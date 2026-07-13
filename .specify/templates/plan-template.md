@@ -40,7 +40,16 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Confirm the plan satisfies each principle (mark each PASS, or record a justified
+deviation in Complexity Tracking):
+
+- [ ] **I. Test-First (NON-NEGOTIABLE)**: Every unit of production code is preceded by a failing, reviewed test (Red-Green-Refactor). No code path is planned without covering tests.
+- [ ] **II. Multi-Session Support**: New state is scoped per session; sessions stay independently addressable, persisted, restorable, and leak no state into one another.
+- [ ] **III. Worktree Integration**: File/VCS operations are worktree-aware; the app owns worktree create/switch/cleanup with no manual git steps required of the user.
+- [ ] **IV. Local-First Storage (NON-NEGOTIABLE)**: All state lives on the local filesystem; the feature works fully offline; nothing leaves the device without explicit opt-in.
+- [ ] **V. Rust + iced Stack**: Implemented in Rust with iced only; invalid session/worktree states are made unrepresentable via the type system.
+- [ ] **VI. Cross-Platform Parity**: Feature behaves equivalently on Linux, macOS, and Windows; platform-specific code sits behind clear abstractions; CI covers all three.
+- [ ] **VII. Documentation First-Class**: User-facing changes include user-guide docs in the same change; docs are in-repo and verified in CI.
 
 ## Project Structure
 
