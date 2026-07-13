@@ -1,0 +1,14 @@
+# Spec Kit local feature pointer (per-workspace, not shared)
+.specify/feature.json
+
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp

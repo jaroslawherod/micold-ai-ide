@@ -1,0 +1,42 @@
+[package]
+name = "micold-ai-ide"
+version = "0.1.0"
+edition = "2021"
+description = "A local-first, AI-assisted desktop IDE."
+license = "Apache-2.0"
+repository = "https://github.com/Cumulocity-IoT/micold-ai-ide"
+rust-version = "1.80"
+
+# Pure, render-free core (state, update logic, metadata). No GUI dependency, so
+# `cargo test --no-default-features` exercises all logic without compiling iced.
+[lib]
+name = "micold_ai_ide"
+path = "src/lib.rs"
+
+# The GUI binary. Only built when the `gui` feature is enabled (the default).
+[[bin]]
+name = "micold-ai-ide"
+path = "src/main.rs"
+required-features = ["gui"]
+
+[features]
+default = ["gui"]
+# `gui` pulls in iced and enables the rendering layer in the binary.
+gui = ["dep:iced"]
+
+[dependencies]
+# iced is the only permitted GUI framework (Constitution Principle V). Optional so
+# the logic core and its tests compile without it.
+iced = { version = "0.13", optional = true }
+# Local-first persistence of the known-projects list. These are core (non-GUI) deps,
+# NOT behind the `gui` feature, so `cargo test --no-default-features` compiles them.
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+# Cross-platform per-user data directory (XDG / Application Support / AppData).
+directories = "6.0.0"
+
+[lints.clippy]
+all = "warn"
+
+[dev-dependencies]
+tempfile = "3.27.0"

@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Formatting + lints run once on Linux (they are platform-independent).
+  lint:
+    name: fmt + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+      - name: clippy (logic core)
+        run: cargo clippy --no-default-features --all-targets -- -D warnings
+      - name: clippy (gui)
+        run: cargo clippy --features gui --all-targets -- -D warnings
+
+  # Constitution Principle VI: build + test on Linux, macOS, and Windows.
+  test:
+    name: build + test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install iced system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-dev libwayland-dev libx11-dev \
+            libxcursor-dev libxrandr-dev libxi-dev
+      # Principle I: the render-free logic core + all integration tests, no GUI.
+      - name: Test (logic core, no GUI)
+        run: cargo test --no-default-features --all-targets
+      # Ensure the full GUI binary compiles on every platform.
+      - name: Build (GUI)
+        run: cargo build --features gui
+
+  # Constitution Principle VII: documentation ships and is verified in CI.
+  docs:
+    name: docs check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required user-guide docs exist
+        run: |
+          test -f docs/user-guide/help-about.md
+          test -f docs/user-guide/project-selection.md
