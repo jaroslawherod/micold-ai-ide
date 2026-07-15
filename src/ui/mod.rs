@@ -8,10 +8,30 @@ pub mod style;
 mod theme_menu;
 mod toolbar;
 
-use iced::widget::{column, container};
-use iced::{Element, Length, Subscription};
+use iced::widget::{column, container, text};
+use iced::{Element, Font, Length, Subscription};
 use micold_ai_ide::app::{Message, Overlay, State};
-use micold_ai_ide::tokens;
+use micold_ai_ide::icons::Icon;
+use micold_ai_ide::tokens::{self, Rgb};
+
+/// The embedded Material Symbols (Outlined) icon font. Registered once at startup in
+/// `main` so every icon glyph resolves; see `assets/fonts/PROVENANCE.md`.
+pub const MATERIAL_SYMBOLS_BYTES: &[u8] =
+    include_bytes!("../../assets/fonts/MaterialSymbolsOutlined.ttf");
+
+/// The font family the embedded icon file advertises (asserted by `tests/icons_font.rs`).
+pub const MATERIAL_SYMBOLS: Font = Font::with_name("Material Symbols Outlined");
+
+/// Render an [`Icon`] as an element at a design-system size, tinted with a foreground color
+/// role (FR-004). Reuses [`style::color`] so tint follows the active theme exactly like all
+/// other text, giving light/dark and disabled states for free (FR-007).
+pub fn icon<'a, M: 'a>(icon: Icon, size: u16, color: Rgb) -> Element<'a, M> {
+    text(icon.glyph().to_string())
+        .font(MATERIAL_SYMBOLS)
+        .size(size)
+        .color(style::color(color))
+        .into()
+}
 
 /// Render the main window: the top app bar over the shell body (active project / empty
 /// state), with any modal overlay (About or the project selector) stacked on top. Every

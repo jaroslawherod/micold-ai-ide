@@ -29,6 +29,9 @@ pub fn main() -> iced::Result {
     iced::application("Micold AI IDE", update, view)
         .theme(theme)
         .default_font(iced::Font::DEFAULT)
+        // Register the embedded Material Symbols icon font so every icon glyph resolves
+        // before the first frame — a known icon can never render as "tofu" (SC-005).
+        .font(ui::MATERIAL_SYMBOLS_BYTES)
         .subscription(subscription)
         .run_with(boot)
 }

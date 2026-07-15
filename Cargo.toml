@@ -46,3 +46,7 @@ all = "warn"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+# Pure-Rust font parser used only by tests to verify the shipped icon font contains every
+# `Icon` codepoint (no "tofu") and advertises the pinned family name. Already in the tree via
+# iced's text stack; kept GUI-free so the icon asset tests run under `--no-default-features`.
+ttf-parser = "0.21"

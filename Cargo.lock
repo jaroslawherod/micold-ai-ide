@@ -1842,6 +1842,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "ttf-parser 0.21.1",
 ]
 
 [[package]]

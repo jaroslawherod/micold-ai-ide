@@ -1,9 +1,10 @@
 //! The Material top app bar: the application title, the Help menu, and the theme selector.
 
-use crate::ui::{style, theme_menu};
+use crate::ui::{icon, style, theme_menu};
 use iced::widget::{button, column, container, row, text};
-use iced::{Element, Length};
+use iced::{Alignment, Element, Length};
 use micold_ai_ide::app::{help_actions, toolbar_entries, Message, State};
+use micold_ai_ide::icons::{icon_role, Icon, IconSurface};
 use micold_ai_ide::metadata::AppMetadata;
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale};
@@ -17,14 +18,25 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
 
     let title = text(meta.name).size(type_scale::TITLE);
 
+    // App-bar action icons take the on-surface foreground role (FR-005, FR-007).
+    let action_tint = icon_role(IconSurface::AppBarAction, r);
+    let labeled = |glyph: Icon, label: &'static str| {
+        row![
+            icon(glyph, type_scale::BODY, action_tint),
+            text(label).size(type_scale::BODY),
+        ]
+        .spacing(spacing::XS)
+        .align_y(Alignment::Center)
+    };
+
     // The one and only toolbar entry.
-    let help = button(text(toolbar_entries()[0]).size(type_scale::BODY))
+    let help = button(labeled(Icon::Help, toolbar_entries()[0]))
         .on_press(Message::HelpMenuToggled)
         .style(style::text_button(r));
 
     let mut help_menu = column![help].spacing(spacing::XS);
     if state.help_menu_open {
-        let about = button(text(help_actions()[0]).size(type_scale::BODY))
+        let about = button(labeled(Icon::About, help_actions()[0]))
             .on_press(Message::AboutOpened)
             .style(style::text_button(r));
         help_menu = help_menu.push(about);

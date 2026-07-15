@@ -2,10 +2,11 @@
 //! within the main window (research R3). Lists the current directory's subfolders, supports
 //! navigation, and lets the user open the current folder as a project.
 
-use crate::ui::style;
+use crate::ui::{icon, style};
 use iced::widget::{button, center, column, container, opaque, row, scrollable, stack, text};
-use iced::{Element, Length};
+use iced::{Alignment, Element, Length};
 use micold_ai_ide::app::Message;
+use micold_ai_ide::icons::{icon_role, Icon, IconSurface};
 use micold_ai_ide::selector::{Selector, SelectorStatus};
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale};
@@ -17,11 +18,21 @@ pub fn modal<'a>(
     scheme: ColorScheme,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
+    let on_surface_tint = icon_role(IconSurface::AppBarAction, r);
+    let on_primary_tint = icon_role(IconSurface::PrimaryButton, r);
+    let badge_tint = icon_role(IconSurface::Badge, r);
 
     let header = row![
-        button(text("↑ Up").size(type_scale::BODY))
-            .on_press(Message::SelectorNavigatedUp)
-            .style(style::outlined(r)),
+        button(
+            row![
+                icon(Icon::NavigateUp, type_scale::BODY, on_surface_tint),
+                text("Up").size(type_scale::BODY),
+            ]
+            .spacing(spacing::XS)
+            .align_y(Alignment::Center)
+        )
+        .on_press(Message::SelectorNavigatedUp)
+        .style(style::outlined(r)),
         text(selector.current_dir.display().to_string())
             .size(type_scale::LABEL)
             .style(style::muted(r)),
@@ -52,8 +63,14 @@ pub fn modal<'a>(
                     .spacing(spacing::SM)
                     .align_y(iced::Alignment::Center);
                     if entry.is_git_repo {
-                        label =
-                            label.push(text("git").size(type_scale::LABEL).style(style::muted(r)));
+                        label = label.push(
+                            row![
+                                icon(Icon::Git, type_scale::LABEL, badge_tint),
+                                text("git").size(type_scale::LABEL).style(style::muted(r)),
+                            ]
+                            .spacing(spacing::XS)
+                            .align_y(Alignment::Center),
+                        );
                     }
                     list = list.push(
                         button(label)
@@ -68,9 +85,16 @@ pub fn modal<'a>(
     };
 
     let actions = row![
-        button(text("Open this folder").size(type_scale::BODY))
-            .on_press(Message::FolderChosen(selector.current_dir.clone()))
-            .style(style::filled(r)),
+        button(
+            row![
+                icon(Icon::OpenProject, type_scale::BODY, on_primary_tint),
+                text("Open this folder").size(type_scale::BODY),
+            ]
+            .spacing(spacing::XS)
+            .align_y(Alignment::Center)
+        )
+        .on_press(Message::FolderChosen(selector.current_dir.clone()))
+        .style(style::filled(r)),
         button(text("Cancel").size(type_scale::BODY))
             .on_press(Message::ProjectSelectorClosed)
             .style(style::outlined(r)),

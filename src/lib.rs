@@ -10,6 +10,7 @@
 
 pub mod app;
 pub mod fs_scan;
+pub mod icons;
 pub mod metadata;
 pub mod project;
 pub mod selector;
