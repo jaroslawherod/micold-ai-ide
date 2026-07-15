@@ -1,41 +1,65 @@
-//! The in-app project selector (folder browser), rendered as a modal overlay within the
-//! main window (research R3). Lists the current directory's subfolders, supports
-//! navigation, and lets the user open the current folder as a project. Git icons are
-//! added with User Story 3.
+//! The in-app project selector (folder browser), rendered as a Material modal overlay
+//! within the main window (research R3). Lists the current directory's subfolders, supports
+//! navigation, and lets the user open the current folder as a project.
 
+use crate::ui::style;
 use iced::widget::{button, center, column, container, opaque, row, scrollable, stack, text};
-use iced::{Color, Element, Length};
+use iced::{Element, Length};
 use micold_ai_ide::app::Message;
 use micold_ai_ide::selector::{Selector, SelectorStatus};
+use micold_ai_ide::theme::ColorScheme;
+use micold_ai_ide::tokens::{self, spacing, type_scale};
 
 /// Stack the folder browser as a modal overlay on top of `base`.
-pub fn modal<'a>(base: Element<'a, Message>, selector: &'a Selector) -> Element<'a, Message> {
+pub fn modal<'a>(
+    base: Element<'a, Message>,
+    selector: &'a Selector,
+    scheme: ColorScheme,
+) -> Element<'a, Message> {
+    let r = tokens::roles(scheme);
+
     let header = row![
-        button(text("↑ Up")).on_press(Message::SelectorNavigatedUp),
-        text(selector.current_dir.display().to_string()),
+        button(text("↑ Up").size(type_scale::BODY))
+            .on_press(Message::SelectorNavigatedUp)
+            .style(style::outlined(r)),
+        text(selector.current_dir.display().to_string())
+            .size(type_scale::LABEL)
+            .style(style::muted(r)),
     ]
-    .spacing(8);
+    .spacing(spacing::SM)
+    .align_y(iced::Alignment::Center);
 
     let body: Element<'a, Message> = match &selector.status {
-        SelectorStatus::Loading => text("Loading…").into(),
-        SelectorStatus::Error(message) => {
-            text(format!("Cannot read this folder: {message}")).into()
-        }
+        SelectorStatus::Loading => text("Loading…").size(type_scale::BODY).into(),
+        SelectorStatus::Error(message) => text(format!("Cannot read this folder: {message}"))
+            .size(type_scale::BODY)
+            .style(style::muted(r))
+            .into(),
         SelectorStatus::Ready => {
-            let mut list = column![].spacing(2);
+            let mut list = column![].spacing(spacing::XS);
             if selector.entries.is_empty() {
-                list = list.push(text("(no subfolders here)"));
+                list = list.push(
+                    text("(no subfolders here)")
+                        .size(type_scale::BODY)
+                        .style(style::muted(r)),
+                );
             } else {
                 for entry in &selector.entries {
                     // Git repositories are marked with a "git" badge (FR-006).
-                    let mut label = row![text(entry.name.clone()).width(Length::Fill)].spacing(6);
+                    let mut label = row![text(entry.name.clone())
+                        .size(type_scale::BODY)
+                        .width(Length::Fill)]
+                    .spacing(spacing::SM)
+                    .align_y(iced::Alignment::Center);
                     if entry.is_git_repo {
-                        label = label.push(text("git").size(12));
+                        label =
+                            label.push(text("git").size(type_scale::LABEL).style(style::muted(r)));
                     }
                     list = list.push(
                         button(label)
                             .on_press(Message::SelectorNavigatedInto(entry.path.clone()))
-                            .width(Length::Fill),
+                            .width(Length::Fill)
+                            .style(style::text_button(r)),
                     );
                 }
             }
@@ -44,29 +68,30 @@ pub fn modal<'a>(base: Element<'a, Message>, selector: &'a Selector) -> Element<
     };
 
     let actions = row![
-        button(text("Open this folder"))
-            .on_press(Message::FolderChosen(selector.current_dir.clone())),
-        button(text("Cancel")).on_press(Message::ProjectSelectorClosed),
+        button(text("Open this folder").size(type_scale::BODY))
+            .on_press(Message::FolderChosen(selector.current_dir.clone()))
+            .style(style::filled(r)),
+        button(text("Cancel").size(type_scale::BODY))
+            .on_press(Message::ProjectSelectorClosed)
+            .style(style::outlined(r)),
     ]
-    .spacing(8);
+    .spacing(spacing::SM);
 
-    let dialog =
-        container(column![text("Open a project").size(20), header, body, actions].spacing(12))
-            .padding(20)
-            .width(Length::Fixed(560.0))
-            .height(Length::Fixed(420.0))
-            .style(container::rounded_box);
+    let dialog = container(
+        column![
+            text("Open a project").size(type_scale::HEADLINE),
+            header,
+            body,
+            actions
+        ]
+        .spacing(spacing::MD),
+    )
+    .padding(spacing::MD)
+    .width(Length::Fixed(560.0))
+    .height(Length::Fixed(420.0))
+    .style(style::dialog(r));
 
-    let backdrop = center(dialog).style(|_theme| container::Style {
-        background: Some(
-            Color {
-                a: 0.6,
-                ..Color::BLACK
-            }
-            .into(),
-        ),
-        ..container::Style::default()
-    });
+    let backdrop = center(dialog).style(style::backdrop());
 
     stack![base, opaque(backdrop)].into()
 }

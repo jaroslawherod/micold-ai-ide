@@ -13,5 +13,8 @@ pub mod fs_scan;
 pub mod metadata;
 pub mod project;
 pub mod selector;
+pub mod settings;
 pub mod store;
+pub mod theme;
+pub mod tokens;
 pub mod workspace;

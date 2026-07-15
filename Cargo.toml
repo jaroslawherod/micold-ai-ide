@@ -21,13 +21,19 @@ required-features = ["gui"]
 
 [features]
 default = ["gui"]
-# `gui` pulls in iced and enables the rendering layer in the binary.
-gui = ["dep:iced"]
+# `gui` pulls in iced and enables the rendering layer in the binary. It also enables
+# OS dark/light detection (`dark-light`), which is only needed by the GUI binary.
+gui = ["dep:iced", "dep:dark-light"]
 
 [dependencies]
 # iced is the only permitted GUI framework (Constitution Principle V). Optional so
 # the logic core and its tests compile without it.
-iced = { version = "0.13", optional = true }
+# The `tokio` feature provides the async runtime backing `iced::time::every`, used to poll
+# the OS light/dark preference (iced 0.13 has no theme-changed event — research R4).
+iced = { version = "0.13", optional = true, features = ["tokio"] }
+# Cross-platform OS light/dark theme detection (XDG portal / registry / AppleInterfaceStyle).
+# GUI-only, so the render-free core still compiles under `cargo test --no-default-features`.
+dark-light = { version = "1.1", optional = true }
 # Local-first persistence of the known-projects list. These are core (non-GUI) deps,
 # NOT behind the `gui` feature, so `cargo test --no-default-features` compiles them.
 serde = { version = "1.0.228", features = ["derive"] }

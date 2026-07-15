@@ -10,3 +10,5 @@ verified in CI.
   and the About dialog.
 - [Project Selection & Workspace Management](user-guide/project-selection.md) — opening a
   project, the known-projects list, git repository marking, and renaming.
+- [Appearance & Theming](user-guide/appearance-theming.md) — the Material Design layout, the
+  light and dark themes, following the system preference, and choosing a theme.

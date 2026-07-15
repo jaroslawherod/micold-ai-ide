@@ -62,3 +62,4 @@ jobs:
         run: |
           test -f docs/user-guide/help-about.md
           test -f docs/user-guide/project-selection.md
+          test -f docs/user-guide/appearance-theming.md

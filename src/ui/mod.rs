@@ -4,30 +4,41 @@ mod about;
 mod project_selector;
 mod rename;
 mod shell;
+pub mod style;
+mod theme_menu;
 mod toolbar;
 
 use iced::widget::{column, container};
 use iced::{Element, Length, Subscription};
 use micold_ai_ide::app::{Message, Overlay, State};
+use micold_ai_ide::tokens;
 
-/// Render the main window: the top toolbar over the shell body (active project / empty
-/// state), with any modal overlay (About or the project selector) stacked on top.
+/// Render the main window: the top app bar over the shell body (active project / empty
+/// state), with any modal overlay (About or the project selector) stacked on top. Every
+/// surface is styled from the active color scheme's design tokens.
 pub fn view(state: &State) -> Element<'_, Message> {
-    let base: Element<'_, Message> = container(column![toolbar::view(state), shell::view(state)])
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into();
+    let scheme = state.color_scheme();
+    let roles = tokens::roles(scheme);
+
+    let base: Element<'_, Message> = container(column![
+        toolbar::view(state, scheme),
+        shell::view(state, scheme)
+    ])
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .style(style::window_bg(roles))
+    .into();
 
     match state.overlay {
         Overlay::None => base,
-        Overlay::About => about::modal(base),
+        Overlay::About => about::modal(base, scheme),
         Overlay::ProjectSelector => match &state.selector {
-            Some(selector) => project_selector::modal(base, selector),
+            Some(selector) => project_selector::modal(base, selector, scheme),
             // Overlay flagged but no selector state — render the base defensively.
             None => base,
         },
         Overlay::RenameProject => match &state.rename_draft {
-            Some(draft) => rename::modal(base, draft),
+            Some(draft) => rename::modal(base, draft, scheme),
             None => base,
         },
     }

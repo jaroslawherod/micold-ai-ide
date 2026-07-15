@@ -1,3 +1,15 @@
 [tools]
 rust = "stable"
 uv = "latest"
+
+[tasks.run]
+description = "Run the GUI application"
+run = "cargo run --features gui"
+
+[tasks.test]
+description = "Test the render-free logic core (no GUI), matching CI"
+run = "cargo test --no-default-features --all-targets"
+
+[tasks.build]
+description = "Build the release GUI binary"
+run = "cargo build --release --features gui"

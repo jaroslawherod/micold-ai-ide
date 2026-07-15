@@ -1,25 +1,37 @@
-//! The rename-project dialog, rendered as a modal overlay within the main window
+//! The rename-project dialog, rendered as a Material modal overlay within the main window
 //! (FR-017, FR-020). Editing changes only the stored display name — never the folder on
 //! disk (FR-018).
 
+use crate::ui::style;
 use iced::widget::{button, center, column, container, opaque, row, stack, text, text_input};
-use iced::{Color, Element, Length};
+use iced::{Element, Length};
 use micold_ai_ide::app::{Message, RenameDraft};
 use micold_ai_ide::project::RenameError;
+use micold_ai_ide::theme::ColorScheme;
+use micold_ai_ide::tokens::{self, spacing, type_scale};
 
 /// Stack the rename dialog as a modal overlay on top of `base`.
-pub fn modal<'a>(base: Element<'a, Message>, draft: &'a RenameDraft) -> Element<'a, Message> {
+pub fn modal<'a>(
+    base: Element<'a, Message>,
+    draft: &'a RenameDraft,
+    scheme: ColorScheme,
+) -> Element<'a, Message> {
+    let r = tokens::roles(scheme);
+
     let input = text_input("Project name", &draft.text)
         .on_input(Message::RenameTextChanged)
         .on_submit(Message::RenameConfirmed)
-        .padding(8);
+        .padding(spacing::SM)
+        .style(style::input(r));
 
     let mut fields = column![
-        text("Rename project").size(20),
-        text(draft.path.display().to_string()).size(12),
+        text("Rename project").size(type_scale::HEADLINE),
+        text(draft.path.display().to_string())
+            .size(type_scale::LABEL)
+            .style(style::muted(r)),
         input,
     ]
-    .spacing(12);
+    .spacing(spacing::MD);
 
     // Show the validation problem when a blank name was submitted (FR-020).
     if let Some(error) = draft.error {
@@ -27,30 +39,29 @@ pub fn modal<'a>(base: Element<'a, Message>, draft: &'a RenameDraft) -> Element<
             RenameError::Empty => "Name cannot be empty.",
             RenameError::Whitespace => "Name cannot be only whitespace.",
         };
-        fields = fields.push(text(message));
+        fields = fields.push(text(message).size(type_scale::LABEL).style(
+            move |_theme: &iced::Theme| iced::widget::text::Style {
+                color: Some(style::color(r.error)),
+            },
+        ));
     }
 
     let actions = row![
-        button(text("Rename")).on_press(Message::RenameConfirmed),
-        button(text("Cancel")).on_press(Message::RenameCancelled),
+        button(text("Rename").size(type_scale::BODY))
+            .on_press(Message::RenameConfirmed)
+            .style(style::filled(r)),
+        button(text("Cancel").size(type_scale::BODY))
+            .on_press(Message::RenameCancelled)
+            .style(style::outlined(r)),
     ]
-    .spacing(8);
+    .spacing(spacing::SM);
 
     let dialog = container(fields.push(actions))
-        .padding(24)
+        .padding(spacing::LG)
         .width(Length::Fixed(420.0))
-        .style(container::rounded_box);
+        .style(style::dialog(r));
 
-    let backdrop = center(dialog).style(|_theme| container::Style {
-        background: Some(
-            Color {
-                a: 0.6,
-                ..Color::BLACK
-            }
-            .into(),
-        ),
-        ..container::Style::default()
-    });
+    let backdrop = center(dialog).style(style::backdrop());
 
     stack![base, opaque(backdrop)].into()
 }

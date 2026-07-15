@@ -1,23 +1,48 @@
-//! The top toolbar and its "Help" menu.
+//! The Material top app bar: the application title, the Help menu, and the theme selector.
 
+use crate::ui::{style, theme_menu};
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Length};
 use micold_ai_ide::app::{help_actions, toolbar_entries, Message, State};
+use micold_ai_ide::metadata::AppMetadata;
+use micold_ai_ide::theme::ColorScheme;
+use micold_ai_ide::tokens::{self, spacing, type_scale};
 
-/// Render the toolbar across the top of the window. It exposes exactly one entry,
-/// "Help" (FR-002, FR-003); selecting it reveals the single "About" action (FR-004).
-pub fn view(state: &State) -> Element<'_, Message> {
+/// Render the top app bar. It carries the application title on the left and its actions on
+/// the right: the theme selector and the "Help" entry (FR-002, FR-003, FR-010), which
+/// reveals the single "About" action (FR-004).
+pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
+    let r = tokens::roles(scheme);
+    let meta = AppMetadata::from_env();
+
+    let title = text(meta.name).size(type_scale::TITLE);
+
     // The one and only toolbar entry.
-    let help = button(text(toolbar_entries()[0])).on_press(Message::HelpMenuToggled);
+    let help = button(text(toolbar_entries()[0]).size(type_scale::BODY))
+        .on_press(Message::HelpMenuToggled)
+        .style(style::text_button(r));
 
-    let mut menu = column![help].spacing(2);
+    let mut help_menu = column![help].spacing(spacing::XS);
     if state.help_menu_open {
-        // Reveal the single action under Help.
-        let about = button(text(help_actions()[0]))
+        let about = button(text(help_actions()[0]).size(type_scale::BODY))
             .on_press(Message::AboutOpened)
-            .width(Length::Shrink);
-        menu = menu.push(about);
+            .style(style::text_button(r));
+        help_menu = help_menu.push(about);
     }
 
-    container(row![menu]).width(Length::Fill).padding(8).into()
+    let bar = row![
+        title,
+        // Spacer pushes actions to the trailing edge.
+        container(text("")).width(Length::Fill),
+        theme_menu::view(state, scheme),
+        help_menu,
+    ]
+    .spacing(spacing::MD)
+    .align_y(iced::Alignment::Start);
+
+    container(bar)
+        .width(Length::Fill)
+        .padding(spacing::SM)
+        .style(style::app_bar(r))
+        .into()
 }

@@ -12,6 +12,7 @@
 
 use crate::project::{FolderEntry, RenameError};
 use crate::selector::Selector;
+use crate::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
 use std::path::PathBuf;
 
 /// The labels of the top toolbar's entries, in display order.
@@ -101,6 +102,12 @@ pub enum Message {
     RenameConfirmed,
     /// Dismiss the rename dialog without applying (Cancel or Esc).
     RenameCancelled,
+    /// The user selected a theme preference (Follow system / Light / Dark) (FR-007, FR-008).
+    /// The binary persists the updated preference afterward.
+    ThemePreferenceChanged(ThemePreference),
+    /// The OS light/dark preference poll observed a (changed) scheme (FR-006). Transient;
+    /// never persisted.
+    SystemThemeChanged(SystemScheme),
 }
 
 /// Root application state for the single main window.
@@ -117,9 +124,19 @@ pub struct State {
     pub selector: Option<Selector>,
     /// The in-progress rename, present only while the rename overlay is shown.
     pub rename_draft: Option<RenameDraft>,
+    /// How the app chooses its theme (persisted); defaults to following the OS (FR-005).
+    pub theme_pref: ThemePreference,
+    /// The last light/dark scheme reported by the OS poll (transient, not persisted).
+    pub system_scheme: SystemScheme,
 }
 
 impl State {
+    /// The color scheme to render, resolved from the user's preference and the OS scheme
+    /// (FR-005, FR-007, FR-018). See [`crate::theme::resolve`].
+    pub fn color_scheme(&self) -> ColorScheme {
+        resolve(self.theme_pref, self.system_scheme)
+    }
+
     /// Apply a [`Message`], transitioning the state. Pure and side-effect free.
     pub fn update(&mut self, message: Message) {
         match message {
@@ -205,6 +222,13 @@ impl State {
             Message::RenameCancelled => {
                 self.overlay = Overlay::None;
                 self.rename_draft = None;
+            }
+            Message::ThemePreferenceChanged(pref) => {
+                // Pure state change; the binary persists it at the I/O boundary (FR-009).
+                self.theme_pref = pref;
+            }
+            Message::SystemThemeChanged(scheme) => {
+                self.system_scheme = scheme;
             }
             // Performed by the binary at the I/O boundary (needs the home directory + a
             // scan task, a FolderScanner, or persistence); no pure reducer effect.

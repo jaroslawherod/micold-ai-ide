@@ -1,41 +1,42 @@
-//! The About dialog, rendered as a modal overlay within the main window (FR-013).
+//! The About dialog, rendered as a Material modal overlay within the main window (FR-013).
 
+use crate::ui::style;
 use iced::widget::{button, center, column, container, opaque, stack, text};
-use iced::{Color, Element};
+use iced::Element;
 use micold_ai_ide::app::Message;
 use micold_ai_ide::metadata::AppMetadata;
+use micold_ai_ide::theme::ColorScheme;
+use micold_ai_ide::tokens::{self, spacing, type_scale};
 
 /// Stack the About dialog as a modal overlay on top of `base`.
 ///
-/// The overlay is wrapped in `opaque`, so it captures all input and the content beneath
-/// is non-interactive while the dialog is open (FR-013). Dismissal is via the Close button
+/// The overlay is wrapped in `opaque`, so it captures all input and the content beneath is
+/// non-interactive while the dialog is open (FR-013). Dismissal is via the Close button
 /// (FR-010) or Esc (FR-011) — clicking the dimmed backdrop does not dismiss.
-pub fn modal(base: Element<'_, Message>) -> Element<'_, Message> {
+pub fn modal(base: Element<'_, Message>, scheme: ColorScheme) -> Element<'_, Message> {
+    let r = tokens::roles(scheme);
     let meta = AppMetadata::from_env();
 
     let dialog = container(
         column![
-            text(meta.name).size(24),
-            text(format!("Version {}", meta.version)),
-            text(format!("License: {}", meta.license)),
-            text(meta.description),
-            button(text("Close")).on_press(Message::AboutClosed),
+            text(meta.name).size(type_scale::HEADLINE),
+            text(format!("Version {}", meta.version))
+                .size(type_scale::LABEL)
+                .style(style::muted(r)),
+            text(format!("License: {}", meta.license))
+                .size(type_scale::LABEL)
+                .style(style::muted(r)),
+            text(meta.description).size(type_scale::BODY),
+            button(text("Close").size(type_scale::BODY))
+                .on_press(Message::AboutClosed)
+                .style(style::filled(r)),
         ]
-        .spacing(12),
+        .spacing(spacing::MD),
     )
-    .padding(24)
-    .style(container::rounded_box);
+    .padding(spacing::LG)
+    .style(style::dialog(r));
 
-    let backdrop = center(dialog).style(|_theme| container::Style {
-        background: Some(
-            Color {
-                a: 0.6,
-                ..Color::BLACK
-            }
-            .into(),
-        ),
-        ..container::Style::default()
-    });
+    let backdrop = center(dialog).style(style::backdrop());
 
     stack![base, opaque(backdrop)].into()
 }
