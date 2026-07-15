@@ -156,14 +156,41 @@ fn os_theme_poll() -> Subscription<Message> {
     every(OS_THEME_POLL).map(|_instant| Message::SystemThemeChanged(detect_system_scheme()))
 }
 
-/// Detect the OS light/dark preference, mapping `dark_light::Mode` to [`SystemScheme`].
-/// `Mode::Default` (undetectable — e.g. a Linux session without an appearance portal) maps
-/// to `Unspecified`, which the resolver falls back to light (FR-018).
-fn detect_system_scheme() -> SystemScheme {
-    match dark_light::detect() {
+/// Map a `dark_light::Mode` to our [`SystemScheme`]. `Mode::Unspecified` (undetectable — e.g.
+/// a headless session, or an OS reporting "no preference") maps to `Unspecified`, which the
+/// resolver falls back to light (FR-018).
+fn map_system_scheme(mode: dark_light::Mode) -> SystemScheme {
+    match mode {
         dark_light::Mode::Dark => SystemScheme::Dark,
         dark_light::Mode::Light => SystemScheme::Light,
-        dark_light::Mode::Default => SystemScheme::Unspecified,
+        dark_light::Mode::Unspecified => SystemScheme::Unspecified,
+    }
+}
+
+/// Detect the OS light/dark preference. `dark_light::detect` returns `Err` when the OS cannot
+/// be queried (e.g. the XDG Desktop Portal is unreachable); that is treated as `Unspecified`
+/// rather than surfaced, so detection failure degrades gracefully to the light fallback.
+fn detect_system_scheme() -> SystemScheme {
+    dark_light::detect()
+        .map(map_system_scheme)
+        .unwrap_or(SystemScheme::Unspecified)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_dark_light_mode_onto_system_scheme() {
+        assert_eq!(map_system_scheme(dark_light::Mode::Dark), SystemScheme::Dark);
+        assert_eq!(
+            map_system_scheme(dark_light::Mode::Light),
+            SystemScheme::Light
+        );
+        assert_eq!(
+            map_system_scheme(dark_light::Mode::Unspecified),
+            SystemScheme::Unspecified
+        );
     }
 }
 

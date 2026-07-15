@@ -34,7 +34,8 @@ pub enum ThemePreference {
 /// What the operating system reports, including "no preference / undetectable".
 ///
 /// Mirrors `dark_light::Mode` without depending on that crate; the binary performs the
-/// mapping (`Dark→Dark`, `Light→Light`, `Default→Unspecified`).
+/// mapping (`Dark→Dark`, `Light→Light`, `Unspecified→Unspecified`, and any detection
+/// `Err→Unspecified`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SystemScheme {
     /// The OS prefers a light appearance.
