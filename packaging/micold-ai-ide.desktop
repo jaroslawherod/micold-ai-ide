@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Micold AI IDE
+Comment=A local-first, AI-assisted desktop IDE
+Exec=micold-ai-ide
+Icon=micold-ai-ide
+Terminal=false
+Categories=Development;IDE;
+Keywords=IDE;AI;claude;terminal;git;worktree;

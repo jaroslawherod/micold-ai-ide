@@ -1,0 +1,67 @@
+name: release
+
+# Release automation:
+#  1. release-please watches `main` and opens/maintains a release PR from Conventional Commits,
+#     bumping the Cargo version + Cargo.lock and updating CHANGELOG.md (embedded in the app).
+#  2. When that PR is merged, release-please tags + creates the GitHub Release; the `deb` job then
+#     builds a .deb natively on amd64 and arm64 runners and uploads them to the release.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release-please:
+    name: release-please
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  deb:
+    name: deb (${{ matrix.arch }})
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install iced + packaging system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-dev libwayland-dev libx11-dev \
+            libxcursor-dev libxrandr-dev libxi-dev
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --locked
+      # Native build → cargo-deb derives the Debian arch (amd64 / arm64) automatically.
+      - name: Build .deb
+        run: cargo deb
+      - name: Upload .deb to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$TAG_NAME" target/debian/*.deb --clobber

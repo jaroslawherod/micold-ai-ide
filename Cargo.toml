@@ -55,6 +55,23 @@ directories = "6.0.0"
 # (research R6). Core (non-GUI) dep — needed by the pure session model + persistence.
 uuid = { version = "1.20.0", features = ["v4", "serde"] }
 
+# Debian packaging (`cargo deb`). Produces micold-ai-ide_<version>_<arch>.deb; the release
+# workflow builds it natively on amd64 and arm64 runners. Runtime deps are auto-detected
+# (dpkg-shlibdeps). Ships the GUI binary, the app icon, and a desktop entry.
+[package.metadata.deb]
+maintainer = "Jaroslaw Herod <jaroslaw.herod@cumulocity.com>"
+copyright = "2026, Micold AI IDE contributors"
+extended-description = "A local-first, AI-assisted desktop IDE for managing Claude Code worktrees and sessions with an embedded terminal."
+section = "devel"
+priority = "optional"
+assets = [
+    ["target/release/micold-ai-ide", "usr/bin/", "755"],
+    ["assets/icon/png/icon-256.png", "usr/share/icons/hicolor/256x256/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-128.png", "usr/share/icons/hicolor/128x128/apps/micold-ai-ide.png", "644"],
+    ["packaging/micold-ai-ide.desktop", "usr/share/applications/micold-ai-ide.desktop", "644"],
+    ["README.md", "usr/share/doc/micold-ai-ide/README.md", "644"],
+]
+
 [lints.clippy]
 all = "warn"
 

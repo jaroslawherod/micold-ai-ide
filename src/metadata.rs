@@ -9,6 +9,11 @@
 /// The application's display name. Exactly this string per FR-006.
 pub const APP_NAME: &str = "Micold AI IDE";
 
+/// The project changelog, embedded at compile time so the app can show a "What's new" view with
+/// no filesystem/network access (Constitution Principle IV). Maintained by release-please from
+/// Conventional Commits; see `CHANGELOG.md` at the repository root.
+pub const CHANGELOG: &str = include_str!("../CHANGELOG.md");
+
 /// Shown in place of any metadata field whose source value is empty (FR-016).
 const FALLBACK: &str = "unknown";
 
