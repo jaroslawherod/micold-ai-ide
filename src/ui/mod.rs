@@ -46,6 +46,8 @@ pub struct Anim {
     pub sidebar: f32,
     /// Main-view fade progress (dips to 0 and back to 1 when the content changes).
     pub main: f32,
+    /// Sidebar resize-handle hover-highlight progress (0 = idle, 1 = fully highlighted).
+    pub handle_hover: f32,
 }
 
 impl Default for Anim {
@@ -54,6 +56,7 @@ impl Default for Anim {
             menu: 0.0,
             sidebar: 1.0,
             main: 1.0,
+            handle_hover: 0.0,
         }
     }
 }
@@ -86,7 +89,7 @@ pub fn view<'a>(
         } else {
             row![
                 material::slide(sidebar::view(state, scheme), anim.sidebar),
-                sidebar::handle(scheme)
+                sidebar::handle(scheme, anim.handle_hover)
             ]
             .into()
         };

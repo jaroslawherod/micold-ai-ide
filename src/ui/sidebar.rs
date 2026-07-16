@@ -22,6 +22,17 @@ fn separator_color(r: Roles) -> iced::Color {
     iced::Color { a: 0.4, ..style::color(r.outline) }
 }
 
+/// Linearly interpolate between two colors (`t` 0→1), for the handle's animated hover highlight.
+fn lerp_color(from: iced::Color, to: iced::Color, t: f32) -> iced::Color {
+    let t = t.clamp(0.0, 1.0);
+    iced::Color {
+        r: from.r + (to.r - from.r) * t,
+        g: from.g + (to.g - from.g) * t,
+        b: from.b + (to.b - from.b) * t,
+        a: from.a + (to.a - from.a) * t,
+    }
+}
+
 /// Render the sidebar for the active project's worktrees and sessions, at the current
 /// (adjustable) width.
 pub fn view(state: &State, scheme: micold_ai_ide::theme::ColorScheme) -> Element<'_, Message> {
@@ -82,7 +93,10 @@ pub fn view(state: &State, scheme: micold_ai_ide::theme::ColorScheme) -> Element
 /// (a thin transparent hit target) with a single 1px boundary line that reads as the
 /// sidebar's right border; hovering shows the horizontal-resize cursor. Pressing it starts a
 /// resize drag (the binary captures the drag with a full-window overlay).
-pub fn handle(scheme: micold_ai_ide::theme::ColorScheme) -> Element<'static, Message> {
+pub fn handle(
+    scheme: micold_ai_ide::theme::ColorScheme,
+    hover: f32,
+) -> Element<'static, Message> {
     let r = tokens::roles(scheme);
     // The invisible grab zone is blended with the sidebar surface and sits on the LEFT; the 1px
     // separator line sits on the RIGHT, flush against the main area — so no window-background gap
@@ -90,14 +104,18 @@ pub fn handle(scheme: micold_ai_ide::theme::ColorScheme) -> Element<'static, Mes
     let grab = container(Space::new(Length::Fixed(HANDLE_WIDTH - 1.0), Length::Fill))
         .height(Length::Fill)
         .style(style::sidebar_surface(r));
+    // The separator brightens toward the accent as the pointer hovers (animated via `hover`).
+    let line_color = lerp_color(separator_color(r), style::color(r.primary), hover);
     let line = container(Space::new(Length::Fixed(1.0), Length::Fill))
         .height(Length::Fill)
         .style(move |_t: &iced::Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(separator_color(r))),
+            background: Some(iced::Background::Color(line_color)),
             ..Default::default()
         });
     mouse_area(row![grab, line].height(Length::Fill))
         .on_press(Message::SidebarDragStarted)
+        .on_enter(Message::SidebarHandleHovered(true))
+        .on_exit(Message::SidebarHandleHovered(false))
         .interaction(iced::mouse::Interaction::ResizingHorizontally)
         .into()
 }

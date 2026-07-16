@@ -36,6 +36,9 @@ const ANIM_TICK: Duration = Duration::from_millis(16);
 /// Per-tick progress step for fades (~90ms) and the sidebar slide (~120ms).
 const FADE_STEP: f32 = 0.18;
 const SLIDE_STEP: f32 = 0.14;
+/// Per-tick step for the resize-handle hover highlight (~0.8s ramp at 60fps — the requested
+/// gentle ~1s animated highlight).
+const HOVER_STEP: f32 = 0.02;
 
 /// The binary's application state: the pure core plus gui-only runtime handles.
 struct App {
@@ -53,6 +56,10 @@ struct App {
     main_anim: f32,
     /// Identity of the current main content, to detect changes that trigger a fade.
     main_key: String,
+    /// Whether the pointer is over the sidebar resize handle (drives its hover highlight).
+    handle_hovered: bool,
+    /// Sidebar resize-handle hover-highlight progress (0 = idle, 1 = fully highlighted).
+    handle_hover_anim: f32,
 }
 
 /// Identity of the main content area, used to trigger a fade when it changes.
@@ -143,6 +150,8 @@ fn boot() -> (App, Task<Message>) {
             sidebar_anim,
             main_anim: 1.0,
             main_key,
+            handle_hovered: false,
+            handle_hover_anim: 0.0,
         },
         Task::none(),
     )
@@ -232,9 +241,17 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::AnimationTick => {
             let menu_target = if app.core.help_menu_open { 1.0 } else { 0.0 };
             let sidebar_target = if app.core.sidebar_hidden { 0.0 } else { 1.0 };
+            let hover_target = if app.handle_hovered { 1.0 } else { 0.0 };
             app.menu_anim = approach(app.menu_anim, menu_target, FADE_STEP);
             app.sidebar_anim = approach(app.sidebar_anim, sidebar_target, SLIDE_STEP);
             app.main_anim = approach(app.main_anim, 1.0, FADE_STEP);
+            app.handle_hover_anim = approach(app.handle_hover_anim, hover_target, HOVER_STEP);
+            Task::none()
+        }
+        // Pointer entered/left the sidebar resize handle; the hover highlight animates via the
+        // animation clock.
+        Message::SidebarHandleHovered(hovered) => {
+            app.handle_hovered = hovered;
             Task::none()
         }
         Message::ProjectSelectorOpened => {
@@ -481,6 +498,7 @@ fn view(app: &App) -> iced::Element<'_, Message> {
         menu: app.menu_anim,
         sidebar: app.sidebar_anim,
         main: app.main_anim,
+        handle_hover: app.handle_hover_anim,
     };
     ui::view(&app.core, terminal, anim)
 }
@@ -497,9 +515,11 @@ fn subscription(app: &App) -> Subscription<Message> {
     // Run the animation clock only while something is actually animating.
     let menu_target = if app.core.help_menu_open { 1.0 } else { 0.0 };
     let sidebar_target = if app.core.sidebar_hidden { 0.0 } else { 1.0 };
+    let hover_target = if app.handle_hovered { 1.0 } else { 0.0 };
     let animating = (app.menu_anim - menu_target).abs() > f32::EPSILON
         || (app.sidebar_anim - sidebar_target).abs() > f32::EPSILON
-        || app.main_anim < 1.0;
+        || app.main_anim < 1.0
+        || (app.handle_hover_anim - hover_target).abs() > f32::EPSILON;
     if animating {
         subs.push(every(ANIM_TICK).map(|_| Message::AnimationTick));
     }

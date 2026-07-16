@@ -234,6 +234,9 @@ pub enum Message {
     SidebarDragMoved(u16),
     /// The resize drag ended.
     SidebarDragEnded,
+    /// The pointer entered (`true`) or left (`false`) the sidebar resize handle; drives its
+    /// animated hover highlight (handled by the binary).
+    SidebarHandleHovered(bool),
     /// Animation clock tick (drives fade/slide progress; handled by the binary).
     AnimationTick,
 
@@ -588,7 +591,8 @@ impl State {
             | Message::TerminalScrolled(_)
             | Message::TerminalResized { .. }
             | Message::TerminalCopyRequested
-            | Message::TerminalPasteRequested => {}
+            | Message::TerminalPasteRequested
+            | Message::SidebarHandleHovered(_) => {}
         }
     }
 
