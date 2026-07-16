@@ -39,7 +39,7 @@ impl<'a, M: 'a> Toolbar<'a, M> {
 impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
     fn from(t: Toolbar<'a, M>) -> Self {
         let mut bar = row![
-            text(t.title).size(type_scale::TITLE),
+            text(t.title).size(type_scale::BODY),
             Space::with_width(Length::Fill),
         ]
         .spacing(spacing::MD)
@@ -50,9 +50,10 @@ impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
             bar = bar.push(action);
         }
 
+        // Compact bar: tight vertical padding (`XS`) with comfortable horizontal padding (`SM`).
         container(bar)
             .width(Length::Fill)
-            .padding(spacing::SM)
+            .padding(iced::Padding::from([spacing::XS as f32, spacing::SM as f32]))
             .style(style::toolbar_surface(t.roles))
             .into()
     }

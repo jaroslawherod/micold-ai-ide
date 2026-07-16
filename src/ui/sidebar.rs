@@ -14,7 +14,13 @@ use micold_ai_ide::worktree::WorktreeStatus;
 /// Width of the draggable resize handle between the sidebar and the main area.
 const HANDLE_WIDTH: f32 = 6.0;
 /// Width of the collapsed strip that hosts the "show sidebar" button.
-const STRIP_WIDTH: f32 = 44.0;
+const STRIP_WIDTH: f32 = 32.0;
+
+/// A low-contrast color for separator/border lines (the sidebar edge and the resize handle):
+/// the outline role softened with reduced alpha so it reads as a subtle divider, not a hard rule.
+fn separator_color(r: Roles) -> iced::Color {
+    iced::Color { a: 0.4, ..style::color(r.outline) }
+}
 
 /// Render the sidebar for the active project's worktrees and sessions, at the current
 /// (adjustable) width.
@@ -78,18 +84,22 @@ pub fn view(state: &State, scheme: micold_ai_ide::theme::ColorScheme) -> Element
 /// resize drag (the binary captures the drag with a full-window overlay).
 pub fn handle(scheme: micold_ai_ide::theme::ColorScheme) -> Element<'static, Message> {
     let r = tokens::roles(scheme);
+    // The invisible grab zone is blended with the sidebar surface and sits on the LEFT; the 1px
+    // separator line sits on the RIGHT, flush against the main area — so no window-background gap
+    // shows between the separator and the terminal.
+    let grab = container(Space::new(Length::Fixed(HANDLE_WIDTH - 1.0), Length::Fill))
+        .height(Length::Fill)
+        .style(style::sidebar_surface(r));
     let line = container(Space::new(Length::Fixed(1.0), Length::Fill))
         .height(Length::Fill)
         .style(move |_t: &iced::Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(style::color(r.outline))),
+            background: Some(iced::Background::Color(separator_color(r))),
             ..Default::default()
         });
-    mouse_area(
-        row![line, Space::with_width(Length::Fixed(HANDLE_WIDTH - 1.0))].height(Length::Fill),
-    )
-    .on_press(Message::SidebarDragStarted)
-    .interaction(iced::mouse::Interaction::ResizingHorizontally)
-    .into()
+    mouse_area(row![grab, line].height(Length::Fill))
+        .on_press(Message::SidebarDragStarted)
+        .interaction(iced::mouse::Interaction::ResizingHorizontally)
+        .into()
 }
 
 /// The collapsed sidebar: a thin vertical strip hosting the "show sidebar" button (with a
@@ -103,15 +113,24 @@ pub fn collapsed_strip(scheme: micold_ai_ide::theme::ColorScheme) -> Element<'st
         "Show sidebar",
         r,
     );
-    container(
+    let content = container(
         column![show]
             .align_x(Alignment::Center)
             .padding(spacing::XS),
     )
-    .width(Length::Fixed(STRIP_WIDTH))
+    .width(Length::Fixed(STRIP_WIDTH - 1.0))
     .height(Length::Fill)
-    .style(style::sidebar_surface(r))
-    .into()
+    .style(style::sidebar_surface(r));
+
+    // A subtle right border so the collapsed strip still reads as a bounded panel edge.
+    let border = container(Space::new(Length::Fixed(1.0), Length::Fill))
+        .height(Length::Fill)
+        .style(move |_t: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(separator_color(r))),
+            ..Default::default()
+        });
+
+    row![content, border].height(Length::Fill).into()
 }
 
 /// Flatten the worktree tree into ordered [`TreeItem`]s (worktrees, then their sessions when
