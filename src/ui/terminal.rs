@@ -1,33 +1,65 @@
 //! The embedded terminal: the real `portable-pty`-backed [`TerminalBackend`] impl, VT/ANSI
-//! interpretation via `alacritty_terminal`, and the terminal pane rendering (gui-only).
-//! Research R1/R2/R4/R6.
+//! interpretation via `alacritty_terminal`, per-session runtime state, colour palette, and the
+//! terminal pane rendering (gui-only). Feature 005 (R1/R2/R4/R6) + feature 006 (real terminal).
 //!
 //! A session's `claude` process runs in a PTY; a reader thread streams its raw bytes into a
-//! shared buffer, which is fed into an `alacritty_terminal::Term` (a VT emulator) so escape
-//! sequences are interpreted into a character grid rather than shown literally (FR-012). The
-//! pane renders that grid as monospace text and sends input lines to the PTY writer (FR-014).
-//! The [`crate::terminal::TerminalBackend`]/`SessionRouter` seam keeps this local.
+//! shared buffer, fed into an `alacritty_terminal::Term` (a VT emulator) so escape sequences are
+//! interpreted into a character grid with per-cell colour/style. Feature 006 renders that grid
+//! in colour via a custom canvas widget ([`crate::ui::material::terminal_pane`]) and streams
+//! keystrokes back to the PTY.
 
+use crate::ui::material::TerminalPane;
 use crate::ui::style;
 use alacritty_terminal::event::VoidListener;
 use alacritty_terminal::grid::Dimensions;
-use alacritty_terminal::term::{Config, Term};
-use alacritty_terminal::vte::ansi::Processor;
-use iced::widget::{column, container, row, scrollable, text, text_input};
-use iced::{Element, Font, Length};
+use alacritty_terminal::index::{Column, Point, Side};
+use alacritty_terminal::selection::{Selection, SelectionType};
+use alacritty_terminal::term::cell::Flags;
+use alacritty_terminal::term::test::TermSize;
+use alacritty_terminal::term::{viewport_to_point, Config, RenderableContent, Term, TermMode};
+use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Processor};
+use micold_ai_ide::app::SelectKind;
+use iced::widget::{button, column, container, row, text};
+use iced::{Color, Element, Font, Length};
 use micold_ai_ide::app::{Message, State};
 use micold_ai_ide::session::{SessionId, SessionLifecycle};
 use micold_ai_ide::terminal::{claude_args, LaunchSpec, TerminalBackend, TerminalHandle};
-use micold_ai_ide::tokens::{self, spacing, type_scale};
+use micold_ai_ide::theme::ColorScheme;
+use micold_ai_ide::tokens::{self, spacing, type_scale, Rgb};
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 
-/// The PTY (and terminal grid) dimensions. Fixed for now; a resize pass is future work (T058).
-const ROWS: u16 = 30;
-const COLS: u16 = 100;
+/// The initial PTY/grid size, used until the pane reports its real size (feature 006 resize).
+const INIT_ROWS: u16 = 30;
+const INIT_COLS: u16 = 100;
 
-/// Fixed terminal dimensions for the `alacritty_terminal` grid.
+/// The terminal font size (monospace). Cell metrics are derived from it.
+pub const TERM_FONT_SIZE: f32 = 13.0;
+
+/// Approximate monospace cell metrics for a given font size. Exact glyph measurement is a
+/// future refinement; these ratios keep the grid aligned for typical monospace faces.
+#[derive(Debug, Clone, Copy)]
+pub struct CellMetrics {
+    pub size: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+impl CellMetrics {
+    pub fn new(size: f32) -> Self {
+        Self { size, width: size * 0.6, height: size * 1.4 }
+    }
+
+    /// The grid dimensions (cols, rows) that fit a pixel area, minimum 1×1 (feature 006, FR-014).
+    pub fn grid_size(&self, width: f32, height: f32) -> (u16, u16) {
+        let cols = (width / self.width).floor().max(1.0) as u16;
+        let rows = (height / self.height).floor().max(1.0) as u16;
+        (cols, rows)
+    }
+}
+
+/// Fixed terminal dimensions for constructing an `alacritty_terminal` grid.
 struct TermDimensions {
     rows: usize,
     cols: usize,
@@ -45,15 +77,13 @@ impl Dimensions for TermDimensions {
     }
 }
 
-/// A live PTY session: writer + child, a shared raw-output buffer the reader thread appends
-/// to, and the VT emulator that interprets it into a renderable grid.
+/// A live PTY session: writer + child, a shared raw-output buffer the reader thread appends to,
+/// the VT emulator, and a canvas cache invalidated when new output arrives (feature 006).
 pub struct RuntimeTerminal {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     child: Box<dyn portable_pty::Child + Send + Sync>,
-    /// Raw bytes streamed from the child, awaiting interpretation (drained by [`Self::pump`]).
     output: Arc<Mutex<Vec<u8>>>,
-    /// The VT emulator turning the byte stream into a character grid.
     term: Term<VoidListener>,
     parser: Processor,
     rows: usize,
@@ -61,7 +91,8 @@ pub struct RuntimeTerminal {
 }
 
 impl RuntimeTerminal {
-    /// Feed any newly-streamed bytes into the VT emulator (call on the UI tick).
+    /// Feed newly-streamed bytes into the VT emulator (call on the UI tick). Invalidates the
+    /// render cache only when bytes were actually applied.
     pub fn pump(&mut self) {
         let bytes = std::mem::take(&mut *self.output.lock().unwrap());
         if !bytes.is_empty() {
@@ -69,40 +100,32 @@ impl RuntimeTerminal {
         }
     }
 
-    /// The current visible screen as plain text (escape sequences already interpreted).
-    pub fn screen_text(&self) -> String {
-        let mut grid = vec![vec![' '; self.cols]; self.rows];
-        let content = self.term.renderable_content();
-        for cell in content.display_iter {
-            let line = cell.point.line.0;
-            let col = cell.point.column.0;
-            if line >= 0 && (line as usize) < self.rows && col < self.cols {
-                let c = cell.c;
-                grid[line as usize][col] = if c == '\0' { ' ' } else { c };
-            }
-        }
-        grid.into_iter()
-            .map(|r| r.into_iter().collect::<String>().trim_end().to_string())
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    /// Write raw bytes (e.g. a submitted line + newline) to the child (FR-014).
+    /// Write raw bytes to the child (FR-014, FR-008).
     pub fn write(&mut self, bytes: &[u8]) -> std::io::Result<()> {
         self.writer.write_all(bytes)?;
         self.writer.flush()
     }
 
-    /// Resize the PTY to `rows`×`cols`.
-    pub fn resize(&mut self, rows: u16, cols: u16) -> std::io::Result<()> {
+    /// Scroll the display by `delta` lines (+ up into scrollback) (FR-016).
+    pub fn scroll(&mut self, delta: i32) {
+        use alacritty_terminal::grid::Scroll;
+        if delta != 0 {
+            self.term.grid_mut().scroll_display(Scroll::Delta(delta));
+        }
+    }
+
+    /// Resize the PTY and the VT grid to `cols`×`rows` (FR-014, FR-015).
+    pub fn resize(&mut self, cols: u16, rows: u16) -> std::io::Result<()> {
+        if cols == 0 || rows == 0 || (cols as usize == self.cols && rows as usize == self.rows) {
+            return Ok(());
+        }
         self.master
-            .resize(PtySize {
-                rows,
-                cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(std::io::Error::other)
+            .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+            .map_err(std::io::Error::other)?;
+        self.term.resize(TermSize::new(cols as usize, rows as usize));
+        self.cols = cols as usize;
+        self.rows = rows as usize;
+        Ok(())
     }
 
     /// Terminate the child process (FR-015a).
@@ -114,6 +137,96 @@ impl RuntimeTerminal {
     pub fn has_exited(&mut self) -> bool {
         matches!(self.child.try_wait(), Ok(Some(_)))
     }
+
+    /// The current grid size in cells.
+    pub fn size(&self) -> (u16, u16) {
+        (self.cols as u16, self.rows as u16)
+    }
+
+    /// The interpreted screen content for rendering (borrows the grid).
+    pub fn renderable(&self) -> RenderableContent<'_> {
+        self.term.renderable_content()
+    }
+
+    /// The key-encoding-relevant terminal mode (cursor-key mode, alt-screen) (feature 006).
+    pub fn key_term_mode(&self) -> micold_ai_ide::keymap::TermMode {
+        let mode = self.term.renderable_content().mode;
+        micold_ai_ide::keymap::TermMode {
+            app_cursor: mode.contains(TermMode::APP_CURSOR),
+            alt_screen: mode.contains(TermMode::ALT_SCREEN),
+        }
+    }
+
+    /// Whether the process has enabled mouse reporting (feature 006, FR-013a).
+    pub fn mouse_mode(&self) -> bool {
+        self.term
+            .renderable_content()
+            .mode
+            .intersects(TermMode::MOUSE_MODE)
+    }
+
+    /// The grid point for a viewport cell, accounting for scrollback offset.
+    fn viewport_point(&self, col: u16, line: u16) -> Point {
+        let display_offset = self.term.grid().display_offset();
+        let col = (col as usize).min(self.cols.saturating_sub(1));
+        let line = (line as usize).min(self.rows.saturating_sub(1));
+        viewport_to_point(display_offset, Point::new(line, Column(col)))
+    }
+
+    /// Begin a text selection at a viewport grid cell (FR-013).
+    pub fn selection_start(&mut self, col: u16, line: u16, kind: SelectKind) {
+        let ty = match kind {
+            SelectKind::Simple => SelectionType::Simple,
+            SelectKind::Semantic => SelectionType::Semantic,
+            SelectKind::Lines => SelectionType::Lines,
+        };
+        let point = self.viewport_point(col, line);
+        self.term.selection = Some(Selection::new(ty, point, Side::Left));
+    }
+
+    /// Extend the in-progress selection to a viewport grid cell (FR-013).
+    pub fn selection_update(&mut self, col: u16, line: u16) {
+        let point = self.viewport_point(col, line);
+        if let Some(sel) = self.term.selection.as_mut() {
+            sel.update(point, Side::Left);
+        }
+    }
+
+    /// Clear the current text selection.
+    pub fn selection_clear(&mut self) {
+        self.term.selection = None;
+    }
+
+    /// Encode a mouse event as a terminal mouse-report sequence, or `None` when the process has
+    /// not enabled mouse reporting (FR-013a). `button`: 0=left, 1=middle, 2=right, 64/65=wheel.
+    pub fn mouse_report_bytes(
+        &self,
+        button: u8,
+        col: u16,
+        line: u16,
+        pressed: bool,
+        shift: bool,
+        alt: bool,
+        ctrl: bool,
+    ) -> Option<Vec<u8>> {
+        let mode = self.term.renderable_content().mode;
+        encode_mouse_report(mode, button, col, line, pressed, shift, alt, ctrl)
+    }
+
+    /// The currently-selected text, or empty when there is no selection (feature 006 copy).
+    pub fn selectable_content(&self) -> String {
+        let content = self.term.renderable_content();
+        let Some(range) = content.selection else {
+            return String::new();
+        };
+        let mut out = String::new();
+        for cell in content.display_iter {
+            if range.contains(cell.point) {
+                out.push(cell.c);
+            }
+        }
+        out
+    }
 }
 
 impl TerminalHandle for RuntimeTerminal {
@@ -121,23 +234,19 @@ impl TerminalHandle for RuntimeTerminal {
         self.write(bytes)
     }
     fn resize(&mut self, rows: u16, cols: u16) -> std::io::Result<()> {
-        RuntimeTerminal::resize(self, rows, cols)
+        RuntimeTerminal::resize(self, cols, rows)
     }
     fn kill(&mut self) -> std::io::Result<()> {
         RuntimeTerminal::kill(self)
     }
 }
 
-/// Spawn `claude` for `spec` in a PTY and start streaming its output (research R1/R4/R6).
-pub fn spawn_pty(spec: &LaunchSpec) -> std::io::Result<RuntimeTerminal> {
+/// Spawn `claude` for `spec` in a PTY and start streaming its output. `scrollback_lines` sets the
+/// VT grid's history depth (feature 006, FR-016/FR-020).
+pub fn spawn_pty(spec: &LaunchSpec, scrollback_lines: usize) -> std::io::Result<RuntimeTerminal> {
     let pty = native_pty_system();
     let pair = pty
-        .openpty(PtySize {
-            rows: ROWS,
-            cols: COLS,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
+        .openpty(PtySize { rows: INIT_ROWS, cols: INIT_COLS, pixel_width: 0, pixel_height: 0 })
         .map_err(std::io::Error::other)?;
 
     let mut cmd = CommandBuilder::new("claude");
@@ -149,17 +258,10 @@ pub fn spawn_pty(spec: &LaunchSpec) -> std::io::Result<RuntimeTerminal> {
         cmd.arg(arg);
     }
 
-    let child = pair
-        .slave
-        .spawn_command(cmd)
-        .map_err(std::io::Error::other)?;
-    // Drop the slave so EOF propagates once the child exits.
+    let child = pair.slave.spawn_command(cmd).map_err(std::io::Error::other)?;
     drop(pair.slave);
 
-    let mut reader = pair
-        .master
-        .try_clone_reader()
-        .map_err(std::io::Error::other)?;
+    let mut reader = pair.master.try_clone_reader().map_err(std::io::Error::other)?;
     let writer = pair.master.take_writer().map_err(std::io::Error::other)?;
 
     let output = Arc::new(Mutex::new(Vec::new()));
@@ -175,11 +277,9 @@ pub fn spawn_pty(spec: &LaunchSpec) -> std::io::Result<RuntimeTerminal> {
         }
     });
 
-    let dims = TermDimensions {
-        rows: ROWS as usize,
-        cols: COLS as usize,
-    };
-    let term = Term::new(Config::default(), &dims, VoidListener);
+    let dims = TermDimensions { rows: INIT_ROWS as usize, cols: INIT_COLS as usize };
+    let config = Config { scrolling_history: scrollback_lines, ..Config::default() };
+    let term = Term::new(config, &dims, VoidListener);
     let parser = Processor::new();
 
     Ok(RuntimeTerminal {
@@ -189,30 +289,223 @@ pub fn spawn_pty(spec: &LaunchSpec) -> std::io::Result<RuntimeTerminal> {
         output,
         term,
         parser,
-        rows: ROWS as usize,
-        cols: COLS as usize,
+        rows: INIT_ROWS as usize,
+        cols: INIT_COLS as usize,
     })
 }
 
-/// The production [`TerminalBackend`] (constitution seam per contracts/terminal-backend-trait.md).
-/// The binary uses [`spawn_pty`] directly so it can also read the interpreted grid for
-/// rendering; this impl keeps the abstract seam satisfiable (and swappable for `iced_term`).
+/// The production [`TerminalBackend`] (constitution seam). The binary uses [`spawn_pty`] directly
+/// so it can also read the interpreted grid for rendering.
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub struct PtyTerminalBackend;
 
 impl TerminalBackend for PtyTerminalBackend {
     fn spawn(&self, spec: LaunchSpec) -> std::io::Result<Box<dyn TerminalHandle>> {
-        Ok(Box::new(spawn_pty(&spec)?))
+        Ok(Box::new(spawn_pty(&spec, 10_000)?))
     }
 }
 
-/// Render the terminal pane for the active session (FR-012). `output` is the interpreted
-/// screen text of the active session (supplied by the binary); `None` renders an empty state.
+/// Maps `alacritty_terminal` ANSI colours to iced colours (feature 006, FR-001/FR-003). Default
+/// foreground/background follow the app's active theme; the 16 ANSI colours use a fixed
+/// conventional palette (programs assume standard colours — SC-002).
+#[derive(Debug, Clone)]
+pub struct TermPalette {
+    fg: Color,
+    bg: Color,
+    accent: Color,
+    ansi16: [Color; 16],
+}
+
+impl TermPalette {
+    /// Build a palette whose default fg/bg follow the active light/dark scheme (FR-003), with
+    /// the theme's primary as the focus-indicator accent.
+    pub fn from_scheme(scheme: ColorScheme) -> Self {
+        let r = tokens::roles(scheme);
+        Self {
+            fg: rgb_to_color(r.on_surface),
+            bg: rgb_to_color(r.surface),
+            accent: rgb_to_color(r.primary),
+            ansi16: STANDARD_ANSI16,
+        }
+    }
+
+    /// The default background (the pane's fill).
+    pub fn background(&self) -> Color {
+        self.bg
+    }
+
+    /// The default foreground.
+    pub fn foreground(&self) -> Color {
+        self.fg
+    }
+
+    /// The focus-indicator accent color.
+    pub fn accent(&self) -> Color {
+        self.accent
+    }
+
+    /// Resolve an ANSI colour to an iced colour (16 / bright / 256 / truecolor).
+    pub fn color(&self, c: AnsiColor) -> Color {
+        match c {
+            AnsiColor::Spec(rgb) => Color::from_rgb8(rgb.r, rgb.g, rgb.b),
+            AnsiColor::Named(named) => match named {
+                NamedColor::Foreground => self.fg,
+                NamedColor::Background => self.bg,
+                NamedColor::Black => self.ansi16[0],
+                NamedColor::Red => self.ansi16[1],
+                NamedColor::Green => self.ansi16[2],
+                NamedColor::Yellow => self.ansi16[3],
+                NamedColor::Blue => self.ansi16[4],
+                NamedColor::Magenta => self.ansi16[5],
+                NamedColor::Cyan => self.ansi16[6],
+                NamedColor::White => self.ansi16[7],
+                NamedColor::BrightBlack => self.ansi16[8],
+                NamedColor::BrightRed => self.ansi16[9],
+                NamedColor::BrightGreen => self.ansi16[10],
+                NamedColor::BrightYellow => self.ansi16[11],
+                NamedColor::BrightBlue => self.ansi16[12],
+                NamedColor::BrightMagenta => self.ansi16[13],
+                NamedColor::BrightCyan => self.ansi16[14],
+                NamedColor::BrightWhite => self.ansi16[15],
+                _ => self.fg,
+            },
+            AnsiColor::Indexed(i) => {
+                if (i as usize) < 16 {
+                    self.ansi16[i as usize]
+                } else {
+                    indexed_256(i)
+                }
+            }
+        }
+    }
+}
+
+fn rgb_to_color(c: Rgb) -> Color {
+    Color::from_rgb8(c.r, c.g, c.b)
+}
+
+/// A conventional 16-colour ANSI palette (standard + bright), theme-independent (SC-002).
+const STANDARD_ANSI16: [Color; 16] = [
+    Color::from_rgb(0.0, 0.0, 0.0),                      // black
+    Color::from_rgb(0.674, 0.259, 0.259),                // red
+    Color::from_rgb(0.564, 0.663, 0.349),                // green
+    Color::from_rgb(0.956, 0.749, 0.459),                // yellow
+    Color::from_rgb(0.416, 0.623, 0.71),                 // blue
+    Color::from_rgb(0.666, 0.458, 0.623),                // magenta
+    Color::from_rgb(0.458, 0.71, 0.666),                 // cyan
+    Color::from_rgb(0.847, 0.847, 0.847),                // white
+    Color::from_rgb(0.419, 0.419, 0.419),                // bright black
+    Color::from_rgb(0.772, 0.333, 0.333),                // bright red
+    Color::from_rgb(0.667, 0.769, 0.454),                // bright green
+    Color::from_rgb(0.996, 0.792, 0.533),                // bright yellow
+    Color::from_rgb(0.509, 0.721, 0.784),                // bright blue
+    Color::from_rgb(0.76, 0.549, 0.721),                 // bright magenta
+    Color::from_rgb(0.576, 0.827, 0.764),                // bright cyan
+    Color::from_rgb(0.972, 0.972, 0.972),                // bright white
+];
+
+/// The xterm 256-colour cube + grayscale ramp for indices ≥ 16.
+fn indexed_256(i: u8) -> Color {
+    if i < 16 {
+        return STANDARD_ANSI16[i as usize];
+    }
+    if i < 232 {
+        let i = i - 16;
+        let r = i / 36;
+        let g = (i % 36) / 6;
+        let b = i % 6;
+        let comp = |v: u8| -> f32 {
+            if v == 0 {
+                0.0
+            } else {
+                (v as f32 * 40.0 + 55.0) / 255.0
+            }
+        };
+        Color::from_rgb(comp(r), comp(g), comp(b))
+    } else {
+        let level = (i - 232) as f32 * 10.0 + 8.0;
+        let v = level / 255.0;
+        Color::from_rgb(v, v, v)
+    }
+}
+
+/// Resolve per-cell fg/bg/flags into final draw colours + font (feature 006 rendering helper).
+pub fn cell_colors(palette: &TermPalette, fg: AnsiColor, bg: AnsiColor, flags: Flags) -> (Color, Color) {
+    let mut f = palette.color(fg);
+    let mut b = palette.color(bg);
+    if flags.intersects(Flags::DIM | Flags::DIM_BOLD) {
+        f.a *= 0.7;
+    }
+    if flags.contains(Flags::INVERSE) {
+        std::mem::swap(&mut f, &mut b);
+    }
+    if flags.contains(Flags::HIDDEN) {
+        f = b;
+    }
+    (f, b)
+}
+
+/// The bold/italic font for a cell's flags.
+pub fn cell_font(flags: Flags) -> Font {
+    let mut font = Font::MONOSPACE;
+    if flags.intersects(Flags::BOLD | Flags::DIM_BOLD | Flags::BOLD_ITALIC) {
+        font.weight = iced::font::Weight::Bold;
+    }
+    if flags.intersects(Flags::ITALIC | Flags::BOLD_ITALIC) {
+        font.style = iced::font::Style::Italic;
+    }
+    font
+}
+
+/// Whether the terminal is currently showing its cursor.
+pub fn shows_cursor(mode: TermMode) -> bool {
+    mode.contains(TermMode::SHOW_CURSOR)
+}
+
+/// Encode a mouse event into a terminal mouse-report sequence for `mode`, or `None` when mouse
+/// reporting is off (feature 006, FR-013a). Pure over `TermMode` so it is unit-testable.
+/// `button`: 0=left, 1=middle, 2=right, 64/65=wheel up/down.
+pub fn encode_mouse_report(
+    mode: TermMode,
+    button: u8,
+    col: u16,
+    line: u16,
+    pressed: bool,
+    shift: bool,
+    alt: bool,
+    ctrl: bool,
+) -> Option<Vec<u8>> {
+    if !mode.intersects(TermMode::MOUSE_MODE) {
+        return None;
+    }
+    let mut mods = 0u8;
+    if shift {
+        mods += 4;
+    }
+    if alt {
+        mods += 8;
+    }
+    if ctrl {
+        mods += 16;
+    }
+    if mode.contains(TermMode::SGR_MOUSE) {
+        let c = if pressed { 'M' } else { 'm' };
+        Some(format!("\x1b[<{};{};{}{}", button + mods, col + 1, line + 1, c).into_bytes())
+    } else {
+        let b = if pressed { button + mods } else { 3 + mods };
+        let cx = 32 + 1 + (col.min(222) as u8);
+        let cy = 32 + 1 + (line.min(222) as u8);
+        Some(vec![0x1b, b'[', b'M', 32 + b, cx, cy])
+    }
+}
+
+/// Render the terminal pane for the active session (FR-012). `terminal` is the active session's
+/// live runtime (colour-rendered); `None` renders an empty state.
 pub fn pane<'a>(
     state: &'a State,
-    output: Option<&str>,
-    scheme: micold_ai_ide::theme::ColorScheme,
+    terminal: Option<&'a RuntimeTerminal>,
+    scheme: ColorScheme,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
@@ -229,33 +522,45 @@ pub fn pane<'a>(
     };
 
     let status = session_status(state, active);
-    let header = row![
+    let mut header = row![
         text(session_title(state, active)).size(type_scale::TITLE),
         container(text("").width(Length::Fill)).width(Length::Fill),
         text(status).size(type_scale::LABEL).style(style::muted(r)),
     ]
     .spacing(spacing::SM);
+    // While the terminal holds focus, offer an explicit way out (FR-011) alongside the reserved
+    // Ctrl+Shift+E chord and click-outside.
+    if state.terminal_focused {
+        header = header.push(
+            button(
+                text("⎋ release focus (Ctrl+Shift+E)")
+                    .size(type_scale::LABEL)
+                    .style(style::muted(r)),
+            )
+            .padding(spacing::XS)
+            .style(style::text_button(r))
+            .on_press(Message::TerminalFocusReleased),
+        );
+    }
 
-    let body = scrollable(
-        text(output.unwrap_or("").to_string())
-            .font(Font::MONOSPACE)
-            .size(type_scale::LABEL),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill);
+    // The colour-rendering terminal body (feature 006). Falls back to an empty state if the
+    // runtime is not yet available (e.g. the session is still starting).
+    let body: Element<'a, Message> = match terminal {
+        Some(rt) => TerminalPane::new(rt, TermPalette::from_scheme(scheme))
+            .focused(state.terminal_focused)
+            .into(),
+        None => container(text("Starting…").size(type_scale::LABEL).style(style::muted(r)))
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .into(),
+    };
 
-    let input = text_input("Type a message and press Enter…", &state.terminal_input)
-        .on_input(Message::TerminalInputChanged)
-        .on_submit(Message::TerminalLineSubmitted)
-        .font(Font::MONOSPACE)
-        .padding(spacing::SM)
-        .style(style::input(r));
-
+    // Feature 006 US2: keystrokes stream live to the PTY through the focused `TerminalPane`;
+    // the old line-input box is gone (FR-008). Click the terminal to focus it, then type.
     container(
         column![
             header,
             container(body).height(Length::Fill).width(Length::Fill),
-            input
         ]
         .spacing(spacing::SM),
     )
@@ -287,5 +592,104 @@ fn session_status(state: &State, id: SessionId) -> &'static str {
         Some(SessionLifecycle::Failed) => "failed",
         Some(SessionLifecycle::Idle) => "idle",
         None => "",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Colour-mapping tests for `TermPalette` (feature 006, FR-001/FR-003). Bin unit tests —
+    //! run with `cargo test --features gui`. See contracts/terminal-render-input.md.
+    use super::*;
+    use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Rgb as AnsiRgb};
+
+    #[test]
+    fn spec_maps_to_truecolor() {
+        let p = TermPalette::from_scheme(ColorScheme::Dark);
+        let c = p.color(AnsiColor::Spec(AnsiRgb { r: 10, g: 20, b: 30 }));
+        assert_eq!(c, Color::from_rgb8(10, 20, 30));
+    }
+
+    #[test]
+    fn indexed_0_to_15_use_the_ansi16_palette() {
+        let p = TermPalette::from_scheme(ColorScheme::Dark);
+        for i in 0u8..16 {
+            assert_eq!(p.color(AnsiColor::Indexed(i)), STANDARD_ANSI16[i as usize]);
+        }
+    }
+
+    #[test]
+    fn named_black_and_bright_white_match_ansi16() {
+        let p = TermPalette::from_scheme(ColorScheme::Light);
+        assert_eq!(p.color(AnsiColor::Named(NamedColor::Black)), STANDARD_ANSI16[0]);
+        assert_eq!(p.color(AnsiColor::Named(NamedColor::BrightWhite)), STANDARD_ANSI16[15]);
+    }
+
+    #[test]
+    fn indexed_256_cube_starts_at_black() {
+        let p = TermPalette::from_scheme(ColorScheme::Dark);
+        // Index 16 is the first colour-cube entry (0,0,0).
+        assert_eq!(p.color(AnsiColor::Indexed(16)), Color::from_rgb(0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn default_fg_bg_follow_the_theme() {
+        let light = TermPalette::from_scheme(ColorScheme::Light);
+        let dark = TermPalette::from_scheme(ColorScheme::Dark);
+        // Default background differs between light and dark schemes (FR-003).
+        assert_ne!(light.background(), dark.background());
+        // Named Foreground/Background resolve to the theme defaults, not the ANSI palette.
+        assert_eq!(dark.color(AnsiColor::Named(NamedColor::Foreground)), dark.foreground());
+        assert_eq!(dark.color(AnsiColor::Named(NamedColor::Background)), dark.background());
+    }
+
+    #[test]
+    fn inverse_flag_swaps_fg_and_bg() {
+        let p = TermPalette::from_scheme(ColorScheme::Dark);
+        let fg = AnsiColor::Named(NamedColor::Foreground);
+        let bg = AnsiColor::Named(NamedColor::Background);
+        let (f, b) = cell_colors(&p, fg, bg, Flags::INVERSE);
+        assert_eq!(f, p.background());
+        assert_eq!(b, p.foreground());
+    }
+
+    #[test]
+    fn no_mouse_report_when_mouse_mode_off() {
+        assert_eq!(
+            encode_mouse_report(TermMode::empty(), 0, 3, 4, true, false, false, false),
+            None
+        );
+    }
+
+    #[test]
+    fn sgr_mouse_report_is_one_based_with_press_marker() {
+        let mode = TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE;
+        // Left button (0) press at grid (col 3, line 4) → CSI < 0 ; 4 ; 5 M.
+        let seq = encode_mouse_report(mode, 0, 3, 4, true, false, false, false).unwrap();
+        assert_eq!(seq, b"\x1b[<0;4;5M");
+        // Release uses the lowercase 'm' terminator.
+        let seq = encode_mouse_report(mode, 0, 3, 4, false, false, false, false).unwrap();
+        assert_eq!(seq, b"\x1b[<0;4;5m");
+    }
+
+    #[test]
+    fn sgr_mouse_report_adds_modifier_bits() {
+        let mode = TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE;
+        // Shift adds 4 to the button code.
+        let seq = encode_mouse_report(mode, 0, 0, 0, true, true, false, false).unwrap();
+        assert_eq!(seq, b"\x1b[<4;1;1M");
+    }
+
+    #[test]
+    fn grid_size_fits_cells_and_floors() {
+        let m = CellMetrics::new(TERM_FONT_SIZE); // width 7.8, height 18.2
+        // 800x600 → floor(800/7.8)=102 cols, floor(600/18.2)=32 rows.
+        assert_eq!(m.grid_size(800.0, 600.0), (102, 32));
+    }
+
+    #[test]
+    fn grid_size_is_at_least_one_by_one() {
+        let m = CellMetrics::new(TERM_FONT_SIZE);
+        assert_eq!(m.grid_size(0.0, 0.0), (1, 1));
+        assert_eq!(m.grid_size(3.0, 3.0), (1, 1));
     }
 }

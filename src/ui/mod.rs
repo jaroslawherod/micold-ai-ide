@@ -4,6 +4,7 @@ mod about;
 mod material;
 mod project_selector;
 mod rename;
+mod settings_form;
 mod shell;
 mod sidebar;
 pub mod style;
@@ -63,7 +64,7 @@ impl Default for Anim {
 /// material motion progress (menu fade, sidebar slide, main-view fade).
 pub fn view<'a>(
     state: &'a State,
-    terminal_output: Option<&str>,
+    terminal: Option<&'a terminal::RuntimeTerminal>,
     anim: Anim,
 ) -> Element<'a, Message> {
     let scheme = state.color_scheme();
@@ -75,7 +76,7 @@ pub fn view<'a>(
     // sidebar slides in/out and is resizable; the main content fades when it changes.
     let body: Element<'a, Message> = if state.workspace.active_project().is_some() {
         let main_inner: Element<'a, Message> = if state.active_session.is_some() {
-            terminal::pane(state, terminal_output, scheme)
+            terminal::pane(state, terminal, scheme)
         } else {
             shell::view(state, scheme)
         };
@@ -117,13 +118,14 @@ pub fn view<'a>(
     }
 
     // Float the toolbar's overflow menu over everything (no toolbar reflow), fading in/out.
-    let base = material::menu_overlay(
+    let base = material::MenuOverlay::new(
         base,
-        anim.menu,
         toolbar::overflow_items(state),
         Message::HelpMenuToggled,
         roles,
-    );
+    )
+    .progress(anim.menu)
+    .into();
 
     match state.overlay {
         Overlay::None => base,
@@ -141,12 +143,23 @@ pub fn view<'a>(
             Some(form) => worktree_form::modal(base, form, state.worktree_error.as_deref(), scheme),
             None => base,
         },
+        Overlay::Settings => match &state.settings_draft {
+            Some(draft) => settings_form::modal(base, draft, scheme),
+            None => base,
+        },
     }
 }
 
 /// Keyboard subscription. While a modal overlay is open, Esc dismisses it — the About
 /// dialog (FR-011) or the project selector. Mirrors [`micold_ai_ide::app::on_escape`].
+///
+/// Feature 006 (FR-009): while the embedded terminal holds focus, the app binds NO global
+/// keyboard shortcuts — every key is owned by the focused terminal widget (so Esc and any app
+/// chord reach the `claude` process instead of driving the app).
 pub fn subscription(state: &State) -> Subscription<Message> {
+    if state.terminal_focused {
+        return Subscription::none();
+    }
     // `on_key_press` takes a non-capturing `fn`, so each overlay supplies its own.
     match state.overlay {
         Overlay::None => Subscription::none(),
@@ -165,6 +178,10 @@ pub fn subscription(state: &State) -> Subscription<Message> {
         Overlay::AddWorktree => iced::keyboard::on_key_press(|key, _modifiers| {
             use iced::keyboard::{key::Named, Key};
             matches!(key, Key::Named(Named::Escape)).then_some(Message::AddWorktreeCancelled)
+        }),
+        Overlay::Settings => iced::keyboard::on_key_press(|key, _modifiers| {
+            use iced::keyboard::{key::Named, Key};
+            matches!(key, Key::Named(Named::Escape)).then_some(Message::SettingsCancelled)
         }),
     }
 }

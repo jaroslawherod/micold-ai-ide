@@ -87,9 +87,24 @@ impl<M> TreeItem<'_, M> {
     }
 }
 
-/// Render a tree from a flat, pre-ordered list of items (Principle VIII reusable primitive).
-pub fn tree_view<'a, M: Clone + 'a>(items: Vec<TreeItem<'a, M>>, r: Roles) -> Element<'a, M> {
-    let mut col = column![].spacing(spacing::XS).width(Length::Fill);
+/// A tree rendered from a flat, pre-ordered list of [`TreeItem`]s (Principle VIII reusable
+/// primitive, builder form): `TreeView::new(items, roles).into()`.
+pub struct TreeView<'a, M> {
+    items: Vec<TreeItem<'a, M>>,
+    roles: Roles,
+}
+
+impl<'a, M: Clone + 'a> TreeView<'a, M> {
+    /// A tree from a flat, pre-ordered `items` list, themed by `roles`.
+    pub fn new(items: Vec<TreeItem<'a, M>>, roles: Roles) -> Self {
+        Self { items, roles }
+    }
+}
+
+impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
+    fn from(tv: TreeView<'a, M>) -> Self {
+        let TreeView { items, roles: r } = tv;
+        let mut col = column![].spacing(spacing::XS).width(Length::Fill);
 
     for item in items {
         let indent = spacing::MD + item.depth * spacing::MD;
@@ -136,7 +151,7 @@ pub fn tree_view<'a, M: Clone + 'a>(items: Vec<TreeItem<'a, M>>, r: Roles) -> El
                 .style(style::text_button(r))
                 .on_press(msg);
             let trailing: Element<'a, M> = match item.trailing_tooltip {
-                Some(tip) => super::with_tooltip(btn, tip, r),
+                Some(tip) => super::Tooltip::new(btn, tip, r).into(),
                 None => btn.into(),
             };
             line = line.push(trailing);
@@ -177,5 +192,6 @@ pub fn tree_view<'a, M: Clone + 'a>(items: Vec<TreeItem<'a, M>>, r: Roles) -> El
         }
     }
 
-    col.into()
+        col.into()
+    }
 }

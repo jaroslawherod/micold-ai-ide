@@ -47,6 +47,8 @@ pub enum Icon {
     HideSidebar,
     /// Expand/show the sidebar.
     ShowSidebar,
+    /// Application settings (feature 006).
+    Settings,
 }
 
 impl Icon {
@@ -68,6 +70,7 @@ impl Icon {
         Icon::AutoMode,
         Icon::HideSidebar,
         Icon::ShowSidebar,
+        Icon::Settings,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -90,6 +93,7 @@ impl Icon {
             Icon::AutoMode => '\u{e1ab}',
             Icon::HideSidebar => '\u{f717}',
             Icon::ShowSidebar => '\u{f716}',
+            Icon::Settings => '\u{e8b8}',
         }
     }
 }

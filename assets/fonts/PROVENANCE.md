@@ -21,7 +21,7 @@ fonttools varLib.instancer "MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].ttf" \
 
 # 2. Subset to the curated codepoints
 pyftsubset _static.ttf \
-  --unicodes=e5d8,f0be,eaf5,f097,f8b6,e2c8,e8fd,e88e,e145,e97a,e5d4,e518,e51c,e1ab,f717,f716 \
+  --unicodes=e5d8,f0be,eaf5,f097,f8b6,e2c8,e8fd,e88e,e145,e97a,e5d4,e518,e51c,e1ab,f717,f716,e8b8 \
   --output-file=MaterialSymbolsOutlined.ttf --name-IDs='*' --recalc-bounds
 ```
 
@@ -50,6 +50,7 @@ pyftsubset _static.ttf \
 | `AutoMode`     | `brightness_auto`      | `E1AB`         |
 | `HideSidebar`  | `left_panel_close`     | `F717`         |
 | `ShowSidebar`  | `left_panel_open`      | `F716`         |
+| `Settings`     | `settings`             | `E8B8`         |
 
 These codepoints are taken from the upstream `.codepoints` manifest and are pinned in
 `src/icons.rs`; the mapping is regression-locked by `tests/icons.rs` and glyph presence is

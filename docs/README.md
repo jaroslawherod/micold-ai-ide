@@ -15,4 +15,6 @@ verified in CI.
 - [Icons](user-guide/icons.md) — the shared Material icon set, where each icon appears, theming,
   licensing, and how to add a new icon.
 - [Worktrees & Sessions](user-guide/worktrees-and-sessions.md) — opening a git project, the
-  worktree sidebar, creating worktrees, and running `claude` sessions in the embedded terminal.
+  worktree sidebar, creating worktrees, and running `claude` sessions in the embedded terminal
+  (colored real-terminal rendering, interactive keyboard/mouse input, focus, resize, scrollback).
+- [Settings](user-guide/settings.md) — the Settings dialog and the terminal scrollback limit.

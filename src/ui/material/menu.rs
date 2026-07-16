@@ -5,7 +5,7 @@
 //! overlay (Angular-Material `mat-menu` style) — so opening it never reflows the toolbar.
 //! Reused for the toolbar's overflow menu; any future dropdown should reuse it.
 
-use crate::ui::material::icon_button;
+use crate::ui::material::IconButton;
 use crate::ui::{icon, style};
 use iced::widget::{button, column, container, mouse_area, row, text, Space};
 use iced::{Alignment, Element, Length};
@@ -38,27 +38,67 @@ const PANEL_WIDTH: f32 = 220.0;
 /// Vertical offset so the panel clears the toolbar (approx. toolbar height).
 const TOP_OFFSET: f32 = 52.0;
 
-/// The menu trigger: an icon button (emitting `on_toggle`) placed in the toolbar.
-pub fn menu_trigger<'a, M: Clone + 'a>(trigger: Icon, on_toggle: M, r: Roles) -> Element<'a, M> {
-    icon_button(trigger, type_scale::BODY, r.on_surface, r, Some(on_toggle))
+/// The menu trigger: an icon button (emitting `on_toggle`) placed in the toolbar. Builder form
+/// (Principle VIII): `MenuTrigger::new(icon, on_toggle, roles).into()`.
+pub struct MenuTrigger<M> {
+    icon: Icon,
+    on_toggle: M,
+    roles: Roles,
 }
 
-/// Float the menu panel over `base`, anchored top-right below the toolbar, with a fade driven
+impl<M> MenuTrigger<M> {
+    /// A trigger showing `icon` that emits `on_toggle` when pressed, themed by `roles`.
+    pub fn new(icon: Icon, on_toggle: M, roles: Roles) -> Self {
+        Self { icon, on_toggle, roles }
+    }
+}
+
+impl<'a, M: Clone + 'a> From<MenuTrigger<M>> for Element<'a, M> {
+    fn from(t: MenuTrigger<M>) -> Self {
+        IconButton::new(t.icon, t.roles).on_press(t.on_toggle).into()
+    }
+}
+
+/// Floats the menu panel over `base`, anchored top-right below the toolbar, with a fade driven
 /// by `progress` (0 = hidden, 1 = fully shown). An invisible full-window backdrop beneath the
 /// panel emits `on_dismiss` on an outside click, so the menu closes without reflowing any
-/// layout. At `progress` 0 the overlay is absent and `base` is returned as-is.
-pub fn menu_overlay<'a, M: Clone + 'a>(
+/// layout. At `progress` ≤ 0 the overlay is absent and `base` is returned as-is. Builder form
+/// (Principle VIII): `MenuOverlay::new(base, items, on_dismiss, roles).progress(p).into()`.
+pub struct MenuOverlay<'a, M> {
     base: Element<'a, M>,
-    progress: f32,
     items: Vec<MenuItem<M>>,
     on_dismiss: M,
-    r: Roles,
-) -> Element<'a, M> {
-    if progress <= 0.001 {
-        return base;
+    roles: Roles,
+    progress: f32,
+}
+
+impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
+    /// A menu panel over `base` with `items`, dismissing via `on_dismiss`, themed by `roles`.
+    /// Fully shown by default; set [`Self::progress`] to fade.
+    pub fn new(
+        base: impl Into<Element<'a, M>>,
+        items: Vec<MenuItem<M>>,
+        on_dismiss: M,
+        roles: Roles,
+    ) -> Self {
+        Self { base: base.into(), items, on_dismiss, roles, progress: 1.0 }
     }
 
-    let mut list = column![].spacing(spacing::XS).width(Length::Fill);
+    /// Fade progress (0 = hidden → returns `base` as-is; 1 = fully shown).
+    pub fn progress(mut self, progress: f32) -> Self {
+        self.progress = progress;
+        self
+    }
+}
+
+impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Element<'a, M> {
+    fn from(m: MenuOverlay<'a, M>) -> Self {
+        let MenuOverlay { base, items, on_dismiss, roles: r, progress } = m;
+        if progress <= 0.001 {
+            return base;
+        }
+
+        let mut list = column![].spacing(spacing::XS).width(Length::Fill);
     for item in items {
         let mut content = row![].spacing(spacing::SM).align_y(Alignment::Center);
         if let Some(glyph) = item.icon {
@@ -103,5 +143,6 @@ pub fn menu_overlay<'a, M: Clone + 'a>(
     )
     .on_press(on_dismiss);
 
-    iced::widget::stack![base, backdrop, panel].into()
+        iced::widget::stack![base, backdrop, panel].into()
+    }
 }

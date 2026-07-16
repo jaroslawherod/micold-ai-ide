@@ -1,7 +1,7 @@
 //! The left navigation sidebar: worktrees (top level) → sessions (sub-items), built from the
 //! shared [`tree_view`] primitive (FR-002, FR-003, Constitution Principle VIII).
 
-use crate::ui::material::{icon_button, tree_view, with_tooltip, TreeItem};
+use crate::ui::material::{IconButton, Tooltip, TreeItem, TreeView};
 use crate::ui::style;
 use iced::widget::{column, container, mouse_area, row, text, Space};
 use iced::{Alignment, Element, Length};
@@ -23,25 +23,17 @@ pub fn view(state: &State, scheme: micold_ai_ide::theme::ColorScheme) -> Element
     let width = state.sidebar_width_px() as f32;
 
     // Header: title (fill) + add-worktree + hide, the actions grouped on the right.
-    let add_worktree = with_tooltip(
-        icon_button(
-            Icon::AddWorktree,
-            type_scale::BODY,
-            r.primary,
-            r,
-            Some(Message::AddWorktreeOpened),
-        ),
+    let add_worktree = Tooltip::new(
+        IconButton::new(Icon::AddWorktree, r)
+            .tint(r.primary)
+            .on_press(Message::AddWorktreeOpened),
         "Add a worktree (new git branch)",
         r,
     );
-    let hide = with_tooltip(
-        icon_button(
-            Icon::HideSidebar,
-            type_scale::BODY,
-            r.on_surface_variant,
-            r,
-            Some(Message::SidebarToggled),
-        ),
+    let hide = Tooltip::new(
+        IconButton::new(Icon::HideSidebar, r)
+            .tint(r.on_surface_variant)
+            .on_press(Message::SidebarToggled),
         "Hide sidebar",
         r,
     );
@@ -64,7 +56,7 @@ pub fn view(state: &State, scheme: micold_ai_ide::theme::ColorScheme) -> Element
         .padding(spacing::MD)
         .into()
     } else {
-        tree_view(build_items(state, r), r)
+        TreeView::new(build_items(state, r), r).into()
     };
 
     let content = column![header, body]
@@ -104,14 +96,10 @@ pub fn handle(scheme: micold_ai_ide::theme::ColorScheme) -> Element<'static, Mes
 /// tooltip), wide enough for the icon.
 pub fn collapsed_strip(scheme: micold_ai_ide::theme::ColorScheme) -> Element<'static, Message> {
     let r = tokens::roles(scheme);
-    let show = with_tooltip(
-        icon_button(
-            Icon::ShowSidebar,
-            type_scale::BODY,
-            r.on_surface_variant,
-            r,
-            Some(Message::SidebarToggled),
-        ),
+    let show = Tooltip::new(
+        IconButton::new(Icon::ShowSidebar, r)
+            .tint(r.on_surface_variant)
+            .on_press(Message::SidebarToggled),
         "Show sidebar",
         r,
     );

@@ -64,6 +64,8 @@ pub enum Overlay {
     RenameProject,
     /// The add-worktree form is shown as a modal overlay (feature 005, FR-005).
     AddWorktree,
+    /// The Settings form is shown as a modal overlay (feature 006, FR-019).
+    Settings,
 }
 
 /// In-progress add-worktree form state, present only while the form overlay is open (FR-005).
@@ -103,6 +105,28 @@ pub struct WorktreeNode {
     pub expanded: bool,
     /// The sessions hosted by this worktree (empty unless expanded is irrelevant to data).
     pub sessions: Vec<Session>,
+}
+
+/// The kind of text selection to begin (feature 006, FR-013): single click = character range,
+/// double = semantic (word), triple = whole line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectKind {
+    /// Character-range selection (single click-drag).
+    Simple,
+    /// Semantic (word) selection (double click).
+    Semantic,
+    /// Whole-line selection (triple click).
+    Lines,
+}
+
+/// In-progress Settings form state, present only while the Settings overlay is open (feature
+/// 006, FR-020). The scrollback field is edited as text and validated/parsed on save.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SettingsDraft {
+    /// The editable scrollback-limit value (parsed/validated on save).
+    pub scrollback_lines: String,
+    /// The last validation error shown after a rejected save.
+    pub error: Option<String>,
 }
 
 /// In-progress rename state, present only while the rename dialog is open.
@@ -200,11 +224,6 @@ pub enum Message {
     SessionRunning(SessionId),
     /// The session's `claude` title became available/changed (FR-011a).
     SessionTitleUpdated { id: SessionId, title: String },
-    /// The terminal input line changed (FR-014).
-    TerminalInputChanged(String),
-    /// Submit the current terminal input line to the active session (FR-014). The binary
-    /// writes it to the PTY; the reducer clears the input.
-    TerminalLineSubmitted,
     /// Periodic redraw tick while a terminal is live (drives streamed-output repaint).
     TerminalTick,
     /// Hide or show the sidebar (toggle).
@@ -217,6 +236,38 @@ pub enum Message {
     SidebarDragEnded,
     /// Animation clock tick (drives fade/slide progress; handled by the binary).
     AnimationTick,
+
+    // ---- Feature 006: real terminal behavior ----
+    /// The terminal pane gained input focus (explicit click/action) (FR-010).
+    TerminalFocused,
+    /// Focus was released back to the app (reserved chord / click-outside / affordance) (FR-011).
+    TerminalFocusReleased,
+    /// Bytes to write to the focused session's PTY (from `keymap::encode` / paste). The binary
+    /// writes them only when the session is Running (FR-008, FR-012a).
+    TerminalBytes(Vec<u8>),
+    /// Begin a text selection at a viewport grid cell (feature 006 mouse, FR-013/FR-013b).
+    TerminalSelectStart { col: u16, line: u16, kind: SelectKind },
+    /// Extend the in-progress text selection to a viewport grid cell (FR-013).
+    TerminalSelectUpdate { col: u16, line: u16 },
+    /// Clear the current text selection.
+    TerminalSelectCleared,
+    /// Scroll the displayed terminal by N lines (+ up into scrollback) (FR-016).
+    TerminalScrolled(i32),
+    /// The terminal pane's visible size changed; resize the PTY + grid (FR-014, FR-015).
+    TerminalResized { cols: u16, rows: u16 },
+    /// Copy the current terminal selection to the clipboard (binary handles clipboard) (FR-013).
+    TerminalCopyRequested,
+    /// Paste clipboard text into the focused session's PTY (binary handles clipboard) (FR-013).
+    TerminalPasteRequested,
+    /// Open the Settings form (from the toolbar menu) (FR-019). The binary seeds the draft with
+    /// the current scrollback value.
+    SettingsOpened,
+    /// The Settings scrollback field changed.
+    SettingsScrollbackChanged(String),
+    /// Save the Settings form (validated + persisted by the binary) (FR-020, FR-021).
+    SettingsSaved,
+    /// Dismiss the Settings form without saving (Cancel or Esc).
+    SettingsCancelled,
 }
 
 /// Root application state for the single main window.
@@ -249,15 +300,17 @@ pub struct State {
     /// A message shown when opening a non-git directory was refused (FR-001a), or a worktree
     /// create failed (FR-017). Transient.
     pub worktree_error: Option<String>,
-    /// The active terminal's pending input line (FR-014). Transient; the binary writes it to
-    /// the PTY on submit.
-    pub terminal_input: String,
     /// Whether the sidebar is collapsed/hidden. Default (`false`) is visible.
     pub sidebar_hidden: bool,
     /// The sidebar width in pixels. `0` means "use the default width" (see [`State::sidebar_width_px`]).
     pub sidebar_width: u16,
     /// Whether a sidebar resize drag is in progress (transient).
     pub sidebar_dragging: bool,
+    /// Whether the embedded terminal holds input focus (feature 006). Default `false`; keys are
+    /// delivered to the session process only while `true` (FR-009/FR-010/FR-012).
+    pub terminal_focused: bool,
+    /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
+    pub settings_draft: Option<SettingsDraft>,
 }
 
 impl State {
@@ -470,13 +523,6 @@ impl State {
                     self.active_session = None;
                 }
             }
-            Message::TerminalInputChanged(text) => {
-                self.terminal_input = text;
-            }
-            Message::TerminalLineSubmitted => {
-                // The binary writes the line to the PTY before delegating here; clear it.
-                self.terminal_input.clear();
-            }
             Message::TerminalTick => {}
             Message::SidebarToggled => {
                 self.sidebar_hidden = !self.sidebar_hidden;
@@ -495,13 +541,54 @@ impl State {
             // Animation progress is tracked by the binary (gui runtime), not the pure core.
             Message::AnimationTick => {}
 
+            // ---- Feature 006 ----
+            Message::TerminalFocused => {
+                self.terminal_focused = true;
+            }
+            Message::TerminalFocusReleased => {
+                self.terminal_focused = false;
+            }
+            Message::SettingsOpened => {
+                self.overlay = Overlay::Settings;
+                self.help_menu_open = false;
+                // The binary seeds the current value; ensure a draft exists for the reducer path.
+                if self.settings_draft.is_none() {
+                    self.settings_draft = Some(SettingsDraft::default());
+                }
+            }
+            Message::SettingsScrollbackChanged(text) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.scrollback_lines = text;
+                    draft.error = None;
+                }
+            }
+            Message::SettingsSaved => {
+                // Validation + persistence happen in the binary; the reducer closes the form.
+                self.overlay = Overlay::None;
+                self.settings_draft = None;
+            }
+            Message::SettingsCancelled => {
+                self.overlay = Overlay::None;
+                self.settings_draft = None;
+            }
+
             // Performed by the binary at the I/O boundary (needs the home directory + a
             // scan task, a FolderScanner, git, persistence, or PTY spawning); no pure
             // reducer effect.
             Message::ProjectSelectorOpened
             | Message::FolderChosen(_)
             | Message::KnownProjectReopened(_)
-            | Message::SessionStartRequested { .. } => {}
+            | Message::SessionStartRequested { .. }
+            // Feature 006: applied to the live terminal by the binary (PTY write/scroll/resize,
+            // clipboard); no pure reducer effect.
+            | Message::TerminalBytes(_)
+            | Message::TerminalSelectStart { .. }
+            | Message::TerminalSelectUpdate { .. }
+            | Message::TerminalSelectCleared
+            | Message::TerminalScrolled(_)
+            | Message::TerminalResized { .. }
+            | Message::TerminalCopyRequested
+            | Message::TerminalPasteRequested => {}
         }
     }
 
@@ -566,6 +653,48 @@ pub fn on_escape(state: &State) -> Option<Message> {
         Overlay::ProjectSelector => Some(Message::ProjectSelectorClosed),
         Overlay::RenameProject => Some(Message::RenameCancelled),
         Overlay::AddWorktree => Some(Message::AddWorktreeCancelled),
+        Overlay::Settings => Some(Message::SettingsCancelled),
         Overlay::None => None,
     }
+}
+
+/// Where a decoded key press should go (feature 006, FR-009/FR-011). Pure; see
+/// `contracts/focus-model.md`. When the terminal is unfocused every key drives the app; when
+/// focused, the key's [`crate::keymap::KeyOutput`] determines the terminal action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeyRouting {
+    /// Let the surrounding application handle the key (terminal unfocused).
+    App,
+    /// Write these bytes to the focused session's PTY.
+    Write(Vec<u8>),
+    /// Copy the current terminal selection.
+    Copy,
+    /// Paste clipboard text into the PTY.
+    Paste,
+    /// Release terminal focus back to the application.
+    ReleaseFocus,
+    /// Focused, but the key has no terminal meaning — drop it.
+    Ignore,
+}
+
+/// Route a decoded key press given the current focus (FR-009/FR-011/FR-012).
+pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> KeyRouting {
+    use crate::keymap::KeyOutput;
+    if !terminal_focused {
+        return KeyRouting::App;
+    }
+    match output {
+        KeyOutput::Bytes(bytes) => KeyRouting::Write(bytes),
+        KeyOutput::Copy => KeyRouting::Copy,
+        KeyOutput::Paste => KeyRouting::Paste,
+        KeyOutput::ReleaseFocus => KeyRouting::ReleaseFocus,
+        KeyOutput::Ignore => KeyRouting::Ignore,
+    }
+}
+
+/// Whether keystrokes may be written to a session's PTY given its lifecycle (FR-012a): only
+/// while `Running`. In other states input is discarded (no buffering); focus/scroll/copy still
+/// work.
+pub fn should_write_to(lifecycle: crate::session::SessionLifecycle) -> bool {
+    matches!(lifecycle, crate::session::SessionLifecycle::Running)
 }

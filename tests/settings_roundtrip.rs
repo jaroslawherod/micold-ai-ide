@@ -15,6 +15,7 @@ fn save_then_load_preserves_the_preference() {
     store
         .save(&Settings {
             theme: ThemePreference::Dark,
+            ..Settings::default()
         })
         .unwrap();
 

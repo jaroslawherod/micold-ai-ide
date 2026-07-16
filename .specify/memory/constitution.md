@@ -1,6 +1,27 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.1.0 → 1.2.0
+Bump rationale: MINOR bump — Principle VIII (Reusable UI Component Foundation) was
+  materially expanded with a builder-style component-API convention, and the
+  Component-reuse review gate was tightened to enforce it. Additive expansion of an
+  existing principle and its gate; no principle removed or redefined (MINOR, not MAJOR).
+
+Modified in 1.2.0:
+  - Principle VIII — added the builder-API rule: shared components expose a chainable
+    builder terminating in `.into()` (iced widget idiom), not free/procedural functions
+    with many positional parameters.
+  - Development Workflow & Quality Gates — Component-reuse gate now rejects shared
+    components added/edited as free-function/many-parameter signatures instead of the
+    chainable builder-into-Element form (unless justified and recorded).
+  - Templates: ✅ .specify/templates/plan-template.md — Principle VIII Constitution-Check
+    line updated to name the builder-API convention.
+  Follow-up (non-artifact): existing shared components in `src/ui/material/`
+  (`icon_button`, `tree_view`, `toolbar`, `menu_trigger`, `menu_overlay`, `with_tooltip`,
+  and feature 006's `terminal_pane`) SHOULD be migrated to the builder form; new
+  components MUST follow it. Tracked as implementation tasks, not a deferred placeholder.
+
+Prior report (1.0.0 → 1.1.0):
 Version change: 1.0.0 → 1.1.0
 Bump rationale: MINOR bump — a new core principle (VIII. Reusable UI Component
   Foundation) was added along with a matching Component-reuse review gate under
@@ -176,14 +197,30 @@ MUST NOT fork one-off copies of a widget that a shared primitive already provide
 - Shared components MUST honor the same guarantees as the rest of the UI: light/dark
   theming (consistent with the iced-based app shell) and cross-platform parity
   (Principle VI).
+- **Builder-style API (mandatory).** Shared components MUST expose an object-oriented,
+  chainable builder API that mirrors iced's own widget idiom — NOT free/procedural
+  functions that take many positional parameters. Specifically:
+  - Each component is a public struct constructed with only its required inputs
+    (for example `IconButton::new(icon, on_press)`); optional configuration is applied
+    through chainable, `self`-consuming methods (for example `.tooltip(text)`,
+    `.disabled(true)`, `.size(px)`, `.roles(r)`).
+  - The chain terminates by converting into an `iced::Element` via
+    `impl From<Component> for Element<'_, Message>`, so call sites end in `.into()`,
+    exactly like iced's built-in `button` / `text_input` / `container` widgets.
+  - Theming stays first-class: the active `Roles` / color scheme is supplied through the
+    builder (a constructor argument or a `.roles(...)` / `.scheme(...)` method), preserving
+    the light/dark theming guarantee above.
 - The concrete catalog of components lives in the code and its documentation
   (Principle VII), NOT in this constitution. This principle governs the practice of
-  reuse, not a fixed inventory.
+  reuse and the shape of component APIs, not a fixed inventory.
 
 Rationale: A shared component foundation keeps the UI coherent, reduces duplicated and
 divergent behavior, and makes theming and cross-platform fixes apply once rather than
 feature-by-feature. Mandating reuse at the principle level prevents the slow accretion of
-inconsistent one-off widgets that is expensive to reconcile later.
+inconsistent one-off widgets that is expensive to reconcile later. Requiring the builder
+API on top of that matches iced's own idiom (consistency and discoverability), keeps
+optional parameters optional, and lets a component gain new configuration without breaking
+every call site — which itself removes a common excuse to fork a bespoke widget.
 
 ## Technology, Storage & Licensing Constraints
 
@@ -212,7 +249,10 @@ inconsistent one-off widgets that is expensive to reconcile later.
   justified against these principles; unjustified complexity is grounds for rejection.
 - **Component-reuse gate**: A change that introduces a duplicate or one-off widget instead
   of reusing or extending a shared UI primitive MUST be rejected in review, unless the
-  divergence is explicitly justified and recorded. This gate operationalizes Principle VIII.
+  divergence is explicitly justified and recorded. Additionally, a change that adds or edits
+  a shared component using a free-function / many-positional-parameter signature instead of
+  the chainable builder-into-`Element` form (Principle VIII) MUST be rejected in review,
+  unless explicitly justified and recorded. This gate operationalizes Principle VIII.
 - **Isolation & lifecycle gate**: Session isolation (Principle II) and worktree lifecycle
   (Principle III) MUST be covered by integration tests, not unit tests alone.
 
@@ -235,4 +275,4 @@ convention, or habit conflicts with it, this constitution prevails.
   principles. Complexity that violates a principle MUST be either removed or explicitly
   justified and recorded.
 
-**Version**: 1.1.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-15
+**Version**: 1.2.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-16

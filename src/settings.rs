@@ -13,15 +13,45 @@ use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::PathBuf;
 
-/// The current on-disk settings schema version (see the settings-schema contract).
-const SETTINGS_VERSION: u32 = 1;
+/// The current on-disk settings schema version (see the settings-schema contract). Bumped to
+/// `2` in feature 006 when `scrollback_lines` was added (missing field still defaults on read).
+const SETTINGS_VERSION: u32 = 2;
+
+/// Default per-session terminal scrollback (lines). Matches `alacritty_terminal 0.25`'s
+/// `Config::scrolling_history` default (feature 006, FR-021).
+pub const DEFAULT_SCROLLBACK_LINES: usize = 10_000;
+/// Minimum accepted scrollback limit.
+pub const MIN_SCROLLBACK_LINES: usize = 100;
+/// Maximum accepted scrollback limit.
+pub const MAX_SCROLLBACK_LINES: usize = 1_000_000;
+
+fn default_scrollback() -> usize {
+    DEFAULT_SCROLLBACK_LINES
+}
+
+/// Clamp a requested scrollback limit into the supported range (FR-020, FR-021).
+pub fn clamp_scrollback(lines: usize) -> usize {
+    lines.clamp(MIN_SCROLLBACK_LINES, MAX_SCROLLBACK_LINES)
+}
 
 /// The persisted application settings document.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     /// How the app selects its theme.
     #[serde(default)]
     pub theme: ThemePreference,
+    /// Per-session embedded-terminal scrollback limit in lines (feature 006, FR-020/FR-021).
+    #[serde(default = "default_scrollback")]
+    pub scrollback_lines: usize,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            theme: ThemePreference::default(),
+            scrollback_lines: DEFAULT_SCROLLBACK_LINES,
+        }
+    }
 }
 
 /// How a settings load resolved. Always yields usable [`Settings`]; `status` distinguishes a
@@ -51,6 +81,9 @@ struct StoredSettings {
     settings_version: u32,
     #[serde(default)]
     theme: ThemePreference,
+    /// Missing in v1 files → defaults to [`DEFAULT_SCROLLBACK_LINES`] (backward compatible).
+    #[serde(default = "default_scrollback")]
+    scrollback_lines: usize,
 }
 
 impl StoredSettings {
@@ -58,11 +91,15 @@ impl StoredSettings {
         Self {
             settings_version: SETTINGS_VERSION,
             theme: settings.theme,
+            scrollback_lines: settings.scrollback_lines,
         }
     }
 
     fn into_settings(self) -> Settings {
-        Settings { theme: self.theme }
+        Settings {
+            theme: self.theme,
+            scrollback_lines: clamp_scrollback(self.scrollback_lines),
+        }
     }
 }
 

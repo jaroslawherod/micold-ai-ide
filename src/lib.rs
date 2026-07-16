@@ -12,6 +12,7 @@ pub mod app;
 pub mod fs_scan;
 pub mod git;
 pub mod icons;
+pub mod keymap;
 pub mod metadata;
 pub mod naming;
 pub mod project;

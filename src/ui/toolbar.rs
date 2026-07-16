@@ -3,7 +3,7 @@
 //! (three dots). The menu's items — a cycling theme-mode toggle and "About" — float as an
 //! overlay (see [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
 
-use crate::ui::material::{menu_trigger, toolbar, MenuItem};
+use crate::ui::material::{MenuItem, MenuTrigger, Toolbar};
 use iced::Element;
 use micold_ai_ide::app::{help_actions, Message, State};
 use micold_ai_ide::icons::Icon;
@@ -29,6 +29,7 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
             state.theme_pref.label(),
             Message::ThemeModeCycled,
         ),
+        MenuItem::new(Icon::Settings, "Settings", Message::SettingsOpened),
         MenuItem::new(Icon::About, help_actions()[0], Message::AboutOpened),
     ]
 }
@@ -38,6 +39,6 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
 pub fn view<'a>(scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let meta = AppMetadata::from_env();
-    let trigger = menu_trigger(Icon::Menu, Message::HelpMenuToggled, r);
-    toolbar(meta.name, vec![trigger], r)
+    let trigger = MenuTrigger::new(Icon::Menu, Message::HelpMenuToggled, r);
+    Toolbar::new(meta.name, r).action(trigger).into()
 }

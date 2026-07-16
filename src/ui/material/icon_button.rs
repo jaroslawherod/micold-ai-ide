@@ -1,32 +1,77 @@
 //! `IconButton` — a reusable icon-only button primitive (Constitution Principle VIII).
 //!
-//! Theme-aware (tinted via a design-system color role) with a disabled state. Reused across
-//! the sidebar (add worktree, close session) and any future icon actions rather than each
-//! feature building its own.
+//! Theme-aware (tinted via a design-system color role) with a disabled state. Exposed as a
+//! chainable builder terminating in `.into()` (Principle VIII builder-API rule): construct with
+//! the required glyph + roles, then set optional size/tint/press before converting to an
+//! `Element`. Reused across the sidebar and any icon action rather than each feature forking one.
 
 use crate::ui::{icon, style};
 use iced::widget::button;
 use iced::Element;
 use micold_ai_ide::icons::Icon;
-use micold_ai_ide::tokens::{spacing, Rgb, Roles};
+use micold_ai_ide::tokens::{spacing, type_scale, Rgb, Roles};
+use std::marker::PhantomData;
 
-/// A compact icon-only button. `on_press` of `None` renders it disabled (greyed, inert).
-///
-/// Generic over the message type so any feature can reuse it (Principle VIII). Styled as a
-/// low-emphasis text button so it sits unobtrusively in dense rows like the sidebar tree.
-pub fn icon_button<'a, M: Clone + 'a>(
+/// A compact icon-only button. Without an `on_press` it renders disabled (greyed, inert).
+/// Styled as a low-emphasis text button so it sits unobtrusively in dense rows.
+pub struct IconButton<'a, M> {
     glyph: Icon,
-    size: u16,
-    tint: Rgb,
     roles: Roles,
+    size: u16,
+    tint: Option<Rgb>,
     on_press: Option<M>,
-) -> Element<'a, M> {
-    let content = icon(glyph, size, tint);
-    let mut btn = button(content)
-        .padding(spacing::XS)
-        .style(style::text_button(roles));
-    if let Some(message) = on_press {
-        btn = btn.on_press(message);
+    _marker: PhantomData<&'a ()>,
+}
+
+impl<'a, M: Clone + 'a> IconButton<'a, M> {
+    /// Build an icon button for `glyph` themed by `roles`. Defaults: body-size, `on_surface`
+    /// tint, no press action (disabled).
+    pub fn new(glyph: Icon, roles: Roles) -> Self {
+        Self {
+            glyph,
+            roles,
+            size: type_scale::BODY,
+            tint: None,
+            on_press: None,
+            _marker: PhantomData,
+        }
     }
-    btn.into()
+
+    /// Override the glyph size.
+    pub fn size(mut self, size: u16) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// Override the icon tint (defaults to the roles' `on_surface`).
+    pub fn tint(mut self, tint: Rgb) -> Self {
+        self.tint = Some(tint);
+        self
+    }
+
+    /// Set the message emitted on press (enables the button).
+    pub fn on_press(mut self, message: M) -> Self {
+        self.on_press = Some(message);
+        self
+    }
+
+    /// Set the press message from an `Option` (disabled when `None`).
+    pub fn on_press_maybe(mut self, message: Option<M>) -> Self {
+        self.on_press = message;
+        self
+    }
+}
+
+impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
+    fn from(b: IconButton<'a, M>) -> Self {
+        let tint = b.tint.unwrap_or(b.roles.on_surface);
+        let content = icon(b.glyph, b.size, tint);
+        let mut btn = button(content)
+            .padding(spacing::XS)
+            .style(style::text_button(b.roles));
+        if let Some(message) = b.on_press {
+            btn = btn.on_press(message);
+        }
+        btn.into()
+    }
 }

@@ -11,31 +11,45 @@
 mod animation;
 mod icon_button;
 mod menu;
+mod terminal_pane;
 mod toolbar;
 mod tree_view;
 
 pub use animation::{fade, slide};
-pub use icon_button::icon_button;
-pub use menu::{menu_overlay, menu_trigger, MenuItem};
-pub use toolbar::toolbar;
-pub use tree_view::{tree_view, TreeItem};
+pub use icon_button::IconButton;
+pub use menu::{MenuItem, MenuOverlay, MenuTrigger};
+pub use terminal_pane::TerminalPane;
+pub use toolbar::Toolbar;
+pub use tree_view::{TreeItem, TreeView};
 
 use crate::ui::style;
 use iced::widget::{container, text, tooltip};
 use iced::Element;
 use micold_ai_ide::tokens::{spacing, type_scale, Roles};
 
-/// Wrap any element with a hover tooltip describing the action it triggers. Reusable
-/// (Principle VIII); theme-aware surface styling. Shown below the element.
-pub fn with_tooltip<'a, M: 'a>(
-    content: impl Into<Element<'a, M>>,
-    label: impl Into<String>,
-    r: Roles,
-) -> Element<'a, M> {
-    let tip = container(text(label.into()).size(type_scale::LABEL))
-        .padding(spacing::XS)
-        .style(style::surface(r));
-    tooltip(content, tip, tooltip::Position::Bottom)
-        .gap(spacing::XS)
-        .into()
+/// Wrap any element with a hover tooltip describing the action it triggers (Principle VIII
+/// builder-API rule: construct with the required content + label + roles, then `.into()`).
+/// Theme-aware surface styling; shown below the element.
+pub struct Tooltip<'a, M> {
+    content: Element<'a, M>,
+    label: String,
+    roles: Roles,
+}
+
+impl<'a, M: 'a> Tooltip<'a, M> {
+    /// Wrap `content` with a hover tooltip showing `label`, themed by `roles`.
+    pub fn new(content: impl Into<Element<'a, M>>, label: impl Into<String>, roles: Roles) -> Self {
+        Self { content: content.into(), label: label.into(), roles }
+    }
+}
+
+impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
+    fn from(t: Tooltip<'a, M>) -> Self {
+        let tip = container(text(t.label).size(type_scale::LABEL))
+            .padding(spacing::XS)
+            .style(style::surface(t.roles));
+        tooltip(t.content, tip, tooltip::Position::Bottom)
+            .gap(spacing::XS)
+            .into()
+    }
 }

@@ -42,6 +42,9 @@ struct App {
     core: State,
     /// Live PTY sessions, keyed by session id (never part of the pure core — not Clone/Eq).
     terminals: HashMap<SessionId, RuntimeTerminal>,
+    /// The configured terminal scrollback limit (feature 006), loaded from settings and applied
+    /// to newly spawned sessions.
+    scrollback_lines: usize,
     /// Overflow-menu fade progress (0=hidden, 1=shown).
     menu_anim: f32,
     /// Sidebar slide progress (0=collapsed, 1=expanded).
@@ -118,8 +121,11 @@ fn boot() -> (App, Task<Message>) {
         // conversation (bug fix; see spec Clarifications 2026-07-16).
         prune_empty_sessions(&mut core.workspace);
     }
+    let mut scrollback_lines = micold_ai_ide::settings::DEFAULT_SCROLLBACK_LINES;
     if let Some(store) = JsonFileSettingsStore::default_location() {
-        core.theme_pref = store.load().settings.theme;
+        let loaded = store.load().settings;
+        core.theme_pref = loaded.theme;
+        scrollback_lines = loaded.scrollback_lines;
     }
     core.system_scheme = detect_system_scheme();
     // If a project is already active from a previous run, discover its worktrees.
@@ -132,6 +138,7 @@ fn boot() -> (App, Task<Message>) {
         App {
             core,
             terminals: HashMap::new(),
+            scrollback_lines,
             menu_anim: 0.0,
             sidebar_anim,
             main_anim: 1.0,
@@ -199,8 +206,11 @@ fn claude_config_dir() -> Option<PathBuf> {
 
 fn persist_settings(core: &State) {
     if let Some(store) = JsonFileSettingsStore::default_location() {
+        // Preserve the persisted scrollback limit (feature 006) when saving a theme change.
+        let scrollback_lines = store.load().settings.scrollback_lines;
         let _ = store.save(&Settings {
             theme: core.theme_pref,
+            scrollback_lines,
         });
     }
 }
@@ -310,7 +320,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 let cwd = repo.join(".claude/worktrees").join(&worktree_dir);
                 let session = Session::start_new(&worktree_dir);
                 let id = session.id;
-                match spawn_pty(&launch_spec(&cwd, id, LaunchMode::Fresh)) {
+                match spawn_pty(&launch_spec(&cwd, id, LaunchMode::Fresh), app.scrollback_lines) {
                     Ok(rt) => {
                         app.terminals.insert(id, rt);
                         app.core.update(Message::SessionStarted(session));
@@ -329,7 +339,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::SessionSelected(id));
             if !app.terminals.contains_key(&id) {
                 if let Some((cwd, _)) = session_cwd(&app.core, id) {
-                    if let Ok(rt) = spawn_pty(&launch_spec(&cwd, id, LaunchMode::Resume)) {
+                    if let Ok(rt) = spawn_pty(&launch_spec(&cwd, id, LaunchMode::Resume), app.scrollback_lines) {
                         app.terminals.insert(id, rt);
                         app.core.update(Message::SessionRunning(id));
                     }
@@ -346,23 +356,107 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             persist(&app.core);
             Task::none()
         }
-        // Send the input line to the active session's PTY (FR-014).
-        Message::TerminalLineSubmitted => {
+        // Stream live keystrokes/paste to the displayed session's PTY (FR-008), but only while
+        // it is Running (FR-012a): input to a non-running process is discarded, not buffered.
+        Message::TerminalBytes(bytes) => {
             if let Some(id) = app.core.active_session {
-                if let Some(rt) = app.terminals.get_mut(&id) {
-                    let mut line = app.core.terminal_input.clone();
-                    line.push('\n');
-                    let _ = rt.write(line.as_bytes());
+                let running = app
+                    .core
+                    .active_sessions()
+                    .iter()
+                    .find(|s| s.id == id)
+                    .map(|s| micold_ai_ide::app::should_write_to(s.lifecycle))
+                    .unwrap_or(false);
+                if running {
+                    if let Some(rt) = app.terminals.get_mut(&id) {
+                        let _ = rt.write(&bytes);
+                    }
+                    // The user interacted, so `claude` now has a conversation — persist it so it
+                    // can be resumed after a restart (FR-020; empty sessions still pruned).
+                    persist(&app.core);
                 }
             }
-            app.core.update(Message::TerminalLineSubmitted);
-            // The user interacted, so `claude` now has a conversation — persist it so it can
-            // be resumed after a restart (FR-020; empty sessions are still pruned by persist).
-            persist(&app.core);
+            Task::none()
+        }
+        // Mouse text selection on the displayed session's grid (FR-013).
+        Message::TerminalSelectStart { col, line, kind } => {
+            if let Some(rt) = app.core.active_session.and_then(|id| app.terminals.get_mut(&id)) {
+                rt.selection_start(col, line, kind);
+            }
+            Task::none()
+        }
+        Message::TerminalSelectUpdate { col, line } => {
+            if let Some(rt) = app.core.active_session.and_then(|id| app.terminals.get_mut(&id)) {
+                rt.selection_update(col, line);
+            }
+            Task::none()
+        }
+        Message::TerminalSelectCleared => {
+            if let Some(rt) = app.core.active_session.and_then(|id| app.terminals.get_mut(&id)) {
+                rt.selection_clear();
+            }
+            Task::none()
+        }
+        // Reflow the displayed session's PTY + grid to the visible size (FR-014/FR-015).
+        Message::TerminalResized { cols, rows } => {
+            if let Some(rt) = app.core.active_session.and_then(|id| app.terminals.get_mut(&id)) {
+                let _ = rt.resize(cols, rows);
+            }
+            Task::none()
+        }
+        // Scroll the displayed session's local scrollback (FR-016).
+        Message::TerminalScrolled(delta) => {
+            if let Some(rt) = app.core.active_session.and_then(|id| app.terminals.get_mut(&id)) {
+                rt.scroll(delta);
+            }
             Task::none()
         }
         // Poll terminals: feed streamed bytes into the VT emulators, then detect unexpected
         // exits and apply the crash-restart policy (FR-012, FR-022).
+        // Open Settings: let the reducer show the overlay, then seed the draft with the current
+        // scrollback value (FR-019/FR-020).
+        Message::SettingsOpened => {
+            app.core.update(Message::SettingsOpened);
+            if let Some(draft) = app.core.settings_draft.as_mut() {
+                draft.scrollback_lines = app.scrollback_lines.to_string();
+            }
+            Task::none()
+        }
+        // Save Settings: validate the scrollback field; on success persist + apply and close, on
+        // failure keep the form open with an error (FR-020/FR-021).
+        Message::SettingsSaved => {
+            let parsed = app
+                .core
+                .settings_draft
+                .as_ref()
+                .and_then(|d| d.scrollback_lines.trim().parse::<usize>().ok());
+            let min = micold_ai_ide::settings::MIN_SCROLLBACK_LINES;
+            let max = micold_ai_ide::settings::MAX_SCROLLBACK_LINES;
+            match parsed {
+                Some(n) if (min..=max).contains(&n) => {
+                    app.scrollback_lines = n;
+                    if let Some(store) = JsonFileSettingsStore::default_location() {
+                        let _ = store.save(&Settings {
+                            theme: app.core.theme_pref,
+                            scrollback_lines: n,
+                        });
+                    }
+                    app.core.update(Message::SettingsSaved); // closes the overlay
+                }
+                Some(_) => {
+                    if let Some(draft) = app.core.settings_draft.as_mut() {
+                        draft.error =
+                            Some(format!("Enter a number between {min} and {max}."));
+                    }
+                }
+                None => {
+                    if let Some(draft) = app.core.settings_draft.as_mut() {
+                        draft.error = Some("Enter a whole number of lines.".to_string());
+                    }
+                }
+            }
+            Task::none()
+        }
         Message::TerminalTick => {
             for rt in app.terminals.values_mut() {
                 rt.pump();
@@ -378,18 +472,17 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
 }
 
 fn view(app: &App) -> iced::Element<'_, Message> {
-    // Supply the active session's interpreted terminal screen to the pane.
-    let output = app
+    // Supply the active session's live terminal runtime to the colour-rendering pane (feature 006).
+    let terminal = app
         .core
         .active_session
-        .and_then(|id| app.terminals.get(&id))
-        .map(|rt| rt.screen_text());
+        .and_then(|id| app.terminals.get(&id));
     let anim = ui::Anim {
         menu: app.menu_anim,
         sidebar: app.sidebar_anim,
         main: app.main_anim,
     };
-    ui::view(&app.core, output.as_deref(), anim)
+    ui::view(&app.core, terminal, anim)
 }
 
 fn theme(app: &App) -> iced::Theme {
@@ -433,7 +526,7 @@ fn handle_process_exits(app: &mut App) {
         }
         let decision = with_session(&mut app.core, id, |s| s.on_unexpected_exit());
         if decision == Some(RestartDecision::Resume) {
-            if let Ok(rt) = spawn_pty(&launch_spec(&cwd, id, LaunchMode::Resume)) {
+            if let Ok(rt) = spawn_pty(&launch_spec(&cwd, id, LaunchMode::Resume), app.scrollback_lines) {
                 app.terminals.insert(id, rt);
                 app.core.update(Message::SessionRunning(id));
             }

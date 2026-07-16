@@ -77,3 +77,50 @@ placeholder is shown.
   sessions; reopening the project restores them and resumes them via `claude --resume`.
 
 > Requires the `claude` CLI on your `PATH`. If it is missing, starting a session reports an error.
+
+## Colored, real-terminal output
+
+The embedded terminal renders `claude`'s output like a real terminal, not as flat text:
+
+- **Colors and styles** — ANSI foreground/background colors (the standard 16, bright, 256-color,
+  and 24-bit truecolor) and text styles (bold, dim, italic, underline, strikethrough, and
+  reverse/inverse) appear the same as in a standalone terminal.
+- **Theme-aware defaults** — when output specifies no explicit color, the terminal's default
+  text and background follow the app's light/dark theme and update when you switch themes. The 16
+  ANSI colors use a fixed conventional palette so programs look as their authors intended.
+- **Full-screen interfaces** — `claude`'s interactive UI and other full-screen (alternate-screen)
+  programs redraw cleanly, with the cursor shown at its current position.
+- **Focus** — click the terminal to give it focus (a colored border marks the focused terminal).
+
+## Interacting with the terminal
+
+Click the terminal to focus it (a colored border appears), then type — keystrokes stream
+straight to `claude` as you press them, exactly like a standalone terminal:
+
+- **Everything reaches `claude`**: printable characters, Enter, Backspace, Tab, arrow keys,
+  Home/End/PageUp/PageDown, Insert/Delete, function keys, and control chords (Ctrl+C to
+  interrupt, Ctrl+D, Ctrl+R, Ctrl+U, …). There is no "type a line and press Enter" box any more.
+- **Paste** with the platform paste shortcut (Ctrl+Shift+V, or Cmd+V on macOS); the text is
+  inserted into `claude` as input.
+- **Select** text by dragging with the mouse (double-click selects a word, triple-click a line);
+  the selection is copied to the clipboard automatically on release. **Copy** the current
+  selection with Ctrl+Shift+C (Cmd+C on macOS); **middle-click** pastes.
+- **Mouse-driven programs**: when the running program turns on mouse reporting, mouse clicks are
+  forwarded to it; hold **Shift** while dragging to select text instead.
+- **Keys route to `claude` only while the terminal is focused.** When focused, every key —
+  including Escape and shortcuts the app would otherwise use — goes to `claude`; when not focused,
+  those keys drive the application instead. Input is only delivered while the session's process
+  is running (otherwise keystrokes are ignored and the header shows the session status).
+- **Leaving focus**: press **Ctrl+Shift+E** (Cmd+Shift+E on macOS), click anywhere outside the
+  terminal, or use the **"⎋ release focus"** control in the terminal header. Releasing focus never
+  interrupts the running session.
+
+## Sizing, resize & scrollback
+
+- The terminal tells `claude` how many rows and columns are actually visible, so its interface
+  lays out to fit. **Resizing** the window or dragging the sidebar reflows the terminal and the
+  running interface to the new size.
+- **Scroll** the mouse wheel to move back through earlier output (up to the scrollback limit).
+  When a full-screen program has taken over the mouse, the wheel is forwarded to it instead.
+
+> The scrollback limit is configurable — see [Settings](./settings.md).
