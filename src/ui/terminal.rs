@@ -19,8 +19,8 @@ use alacritty_terminal::term::test::TermSize;
 use alacritty_terminal::term::{viewport_to_point, Config, RenderableContent, Term, TermMode};
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Processor};
 use micold_ai_ide::app::SelectKind;
-use iced::widget::{button, column, container, row, text};
-use iced::{Color, Element, Font, Length};
+use iced::widget::{button, column, container, row, text, Space};
+use iced::{Alignment, Color, Element, Font, Length};
 use micold_ai_ide::app::{Message, State};
 use micold_ai_ide::session::{SessionId, SessionLifecycle};
 use micold_ai_ide::terminal::{claude_args, LaunchSpec, TerminalBackend, TerminalHandle};
@@ -521,30 +521,8 @@ pub fn pane<'a>(
         .into();
     };
 
-    let status = session_status(state, active);
-    let mut header = row![
-        text(session_title(state, active)).size(type_scale::TITLE),
-        container(text("").width(Length::Fill)).width(Length::Fill),
-        text(status).size(type_scale::LABEL).style(style::muted(r)),
-    ]
-    .spacing(spacing::SM);
-    // While the terminal holds focus, offer an explicit way out (FR-011) alongside the reserved
-    // Ctrl+Shift+E chord and click-outside.
-    if state.terminal_focused {
-        header = header.push(
-            button(
-                text("⎋ release focus (Ctrl+Shift+E)")
-                    .size(type_scale::LABEL)
-                    .style(style::muted(r)),
-            )
-            .padding(spacing::XS)
-            .style(style::text_button(r))
-            .on_press(Message::TerminalFocusReleased),
-        );
-    }
-
-    // The colour-rendering terminal body (feature 006). Falls back to an empty state if the
-    // runtime is not yet available (e.g. the session is still starting).
+    // The colour-rendering terminal body fills the whole main area (feature 006). Falls back to
+    // an empty state if the runtime is not yet available (e.g. the session is still starting).
     let body: Element<'a, Message> = match terminal {
         Some(rt) => TerminalPane::new(rt, TermPalette::from_scheme(scheme))
             .focused(state.terminal_focused)
@@ -555,16 +533,41 @@ pub fn pane<'a>(
             .into(),
     };
 
+    // A slim bottom status bar: the current session name (left) and its lifecycle status
+    // (right). A live activity indicator (spinner/idle icon) is a planned follow-up feature.
+    let status = session_status(state, active);
+    let mut bar = row![
+        text(session_title(state, active)).size(type_scale::LABEL),
+        Space::with_width(Length::Fill),
+        text(status).size(type_scale::LABEL).style(style::muted(r)),
+    ]
+    .spacing(spacing::SM)
+    .align_y(Alignment::Center);
+    // While the terminal holds focus, offer an explicit way out (FR-011) alongside the reserved
+    // Ctrl+Shift+E chord and click-outside.
+    if state.terminal_focused {
+        bar = bar.push(
+            button(
+                text("⎋ release focus (Ctrl+Shift+E)")
+                    .size(type_scale::LABEL)
+                    .style(style::muted(r)),
+            )
+            .padding(spacing::XS)
+            .style(style::text_button(r))
+            .on_press(Message::TerminalFocusReleased),
+        );
+    }
+    let bottom_bar = container(bar)
+        .width(Length::Fill)
+        .padding(spacing::SM)
+        .style(style::toolbar_surface(r));
+
     // Feature 006 US2: keystrokes stream live to the PTY through the focused `TerminalPane`;
     // the old line-input box is gone (FR-008). Click the terminal to focus it, then type.
-    container(
-        column![
-            header,
-            container(body).height(Length::Fill).width(Length::Fill),
-        ]
-        .spacing(spacing::SM),
-    )
-    .padding(spacing::MD)
+    column![
+        container(body).height(Length::Fill).width(Length::Fill),
+        bottom_bar,
+    ]
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
