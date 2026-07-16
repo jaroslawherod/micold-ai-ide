@@ -109,11 +109,22 @@ impl Drop for App {
     }
 }
 
+/// The app window icon as raw 64x64 RGBA (generated from `assets/icon/icon.svg` by
+/// `assets/icon/generate.py`). Embedded directly so no runtime image decoder is needed.
+const ICON_RGBA: &[u8] = include_bytes!("../assets/icon/icon-64.rgba");
+
+/// Window settings carrying the app icon (taskbar / titlebar).
+fn window_settings() -> iced::window::Settings {
+    let icon = iced::window::icon::from_rgba(ICON_RGBA.to_vec(), 64, 64).ok();
+    iced::window::Settings { icon, ..Default::default() }
+}
+
 pub fn main() -> iced::Result {
     iced::application("Micold AI IDE", update, view)
         .theme(theme)
         .default_font(iced::Font::DEFAULT)
         .font(ui::MATERIAL_SYMBOLS_BYTES)
+        .window(window_settings())
         .subscription(subscription)
         .run_with(boot)
 }
