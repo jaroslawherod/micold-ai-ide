@@ -68,11 +68,11 @@ impl Workspace {
     /// `Ok(())` no-op if the path is unknown.
     pub fn rename(&mut self, path: &Path, new_name: &str) -> Result<(), RenameError> {
         let name = validate_rename(new_name)?;
-        // Match by the project's stored identity path exactly as given — callers pass the
-        // project's own (already-canonical) path. Re-canonicalizing here diverged from the
-        // stored path for synthetic/nonexistent paths on some platforms (Windows), silently
-        // dropping the rename.
-        if let Some(project) = self.projects.iter_mut().find(|p| p.path.as_path() == path) {
+        // Normalize the lookup path the same way projects are stored, so the match is consistent
+        // with `open_or_activate`/`activate` (now a deterministic, filesystem-independent
+        // normalization — see `canonicalize_best_effort`).
+        let path = canonicalize_best_effort(path);
+        if let Some(project) = self.projects.iter_mut().find(|p| p.path == path) {
             project.display_name = name;
         }
         Ok(())

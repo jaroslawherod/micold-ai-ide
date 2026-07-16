@@ -103,10 +103,33 @@ pub fn validate_rename(raw: &str) -> Result<String, RenameError> {
     Ok(trimmed.to_string())
 }
 
-/// Best-effort path canonicalization used to give a project a stable identity (FR-012).
-/// Resolves symlinks and `.`/`..` when the folder exists; if canonicalization fails (for
-/// example the folder is gone, or in a unit test with a synthetic path), the input path
-/// is returned unchanged so equality-based dedupe still works.
+/// Normalize a path to a stable project identity (FR-012): a **purely lexical** normalization
+/// that collapses `.` and `..` and drops redundant separators, WITHOUT touching the filesystem.
+///
+/// This is deliberately filesystem-independent. An earlier version used `std::fs::canonicalize`,
+/// but that made identity depend on whether the path currently exists — which is not
+/// deterministic across machines (e.g. on a Windows CI runner a synthetic path like `/a`
+/// resolves to a real `\\?\D:\a`, silently rewriting it). Lexical normalization still dedupes
+/// equivalent spellings (trailing separators, `.`/`..`) reliably on every platform; it does not
+/// resolve symlinks (an acceptable trade-off for a stable, testable identity).
 pub fn canonicalize_best_effort(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if matches!(out.components().next_back(), Some(Component::Normal(_))) {
+                    out.pop();
+                } else {
+                    out.push("..");
+                }
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    if out.as_os_str().is_empty() {
+        out.push(".");
+    }
+    out
 }
