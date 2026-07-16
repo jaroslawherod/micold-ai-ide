@@ -11,9 +11,11 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+# Least privilege: the workflow's default token is read-only; each job elevates only what it
+# needs. Third-party actions are pinned to full commit SHAs (supply-chain trust) with the
+# human-readable version in a trailing comment.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -22,11 +24,15 @@ jobs:
   release-please:
     name: release-please
     runs-on: ubuntu-latest
+    # Creates release commits/tags (contents) and maintains the release PR (pull-requests).
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -46,10 +52,13 @@ jobs:
           - arch: arm64
             runner: ubuntu-22.04-arm
     runs-on: ${{ matrix.runner }}
+    # Only needs to upload assets to the release created by release-please.
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Install iced + packaging system dependencies
         run: |
           sudo apt-get update
