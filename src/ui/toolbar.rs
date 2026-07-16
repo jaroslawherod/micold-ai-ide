@@ -1,60 +1,43 @@
-//! The Material top app bar: the application title, the Help menu, and the theme selector.
+//! The Material top app bar, composed from reusable primitives (Principle VIII): the shared
+//! [`toolbar`] with the application title and, on the right, a single overflow-menu trigger
+//! (three dots). The menu's items — a cycling theme-mode toggle and "About" — float as an
+//! overlay (see [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
 
-use crate::ui::{icon, style, theme_menu};
-use iced::widget::{button, column, container, row, text};
-use iced::{Alignment, Element, Length};
-use micold_ai_ide::app::{help_actions, toolbar_entries, Message, State};
-use micold_ai_ide::icons::{icon_role, Icon, IconSurface};
+use crate::ui::material::{menu_trigger, toolbar, MenuItem};
+use iced::Element;
+use micold_ai_ide::app::{help_actions, Message, State};
+use micold_ai_ide::icons::Icon;
 use micold_ai_ide::metadata::AppMetadata;
-use micold_ai_ide::theme::ColorScheme;
-use micold_ai_ide::tokens::{self, spacing, type_scale};
+use micold_ai_ide::theme::{ColorScheme, ThemePreference};
+use micold_ai_ide::tokens;
 
-/// Render the top app bar. It carries the application title on the left and its actions on
-/// the right: the theme selector and the "Help" entry (FR-002, FR-003, FR-010), which
-/// reveals the single "About" action (FR-004).
-pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
+/// The icon representing the current theme mode (shown on the menu's mode toggle).
+fn mode_icon(pref: ThemePreference) -> Icon {
+    match pref {
+        ThemePreference::FollowSystem => Icon::AutoMode,
+        ThemePreference::Light => Icon::LightMode,
+        ThemePreference::Dark => Icon::DarkMode,
+    }
+}
+
+/// The overflow menu's items: a cycling theme-mode toggle (Auto → Light → Dark), then About.
+/// Rendered as a floating overlay by `ui::view` via `menu_overlay`.
+pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
+    vec![
+        MenuItem::new(
+            mode_icon(state.theme_pref),
+            state.theme_pref.label(),
+            Message::ThemeModeCycled,
+        ),
+        MenuItem::new(Icon::About, help_actions()[0], Message::AboutOpened),
+    ]
+}
+
+/// Render the top app bar: title (left) and the overflow-menu trigger (right). The menu panel
+/// itself is floated as an overlay by `ui::view` so opening it never reflows the bar.
+pub fn view<'a>(scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let meta = AppMetadata::from_env();
-
-    let title = text(meta.name).size(type_scale::TITLE);
-
-    // App-bar action icons take the on-surface foreground role (FR-005, FR-007).
-    let action_tint = icon_role(IconSurface::AppBarAction, r);
-    let labeled = |glyph: Icon, label: &'static str| {
-        row![
-            icon(glyph, type_scale::BODY, action_tint),
-            text(label).size(type_scale::BODY),
-        ]
-        .spacing(spacing::XS)
-        .align_y(Alignment::Center)
-    };
-
-    // The one and only toolbar entry.
-    let help = button(labeled(Icon::Help, toolbar_entries()[0]))
-        .on_press(Message::HelpMenuToggled)
-        .style(style::text_button(r));
-
-    let mut help_menu = column![help].spacing(spacing::XS);
-    if state.help_menu_open {
-        let about = button(labeled(Icon::About, help_actions()[0]))
-            .on_press(Message::AboutOpened)
-            .style(style::text_button(r));
-        help_menu = help_menu.push(about);
-    }
-
-    let bar = row![
-        title,
-        // Spacer pushes actions to the trailing edge.
-        container(text("")).width(Length::Fill),
-        theme_menu::view(state, scheme),
-        help_menu,
-    ]
-    .spacing(spacing::MD)
-    .align_y(iced::Alignment::Start);
-
-    container(bar)
-        .width(Length::Fill)
-        .padding(spacing::SM)
-        .style(style::app_bar(r))
-        .into()
+    let trigger = menu_trigger(Icon::Menu, Message::HelpMenuToggled, r);
+    toolbar(meta.name, vec![trigger], r)
 }

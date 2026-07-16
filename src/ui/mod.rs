@@ -1,14 +1,17 @@
 //! iced rendering layer for the main window. Bin-only; compiled with the `gui` feature.
 
 mod about;
+mod material;
 mod project_selector;
 mod rename;
 mod shell;
+mod sidebar;
 pub mod style;
-mod theme_menu;
+pub mod terminal;
 mod toolbar;
+mod worktree_form;
 
-use iced::widget::{column, container, text};
+use iced::widget::{column, container, mouse_area, row, stack, text, Space};
 use iced::{Element, Font, Length, Subscription};
 use micold_ai_ide::app::{Message, Overlay, State};
 use micold_ai_ide::icons::Icon;
@@ -33,21 +36,94 @@ pub fn icon<'a, M: 'a>(icon: Icon, size: u16, color: Rgb) -> Element<'a, M> {
         .into()
 }
 
+/// Animation progress (0..1) for the material motion wrappers, driven by the binary's clock.
+#[derive(Debug, Clone, Copy)]
+pub struct Anim {
+    /// Overflow-menu fade progress.
+    pub menu: f32,
+    /// Sidebar slide progress (0 = collapsed, 1 = expanded).
+    pub sidebar: f32,
+    /// Main-view fade progress (dips to 0 and back to 1 when the content changes).
+    pub main: f32,
+}
+
+impl Default for Anim {
+    fn default() -> Self {
+        Self {
+            menu: 0.0,
+            sidebar: 1.0,
+            main: 1.0,
+        }
+    }
+}
+
 /// Render the main window: the top app bar over the shell body (active project / empty
 /// state), with any modal overlay (About or the project selector) stacked on top. Every
-/// surface is styled from the active color scheme's design tokens.
-pub fn view(state: &State) -> Element<'_, Message> {
+/// surface is styled from the active color scheme's design tokens. `anim` carries the
+/// material motion progress (menu fade, sidebar slide, main-view fade).
+pub fn view<'a>(
+    state: &'a State,
+    terminal_output: Option<&str>,
+    anim: Anim,
+) -> Element<'a, Message> {
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
+    let bg = style::color(roles.background);
 
-    let base: Element<'_, Message> = container(column![
-        toolbar::view(state, scheme),
-        shell::view(state, scheme)
-    ])
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .style(style::window_bg(roles))
-    .into();
+    // With a project open, show the worktree sidebar beside the main area; the main area is
+    // the embedded terminal when a session is active (FR-012), else the project surface. The
+    // sidebar slides in/out and is resizable; the main content fades when it changes.
+    let body: Element<'a, Message> = if state.workspace.active_project().is_some() {
+        let main_inner: Element<'a, Message> = if state.active_session.is_some() {
+            terminal::pane(state, terminal_output, scheme)
+        } else {
+            shell::view(state, scheme)
+        };
+        let main = material::fade(main_inner, anim.main, bg);
+        let left: Element<'a, Message> = if state.sidebar_hidden && anim.sidebar <= 0.001 {
+            sidebar::collapsed_strip(scheme)
+        } else {
+            row![
+                material::slide(sidebar::view(state, scheme), anim.sidebar),
+                sidebar::handle(scheme)
+            ]
+            .into()
+        };
+        row![left, main]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+    } else {
+        material::fade(shell::view(state, scheme), anim.main, bg)
+    };
+
+    let mut base: Element<'a, Message> = container(column![toolbar::view(scheme), body])
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(style::window_bg(roles))
+        .into();
+
+    // While resizing, a full-window capture layer tracks the cursor and ends the drag on
+    // release, so the drag continues even when the pointer leaves the thin handle.
+    if state.sidebar_dragging {
+        let capture = mouse_area(
+            container(Space::new(Length::Fill, Length::Fill))
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .on_move(|p| Message::SidebarDragMoved(p.x.max(0.0) as u16))
+        .on_release(Message::SidebarDragEnded);
+        base = stack![base, capture].into();
+    }
+
+    // Float the toolbar's overflow menu over everything (no toolbar reflow), fading in/out.
+    let base = material::menu_overlay(
+        base,
+        anim.menu,
+        toolbar::overflow_items(state),
+        Message::HelpMenuToggled,
+        roles,
+    );
 
     match state.overlay {
         Overlay::None => base,
@@ -59,6 +135,10 @@ pub fn view(state: &State) -> Element<'_, Message> {
         },
         Overlay::RenameProject => match &state.rename_draft {
             Some(draft) => rename::modal(base, draft, scheme),
+            None => base,
+        },
+        Overlay::AddWorktree => match &state.worktree_form {
+            Some(form) => worktree_form::modal(base, form, state.worktree_error.as_deref(), scheme),
             None => base,
         },
     }
@@ -81,6 +161,10 @@ pub fn subscription(state: &State) -> Subscription<Message> {
         Overlay::RenameProject => iced::keyboard::on_key_press(|key, _modifiers| {
             use iced::keyboard::{key::Named, Key};
             matches!(key, Key::Named(Named::Escape)).then_some(Message::RenameCancelled)
+        }),
+        Overlay::AddWorktree => iced::keyboard::on_key_press(|key, _modifiers| {
+            use iced::keyboard::{key::Named, Key};
+            matches!(key, Key::Named(Named::Escape)).then_some(Message::AddWorktreeCancelled)
         }),
     }
 }

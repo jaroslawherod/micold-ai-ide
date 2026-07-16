@@ -14,3 +14,5 @@ verified in CI.
   light and dark themes, following the system preference, and choosing a theme.
 - [Icons](user-guide/icons.md) — the shared Material icon set, where each icon appears, theming,
   licensing, and how to add a new icon.
+- [Worktrees & Sessions](user-guide/worktrees-and-sessions.md) — opening a git project, the
+  worktree sidebar, creating worktrees, and running `claude` sessions in the embedded terminal.

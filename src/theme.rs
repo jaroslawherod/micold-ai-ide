@@ -31,6 +31,27 @@ pub enum ThemePreference {
     Dark,
 }
 
+impl ThemePreference {
+    /// The next preference in the cycle: `FollowSystem → Light → Dark → FollowSystem`.
+    /// Used by the toolbar's cycling theme-mode toggle.
+    pub fn next(self) -> Self {
+        match self {
+            ThemePreference::FollowSystem => ThemePreference::Light,
+            ThemePreference::Light => ThemePreference::Dark,
+            ThemePreference::Dark => ThemePreference::FollowSystem,
+        }
+    }
+
+    /// A human-readable label for the current mode (shown in the toolbar menu).
+    pub fn label(self) -> &'static str {
+        match self {
+            ThemePreference::FollowSystem => "Theme: Auto",
+            ThemePreference::Light => "Theme: Light",
+            ThemePreference::Dark => "Theme: Dark",
+        }
+    }
+}
+
 /// What the operating system reports, including "no preference / undetectable".
 ///
 /// Mirrors `dark_light::Mode` without depending on that crate; the binary performs the

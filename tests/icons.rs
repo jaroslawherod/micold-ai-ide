@@ -16,6 +16,14 @@ fn expected(icon: Icon) -> char {
         Icon::ActiveMarker => '\u{f0be}',
         Icon::Unavailable => '\u{f8b6}',
         Icon::NavigateUp => '\u{e5d8}',
+        Icon::AddSession => '\u{e145}',
+        Icon::AddWorktree => '\u{e97a}',
+        Icon::Menu => '\u{e5d4}',
+        Icon::LightMode => '\u{e518}',
+        Icon::DarkMode => '\u{e51c}',
+        Icon::AutoMode => '\u{e1ab}',
+        Icon::HideSidebar => '\u{f717}',
+        Icon::ShowSidebar => '\u{f716}',
     }
 }
 
@@ -32,8 +40,8 @@ fn glyph_maps_every_variant_to_its_pinned_codepoint() {
 
 #[test]
 fn all_covers_every_variant_without_duplicates() {
-    // Eight curated icons (research R5 / PROVENANCE.md).
-    assert_eq!(Icon::ALL.len(), 8, "curated set size");
+    // Sixteen curated icons (research R5 / PROVENANCE.md).
+    assert_eq!(Icon::ALL.len(), 16, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

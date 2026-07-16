@@ -11,6 +11,8 @@ use crate::fs_scan::FolderScanner;
 use crate::project::{
     canonicalize_best_effort, validate_rename, Availability, Project, RenameError,
 };
+use crate::session::Session;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// The known-projects list plus the single active working space (referenced by path).
@@ -21,6 +23,9 @@ pub struct Workspace {
     /// The active working space, by path. `None` before any project is opened (FR-016);
     /// at most one at a time (FR-013).
     pub active: Option<PathBuf>,
+    /// Persisted sessions per project path (feature 005, FR-020). Keyed by the project's
+    /// canonical path; restored `Idle` and resumed on reopen (FR-023a).
+    pub sessions: BTreeMap<PathBuf, Vec<Session>>,
 }
 
 impl Workspace {

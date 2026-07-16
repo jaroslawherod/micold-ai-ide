@@ -10,7 +10,7 @@ follows your operating system's preference.
 The window is organised as a Material Design layout:
 
 - A **top app bar** across the top holds the application title and its primary actions
-  (including the Help menu and the theme selector).
+  (including the overflow menu).
 - The **main area** shows either the active project or, when nothing is open, a welcoming
   empty state inviting you to open a folder.
 - Content sits on distinct **surfaces** (cards) with consistent spacing and rounded corners.
@@ -39,11 +39,14 @@ version of the light one.
 
 ## Choosing your theme
 
-Open the **theme selector** in the top app bar and pick one of:
+Open the **overflow menu** (the three-dots icon on the right of the toolbar). Its first item
+is a **theme-mode toggle** showing the current mode with an icon; **each click cycles to the
+next mode**:
 
-- **Follow system** — track the OS preference (the default).
-- **Light** — always use the light theme, regardless of the OS.
-- **Dark** — always use the dark theme, regardless of the OS.
+- **Auto** (brightness-auto icon) — follow the OS preference (the default).
+- **Light** (sun icon) — always use the light theme, regardless of the OS.
+- **Dark** (moon icon) — always use the dark theme, regardless of the OS.
 
-Your choice takes effect immediately and is remembered across restarts. Selecting **Follow
-system** again resumes tracking your OS preference and switching live when it changes.
+The cycle order is Auto → Light → Dark → Auto. The menu stays open while you cycle so you can
+click again. Your choice takes effect immediately and is remembered across restarts. Cycling
+back to **Auto** resumes tracking your OS preference and switching live when it changes.

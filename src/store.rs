@@ -7,8 +7,10 @@
 //! durable contract in `specs/002-project-workspace-management/contracts/storage-schema.md`.
 
 use crate::project::{Availability, Project};
+use crate::session::{Session, SessionId, SessionLabel};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::io;
 use std::path::PathBuf;
 
@@ -67,6 +69,21 @@ struct StoredProject {
     display_name: String,
     #[serde(default)]
     is_git_repo: bool,
+    // Feature 005, option A (contracts/storage-schema.md): an optional per-project sessions
+    // array. `default` keeps older files (without the field) loading unchanged — forward
+    // compatible, so no `schema_version` bump is required.
+    #[serde(default)]
+    sessions: Vec<StoredSession>,
+}
+
+/// The persisted shape of a session (FR-020): identity, worktree binding, last-known title.
+/// Lifecycle and terminal buffers are never persisted (FR-021).
+#[derive(Debug, Serialize, Deserialize)]
+struct StoredSession {
+    id: uuid::Uuid,
+    worktree_dir: String,
+    #[serde(default)]
+    title: Option<String>,
 }
 
 impl StoredCatalog {
@@ -81,22 +98,55 @@ impl StoredCatalog {
                     path: p.path.clone(),
                     display_name: p.display_name.clone(),
                     is_git_repo: p.is_git_repo,
+                    sessions: ws
+                        .sessions
+                        .get(&p.path)
+                        .map(|list| {
+                            list.iter()
+                                .map(|s| StoredSession {
+                                    id: s.id.0,
+                                    worktree_dir: s.worktree_dir.clone(),
+                                    title: match &s.label {
+                                        SessionLabel::Named(t) => Some(t.clone()),
+                                        SessionLabel::Pending => None,
+                                    },
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                 })
                 .collect(),
         }
     }
 
     fn into_workspace(self) -> Workspace {
+        let mut sessions: BTreeMap<PathBuf, Vec<Session>> = BTreeMap::new();
         let projects: Vec<Project> = self
             .projects
             .into_iter()
-            .map(|p| Project {
-                path: p.path,
-                display_name: p.display_name,
-                is_git_repo: p.is_git_repo,
-                // Availability is not persisted; assume available until the caller
-                // refreshes it against the filesystem (FR-022).
-                availability: Availability::Available,
+            .map(|p| {
+                let restored: Vec<Session> = p
+                    .sessions
+                    .into_iter()
+                    .map(|s| {
+                        let label = match s.title {
+                            Some(t) => SessionLabel::Named(t),
+                            None => SessionLabel::Pending,
+                        };
+                        Session::restored(SessionId::from_uuid(s.id), s.worktree_dir, label)
+                    })
+                    .collect();
+                if !restored.is_empty() {
+                    sessions.insert(p.path.clone(), restored);
+                }
+                Project {
+                    path: p.path,
+                    display_name: p.display_name,
+                    is_git_repo: p.is_git_repo,
+                    // Availability is not persisted; assume available until the caller
+                    // refreshes it against the filesystem (FR-022).
+                    availability: Availability::Available,
+                }
             })
             .collect();
 
@@ -106,7 +156,11 @@ impl StoredCatalog {
             .last_active
             .filter(|path| projects.iter().any(|p| &p.path == path));
 
-        Workspace { projects, active }
+        Workspace {
+            projects,
+            active,
+            sessions,
+        }
     }
 }
 

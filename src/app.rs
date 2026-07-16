@@ -10,9 +10,13 @@
 //! `FolderChosen`) therefore carry no reducer effect here — they are documented no-ops
 //! handled entirely in `src/main.rs`.
 
+use crate::naming::{derive, ConventionalType, DerivedNames, NamingError, WorktreeNaming};
 use crate::project::{FolderEntry, RenameError};
 use crate::selector::Selector;
+use crate::session::{Session, SessionId};
 use crate::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
+use crate::worktree::Worktree;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 /// The labels of the top toolbar's entries, in display order.
@@ -24,6 +28,13 @@ pub const TOOLBAR_ENTRIES: [&str; 1] = ["Help"];
 ///
 /// "Help" exposes exactly one action — "About" (FR-003, FR-004).
 pub const HELP_ACTIONS: [&str; 1] = ["About"];
+
+/// Minimum sidebar width in pixels (resize lower bound).
+pub const SIDEBAR_MIN_WIDTH: u16 = 180;
+/// Maximum sidebar width in pixels (resize upper bound).
+pub const SIDEBAR_MAX_WIDTH: u16 = 600;
+/// Default sidebar width in pixels, used until the user resizes it.
+pub const SIDEBAR_DEFAULT_WIDTH: u16 = 300;
 
 /// The top toolbar's entry labels. See [`TOOLBAR_ENTRIES`].
 pub fn toolbar_entries() -> &'static [&'static str] {
@@ -51,6 +62,47 @@ pub enum Overlay {
     ProjectSelector,
     /// The rename-project dialog is shown as a modal overlay.
     RenameProject,
+    /// The add-worktree form is shown as a modal overlay (feature 005, FR-005).
+    AddWorktree,
+}
+
+/// In-progress add-worktree form state, present only while the form overlay is open (FR-005).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WorktreeForm {
+    /// Selected Conventional-Commits type (FR-005a).
+    pub type_: Option<ConventionalType>,
+    /// Optional ticket reference (FR-005b).
+    pub ticket: String,
+    /// Free-text name.
+    pub name: String,
+    /// The last validation error shown after a rejected submit.
+    pub error: Option<NamingError>,
+}
+
+impl WorktreeForm {
+    /// The live derived directory/branch preview, or the validation error (FR-008a).
+    pub fn preview(&self) -> Result<DerivedNames, NamingError> {
+        derive(&WorktreeNaming {
+            type_: self.type_,
+            ticket: if self.ticket.trim().is_empty() {
+                None
+            } else {
+                Some(self.ticket.clone())
+            },
+            name: self.name.clone(),
+        })
+    }
+}
+
+/// One worktree row in the sidebar tree, joined with its (expanded) sessions (FR-002/003).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorktreeNode {
+    /// The worktree itself.
+    pub worktree: Worktree,
+    /// Whether its session sub-items are shown.
+    pub expanded: bool,
+    /// The sessions hosted by this worktree (empty unless expanded is irrelevant to data).
+    pub sessions: Vec<Session>,
 }
 
 /// In-progress rename state, present only while the rename dialog is open.
@@ -105,9 +157,66 @@ pub enum Message {
     /// The user selected a theme preference (Follow system / Light / Dark) (FR-007, FR-008).
     /// The binary persists the updated preference afterward.
     ThemePreferenceChanged(ThemePreference),
+    /// Cycle the theme mode to the next one (Auto → Light → Dark → Auto) from the toolbar
+    /// menu's mode toggle. The binary persists the updated preference; the menu stays open.
+    ThemeModeCycled,
     /// The OS light/dark preference poll observed a (changed) scheme (FR-006). Transient;
     /// never persisted.
     SystemThemeChanged(SystemScheme),
+
+    // ---- Feature 005: worktrees, sessions, embedded terminal ----
+    /// Opening a directory as a project was refused because it is not a git repo (FR-001a).
+    /// The binary performs the `Git::is_repo_root` check and dispatches this on refusal.
+    ProjectOpenRefused(String),
+    /// The binary discovered/re-discovered the active project's worktrees (FR-018).
+    WorktreesLoaded(Vec<Worktree>),
+    /// Expand/collapse a worktree's session sub-items (FR-003), by `dir_name`.
+    WorktreeExpansionToggled(String),
+    /// Open the add-worktree form (FR-005).
+    AddWorktreeOpened,
+    /// The form's type selection changed.
+    AddWorktreeTypeSelected(ConventionalType),
+    /// The form's ticket field changed.
+    AddWorktreeTicketChanged(String),
+    /// The form's name field changed.
+    AddWorktreeNameChanged(String),
+    /// Submit the form (FR-006). Validation happens here; the binary performs the git create.
+    AddWorktreeSubmitted,
+    /// Dismiss the form without creating (Cancel or Esc).
+    AddWorktreeCancelled,
+    /// The binary created a worktree successfully (FR-007); add it and close the form.
+    WorktreeCreated(Worktree),
+    /// The binary reported a worktree create failure (FR-017); show it, keep the form open.
+    WorktreeCreateFailed(String),
+    /// Start a new session on the given worktree (FR-010). The binary spawns `claude`.
+    SessionStartRequested { worktree_dir: String },
+    /// A session was started/added for the active project (FR-011).
+    SessionStarted(Session),
+    /// Select a session to display its terminal (FR-015); other sessions keep running.
+    SessionSelected(SessionId),
+    /// Close/stop a session (FR-015a). The binary kills the process; this drops the record.
+    SessionCloseRequested(SessionId),
+    /// The session's `claude` process reported it is running (FR-010).
+    SessionRunning(SessionId),
+    /// The session's `claude` title became available/changed (FR-011a).
+    SessionTitleUpdated { id: SessionId, title: String },
+    /// The terminal input line changed (FR-014).
+    TerminalInputChanged(String),
+    /// Submit the current terminal input line to the active session (FR-014). The binary
+    /// writes it to the PTY; the reducer clears the input.
+    TerminalLineSubmitted,
+    /// Periodic redraw tick while a terminal is live (drives streamed-output repaint).
+    TerminalTick,
+    /// Hide or show the sidebar (toggle).
+    SidebarToggled,
+    /// The user began dragging the sidebar resize handle.
+    SidebarDragStarted,
+    /// The resize drag moved; carries the new intended width in pixels (cursor x).
+    SidebarDragMoved(u16),
+    /// The resize drag ended.
+    SidebarDragEnded,
+    /// Animation clock tick (drives fade/slide progress; handled by the binary).
+    AnimationTick,
 }
 
 /// Root application state for the single main window.
@@ -128,6 +237,27 @@ pub struct State {
     pub theme_pref: ThemePreference,
     /// The last light/dark scheme reported by the OS poll (transient, not persisted).
     pub system_scheme: SystemScheme,
+    /// Worktrees discovered for the active project (feature 005, FR-018). Re-derived from git
+    /// on open and after each mutation — never persisted.
+    pub worktrees: Vec<Worktree>,
+    /// Which worktree rows are expanded to reveal their sessions (FR-003). By `dir_name`.
+    pub expanded: BTreeSet<String>,
+    /// The currently displayed session, if any (FR-012, FR-015).
+    pub active_session: Option<SessionId>,
+    /// The add-worktree form, present only while its overlay is shown (FR-005).
+    pub worktree_form: Option<WorktreeForm>,
+    /// A message shown when opening a non-git directory was refused (FR-001a), or a worktree
+    /// create failed (FR-017). Transient.
+    pub worktree_error: Option<String>,
+    /// The active terminal's pending input line (FR-014). Transient; the binary writes it to
+    /// the PTY on submit.
+    pub terminal_input: String,
+    /// Whether the sidebar is collapsed/hidden. Default (`false`) is visible.
+    pub sidebar_hidden: bool,
+    /// The sidebar width in pixels. `0` means "use the default width" (see [`State::sidebar_width_px`]).
+    pub sidebar_width: u16,
+    /// Whether a sidebar resize drag is in progress (transient).
+    pub sidebar_dragging: bool,
 }
 
 impl State {
@@ -223,6 +353,10 @@ impl State {
                 self.overlay = Overlay::None;
                 self.rename_draft = None;
             }
+            Message::ThemeModeCycled => {
+                // Advance to the next mode; the menu stays open so repeated clicks cycle.
+                self.theme_pref = self.theme_pref.next();
+            }
             Message::ThemePreferenceChanged(pref) => {
                 // Pure state change; the binary persists it at the I/O boundary (FR-009).
                 self.theme_pref = pref;
@@ -230,12 +364,194 @@ impl State {
             Message::SystemThemeChanged(scheme) => {
                 self.system_scheme = scheme;
             }
+            Message::ProjectOpenRefused(message) => {
+                // Non-git directory refused (FR-001a); the active project is unchanged.
+                self.worktree_error = Some(message);
+            }
+            Message::WorktreesLoaded(worktrees) => {
+                self.worktrees = worktrees;
+                self.worktree_error = None;
+                // Drop expansion state for worktrees that no longer exist.
+                let names: BTreeSet<String> =
+                    self.worktrees.iter().map(|w| w.dir_name.clone()).collect();
+                self.expanded.retain(|d| names.contains(d));
+            }
+            Message::WorktreeExpansionToggled(dir) => {
+                if !self.expanded.remove(&dir) {
+                    self.expanded.insert(dir);
+                }
+            }
+            Message::AddWorktreeOpened => {
+                self.overlay = Overlay::AddWorktree;
+                self.worktree_form = Some(WorktreeForm::default());
+                self.worktree_error = None;
+            }
+            Message::AddWorktreeTypeSelected(type_) => {
+                if let Some(form) = &mut self.worktree_form {
+                    form.type_ = Some(type_);
+                    form.error = None;
+                }
+            }
+            Message::AddWorktreeTicketChanged(text) => {
+                if let Some(form) = &mut self.worktree_form {
+                    form.ticket = text;
+                    form.error = None;
+                }
+            }
+            Message::AddWorktreeNameChanged(text) => {
+                if let Some(form) = &mut self.worktree_form {
+                    form.name = text;
+                    form.error = None;
+                }
+            }
+            Message::AddWorktreeSubmitted => {
+                // Validate only (FR-008); the binary performs the git create on a valid form
+                // and dispatches WorktreeCreated / WorktreeCreateFailed.
+                if let Some(form) = &mut self.worktree_form {
+                    if let Err(error) = form.preview() {
+                        form.error = Some(error);
+                    }
+                }
+            }
+            Message::AddWorktreeCancelled => {
+                self.overlay = Overlay::None;
+                self.worktree_form = None;
+            }
+            Message::WorktreeCreated(worktree) => {
+                if !self
+                    .worktrees
+                    .iter()
+                    .any(|w| w.dir_name == worktree.dir_name)
+                {
+                    self.worktrees.push(worktree);
+                    self.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
+                }
+                self.overlay = Overlay::None;
+                self.worktree_form = None;
+                self.worktree_error = None;
+            }
+            Message::WorktreeCreateFailed(message) => {
+                // Keep the form open so the user can adjust; show the error (FR-017).
+                self.worktree_error = Some(message);
+            }
+            Message::SessionStarted(session) => {
+                let id = session.id;
+                let worktree_dir = session.worktree_dir.clone();
+                if let Some(path) = self.workspace.active.clone() {
+                    self.workspace
+                        .sessions
+                        .entry(path)
+                        .or_default()
+                        .push(session);
+                }
+                self.expanded.insert(worktree_dir);
+                self.active_session = Some(id);
+            }
+            Message::SessionSelected(id) => {
+                self.active_session = Some(id);
+            }
+            Message::SessionRunning(id) => {
+                if let Some(session) = self.session_mut(id) {
+                    session.mark_running();
+                }
+            }
+            Message::SessionTitleUpdated { id, title } => {
+                if let Some(session) = self.session_mut(id) {
+                    session.set_title(title);
+                }
+            }
+            Message::SessionCloseRequested(id) => {
+                if let Some(path) = self.workspace.active.clone() {
+                    if let Some(list) = self.workspace.sessions.get_mut(&path) {
+                        list.retain(|s| s.id != id);
+                    }
+                }
+                if self.active_session == Some(id) {
+                    self.active_session = None;
+                }
+            }
+            Message::TerminalInputChanged(text) => {
+                self.terminal_input = text;
+            }
+            Message::TerminalLineSubmitted => {
+                // The binary writes the line to the PTY before delegating here; clear it.
+                self.terminal_input.clear();
+            }
+            Message::TerminalTick => {}
+            Message::SidebarToggled => {
+                self.sidebar_hidden = !self.sidebar_hidden;
+            }
+            Message::SidebarDragStarted => {
+                self.sidebar_dragging = true;
+            }
+            Message::SidebarDragMoved(x) => {
+                if self.sidebar_dragging {
+                    self.sidebar_width = x.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                }
+            }
+            Message::SidebarDragEnded => {
+                self.sidebar_dragging = false;
+            }
+            // Animation progress is tracked by the binary (gui runtime), not the pure core.
+            Message::AnimationTick => {}
+
             // Performed by the binary at the I/O boundary (needs the home directory + a
-            // scan task, a FolderScanner, or persistence); no pure reducer effect.
+            // scan task, a FolderScanner, git, persistence, or PTY spawning); no pure
+            // reducer effect.
             Message::ProjectSelectorOpened
             | Message::FolderChosen(_)
-            | Message::KnownProjectReopened(_) => {}
+            | Message::KnownProjectReopened(_)
+            | Message::SessionStartRequested { .. } => {}
         }
+    }
+
+    /// The effective sidebar width in pixels: the user's chosen width (clamped), or the
+    /// default until they resize it.
+    pub fn sidebar_width_px(&self) -> u16 {
+        if self.sidebar_width == 0 {
+            SIDEBAR_DEFAULT_WIDTH
+        } else {
+            self.sidebar_width
+                .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+        }
+    }
+
+    /// Sessions hosted by the active project (FR-011). Empty when no project is active.
+    pub fn active_sessions(&self) -> &[Session] {
+        self.workspace
+            .active
+            .as_ref()
+            .and_then(|path| self.workspace.sessions.get(path))
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    /// Mutable access to a session of the active project by id.
+    fn session_mut(&mut self, id: SessionId) -> Option<&mut Session> {
+        let path = self.workspace.active.clone()?;
+        self.workspace
+            .sessions
+            .get_mut(&path)?
+            .iter_mut()
+            .find(|s| s.id == id)
+    }
+
+    /// Build the sidebar tree: worktrees (top level) each joined with their sessions and
+    /// expansion state (FR-002, FR-003). Sessions are matched to worktrees by `dir_name`.
+    pub fn worktree_tree(&self) -> Vec<WorktreeNode> {
+        let sessions = self.active_sessions();
+        self.worktrees
+            .iter()
+            .map(|worktree| WorktreeNode {
+                expanded: self.expanded.contains(&worktree.dir_name),
+                sessions: sessions
+                    .iter()
+                    .filter(|s| s.worktree_dir == worktree.dir_name)
+                    .cloned()
+                    .collect(),
+                worktree: worktree.clone(),
+            })
+            .collect()
     }
 }
 
@@ -249,6 +565,7 @@ pub fn on_escape(state: &State) -> Option<Message> {
         Overlay::About => Some(Message::AboutClosed),
         Overlay::ProjectSelector => Some(Message::ProjectSelectorClosed),
         Overlay::RenameProject => Some(Message::RenameCancelled),
+        Overlay::AddWorktree => Some(Message::AddWorktreeCancelled),
         Overlay::None => None,
     }
 }

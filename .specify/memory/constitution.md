@@ -1,39 +1,44 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: (template / unversioned) → 1.0.0
-Bump rationale: Initial ratification of the project constitution. The committed
-  baseline was the raw, unfilled template; this is the first concrete, released
-  version. Per the user's explicit direction, the initial version is 1.0.0 with a
-  ratification date of 2026-07-13. No prior released version existed, so no
-  amendment bump applies.
+Version change: 1.0.0 → 1.1.0
+Bump rationale: MINOR bump — a new core principle (VIII. Reusable UI Component
+  Foundation) was added along with a matching Component-reuse review gate under
+  Development Workflow & Quality Gates. No existing principle was removed or
+  redefined, so this is additive (MINOR), not MAJOR.
 
-Principles (final set — 7):
-  - I.   Test-First Development (NON-NEGOTIABLE)
-  - II.  Native Multi-Session Support
-  - III. Native Worktree Integration
-  - IV.  Local-First Storage (NON-NEGOTIABLE)
-  - V.   Rust + iced Stack
-  - VI.  Cross-Platform Parity                       (added)
-  - VII. Documentation as a First-Class Citizen      (added)
+Principles (final set — 8):
+  - I.    Test-First Development (NON-NEGOTIABLE)
+  - II.   Native Multi-Session Support
+  - III.  Native Worktree Integration
+  - IV.   Local-First Storage (NON-NEGOTIABLE)
+  - V.    Rust + iced Stack
+  - VI.   Cross-Platform Parity
+  - VII.  Documentation as a First-Class Citizen
+  - VIII. Reusable UI Component Foundation           (added in 1.1.0)
 
 Added sections / expansions:
-  - Technology, Storage & Licensing Constraints — added Distribution clause
+  - Core Principles — added Principle VIII (Reusable UI Component Foundation):
+    UI built from a shared, reusable component library; features MUST reuse or
+    extend shared primitives rather than fork bespoke one-off widgets. Kept at
+    principle altitude — no specific component inventory hardcoded.
+  - Development Workflow & Quality Gates — added Component-reuse gate: a change
+    that introduces a duplicate/one-off widget instead of reusing or extending a
+    shared primitive MUST be rejected in review unless explicitly justified and
+    recorded.
+  - (1.0.0) Technology, Storage & Licensing Constraints — Distribution clause
     (open source under an OSI-approved license; releases MUST ship Linux, macOS,
     and Windows builds).
-  - Development Workflow & Quality Gates — added Documentation gate and
-    Cross-platform gate; TDD gate now runs on all three platforms.
-  - Governance — added open-source contribution clause.
+  - (1.0.0) Governance — open-source contribution clause.
 
 Removed sections: none
 
 Templates requiring updates:
+  - ✅ .specify/templates/plan-template.md — Constitution Check gets a new
+       Principle VIII checkbox (component reuse).
   - ✅ .specify/templates/tasks-template.md — Test-First language already
-       reconciled (tests MANDATORY); documentation now surfaced as a mandatory
-       per-story deliverable (Principle VII) and cross-platform validation noted
-       (Principle VI).
-  - ✅ .specify/templates/plan-template.md — Constitution Check populated with
-       concrete gates covering all seven principles.
+       reconciled (tests MANDATORY); documentation surfaced as a mandatory
+       per-story deliverable (Principle VII); no change required for VIII.
   - ✅ .specify/templates/spec-template.md — technology-agnostic; no principle
        conflict, no edit required.
   - ✅ .specify/templates/checklist-template.md — generic sample items; no
@@ -159,6 +164,27 @@ Rationale: Documentation written separately from the code drifts out of date and
 trust. Requiring docs in the same change, stored and versioned with the code and verified
 in CI, keeps them accurate and makes the product usable by definition rather than by luck.
 
+### VIII. Reusable UI Component Foundation
+
+The user interface MUST be built from a shared, reusable component library rather than
+per-feature bespoke widgets. Features MUST reuse or extend the shared UI primitives; they
+MUST NOT fork one-off copies of a widget that a shared primitive already provides.
+
+- When a needed UI element does not yet exist as a shared primitive, the reusable
+  primitive MUST be created in (or promoted to) the shared library and consumed from
+  there, rather than embedded privately in a single feature.
+- Shared components MUST honor the same guarantees as the rest of the UI: light/dark
+  theming (consistent with the iced-based app shell) and cross-platform parity
+  (Principle VI).
+- The concrete catalog of components lives in the code and its documentation
+  (Principle VII), NOT in this constitution. This principle governs the practice of
+  reuse, not a fixed inventory.
+
+Rationale: A shared component foundation keeps the UI coherent, reduces duplicated and
+divergent behavior, and makes theming and cross-platform fixes apply once rather than
+feature-by-feature. Mandating reuse at the principle level prevents the slow accretion of
+inconsistent one-off widgets that is expensive to reconcile later.
+
 ## Technology, Storage & Licensing Constraints
 
 - **Language**: Rust, stable toolchain, managed via `mise`.
@@ -184,6 +210,9 @@ in CI, keeps them accurate and makes the product usable by definition rather tha
   Principle VII.
 - **Review gate**: Every change MUST be reviewed before merge. Added complexity MUST be
   justified against these principles; unjustified complexity is grounds for rejection.
+- **Component-reuse gate**: A change that introduces a duplicate or one-off widget instead
+  of reusing or extending a shared UI primitive MUST be rejected in review, unless the
+  divergence is explicitly justified and recorded. This gate operationalizes Principle VIII.
 - **Isolation & lifecycle gate**: Session isolation (Principle II) and worktree lifecycle
   (Principle III) MUST be covered by integration tests, not unit tests alone.
 
@@ -206,4 +235,4 @@ convention, or habit conflicts with it, this constitution prevails.
   principles. Complexity that violates a principle MUST be either removed or explicitly
   justified and recorded.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-13
+**Version**: 1.1.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-15

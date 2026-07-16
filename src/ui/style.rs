@@ -94,15 +94,36 @@ pub fn dialog(r: Roles) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-/// The top app bar surface (flat surface with a bottom hairline via a full border).
-pub fn app_bar(r: Roles) -> impl Fn(&Theme) -> container::Style {
+/// The sidebar surface — flat `surface` fill with **no border and no rounded corners**. The
+/// sidebar's right edge is drawn by the resize handle's 1px boundary line instead.
+pub fn sidebar_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface))),
+        text_color: Some(color(r.on_surface)),
+        border: Border::default(),
+        ..container::Style::default()
+    }
+}
+
+/// The Material toolbar surface — flat `surface` fill, **no border** (Angular-Material style).
+pub fn toolbar_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface))),
+        text_color: Some(color(r.on_surface)),
+        border: Border::default(),
+        ..container::Style::default()
+    }
+}
+
+/// A raised menu/dropdown surface: `surface` fill, subtle outline, rounded (for popup menus).
+pub fn menu_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
     move |_theme| container::Style {
         background: Some(Background::Color(color(r.surface))),
         text_color: Some(color(r.on_surface)),
         border: Border {
-            color: alpha(color(r.outline), 0.3),
+            color: alpha(color(r.outline), 0.4),
             width: 1.0,
-            radius: 0.0.into(),
+            radius: (shape::SM as f32).into(),
         },
         ..container::Style::default()
     }

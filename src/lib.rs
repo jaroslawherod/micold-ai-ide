@@ -10,12 +10,17 @@
 
 pub mod app;
 pub mod fs_scan;
+pub mod git;
 pub mod icons;
 pub mod metadata;
+pub mod naming;
 pub mod project;
 pub mod selector;
+pub mod session;
 pub mod settings;
 pub mod store;
+pub mod terminal;
 pub mod theme;
 pub mod tokens;
 pub mod workspace;
+pub mod worktree;

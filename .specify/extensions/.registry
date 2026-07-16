@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "extensions": {
+    "bugfix": {
+      "version": "1.1.0",
+      "source": "local",
+      "manifest_hash": "sha256:510fbaf292d0766594bf1fc3312de522d067b0420912d20a94f5323df3708419",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "speckit.bugfix.report",
+          "speckit.bugfix.patch",
+          "speckit.bugfix.switch",
+          "speckit.bugfix.verify"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-07-16T09:12:22.503581+00:00"
+    }
+  }
+}

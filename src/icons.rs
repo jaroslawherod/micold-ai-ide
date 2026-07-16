@@ -31,6 +31,22 @@ pub enum Icon {
     Unavailable,
     /// Navigate up a directory in the project selector.
     NavigateUp,
+    /// Add a new session (the "+" action, feature 005).
+    AddSession,
+    /// Add a new worktree (a branch/tree action, feature 005).
+    AddWorktree,
+    /// Overflow / "more" menu trigger (three vertical dots).
+    Menu,
+    /// Light theme mode.
+    LightMode,
+    /// Dark theme mode.
+    DarkMode,
+    /// Auto (follow-system) theme mode.
+    AutoMode,
+    /// Collapse/hide the sidebar.
+    HideSidebar,
+    /// Expand/show the sidebar.
+    ShowSidebar,
 }
 
 impl Icon {
@@ -44,6 +60,14 @@ impl Icon {
         Icon::ActiveMarker,
         Icon::Unavailable,
         Icon::NavigateUp,
+        Icon::AddSession,
+        Icon::AddWorktree,
+        Icon::Menu,
+        Icon::LightMode,
+        Icon::DarkMode,
+        Icon::AutoMode,
+        Icon::HideSidebar,
+        Icon::ShowSidebar,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -58,6 +82,14 @@ impl Icon {
             Icon::ActiveMarker => '\u{f0be}',
             Icon::Unavailable => '\u{f8b6}',
             Icon::NavigateUp => '\u{e5d8}',
+            Icon::AddSession => '\u{e145}',
+            Icon::AddWorktree => '\u{e97a}',
+            Icon::Menu => '\u{e5d4}',
+            Icon::LightMode => '\u{e518}',
+            Icon::DarkMode => '\u{e51c}',
+            Icon::AutoMode => '\u{e1ab}',
+            Icon::HideSidebar => '\u{f717}',
+            Icon::ShowSidebar => '\u{f716}',
         }
     }
 }
