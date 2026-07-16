@@ -116,7 +116,10 @@ const ICON_RGBA: &[u8] = include_bytes!("../assets/icon/icon-64.rgba");
 /// Window settings carrying the app icon (taskbar / titlebar).
 fn window_settings() -> iced::window::Settings {
     let icon = iced::window::icon::from_rgba(ICON_RGBA.to_vec(), 64, 64).ok();
-    iced::window::Settings { icon, ..Default::default() }
+    iced::window::Settings {
+        icon,
+        ..Default::default()
+    }
 }
 
 pub fn main() -> iced::Result {
@@ -348,7 +351,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 let cwd = repo.join(".claude/worktrees").join(&worktree_dir);
                 let session = Session::start_new(&worktree_dir);
                 let id = session.id;
-                match spawn_pty(&launch_spec(&cwd, id, LaunchMode::Fresh), app.scrollback_lines) {
+                match spawn_pty(
+                    &launch_spec(&cwd, id, LaunchMode::Fresh),
+                    app.scrollback_lines,
+                ) {
                     Ok(rt) => {
                         app.terminals.insert(id, rt);
                         app.core.update(Message::SessionStarted(session));
@@ -367,7 +373,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::SessionSelected(id));
             if !app.terminals.contains_key(&id) {
                 if let Some((cwd, _)) = session_cwd(&app.core, id) {
-                    if let Ok(rt) = spawn_pty(&launch_spec(&cwd, id, LaunchMode::Resume), app.scrollback_lines) {
+                    if let Ok(rt) = spawn_pty(
+                        &launch_spec(&cwd, id, LaunchMode::Resume),
+                        app.scrollback_lines,
+                    ) {
                         app.terminals.insert(id, rt);
                         app.core.update(Message::SessionRunning(id));
                     }
@@ -408,33 +417,53 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Mouse text selection on the displayed session's grid (FR-013).
         Message::TerminalSelectStart { col, line, kind } => {
-            if let Some(rt) = app.core.active_session.and_then(|id| app.terminals.get_mut(&id)) {
+            if let Some(rt) = app
+                .core
+                .active_session
+                .and_then(|id| app.terminals.get_mut(&id))
+            {
                 rt.selection_start(col, line, kind);
             }
             Task::none()
         }
         Message::TerminalSelectUpdate { col, line } => {
-            if let Some(rt) = app.core.active_session.and_then(|id| app.terminals.get_mut(&id)) {
+            if let Some(rt) = app
+                .core
+                .active_session
+                .and_then(|id| app.terminals.get_mut(&id))
+            {
                 rt.selection_update(col, line);
             }
             Task::none()
         }
         Message::TerminalSelectCleared => {
-            if let Some(rt) = app.core.active_session.and_then(|id| app.terminals.get_mut(&id)) {
+            if let Some(rt) = app
+                .core
+                .active_session
+                .and_then(|id| app.terminals.get_mut(&id))
+            {
                 rt.selection_clear();
             }
             Task::none()
         }
         // Reflow the displayed session's PTY + grid to the visible size (FR-014/FR-015).
         Message::TerminalResized { cols, rows } => {
-            if let Some(rt) = app.core.active_session.and_then(|id| app.terminals.get_mut(&id)) {
+            if let Some(rt) = app
+                .core
+                .active_session
+                .and_then(|id| app.terminals.get_mut(&id))
+            {
                 let _ = rt.resize(cols, rows);
             }
             Task::none()
         }
         // Scroll the displayed session's local scrollback (FR-016).
         Message::TerminalScrolled(delta) => {
-            if let Some(rt) = app.core.active_session.and_then(|id| app.terminals.get_mut(&id)) {
+            if let Some(rt) = app
+                .core
+                .active_session
+                .and_then(|id| app.terminals.get_mut(&id))
+            {
                 rt.scroll(delta);
             }
             Task::none()
@@ -473,8 +502,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 }
                 Some(_) => {
                     if let Some(draft) = app.core.settings_draft.as_mut() {
-                        draft.error =
-                            Some(format!("Enter a number between {min} and {max}."));
+                        draft.error = Some(format!("Enter a number between {min} and {max}."));
                     }
                 }
                 None => {
@@ -557,7 +585,10 @@ fn handle_process_exits(app: &mut App) {
         }
         let decision = with_session(&mut app.core, id, |s| s.on_unexpected_exit());
         if decision == Some(RestartDecision::Resume) {
-            if let Ok(rt) = spawn_pty(&launch_spec(&cwd, id, LaunchMode::Resume), app.scrollback_lines) {
+            if let Ok(rt) = spawn_pty(
+                &launch_spec(&cwd, id, LaunchMode::Resume),
+                app.scrollback_lines,
+            ) {
                 app.terminals.insert(id, rt);
                 app.core.update(Message::SessionRunning(id));
             }

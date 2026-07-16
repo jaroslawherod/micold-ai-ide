@@ -21,7 +21,12 @@ pub struct Mods {
 
 impl Mods {
     /// No modifiers held.
-    pub const NONE: Mods = Mods { shift: false, ctrl: false, alt: false, logo: false };
+    pub const NONE: Mods = Mods {
+        shift: false,
+        ctrl: false,
+        alt: false,
+        logo: false,
+    };
 
     /// True when no modifier is held.
     pub const fn is_empty(self) -> bool {

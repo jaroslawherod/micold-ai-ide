@@ -20,7 +20,11 @@ pub struct Toolbar<'a, M> {
 impl<'a, M: 'a> Toolbar<'a, M> {
     /// A toolbar titled `title`, themed by `roles`, with no actions yet.
     pub fn new(title: impl Into<String>, roles: Roles) -> Self {
-        Self { title: title.into(), roles, actions: Vec::new() }
+        Self {
+            title: title.into(),
+            roles,
+            actions: Vec::new(),
+        }
     }
 
     /// Append a trailing action element.
@@ -53,7 +57,10 @@ impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
         // Compact bar: tight vertical padding (`XS`) with comfortable horizontal padding (`SM`).
         container(bar)
             .width(Length::Fill)
-            .padding(iced::Padding::from([spacing::XS as f32, spacing::SM as f32]))
+            .padding(iced::Padding::from([
+                spacing::XS as f32,
+                spacing::SM as f32,
+            ]))
             .style(style::toolbar_surface(t.roles))
             .into()
     }

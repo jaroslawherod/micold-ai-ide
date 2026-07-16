@@ -8,7 +8,10 @@ use micold_ai_ide::session::SessionLifecycle;
 #[test]
 fn base_state_defaults() {
     let s = State::default();
-    assert!(!s.terminal_focused, "terminal must start unfocused (FR-010)");
+    assert!(
+        !s.terminal_focused,
+        "terminal must start unfocused (FR-010)"
+    );
     assert!(s.settings_draft.is_none());
     assert_eq!(s.overlay, Overlay::None);
 }
@@ -49,7 +52,9 @@ fn release_focus_never_yields_pty_bytes() {
 fn write_gating_only_when_running() {
     assert!(should_write_to(SessionLifecycle::Running));
     assert!(!should_write_to(SessionLifecycle::Starting));
-    assert!(!should_write_to(SessionLifecycle::Restarting { attempts: 1 }));
+    assert!(!should_write_to(SessionLifecycle::Restarting {
+        attempts: 1
+    }));
     assert!(!should_write_to(SessionLifecycle::Failed));
     assert!(!should_write_to(SessionLifecycle::Idle));
 }
@@ -57,8 +62,10 @@ fn write_gating_only_when_running() {
 #[test]
 fn escape_closes_the_settings_overlay() {
     use micold_ai_ide::app::{on_escape, Message};
-    let mut s = State::default();
-    s.overlay = Overlay::Settings;
+    let s = State {
+        overlay: Overlay::Settings,
+        ..State::default()
+    };
     assert_eq!(on_escape(&s), Some(Message::SettingsCancelled));
 }
 

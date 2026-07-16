@@ -18,9 +18,9 @@ use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::test::TermSize;
 use alacritty_terminal::term::{viewport_to_point, Config, RenderableContent, Term, TermMode};
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Processor};
-use micold_ai_ide::app::SelectKind;
 use iced::widget::{button, column, container, row, text, Space};
 use iced::{Alignment, Color, Element, Font, Length};
+use micold_ai_ide::app::SelectKind;
 use micold_ai_ide::app::{Message, State};
 use micold_ai_ide::session::{SessionId, SessionLifecycle};
 use micold_ai_ide::terminal::{claude_args, LaunchSpec, TerminalBackend, TerminalHandle};
@@ -48,7 +48,11 @@ pub struct CellMetrics {
 
 impl CellMetrics {
     pub fn new(size: f32) -> Self {
-        Self { size, width: size * 0.6, height: size * 1.4 }
+        Self {
+            size,
+            width: size * 0.6,
+            height: size * 1.4,
+        }
     }
 
     /// The grid dimensions (cols, rows) that fit a pixel area, minimum 1×1 (feature 006, FR-014).
@@ -120,9 +124,15 @@ impl RuntimeTerminal {
             return Ok(());
         }
         self.master
-            .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
             .map_err(std::io::Error::other)?;
-        self.term.resize(TermSize::new(cols as usize, rows as usize));
+        self.term
+            .resize(TermSize::new(cols as usize, rows as usize));
         self.cols = cols as usize;
         self.rows = rows as usize;
         Ok(())
@@ -205,12 +215,10 @@ impl RuntimeTerminal {
         col: u16,
         line: u16,
         pressed: bool,
-        shift: bool,
-        alt: bool,
-        ctrl: bool,
+        mods: micold_ai_ide::keymap::Mods,
     ) -> Option<Vec<u8>> {
         let mode = self.term.renderable_content().mode;
-        encode_mouse_report(mode, button, col, line, pressed, shift, alt, ctrl)
+        encode_mouse_report(mode, button, col, line, pressed, mods)
     }
 
     /// The currently-selected text, or empty when there is no selection (feature 006 copy).
@@ -246,7 +254,12 @@ impl TerminalHandle for RuntimeTerminal {
 pub fn spawn_pty(spec: &LaunchSpec, scrollback_lines: usize) -> std::io::Result<RuntimeTerminal> {
     let pty = native_pty_system();
     let pair = pty
-        .openpty(PtySize { rows: INIT_ROWS, cols: INIT_COLS, pixel_width: 0, pixel_height: 0 })
+        .openpty(PtySize {
+            rows: INIT_ROWS,
+            cols: INIT_COLS,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
         .map_err(std::io::Error::other)?;
 
     let mut cmd = CommandBuilder::new("claude");
@@ -258,10 +271,16 @@ pub fn spawn_pty(spec: &LaunchSpec, scrollback_lines: usize) -> std::io::Result<
         cmd.arg(arg);
     }
 
-    let child = pair.slave.spawn_command(cmd).map_err(std::io::Error::other)?;
+    let child = pair
+        .slave
+        .spawn_command(cmd)
+        .map_err(std::io::Error::other)?;
     drop(pair.slave);
 
-    let mut reader = pair.master.try_clone_reader().map_err(std::io::Error::other)?;
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(std::io::Error::other)?;
     let writer = pair.master.take_writer().map_err(std::io::Error::other)?;
 
     let output = Arc::new(Mutex::new(Vec::new()));
@@ -277,8 +296,14 @@ pub fn spawn_pty(spec: &LaunchSpec, scrollback_lines: usize) -> std::io::Result<
         }
     });
 
-    let dims = TermDimensions { rows: INIT_ROWS as usize, cols: INIT_COLS as usize };
-    let config = Config { scrolling_history: scrollback_lines, ..Config::default() };
+    let dims = TermDimensions {
+        rows: INIT_ROWS as usize,
+        cols: INIT_COLS as usize,
+    };
+    let config = Config {
+        scrolling_history: scrollback_lines,
+        ..Config::default()
+    };
     let term = Term::new(config, &dims, VoidListener);
     let parser = Processor::new();
 
@@ -387,22 +412,22 @@ fn rgb_to_color(c: Rgb) -> Color {
 
 /// A conventional 16-colour ANSI palette (standard + bright), theme-independent (SC-002).
 const STANDARD_ANSI16: [Color; 16] = [
-    Color::from_rgb(0.0, 0.0, 0.0),                      // black
-    Color::from_rgb(0.674, 0.259, 0.259),                // red
-    Color::from_rgb(0.564, 0.663, 0.349),                // green
-    Color::from_rgb(0.956, 0.749, 0.459),                // yellow
-    Color::from_rgb(0.416, 0.623, 0.71),                 // blue
-    Color::from_rgb(0.666, 0.458, 0.623),                // magenta
-    Color::from_rgb(0.458, 0.71, 0.666),                 // cyan
-    Color::from_rgb(0.847, 0.847, 0.847),                // white
-    Color::from_rgb(0.419, 0.419, 0.419),                // bright black
-    Color::from_rgb(0.772, 0.333, 0.333),                // bright red
-    Color::from_rgb(0.667, 0.769, 0.454),                // bright green
-    Color::from_rgb(0.996, 0.792, 0.533),                // bright yellow
-    Color::from_rgb(0.509, 0.721, 0.784),                // bright blue
-    Color::from_rgb(0.76, 0.549, 0.721),                 // bright magenta
-    Color::from_rgb(0.576, 0.827, 0.764),                // bright cyan
-    Color::from_rgb(0.972, 0.972, 0.972),                // bright white
+    Color::from_rgb(0.0, 0.0, 0.0),       // black
+    Color::from_rgb(0.674, 0.259, 0.259), // red
+    Color::from_rgb(0.564, 0.663, 0.349), // green
+    Color::from_rgb(0.956, 0.749, 0.459), // yellow
+    Color::from_rgb(0.416, 0.623, 0.71),  // blue
+    Color::from_rgb(0.666, 0.458, 0.623), // magenta
+    Color::from_rgb(0.458, 0.71, 0.666),  // cyan
+    Color::from_rgb(0.847, 0.847, 0.847), // white
+    Color::from_rgb(0.419, 0.419, 0.419), // bright black
+    Color::from_rgb(0.772, 0.333, 0.333), // bright red
+    Color::from_rgb(0.667, 0.769, 0.454), // bright green
+    Color::from_rgb(0.996, 0.792, 0.533), // bright yellow
+    Color::from_rgb(0.509, 0.721, 0.784), // bright blue
+    Color::from_rgb(0.76, 0.549, 0.721),  // bright magenta
+    Color::from_rgb(0.576, 0.827, 0.764), // bright cyan
+    Color::from_rgb(0.972, 0.972, 0.972), // bright white
 ];
 
 /// The xterm 256-colour cube + grayscale ramp for indices ≥ 16.
@@ -431,7 +456,12 @@ fn indexed_256(i: u8) -> Color {
 }
 
 /// Resolve per-cell fg/bg/flags into final draw colours + font (feature 006 rendering helper).
-pub fn cell_colors(palette: &TermPalette, fg: AnsiColor, bg: AnsiColor, flags: Flags) -> (Color, Color) {
+pub fn cell_colors(
+    palette: &TermPalette,
+    fg: AnsiColor,
+    bg: AnsiColor,
+    flags: Flags,
+) -> (Color, Color) {
     let mut f = palette.color(fg);
     let mut b = palette.color(bg);
     if flags.intersects(Flags::DIM | Flags::DIM_BOLD) {
@@ -472,28 +502,30 @@ pub fn encode_mouse_report(
     col: u16,
     line: u16,
     pressed: bool,
-    shift: bool,
-    alt: bool,
-    ctrl: bool,
+    mods: micold_ai_ide::keymap::Mods,
 ) -> Option<Vec<u8>> {
     if !mode.intersects(TermMode::MOUSE_MODE) {
         return None;
     }
-    let mut mods = 0u8;
-    if shift {
-        mods += 4;
+    let mut mod_bits = 0u8;
+    if mods.shift {
+        mod_bits += 4;
     }
-    if alt {
-        mods += 8;
+    if mods.alt {
+        mod_bits += 8;
     }
-    if ctrl {
-        mods += 16;
+    if mods.ctrl {
+        mod_bits += 16;
     }
     if mode.contains(TermMode::SGR_MOUSE) {
         let c = if pressed { 'M' } else { 'm' };
-        Some(format!("\x1b[<{};{};{}{}", button + mods, col + 1, line + 1, c).into_bytes())
+        Some(format!("\x1b[<{};{};{}{}", button + mod_bits, col + 1, line + 1, c).into_bytes())
     } else {
-        let b = if pressed { button + mods } else { 3 + mods };
+        let b = if pressed {
+            button + mod_bits
+        } else {
+            3 + mod_bits
+        };
         let cx = 32 + 1 + (col.min(222) as u8);
         let cy = 32 + 1 + (line.min(222) as u8);
         Some(vec![0x1b, b'[', b'M', 32 + b, cx, cy])
@@ -527,10 +559,14 @@ pub fn pane<'a>(
         Some(rt) => TerminalPane::new(rt, TermPalette::from_scheme(scheme))
             .focused(state.terminal_focused)
             .into(),
-        None => container(text("Starting…").size(type_scale::LABEL).style(style::muted(r)))
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .into(),
+        None => container(
+            text("Starting…")
+                .size(type_scale::LABEL)
+                .style(style::muted(r)),
+        )
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .into(),
     };
 
     // A slim bottom status bar: the current session name (left) and its lifecycle status
@@ -608,7 +644,11 @@ mod tests {
     #[test]
     fn spec_maps_to_truecolor() {
         let p = TermPalette::from_scheme(ColorScheme::Dark);
-        let c = p.color(AnsiColor::Spec(AnsiRgb { r: 10, g: 20, b: 30 }));
+        let c = p.color(AnsiColor::Spec(AnsiRgb {
+            r: 10,
+            g: 20,
+            b: 30,
+        }));
         assert_eq!(c, Color::from_rgb8(10, 20, 30));
     }
 
@@ -623,15 +663,24 @@ mod tests {
     #[test]
     fn named_black_and_bright_white_match_ansi16() {
         let p = TermPalette::from_scheme(ColorScheme::Light);
-        assert_eq!(p.color(AnsiColor::Named(NamedColor::Black)), STANDARD_ANSI16[0]);
-        assert_eq!(p.color(AnsiColor::Named(NamedColor::BrightWhite)), STANDARD_ANSI16[15]);
+        assert_eq!(
+            p.color(AnsiColor::Named(NamedColor::Black)),
+            STANDARD_ANSI16[0]
+        );
+        assert_eq!(
+            p.color(AnsiColor::Named(NamedColor::BrightWhite)),
+            STANDARD_ANSI16[15]
+        );
     }
 
     #[test]
     fn indexed_256_cube_starts_at_black() {
         let p = TermPalette::from_scheme(ColorScheme::Dark);
         // Index 16 is the first colour-cube entry (0,0,0).
-        assert_eq!(p.color(AnsiColor::Indexed(16)), Color::from_rgb(0.0, 0.0, 0.0));
+        assert_eq!(
+            p.color(AnsiColor::Indexed(16)),
+            Color::from_rgb(0.0, 0.0, 0.0)
+        );
     }
 
     #[test]
@@ -641,8 +690,14 @@ mod tests {
         // Default background differs between light and dark schemes (FR-003).
         assert_ne!(light.background(), dark.background());
         // Named Foreground/Background resolve to the theme defaults, not the ANSI palette.
-        assert_eq!(dark.color(AnsiColor::Named(NamedColor::Foreground)), dark.foreground());
-        assert_eq!(dark.color(AnsiColor::Named(NamedColor::Background)), dark.background());
+        assert_eq!(
+            dark.color(AnsiColor::Named(NamedColor::Foreground)),
+            dark.foreground()
+        );
+        assert_eq!(
+            dark.color(AnsiColor::Named(NamedColor::Background)),
+            dark.background()
+        );
     }
 
     #[test]
@@ -657,8 +712,9 @@ mod tests {
 
     #[test]
     fn no_mouse_report_when_mouse_mode_off() {
+        let mods = micold_ai_ide::keymap::Mods::NONE;
         assert_eq!(
-            encode_mouse_report(TermMode::empty(), 0, 3, 4, true, false, false, false),
+            encode_mouse_report(TermMode::empty(), 0, 3, 4, true, mods),
             None
         );
     }
@@ -666,11 +722,12 @@ mod tests {
     #[test]
     fn sgr_mouse_report_is_one_based_with_press_marker() {
         let mode = TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE;
+        let mods = micold_ai_ide::keymap::Mods::NONE;
         // Left button (0) press at grid (col 3, line 4) → CSI < 0 ; 4 ; 5 M.
-        let seq = encode_mouse_report(mode, 0, 3, 4, true, false, false, false).unwrap();
+        let seq = encode_mouse_report(mode, 0, 3, 4, true, mods).unwrap();
         assert_eq!(seq, b"\x1b[<0;4;5M");
         // Release uses the lowercase 'm' terminator.
-        let seq = encode_mouse_report(mode, 0, 3, 4, false, false, false, false).unwrap();
+        let seq = encode_mouse_report(mode, 0, 3, 4, false, mods).unwrap();
         assert_eq!(seq, b"\x1b[<0;4;5m");
     }
 
@@ -678,14 +735,18 @@ mod tests {
     fn sgr_mouse_report_adds_modifier_bits() {
         let mode = TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE;
         // Shift adds 4 to the button code.
-        let seq = encode_mouse_report(mode, 0, 0, 0, true, true, false, false).unwrap();
+        let mods = micold_ai_ide::keymap::Mods {
+            shift: true,
+            ..micold_ai_ide::keymap::Mods::NONE
+        };
+        let seq = encode_mouse_report(mode, 0, 0, 0, true, mods).unwrap();
         assert_eq!(seq, b"\x1b[<4;1;1M");
     }
 
     #[test]
     fn grid_size_fits_cells_and_floors() {
         let m = CellMetrics::new(TERM_FONT_SIZE); // width 7.8, height 18.2
-        // 800x600 → floor(800/7.8)=102 cols, floor(600/18.2)=32 rows.
+                                                  // 800x600 → floor(800/7.8)=102 cols, floor(600/18.2)=32 rows.
         assert_eq!(m.grid_size(800.0, 600.0), (102, 32));
     }
 

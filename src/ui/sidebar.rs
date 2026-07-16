@@ -19,7 +19,10 @@ const STRIP_WIDTH: f32 = 32.0;
 /// A low-contrast color for separator/border lines (the sidebar edge and the resize handle):
 /// the outline role softened with reduced alpha so it reads as a subtle divider, not a hard rule.
 fn separator_color(r: Roles) -> iced::Color {
-    iced::Color { a: 0.4, ..style::color(r.outline) }
+    iced::Color {
+        a: 0.4,
+        ..style::color(r.outline)
+    }
 }
 
 /// Linearly interpolate between two colors (`t` 0→1), for the handle's animated hover highlight.
@@ -93,10 +96,7 @@ pub fn view(state: &State, scheme: micold_ai_ide::theme::ColorScheme) -> Element
 /// (a thin transparent hit target) with a single 1px boundary line that reads as the
 /// sidebar's right border; hovering shows the horizontal-resize cursor. Pressing it starts a
 /// resize drag (the binary captures the drag with a full-window overlay).
-pub fn handle(
-    scheme: micold_ai_ide::theme::ColorScheme,
-    hover: f32,
-) -> Element<'static, Message> {
+pub fn handle(scheme: micold_ai_ide::theme::ColorScheme, hover: f32) -> Element<'static, Message> {
     let r = tokens::roles(scheme);
     // The invisible grab zone is blended with the sidebar surface and sits on the LEFT; the 1px
     // separator line sits on the RIGHT, flush against the main area — so no window-background gap

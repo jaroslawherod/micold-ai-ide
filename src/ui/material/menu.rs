@@ -49,13 +49,19 @@ pub struct MenuTrigger<M> {
 impl<M> MenuTrigger<M> {
     /// A trigger showing `icon` that emits `on_toggle` when pressed, themed by `roles`.
     pub fn new(icon: Icon, on_toggle: M, roles: Roles) -> Self {
-        Self { icon, on_toggle, roles }
+        Self {
+            icon,
+            on_toggle,
+            roles,
+        }
     }
 }
 
 impl<'a, M: Clone + 'a> From<MenuTrigger<M>> for Element<'a, M> {
     fn from(t: MenuTrigger<M>) -> Self {
-        IconButton::new(t.icon, t.roles).on_press(t.on_toggle).into()
+        IconButton::new(t.icon, t.roles)
+            .on_press(t.on_toggle)
+            .into()
     }
 }
 
@@ -81,7 +87,13 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
         on_dismiss: M,
         roles: Roles,
     ) -> Self {
-        Self { base: base.into(), items, on_dismiss, roles, progress: 1.0 }
+        Self {
+            base: base.into(),
+            items,
+            on_dismiss,
+            roles,
+            progress: 1.0,
+        }
     }
 
     /// Fade progress (0 = hidden → returns `base` as-is; 1 = fully shown).
@@ -93,55 +105,61 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
 
 impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Element<'a, M> {
     fn from(m: MenuOverlay<'a, M>) -> Self {
-        let MenuOverlay { base, items, on_dismiss, roles: r, progress } = m;
+        let MenuOverlay {
+            base,
+            items,
+            on_dismiss,
+            roles: r,
+            progress,
+        } = m;
         if progress <= 0.001 {
             return base;
         }
 
         let mut list = column![].spacing(spacing::XS).width(Length::Fill);
-    for item in items {
-        let mut content = row![].spacing(spacing::SM).align_y(Alignment::Center);
-        if let Some(glyph) = item.icon {
-            content = content.push(icon(glyph, type_scale::BODY, r.on_surface));
+        for item in items {
+            let mut content = row![].spacing(spacing::SM).align_y(Alignment::Center);
+            if let Some(glyph) = item.icon {
+                content = content.push(icon(glyph, type_scale::BODY, r.on_surface));
+            }
+            content = content.push(text(item.label).size(type_scale::BODY));
+            list = list.push(
+                button(content)
+                    .width(Length::Fill)
+                    .padding(spacing::SM)
+                    .style(style::text_button(r))
+                    .on_press(item.message),
+            );
         }
-        content = content.push(text(item.label).size(type_scale::BODY));
-        list = list.push(
-            button(content)
-                .width(Length::Fill)
-                .padding(spacing::SM)
-                .style(style::text_button(r))
-                .on_press(item.message),
+
+        // Fade the panel box itself (scrim of its own surface color), then anchor it top-right.
+        let panel_box = super::fade(
+            container(list)
+                .padding(spacing::XS)
+                .width(Length::Fixed(PANEL_WIDTH))
+                .style(style::menu_surface(r)),
+            progress,
+            style::color(r.surface),
         );
-    }
-
-    // Fade the panel box itself (scrim of its own surface color), then anchor it top-right.
-    let panel_box = super::fade(
-        container(list)
-            .padding(spacing::XS)
-            .width(Length::Fixed(PANEL_WIDTH))
-            .style(style::menu_surface(r)),
-        progress,
-        style::color(r.surface),
-    );
-    let panel = container(panel_box)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(iced::alignment::Horizontal::Right)
-        .align_y(iced::alignment::Vertical::Top)
-        .padding(iced::Padding {
-            top: TOP_OFFSET,
-            right: spacing::SM as f32,
-            bottom: 0.0,
-            left: 0.0,
-        });
-
-    // Invisible backdrop that dismisses the menu on any outside click.
-    let backdrop = mouse_area(
-        container(Space::new(Length::Fill, Length::Fill))
+        let panel = container(panel_box)
             .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .on_press(on_dismiss);
+            .height(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Right)
+            .align_y(iced::alignment::Vertical::Top)
+            .padding(iced::Padding {
+                top: TOP_OFFSET,
+                right: spacing::SM as f32,
+                bottom: 0.0,
+                left: 0.0,
+            });
+
+        // Invisible backdrop that dismisses the menu on any outside click.
+        let backdrop = mouse_area(
+            container(Space::new(Length::Fill, Length::Fill))
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .on_press(on_dismiss);
 
         iced::widget::stack![base, backdrop, panel].into()
     }

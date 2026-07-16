@@ -106,76 +106,76 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
         let TreeView { items, roles: r } = tv;
         let mut col = column![].spacing(spacing::XS).width(Length::Fill);
 
-    for item in items {
-        let indent = spacing::MD + item.depth * spacing::MD;
-        let mut line = row![Space::with_width(Length::Fixed(indent as f32))]
-            .spacing(spacing::XS)
-            .align_y(Alignment::Center)
-            .width(Length::Fill);
+        for item in items {
+            let indent = spacing::MD + item.depth * spacing::MD;
+            let mut line = row![Space::with_width(Length::Fixed(indent as f32))]
+                .spacing(spacing::XS)
+                .align_y(Alignment::Center)
+                .width(Length::Fill);
 
-        // Expand/collapse twisty (or a spacer to keep labels aligned).
-        match item.expandable {
-            Some(expanded) => {
-                let glyph = if expanded {
-                    Icon::NavigateUp // rotated visual not available; reuse a chevron-like glyph
-                } else {
-                    Icon::OpenProject
-                };
-                let mut twisty = button(icon(glyph, type_scale::LABEL, item.tint))
-                    .padding(spacing::XS)
-                    .style(style::text_button(r));
-                if let Some(msg) = item.on_toggle.clone() {
-                    twisty = twisty.on_press(msg);
+            // Expand/collapse twisty (or a spacer to keep labels aligned).
+            match item.expandable {
+                Some(expanded) => {
+                    let glyph = if expanded {
+                        Icon::NavigateUp // rotated visual not available; reuse a chevron-like glyph
+                    } else {
+                        Icon::OpenProject
+                    };
+                    let mut twisty = button(icon(glyph, type_scale::LABEL, item.tint))
+                        .padding(spacing::XS)
+                        .style(style::text_button(r));
+                    if let Some(msg) = item.on_toggle.clone() {
+                        twisty = twisty.on_press(msg);
+                    }
+                    line = line.push(twisty);
                 }
-                line = line.push(twisty);
+                None => {
+                    line = line.push(Space::with_width(Length::Fixed(type_scale::LABEL as f32)))
+                }
             }
-            None => line = line.push(Space::with_width(Length::Fixed(type_scale::LABEL as f32))),
-        }
 
-        if let Some(glyph) = item.icon {
-            line = line.push(icon(glyph, type_scale::BODY, item.tint));
-        }
+            if let Some(glyph) = item.icon {
+                line = line.push(icon(glyph, type_scale::BODY, item.tint));
+            }
 
-        line = line.push(
-            text(item.label)
-                .size(type_scale::BODY)
-                .style(move |_t: &iced::Theme| text::Style {
-                    color: Some(style::color(item.tint)),
-                })
-                .width(Length::Fill),
-        );
+            line = line.push(
+                text(item.label)
+                    .size(type_scale::BODY)
+                    .style(move |_t: &iced::Theme| text::Style {
+                        color: Some(style::color(item.tint)),
+                    })
+                    .width(Length::Fill),
+            );
 
-        if let Some((glyph, msg)) = item.trailing {
-            let btn = button(icon(glyph, type_scale::LABEL, item.tint))
-                .padding(spacing::XS)
-                .style(style::text_button(r))
-                .on_press(msg);
-            let trailing: Element<'a, M> = match item.trailing_tooltip {
-                Some(tip) => super::Tooltip::new(btn, tip, r).into(),
-                None => btn.into(),
-            };
-            line = line.push(trailing);
-        }
+            if let Some((glyph, msg)) = item.trailing {
+                let btn = button(icon(glyph, type_scale::LABEL, item.tint))
+                    .padding(spacing::XS)
+                    .style(style::text_button(r))
+                    .on_press(msg);
+                let trailing: Element<'a, M> = match item.trailing_tooltip {
+                    Some(tip) => super::Tooltip::new(btn, tip, r).into(),
+                    None => btn.into(),
+                };
+                line = line.push(trailing);
+            }
 
-        // The whole row is a low-emphasis button when it has a press action, so selection
-        // and hover feedback are consistent.
-        let row_el: Element<'a, M> = if let Some(msg) = item.on_press.clone() {
-            button(line)
-                .padding(spacing::XS)
-                .width(Length::Fill)
-                .style(style::text_button(r))
-                .on_press(msg)
-                .into()
-        } else {
-            line.into()
-        };
-
-        // Selected rows get a subtle surface-variant background.
-        if item.selected {
-            col = col.push(
-                container(row_el)
+            // The whole row is a low-emphasis button when it has a press action, so selection
+            // and hover feedback are consistent.
+            let row_el: Element<'a, M> = if let Some(msg) = item.on_press.clone() {
+                button(line)
+                    .padding(spacing::XS)
                     .width(Length::Fill)
-                    .style(move |_t: &iced::Theme| iced::widget::container::Style {
+                    .style(style::text_button(r))
+                    .on_press(msg)
+                    .into()
+            } else {
+                line.into()
+            };
+
+            // Selected rows get a subtle surface-variant background.
+            if item.selected {
+                col = col.push(container(row_el).width(Length::Fill).style(
+                    move |_t: &iced::Theme| iced::widget::container::Style {
                         background: Some(iced::Background::Color(iced::Color {
                             a: 0.5,
                             ..style::color(r.surface_variant)
@@ -185,12 +185,12 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                             ..Default::default()
                         },
                         ..Default::default()
-                    }),
-            );
-        } else {
-            col = col.push(row_el);
+                    },
+                ));
+            } else {
+                col = col.push(row_el);
+            }
         }
-    }
 
         col.into()
     }

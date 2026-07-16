@@ -22,7 +22,10 @@ fn default_scrollback_is_10000() {
 #[test]
 fn save_then_load_preserves_scrollback() {
     let (_dir, store) = temp_store();
-    let settings = Settings { scrollback_lines: 25_000, ..Settings::default() };
+    let settings = Settings {
+        scrollback_lines: 25_000,
+        ..Settings::default()
+    };
     store.save(&settings).unwrap();
     assert_eq!(store.load().settings.scrollback_lines, 25_000);
 }
@@ -31,7 +34,11 @@ fn save_then_load_preserves_scrollback() {
 fn v1_document_without_field_loads_the_default() {
     let (dir, store) = temp_store();
     // A pre-006 (v1) settings file has no `scrollback_lines`.
-    std::fs::write(dir.path().join("settings.json"), r#"{"settings_version":1}"#).unwrap();
+    std::fs::write(
+        dir.path().join("settings.json"),
+        r#"{"settings_version":1}"#,
+    )
+    .unwrap();
     let loaded = store.load().settings;
     assert_eq!(loaded.scrollback_lines, DEFAULT_SCROLLBACK_LINES);
 }

@@ -249,7 +249,11 @@ pub enum Message {
     /// writes them only when the session is Running (FR-008, FR-012a).
     TerminalBytes(Vec<u8>),
     /// Begin a text selection at a viewport grid cell (feature 006 mouse, FR-013/FR-013b).
-    TerminalSelectStart { col: u16, line: u16, kind: SelectKind },
+    TerminalSelectStart {
+        col: u16,
+        line: u16,
+        kind: SelectKind,
+    },
     /// Extend the in-progress text selection to a viewport grid cell (FR-013).
     TerminalSelectUpdate { col: u16, line: u16 },
     /// Clear the current text selection.

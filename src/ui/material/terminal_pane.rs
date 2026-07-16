@@ -5,11 +5,14 @@
 //! Adapted from `iced_term 0.6.0` `view.rs` (MIT © Ilya Shvyryalkin). Key/mouse input and the
 //! full focus gate land in feature 006 US2/US3; this file covers colour rendering + click focus.
 
-use crate::ui::terminal::{cell_colors, cell_font, shows_cursor, CellMetrics, RuntimeTerminal, TermPalette, TERM_FONT_SIZE};
+use crate::ui::terminal::{
+    cell_colors, cell_font, shows_cursor, CellMetrics, RuntimeTerminal, TermPalette, TERM_FONT_SIZE,
+};
+use iced::advanced::clipboard::Kind as ClipboardKind;
 use iced::advanced::graphics::geometry::Renderer as _;
 use iced::advanced::layout::{self, Layout};
-use iced::advanced::renderer;
 use iced::advanced::mouse::{click, Click};
+use iced::advanced::renderer;
 use iced::advanced::widget::{tree, Tree, Widget};
 use iced::advanced::{Clipboard, Shell};
 use iced::widget::canvas::{Frame, Path, Stroke, Text};
@@ -17,7 +20,6 @@ use iced::{
     alignment, event, keyboard, mouse, Element, Event, Length, Point, Rectangle, Renderer, Size,
     Theme,
 };
-use iced::advanced::clipboard::Kind as ClipboardKind;
 use micold_ai_ide::app::{Message, SelectKind};
 use micold_ai_ide::keymap::{self, KeyOutput};
 
@@ -50,7 +52,11 @@ pub struct TerminalPane<'a> {
 impl<'a> TerminalPane<'a> {
     /// A terminal pane rendering `rt`'s grid with `palette`. Unfocused by default.
     pub fn new(rt: &'a RuntimeTerminal, palette: TermPalette) -> Self {
-        Self { rt, palette, focused: false }
+        Self {
+            rt,
+            palette,
+            focused: false,
+        }
     }
 
     /// Mark the pane focused (draws the accent focus border).
@@ -68,7 +74,10 @@ impl<'a> From<TerminalPane<'a>> for Element<'a, Message> {
 
 impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
     fn size(&self) -> Size<Length> {
-        Size { width: Length::Fill, height: Length::Fill }
+        Size {
+            width: Length::Fill,
+            height: Length::Fill,
+        }
     }
 
     fn tag(&self) -> tree::Tag {
@@ -144,17 +153,25 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let ch = indexed.cell.c;
                 if ch != ' ' && ch != '\t' && ch != '\0' {
                     // Invert the glyph over the cursor block for legibility.
-                    let glyph_fg =
-                        if show_cursor && indexed.point == cursor_point { default_bg } else { fg };
+                    let glyph_fg = if show_cursor && indexed.point == cursor_point {
+                        default_bg
+                    } else {
+                        fg
+                    };
                     frame.fill_text(Text {
                         content: ch.to_string(),
-                        position: iced::Point::new(x + metrics.width / 2.0, y + metrics.height / 2.0),
+                        position: iced::Point::new(
+                            x + metrics.width / 2.0,
+                            y + metrics.height / 2.0,
+                        ),
                         color: glyph_fg,
                         size: iced::Pixels(metrics.size),
                         font: cell_font(flags),
                         horizontal_alignment: alignment::Horizontal::Center,
                         vertical_alignment: alignment::Vertical::Center,
-                        line_height: iced::widget::text::LineHeight::Absolute(iced::Pixels(metrics.height)),
+                        line_height: iced::widget::text::LineHeight::Absolute(iced::Pixels(
+                            metrics.height,
+                        )),
                         shaping: iced::widget::text::Shaping::Advanced,
                     });
                 }
@@ -164,14 +181,20 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 if flags.contains(Flags::UNDERLINE) {
                     let uy = y + metrics.height - 1.0;
                     frame.stroke(
-                        &Path::line(iced::Point::new(x, uy), iced::Point::new(x + metrics.width, uy)),
+                        &Path::line(
+                            iced::Point::new(x, uy),
+                            iced::Point::new(x + metrics.width, uy),
+                        ),
                         Stroke::default().with_width(1.0).with_color(fg),
                     );
                 }
                 if flags.contains(Flags::STRIKEOUT) {
                     let sy = y + metrics.height / 2.0;
                     frame.stroke(
-                        &Path::line(iced::Point::new(x, sy), iced::Point::new(x + metrics.width, sy)),
+                        &Path::line(
+                            iced::Point::new(x, sy),
+                            iced::Point::new(x + metrics.width, sy),
+                        ),
                         Stroke::default().with_width(1.0).with_color(fg),
                     );
                 }
@@ -181,7 +204,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             if self.focused {
                 frame.stroke(
                     &Path::rectangle(bounds.position(), bounds.size()),
-                    Stroke::default().with_width(1.5).with_color(self.palette.accent()),
+                    Stroke::default()
+                        .with_width(1.5)
+                        .with_color(self.palette.accent()),
                 );
             }
         }
@@ -208,7 +233,10 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         let grid = metrics.grid_size(bounds.width, bounds.height);
         if grid != state.last_grid {
             state.last_grid = grid;
-            shell.publish(Message::TerminalResized { cols: grid.0, rows: grid.1 });
+            shell.publish(Message::TerminalResized {
+                cols: grid.0,
+                rows: grid.1,
+            });
         }
 
         // Track modifiers (even when unfocused) so Shift-forces-selection works (FR-013b).
@@ -239,7 +267,11 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let shift = state.modifiers.shift();
                 if self.focused && self.rt.mouse_mode() && !shift {
                     if let Some(seq) = self.rt.mouse_report_bytes(
-                        0, col, line, true, shift, state.modifiers.alt(), state.modifiers.control(),
+                        0,
+                        col,
+                        line,
+                        true,
+                        to_keymap_mods(state.modifiers),
                     ) {
                         shell.publish(Message::TerminalBytes(seq));
                     }
@@ -288,14 +320,15 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 };
                 if lines != 0 {
                     if self.focused && self.rt.mouse_mode() {
-                        let (col, line) =
-                            cursor.position().map(|p| grid_at(p, bounds, metrics)).unwrap_or((0, 0));
+                        let (col, line) = cursor
+                            .position()
+                            .map(|p| grid_at(p, bounds, metrics))
+                            .unwrap_or((0, 0));
                         let btn = if lines > 0 { 64 } else { 65 };
-                        let m = state.modifiers;
+                        let km = to_keymap_mods(state.modifiers);
                         for _ in 0..lines.abs() {
-                            if let Some(seq) = self.rt.mouse_report_bytes(
-                                btn, col, line, true, m.shift(), m.alt(), m.control(),
-                            ) {
+                            if let Some(seq) = self.rt.mouse_report_bytes(btn, col, line, true, km)
+                            {
                                 shell.publish(Message::TerminalBytes(seq));
                             }
                         }
@@ -312,7 +345,13 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         if !self.focused {
             return event::Status::Ignored;
         }
-        if let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, text, .. }) = event {
+        if let Event::Keyboard(keyboard::Event::KeyPressed {
+            key,
+            modifiers,
+            text,
+            ..
+        }) = event
+        {
             let Some(k) = to_keymap_key(&key) else {
                 return event::Status::Ignored;
             };
@@ -364,7 +403,12 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
 
 /// Map iced modifiers onto the pure `keymap::Mods`.
 fn to_keymap_mods(m: keyboard::Modifiers) -> keymap::Mods {
-    keymap::Mods { shift: m.shift(), ctrl: m.control(), alt: m.alt(), logo: m.logo() }
+    keymap::Mods {
+        shift: m.shift(),
+        ctrl: m.control(),
+        alt: m.alt(),
+        logo: m.logo(),
+    }
 }
 
 /// Map an iced logical key onto the pure `keymap::Key` (returns `None` for keys the terminal
@@ -420,7 +464,12 @@ mod tests {
     #[test]
     fn grid_at_maps_pixels_to_cells() {
         let metrics = CellMetrics::new(TERM_FONT_SIZE); // width 7.8, height 18.2
-        let bounds = Rectangle { x: 10.0, y: 20.0, width: 800.0, height: 600.0 };
+        let bounds = Rectangle {
+            x: 10.0,
+            y: 20.0,
+            width: 800.0,
+            height: 600.0,
+        };
         // Just inside the origin cell.
         assert_eq!(grid_at(Point::new(11.0, 21.0), bounds, metrics), (0, 0));
         // One cell right, two cells down.
@@ -435,7 +484,12 @@ mod tests {
     #[test]
     fn grid_at_clamps_above_and_left_of_bounds_to_origin() {
         let metrics = CellMetrics::new(TERM_FONT_SIZE);
-        let bounds = Rectangle { x: 50.0, y: 50.0, width: 100.0, height: 100.0 };
+        let bounds = Rectangle {
+            x: 50.0,
+            y: 50.0,
+            width: 100.0,
+            height: 100.0,
+        };
         assert_eq!(grid_at(Point::new(0.0, 0.0), bounds, metrics), (0, 0));
     }
 }

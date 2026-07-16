@@ -39,7 +39,11 @@ pub struct Tooltip<'a, M> {
 impl<'a, M: 'a> Tooltip<'a, M> {
     /// Wrap `content` with a hover tooltip showing `label`, themed by `roles`.
     pub fn new(content: impl Into<Element<'a, M>>, label: impl Into<String>, roles: Roles) -> Self {
-        Self { content: content.into(), label: label.into(), roles }
+        Self {
+            content: content.into(),
+            label: label.into(),
+            roles,
+        }
     }
 }
 
