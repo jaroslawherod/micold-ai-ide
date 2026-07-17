@@ -343,6 +343,10 @@ pub enum Message {
     SidebarHandleHovered(bool),
     /// Animation clock tick (drives fade/slide progress; handled by the binary).
     AnimationTick,
+    /// The OS window gained (`true`) or lost (`false`) input focus. Handled by the binary,
+    /// which gates the terminal/OS-theme poll subscriptions on it so a backgrounded window
+    /// doesn't keep burning CPU on ticks nothing is looking at (idle-CPU fix).
+    WindowFocusChanged(bool),
 
     // ---- Feature 006: real terminal behavior ----
     /// The terminal pane gained input focus (explicit click/action) (FR-010).
@@ -873,7 +877,9 @@ impl State {
             | Message::TerminalCopyRequested
             | Message::TerminalPasteRequested
             | Message::TextCopyRequested(_)
-            | Message::SidebarHandleHovered(_) => {}
+            | Message::SidebarHandleHovered(_)
+            // Focus state is tracked by the binary (gui runtime), not the pure core.
+            | Message::WindowFocusChanged(_) => {}
         }
     }
 

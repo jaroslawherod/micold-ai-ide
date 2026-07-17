@@ -104,6 +104,10 @@ struct App {
     /// The worktree hovered on the previous update, to detect hover-enter/leave transitions and
     /// start the corresponding fade.
     prev_hovered: Option<String>,
+    /// Whether the OS window currently has input focus (idle-CPU fix). Gates the
+    /// terminal/OS-theme poll subscriptions: `true` until the first `Unfocused` event,
+    /// which matches iced's behavior of not emitting an initial `Focused` on launch.
+    window_focused: bool,
 }
 
 /// Identity of the main content area, used to trigger a fade when it changes.
@@ -257,6 +261,7 @@ fn boot() -> (App, Task<Message>) {
             dismissing: None,
             row_fx: Animator::new(),
             prev_hovered: None,
+            window_focused: true,
         },
         Task::none(),
     )
@@ -733,6 +738,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             handle_process_exits(app);
             Task::none()
         }
+        Message::WindowFocusChanged(focused) => {
+            app.window_focused = focused;
+            Task::none()
+        }
         // Confirmed worktree delete (feature 008, FR-020): terminate the worktree's session
         // processes, remove its git worktree + branch + directory, then drop the records and
         // persist. Ordered per `CleanupStep`; every git step is idempotent (FR-023).
@@ -792,8 +801,14 @@ fn theme(app: &App) -> iced::Theme {
 }
 
 fn subscription(app: &App) -> Subscription<Message> {
-    let mut subs = vec![ui::subscription(&app.core), os_theme_poll()];
-    if !app.terminals.is_empty() {
+    // Event-driven (not a poll): reports actual OS focus changes, so it costs nothing while
+    // the window sits idle either focused or not (idle-CPU fix).
+    let mut subs = vec![ui::subscription(&app.core), window_focus_events()];
+    // The OS theme poll only matters while the window is visible to look at.
+    if app.window_focused {
+        subs.push(os_theme_poll());
+    }
+    if should_poll_terminals(!app.terminals.is_empty(), app.window_focused) {
         subs.push(every(TERMINAL_POLL).map(|_| Message::TerminalTick));
     }
     // Run the animation clock only while something is actually animating (FR-014).
@@ -801,6 +816,38 @@ fn subscription(app: &App) -> Subscription<Message> {
         subs.push(every(ANIM_TICK).map(|_| Message::AnimationTick));
     }
     Subscription::batch(subs)
+}
+
+/// Whether the terminal poll is worth running this tick: only while at least one terminal
+/// tab is open, and only while the window has focus — a backgrounded window has nothing
+/// visibly changing, so the tick's full-`view()` rebuild cost buys nothing (idle-CPU fix).
+fn should_poll_terminals(has_terminals: bool, window_focused: bool) -> bool {
+    has_terminals && window_focused
+}
+
+/// Subscribes to raw OS window events and keeps only focus changes, translating them into
+/// [`Message::WindowFocusChanged`]. Every other window event (resize, move, redraw, ...) is
+/// discarded before it ever reaches `update`.
+fn window_focus_events() -> Subscription<Message> {
+    iced::event::listen_with(window_focus_message)
+}
+
+/// The `listen_with` callback backing [`window_focus_events`]; a free function (rather than a
+/// closure) so it can be unit-tested directly.
+fn window_focus_message(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    match event {
+        iced::Event::Window(iced::window::Event::Focused) => {
+            Some(Message::WindowFocusChanged(true))
+        }
+        iced::Event::Window(iced::window::Event::Unfocused) => {
+            Some(Message::WindowFocusChanged(false))
+        }
+        _ => None,
+    }
 }
 
 /// Detect processes that exited unexpectedly and apply the crash-loop guard (FR-022/022a).
@@ -1017,5 +1064,81 @@ mod tests {
             map_system_scheme(dark_light::Mode::Unspecified),
             SystemScheme::Unspecified
         );
+    }
+
+    #[test]
+    fn should_poll_terminals_requires_open_terminals_and_focus() {
+        assert!(should_poll_terminals(true, true));
+        assert!(!should_poll_terminals(false, true), "no terminals open");
+        assert!(!should_poll_terminals(true, false), "window not focused");
+        assert!(!should_poll_terminals(false, false));
+    }
+
+    fn dummy_status() -> iced::event::Status {
+        iced::event::Status::Ignored
+    }
+
+    #[test]
+    fn window_focus_message_maps_focused_and_unfocused() {
+        assert_eq!(
+            window_focus_message(
+                iced::Event::Window(iced::window::Event::Focused),
+                dummy_status(),
+                iced::window::Id::unique()
+            ),
+            Some(Message::WindowFocusChanged(true))
+        );
+        assert_eq!(
+            window_focus_message(
+                iced::Event::Window(iced::window::Event::Unfocused),
+                dummy_status(),
+                iced::window::Id::unique()
+            ),
+            Some(Message::WindowFocusChanged(false))
+        );
+    }
+
+    #[test]
+    fn window_focus_message_ignores_other_window_events() {
+        assert_eq!(
+            window_focus_message(
+                iced::Event::Window(iced::window::Event::Closed),
+                dummy_status(),
+                iced::window::Id::unique()
+            ),
+            None
+        );
+        assert_eq!(
+            window_focus_message(
+                iced::Event::Window(iced::window::Event::RedrawRequested(
+                    iced::time::Instant::now()
+                )),
+                dummy_status(),
+                iced::window::Id::unique()
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn update_inner_applies_window_focus_changed() {
+        let mut app = App {
+            core: State::default(),
+            terminals: HashMap::new(),
+            scrollback_lines: micold_ai_ide::settings::DEFAULT_SCROLLBACK_LINES,
+            motion: Animator::new(),
+            main_key: main_content_key(&State::default()),
+            handle_hovered: false,
+            dismissing: None,
+            row_fx: Animator::new(),
+            prev_hovered: None,
+            window_focused: true,
+        };
+
+        let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
+        assert!(!app.window_focused);
+
+        let _ = update_inner(&mut app, Message::WindowFocusChanged(true));
+        assert!(app.window_focused);
     }
 }
