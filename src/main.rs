@@ -15,7 +15,8 @@ use micold_ai_ide::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_ai_ide::git::{Git, GitCli};
 use micold_ai_ide::motion::Animator;
 use micold_ai_ide::selector::{Selector, SelectorStatus};
-use micold_ai_ide::session::{RestartDecision, Session, SessionId, SessionLifecycle};
+use micold_ai_ide::provider::{AiCliProvider, ClaudeProvider};
+use micold_ai_ide::session::{RestartDecision, Session, SessionId, SessionLabel, SessionLifecycle};
 use micold_ai_ide::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_ai_ide::store::{JsonFileStore, ProjectStore};
 use micold_ai_ide::terminal::{LaunchMode, LaunchSpec};
@@ -284,39 +285,21 @@ fn prune_empty_sessions(workspace: &mut micold_ai_ide::workspace::Workspace) {
         .retain(|_, sessions| !sessions.is_empty());
 }
 
-/// Whether `claude` has recorded a conversation transcript for this session (research R6).
-/// The transcript lives at `<claude>/projects/<encoded-cwd>/<session-id>.jsonl`, where
-/// `<encoded-cwd>` is the worktree path with every non-alphanumeric char replaced by `-`.
+/// Whether the AI CLI provider has recorded a conversation transcript for this session
+/// (research R6, FR-020a). Routed through the provider seam (FR-024, bugfix BUG-002).
 fn session_has_conversation(
     project_path: &Path,
     session: &micold_ai_ide::session::Session,
 ) -> bool {
+    let provider = ClaudeProvider;
     let cwd = project_path
         .join(".claude/worktrees")
         .join(&session.worktree_dir);
-    let Some(base) = claude_config_dir() else {
-        // Cannot determine the claude dir — do not drop the session on uncertainty.
+    let Some(config) = provider.config_dir() else {
+        // Cannot determine the provider config dir — do not drop the session on uncertainty.
         return true;
     };
-    let encoded: String = cwd
-        .to_string_lossy()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
-    base.join("projects")
-        .join(encoded)
-        .join(format!("{}.jsonl", session.id))
-        .exists()
-}
-
-/// The `claude` config directory: `$CLAUDE_CONFIG_DIR` or `~/.claude`.
-fn claude_config_dir() -> Option<PathBuf> {
-    if let Ok(dir) = std::env::var("CLAUDE_CONFIG_DIR") {
-        if !dir.is_empty() {
-            return Some(PathBuf::from(dir));
-        }
-    }
-    directories::UserDirs::new().map(|d| d.home_dir().join(".claude"))
+    provider.has_recorded_conversation(&config, &cwd, session.id.0)
 }
 
 fn persist_settings(core: &State) {
@@ -651,6 +634,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             for rt in app.terminals.values_mut() {
                 rt.pump();
             }
+            sync_session_titles(app);
             handle_process_exits(app);
             Task::none()
         }
@@ -687,6 +671,39 @@ fn subscription(app: &App) -> Subscription<Message> {
 }
 
 /// Detect processes that exited unexpectedly and apply the crash-loop guard (FR-022/022a).
+/// Reconcile each active session's sidebar label with the AI CLI provider's current session
+/// title (FR-011a, SC-009, bugfix BUG-002 / completes T054). Runs on the terminal poll so the
+/// label tracks the provider's name as the conversation evolves — placeholder → provider name,
+/// and updated whenever the provider changes the name, so the two never stay diverged.
+///
+/// Best-effort I/O: a missing/unreadable transcript is a no-op and never fails the session.
+/// Collect the updates first (immutable borrow of the sessions) then apply, avoiding a borrow
+/// conflict with the reducer.
+fn sync_session_titles(app: &mut App) {
+    let provider = ClaudeProvider;
+    let Some(config) = provider.config_dir() else {
+        return;
+    };
+    let Some(project) = app.core.workspace.active.clone() else {
+        return;
+    };
+    let mut updates: Vec<(SessionId, String)> = Vec::new();
+    for session in app.core.active_sessions() {
+        if !session.is_active() {
+            continue;
+        }
+        let cwd = project.join(".claude/worktrees").join(&session.worktree_dir);
+        if let Some(title) = provider.read_title(&config, &cwd, session.id.0) {
+            if session.label != SessionLabel::Named(title.clone()) {
+                updates.push((session.id, title));
+            }
+        }
+    }
+    for (id, title) in updates {
+        app.core.update(Message::SessionTitleUpdated { id, title });
+    }
+}
+
 fn handle_process_exits(app: &mut App) {
     let mut exited: Vec<SessionId> = Vec::new();
     for (id, rt) in app.terminals.iter_mut() {
