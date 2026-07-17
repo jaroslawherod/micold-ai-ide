@@ -29,6 +29,11 @@
 
 - Q: Should empty sessions (started but never used, so `claude` recorded no conversation) be persisted and resumed across restarts? → A: No. Only sessions that have a recorded `claude` conversation are persisted and resumed. Empty sessions are not written to the store and are pruned on load, so a restart never attempts to resume a nonexistent conversation.
 
+### Session 2026-07-17 (bugfix BUG-002)
+
+- Q: The sidebar label never matches the AI CLI's own session name — it stays on the placeholder ("New session") forever. What is expected? → A: The system MUST actively read the provider-assigned session name/title while the session runs and reconcile the sidebar label to it (placeholder → provider name), updating whenever the provider's name changes. This label-sync flow must actually run at runtime, not merely be represented in the model.
+- Q: The requirements and contracts name `claude` directly everywhere. Should the AI CLI be abstracted so other AI CLI providers can be supported later? → A: Yes. Treat the AI CLI as an abstract **AI CLI provider** behind a single seam; all provider-specific details (id ownership, resume mechanism, conversation-transcript location, session-title record format) live behind that abstraction. `claude` (Claude Code) is the default and first provider. Throughout this spec, existing references to `claude` are to be read as "the configured AI CLI provider" (see FR-024), with `claude` as the concrete default; they are not rewritten inline to keep this bugfix minimal.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Open a project and browse its worktrees (Priority: P1)
@@ -100,6 +105,8 @@ The developer selects a worktree and starts a session on it. The session appears
 - How does the system handle a worktree whose underlying directory was deleted outside the application? (Resolved: flagged as unavailable/invalid in the sidebar; session creation disabled until resolved.)
 - What happens to active sessions and their terminals when the user closes or switches the active project? (Resolved: the project's `claude` session processes are stopped, but sessions persist and resume via `claude --resume` when the project is reopened.)
 - What happens to a session that was started but never used (no `claude` conversation) on restart? (Resolved — bugfix BUG-001: empty sessions are not persisted; they are excluded on save and pruned on load, so a restart never resumes a nonexistent conversation.)
+- What happens when the AI CLI provider assigns or later changes a session's name after the session is already shown in the sidebar? (Resolved — bugfix BUG-002: the label is actively reconciled with the provider's current session name at runtime — placeholder → provider name, and updated on any subsequent change — so the displayed name never diverges from the provider's.)
+- What happens when the provider has not yet supplied a session name, or the name cannot be read? (Resolved — bugfix BUG-002: the placeholder / last-known label is kept and the read is retried opportunistically; a failed or absent read never fails the session.)
 - How does the system handle a very large number of worktrees or sessions in the sidebar?
 
 ## Requirements *(mandatory)*
@@ -124,7 +131,7 @@ The developer selects a worktree and starts a session on it. The session appears
 - **FR-010**: System MUST allow the user to start a new session on a selected worktree.
 - **FR-010a**: System MUST allow a single worktree to host multiple concurrent sessions, each with its own independent `claude` process and terminal, listed as separate sub-items under that worktree. Coordinating overlapping file edits within a shared worktree is the user's responsibility and is not enforced by the system.
 - **FR-011**: System MUST display each started session as a sub-item under its worktree in the sidebar.
-- **FR-011a**: System MUST label each session in the sidebar using the session name/title extracted from `claude` (obtained the same way as the `claude` session id), not a user-entered name. Until `claude` provides a name, System MUST show a placeholder label, and MUST update the label once the name becomes available. The extracted name MUST be persisted alongside the session id.
+- **FR-011a**: System MUST label each session in the sidebar using the session name/title extracted from the AI CLI provider (obtained the same way as the provider's session id), not a user-entered name. Until the provider supplies a name, System MUST show a placeholder label, and MUST update the label once the name becomes available. The extracted name MUST be persisted alongside the session id. **The label MUST be actively reconciled with the provider's current session name while the session is running (bugfix BUG-002): System MUST read the provider-supplied name at runtime and keep the sidebar label in sync with it — updating the label whenever the provider assigns or changes the name — so the displayed name never diverges from the provider's session name. A failed or absent read MUST NOT fail the session (the label simply stays at its last known value / the placeholder).**
 - **FR-012**: System MUST, when a session is active, show an embedded terminal on the right side of the window.
 - **FR-013**: The embedded terminal MUST run the `claude` CLI with its working directory set to the session's worktree directory.
 - **FR-014**: System MUST allow the user to send interactive input to, and view output from, the `claude` process through the embedded terminal.
@@ -143,14 +150,16 @@ The developer selects a worktree and starts a session on it. The session appears
 - **FR-022a**: System MUST guard against crash loops: after a bounded number of failed restarts within a short interval, System MUST stop auto-restarting that session and surface a clear error, leaving the session in the sidebar so the user can retry manually.
 - **FR-023**: When the user closes the active project or switches to a different project, System MUST stop all of that project's running session `claude` processes, while preserving the sessions' persisted identity, `claude` session id, and name.
 - **FR-023a**: When a previously-open project is reopened, System MUST restore its persisted sessions in the sidebar (consistent with FR-020/FR-021), resuming a session's `claude` process via `claude --resume <session-id>` when it is reopened. The crash-loop auto-restart of FR-022 applies only to unexpected process exits, not to processes intentionally stopped on project close/switch.
+- **FR-024**: System MUST treat the underlying AI CLI as an abstract **AI CLI provider** rather than hard-coding one tool (bugfix BUG-002). All provider-specific behaviour MUST be defined in a single place and accessed through one seam, including: the executable/launch command, how the app-owned session id is passed, how a session is resumed, where the conversation transcript lives, how "a conversation was recorded" is detected (FR-020a), and how the session name/title is extracted (FR-011a). `claude` (Claude Code) MUST be the default and only provider shipped in this version; adding another provider MUST NOT require changes to the session model, persistence, sidebar, or terminal wiring — only a new provider definition. (Multiple providers and provider selection UI are out of scope for this version; this requirement only mandates the seam, mirroring the configurable-naming approach of FR-006a.)
 
 ### Key Entities *(include if feature involves data)*
 
 - **Project**: An existing git repository directory opened by the user, serving as the active context. Non-git directories cannot be opened as projects. Owns a collection of worktrees and is the root relative to which `.claude/worktrees/` is resolved.
 - **Worktree**: An isolated workspace located at `.claude/worktrees/${type}-${ticket}-${name}` under the project and bound to a dedicated git branch `${type}/${ticket}-${name}`. Created from a type (Conventional Commits vocabulary), an optional ticket reference, and a name. Appears as a top-level sidebar item, has a validity/active state, and owns a collection of zero or more concurrent sessions.
 - **Worktree Naming Convention**: The rule set that maps `(type, ticket, name)` inputs to a directory name (`${type}-${ticket}-${name}`) and a branch name (`${type}/${ticket}-${name}`), dropping the ticket segment when absent. Fixed defaults in this version; designed to become user-configurable later.
-- **Session**: A unit of work bound to a single worktree. Appears as a sub-item under its worktree, has an active/inactive state, and is associated with an embedded terminal. Persists its identity, the underlying `claude` session id, and the `claude`-provided session name/title (used as its sidebar label) so it can be restored (via `claude --resume <session-id>`) and re-labeled after an application restart.
-- **Embedded Terminal**: The interactive terminal surface shown on the right for an active session, running the `claude` CLI in the session's worktree directory and relaying input and output between the user and that process.
+- **Session**: A unit of work bound to a single worktree. Appears as a sub-item under its worktree, has an active/inactive state, and is associated with an embedded terminal. Persists its identity, the underlying AI CLI provider's session id, and the provider-supplied session name/title (used as its sidebar label) so it can be restored (via the provider's resume mechanism, e.g. `claude --resume <session-id>`) and re-labeled after an application restart. The label is kept in sync with the provider's current session name while running (FR-011a, bugfix BUG-002).
+- **Embedded Terminal**: The interactive terminal surface shown on the right for an active session, running the AI CLI provider's CLI (default `claude`) in the session's worktree directory and relaying input and output between the user and that process.
+- **AI CLI Provider** (bugfix BUG-002): The abstraction over the AI coding CLI that backs a session. Defines the launch command, how the app-owned session id is passed, how a session is resumed, where the conversation transcript is stored, how a recorded conversation is detected, and how the session name/title is extracted for the sidebar label. `claude` (Claude Code) is the default and only provider in this version; the abstraction exists so other providers can be added later without touching the session/persistence/UI layers (FR-024).
 
 ## Success Criteria *(mandatory)*
 
@@ -166,6 +175,7 @@ The developer selects a worktree and starts a session on it. The session appears
 - **SC-006**: 100% of invalid or duplicate worktree name attempts are rejected with a clear message and produce no directory or sidebar artifacts.
 - **SC-007**: The sidebar accurately reflects the active/inactive state of every worktree and session at all times.
 - **SC-008**: After an application restart, 100% of previously persisted sessions reappear in the sidebar, and reopening one resumes its prior `claude` conversation via `claude --resume`. Only sessions with a recorded `claude` conversation are persisted; empty (never-used) sessions do not reappear (bugfix BUG-001).
+- **SC-009**: For 100% of sessions whose AI CLI provider has assigned a session name, the sidebar label matches that provider-supplied name (not the placeholder), and updates to reflect any later change to the provider's name — the displayed name never stays diverged from the provider's session name (bugfix BUG-002).
 
 ## Assumptions
 
@@ -174,6 +184,7 @@ The developer selects a worktree and starts a session on it. The session appears
 - The Conventional Commits type list, the naming formats, and the ability to customize them are fixed defaults in this version; making them user-configurable is explicitly deferred to a future version and out of scope here.
 - The `.claude/worktrees/` directory is created on demand under the project if it does not already exist.
 - The `claude` CLI is installed and available on the user's PATH; its absence is surfaced as an error when starting a session.
+- The AI CLI provider is abstracted behind a single seam (FR-024); `claude` (Claude Code) is the default and only provider in this version. Provider selection and additional providers are deferred to a future version — the abstraction exists so they can be added without reworking the session, persistence, or UI layers (bugfix BUG-002).
 - This feature builds on the existing project/workspace management and Material Design app shell already present in the application (specs 001–004).
 - Worktree names map directly to directory names under `.claude/worktrees/`; no separate display-name-to-directory mapping is assumed for the initial version.
 - Session and worktree state is persisted locally, consistent with the project's local-first storage principle; the precise persistence format is an implementation detail deferred to planning.
@@ -182,3 +193,5 @@ The developer selects a worktree and starts a session on it. The session appears
 - Empty sessions (started but with no `claude` conversation recorded) are not persisted; only sessions with a recorded conversation survive a restart (bugfix BUG-001).
 
 **Bugfix**: 2026-07-16 — BUG-001 Empty sessions are no longer persisted or resumed on restart. FR-020 amended, FR-020a added, FR-021/SC-008 clarified, plus a Clarifications entry and edge case.
+
+**Bugfix**: 2026-07-17 — BUG-002 Session name kept in sync with the AI CLI provider's session name, and `claude` references abstracted behind an AI CLI provider seam. FR-011a amended (active label reconciliation), FR-024 added (AI CLI provider abstraction), SC-009 added, an "AI CLI Provider" key entity added, Session/Embedded Terminal entities reworded provider-neutral, plus a Clarifications entry, two edge cases, and an assumption. Existing inline `claude` references are read as "the configured AI CLI provider" (default `claude`) per FR-024 rather than rewritten, to keep the patch minimal.

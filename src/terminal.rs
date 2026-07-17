@@ -34,14 +34,14 @@ pub struct LaunchSpec {
     pub env: Vec<(String, String)>,
 }
 
-/// Build the `claude` argument vector for a launch spec (claude-cli.md). Pure, so the
+/// Build the AI CLI argument vector for a launch spec (claude-cli.md). Pure, so the
 /// fresh/resume flag choice is unit-testable without spawning (FR-013, FR-021).
+///
+/// Delegates to the default [`crate::provider::AiCliProvider`] so the argument shape lives in one
+/// place behind the provider seam (FR-024, bugfix BUG-002).
 pub fn claude_args(spec: &LaunchSpec) -> Vec<String> {
-    let id = spec.session_id.to_string();
-    match spec.mode {
-        LaunchMode::Fresh => vec!["--session-id".to_string(), id],
-        LaunchMode::Resume => vec!["--resume".to_string(), id],
-    }
+    use crate::provider::AiCliProvider;
+    crate::provider::ClaudeProvider.launch_args(spec.session_id, spec.mode)
 }
 
 /// A live handle to one running session's terminal. `Send` so its reader can live on a worker

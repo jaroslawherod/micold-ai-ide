@@ -2,6 +2,14 @@
 
 **Feature**: 005-worktree-session-terminal | consumed by the `TerminalBackend` impl.
 
+> **Bugfix BUG-002 (2026-07-17)**: As of FR-024, the AI CLI is an abstract **AI CLI provider**.
+> This document is the concrete **`claude` provider profile** of that abstraction — the default and
+> only provider this version. Each section below maps to a provider-seam capability: launch,
+> resume, session-id ownership, transcript location + encoding, recorded-conversation detection,
+> and **session-title extraction** (the "Session label extraction" section is the contract the
+> title-sync reader of T064 implements). A future provider supplies its own profile without
+> changing the session model, persistence, sidebar, or terminal wiring.
+
 External dependency contract. Verified against Claude Code **v2.1.210** (research R6). The app
 MUST detect the CLI version and degrade gracefully; the on-disk JSONL format is *internal* and
 all file reads are best-effort.

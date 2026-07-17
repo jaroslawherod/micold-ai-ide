@@ -2,6 +2,7 @@
 
 mod about;
 mod material;
+pub(crate) use material::target_offset_delta;
 mod project_selector;
 mod rename;
 mod settings_form;

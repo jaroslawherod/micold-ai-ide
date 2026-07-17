@@ -277,6 +277,10 @@ pub enum Message {
     TerminalSelectCleared,
     /// Scroll the displayed terminal by N lines (+ up into scrollback) (FR-016).
     TerminalScrolled(i32),
+    /// Scroll the displayed terminal to an absolute scrollback offset (0 = live bottom) (FR-016).
+    /// Used by the scrollbar drag: the delta is resolved against the live offset at apply time, so
+    /// batched drag events set the target instead of accumulating relative deltas (drag flicker).
+    TerminalScrolledTo(usize),
     /// The terminal pane's visible size changed; resize the PTY + grid (FR-014, FR-015).
     TerminalResized { cols: u16, rows: u16 },
     /// Copy the current terminal selection to the clipboard (binary handles clipboard) (FR-013).
@@ -638,6 +642,7 @@ impl State {
             | Message::TerminalSelectUpdate { .. }
             | Message::TerminalSelectCleared
             | Message::TerminalScrolled(_)
+            | Message::TerminalScrolledTo(_)
             | Message::TerminalResized { .. }
             | Message::TerminalCopyRequested
             | Message::TerminalPasteRequested

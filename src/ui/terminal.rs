@@ -22,6 +22,7 @@ use iced::widget::{button, column, container, row, text, Space};
 use iced::{Alignment, Color, Element, Font, Length};
 use micold_ai_ide::app::SelectKind;
 use micold_ai_ide::app::{Message, State};
+use micold_ai_ide::provider::{AiCliProvider, ClaudeProvider};
 use micold_ai_ide::session::{SessionId, SessionLifecycle};
 use micold_ai_ide::terminal::{claude_args, LaunchSpec, TerminalBackend, TerminalHandle};
 use micold_ai_ide::theme::ColorScheme;
@@ -272,7 +273,7 @@ pub fn spawn_pty(spec: &LaunchSpec, scrollback_lines: usize) -> std::io::Result<
         })
         .map_err(std::io::Error::other)?;
 
-    let mut cmd = CommandBuilder::new("claude");
+    let mut cmd = CommandBuilder::new(ClaudeProvider.command());
     cmd.cwd(&spec.cwd);
     for (k, v) in &spec.env {
         cmd.env(k, v);

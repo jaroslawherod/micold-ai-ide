@@ -153,9 +153,11 @@ sessions restore and resume.
 - [x] T051 [US3] Close/stop session — `kill()` + reap, remove from sidebar, drop persisted record (FR-015a) — in `src/app.rs` + `src/main.rs`.
 - [x] T052 [US3] Crash auto-restart wiring: `PtyExited` (unexpected) → `Restarting{attempts}` → `--resume`; exceed guard → `Failed` (FR-022/022a) in `src/app.rs` + `src/main.rs`.
 - [x] T053 [US3] Project close/switch: stop that project's session processes → `Idle`, preserve records; reopen restores and resumes (FR-023/023a) in `src/app.rs` + `src/main.rs`.
-- [ ] T054 [US3] Best-effort session label from `claude` `ai-title` JSONL, updating `Pending` → `Named` (FR-011a, claude-cli.md) at the I/O boundary in `src/ui/terminal.rs` / `src/main.rs`.
+- [X] T054 [US3] Best-effort session label from the AI CLI provider's session title, updating `Pending` → `Named` and re-syncing on change (FR-011a, claude-cli.md) at the I/O boundary in `src/main.rs`. ✅ **Completed via bugfix BUG-002 (T064)**: the terminal poll now reads the provider title (`AiCliProvider::read_title`) and emits `Message::SessionTitleUpdated`, which the reducer already reconciles via `set_title`. Routed through the provider seam (T063); covered headlessly by `tests/session_title_sync.rs`.
 - [x] T055 [US3] User-guide docs: "Starting, switching, and closing sessions" + "The embedded terminal, resume & restart behavior" in `docs/user-guide/worktrees-and-sessions.md` (Principle VII).
 - [x] T062 [US3] (bugfix BUG-001) Exclude **empty sessions** (no recorded `claude` conversation) from persistence: filter on save and prune on load, using a `claude`-transcript existence check (`<claude>/projects/<encoded-cwd>/<session-id>.jsonl`), so a restart never resumes a nonexistent conversation (FR-020/FR-020a). In `src/main.rs` (persist/boot); covered by the manual restart check.
+- [X] T063 [US3] (bugfix BUG-002) Introduce the **AI CLI provider** abstraction (FR-024). Tests-first in `tests/ai_cli_provider.rs` for a provider seam consolidating: launch command, session-id flag, resume mechanism, conversation-transcript path + encoding, recorded-conversation detection, and session-title extraction. Defined an `AiCliProvider` trait + concrete `ClaudeProvider` in `src/provider.rs`; routed the `claude` specifics through it — `src/main.rs` `session_has_conversation` (via `config_dir` + `has_recorded_conversation`, removed the ad-hoc `claude_config_dir`), `src/terminal.rs` `claude_args` (delegates to `launch_args`), and `src/ui/terminal.rs` command name (`ClaudeProvider.command()`). No behaviour change for the `claude` default; persisted schema unchanged.
+- [X] T064 [US3] (bugfix BUG-002, completes T054) Implemented **session-title sync** at the I/O boundary in `src/main.rs` (`sync_session_titles`, called on `Message::TerminalTick`). Headless test-first in `tests/session_title_sync.rs` proves the label goes `Pending → Named` when the provider supplies a title and re-syncs when it changes, plus a no-op when no title exists. For each active session it reads the provider title via the T063 seam (`AiCliProvider::read_title`; for `claude`, the latest `ai-title` record in the transcript JSONL) and emits `Message::SessionTitleUpdated { id, title }` when it differs from the current label. A failed/absent read is a no-op and never fails the session (FR-011a, SC-009).
 
 **Checkpoint**: Concurrent `claude` sessions run in worktrees, persist, resume, and recover from crashes.
 
@@ -262,18 +264,22 @@ docs. Verification evidence:
 - GUI compiles with the full terminal stack (`iced_term 0.6`, `portable-pty 0.9`,
   `alacritty_terminal 0.25`).
 
-**Remaining** (6) — require a display or CI and are not verifiable in this headless environment:
+**Remaining** (5) — require a display or CI and are not verifiable in this headless environment
+(T054 was resolved headlessly via bugfix BUG-002, see below):
 - **T004 / T060** — CI matrix build/test on Linux/macOS/Windows. `rust-version` left at `1.80`;
   builds on 1.97 locally, but the exact MSRV for the terminal crates was not re-pinned.
 - **T047** — the terminal pane currently renders streamed output as scrollable monospace text
   with line input (functional, via `portable-pty`); full `iced_term`/`alacritty_terminal` VT-grid
   rendering + raw-key input is the next increment. The `TerminalBackend`/`SessionRouter` seam
   keeps that swap local.
-- **T054** — session labels stay at the `Pending` placeholder; reading the `claude` `ai-title`
-  JSONL to populate `Named(..)` is not yet implemented (best-effort, degrades gracefully).
+- **T054** — ✅ **RESOLVED** via bugfix BUG-002. The label now syncs with the provider's session
+  name at runtime (best-effort, degrades gracefully): implemented as T063 (AI CLI provider seam)
+  + T064 (title-sync reader on the terminal poll). See `bugs/BUG-002.md`.
 - **T058** — redraw coalescing is approximated by the 120 ms poll; a per-session scrollback cap
   and formal perf verification are pending.
 - **T061** — the git-side scenarios (V3) are verified; GUI-driven scenarios (V1/V2/V4–V10) need a
   display to run.
 
 **Bugfix**: 2026-07-16 — BUG-001 Added T062 (empty sessions excluded from persistence). See `bugs/BUG-001.md`. Also resolved implementation drift on T047 (terminal now interprets ANSI/VT via `alacritty_terminal` instead of showing raw escapes).
+
+**Bugfix**: 2026-07-17 — BUG-002 Session name kept in sync with the AI CLI provider's session name, and `claude` references abstracted behind an AI CLI provider seam. Added + **completed** T063 (AI CLI provider abstraction `src/provider.rs`, FR-024) and T064 (session-title-sync reader in `src/main.rs`, completes the never-implemented T054). New headless tests: `tests/ai_cli_provider.rs` (10) + `tests/session_title_sync.rs` (2), all green; full suite + GUI build + clippy clean. See `bugs/BUG-002.md`.

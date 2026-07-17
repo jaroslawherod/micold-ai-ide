@@ -17,6 +17,7 @@ pub mod metadata;
 pub mod motion;
 pub mod naming;
 pub mod project;
+pub mod provider;
 pub mod selector;
 pub mod session;
 pub mod settings;
