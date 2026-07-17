@@ -160,24 +160,6 @@ fn motion_animating(app: &App) -> bool {
     steady || overlay
 }
 
-impl App {
-    /// Stop the outgoing project's sessions on close/switch (FR-023): kill their processes and
-    /// mark the persisted records `Idle` so reopening the project can resume them (FR-023a).
-    fn stop_active_project_sessions(&mut self) {
-        for (_, mut rt) in self.terminals.drain() {
-            let _ = rt.kill();
-        }
-        if let Some(path) = self.core.workspace.active.clone() {
-            if let Some(list) = self.core.workspace.sessions.get_mut(&path) {
-                for session in list {
-                    session.stop_for_project_change();
-                }
-            }
-        }
-        self.core.active_session = None;
-    }
-}
-
 impl Drop for App {
     /// Kill every child `claude` process on shutdown so none are orphaned (research R5, T057).
     fn drop(&mut self) {
@@ -427,11 +409,14 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 ));
                 return Task::none();
             }
-            // Stop the outgoing project's sessions before switching (FR-023).
-            app.stop_active_project_sessions();
+            // Switch without tearing down the outgoing project's sessions (feature 008, BS-1).
+            // `open_or_activate` moves `active` to the new project, so capture the outgoing
+            // foreground FIRST (I1), then finish the switch bookkeeping for the new project.
+            app.core.record_foreground();
             app.core
                 .workspace
                 .open_or_activate(path.clone(), &StdFolderScanner::new());
+            app.core.restore_after_activation(&path);
             app.core.worktrees = discover_worktrees(&path);
             app.core.worktree_error = None;
             persist(&app.core);
@@ -441,9 +426,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core
                 .workspace
                 .refresh_availability(&StdFolderScanner::new());
-            // Stop the outgoing project's sessions before switching (FR-023).
-            app.stop_active_project_sessions();
-            if app.core.workspace.activate(&path) {
+            // Non-destructive switch: keep the outgoing project's sessions running in the
+            // background and restore the target project's foreground (feature 008, BS-1/BS-3).
+            if app.core.switch_active(&path) {
                 app.core.worktrees = discover_worktrees(&path);
                 persist(&app.core);
             }
@@ -697,39 +682,36 @@ fn handle_process_exits(app: &mut App) {
 
     for id in exited {
         app.terminals.remove(&id);
-        let Some((cwd, lifecycle)) = session_cwd(&app.core, id) else {
+        // Resolve the exited session in ANY project — a background session of an inactive
+        // project must still be handled, not silently dropped (feature 008, BS-6).
+        let Some((cwd, lifecycle)) = session_cwd_any(&app.core, id) else {
             continue;
         };
         // An intentional stop (Idle) is not a crash — do not auto-restart.
         if lifecycle == SessionLifecycle::Idle {
             continue;
         }
-        let decision = with_session(&mut app.core, id, |s| s.on_unexpected_exit());
+        let decision = app
+            .core
+            .workspace
+            .find_session_mut(id)
+            .map(|(_, s)| s.on_unexpected_exit());
         if decision == Some(RestartDecision::Resume) {
             if let Ok(rt) = spawn_pty(
                 &launch_spec(&cwd, id, LaunchMode::Resume),
                 app.scrollback_lines,
             ) {
                 app.terminals.insert(id, rt);
-                app.core.update(Message::SessionRunning(id));
+                // Mark the (possibly background) session Running directly — SessionRunning only
+                // reaches the active project. If it was restarted while its project is inactive,
+                // record it so the user is notified on return (feature 008, BS-6/BS-7).
+                if let Some((_, s)) = app.core.workspace.find_session_mut(id) {
+                    s.mark_running();
+                }
+                app.core.note_background_restart(id);
             }
         }
     }
-}
-
-/// Run `f` against the active project's session `id`, returning its result.
-fn with_session<R>(
-    core: &mut State,
-    id: SessionId,
-    f: impl FnOnce(&mut Session) -> R,
-) -> Option<R> {
-    let path = core.workspace.active.clone()?;
-    core.workspace
-        .sessions
-        .get_mut(&path)?
-        .iter_mut()
-        .find(|s| s.id == id)
-        .map(f)
 }
 
 /// The worktree cwd + current lifecycle for a session of the active project.
@@ -737,6 +719,17 @@ fn session_cwd(core: &State, id: SessionId) -> Option<(PathBuf, SessionLifecycle
     let repo = core.workspace.active.clone()?;
     let session = core.active_sessions().iter().find(|s| s.id == id)?;
     let cwd = repo.join(".claude/worktrees").join(&session.worktree_dir);
+    Some((cwd, session.lifecycle))
+}
+
+/// The worktree cwd + current lifecycle for a session in ANY project (feature 008). Unlike
+/// [`session_cwd`], this resolves sessions of inactive projects too, so the crash-loop guard
+/// applies to background sessions (BS-6).
+fn session_cwd_any(core: &State, id: SessionId) -> Option<(PathBuf, SessionLifecycle)> {
+    let (project, session) = core.workspace.find_session(id)?;
+    let cwd = project
+        .join(".claude/worktrees")
+        .join(&session.worktree_dir);
     Some((cwd, session.lifecycle))
 }
 

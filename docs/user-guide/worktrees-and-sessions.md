@@ -73,10 +73,30 @@ placeholder is shown.
 - If a session's `claude` process exits unexpectedly, it is **automatically restarted** (resuming
   the prior conversation via `claude --resume`). Repeated rapid failures stop the auto-restart and
   mark the session **failed** so you can retry manually.
-- Closing or switching the active project stops that project's session processes but keeps the
-  sessions; reopening the project restores them and resumes them via `claude --resume`.
+- **Closing** the active project (or quitting the app) stops that project's session processes but
+  keeps the sessions; reopening the project restores them and resumes them via `claude --resume`.
+  **Switching** to another project does not stop them — see below.
 
 > Requires the `claude` CLI on your `PATH`. If it is missing, starting a session reports an error.
+
+## Sessions in the background
+
+Switching to a different project **does not stop your sessions**. When you change the active
+project — from the top-bar project switcher, the **Known projects** list, or the folder browser —
+the project you leave keeps all its sessions running in the background: their `claude` processes
+stay alive and their output keeps accumulating while you are away.
+
+When you switch back, the project's sessions are still running and the session that was in the
+foreground is shown again, exactly as you left it (other sessions stay in the background). Any
+number of projects can hold running sessions at once.
+
+If one of a background project's sessions exits unexpectedly while you are away, it is
+auto-restarted under the same crash-loop guard as a foreground session. When you return to that
+project a short **notice** tells you a background session was restarted — the state never changes
+silently. Dismiss it with its **Dismiss** button.
+
+> Background sessions live for as long as the app is running. Quitting the app stops every session;
+> on the next launch they are restored and resume via `claude --resume` when selected.
 
 ## Colored, real-terminal output
 

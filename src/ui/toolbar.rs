@@ -3,7 +3,7 @@
 //! (three dots). The menu's items — a cycling theme-mode toggle and "About" — float as an
 //! overlay (see [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
 
-use crate::ui::material::{MenuItem, MenuTrigger, Toolbar};
+use crate::ui::material::{MenuItem, MenuTrigger, ProjectSwitcherTrigger, Toolbar};
 use iced::Element;
 use micold_ai_ide::app::{help_actions, Message, State};
 use micold_ai_ide::icons::Icon;
@@ -34,11 +34,18 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
     ]
 }
 
-/// Render the top app bar: title (left) and the overflow-menu trigger (right). The menu panel
-/// itself is floated as an overlay by `ui::view` so opening it never reflows the bar.
-pub fn view<'a>(scheme: ColorScheme) -> Element<'a, Message> {
+/// Render the top app bar: title (left), then on the trailing edge the project switcher
+/// trigger immediately left of the overflow-menu trigger (feature 008, FR-004). Both panels
+/// are floated as overlays by `ui::view`, so opening either never reflows the bar.
+pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let meta = AppMetadata::from_env();
-    let trigger = MenuTrigger::new(Icon::Menu, Message::HelpMenuToggled, r);
-    Toolbar::new(meta.name, r).action(trigger).into()
+    let switcher_label = state
+        .workspace
+        .active_project()
+        .map(|p| p.display_name.clone())
+        .unwrap_or_else(|| "Select project".to_string());
+    let switcher = ProjectSwitcherTrigger::new(switcher_label, Message::ProjectSwitcherToggled, r);
+    let menu = MenuTrigger::new(Icon::Menu, Message::HelpMenuToggled, r);
+    Toolbar::new(meta.name, r).action(switcher).action(menu).into()
 }

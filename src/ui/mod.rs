@@ -101,7 +101,7 @@ pub fn view<'a>(
         material::fade(shell::view(state, scheme), motion.get(MotionKey::Main), bg)
     };
 
-    let mut base: Element<'a, Message> = container(column![toolbar::view(scheme), body])
+    let mut base: Element<'a, Message> = container(column![toolbar::view(state, scheme), body])
         .width(Length::Fill)
         .height(Length::Fill)
         .style(style::window_bg(roles))
@@ -121,13 +121,37 @@ pub fn view<'a>(
     }
 
     // Float the toolbar's overflow menu over everything (no toolbar reflow), fading in/out.
-    let base = material::MenuOverlay::new(
+    let base: Element<'a, Message> = material::MenuOverlay::new(
         base,
         toolbar::overflow_items(state),
         Message::HelpMenuToggled,
         roles,
     )
     .progress(motion.get(MotionKey::Menu))
+    .into();
+
+    // Float the project switcher panel (feature 008, FR-004/005/006/007/008/009). Rows are
+    // built purely from the workspace: active marker, running-background-session count, and
+    // unavailable badge. Mutually exclusive with the overflow menu (handled in the reducer).
+    let switcher_rows: Vec<material::ProjectRow<Message>> = state
+        .switcher_entries()
+        .into_iter()
+        .map(|e| material::ProjectRow {
+            label: e.label,
+            is_active: e.is_active,
+            running_count: e.running_count,
+            available: e.available,
+            on_select: Message::KnownProjectReopened(e.path),
+        })
+        .collect();
+    let base = material::ProjectSwitcherOverlay::new(
+        base,
+        switcher_rows,
+        Message::ProjectSelectorOpened,
+        Message::ProjectSwitcherToggled,
+        roles,
+    )
+    .open(state.project_switcher_open)
     .into();
 
     // The overlay fade progress (0 = hidden, 1 = fully shown). Drives both the enter (a live

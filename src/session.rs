@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 /// Stable session identity — the app-generated UUID passed to `claude --session-id` and used
 /// as the `--resume` handle (research R6).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SessionId(pub Uuid);
 
 impl SessionId {
@@ -165,8 +165,9 @@ impl Session {
         }
     }
 
-    /// Stop the process intentionally on project close/switch → `Idle`, preserving the record;
-    /// NO auto-restart applies (FR-023).
+    /// Stop the process intentionally on project **close** → `Idle`, preserving the record; NO
+    /// auto-restart applies (FR-023). Note: as of feature 008, merely *switching* the active
+    /// project no longer calls this — switched-away sessions keep running in the background.
     pub fn stop_for_project_change(&mut self) {
         self.lifecycle = SessionLifecycle::Idle;
     }

@@ -41,6 +41,27 @@ The list is stored on your own machine (no account, no network required — Mico
 fully offline). Opening a folder that is already in the list simply reactivates the existing
 entry; it never creates a duplicate.
 
+## Switching projects from the top bar
+
+Next to the menu button in the top bar is the **project switcher** — the quickest way to
+change your active project without opening the folder browser or scrolling the main-window
+list. Click it to drop down a panel listing your known projects. Each row shows:
+
+- the project's name, with the **active** project marked;
+- a **running** count when the project has terminal sessions running in the background
+  (for example, "2 running") — so you can tell at a glance where your live work is;
+- an **unavailable** badge for folders that are missing on disk (these cannot be selected).
+
+Click any available project to switch to it in a single step. The last row, **Add project…**,
+opens the folder browser so you can add a project that isn't in the list yet. The switcher
+complements the **Known projects** list in the main window and the folder browser — all three
+still work.
+
+Switching projects this way **does not stop your running terminal sessions**. The project you
+leave keeps its sessions running in the background, and returning to it restores them exactly
+as you left them. See
+[Worktrees & Sessions → Sessions in the background](worktrees-and-sessions.md) for details.
+
 ## Unavailable projects
 
 If a project's folder has been deleted, moved, or renamed on disk since you added it, Micold

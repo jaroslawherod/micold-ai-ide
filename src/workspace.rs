@@ -11,7 +11,7 @@ use crate::fs_scan::FolderScanner;
 use crate::project::{
     canonicalize_best_effort, validate_rename, Availability, Project, RenameError,
 };
-use crate::session::Session;
+use crate::session::{Session, SessionId};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -89,6 +89,41 @@ impl Workspace {
                 Availability::Unavailable
             };
         }
+    }
+
+    /// Find a session by id across **all** projects (feature 008, FR-011). Returns the
+    /// owning project's path together with the session, or `None` if no project holds it.
+    /// Total lookup — used by project-aware crash handling, which must resolve a session
+    /// even when its project is not the active one.
+    pub fn find_session(&self, id: SessionId) -> Option<(&Path, &Session)> {
+        self.sessions.iter().find_map(|(path, list)| {
+            list.iter()
+                .find(|s| s.id == id)
+                .map(|s| (path.as_path(), s))
+        })
+    }
+
+    /// Mutable variant of [`find_session`](Self::find_session): resolve a session by id
+    /// across all projects and borrow it mutably, returning its owning project path
+    /// (cloned, so the caller can use it after the borrow ends).
+    pub fn find_session_mut(&mut self, id: SessionId) -> Option<(PathBuf, &mut Session)> {
+        for (path, list) in self.sessions.iter_mut() {
+            if let Some(session) = list.iter_mut().find(|s| s.id == id) {
+                return Some((path.clone(), session));
+            }
+        }
+        None
+    }
+
+    /// The number of currently active (running/starting/restarting) sessions for a project
+    /// (feature 008, FR-007). `0` for a project with none, or an unknown path. Pure — this is
+    /// the source for the switcher's running-background indicator (research R6).
+    pub fn running_session_count(&self, path: &Path) -> usize {
+        let key = canonicalize_best_effort(path);
+        self.sessions
+            .get(&key)
+            .map(|list| list.iter().filter(|s| s.is_active()).count())
+            .unwrap_or(0)
     }
 
     /// Activate a known project by path, replacing any previous active project.

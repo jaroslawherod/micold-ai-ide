@@ -75,7 +75,30 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
         .into(),
     };
 
-    let mut body = column![header].spacing(spacing::LG);
+    let mut body = column![].spacing(spacing::LG);
+
+    // Return notice: shown when a background session was restarted while this project was
+    // inactive (feature 008, SC-007). Dismissible — the state change is surfaced, never silent.
+    if let Some(notice) = &state.notice {
+        let banner = row![
+            text(notice.clone())
+                .size(type_scale::BODY)
+                .width(Length::Fill),
+            button(text("Dismiss").size(type_scale::LABEL))
+                .on_press(Message::NoticeDismissed)
+                .style(style::outlined(r)),
+        ]
+        .spacing(spacing::SM)
+        .align_y(Alignment::Center);
+        body = body.push(
+            container(banner)
+                .padding(spacing::MD)
+                .width(Length::Fill)
+                .style(style::list_item(r)),
+        );
+    }
+
+    body = body.push(header);
 
     // Known-projects list: reopen without browsing (FR-011); mark the active one (FR-010)
     // and unavailable folders, blocking their reopen (FR-022, FR-023).
