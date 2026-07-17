@@ -113,6 +113,13 @@ pub(crate) fn offset_for_thumb_top(
     (history_size as f32 * (1.0 - frac)).round() as usize
 }
 
+/// The relative delta to reach an absolute scrollback `target` from the `current` offset. Computed
+/// at apply time against the live offset so that a burst of drag messages converges on the target
+/// rather than accumulating stale relative deltas (drag flicker fix, FR-016).
+pub(crate) fn target_offset_delta(current: usize, target: usize) -> i32 {
+    target as i32 - current as i32
+}
+
 /// The colour terminal widget for a live session runtime (Principle VIII builder form):
 /// `TerminalPane::new(rt, palette).focused(bool).into()`.
 pub struct TerminalPane<'a> {
@@ -396,10 +403,10 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     let thumb_top = position.y - bounds.y - grab_dy;
                     let target =
                         offset_for_thumb_top(bounds.height, screen_lines, history, thumb_top);
-                    let delta = target as i32 - offset as i32;
-                    if delta != 0 {
-                        shell.publish(Message::TerminalScrolled(delta));
-                    }
+                    // Publish an absolute target, not a relative delta: several CursorMoved events
+                    // are batched before the app update runs, so relative deltas computed against
+                    // the pre-batch offset would accumulate and jump the view (drag flicker).
+                    shell.publish(Message::TerminalScrolledTo(target));
                     return event::Status::Captured;
                 }
                 Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
@@ -743,5 +750,30 @@ mod tests {
         assert_eq!(offset_for_thumb_top(track, screen, history, -50.0), history);
         // Dragged below the bottom → back to the live bottom (offset 0).
         assert_eq!(offset_for_thumb_top(track, screen, history, 10_000.0), 0);
+    }
+
+    #[test]
+    fn scrollbar_drag_targets_converge_and_do_not_accumulate() {
+        // Models the apply loop: several drag messages are batched, then each resolves its delta
+        // against the LIVE offset (as main.rs does via `target_offset_delta`) and alacritty applies
+        // it additively and clamped. The absolute approach converges on the last drag position.
+        let history = 100i32;
+        let apply = |offset: i32, delta: i32| (offset + delta).clamp(0, history);
+        let start = 40usize;
+        let targets = [55usize, 72, 61];
+
+        let mut live = start as i32;
+        for &t in &targets {
+            live = apply(live, target_offset_delta(live as usize, t));
+        }
+        assert_eq!(live, 61, "absolute targeting lands on the last drag position");
+
+        // The reported flicker: computing every batched delta against the pre-batch offset makes
+        // the additive applies overshoot and clamp to an extreme instead of converging.
+        let mut batched = start as i32;
+        for &t in &targets {
+            batched = apply(batched, t as i32 - start as i32);
+        }
+        assert_ne!(batched, 61, "stale relative deltas accumulate instead of converging");
     }
 }

@@ -602,6 +602,19 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        // Scroll to an absolute offset (scrollbar drag). Resolve the delta against the LIVE offset
+        // here at apply time so a burst of batched drag messages converges instead of accumulating
+        // stale relative deltas (drag flicker fix, FR-016).
+        Message::TerminalScrolledTo(target) => {
+            if let Some(rt) = app
+                .core
+                .active_session
+                .and_then(|id| app.terminals.get_mut(&id))
+            {
+                rt.scroll(ui::target_offset_delta(rt.display_offset(), target));
+            }
+            Task::none()
+        }
         // Poll terminals: feed streamed bytes into the VT emulators, then detect unexpected
         // exits and apply the crash-restart policy (FR-012, FR-022).
         // Open Settings: let the reducer show the overlay, then seed the draft with the current
