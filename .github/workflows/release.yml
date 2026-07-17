@@ -3,8 +3,10 @@ name: release
 # Release automation:
 #  1. release-please watches `main` and opens/maintains a release PR from Conventional Commits,
 #     bumping the Cargo version + Cargo.lock and updating CHANGELOG.md (embedded in the app).
-#  2. When that PR is merged, release-please tags + creates the GitHub Release; the `deb` job then
-#     builds a .deb natively on amd64 and arm64 runners and uploads them to the release.
+#  2. When that PR is merged, release-please creates a DRAFT GitHub release + tag; the `deb` job
+#     builds a .deb natively on amd64 and arm64 runners and attaches them to the draft (drafts
+#     are mutable, so this works even with immutable releases enabled); the `publish` job then
+#     flips the draft to published, freezing it immutably with the assets attached.
 
 on:
   push:
@@ -70,8 +72,27 @@ jobs:
       # Native build → cargo-deb derives the Debian arch (amd64 / arm64) automatically.
       - name: Build .deb
         run: cargo deb
-      - name: Upload .deb to the release
+      # release-please creates the release as a DRAFT (mutable), so assets can be attached even
+      # with immutable releases enabled; the `publish` job flips it to published afterward.
+      - name: Upload .deb to the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: gh release upload "$TAG_NAME" target/debian/*.deb --clobber
+
+  publish:
+    name: publish release
+    needs: [release-please, deb]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    # Only needs to flip the draft release to published (contents), which freezes it immutably
+    # with the .deb assets already attached.
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the release now that the .deb assets are attached
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release edit "$TAG_NAME" --draft=false --latest
