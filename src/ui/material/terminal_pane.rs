@@ -184,13 +184,20 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         _style: &renderer::Style,
         layout: Layout<'_>,
         _cursor: mouse::Cursor,
-        viewport: &Rectangle,
+        _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
         let metrics = CellMetrics::new(TERM_FONT_SIZE);
         let default_bg = self.palette.background();
 
-        let mut frame = Frame::new(renderer, viewport.size());
+        // Geometry below is drawn in absolute window coordinates, so the canvas frame must span
+        // from the window origin to the pane's bottom-right corner. Sizing it to `viewport` breaks
+        // when a parent clips the viewport (e.g. a `stack` overlay passes `clipped_viewport`),
+        // which would cut off — and blank out — the part of the pane beyond the shrunken frame.
+        let mut frame = Frame::new(
+            renderer,
+            Size::new(bounds.x + bounds.width, bounds.y + bounds.height),
+        );
         {
             // Pane background.
             frame.fill_rectangle(bounds.position(), bounds.size(), default_bg);
@@ -198,6 +205,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             let content = self.rt.renderable();
             let cursor_point = content.cursor.point;
             let show_cursor = shows_cursor(content.mode);
+            // The active text-selection range (if any); each cell inside it is drawn highlighted
+            // with fg/bg swapped (FR-013).
+            let selection = content.selection;
             // Buffer lines from `display_iter` are 0 at the screen top and negative up in the
             // scrollback; map them to viewport rows using the current scroll offset (FR-016).
             let display_offset = content.display_offset;
@@ -212,7 +222,14 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let y = bounds.y + (row as f32) * metrics.height;
 
                 let flags = indexed.cell.flags;
-                let (fg, bg) = cell_colors(&self.palette, indexed.cell.fg, indexed.cell.bg, flags);
+                let selected = selection.is_some_and(|range| range.contains(indexed.point));
+                let (fg, bg) = cell_colors(
+                    &self.palette,
+                    indexed.cell.fg,
+                    indexed.cell.bg,
+                    flags,
+                    selected,
+                );
 
                 // Per-cell background when it differs from the default.
                 if bg != default_bg {
@@ -474,6 +491,17 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
                     shell.publish(Message::TerminalBytes(pasted.into_bytes()));
                 }
+                return event::Status::Captured;
+            }
+            // Right-click opens the copy/paste context menu at the cursor, intercepting the
+            // gesture rather than forwarding it to the process (FR-013).
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
+                if cursor.is_over(bounds) =>
+            {
+                let pos = cursor.position().unwrap_or_default();
+                let x = (pos.x - bounds.x).max(0.0) as u16;
+                let y = (pos.y - bounds.y).max(0.0) as u16;
+                shell.publish(Message::TerminalContextMenuOpened { x, y });
                 return event::Status::Captured;
             }
             // Wheel scrolls the local scrollback, or forwards to a mouse-reporting program on

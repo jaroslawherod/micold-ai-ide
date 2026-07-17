@@ -8,7 +8,7 @@
 //! in colour via a custom canvas widget ([`crate::ui::material::terminal_pane`]) and streams
 //! keystrokes back to the PTY.
 
-use crate::ui::material::TerminalPane;
+use crate::ui::material::{ContextMenu, MenuItem, TerminalPane};
 use crate::ui::style;
 use alacritty_terminal::event::VoidListener;
 use alacritty_terminal::grid::Dimensions;
@@ -467,18 +467,23 @@ fn indexed_256(i: u8) -> Color {
 }
 
 /// Resolve per-cell fg/bg/flags into final draw colours + font (feature 006 rendering helper).
+/// `selected` marks a cell inside the active text selection, drawn with fg/bg swapped — the
+/// visible highlight (contracts/terminal-render-input.md, FR-013).
 pub fn cell_colors(
     palette: &TermPalette,
     fg: AnsiColor,
     bg: AnsiColor,
     flags: Flags,
+    selected: bool,
 ) -> (Color, Color) {
     let mut f = palette.color(fg);
     let mut b = palette.color(bg);
     if flags.intersects(Flags::DIM | Flags::DIM_BOLD) {
         f.a *= 0.7;
     }
-    if flags.contains(Flags::INVERSE) {
+    // Both INVERSE and selection swap fg/bg; when both apply they cancel (double swap), so a
+    // selected reverse-video cell renders like plain selected text, as in a standalone terminal.
+    if flags.contains(Flags::INVERSE) != selected {
         std::mem::swap(&mut f, &mut b);
     }
     if flags.contains(Flags::HIDDEN) {
@@ -578,6 +583,31 @@ pub fn pane<'a>(
         .center_x(Length::Fill)
         .center_y(Length::Fill)
         .into(),
+    };
+
+    // While the right-click context menu is open, float it over the terminal body anchored at the
+    // clicked point; choosing Copy/Paste or clicking outside dismisses it (FR-013).
+    let body: Element<'a, Message> = match state.terminal_context_menu {
+        Some((x, y)) => ContextMenu::new(
+            body,
+            vec![
+                MenuItem {
+                    icon: None,
+                    label: "Copy".to_string(),
+                    message: Message::TerminalCopyRequested,
+                },
+                MenuItem {
+                    icon: None,
+                    label: "Paste".to_string(),
+                    message: Message::TerminalPasteRequested,
+                },
+            ],
+            (x, y),
+            Message::TerminalContextMenuClosed,
+            r,
+        )
+        .into(),
+        None => body,
     };
 
     // A slim bottom status bar: the current session name (left) and its lifecycle status
@@ -716,9 +746,93 @@ mod tests {
         let p = TermPalette::from_scheme(ColorScheme::Dark);
         let fg = AnsiColor::Named(NamedColor::Foreground);
         let bg = AnsiColor::Named(NamedColor::Background);
-        let (f, b) = cell_colors(&p, fg, bg, Flags::INVERSE);
+        let (f, b) = cell_colors(&p, fg, bg, Flags::INVERSE, false);
         assert_eq!(f, p.background());
         assert_eq!(b, p.foreground());
+    }
+
+    #[test]
+    fn selected_cells_swap_fg_and_bg() {
+        // A cell within the selection range renders with fg/bg swapped — the visible highlight
+        // (contracts/terminal-render-input.md: "within selection range → swap fg/bg").
+        let p = TermPalette::from_scheme(ColorScheme::Dark);
+        let fg = AnsiColor::Named(NamedColor::Foreground);
+        let bg = AnsiColor::Named(NamedColor::Background);
+        let (f, b) = cell_colors(&p, fg, bg, Flags::empty(), true);
+        assert_eq!(f, p.background());
+        assert_eq!(b, p.foreground());
+    }
+
+    #[test]
+    fn selection_over_inverse_cell_cancels_the_swap() {
+        // Selection and INVERSE both swap fg/bg; together they cancel, so a selected reverse-video
+        // cell renders like a plain unselected one — matching a standalone terminal.
+        let p = TermPalette::from_scheme(ColorScheme::Dark);
+        let fg = AnsiColor::Named(NamedColor::Foreground);
+        let bg = AnsiColor::Named(NamedColor::Background);
+        let (f, b) = cell_colors(&p, fg, bg, Flags::INVERSE, true);
+        assert_eq!(f, p.foreground());
+        assert_eq!(b, p.background());
+    }
+
+    /// End-to-end against a real `alacritty_terminal` grid (no PTY, no window): make a selection
+    /// exactly as the runtime does, then walk the grid the way `draw` does and confirm the
+    /// selected cells come back with fg/bg swapped while the rest are untouched. Reproduces the
+    /// reported bug where a drag selected text but nothing was ever highlighted (FR-013).
+    #[test]
+    fn selected_grid_cells_render_highlighted_like_draw() {
+        use alacritty_terminal::index::{Column, Line, Point as GridPoint, Side};
+        use alacritty_terminal::selection::{Selection, SelectionType};
+
+        let rows = 3usize;
+        let cols = 10usize;
+        let dims = TermDimensions { rows, cols };
+        let mut term = Term::new(Config::default(), &dims, VoidListener);
+        let mut parser: Processor = Processor::new();
+        parser.advance(&mut term, b"hello");
+
+        // Select the first three columns of the top line, as selection_start/update would.
+        let mut sel = Selection::new(
+            SelectionType::Simple,
+            GridPoint::new(Line(0), Column(0)),
+            Side::Left,
+        );
+        sel.update(GridPoint::new(Line(0), Column(2)), Side::Left);
+        term.selection = Some(sel);
+
+        let palette = TermPalette::from_scheme(ColorScheme::Dark);
+        let content = term.renderable_content();
+        let selection = content
+            .selection
+            .expect("a non-empty selection must yield a range");
+
+        let (mut saw_selected, mut saw_unselected) = (false, false);
+        for indexed in content.display_iter {
+            let selected = selection.contains(indexed.point);
+            let styled = cell_colors(
+                &palette,
+                indexed.cell.fg,
+                indexed.cell.bg,
+                indexed.cell.flags,
+                selected,
+            );
+            let plain = cell_colors(
+                &palette,
+                indexed.cell.fg,
+                indexed.cell.bg,
+                indexed.cell.flags,
+                false,
+            );
+            if selected {
+                saw_selected = true;
+                assert_eq!(styled, (plain.1, plain.0), "selected cell must swap fg/bg");
+            } else {
+                saw_unselected = true;
+                assert_eq!(styled, plain, "unselected cell must be unchanged");
+            }
+        }
+        assert!(saw_selected, "expected some cells inside the selection");
+        assert!(saw_unselected, "expected some cells outside the selection");
     }
 
     #[test]

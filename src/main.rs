@@ -583,6 +583,28 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        // Copy the current selection to the system clipboard (FR-013). Also closes the menu.
+        Message::TerminalCopyRequested => {
+            app.core.update(Message::TerminalContextMenuClosed);
+            let content = app
+                .core
+                .active_session
+                .and_then(|id| app.terminals.get(&id))
+                .map(|rt| rt.selectable_content())
+                .unwrap_or_default();
+            if content.is_empty() {
+                Task::none()
+            } else {
+                iced::clipboard::write(content)
+            }
+        }
+        // Paste the system clipboard into the displayed session's PTY (FR-013). The read is async;
+        // its result flows back through `TerminalBytes`, which honours the Running write-gate.
+        Message::TerminalPasteRequested => {
+            app.core.update(Message::TerminalContextMenuClosed);
+            iced::clipboard::read()
+                .map(|c| Message::TerminalBytes(c.unwrap_or_default().into_bytes()))
+        }
         // Poll terminals: feed streamed bytes into the VT emulators, then detect unexpected
         // exits and apply the crash-restart policy (FR-012, FR-022).
         // Open Settings: let the reducer show the overlay, then seed the draft with the current

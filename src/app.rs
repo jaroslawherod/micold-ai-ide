@@ -287,6 +287,10 @@ pub enum Message {
     TerminalCopyRequested,
     /// Paste clipboard text into the focused session's PTY (binary handles clipboard) (FR-013).
     TerminalPasteRequested,
+    /// Open the terminal right-click context menu at a pane-local pixel point (FR-013).
+    TerminalContextMenuOpened { x: u16, y: u16 },
+    /// Dismiss the terminal context menu (an outside click, or after an item is chosen) (FR-013).
+    TerminalContextMenuClosed,
     /// Open the Settings form (from the toolbar menu) (FR-019). The binary seeds the draft with
     /// the current scrollback value.
     SettingsOpened,
@@ -344,6 +348,9 @@ pub struct State {
     /// Whether the embedded terminal holds input focus (feature 006). Default `false`; keys are
     /// delivered to the session process only while `true` (FR-009/FR-010/FR-012).
     pub terminal_focused: bool,
+    /// The open terminal right-click context menu's anchor in pane-local pixels, or `None` when
+    /// no menu is showing (feature 006, FR-013).
+    pub terminal_context_menu: Option<(u16, u16)>,
     /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
     /// The session that was in the foreground for each project, remembered so returning to a
@@ -600,6 +607,12 @@ impl State {
             }
             Message::TerminalFocusReleased => {
                 self.terminal_focused = false;
+            }
+            Message::TerminalContextMenuOpened { x, y } => {
+                self.terminal_context_menu = Some((x, y));
+            }
+            Message::TerminalContextMenuClosed => {
+                self.terminal_context_menu = None;
             }
             Message::SettingsOpened => {
                 self.overlay = Overlay::Settings;

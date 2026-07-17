@@ -78,3 +78,24 @@ fn focus_toggles_via_messages() {
     s.update(Message::TerminalFocusReleased);
     assert!(!s.terminal_focused);
 }
+
+#[test]
+fn context_menu_opens_at_a_point_and_dismisses() {
+    use micold_ai_ide::app::Message;
+    let mut s = State::default();
+    assert_eq!(
+        s.terminal_context_menu, None,
+        "the terminal context menu starts closed (FR-013)"
+    );
+    s.update(Message::TerminalContextMenuOpened { x: 48, y: 16 });
+    assert_eq!(
+        s.terminal_context_menu,
+        Some((48, 16)),
+        "right-click opens the context menu anchored at the clicked point"
+    );
+    s.update(Message::TerminalContextMenuClosed);
+    assert_eq!(
+        s.terminal_context_menu, None,
+        "an outside click or a chosen item closes the context menu"
+    );
+}

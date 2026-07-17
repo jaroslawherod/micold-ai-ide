@@ -37,6 +37,28 @@ impl<M> MenuItem<M> {
 const PANEL_WIDTH: f32 = 220.0;
 /// Vertical offset so the panel clears the toolbar (approx. toolbar height).
 const TOP_OFFSET: f32 = 52.0;
+/// The width of the right-click context-menu panel (narrower than the toolbar dropdown).
+const CONTEXT_MENU_WIDTH: f32 = 160.0;
+
+/// The vertical stack of clickable menu entries shared by [`MenuOverlay`] and [`ContextMenu`].
+fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) -> Element<'a, M> {
+    let mut list = column![].spacing(spacing::XS).width(Length::Fill);
+    for item in items {
+        let mut content = row![].spacing(spacing::SM).align_y(Alignment::Center);
+        if let Some(glyph) = item.icon {
+            content = content.push(icon(glyph, type_scale::BODY, r.on_surface));
+        }
+        content = content.push(text(item.label).size(type_scale::BODY));
+        list = list.push(
+            button(content)
+                .width(Length::Fill)
+                .padding(spacing::SM)
+                .style(style::text_button(r))
+                .on_press(item.message),
+        );
+    }
+    list.into()
+}
 
 /// The menu trigger: an icon button (emitting `on_toggle`) placed in the toolbar. Builder form
 /// (Principle VIII): `MenuTrigger::new(icon, on_toggle, roles).into()`.
@@ -116,25 +138,9 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Element<'a, M> {
             return base;
         }
 
-        let mut list = column![].spacing(spacing::XS).width(Length::Fill);
-        for item in items {
-            let mut content = row![].spacing(spacing::SM).align_y(Alignment::Center);
-            if let Some(glyph) = item.icon {
-                content = content.push(icon(glyph, type_scale::BODY, r.on_surface));
-            }
-            content = content.push(text(item.label).size(type_scale::BODY));
-            list = list.push(
-                button(content)
-                    .width(Length::Fill)
-                    .padding(spacing::SM)
-                    .style(style::text_button(r))
-                    .on_press(item.message),
-            );
-        }
-
         // Fade the panel box itself (scrim of its own surface color), then anchor it top-right.
         let panel_box = super::fade(
-            container(list)
+            container(item_column(items, r))
                 .padding(spacing::XS)
                 .width(Length::Fixed(PANEL_WIDTH))
                 .style(style::menu_surface(r)),
@@ -152,6 +158,78 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Element<'a, M> {
                 bottom: 0.0,
                 left: 0.0,
             });
+
+        // Invisible backdrop that dismisses the menu on any outside click.
+        let backdrop = mouse_area(
+            container(Space::new(Length::Fill, Length::Fill))
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .on_press(on_dismiss);
+
+        iced::widget::stack![base, backdrop, panel].into()
+    }
+}
+
+/// A right-click context menu: floats a small item panel anchored at a pane-local pixel point
+/// over `base`, with an invisible full-area backdrop that emits `on_dismiss` on an outside click.
+/// Unlike [`MenuOverlay`] (anchored top-right below the toolbar), the panel follows the cursor.
+/// Builder form (Principle VIII): `ContextMenu::new(base, items, (x, y), on_dismiss, roles).into()`.
+pub struct ContextMenu<'a, M> {
+    base: Element<'a, M>,
+    items: Vec<MenuItem<M>>,
+    origin: (u16, u16),
+    on_dismiss: M,
+    roles: Roles,
+}
+
+impl<'a, M: Clone + 'a> ContextMenu<'a, M> {
+    /// A context menu over `base` with `items`, anchored at pane-local pixel point `origin`,
+    /// dismissing via `on_dismiss`, themed by `roles`.
+    pub fn new(
+        base: impl Into<Element<'a, M>>,
+        items: Vec<MenuItem<M>>,
+        origin: (u16, u16),
+        on_dismiss: M,
+        roles: Roles,
+    ) -> Self {
+        Self {
+            base: base.into(),
+            items,
+            origin,
+            on_dismiss,
+            roles,
+        }
+    }
+}
+
+impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Element<'a, M> {
+    fn from(m: ContextMenu<'a, M>) -> Self {
+        let ContextMenu {
+            base,
+            items,
+            origin,
+            on_dismiss,
+            roles: r,
+        } = m;
+
+        // Anchor the panel's top-left at the click point via top/left padding on a fill container.
+        let panel = container(
+            container(item_column(items, r))
+                .padding(spacing::XS)
+                .width(Length::Fixed(CONTEXT_MENU_WIDTH))
+                .style(style::menu_surface(r)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Left)
+        .align_y(iced::alignment::Vertical::Top)
+        .padding(iced::Padding {
+            top: origin.1 as f32,
+            left: origin.0 as f32,
+            right: 0.0,
+            bottom: 0.0,
+        });
 
         // Invisible backdrop that dismisses the menu on any outside click.
         let backdrop = mouse_area(

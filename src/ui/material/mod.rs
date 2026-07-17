@@ -19,7 +19,7 @@ mod tree_view;
 
 pub use animation::{fade, scale, slide};
 pub use icon_button::IconButton;
-pub use menu::{MenuItem, MenuOverlay, MenuTrigger};
+pub use menu::{ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};
 pub use terminal_pane::TerminalPane;
