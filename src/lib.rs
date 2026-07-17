@@ -14,6 +14,7 @@ pub mod git;
 pub mod icons;
 pub mod keymap;
 pub mod metadata;
+pub mod motion;
 pub mod naming;
 pub mod project;
 pub mod selector;
