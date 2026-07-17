@@ -139,17 +139,6 @@ pub fn list_item(r: Roles) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-/// The dimmed modal backdrop behind a dialog.
-pub fn backdrop() -> impl Fn(&Theme) -> container::Style {
-    move |_theme| container::Style {
-        background: Some(Background::Color(Color {
-            a: 0.6,
-            ..Color::BLACK
-        })),
-        ..container::Style::default()
-    }
-}
-
 /// Filled button: primary fill, `on_primary` label (the single primary action, FR-015).
 pub fn filled(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_theme, status| {

@@ -10,9 +10,10 @@ mod ui;
 
 use iced::time::every;
 use iced::{Subscription, Task};
-use micold_ai_ide::app::{Message, Overlay, State};
+use micold_ai_ide::app::{Message, Overlay, RenameDraft, SettingsDraft, State, WorktreeForm};
 use micold_ai_ide::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_ai_ide::git::{Git, GitCli};
+use micold_ai_ide::motion::Animator;
 use micold_ai_ide::selector::{Selector, SelectorStatus};
 use micold_ai_ide::session::{RestartDecision, Session, SessionId, SessionLifecycle};
 use micold_ai_ide::settings::{JsonFileSettingsStore, Settings, SettingsStore};
@@ -24,6 +25,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use ui::terminal::{spawn_pty, RuntimeTerminal};
+use ui::MotionKey;
 
 /// How often the OS light/dark preference is polled (research R4).
 const OS_THEME_POLL: Duration = Duration::from_millis(500);
@@ -33,12 +35,41 @@ const TERMINAL_POLL: Duration = Duration::from_millis(120);
 
 /// The animation clock tick interval (~60fps).
 const ANIM_TICK: Duration = Duration::from_millis(16);
-/// Per-tick progress step for fades (~90ms) and the sidebar slide (~120ms).
-const FADE_STEP: f32 = 0.18;
-const SLIDE_STEP: f32 = 0.14;
-/// Per-tick step for the resize-handle hover highlight (~0.8s ramp at 60fps — the requested
-/// gentle ~1s animated highlight).
-const HOVER_STEP: f32 = 0.02;
+
+// Animation timing as legible durations (not opaque per-frame steps); the per-tick step the
+// `Animator` consumes is derived via `step()` below (FR-013).
+/// Overlay fade-in — Material Design 3 "medium" duration; clearly perceptible (the prior ~90ms
+/// was imperceptible).
+const OVERLAY_ENTER: Duration = Duration::from_millis(250);
+/// Overlay fade-out — ~0.8× the enter (Material convention: exits are quicker).
+const OVERLAY_EXIT: Duration = Duration::from_millis(200);
+/// Overflow-menu fade — preserves the prior feel (was step 0.18 ≈ 90ms).
+const MENU_FADE: Duration = Duration::from_millis(90);
+/// Main-view fade — preserves the prior feel (was step 0.18 ≈ 90ms).
+const MAIN_FADE: Duration = Duration::from_millis(90);
+/// Sidebar slide — preserves the prior feel (was step 0.14 ≈ 114ms).
+const SIDEBAR_SLIDE: Duration = Duration::from_millis(114);
+/// Resize-handle hover highlight — preserves the prior gentle ~0.8s ramp (was step 0.02).
+const HANDLE_HOVER: Duration = Duration::from_millis(800);
+
+/// Convert an animation `duration` into the per-tick progress step the [`Animator`] advances by
+/// on each [`ANIM_TICK`], clamped to `(0, 1]`.
+fn step(duration: Duration) -> f32 {
+    (ANIM_TICK.as_secs_f32() / duration.as_secs_f32()).clamp(f32::EPSILON, 1.0)
+}
+
+/// A snapshot of a just-closed overlay, kept alive by the binary so it can keep being rendered
+/// while it fades out. The pure core clears the overlay + its draft synchronously on close, so
+/// we capture the data here *before* the reducer runs and render from this snapshot during the
+/// exit animation. Each variant carries a clone of exactly what that overlay's render function
+/// needs (all `Clone`, straight from the core `State`).
+enum ClosingOverlay {
+    About,
+    Selector(Selector),
+    Rename(RenameDraft),
+    Worktree(WorktreeForm, Option<String>),
+    Settings(SettingsDraft),
+}
 
 /// The binary's application state: the pure core plus gui-only runtime handles.
 struct App {
@@ -48,18 +79,16 @@ struct App {
     /// The configured terminal scrollback limit (feature 006), loaded from settings and applied
     /// to newly spawned sessions.
     scrollback_lines: usize,
-    /// Overflow-menu fade progress (0=hidden, 1=shown).
-    menu_anim: f32,
-    /// Sidebar slide progress (0=collapsed, 1=expanded).
-    sidebar_anim: f32,
-    /// Main-view fade progress (reset to 0 to fade in when the content changes).
-    main_anim: f32,
+    /// The single shared animation driver for all UI motion (menu / sidebar / main / handle /
+    /// overlay). Replaces the former per-animation `*_anim` fields (FR-007).
+    motion: Animator<MotionKey>,
     /// Identity of the current main content, to detect changes that trigger a fade.
     main_key: String,
     /// Whether the pointer is over the sidebar resize handle (drives its hover highlight).
     handle_hovered: bool,
-    /// Sidebar resize-handle hover-highlight progress (0 = idle, 1 = fully highlighted).
-    handle_hover_anim: f32,
+    /// The overlay currently fading out (rendered from this snapshot until its fade completes),
+    /// or `None` when no overlay is leaving.
+    dismissing: Option<ClosingOverlay>,
 }
 
 /// Identity of the main content area, used to trigger a fade when it changes.
@@ -73,13 +102,62 @@ fn main_content_key(core: &State) -> String {
     }
 }
 
-/// Move `current` toward `target` by at most `step`.
-fn approach(current: f32, target: f32, step: f32) -> f32 {
-    if current < target {
-        (current + step).min(target)
-    } else {
-        (current - step).max(target)
+/// The desired `(target, duration)` for each state-driven motion key, derived from the current
+/// state. Used both to advance the animator (in [`apply_motion_targets`]) and to decide whether
+/// the animation clock should run (in [`motion_animating`]), so the two never disagree.
+///
+/// `MotionKey::Overlay` is intentionally absent: it is driven by the overlay open/close
+/// lifecycle in `update`, not by steady-state.
+fn motion_targets(app: &App) -> [(MotionKey, f32, Duration); 4] {
+    [
+        (
+            MotionKey::Menu,
+            if app.core.help_menu_open { 1.0 } else { 0.0 },
+            MENU_FADE,
+        ),
+        (
+            MotionKey::Sidebar,
+            if app.core.sidebar_hidden { 0.0 } else { 1.0 },
+            SIDEBAR_SLIDE,
+        ),
+        (MotionKey::Main, 1.0, MAIN_FADE),
+        (
+            MotionKey::HandleHover,
+            if app.handle_hovered { 1.0 } else { 0.0 },
+            HANDLE_HOVER,
+        ),
+    ]
+}
+
+/// Push the current state-derived targets into the animator before ticking.
+fn apply_motion_targets(app: &mut App) {
+    for (key, target, duration) in motion_targets(app) {
+        app.motion.to(key, target, step(duration));
     }
+}
+
+/// The overlay fade's target: fully shown while an overlay is open, fully hidden otherwise
+/// (including while a just-closed overlay is fading out — the snapshot in `App::dismissing`
+/// only supplies render data, it does not change the target).
+fn overlay_motion_target(app: &App) -> f32 {
+    if app.core.overlay == Overlay::None {
+        0.0
+    } else {
+        1.0
+    }
+}
+
+/// Whether any animation still needs to advance — gates the animation clock (FR-014). Compares
+/// each key's current value against its freshly derived target so a just-reset track (e.g. the
+/// main-view fade reset to 0 on a content change) is detected even before the animator's stored
+/// target is refreshed. `MotionKey::Overlay` is handled by [`overlay_motion_target`].
+fn motion_animating(app: &App) -> bool {
+    let steady = motion_targets(app)
+        .iter()
+        .any(|(key, target, _)| (app.motion.get(*key) - target).abs() > f32::EPSILON);
+    let overlay =
+        (app.motion.get(MotionKey::Overlay) - overlay_motion_target(app)).abs() > f32::EPSILON;
+    steady || overlay
 }
 
 impl App {
@@ -161,19 +239,25 @@ fn boot() -> (App, Task<Message>) {
     if let Some(repo) = core.workspace.active.clone() {
         core.worktrees = discover_worktrees(&repo);
     }
-    let sidebar_anim = if core.sidebar_hidden { 0.0 } else { 1.0 };
+    let mut motion = Animator::new();
+    motion.set(MotionKey::Menu, 0.0);
+    motion.set(
+        MotionKey::Sidebar,
+        if core.sidebar_hidden { 0.0 } else { 1.0 },
+    );
+    motion.set(MotionKey::Main, 1.0);
+    motion.set(MotionKey::HandleHover, 0.0);
+    motion.set(MotionKey::Overlay, 0.0);
     let main_key = main_content_key(&core);
     (
         App {
             core,
             terminals: HashMap::new(),
             scrollback_lines,
-            menu_anim: 0.0,
-            sidebar_anim,
-            main_anim: 1.0,
+            motion,
             main_key,
             handle_hovered: false,
-            handle_hover_anim: 0.0,
+            dismissing: None,
         },
         Task::none(),
     )
@@ -247,27 +331,69 @@ fn persist_settings(core: &State) {
 }
 
 fn update(app: &mut App, message: Message) -> Task<Message> {
+    // Capture the open overlay + its draft BEFORE the reducer runs: closing an overlay clears
+    // its draft synchronously in the core, so this snapshot is the only way to keep rendering it
+    // while it fades out (FR-002/FR-006/FR-012).
+    let overlay_before = app.core.overlay;
+    let snapshot_before = capture_overlay(app);
+
     let task = update_inner(app, message);
+
+    // Drive the overlay fade on open/close transitions (US1).
+    let overlay_after = app.core.overlay;
+    if overlay_before != overlay_after {
+        if overlay_after == Overlay::None {
+            // Closed (Cancel / Esc / successful submit): fade the snapshot out.
+            app.dismissing = snapshot_before;
+            app.motion.to(MotionKey::Overlay, 0.0, step(OVERLAY_EXIT));
+        } else {
+            // Opened (or switched to a different overlay): fade the new one in from hidden.
+            app.dismissing = None;
+            app.motion.set(MotionKey::Overlay, 0.0);
+            app.motion.to(MotionKey::Overlay, 1.0, step(OVERLAY_ENTER));
+        }
+    }
+
     // Trigger a main-view fade-in whenever the displayed content changes.
     let key = main_content_key(&app.core);
     if key != app.main_key {
         app.main_key = key;
-        app.main_anim = 0.0;
+        app.motion.set(MotionKey::Main, 0.0);
     }
     task
 }
 
+/// Snapshot the currently open overlay (and its draft) so it can be rendered while it fades out.
+/// Returns `None` when no overlay is open or its draft is unexpectedly absent.
+fn capture_overlay(app: &App) -> Option<ClosingOverlay> {
+    match app.core.overlay {
+        Overlay::None => None,
+        Overlay::About => Some(ClosingOverlay::About),
+        Overlay::ProjectSelector => app.core.selector.clone().map(ClosingOverlay::Selector),
+        Overlay::RenameProject => app.core.rename_draft.clone().map(ClosingOverlay::Rename),
+        Overlay::AddWorktree => app
+            .core
+            .worktree_form
+            .clone()
+            .map(|form| ClosingOverlay::Worktree(form, app.core.worktree_error.clone())),
+        Overlay::Settings => app
+            .core
+            .settings_draft
+            .clone()
+            .map(ClosingOverlay::Settings),
+    }
+}
+
 fn update_inner(app: &mut App, message: Message) -> Task<Message> {
     match message {
-        // Advance the animation clock toward each target.
+        // Advance every animation toward its target via the shared driver.
         Message::AnimationTick => {
-            let menu_target = if app.core.help_menu_open { 1.0 } else { 0.0 };
-            let sidebar_target = if app.core.sidebar_hidden { 0.0 } else { 1.0 };
-            let hover_target = if app.handle_hovered { 1.0 } else { 0.0 };
-            app.menu_anim = approach(app.menu_anim, menu_target, FADE_STEP);
-            app.sidebar_anim = approach(app.sidebar_anim, sidebar_target, SLIDE_STEP);
-            app.main_anim = approach(app.main_anim, 1.0, FADE_STEP);
-            app.handle_hover_anim = approach(app.handle_hover_anim, hover_target, HOVER_STEP);
+            apply_motion_targets(app);
+            app.motion.tick();
+            // Once the leaving overlay has fully faded, release its snapshot.
+            if app.dismissing.is_some() && app.motion.get(MotionKey::Overlay) <= 0.001 {
+                app.dismissing = None;
+            }
             Task::none()
         }
         // Pointer entered/left the sidebar resize handle; the hover highlight animates via the
@@ -541,13 +667,7 @@ fn view(app: &App) -> iced::Element<'_, Message> {
         .core
         .active_session
         .and_then(|id| app.terminals.get(&id));
-    let anim = ui::Anim {
-        menu: app.menu_anim,
-        sidebar: app.sidebar_anim,
-        main: app.main_anim,
-        handle_hover: app.handle_hover_anim,
-    };
-    ui::view(&app.core, terminal, anim)
+    ui::view(&app.core, terminal, &app.motion, app.dismissing.as_ref())
 }
 
 fn theme(app: &App) -> iced::Theme {
@@ -559,15 +679,8 @@ fn subscription(app: &App) -> Subscription<Message> {
     if !app.terminals.is_empty() {
         subs.push(every(TERMINAL_POLL).map(|_| Message::TerminalTick));
     }
-    // Run the animation clock only while something is actually animating.
-    let menu_target = if app.core.help_menu_open { 1.0 } else { 0.0 };
-    let sidebar_target = if app.core.sidebar_hidden { 0.0 } else { 1.0 };
-    let hover_target = if app.handle_hovered { 1.0 } else { 0.0 };
-    let animating = (app.menu_anim - menu_target).abs() > f32::EPSILON
-        || (app.sidebar_anim - sidebar_target).abs() > f32::EPSILON
-        || app.main_anim < 1.0
-        || (app.handle_hover_anim - hover_target).abs() > f32::EPSILON;
-    if animating {
+    // Run the animation clock only while something is actually animating (FR-014).
+    if motion_animating(app) {
         subs.push(every(ANIM_TICK).map(|_| Message::AnimationTick));
     }
     Subscription::batch(subs)

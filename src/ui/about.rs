@@ -1,19 +1,25 @@
 //! The About dialog, rendered as a Material modal overlay within the main window (FR-013).
 
+use crate::ui::material::Modal;
 use crate::ui::style;
-use iced::widget::{button, center, column, container, opaque, stack, text};
+use iced::widget::{button, column, container, text};
 use iced::Element;
 use micold_ai_ide::app::Message;
 use micold_ai_ide::metadata::AppMetadata;
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale};
 
-/// Stack the About dialog as a modal overlay on top of `base`.
+/// Stack the About dialog as a modal overlay on top of `base`, at transition `progress`
+/// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
 ///
-/// The overlay is wrapped in `opaque`, so it captures all input and the content beneath is
-/// non-interactive while the dialog is open (FR-013). Dismissal is via the Close button
-/// (FR-010) or Esc (FR-011) — clicking the dimmed backdrop does not dismiss.
-pub fn modal(base: Element<'_, Message>, scheme: ColorScheme) -> Element<'_, Message> {
+/// The overlay captures all input while shown, so the content beneath is non-interactive
+/// (FR-013). Dismissal is via the Close button (FR-010) or Esc (FR-011) — clicking the dimmed
+/// backdrop does not dismiss.
+pub fn modal(
+    base: Element<'_, Message>,
+    scheme: ColorScheme,
+    progress: f32,
+) -> Element<'_, Message> {
     let r = tokens::roles(scheme);
     let meta = AppMetadata::from_env();
 
@@ -36,7 +42,5 @@ pub fn modal(base: Element<'_, Message>, scheme: ColorScheme) -> Element<'_, Mes
     .padding(spacing::LG)
     .style(style::dialog(r));
 
-    let backdrop = center(dialog).style(style::backdrop());
-
-    stack![base, opaque(backdrop)].into()
+    Modal::new(base, dialog, r).progress(progress).into()
 }

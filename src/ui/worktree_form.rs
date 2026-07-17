@@ -3,22 +3,23 @@
 //! Captures a Conventional-Commits type, an optional ticket, and a name, and shows the live
 //! derived directory/branch preview so the outcome is predictable before creating (FR-008a).
 
+use crate::ui::material::Modal;
 use crate::ui::style;
-use iced::widget::{
-    button, center, column, container, opaque, row, stack, text, text_input, Space,
-};
+use iced::widget::{button, column, container, row, text, text_input, Space};
 use iced::{Element, Length};
 use micold_ai_ide::app::{Message, WorktreeForm};
 use micold_ai_ide::naming::ConventionalType;
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale, Roles};
 
-/// Stack the add-worktree form as a modal overlay on top of `base`.
+/// Stack the add-worktree form as a modal overlay on top of `base`, at transition `progress`
+/// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
 pub fn modal<'a>(
     base: Element<'a, Message>,
     form: &'a WorktreeForm,
     error: Option<&'a str>,
     scheme: ColorScheme,
+    progress: f32,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
@@ -88,8 +89,7 @@ pub fn modal<'a>(
         .width(Length::Fixed(520.0))
         .style(style::dialog(r));
 
-    let backdrop = center(dialog).style(style::backdrop());
-    stack![base, opaque(backdrop)].into()
+    Modal::new(base, dialog, r).progress(progress).into()
 }
 
 /// The live derived directory/branch preview (FR-008a), or a hint when input is incomplete.

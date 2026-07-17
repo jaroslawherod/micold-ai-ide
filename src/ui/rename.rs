@@ -2,19 +2,22 @@
 //! (FR-017, FR-020). Editing changes only the stored display name — never the folder on
 //! disk (FR-018).
 
+use crate::ui::material::Modal;
 use crate::ui::style;
-use iced::widget::{button, center, column, container, opaque, row, stack, text, text_input};
+use iced::widget::{button, column, container, row, text, text_input};
 use iced::{Element, Length};
 use micold_ai_ide::app::{Message, RenameDraft};
 use micold_ai_ide::project::RenameError;
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale};
 
-/// Stack the rename dialog as a modal overlay on top of `base`.
+/// Stack the rename dialog as a modal overlay on top of `base`, at transition `progress`
+/// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
 pub fn modal<'a>(
     base: Element<'a, Message>,
     draft: &'a RenameDraft,
     scheme: ColorScheme,
+    progress: f32,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
@@ -61,7 +64,5 @@ pub fn modal<'a>(
         .width(Length::Fixed(420.0))
         .style(style::dialog(r));
 
-    let backdrop = center(dialog).style(style::backdrop());
-
-    stack![base, opaque(backdrop)].into()
+    Modal::new(base, dialog, r).progress(progress).into()
 }

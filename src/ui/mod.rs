@@ -16,6 +16,8 @@ use iced::widget::{column, container, mouse_area, row, stack, text, Space};
 use iced::{Element, Font, Length, Subscription};
 use micold_ai_ide::app::{Message, Overlay, State};
 use micold_ai_ide::icons::Icon;
+use micold_ai_ide::motion::Animator;
+use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, Rgb};
 
 /// The embedded Material Symbols (Outlined) icon font. Registered once at startup in
@@ -37,38 +39,35 @@ pub fn icon<'a, M: 'a>(icon: Icon, size: u16, color: Rgb) -> Element<'a, M> {
         .into()
 }
 
-/// Animation progress (0..1) for the material motion wrappers, driven by the binary's clock.
-#[derive(Debug, Clone, Copy)]
-pub struct Anim {
-    /// Overflow-menu fade progress.
-    pub menu: f32,
-    /// Sidebar slide progress (0 = collapsed, 1 = expanded).
-    pub sidebar: f32,
-    /// Main-view fade progress (dips to 0 and back to 1 when the content changes).
-    pub main: f32,
-    /// Sidebar resize-handle hover-highlight progress (0 = idle, 1 = fully highlighted).
-    pub handle_hover: f32,
-}
-
-impl Default for Anim {
-    fn default() -> Self {
-        Self {
-            menu: 0.0,
-            sidebar: 1.0,
-            main: 1.0,
-            handle_hover: 0.0,
-        }
-    }
+/// Identifies each animated element in the app. The generic [`Animator`] core
+/// (`micold_ai_ide::motion`) is keyed by this; adding a new animated element is: add a variant,
+/// set its target, and read its progress — no per-animation fields anywhere (FR-007/FR-008).
+/// This enum is the app-specific consumer side; the reusable core carries no key scheme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MotionKey {
+    /// Overflow-menu fade.
+    Menu,
+    /// Sidebar slide (0 = collapsed, 1 = expanded).
+    Sidebar,
+    /// Main-view fade (dips to 0 and back to 1 when the content changes).
+    Main,
+    /// Sidebar resize-handle hover-highlight (0 = idle, 1 = fully highlighted).
+    HandleHover,
+    /// The currently open/closing modal overlay's fade (0 = hidden, 1 = shown).
+    Overlay,
 }
 
 /// Render the main window: the top app bar over the shell body (active project / empty
-/// state), with any modal overlay (About or the project selector) stacked on top. Every
-/// surface is styled from the active color scheme's design tokens. `anim` carries the
-/// material motion progress (menu fade, sidebar slide, main-view fade).
+/// state), with any modal overlay stacked on top. Every surface is styled from the active
+/// color scheme's design tokens. `motion` carries all material motion progress (menu fade,
+/// sidebar slide, main-view fade, handle hover, and the overlay fade). `dismissing` is the
+/// snapshot of a just-closed overlay still fading out (rendered instead of a live overlay when
+/// `state.overlay` is already `None` — see [`crate::ClosingOverlay`]).
 pub fn view<'a>(
     state: &'a State,
     terminal: Option<&'a terminal::RuntimeTerminal>,
-    anim: Anim,
+    motion: &Animator<MotionKey>,
+    dismissing: Option<&'a crate::ClosingOverlay>,
 ) -> Element<'a, Message> {
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
@@ -83,22 +82,23 @@ pub fn view<'a>(
         } else {
             shell::view(state, scheme)
         };
-        let main = material::fade(main_inner, anim.main, bg);
-        let left: Element<'a, Message> = if state.sidebar_hidden && anim.sidebar <= 0.001 {
-            sidebar::collapsed_strip(scheme)
-        } else {
-            row![
-                material::slide(sidebar::view(state, scheme), anim.sidebar),
-                sidebar::handle(scheme, anim.handle_hover)
-            ]
-            .into()
-        };
+        let main = material::fade(main_inner, motion.get(MotionKey::Main), bg);
+        let left: Element<'a, Message> =
+            if state.sidebar_hidden && motion.get(MotionKey::Sidebar) <= 0.001 {
+                sidebar::collapsed_strip(scheme)
+            } else {
+                row![
+                    material::slide(sidebar::view(state, scheme), motion.get(MotionKey::Sidebar)),
+                    sidebar::handle(scheme, motion.get(MotionKey::HandleHover))
+                ]
+                .into()
+            };
         row![left, main]
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
     } else {
-        material::fade(shell::view(state, scheme), anim.main, bg)
+        material::fade(shell::view(state, scheme), motion.get(MotionKey::Main), bg)
     };
 
     let mut base: Element<'a, Message> = container(column![toolbar::view(scheme), body])
@@ -127,29 +127,67 @@ pub fn view<'a>(
         Message::HelpMenuToggled,
         roles,
     )
-    .progress(anim.menu)
+    .progress(motion.get(MotionKey::Menu))
     .into();
 
+    // The overlay fade progress (0 = hidden, 1 = fully shown). Drives both the enter (a live
+    // overlay fading in as this rises 0→1) and the exit (a dismissing snapshot fading out as it
+    // falls 1→0). At <= 0.001 the modal renders `base` unchanged.
+    let overlay_progress = motion.get(MotionKey::Overlay);
     match state.overlay {
-        Overlay::None => base,
-        Overlay::About => about::modal(base, scheme),
+        // No overlay open. If one is still fading out, render its snapshot (captured before the
+        // core cleared its live state) so the exit animation has something to draw (FR-002).
+        Overlay::None => match dismissing {
+            Some(closing) => dismissing_modal(base, closing, scheme, overlay_progress),
+            None => base,
+        },
+        Overlay::About => about::modal(base, scheme, overlay_progress),
         Overlay::ProjectSelector => match &state.selector {
-            Some(selector) => project_selector::modal(base, selector, scheme),
+            Some(selector) => project_selector::modal(base, selector, scheme, overlay_progress),
             // Overlay flagged but no selector state — render the base defensively.
             None => base,
         },
         Overlay::RenameProject => match &state.rename_draft {
-            Some(draft) => rename::modal(base, draft, scheme),
+            Some(draft) => rename::modal(base, draft, scheme, overlay_progress),
             None => base,
         },
         Overlay::AddWorktree => match &state.worktree_form {
-            Some(form) => worktree_form::modal(base, form, state.worktree_error.as_deref(), scheme),
+            Some(form) => worktree_form::modal(
+                base,
+                form,
+                state.worktree_error.as_deref(),
+                scheme,
+                overlay_progress,
+            ),
             None => base,
         },
         Overlay::Settings => match &state.settings_draft {
-            Some(draft) => settings_form::modal(base, draft, scheme),
+            Some(draft) => settings_form::modal(base, draft, scheme, overlay_progress),
             None => base,
         },
+    }
+}
+
+/// Render the snapshot of a just-closed overlay so it can keep fading out after the pure core
+/// has already cleared its live state (see [`crate::ClosingOverlay`]). Delegates to the same
+/// per-overlay `modal` render functions as the live path, so the exit is the enter in reverse.
+fn dismissing_modal<'a>(
+    base: Element<'a, Message>,
+    closing: &'a crate::ClosingOverlay,
+    scheme: ColorScheme,
+    progress: f32,
+) -> Element<'a, Message> {
+    use crate::ClosingOverlay;
+    match closing {
+        ClosingOverlay::About => about::modal(base, scheme, progress),
+        ClosingOverlay::Selector(selector) => {
+            project_selector::modal(base, selector, scheme, progress)
+        }
+        ClosingOverlay::Rename(draft) => rename::modal(base, draft, scheme, progress),
+        ClosingOverlay::Worktree(form, error) => {
+            worktree_form::modal(base, form, error.as_deref(), scheme, progress)
+        }
+        ClosingOverlay::Settings(draft) => settings_form::modal(base, draft, scheme, progress),
     }
 }
 

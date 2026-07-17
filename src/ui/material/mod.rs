@@ -11,13 +11,15 @@
 mod animation;
 mod icon_button;
 mod menu;
+mod modal;
 mod terminal_pane;
 mod toolbar;
 mod tree_view;
 
-pub use animation::{fade, slide};
+pub use animation::{fade, scale, slide};
 pub use icon_button::IconButton;
 pub use menu::{MenuItem, MenuOverlay, MenuTrigger};
+pub use modal::Modal;
 pub use terminal_pane::TerminalPane;
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};

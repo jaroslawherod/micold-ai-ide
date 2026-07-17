@@ -11,7 +11,7 @@
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
-use iced::{Color, Element, Event, Length, Rectangle, Size, Vector};
+use iced::{Color, Element, Event, Length, Rectangle, Size, Transformation, Vector};
 
 // ---------------------------------------------------------------------------------------
 // Fade
@@ -345,5 +345,181 @@ where
 {
     fn from(slide: Slide<'a, Message, Theme, Renderer>) -> Self {
         Element::new(slide)
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Scale (scale about center)
+// ---------------------------------------------------------------------------------------
+
+/// The scale applied at `progress` 0.0 — a subtle Material dialog "lift" (grows to full size
+/// as it enters, shrinks slightly as it leaves). Kept close to 1.0 so it reads as a lift, not
+/// a zoom.
+const MIN_SCALE: f32 = 0.96;
+
+/// Wrap `content` in a scale-about-center transform: `progress` 1.0 renders at full size, 0.0
+/// at [`MIN_SCALE`], linearly in between. A passthrough widget — layout, events, and the
+/// overlay are delegated to the child; only drawing is transformed (via the renderer), so it
+/// never reflows the layout around it.
+pub fn scale<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+    progress: f32,
+) -> Element<'a, Message> {
+    Scale {
+        content: content.into(),
+        progress: progress.clamp(0.0, 1.0),
+    }
+    .into()
+}
+
+struct Scale<'a, Message, Theme, Renderer> {
+    content: Element<'a, Message, Theme, Renderer>,
+    progress: f32,
+}
+
+impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for Scale<'_, Message, Theme, Renderer>
+where
+    Renderer: renderer::Renderer,
+{
+    fn children(&self) -> Vec<Tree> {
+        vec![Tree::new(&self.content)]
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        tree.diff_children(std::slice::from_ref(&self.content));
+    }
+
+    fn size(&self) -> Size<Length> {
+        self.content.as_widget().size()
+    }
+
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        self.content
+            .as_widget()
+            .layout(&mut tree.children[0], renderer, limits)
+    }
+
+    fn operate(
+        &self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        self.content
+            .as_widget()
+            .operate(&mut tree.children[0], layout, renderer, operation);
+    }
+
+    fn on_event(
+        &mut self,
+        tree: &mut Tree,
+        event: Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        viewport: &Rectangle,
+    ) -> iced::event::Status {
+        self.content.as_widget_mut().on_event(
+            &mut tree.children[0],
+            event,
+            layout,
+            cursor,
+            renderer,
+            clipboard,
+            shell,
+            viewport,
+        )
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+        renderer: &Renderer,
+    ) -> mouse::Interaction {
+        self.content.as_widget().mouse_interaction(
+            &tree.children[0],
+            layout,
+            cursor,
+            viewport,
+            renderer,
+        )
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        let scaling = MIN_SCALE + (1.0 - MIN_SCALE) * self.progress;
+        // At full size, skip the transform layer entirely (identity — nothing to do).
+        if (scaling - 1.0).abs() < 0.0001 {
+            self.content.as_widget().draw(
+                &tree.children[0],
+                renderer,
+                theme,
+                style,
+                layout,
+                cursor,
+                viewport,
+            );
+            return;
+        }
+        // Scale about the child's center: translate(c) · scale · translate(-c).
+        let center = layout.bounds().center();
+        let transformation = Transformation::translate(center.x, center.y)
+            * Transformation::scale(scaling)
+            * Transformation::translate(-center.x, -center.y);
+        renderer.with_transformation(transformation, |renderer| {
+            self.content.as_widget().draw(
+                &tree.children[0],
+                renderer,
+                theme,
+                style,
+                layout,
+                cursor,
+                viewport,
+            );
+        });
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        self.content
+            .as_widget_mut()
+            .overlay(&mut tree.children[0], layout, renderer, translation)
+    }
+}
+
+impl<'a, Message, Theme, Renderer> From<Scale<'a, Message, Theme, Renderer>>
+    for Element<'a, Message, Theme, Renderer>
+where
+    Message: 'a,
+    Theme: 'a,
+    Renderer: 'a + renderer::Renderer,
+{
+    fn from(scale: Scale<'a, Message, Theme, Renderer>) -> Self {
+        Element::new(scale)
     }
 }

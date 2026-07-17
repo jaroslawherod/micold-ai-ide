@@ -1,18 +1,21 @@
 //! The Settings dialog, rendered as a Material modal overlay within the main window (feature
 //! 006, FR-019/FR-020). Currently exposes the embedded-terminal scrollback limit.
 
+use crate::ui::material::Modal;
 use crate::ui::style;
-use iced::widget::{button, center, column, container, opaque, row, stack, text, text_input};
+use iced::widget::{button, column, container, row, text, text_input};
 use iced::{Element, Length};
 use micold_ai_ide::app::{Message, SettingsDraft};
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale};
 
-/// Stack the Settings dialog as a modal overlay on top of `base`.
+/// Stack the Settings dialog as a modal overlay on top of `base`, at transition `progress`
+/// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
 pub fn modal<'a>(
     base: Element<'a, Message>,
     draft: &'a SettingsDraft,
     scheme: ColorScheme,
+    progress: f32,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
@@ -55,7 +58,5 @@ pub fn modal<'a>(
         .width(Length::Fixed(420.0))
         .style(style::dialog(r));
 
-    let backdrop = center(dialog).style(style::backdrop());
-
-    stack![base, opaque(backdrop)].into()
+    Modal::new(base, dialog, r).progress(progress).into()
 }

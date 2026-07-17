@@ -2,8 +2,9 @@
 //! within the main window (research R3). Lists the current directory's subfolders, supports
 //! navigation, and lets the user open the current folder as a project.
 
+use crate::ui::material::Modal;
 use crate::ui::{icon, style};
-use iced::widget::{button, center, column, container, opaque, row, scrollable, stack, text};
+use iced::widget::{button, column, container, row, scrollable, text};
 use iced::{Alignment, Element, Length};
 use micold_ai_ide::app::Message;
 use micold_ai_ide::icons::{icon_role, Icon, IconSurface};
@@ -11,11 +12,13 @@ use micold_ai_ide::selector::{Selector, SelectorStatus};
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale};
 
-/// Stack the folder browser as a modal overlay on top of `base`.
+/// Stack the folder browser as a modal overlay on top of `base`, at transition `progress`
+/// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
 pub fn modal<'a>(
     base: Element<'a, Message>,
     selector: &'a Selector,
     scheme: ColorScheme,
+    progress: f32,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let on_surface_tint = icon_role(IconSurface::AppBarAction, r);
@@ -115,7 +118,5 @@ pub fn modal<'a>(
     .height(Length::Fixed(420.0))
     .style(style::dialog(r));
 
-    let backdrop = center(dialog).style(style::backdrop());
-
-    stack![base, opaque(backdrop)].into()
+    Modal::new(base, dialog, r).progress(progress).into()
 }
