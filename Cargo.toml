@@ -56,19 +56,30 @@ directories = "6.0.0"
 uuid = { version = "1.20.0", features = ["v4", "serde"] }
 
 # Debian packaging (`cargo deb`). Produces micold-ai-ide_<version>_<arch>.deb; the release
-# workflow builds it natively on amd64 and arm64 runners. Runtime deps are auto-detected
-# (dpkg-shlibdeps). Ships the GUI binary, the app icon, and a desktop entry.
+# workflow builds it natively on amd64 and arm64 runners. Installs a full freedesktop desktop
+# entry — so the app appears in the system application launcher (with its icon, `Terminal=false`,
+# Development/IDE category), not just as a CLI binary — plus hicolor icons at every standard size
+# and a scalable SVG. Runtime shared-lib deps are auto-detected (`$auto` / dpkg-shlibdeps);
+# desktop-file-utils + hicolor-icon-theme provide the dpkg triggers that refresh the desktop
+# database and icon cache on install so the launcher entry shows up immediately.
 [package.metadata.deb]
 maintainer = "Jaroslaw Herod <jaroslaw.herod@cumulocity.com>"
 copyright = "2026, Micold AI IDE contributors"
 extended-description = "A local-first, AI-assisted desktop IDE for managing Claude Code worktrees and sessions with an embedded terminal."
 section = "devel"
 priority = "optional"
+depends = "$auto, desktop-file-utils, hicolor-icon-theme"
 assets = [
     ["target/release/micold-ai-ide", "usr/bin/", "755"],
-    ["assets/icon/png/icon-256.png", "usr/share/icons/hicolor/256x256/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-128.png", "usr/share/icons/hicolor/128x128/apps/micold-ai-ide.png", "644"],
     ["packaging/micold-ai-ide.desktop", "usr/share/applications/micold-ai-ide.desktop", "644"],
+    ["assets/icon/png/icon-16.png", "usr/share/icons/hicolor/16x16/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-32.png", "usr/share/icons/hicolor/32x32/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-48.png", "usr/share/icons/hicolor/48x48/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-64.png", "usr/share/icons/hicolor/64x64/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-128.png", "usr/share/icons/hicolor/128x128/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-256.png", "usr/share/icons/hicolor/256x256/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-512.png", "usr/share/icons/hicolor/512x512/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/icon.svg", "usr/share/icons/hicolor/scalable/apps/micold-ai-ide.svg", "644"],
     ["README.md", "usr/share/doc/micold-ai-ide/README.md", "644"],
 ]
 

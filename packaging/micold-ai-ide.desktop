@@ -7,3 +7,6 @@ Icon=micold-ai-ide
 Terminal=false
 Categories=Development;IDE;
 Keywords=IDE;AI;claude;terminal;git;worktree;
+# Must match the window app-id/WM_CLASS set in main.rs so the running window groups under this
+# launcher entry (taskbar icon + "pin to taskbar").
+StartupWMClass=micold-ai-ide

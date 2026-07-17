@@ -113,13 +113,21 @@ impl Drop for App {
 /// `assets/icon/generate.py`). Embedded directly so no runtime image decoder is needed.
 const ICON_RGBA: &[u8] = include_bytes!("../assets/icon/icon-64.rgba");
 
-/// Window settings carrying the app icon (taskbar / titlebar).
+/// Window settings carrying the app icon (taskbar / titlebar). On Linux the window app-id /
+/// WM_CLASS is set to match `StartupWMClass` in the `.desktop` entry so the running window groups
+/// under the launcher icon.
 fn window_settings() -> iced::window::Settings {
     let icon = iced::window::icon::from_rgba(ICON_RGBA.to_vec(), 64, 64).ok();
-    iced::window::Settings {
+    #[allow(unused_mut)]
+    let mut settings = iced::window::Settings {
         icon,
         ..Default::default()
+    };
+    #[cfg(target_os = "linux")]
+    {
+        settings.platform_specific.application_id = "micold-ai-ide".to_string();
     }
+    settings
 }
 
 pub fn main() -> iced::Result {

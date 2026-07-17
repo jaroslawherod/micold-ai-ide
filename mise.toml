@@ -13,3 +13,12 @@ run = "cargo test --no-default-features --all-targets"
 [tasks.build]
 description = "Build the release GUI binary"
 run = "cargo build --release --features gui"
+
+[tasks.deb]
+description = "Build the Debian .deb package for the host arch (installs cargo-deb if missing)"
+run = """
+command -v cargo-deb >/dev/null 2>&1 || cargo install cargo-deb --locked
+cargo deb
+echo 'Built:'
+ls -1 target/debian/*.deb
+"""
