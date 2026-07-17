@@ -110,12 +110,14 @@ The embedded terminal renders `claude`'s output like a real terminal, not as fla
   ANSI colors use a fixed conventional palette so programs look as their authors intended.
 - **Full-screen interfaces** — `claude`'s interactive UI and other full-screen (alternate-screen)
   programs redraw cleanly, with the cursor shown at its current position.
-- **Focus** — click the terminal to give it focus (a colored border marks the focused terminal).
+- **Focus** — starting or selecting a session automatically focuses its terminal (a colored
+  border marks the focused terminal); you can also click the terminal to focus it.
 
 ## Interacting with the terminal
 
-Click the terminal to focus it (a colored border appears), then type — keystrokes stream
-straight to `claude` as you press them, exactly like a standalone terminal:
+Start a session, or select one in the sidebar, and its terminal is focused right away — just type,
+no click needed. (You can also click the terminal to focus it, e.g. after releasing focus.)
+Keystrokes stream straight to `claude` as you press them, exactly like a standalone terminal:
 
 - **Everything reaches `claude`**: printable characters, Enter, Backspace, Tab, arrow keys,
   Home/End/PageUp/PageDown, Insert/Delete, function keys, and control chords (Ctrl+C to
@@ -131,9 +133,10 @@ straight to `claude` as you press them, exactly like a standalone terminal:
   including Escape and shortcuts the app would otherwise use — goes to `claude`; when not focused,
   those keys drive the application instead. Input is only delivered while the session's process
   is running (otherwise keystrokes are ignored and the header shows the session status).
-- **Leaving focus**: press **Ctrl+Shift+E** (Cmd+Shift+E on macOS), click anywhere outside the
-  terminal, or use the **"⎋ release focus"** control in the terminal header. Releasing focus never
-  interrupts the running session.
+- **Leaving focus**: press **Ctrl+Shift+E** (Cmd+Shift+E on macOS), click on empty app chrome
+  outside the terminal, or use the **"⎋ release focus"** control in the terminal header. Releasing
+  focus never interrupts the running session. (Clicking another session in the sidebar switches to
+  it and focuses *its* terminal, rather than just leaving focus.)
 
 ## Sizing, resize & scrollback
 

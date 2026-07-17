@@ -155,7 +155,7 @@ header affordance → focus returns to the app, session keeps running; Esc while
 
 - [X] T023 [US3] Implement `route_key` in `src/app.rs` (or `src/keymap.rs`) to pass T022.
 - [X] T024 [US3] Gate app keyboard handling in `src/ui/mod.rs::subscription`: when `state.terminal_focused`, return `Subscription::none()` for key handling so app shortcuts/Esc are not consumed while the terminal owns the keyboard; otherwise keep the existing overlay Esc behavior (FR-009).
-- [X] T025 [US3] Implement focus release in `src/app.rs`/`src/ui`: handle `Message::TerminalFocusReleased` (reserved chord from `keymap`, click-outside via a surrounding `mouse_area`, and a header "release focus" affordance) → set `terminal_focused = false`; render a visible focus indicator/ring in `TerminalPane::draw`; `SessionSelected`/close/project-switch clear focus (FR-010, FR-011).
+- [X] T025 [US3] Implement focus release in `src/app.rs`/`src/ui`: handle `Message::TerminalFocusReleased` (reserved chord from `keymap`, click-outside via a surrounding `mouse_area`, and a header "release focus" affordance) → set `terminal_focused = false`; render a visible focus indicator/ring in `TerminalPane::draw`; ~~`SessionSelected`~~/close/project-switch clear focus (FR-010, FR-011). *(Bugfix BUG-001: the `SessionSelected` clause is superseded — selecting a session now auto-focuses its terminal, see T050. Session close and project switch still clear focus.)*
 - [X] T026 [US3] Enforce write-gating + isolation in `src/main.rs`: apply `TermAction::Write`/`Paste` only when the displayed session is `SessionLifecycle::Running` (drop otherwise, no buffering) and only to the displayed session's runtime; show the session status label in the pane header for non-Running states (FR-012, FR-012a).
 - [X] T027 [US3] Document focus behavior (how to focus, the reserved release chord, click-outside, that shortcuts propagate only when focused, non-Running input is discarded) in `docs/user-guide/worktrees-and-sessions.md` (Principle VII).
 
@@ -222,6 +222,33 @@ restart → value retained; out-of-range input → validation message, not saved
 - [X] T040 Regression checkpoint for feature 005 (FR-017): confirm the existing session lifecycle, isolation, persistence, and crash-restart tests (e.g. `tests/session_lifecycle.rs`, `tests/session_store.rs`) still pass unchanged, proving this feature altered only rendering/input.
 - [ ] T041 **(DEFERRED)** Verify build + full test suite pass on Linux, macOS, and Windows in CI (Principle VI), both `--no-default-features` and `--features gui` (SC-006). Linux verified locally; macOS + Windows postponed to CI.
 - [ ] T042 **(DEFERRED)** Run `specs/006-real-terminal-emulator/quickstart.md` end-to-end (all 9 manual steps + SC checks, incl. SC-008 responsiveness under flood). Postponed — needs a manual GUI run on a display.
+
+---
+
+## Phase 9: Bugfix BUG-001 — auto-focus the terminal on session select/start (P1)
+
+**Goal**: Selecting or starting a session focuses that session's terminal so the user can interact
+with the AI CLI immediately, with no intervening click. Preserve every other focus guarantee
+(release still works; `Running`-only write-gate; only the displayed session focused).
+
+**Independent Test**: Start a session → without clicking, type → input reaches `claude`. Select a
+different session in the sidebar → without clicking, type → input reaches that session's `claude`.
+Release focus (Ctrl+Shift+E / click outside) → keys drive the app again; the session keeps running.
+
+### Tests for BUG-001 (MANDATORY — Constitution Principle I) ⚠️
+
+> Write/adjust these FIRST and ensure they FAIL before implementation.
+
+- [X] T050 [BUG-001] Add failing pure tests in `tests/terminal_focus.rs` / `tests/app_state.rs` (`--no-default-features`): `State::default().terminal_focused == false` (unchanged base state); after `State::update(Message::SessionStarted(session))` the state is `terminal_focused == true`; after `State::update(Message::SessionSelected(id))` the state is `terminal_focused == true`; `Message::TerminalFocusReleased` still sets it back to `false`; `SessionCloseRequested`/project-switch leave/clear focus with no session displayed (contracts/focus-model.md BUG-001, FR-010/FR-010a).
+
+### Implementation for BUG-001
+
+- [X] T051 [BUG-001] In `src/app.rs`, set `self.terminal_focused = true` in the `Message::SessionStarted` and `Message::SessionSelected` reducer branches (auto-focus the newly displayed session); keep `SessionCloseRequested`/project-switch clearing focus. Make T050 pass (FR-010, FR-010a).
+- [X] T052 [BUG-001] Ensure the sidebar-click auto-focus wins over the click-outside release in the gui path: in `src/main.rs` (and/or `src/ui`), guarantee that when a `SessionSelected` originates from a sidebar click the resulting state is focused even though the same click publishes `Message::TerminalFocusReleased` (e.g. by ordering/precedence so `SessionSelected` is applied last, or by the sidebar not emitting a spurious release). Update the focus docs in `docs/user-guide/worktrees-and-sessions.md` (T027) to describe auto-focus-on-select/start and how to release focus (FR-010a, FR-011, Principle VII).
+
+**Checkpoint**: Selecting/starting a session focuses its terminal immediately; release still works; no key leakage to non-`Running` or background sessions.
+
+**Bugfix**: 2026-07-17 — BUG-001 Updated from bugfix patch. T025 `SessionSelected`-clears-focus clause superseded; added Phase 9 (T050–T052) for auto-focus on select/start.
 
 ---
 

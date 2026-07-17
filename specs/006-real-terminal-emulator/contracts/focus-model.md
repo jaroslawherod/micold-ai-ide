@@ -12,11 +12,23 @@ Governs FR-009, FR-010, FR-011, FR-012, FR-012a. The goal: keys reach the `claud
 
 | From → To | Trigger |
 |-----------|---------|
+| unfocused → focused | A session becomes the displayed session — `SessionStarted` or `SessionSelected` — auto-focuses that session's terminal (bugfix BUG-001, FR-010/FR-010a). |
 | unfocused → focused | Explicit user action: click on the terminal pane (`Message::TerminalFocused`). (FR-010) |
 | focused → unfocused | Click outside the pane; reserved chord `Ctrl+Shift+E` / `Cmd+Shift+E`; or the pane header "release focus" affordance (all → `Message::TerminalFocusReleased`). (FR-011) |
-| focused → unfocused | `SessionSelected`, session close, or project switch (re-focus is a fresh explicit action). |
+| focused → unfocused | Session close (the displayed session goes away). |
+| focused → unfocused | Project switch/open: focus does not carry across; the restored session (if any) is displayed unfocused until the user selects/starts it or clicks (BUG-001). |
 
 Focus release MUST NOT disrupt or terminate the running session (FR-011).
+
+**Bugfix BUG-001 — auto-focus on select/start.** The prior rule that `SessionSelected` *cleared*
+focus is superseded: selecting (or starting) a session now *focuses* that session's terminal so
+the user can type into the AI CLI immediately. Because clicking a sidebar item is a click *outside*
+the pane (which by FR-011 publishes `Message::TerminalFocusReleased`), the implementation MUST
+ensure the auto-focus of the newly-selected session wins over that click-outside release — e.g. the
+`SessionSelected`/`SessionStarted` reducer sets `terminal_focused = true` and this is applied after
+any release produced by the same click. The routing rule and the `Running`-only write-gate below
+are unchanged, so auto-focus never lets keys reach a non-`Running` or background process, and the
+release mechanisms still guarantee the user is never trapped.
 
 ## Routing rule (the gate)
 

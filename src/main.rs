@@ -449,6 +449,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Start a new session on a worktree: spawn `claude` and stream it (FR-010/012/013).
         Message::SessionStartRequested { worktree_dir } => {
+            let mut started = false;
             if let Some(repo) = app.core.workspace.active.clone() {
                 let cwd = repo.join(".claude/worktrees").join(&worktree_dir);
                 let session = Session::start_new(&worktree_dir);
@@ -462,13 +463,21 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         app.core.update(Message::SessionStarted(session));
                         app.core.update(Message::SessionRunning(id));
                         persist(&app.core);
+                        started = true;
                     }
                     Err(err) => {
                         app.core.worktree_error = Some(format!("Could not start session: {err}"));
                     }
                 }
             }
-            Task::none()
+            // BUG-001: auto-focus the newly-started session's terminal (FR-010/FR-010a), using the
+            // same after-the-batch follow-up as `SessionSelected` so it wins over any release
+            // published by the same click that started the session.
+            if started {
+                Task::done(Message::TerminalFocused)
+            } else {
+                Task::none()
+            }
         }
         // Selecting an Idle (restored) session resumes it via `claude --resume` (FR-023a).
         Message::SessionSelected(id) => {
@@ -484,7 +493,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     }
                 }
             }
-            Task::none()
+            // BUG-001: auto-focus the selected session's terminal (FR-010/FR-010a). Selecting from
+            // the sidebar is a click *outside* the pane, so a currently-focused pane also publishes
+            // `TerminalFocusReleased` for the same click. Re-assert focus via a follow-up message,
+            // which is delivered *after* the current event batch drains — so the focus wins
+            // regardless of the intra-batch order of `SessionSelected` vs `TerminalFocusReleased`.
+            Task::done(Message::TerminalFocused)
         }
         // Close a session: kill its process and drop the runtime handle (FR-015a).
         Message::SessionCloseRequested(id) => {

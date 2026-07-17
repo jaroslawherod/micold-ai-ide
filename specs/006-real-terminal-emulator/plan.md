@@ -124,3 +124,5 @@ docs/user-guide/
 ## Complexity Tracking
 
 *No constitution violations — no entries.*
+
+**Bugfix**: 2026-07-17 — BUG-001 Updated from bugfix patch. Auto-focus the displayed session's terminal on start/select: the `SessionSelected` and `SessionStarted` reducer branches in `src/app.rs` set `terminal_focused = true` (previously focus was only click-acquired and `SessionSelected` cleared it). The pure `route_key` gate, the `Running`-only write-gate (`src/main.rs`), and the release mechanisms (`Message::TerminalFocusReleased`) are unchanged. The auto-focus of the selected session must take precedence over the click-outside release produced by the same sidebar click (`contracts/focus-model.md`, BUG-001). Covered by pure tests in `tests/terminal_focus.rs` / `tests/app_state.rs`.

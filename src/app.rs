@@ -559,9 +559,15 @@ impl State {
                 }
                 self.expanded.insert(worktree_dir);
                 self.active_session = Some(id);
+                // BUG-001: making a session the displayed session auto-focuses its terminal so the
+                // user can interact with the AI CLI immediately (FR-010/FR-010a). The gui path
+                // re-asserts focus after any same-click release (see `src/main.rs`).
+                self.terminal_focused = true;
             }
             Message::SessionSelected(id) => {
                 self.active_session = Some(id);
+                // BUG-001: selecting a session auto-focuses its terminal (FR-010/FR-010a).
+                self.terminal_focused = true;
             }
             Message::SessionRunning(id) => {
                 if let Some(session) = self.session_mut(id) {
@@ -581,6 +587,8 @@ impl State {
                 }
                 if self.active_session == Some(id) {
                     self.active_session = None;
+                    // BUG-001 / focus-model.md: no session is displayed, so no terminal is focused.
+                    self.terminal_focused = false;
                 }
             }
             Message::TerminalTick => {}
@@ -738,6 +746,9 @@ impl State {
     pub fn restore_after_activation(&mut self, path: &Path) {
         let key = canonicalize_best_effort(path);
         self.active_session = self.restore_foreground(&key); // STEP 3
+        // BUG-001 / focus-model.md: switching (or opening) a project does not carry terminal focus
+        // across — re-focusing the restored session is a fresh explicit action (or a select/start).
+        self.terminal_focused = false;
         self.arm_notice(&key); // STEP 4
     }
 

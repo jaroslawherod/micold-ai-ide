@@ -99,3 +99,63 @@ fn context_menu_opens_at_a_point_and_dismisses() {
         "an outside click or a chosen item closes the context menu"
     );
 }
+
+// ---- Bugfix BUG-001: auto-focus the displayed session's terminal on select/start ----
+
+#[test]
+fn selecting_a_session_focuses_its_terminal() {
+    use micold_ai_ide::app::Message;
+    use micold_ai_ide::session::Session;
+    let mut s = State::default();
+    assert!(!s.terminal_focused, "precondition: starts unfocused");
+    let id = Session::start_new("feat-x").id;
+    s.update(Message::SessionSelected(id));
+    assert!(
+        s.terminal_focused,
+        "selecting a session must auto-focus its terminal (BUG-001, FR-010/FR-010a)"
+    );
+    assert_eq!(s.active_session, Some(id));
+}
+
+#[test]
+fn starting_a_session_focuses_its_terminal() {
+    use micold_ai_ide::app::Message;
+    use micold_ai_ide::session::Session;
+    let mut s = State::default();
+    s.update(Message::SessionStarted(Session::start_new("feat-x")));
+    assert!(
+        s.terminal_focused,
+        "starting a session must auto-focus its terminal (BUG-001, FR-010/FR-010a)"
+    );
+}
+
+#[test]
+fn releasing_focus_after_auto_focus_still_works() {
+    use micold_ai_ide::app::Message;
+    use micold_ai_ide::session::Session;
+    let mut s = State::default();
+    s.update(Message::SessionSelected(Session::start_new("feat-x").id));
+    assert!(s.terminal_focused);
+    s.update(Message::TerminalFocusReleased);
+    assert!(
+        !s.terminal_focused,
+        "release must still return focus to the app after auto-focus (FR-011)"
+    );
+}
+
+#[test]
+fn closing_the_displayed_session_clears_focus() {
+    use micold_ai_ide::app::Message;
+    use micold_ai_ide::session::Session;
+    let mut s = State::default();
+    let session = Session::start_new("feat-x");
+    let id = session.id;
+    s.update(Message::SessionStarted(session));
+    assert!(s.terminal_focused);
+    s.update(Message::SessionCloseRequested(id));
+    assert!(
+        !s.terminal_focused,
+        "closing the displayed session leaves no terminal to focus (focus-model.md BUG-001)"
+    );
+    assert!(s.active_session.is_none());
+}
