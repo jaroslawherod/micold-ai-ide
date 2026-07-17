@@ -38,6 +38,14 @@ const OS_THEME_POLL: Duration = Duration::from_millis(500);
 /// How often live terminals are polled for streamed output + process-exit detection.
 const TERMINAL_POLL: Duration = Duration::from_millis(120);
 
+/// How often live terminals are polled while the window is unfocused (idle-CPU fix). Coarser
+/// than [`TERMINAL_POLL`] rather than fully suspended: a fully-suspended poll would also stall
+/// crash detection/auto-restart and title-sync indefinitely, and let `RuntimeTerminal`'s PTY
+/// output buffer grow unbounded for as long as the window stays backgrounded (code review
+/// findings). This still cuts the tick rate — and its full-`view()` rebuild cost — by ~17x
+/// while backgrounded.
+const BACKGROUND_TERMINAL_POLL: Duration = Duration::from_secs(2);
+
 /// The animation clock tick interval (~60fps).
 const ANIM_TICK: Duration = Duration::from_millis(16);
 
@@ -808,8 +816,8 @@ fn subscription(app: &App) -> Subscription<Message> {
     if app.window_focused {
         subs.push(os_theme_poll());
     }
-    if should_poll_terminals(!app.terminals.is_empty(), app.window_focused) {
-        subs.push(every(TERMINAL_POLL).map(|_| Message::TerminalTick));
+    if let Some(interval) = terminal_poll_interval(!app.terminals.is_empty(), app.window_focused) {
+        subs.push(every(interval).map(|_| Message::TerminalTick));
     }
     // Run the animation clock only while something is actually animating (FR-014).
     if motion_animating(app) {
@@ -818,11 +826,19 @@ fn subscription(app: &App) -> Subscription<Message> {
     Subscription::batch(subs)
 }
 
-/// Whether the terminal poll is worth running this tick: only while at least one terminal
-/// tab is open, and only while the window has focus — a backgrounded window has nothing
-/// visibly changing, so the tick's full-`view()` rebuild cost buys nothing (idle-CPU fix).
-fn should_poll_terminals(has_terminals: bool, window_focused: bool) -> bool {
-    has_terminals && window_focused
+/// The terminal poll interval for this tick, or `None` if there are no terminals to poll:
+/// [`TERMINAL_POLL`] while the window has focus (redraw responsiveness matters), the coarser
+/// [`BACKGROUND_TERMINAL_POLL`] while unfocused (still detects crashes, keeps titles in sync,
+/// and drains the PTY buffer — just far less often than the foreground cadence).
+fn terminal_poll_interval(has_terminals: bool, window_focused: bool) -> Option<Duration> {
+    if !has_terminals {
+        return None;
+    }
+    Some(if window_focused {
+        TERMINAL_POLL
+    } else {
+        BACKGROUND_TERMINAL_POLL
+    })
 }
 
 /// Subscribes to raw OS window events and keeps only focus changes, translating them into
@@ -1067,11 +1083,18 @@ mod tests {
     }
 
     #[test]
-    fn should_poll_terminals_requires_open_terminals_and_focus() {
-        assert!(should_poll_terminals(true, true));
-        assert!(!should_poll_terminals(false, true), "no terminals open");
-        assert!(!should_poll_terminals(true, false), "window not focused");
-        assert!(!should_poll_terminals(false, false));
+    fn terminal_poll_interval_is_none_without_open_terminals() {
+        assert_eq!(terminal_poll_interval(false, true), None);
+        assert_eq!(terminal_poll_interval(false, false), None);
+    }
+
+    #[test]
+    fn terminal_poll_interval_coarsens_while_unfocused_but_keeps_polling() {
+        assert_eq!(terminal_poll_interval(true, true), Some(TERMINAL_POLL));
+        assert_eq!(
+            terminal_poll_interval(true, false),
+            Some(BACKGROUND_TERMINAL_POLL)
+        );
     }
 
     fn dummy_status() -> iced::event::Status {
