@@ -19,6 +19,13 @@ fn alpha(c: Color, a: f32) -> Color {
     Color { a, ..c }
 }
 
+/// A low-contrast divider color (thin 1px separator lines, e.g. under a toolbar or beside the
+/// sidebar): the `outline` role softened with reduced alpha so it reads as a subtle line, not
+/// a hard rule.
+pub fn separator(r: Roles) -> Color {
+    alpha(color(r.outline), 0.4)
+}
+
 /// Linearly blend `over` on top of `base` by factor `t` (0 = base, 1 = over).
 fn blend(base: Color, over: Color, t: f32) -> Color {
     Color {
@@ -105,7 +112,9 @@ pub fn sidebar_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-/// The Material toolbar surface — flat `surface` fill, **no border** (Angular-Material style).
+/// The Material toolbar surface — flat `surface` fill, **no border** (the toolbar's bottom
+/// border is a separate 1px line composed alongside this surface, same idiom as
+/// [`sidebar_surface`]'s resize-handle boundary).
 pub fn toolbar_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
     move |_theme| container::Style {
         background: Some(Background::Color(color(r.surface))),

@@ -1,12 +1,12 @@
 //! `Toolbar` — a reusable Material toolbar primitive (Constitution Principle VIII).
 //!
-//! A flat `surface` bar with **no border** (Angular-Material style): a title on the leading
-//! edge and a set of action elements pushed to the trailing edge. Reused by the app shell;
-//! any future top bar should reuse it rather than fork a bespoke bar.
+//! A flat `surface` bar with a thin bottom border separating it from the content below: a
+//! title on the leading edge and a set of action elements pushed to the trailing edge. Reused
+//! by the app shell; any future top bar should reuse it rather than fork a bespoke bar.
 
 use crate::ui::style;
-use iced::widget::{container, row, text, Space};
-use iced::{Alignment, Element, Length};
+use iced::widget::{column, container, row, text, Space};
+use iced::{Alignment, Background, Element, Length};
 use micold_ai_ide::tokens::{spacing, type_scale, Roles};
 
 /// A toolbar with a `title` on the leading edge and trailing action elements (Principle VIII
@@ -55,13 +55,24 @@ impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
         }
 
         // Compact bar: tight vertical padding (`XS`) with comfortable horizontal padding (`SM`).
-        container(bar)
+        let bar = container(bar)
             .width(Length::Fill)
             .padding(iced::Padding::from([
                 spacing::XS as f32,
                 spacing::SM as f32,
             ]))
-            .style(style::toolbar_surface(t.roles))
-            .into()
+            .style(style::toolbar_surface(t.roles));
+
+        // A thin bottom border separating the toolbar from the content below (a `Container`
+        // border applies to all four sides, so this is a dedicated 1px line rather than the
+        // surface style's own border).
+        let separator = container(Space::new(Length::Fill, Length::Fixed(1.0))).style(
+            move |_theme: &iced::Theme| iced::widget::container::Style {
+                background: Some(Background::Color(style::separator(t.roles))),
+                ..Default::default()
+            },
+        );
+
+        column![bar, separator].into()
     }
 }

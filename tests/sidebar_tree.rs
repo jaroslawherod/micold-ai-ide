@@ -218,6 +218,22 @@ fn type_filter_selects_only_that_type() {
 }
 
 #[test]
+fn filtered_tree_is_unaffected_by_the_filter_panels_open_state() {
+    // Feature 009 FR-007/FR-008: showing/hiding the filter panel is purely a display change and
+    // must never affect which worktrees are considered filtered.
+    let mut state = filtered_state();
+    state.update(Message::SidebarFilterToggled(TagFilter::Type(
+        ConventionalType::Fix,
+    )));
+    let expected = dirs(&state.filtered_worktree_tree());
+
+    state.update(Message::SidebarFilterMenuToggled); // open
+    assert_eq!(dirs(&state.filtered_worktree_tree()), expected);
+    state.update(Message::SidebarFilterMenuToggled); // close
+    assert_eq!(dirs(&state.filtered_worktree_tree()), expected);
+}
+
+#[test]
 fn filters_combine_with_or() {
     let mut state = filtered_state();
     state.update(Message::SidebarFilterToggled(TagFilter::Type(

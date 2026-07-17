@@ -135,7 +135,7 @@ fn main_content_key(core: &State) -> String {
 ///
 /// `MotionKey::Overlay` is intentionally absent: it is driven by the overlay open/close
 /// lifecycle in `update`, not by steady-state.
-fn motion_targets(app: &App) -> [(MotionKey, f32, Duration); 4] {
+fn motion_targets(app: &App) -> [(MotionKey, f32, Duration); 5] {
     [
         (
             MotionKey::Menu,
@@ -152,6 +152,15 @@ fn motion_targets(app: &App) -> [(MotionKey, f32, Duration); 4] {
             MotionKey::HandleHover,
             if app.handle_hovered { 1.0 } else { 0.0 },
             HANDLE_HOVER,
+        ),
+        (
+            MotionKey::SidebarFilter,
+            if app.core.sidebar_filter_open {
+                1.0
+            } else {
+                0.0
+            },
+            MENU_FADE,
         ),
     ]
 }
@@ -257,6 +266,7 @@ fn boot() -> (App, Task<Message>) {
     motion.set(MotionKey::Main, 1.0);
     motion.set(MotionKey::HandleHover, 0.0);
     motion.set(MotionKey::Overlay, 0.0);
+    motion.set(MotionKey::SidebarFilter, 0.0);
     let main_key = main_content_key(&core);
     (
         App {
@@ -429,7 +439,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::ProjectSelectorOpened => {
             let dir = start_dir();
             app.core.selector = Some(Selector::open_at(dir.clone()));
-            app.core.overlay = Overlay::ProjectSelector;
+            app.core.open_overlay(Overlay::ProjectSelector);
             scan_task(dir)
         }
         Message::SelectorNavigatedInto(_) | Message::SelectorNavigatedUp => {

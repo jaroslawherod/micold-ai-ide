@@ -1,4 +1,4 @@
-# Font Provenance: Material Symbols Outlined (curated subset)
+# Font Provenance: Material Symbols Outlined (full coverage)
 
 **File**: `MaterialSymbolsOutlined.ttf`
 
@@ -11,17 +11,22 @@
 
 ## How this file was produced
 
-The shipped `.ttf` is a **static instance** of the upstream variable font, **subset** to only
-the glyphs this application uses (research R2/R5). Reproduce with `fonttools`:
+The shipped `.ttf` is a **static instance** of the upstream variable font, with **full glyph
+coverage** — every codepoint the upstream font maps, not a curated subset (feature 009,
+research R6). Earlier revisions of this file subset to only the glyphs the app used at the
+time; that was replaced with full coverage so adding a new `Icon` variant never again requires
+regenerating this binary — only `src/icons.rs` + `tests/icons.rs` change. Reproduce with
+`fonttools`:
 
 ```sh
-# 1. Instantiate a static instance at the default axis values
+# 1. Instantiate a static instance at the pinned axis values
 fonttools varLib.instancer "MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].ttf" \
   wght=400 FILL=0 GRAD=0 opsz=24 -o _static.ttf
 
-# 2. Subset to the curated codepoints
+# 2. "Subset" to every Unicode codepoint the font already maps (drops the now-unused variable
+#    axis tables — gvar/avar/fvar/HVAR — without dropping any glyph).
 pyftsubset _static.ttf \
-  --unicodes=e5d8,f0be,eaf5,f097,f8b6,e2c8,e8fd,e88e,e145,e97a,e5d4,e518,e51c,e1ab,f717,f716,e8b8,e872,e14d \
+  --unicodes='*' \
   --output-file=MaterialSymbolsOutlined.ttf --name-IDs='*' --recalc-bounds
 ```
 
@@ -53,14 +58,17 @@ pyftsubset _static.ttf \
 | `Settings`     | `settings`             | `E8B8`         |
 | `Delete`       | `delete`               | `E872`         |
 | `Copy`         | `content_copy`         | `E14D`         |
+| `Filter`       | `filter_list`          | `E152`         |
 
-These codepoints are taken from the upstream `.codepoints` manifest and are pinned in
-`src/icons.rs`; the mapping is regression-locked by `tests/icons.rs` and glyph presence is
-verified by `tests/icons_font.rs`.
+This table documents which of the font's (now much larger) set of glyphs the app actually
+*uses* — it is no longer the list of what the shipped file *contains* (that's every upstream
+codepoint). Used codepoints are pinned in `src/icons.rs`; the mapping is regression-locked by
+`tests/icons.rs` and glyph presence is verified by `tests/icons_font.rs`.
 
 ## Adding a new icon
 
 1. Look up the glyph's codepoint in the upstream `.codepoints` manifest.
-2. Re-run the subset step above with the codepoint added to `--unicodes`.
-3. Add the `Icon` variant + codepoint in `src/icons.rs` and extend the mapping table above.
-4. Extend the `tests/icons.rs` mapping assertion.
+2. Add the `Icon` variant + codepoint in `src/icons.rs` and extend the mapping table above.
+3. Extend the `tests/icons.rs` mapping assertion.
+
+The font already contains every upstream glyph, so no regeneration step is needed here.

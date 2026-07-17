@@ -58,6 +58,8 @@ pub enum MotionKey {
     HandleHover,
     /// The currently open/closing modal overlay's fade (0 = hidden, 1 = shown).
     Overlay,
+    /// Sidebar tag-filter panel fade (feature 009).
+    SidebarFilter,
 }
 
 /// Animation key for a worktree row's hover-revealed actions fade (feature 008). Each worktree
@@ -103,7 +105,7 @@ pub fn view<'a>(
             } else {
                 row![
                     material::slide(
-                        sidebar::view(state, scheme, row_fx),
+                        sidebar::view(state, scheme, row_fx, motion.get(MotionKey::SidebarFilter)),
                         motion.get(MotionKey::Sidebar)
                     ),
                     sidebar::handle(scheme, motion.get(MotionKey::HandleHover))
@@ -300,6 +302,14 @@ fn dismissing_modal<'a>(
 pub fn subscription(state: &State) -> Subscription<Message> {
     if state.terminal_focused {
         return Subscription::none();
+    }
+    // The sidebar filter panel (feature 009) is a lightweight popover, not a modal `Overlay`,
+    // so it's checked ahead of the `Overlay` match below (mirrors `on_escape`'s priority).
+    if state.overlay == Overlay::None && state.sidebar_filter_open {
+        return iced::keyboard::on_key_press(|key, _modifiers| {
+            use iced::keyboard::{key::Named, Key};
+            matches!(key, Key::Named(Named::Escape)).then_some(Message::SidebarFilterMenuToggled)
+        });
     }
     // `on_key_press` takes a non-capturing `fn`, so each overlay supplies its own.
     match state.overlay {

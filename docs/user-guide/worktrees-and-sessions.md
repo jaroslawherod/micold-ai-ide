@@ -44,7 +44,8 @@ themes.
 
 ### Filtering worktrees by tag
 
-When you have many worktrees, use the filter chips above the list to narrow it down:
+Tap the **filter** button in the sidebar header to reveal the tag-filter panel — it's hidden
+by default so the list has the full sidebar to itself until you need it:
 
 - Tap a **type chip** (e.g. `fix`) to show only worktrees of that type.
 - Tap **issue** to show only worktrees that have a Jira key.
@@ -53,7 +54,10 @@ When you have many worktrees, use the filter chips above the list to narrow it d
 - **Clear filters** restores the full list in one tap. If a filter matches nothing, an empty
   message with a clear action is shown.
 
-Only chips for tags actually present in your worktrees are offered.
+Only chips for tags actually present in your worktrees are offered. Close the panel by
+clicking outside it, pressing `Esc`, or tapping the filter button again — any active filter
+stays applied either way. Whenever a filter is active, the filter button itself stays tinted
+so you can tell filtering is on even with the panel closed.
 
 ### Resizing and hiding the sidebar
 
