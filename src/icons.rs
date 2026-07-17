@@ -51,6 +51,8 @@ pub enum Icon {
     Settings,
     /// Delete / trash action (feature 008).
     Delete,
+    /// Copy text (e.g. a worktree name) to the system clipboard.
+    Copy,
 }
 
 impl Icon {
@@ -74,6 +76,7 @@ impl Icon {
         Icon::ShowSidebar,
         Icon::Settings,
         Icon::Delete,
+        Icon::Copy,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -98,6 +101,7 @@ impl Icon {
             Icon::ShowSidebar => '\u{f716}',
             Icon::Settings => '\u{e8b8}',
             Icon::Delete => '\u{e872}',
+            Icon::Copy => '\u{e14d}',
         }
     }
 }

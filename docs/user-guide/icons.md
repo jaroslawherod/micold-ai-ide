@@ -17,6 +17,7 @@ status markers.
 | Check circle | This is the active project | Known-projects list |
 | Error | This project's folder is currently unavailable | Known-projects list |
 | Up arrow | Go up one folder | Project selector |
+| Copy | Copy a worktree's name to the clipboard | Worktree right-click menu (**Copy name**) |
 
 Every icon follows the active theme: it is tinted to match the text around it and is legible
 in both the light and the dark theme. When you switch your system between light and dark, the

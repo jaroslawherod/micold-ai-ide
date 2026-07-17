@@ -85,6 +85,18 @@ fn worktree_menu_toggles_replaces_and_dismisses() {
     assert_eq!(state.worktree_menu_open, None);
 }
 
+// --- Cross-app clipboard copy (worktree "Copy name" context-menu action) ---
+
+#[test]
+fn text_copy_requested_is_a_no_op_in_the_pure_reducer() {
+    // The binary performs the actual clipboard write; the reducer has no state to update.
+    let mut state = State::default();
+    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
+    let before = state.clone();
+    state.update(Message::TextCopyRequested("Login page".to_string()));
+    assert_eq!(state, before);
+}
+
 // --- Feature 008 US3: worktree rename draft lifecycle ---
 
 #[test]

@@ -297,6 +297,9 @@ pub enum Message {
     WorktreeHovered(String),
     /// The pointer left a worktree row (feature 008), by `dir_name`; hides its row actions.
     WorktreeUnhovered(String),
+    /// Copy arbitrary displayed text (e.g. a worktree name) to the system clipboard. The binary
+    /// performs the actual clipboard write; the reducer has no state to update.
+    TextCopyRequested(String),
     /// Open the add-worktree form (FR-005).
     AddWorktreeOpened,
     /// The form's type selection changed.
@@ -869,6 +872,7 @@ impl State {
             | Message::TerminalResized { .. }
             | Message::TerminalCopyRequested
             | Message::TerminalPasteRequested
+            | Message::TextCopyRequested(_)
             | Message::SidebarHandleHovered(_) => {}
         }
     }

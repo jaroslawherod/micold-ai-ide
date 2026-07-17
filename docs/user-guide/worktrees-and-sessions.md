@@ -89,6 +89,9 @@ fails partway, the app rolls back so no half-created branch or directory is left
 
 Right-click a worktree in the sidebar to open its context menu:
 
+- **Copy name** — copies the worktree's displayed name to the system clipboard, so it can be
+  pasted into any other application (browser, chat, terminal, etc.). Useful because the sidebar
+  label itself isn't a text field you can select from directly.
 - **Rename** — changes only the name shown for the worktree in the sidebar. It does **not**
   rename the folder on disk or the git branch, and the type/issue tags are unaffected (they
   keep deriving from the branch). The custom name is remembered across app restarts. Clearing

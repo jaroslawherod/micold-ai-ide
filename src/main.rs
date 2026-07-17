@@ -672,6 +672,14 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             iced::clipboard::read()
                 .map(|c| Message::TerminalBytes(c.unwrap_or_default().into_bytes()))
         }
+        // Copy arbitrary displayed text (e.g. a worktree name) to the system clipboard, so
+        // labels the app itself doesn't make selectable are still reachable cross-application.
+        // Also closes the worktree context menu, mirroring its other actions (idempotent if
+        // the text wasn't copied from that menu).
+        Message::TextCopyRequested(text) => {
+            app.core.update(Message::WorktreeMenuDismissed);
+            iced::clipboard::write(text)
+        }
         // Poll terminals: feed streamed bytes into the VT emulators, then detect unexpected
         // exits and apply the crash-restart policy (FR-012, FR-022).
         // Open Settings: let the reducer show the overlay, then seed the draft with the current

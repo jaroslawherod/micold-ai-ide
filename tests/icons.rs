@@ -26,6 +26,7 @@ fn expected(icon: Icon) -> char {
         Icon::ShowSidebar => '\u{f716}',
         Icon::Settings => '\u{e8b8}',
         Icon::Delete => '\u{e872}',
+        Icon::Copy => '\u{e14d}',
     }
 }
 
@@ -43,8 +44,8 @@ fn glyph_maps_every_variant_to_its_pinned_codepoint() {
 #[test]
 fn all_covers_every_variant_without_duplicates() {
     // Curated icon set (research R5 / PROVENANCE.md); +1 for Settings (feature 006),
-    // +1 for Delete (feature 008).
-    assert_eq!(Icon::ALL.len(), 18, "curated set size");
+    // +1 for Delete (feature 008), +1 for Copy (cross-app clipboard).
+    assert_eq!(Icon::ALL.len(), 19, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

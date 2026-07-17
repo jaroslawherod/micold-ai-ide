@@ -176,7 +176,7 @@ pub fn view<'a>(
     let base = match &state.worktree_menu_open {
         Some(dir) => material::MenuOverlay::new(
             base,
-            worktree_menu_items(dir),
+            worktree_menu_items(dir, &state.worktree_display_name(dir)),
             Message::WorktreeMenuDismissed,
             roles,
         )
@@ -237,9 +237,15 @@ pub fn view<'a>(
     }
 }
 
-/// The items in a worktree's right-click context menu (feature 008, FR-013).
-fn worktree_menu_items(dir: &str) -> Vec<material::MenuItem<Message>> {
+/// The items in a worktree's right-click context menu (feature 008, FR-013; "Copy name" added
+/// for cross-application clipboard access to labels the app doesn't render as selectable text).
+fn worktree_menu_items(dir: &str, display_name: &str) -> Vec<material::MenuItem<Message>> {
     vec![
+        material::MenuItem::new(
+            Icon::Copy,
+            "Copy name",
+            Message::TextCopyRequested(display_name.to_string()),
+        ),
         material::MenuItem::new(
             Icon::Rename,
             "Rename",
