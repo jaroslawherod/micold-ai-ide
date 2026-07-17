@@ -10,12 +10,15 @@
 //! `FolderChosen`) therefore carry no reducer effect here — they are documented no-ops
 //! handled entirely in `src/main.rs`.
 
-use crate::naming::{derive, ConventionalType, DerivedNames, NamingError, WorktreeNaming};
+use crate::naming::{
+    derive, display_name, parse_tags, ConventionalType, DerivedNames, NamingError, Tag,
+    WorktreeNaming,
+};
 use crate::project::{canonicalize_best_effort, Availability, FolderEntry, RenameError};
 use crate::selector::Selector;
 use crate::session::{Session, SessionId};
 use crate::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
-use crate::worktree::Worktree;
+use crate::worktree::{Worktree, WorktreeStatus};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -66,6 +69,12 @@ pub enum Overlay {
     AddWorktree,
     /// The Settings form is shown as a modal overlay (feature 006, FR-019).
     Settings,
+    /// The confirm-delete dialog for a worktree is shown (feature 008, FR-018). The target
+    /// worktree is held in [`State::worktree_delete_target`].
+    ConfirmWorktreeDelete,
+    /// The rename-worktree dialog is shown (feature 008, FR-013/FR-014). The in-progress edit
+    /// is held in [`State::worktree_rename_draft`].
+    RenameWorktree,
 }
 
 /// In-progress add-worktree form state, present only while the form overlay is open (FR-005).
@@ -118,10 +127,42 @@ pub struct SwitcherEntry {
 pub struct WorktreeNode {
     /// The worktree itself.
     pub worktree: Worktree,
+    /// The human-friendly display name shown on the first line (FR-001, FR-017): the custom
+    /// rename override if set, else derived from `dir_name`.
+    pub display_name: String,
+    /// Color-coded tags shown beneath the name (FR-001..003, FR-011): the conventional type,
+    /// an optional Jira issue, and a status tag for non-`Valid` worktrees.
+    pub tags: Vec<Tag>,
     /// Whether its session sub-items are shown.
     pub expanded: bool,
     /// The sessions hosted by this worktree (empty unless expanded is irrelevant to data).
     pub sessions: Vec<Session>,
+}
+
+/// A tag filter the sidebar can apply (feature 008, FR-024). Typed so an impossible filter is
+/// unrepresentable (Principle V); ordered so it lives in a `BTreeSet`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TagFilter {
+    /// Match worktrees of a specific conventional type.
+    Type(ConventionalType),
+    /// Match worktrees that embed a Jira/issue key.
+    HasIssue,
+    /// Match worktrees whose name does not follow the convention (no type tag).
+    Untyped,
+}
+
+/// Whether a worktree with `tags` passes the active `filters` (feature 008, FR-025). An empty
+/// filter set shows everything; otherwise a worktree matches if it satisfies ANY active filter
+/// (logical OR).
+pub fn matches_filters(tags: &[Tag], filters: &BTreeSet<TagFilter>) -> bool {
+    if filters.is_empty() {
+        return true;
+    }
+    filters.iter().any(|f| match f {
+        TagFilter::Type(t) => tags.iter().any(|tag| matches!(tag, Tag::Type(x) if x == t)),
+        TagFilter::HasIssue => tags.iter().any(|tag| matches!(tag, Tag::Issue(_))),
+        TagFilter::Untyped => !tags.iter().any(|tag| matches!(tag, Tag::Type(_))),
+    })
 }
 
 /// The kind of text selection to begin (feature 006, FR-013): single click = character range,
@@ -154,6 +195,19 @@ pub struct RenameDraft {
     /// The current editable text in the dialog.
     pub text: String,
     /// The last validation error, if the user tried to confirm an invalid name (FR-020).
+    pub error: Option<RenameError>,
+}
+
+/// In-progress worktree-rename state, present only while the worktree-rename dialog is open
+/// (feature 008, FR-013/FR-014). Mirrors [`RenameDraft`] but is keyed by worktree `dir_name`
+/// and only ever changes the displayed name — never the folder or branch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorktreeRenameDraft {
+    /// The worktree being renamed, by `dir_name`.
+    pub dir_name: String,
+    /// The current editable display name.
+    pub text: String,
+    /// The last validation error, if the user tried to confirm an invalid name.
     pub error: Option<RenameError>,
 }
 
@@ -213,6 +267,36 @@ pub enum Message {
     WorktreesLoaded(Vec<Worktree>),
     /// Expand/collapse a worktree's session sub-items (FR-003), by `dir_name`.
     WorktreeExpansionToggled(String),
+
+    // ---- Feature 008: worktree sidebar refinement ----
+    /// Open (or close, if already open) a worktree's right-click context menu, by `dir_name`.
+    WorktreeMenuToggled(String),
+    /// Dismiss the worktree context menu (outside click, or after an action is chosen).
+    WorktreeMenuDismissed,
+    /// Request deletion of a worktree; opens the confirm dialog (FR-018), by `dir_name`.
+    WorktreeDeleteRequested(String),
+    /// Confirm deletion. The binary terminates the worktree's sessions, removes its git
+    /// worktree + branch and directory, then persists (FR-020); the reducer drops the records.
+    WorktreeDeleteConfirmed,
+    /// Dismiss the delete confirmation without removing anything (FR-021).
+    WorktreeDeleteCancelled,
+    /// Begin renaming a worktree's displayed name; opens the rename dialog (FR-013), by `dir_name`.
+    WorktreeRenameStarted(String),
+    /// The worktree-rename dialog's text changed.
+    WorktreeRenameTextChanged(String),
+    /// Confirm the worktree rename. Applies the display-name override if valid (FR-014); the
+    /// binary then persists (FR-015).
+    WorktreeRenameConfirmed,
+    /// Dismiss the worktree-rename dialog without applying.
+    WorktreeRenameCancelled,
+    /// Toggle a tag filter on/off in the sidebar (FR-024).
+    SidebarFilterToggled(TagFilter),
+    /// Clear all active tag filters, restoring the full list (FR-026).
+    SidebarFiltersCleared,
+    /// The pointer entered a worktree row (feature 008), by `dir_name`; reveals its row actions.
+    WorktreeHovered(String),
+    /// The pointer left a worktree row (feature 008), by `dir_name`; hides its row actions.
+    WorktreeUnhovered(String),
     /// Open the add-worktree form (FR-005).
     AddWorktreeOpened,
     /// The form's type selection changed.
@@ -354,17 +438,32 @@ pub struct State {
     /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
     /// The session that was in the foreground for each project, remembered so returning to a
-    /// project restores it (feature 008, FR-003). In-memory only; not persisted (research R2).
+    /// project restores it. In-memory only; not persisted (research R2).
     pub foreground_by_project: BTreeMap<PathBuf, SessionId>,
     /// Sessions that were auto-restarted while their project was inactive, pending a return
-    /// notification (feature 008, FR-011 / SC-007). Cleared when the user returns to the owner.
+    /// notification. Cleared when the user returns to the owner.
     pub restarted_while_inactive: BTreeSet<SessionId>,
-    /// A transient banner shown on return when a background restart occurred (feature 008,
-    /// SC-007). Presentation-only; cleared by [`Message::NoticeDismissed`] or the next switch.
+    /// A transient banner shown on return when a background restart occurred.
+    /// Presentation-only; cleared by [`Message::NoticeDismissed`] or the next switch.
     pub notice: Option<String>,
-    /// Whether the top-bar project switcher panel is open (feature 008, FR-004). Mutually
-    /// exclusive with `help_menu_open`.
+    /// Whether the top-bar project switcher panel is open. Mutually exclusive with
+    /// `help_menu_open`.
     pub project_switcher_open: bool,
+    /// The worktree whose right-click context menu is open, by `dir_name` (feature 008). At
+    /// most one is open at a time; `None` means no menu is showing.
+    pub worktree_menu_open: Option<String>,
+    /// The worktree pending deletion (its `dir_name`), shown in the confirm dialog (feature
+    /// 008, FR-018/FR-019). Present only while [`Overlay::ConfirmWorktreeDelete`] is shown.
+    pub worktree_delete_target: Option<String>,
+    /// The in-progress worktree rename, present only while [`Overlay::RenameWorktree`] is shown
+    /// (feature 008, FR-013/FR-014).
+    pub worktree_rename_draft: Option<WorktreeRenameDraft>,
+    /// Active sidebar tag filters (feature 008, FR-024). Empty ⇒ all worktrees shown. Multiple
+    /// filters combine with OR (FR-025). Transient — not persisted.
+    pub sidebar_filters: BTreeSet<TagFilter>,
+    /// The worktree row the pointer is currently over, by `dir_name` (feature 008). Drives the
+    /// hover-revealed row actions (add-session + delete). Transient.
+    pub hovered_worktree: Option<String>,
 }
 
 impl State {
@@ -492,6 +591,113 @@ impl State {
             Message::WorktreeExpansionToggled(dir) => {
                 if !self.expanded.remove(&dir) {
                     self.expanded.insert(dir);
+                }
+            }
+            Message::WorktreeMenuToggled(dir) => {
+                // Toggle: same worktree closes; a different one replaces (only one open).
+                self.worktree_menu_open = if self.worktree_menu_open.as_deref() == Some(dir.as_str())
+                {
+                    None
+                } else {
+                    Some(dir)
+                };
+            }
+            Message::WorktreeMenuDismissed => {
+                self.worktree_menu_open = None;
+            }
+            Message::WorktreeDeleteRequested(dir) => {
+                self.worktree_menu_open = None;
+                self.worktree_delete_target = Some(dir);
+                self.overlay = Overlay::ConfirmWorktreeDelete;
+            }
+            Message::WorktreeDeleteConfirmed => {
+                // Drop the worktree's session records and clear the active session if it was
+                // one of them (the binary has already terminated the processes + git/fs).
+                if let Some(dir) = self.worktree_delete_target.clone() {
+                    if let Some(path) = self.workspace.active.clone() {
+                        if let Some(list) = self.workspace.sessions.get_mut(&path) {
+                            let removed: Vec<SessionId> = list
+                                .iter()
+                                .filter(|s| s.worktree_dir == dir)
+                                .map(|s| s.id)
+                                .collect();
+                            list.retain(|s| s.worktree_dir != dir);
+                            if self
+                                .active_session
+                                .is_some_and(|a| removed.contains(&a))
+                            {
+                                self.active_session = None;
+                            }
+                        }
+                    }
+                    self.worktrees.retain(|w| w.dir_name != dir);
+                    self.expanded.remove(&dir);
+                    // Drop any display-name override so it does not linger (FR-015 cleanup).
+                    self.workspace.clear_worktree_name(&dir);
+                }
+                self.worktree_delete_target = None;
+                self.overlay = Overlay::None;
+            }
+            Message::WorktreeDeleteCancelled => {
+                self.worktree_delete_target = None;
+                self.overlay = Overlay::None;
+            }
+            Message::WorktreeRenameStarted(dir) => {
+                let text = self.worktree_display_name(&dir);
+                self.worktree_menu_open = None;
+                self.worktree_rename_draft = Some(WorktreeRenameDraft {
+                    dir_name: dir,
+                    text,
+                    error: None,
+                });
+                self.overlay = Overlay::RenameWorktree;
+            }
+            Message::WorktreeRenameTextChanged(text) => {
+                if let Some(draft) = &mut self.worktree_rename_draft {
+                    draft.text = text;
+                    draft.error = None;
+                }
+            }
+            Message::WorktreeRenameConfirmed => {
+                if let Some((dir, text)) = self
+                    .worktree_rename_draft
+                    .as_ref()
+                    .map(|d| (d.dir_name.clone(), d.text.clone()))
+                {
+                    // Changes only the stored display name — never the folder or branch (FR-014).
+                    match self.workspace.set_worktree_name(&dir, &text) {
+                        Ok(()) => {
+                            self.overlay = Overlay::None;
+                            self.worktree_rename_draft = None;
+                        }
+                        Err(error) => {
+                            if let Some(draft) = &mut self.worktree_rename_draft {
+                                draft.error = Some(error);
+                            }
+                        }
+                    }
+                }
+            }
+            Message::WorktreeRenameCancelled => {
+                self.overlay = Overlay::None;
+                self.worktree_rename_draft = None;
+            }
+            Message::SidebarFilterToggled(filter) => {
+                if !self.sidebar_filters.remove(&filter) {
+                    self.sidebar_filters.insert(filter);
+                }
+            }
+            Message::SidebarFiltersCleared => {
+                self.sidebar_filters.clear();
+            }
+            Message::WorktreeHovered(dir) => {
+                self.hovered_worktree = Some(dir);
+            }
+            Message::WorktreeUnhovered(dir) => {
+                // Only clear if we're leaving the row we thought was hovered (avoids a stale
+                // exit from a previous row clobbering a fresh enter).
+                if self.hovered_worktree.as_deref() == Some(dir.as_str()) {
+                    self.hovered_worktree = None;
                 }
             }
             Message::AddWorktreeOpened => {
@@ -682,10 +888,10 @@ impl State {
         }
     }
 
-    /// The project-switcher rows for the current workspace (feature 008, FR-005–FR-008). Pure:
-    /// one entry per known project, in catalog order, each carrying its active marker, running
-    /// background-session count, and availability. The GUI maps these to rendered rows and the
-    /// "Add project…" affordance is added by the view (FR-009).
+    /// The project-switcher rows for the current workspace. Pure: one entry per known project,
+    /// in catalog order, each carrying its active marker, running background-session count, and
+    /// availability. The GUI maps these to rendered rows and the "Add project…" affordance is
+    /// added by the view.
     pub fn switcher_entries(&self) -> Vec<SwitcherEntry> {
         self.workspace
             .projects
@@ -697,6 +903,16 @@ impl State {
                 running_count: self.workspace.running_session_count(&p.path),
                 available: p.availability == Availability::Available,
             })
+            .collect()
+    }
+
+    /// Session ids of the active project hosted by the worktree `dir_name` (feature 008
+    /// delete): the sessions the binary must terminate before removing the worktree (FR-020).
+    pub fn sessions_in_worktree(&self, dir_name: &str) -> Vec<SessionId> {
+        self.active_sessions()
+            .iter()
+            .filter(|s| s.worktree_dir == dir_name)
+            .map(|s| s.id)
             .collect()
     }
 
@@ -812,6 +1028,26 @@ impl State {
             .find(|s| s.id == id)
     }
 
+    /// The display name for a worktree (FR-017): the user's rename override when present,
+    /// otherwise the friendly name derived from the directory name. Never touches the folder
+    /// or branch on disk (FR-007, FR-014).
+    pub fn worktree_display_name(&self, dir_name: &str) -> String {
+        self.workspace
+            .worktree_name(dir_name)
+            .map(str::to_string)
+            .unwrap_or_else(|| display_name(dir_name))
+    }
+
+    /// The tags for a worktree: the derived type + issue tags, plus a status tag when the
+    /// worktree is not `Valid` (FR-002, FR-003, FR-011).
+    fn worktree_tags(worktree: &Worktree) -> Vec<Tag> {
+        let mut tags = parse_tags(&worktree.dir_name);
+        if worktree.status != WorktreeStatus::Valid {
+            tags.push(Tag::Status(worktree.status));
+        }
+        tags
+    }
+
     /// Build the sidebar tree: worktrees (top level) each joined with their sessions and
     /// expansion state (FR-002, FR-003). Sessions are matched to worktrees by `dir_name`.
     pub fn worktree_tree(&self) -> Vec<WorktreeNode> {
@@ -819,6 +1055,8 @@ impl State {
         self.worktrees
             .iter()
             .map(|worktree| WorktreeNode {
+                display_name: self.worktree_display_name(&worktree.dir_name),
+                tags: Self::worktree_tags(worktree),
                 expanded: self.expanded.contains(&worktree.dir_name),
                 sessions: sessions
                     .iter()
@@ -828,6 +1066,51 @@ impl State {
                 worktree: worktree.clone(),
             })
             .collect()
+    }
+
+    /// The worktree tree narrowed to the active tag filters (feature 008, FR-025). With no
+    /// filter active this equals [`Self::worktree_tree`]. Used by the sidebar to render only
+    /// matching worktrees; a subsequent add/rename/delete re-runs this so the list stays
+    /// consistent (FR-028).
+    pub fn filtered_worktree_tree(&self) -> Vec<WorktreeNode> {
+        self.worktree_tree()
+            .into_iter()
+            .filter(|node| matches_filters(&node.tags, &self.sidebar_filters))
+            .collect()
+    }
+
+    /// The distinct tag filters offered for the current worktrees (feature 008, FR-024): a
+    /// `Type` per conventional type present, `HasIssue` if any worktree embeds an issue key,
+    /// and `Untyped` if any worktree lacks a type. Order: types first, then HasIssue, Untyped.
+    pub fn available_tag_filters(&self) -> Vec<TagFilter> {
+        let mut types = BTreeSet::new();
+        let mut has_issue = false;
+        let mut has_untyped = false;
+        for worktree in &self.worktrees {
+            let tags = Self::worktree_tags(worktree);
+            let mut typed = false;
+            for tag in &tags {
+                match tag {
+                    Tag::Type(t) => {
+                        types.insert(*t);
+                        typed = true;
+                    }
+                    Tag::Issue(_) => has_issue = true,
+                    Tag::Status(_) => {}
+                }
+            }
+            if !typed {
+                has_untyped = true;
+            }
+        }
+        let mut out: Vec<TagFilter> = types.into_iter().map(TagFilter::Type).collect();
+        if has_issue {
+            out.push(TagFilter::HasIssue);
+        }
+        if has_untyped {
+            out.push(TagFilter::Untyped);
+        }
+        out
     }
 }
 
@@ -843,6 +1126,8 @@ pub fn on_escape(state: &State) -> Option<Message> {
         Overlay::RenameProject => Some(Message::RenameCancelled),
         Overlay::AddWorktree => Some(Message::AddWorktreeCancelled),
         Overlay::Settings => Some(Message::SettingsCancelled),
+        Overlay::ConfirmWorktreeDelete => Some(Message::WorktreeDeleteCancelled),
+        Overlay::RenameWorktree => Some(Message::WorktreeRenameCancelled),
         Overlay::None => None,
     }
 }

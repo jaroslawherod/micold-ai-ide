@@ -6,6 +6,7 @@
 //! (`src/ui/style.rs`) converts these into iced types. Values are the durable contract in
 //! contracts/design-tokens.md.
 
+use crate::naming::ConventionalType;
 use crate::theme::ColorScheme;
 
 /// A plain 8-bit-per-channel sRGB color. The GUI maps this to `iced::Color`.
@@ -53,6 +54,50 @@ pub struct Roles {
     pub error: Rgb,
     /// Text/icons on `error`.
     pub on_error: Rgb,
+    /// Per-type worktree tag fills (FR-005). Each is distinct and, paired with [`on_tag`],
+    /// meets AA in this scheme (enforced by `tests/tokens.rs`).
+    pub tag_feat: Rgb,
+    pub tag_fix: Rgb,
+    pub tag_chore: Rgb,
+    pub tag_docs: Rgb,
+    pub tag_refactor: Rgb,
+    pub tag_test: Rgb,
+    pub tag_build: Rgb,
+    pub tag_ci: Rgb,
+    pub tag_perf: Rgb,
+    pub tag_style: Rgb,
+    /// Jira/issue tag fill — a neutral style distinct from the type colors (FR-004).
+    pub tag_issue: Rgb,
+    /// Text/icons drawn on every tag chip fill in this scheme.
+    pub on_tag: Rgb,
+}
+
+impl Roles {
+    /// Fill color for a worktree type tag.
+    pub fn tag_fill(&self, t: ConventionalType) -> Rgb {
+        match t {
+            ConventionalType::Feat => self.tag_feat,
+            ConventionalType::Fix => self.tag_fix,
+            ConventionalType::Chore => self.tag_chore,
+            ConventionalType::Docs => self.tag_docs,
+            ConventionalType::Refactor => self.tag_refactor,
+            ConventionalType::Test => self.tag_test,
+            ConventionalType::Build => self.tag_build,
+            ConventionalType::Ci => self.tag_ci,
+            ConventionalType::Perf => self.tag_perf,
+            ConventionalType::Style => self.tag_style,
+        }
+    }
+
+    /// `(fill, on_fill)` for a worktree type tag chip.
+    pub fn type_tag(&self, t: ConventionalType) -> (Rgb, Rgb) {
+        (self.tag_fill(t), self.on_tag)
+    }
+
+    /// `(fill, on_fill)` for the Jira/issue tag chip.
+    pub fn issue_tag(&self) -> (Rgb, Rgb) {
+        (self.tag_issue, self.on_tag)
+    }
 }
 
 /// The light-scheme palette (contracts/design-tokens.md).
@@ -68,6 +113,20 @@ pub const LIGHT: Roles = Roles {
     outline: Rgb::hex(0x73777F),
     error: Rgb::hex(0xBA1A1A),
     on_error: Rgb::hex(0xFFFFFF),
+    // Deep, saturated fills carrying white text (`on_tag`).
+    tag_feat: Rgb::hex(0x2E7D32),
+    tag_fix: Rgb::hex(0xC62828),
+    tag_chore: Rgb::hex(0x5D4037),
+    tag_docs: Rgb::hex(0x00695C),
+    tag_refactor: Rgb::hex(0x7B1FA2),
+    tag_test: Rgb::hex(0x1565C0),
+    tag_build: Rgb::hex(0xBF360C),
+    tag_ci: Rgb::hex(0x283593),
+    tag_perf: Rgb::hex(0xAD1457),
+    tag_style: Rgb::hex(0x827717),
+    tag_issue: Rgb::hex(0x455A64),
+    on_tag: Rgb::hex(0xFFFFFF),
+    // NOTE: tag_build uses deep-orange 900 (not 800) so white text clears AA (4.5:1).
 };
 
 /// The dark-scheme palette (contracts/design-tokens.md).
@@ -83,6 +142,19 @@ pub const DARK: Roles = Roles {
     outline: Rgb::hex(0x8D9199),
     error: Rgb::hex(0xFFB4AB),
     on_error: Rgb::hex(0x690005),
+    // Pale fills carrying dark text (`on_tag`).
+    tag_feat: Rgb::hex(0xA5D6A7),
+    tag_fix: Rgb::hex(0xEF9A9A),
+    tag_chore: Rgb::hex(0xBCAAA4),
+    tag_docs: Rgb::hex(0x80CBC4),
+    tag_refactor: Rgb::hex(0xCE93D8),
+    tag_test: Rgb::hex(0x90CAF9),
+    tag_build: Rgb::hex(0xFFAB91),
+    tag_ci: Rgb::hex(0x9FA8DA),
+    tag_perf: Rgb::hex(0xF48FB1),
+    tag_style: Rgb::hex(0xE6EE9C),
+    tag_issue: Rgb::hex(0xB0BEC5),
+    on_tag: Rgb::hex(0x1A1C1E),
 };
 
 /// Select the palette for a resolved scheme.
@@ -106,6 +178,18 @@ pub mod type_scale {
     pub const BODY: u16 = 14;
     /// Paths, captions, badges.
     pub const LABEL: u16 = 12;
+}
+
+/// Sidebar-scoped type sizes — 80% of the app-wide scale (FR-012). Applied ONLY within the
+/// worktree sidebar; the rest of the app keeps [`type_scale`]. Kept as named constants so the
+/// "80%" intent is auditable (`tests/tokens.rs`).
+pub mod sidebar {
+    /// Worktree display name — 80% of `type_scale::BODY` (14 → 11).
+    pub const NAME: u16 = 11;
+    /// Tag chip text — 80% of `type_scale::LABEL` (12 → 10).
+    pub const TAG: u16 = 10;
+    /// Session label — 80% of `type_scale::BODY` (14 → 11).
+    pub const SESSION: u16 = 11;
 }
 
 /// Spacing scale, in logical pixels. All padding/gaps use these steps (SC-007).

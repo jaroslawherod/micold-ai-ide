@@ -49,6 +49,8 @@ pub enum Icon {
     ShowSidebar,
     /// Application settings (feature 006).
     Settings,
+    /// Delete / trash action (feature 008).
+    Delete,
 }
 
 impl Icon {
@@ -71,6 +73,7 @@ impl Icon {
         Icon::HideSidebar,
         Icon::ShowSidebar,
         Icon::Settings,
+        Icon::Delete,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -94,6 +97,7 @@ impl Icon {
             Icon::HideSidebar => '\u{f717}',
             Icon::ShowSidebar => '\u{f716}',
             Icon::Settings => '\u{e8b8}',
+            Icon::Delete => '\u{e872}',
         }
     }
 }

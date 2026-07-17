@@ -34,6 +34,7 @@ fn workspace_with_sessions() -> (Workspace, PathBuf, SessionId) {
             projects: vec![project],
             active: Some(path.clone()),
             sessions,
+            worktree_names: Default::default(),
         },
         path,
         id,
@@ -93,6 +94,7 @@ fn null_title_restores_as_pending() {
         }],
         active: None,
         sessions,
+        worktree_names: Default::default(),
     };
 
     store.save(&ws).unwrap();

@@ -74,6 +74,11 @@ struct StoredProject {
     // compatible, so no `schema_version` bump is required.
     #[serde(default)]
     sessions: Vec<StoredSession>,
+    // Feature 008 (contracts/persistence.md): per-worktree display-name overrides, keyed by
+    // worktree `dir_name`. `default` keeps older files (without the field) loading unchanged —
+    // forward compatible, so no `schema_version` bump is required.
+    #[serde(default)]
+    worktree_display_names: BTreeMap<String, String>,
 }
 
 /// The persisted shape of a session (FR-020): identity, worktree binding, last-known title.
@@ -114,6 +119,11 @@ impl StoredCatalog {
                                 .collect()
                         })
                         .unwrap_or_default(),
+                    worktree_display_names: ws
+                        .worktree_names
+                        .get(&p.path)
+                        .cloned()
+                        .unwrap_or_default(),
                 })
                 .collect(),
         }
@@ -121,6 +131,7 @@ impl StoredCatalog {
 
     fn into_workspace(self) -> Workspace {
         let mut sessions: BTreeMap<PathBuf, Vec<Session>> = BTreeMap::new();
+        let mut worktree_names: BTreeMap<PathBuf, BTreeMap<String, String>> = BTreeMap::new();
         let projects: Vec<Project> = self
             .projects
             .into_iter()
@@ -138,6 +149,9 @@ impl StoredCatalog {
                     .collect();
                 if !restored.is_empty() {
                     sessions.insert(p.path.clone(), restored);
+                }
+                if !p.worktree_display_names.is_empty() {
+                    worktree_names.insert(p.path.clone(), p.worktree_display_names);
                 }
                 Project {
                     path: p.path,
@@ -160,6 +174,7 @@ impl StoredCatalog {
             projects,
             active,
             sessions,
+            worktree_names,
         }
     }
 }

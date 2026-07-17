@@ -4,7 +4,7 @@
 //! every surface draws from one place (SC-007). Nothing here holds decision logic; the
 //! values come from `src/tokens.rs` (contracts/design-tokens.md).
 
-use iced::widget::{button, container, text, text_input};
+use iced::widget::{button, container, scrollable, text, text_input};
 use iced::{Background, Border, Color, Theme};
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, shape, Rgb, Roles};
@@ -125,6 +125,51 @@ pub fn menu_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
             width: 1.0,
             radius: (shape::SM as f32).into(),
         },
+        ..container::Style::default()
+    }
+}
+
+/// A themed scrollbar for scrollable regions (e.g. the worktree sidebar): a subtle rail with a
+/// rounded `outline`-colored thumb that darkens on hover/drag. Visible whenever content overflows.
+pub fn scrollbar(r: Roles) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style {
+    move |_theme, status| {
+        let thumb = match status {
+            scrollable::Status::Hovered {
+                is_vertical_scrollbar_hovered: true,
+                ..
+            }
+            | scrollable::Status::Dragged {
+                is_vertical_scrollbar_dragged: true,
+                ..
+            } => color(r.on_surface_variant),
+            _ => alpha(color(r.outline), 0.8),
+        };
+        let rail = scrollable::Rail {
+            background: Some(Background::Color(alpha(color(r.surface_variant), 0.6))),
+            border: radius(shape::FULL),
+            scroller: scrollable::Scroller {
+                color: thumb,
+                border: radius(shape::FULL),
+            },
+        };
+        scrollable::Style {
+            container: container::Style::default(),
+            vertical_rail: rail,
+            horizontal_rail: rail,
+            gap: None,
+        }
+    }
+}
+
+/// A worktree tag chip: a dimmed **tonal** pill — a faint tint of `accent` behind `accent`-colored
+/// text, fully rounded (feature 008, FR-005). Softer than a solid fill so the tags read as calm
+/// metadata beneath the worktree name. The vivid `accent` as text on its own faint tint keeps
+/// high contrast in both light and dark schemes.
+pub fn chip(accent: Rgb) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(alpha(color(accent), 0.20))),
+        text_color: Some(color(accent)),
+        border: radius(shape::FULL),
         ..container::Style::default()
     }
 }

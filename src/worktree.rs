@@ -6,6 +6,7 @@
 
 use crate::git::Git;
 use crate::naming::DerivedNames;
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// Health of a discovered worktree on disk (FR-018a). Enum, not bools, so the sidebar can
@@ -196,6 +197,26 @@ pub fn rollback_plan() -> [CleanupStep; 4] {
         CleanupStep::BranchDelete,
         CleanupStep::RemoveDir,
     ]
+}
+
+/// Remove a worktree and its branch, app-owned (feature 008, FR-020). Runs the git steps in
+/// [`CleanupStep`] order — `worktree_remove(force)` → `worktree_prune` → `branch_delete` — so
+/// the checked-out branch can be deleted after its registration is gone. Every step is
+/// idempotent (an already-missing worktree/branch is not an error), so a partially-removed
+/// worktree still resolves to a consistent state (FR-023). The caller removes the directory
+/// (`fs`) and terminates the worktree's session processes.
+pub fn remove_worktree(
+    git: &dyn Git,
+    repo: &Path,
+    target_path: &Path,
+    branch: Option<&str>,
+) -> io::Result<()> {
+    git.worktree_remove(repo, target_path, true)?;
+    git.worktree_prune(repo)?;
+    if let Some(branch) = branch {
+        git.branch_delete(repo, branch)?;
+    }
+    Ok(())
 }
 
 /// Create a branch + worktree from derived names, rolling back on failure (FR-006/006b/009).

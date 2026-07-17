@@ -5,7 +5,7 @@
 //! any future hierarchical navigation should reuse it rather than fork a bespoke widget.
 
 use crate::ui::{icon, style};
-use iced::widget::{button, column, container, row, text, Space};
+use iced::widget::{button, column, container, mouse_area, row, text, Row, Space};
 use iced::{Alignment, Element, Length};
 use micold_ai_ide::icons::Icon;
 use micold_ai_ide::tokens::{shape, spacing, type_scale, Rgb, Roles};
@@ -32,11 +32,23 @@ pub struct TreeItem<'a, M> {
     pub trailing: Option<(Icon, M)>,
     /// An optional tooltip describing the trailing action.
     pub trailing_tooltip: Option<String>,
+    /// Color-coded tag chips rendered on a second line beneath the label as `(label, accent)`
+    /// (feature 008, FR-001). Empty ⇒ single-line row.
+    pub tags: Vec<(String, Rgb)>,
+    /// Message emitted on a right-click of the row (feature 008 context menu, FR-013).
+    pub on_right_press: Option<M>,
+    /// Message emitted when the pointer enters the row (feature 008 hover-reveal).
+    pub on_hover: Option<M>,
+    /// Message emitted when the pointer leaves the row (feature 008 hover-reveal).
+    pub on_unhover: Option<M>,
+    /// A pre-built trailing cluster (e.g. hover-revealed row actions). When set it replaces the
+    /// simple `trailing` icon button. Carries its own lifetime `'a`.
+    pub trailing_custom: Option<Element<'a, M>>,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
 
-impl<M> TreeItem<'_, M> {
+impl<'a, M> TreeItem<'a, M> {
     /// A minimal row at `depth` with `label`; fill in the rest with the setters.
     pub fn new(depth: u16, label: impl Into<String>, tint: Rgb) -> Self {
         Self {
@@ -50,8 +62,40 @@ impl<M> TreeItem<'_, M> {
             on_press: None,
             trailing: None,
             trailing_tooltip: None,
+            tags: Vec::new(),
+            on_right_press: None,
+            on_hover: None,
+            on_unhover: None,
+            trailing_custom: None,
             _marker: std::marker::PhantomData,
         }
+    }
+
+    /// Emit `on_hover` when the pointer enters the row and `on_unhover` when it leaves
+    /// (feature 008 hover-reveal).
+    pub fn hover(mut self, on_hover: M, on_unhover: M) -> Self {
+        self.on_hover = Some(on_hover);
+        self.on_unhover = Some(on_unhover);
+        self
+    }
+
+    /// Set a pre-built trailing cluster (replaces the simple `trailing` icon).
+    pub fn trailing_element(mut self, element: impl Into<Element<'a, M>>) -> Self {
+        self.trailing_custom = Some(element.into());
+        self
+    }
+
+    /// Attach color-coded tag chips shown on a second line beneath the label
+    /// (feature 008, FR-001). Each is `(label, accent)`.
+    pub fn tags(mut self, tags: Vec<(String, Rgb)>) -> Self {
+        self.tags = tags;
+        self
+    }
+
+    /// Emit `message` when the row is right-clicked (feature 008 context menu).
+    pub fn on_right_press(mut self, message: M) -> Self {
+        self.on_right_press = Some(message);
+        self
     }
 
     /// Set the leading icon.
@@ -92,22 +136,39 @@ impl<M> TreeItem<'_, M> {
 pub struct TreeView<'a, M> {
     items: Vec<TreeItem<'a, M>>,
     roles: Roles,
+    label_size: u16,
 }
 
 impl<'a, M: Clone + 'a> TreeView<'a, M> {
     /// A tree from a flat, pre-ordered `items` list, themed by `roles`.
     pub fn new(items: Vec<TreeItem<'a, M>>, roles: Roles) -> Self {
-        Self { items, roles }
+        Self {
+            items,
+            roles,
+            label_size: type_scale::BODY,
+        }
+    }
+
+    /// Override the label + leading-icon size (e.g. the sidebar's 80% scale, FR-012).
+    pub fn label_size(mut self, size: u16) -> Self {
+        self.label_size = size;
+        self
     }
 }
 
 impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
     fn from(tv: TreeView<'a, M>) -> Self {
-        let TreeView { items, roles: r } = tv;
+        let TreeView {
+            items,
+            roles: r,
+            label_size,
+        } = tv;
         let mut col = column![].spacing(spacing::XS).width(Length::Fill);
 
         for item in items {
-            let indent = spacing::MD + item.depth * spacing::MD;
+            // Minimal base indent (feature 008, FR-009): depth-0 rows sit flush with the
+            // sidebar's small left padding; each level nests by one step.
+            let indent = item.depth * spacing::MD;
             let mut line = row![Space::with_width(Length::Fixed(indent as f32))]
                 .spacing(spacing::XS)
                 .align_y(Alignment::Center)
@@ -135,19 +196,23 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             }
 
             if let Some(glyph) = item.icon {
-                line = line.push(icon(glyph, type_scale::BODY, item.tint));
+                line = line.push(icon(glyph, label_size, item.tint));
             }
 
             line = line.push(
                 text(item.label)
-                    .size(type_scale::BODY)
+                    .size(label_size)
+                    // Keep the label on one line — clip rather than wrap onto a second row.
+                    .wrapping(text::Wrapping::None)
                     .style(move |_t: &iced::Theme| text::Style {
                         color: Some(style::color(item.tint)),
                     })
                     .width(Length::Fill),
             );
 
-            if let Some((glyph, msg)) = item.trailing {
+            if let Some(custom) = item.trailing_custom {
+                line = line.push(custom);
+            } else if let Some((glyph, msg)) = item.trailing {
                 let btn = button(icon(glyph, type_scale::LABEL, item.tint))
                     .padding(spacing::XS)
                     .style(style::text_button(r))
@@ -159,23 +224,42 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 line = line.push(trailing);
             }
 
+            // The row body: the name line, plus an optional second line of tag chips aligned
+            // beneath the label (feature 008, FR-001). A worktree with tags becomes two lines.
+            let body: Element<'a, M> = if item.tags.is_empty() {
+                line.into()
+            } else {
+                let tag_indent = indent as f32 + label_size as f32 + spacing::SM as f32;
+                let mut tag_row: Row<'a, M> = row![Space::with_width(Length::Fixed(tag_indent))]
+                    .spacing(spacing::XS)
+                    .align_y(Alignment::Center);
+                for (label, accent) in item.tags {
+                    tag_row = tag_row.push(super::Tag::new(label, accent));
+                }
+                column![line, tag_row]
+                    .spacing(2)
+                    .width(Length::Fill)
+                    .into()
+            };
+
             // The whole row is a low-emphasis button when it has a press action, so selection
             // and hover feedback are consistent.
             let row_el: Element<'a, M> = if let Some(msg) = item.on_press.clone() {
-                button(line)
+                button(body)
                     .padding(spacing::XS)
                     .width(Length::Fill)
                     .style(style::text_button(r))
                     .on_press(msg)
                     .into()
             } else {
-                line.into()
+                body
             };
 
             // Selected rows get a subtle surface-variant background.
-            if item.selected {
-                col = col.push(container(row_el).width(Length::Fill).style(
-                    move |_t: &iced::Theme| iced::widget::container::Style {
+            let styled: Element<'a, M> = if item.selected {
+                container(row_el)
+                    .width(Length::Fill)
+                    .style(move |_t: &iced::Theme| iced::widget::container::Style {
                         background: Some(iced::Background::Color(iced::Color {
                             a: 0.5,
                             ..style::color(r.surface_variant)
@@ -185,11 +269,33 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                             ..Default::default()
                         },
                         ..Default::default()
-                    },
-                ));
+                    })
+                    .into()
             } else {
-                col = col.push(row_el);
-            }
+                row_el
+            };
+
+            // Wrap the row in a mouse_area when it needs pointer interactions: a right-click
+            // context menu and/or hover-reveal of its actions (feature 008).
+            let final_el: Element<'a, M> = if item.on_right_press.is_some()
+                || item.on_hover.is_some()
+                || item.on_unhover.is_some()
+            {
+                let mut area = mouse_area(styled);
+                if let Some(msg) = item.on_right_press {
+                    area = area.on_right_press(msg);
+                }
+                if let Some(msg) = item.on_hover {
+                    area = area.on_enter(msg);
+                }
+                if let Some(msg) = item.on_unhover {
+                    area = area.on_exit(msg);
+                }
+                area.into()
+            } else {
+                styled
+            };
+            col = col.push(final_el);
         }
 
         col.into()

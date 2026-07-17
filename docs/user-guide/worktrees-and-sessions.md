@@ -19,7 +19,41 @@ choose a folder.
 - Worktrees discovered under `.claude/worktrees/` appear as top-level items in the sidebar.
 - Expand a worktree (the leading toggle) to reveal its sessions.
 - A worktree whose directory was deleted outside the app, or that is not a valid git worktree,
-  is shown flagged as **unavailable** — you cannot start new sessions on it until it is resolved.
+  shows its name in the error color with a **missing** or **invalid** status tag — you cannot
+  start new sessions on it until it is resolved.
+
+### Reading a worktree: name & tags
+
+Each worktree is shown as a clean, human-friendly **name** on the first line, with small
+color-coded **tags** beneath it:
+
+- A **type tag** — the Conventional-Commits type from the worktree's branch (`feat`, `fix`,
+  `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`, `style`). Each type has its own
+  fixed color, so you can recognize what a worktree is for at a glance.
+- An **issue tag** — the Jira-style key (e.g. `ABC-123`) when the worktree's name embeds one.
+- A **status tag** — `missing` or `invalid` for a worktree that is not usable (see above).
+
+The name is derived from the descriptive part of the branch: `feat/abc-123-login-page` shows as
+**Login page** with `feat` and `ABC-123` tags. The tags are display-only — the underlying branch
+and directory names are unchanged, and a worktree that does not follow the naming convention
+simply shows no type tag.
+
+The sidebar is intentionally compact — tight left/right padding and a slightly smaller font — so
+long names and their tags get as much width as possible. It stays legible in both light and dark
+themes.
+
+### Filtering worktrees by tag
+
+When you have many worktrees, use the filter chips above the list to narrow it down:
+
+- Tap a **type chip** (e.g. `fix`) to show only worktrees of that type.
+- Tap **issue** to show only worktrees that have a Jira key.
+- Tap **untyped** to show worktrees that do not follow the naming convention.
+- Multiple filters combine with **OR** — tapping `feat` and `fix` shows both.
+- **Clear filters** restores the full list in one tap. If a filter matches nothing, an empty
+  message with a clear action is shown.
+
+Only chips for tags actually present in your worktrees are offered.
 
 ### Resizing and hiding the sidebar
 
@@ -50,7 +84,21 @@ name collides with an existing worktree or branch, creation is blocked with a me
 fails partway, the app rolls back so no half-created branch or directory is left behind.
 
 > Naming formats are fixed in this version and are intended to become configurable later.
-> Removing a worktree is not yet available.
+
+## Managing a worktree (right-click)
+
+Right-click a worktree in the sidebar to open its context menu:
+
+- **Rename** — changes only the name shown for the worktree in the sidebar. It does **not**
+  rename the folder on disk or the git branch, and the type/issue tags are unaffected (they
+  keep deriving from the branch). The custom name is remembered across app restarts. Clearing
+  it is not needed — just rename again.
+- **Delete** — removes the worktree completely. A confirmation dialog first spells out exactly
+  what will be removed: the worktree directory under `.claude/worktrees/`, **all of its
+  sessions**, and its **git branch**. Confirming terminates any running sessions in that
+  worktree, then deletes the directory, sessions, and branch — this cannot be undone.
+  Cancelling removes nothing. (A worktree that is already missing/invalid can still be cleaned
+  up this way.)
 
 ## Starting, switching, and closing sessions
 

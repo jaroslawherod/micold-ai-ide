@@ -1,7 +1,8 @@
 //! T025 [US2] — worktree naming derivation (FR-005a/b, FR-006, FR-008, SC-003b).
 
 use micold_ai_ide::naming::{
-    derive, slugify, ConventionalType, DerivedNames, NamingError, WorktreeNaming,
+    derive, display_name, parse_tags, slugify, ConventionalType, DerivedNames, NamingError, Tag,
+    WorktreeNaming,
 };
 
 fn naming(type_: Option<ConventionalType>, ticket: Option<&str>, name: &str) -> WorktreeNaming {
@@ -117,5 +118,78 @@ fn every_conventional_type_has_a_lowercase_token() {
         let s = t.as_str();
         assert!(!s.is_empty());
         assert!(s.chars().all(|c| c.is_ascii_lowercase()));
+    }
+}
+
+// --- Feature 008: friendly-name + tag derivation (contracts/naming-tags.md) ---
+
+#[test]
+fn parse_tags_type_and_issue() {
+    assert_eq!(
+        parse_tags("feat-abc-123-login-page"),
+        vec![
+            Tag::Type(ConventionalType::Feat),
+            Tag::Issue("ABC-123".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn parse_tags_type_only_when_no_issue() {
+    assert_eq!(
+        parse_tags("fix-crash-on-open"),
+        vec![Tag::Type(ConventionalType::Fix)]
+    );
+    assert_eq!(
+        parse_tags("chore-bump-deps"),
+        vec![Tag::Type(ConventionalType::Chore)]
+    );
+}
+
+#[test]
+fn parse_tags_untyped_when_no_known_type() {
+    assert!(parse_tags("my-experiment").is_empty());
+    assert!(parse_tags("main").is_empty());
+}
+
+#[test]
+fn parse_tags_returns_at_most_one_type_and_issue() {
+    let tags = parse_tags("feat-abc-123-def-456-thing");
+    assert_eq!(tags.iter().filter(|t| matches!(t, Tag::Type(_))).count(), 1);
+    assert_eq!(tags.iter().filter(|t| matches!(t, Tag::Issue(_))).count(), 1);
+    // First issue pair wins.
+    assert_eq!(tags[1], Tag::Issue("ABC-123".to_string()));
+}
+
+#[test]
+fn parse_tags_never_yields_status() {
+    for name in ["feat-x", "main", "fix-abc-1-y"] {
+        assert!(parse_tags(name).iter().all(|t| !matches!(t, Tag::Status(_))));
+    }
+}
+
+#[test]
+fn display_name_strips_type_and_issue() {
+    assert_eq!(display_name("feat-abc-123-login-page"), "Login page");
+    assert_eq!(display_name("fix-crash-on-open"), "Crash on open");
+    assert_eq!(display_name("chore-bump-deps"), "Bump deps");
+}
+
+#[test]
+fn display_name_untyped_names() {
+    assert_eq!(display_name("my-experiment"), "My experiment");
+    assert_eq!(display_name("main"), "Main");
+}
+
+#[test]
+fn display_name_falls_back_when_only_type_and_issue() {
+    // Nothing descriptive remains → readable form of the whole dir name.
+    assert_eq!(display_name("feat-abc-123"), "Feat abc 123");
+}
+
+#[test]
+fn display_name_never_empty() {
+    for name in ["feat-abc-123", "main", "x", "feat-x"] {
+        assert!(!display_name(name).is_empty());
     }
 }

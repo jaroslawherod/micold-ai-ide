@@ -1,6 +1,7 @@
 //! iced rendering layer for the main window. Bin-only; compiled with the `gui` feature.
 
 mod about;
+mod confirm_delete;
 mod material;
 pub(crate) use material::target_offset_delta;
 mod project_selector;
@@ -12,6 +13,7 @@ pub mod style;
 pub mod terminal;
 mod toolbar;
 mod worktree_form;
+mod worktree_rename;
 
 use iced::widget::{column, container, mouse_area, row, stack, text, Space};
 use iced::{Element, Font, Length, Subscription};
@@ -58,6 +60,16 @@ pub enum MotionKey {
     Overlay,
 }
 
+/// Animation key for a worktree row's hover-revealed actions fade (feature 008). Each worktree
+/// gets its own track (keyed by a hash of its `dir_name`) so rows fade in and out independently
+/// — hovering B while A fades out animates both at once.
+pub fn worktree_fx_key(dir_name: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    dir_name.hash(&mut hasher);
+    hasher.finish()
+}
+
 /// Render the main window: the top app bar over the shell body (active project / empty
 /// state), with any modal overlay stacked on top. Every surface is styled from the active
 /// color scheme's design tokens. `motion` carries all material motion progress (menu fade,
@@ -69,6 +81,7 @@ pub fn view<'a>(
     terminal: Option<&'a terminal::RuntimeTerminal>,
     motion: &Animator<MotionKey>,
     dismissing: Option<&'a crate::ClosingOverlay>,
+    row_fx: &micold_ai_ide::motion::Animator<u64>,
 ) -> Element<'a, Message> {
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
@@ -89,7 +102,10 @@ pub fn view<'a>(
                 sidebar::collapsed_strip(scheme)
             } else {
                 row![
-                    material::slide(sidebar::view(state, scheme), motion.get(MotionKey::Sidebar)),
+                    material::slide(
+                        sidebar::view(state, scheme, row_fx),
+                        motion.get(MotionKey::Sidebar)
+                    ),
                     sidebar::handle(scheme, motion.get(MotionKey::HandleHover))
                 ]
                 .into()
@@ -131,9 +147,9 @@ pub fn view<'a>(
     .progress(motion.get(MotionKey::Menu))
     .into();
 
-    // Float the project switcher panel (feature 008, FR-004/005/006/007/008/009). Rows are
-    // built purely from the workspace: active marker, running-background-session count, and
-    // unavailable badge. Mutually exclusive with the overflow menu (handled in the reducer).
+    // Float the project switcher panel. Rows are built purely from the workspace: active
+    // marker, running-background-session count, and unavailable badge. Mutually exclusive with
+    // the overflow menu (handled in the reducer).
     let switcher_rows: Vec<material::ProjectRow<Message>> = state
         .switcher_entries()
         .into_iter()
@@ -154,6 +170,20 @@ pub fn view<'a>(
     )
     .open(state.project_switcher_open)
     .into();
+
+    // Float the worktree right-click context menu over everything, anchored near the sidebar
+    // (feature 008, FR-013). Only present while a worktree's menu is open.
+    let base = match &state.worktree_menu_open {
+        Some(dir) => material::MenuOverlay::new(
+            base,
+            worktree_menu_items(dir),
+            Message::WorktreeMenuDismissed,
+            roles,
+        )
+        .anchor(iced::Point::new(24.0, 96.0))
+        .into(),
+        None => base,
+    };
 
     // The overlay fade progress (0 = hidden, 1 = fully shown). Drives both the enter (a live
     // overlay fading in as this rises 0→1) and the exit (a dismissing snapshot fading out as it
@@ -190,7 +220,31 @@ pub fn view<'a>(
             Some(draft) => settings_form::modal(base, draft, scheme, overlay_progress),
             None => base,
         },
+        Overlay::ConfirmWorktreeDelete => match &state.worktree_delete_target {
+            Some(dir) => confirm_delete::modal(base, dir, scheme, overlay_progress),
+            None => base,
+        },
+        Overlay::RenameWorktree => match &state.worktree_rename_draft {
+            Some(draft) => worktree_rename::modal(base, draft, scheme, overlay_progress),
+            None => base,
+        },
     }
+}
+
+/// The items in a worktree's right-click context menu (feature 008, FR-013).
+fn worktree_menu_items(dir: &str) -> Vec<material::MenuItem<Message>> {
+    vec![
+        material::MenuItem::new(
+            Icon::Rename,
+            "Rename",
+            Message::WorktreeRenameStarted(dir.to_string()),
+        ),
+        material::MenuItem::new(
+            Icon::Unavailable,
+            "Delete",
+            Message::WorktreeDeleteRequested(dir.to_string()),
+        ),
+    ]
 }
 
 /// Render the snapshot of a just-closed overlay so it can keep fading out after the pure core
@@ -213,6 +267,10 @@ fn dismissing_modal<'a>(
             worktree_form::modal(base, form, error.as_deref(), scheme, progress)
         }
         ClosingOverlay::Settings(draft) => settings_form::modal(base, draft, scheme, progress),
+        ClosingOverlay::ConfirmDelete(dir) => confirm_delete::modal(base, dir, scheme, progress),
+        ClosingOverlay::WorktreeRename(draft) => {
+            worktree_rename::modal(base, draft, scheme, progress)
+        }
     }
 }
 
@@ -248,6 +306,14 @@ pub fn subscription(state: &State) -> Subscription<Message> {
         Overlay::Settings => iced::keyboard::on_key_press(|key, _modifiers| {
             use iced::keyboard::{key::Named, Key};
             matches!(key, Key::Named(Named::Escape)).then_some(Message::SettingsCancelled)
+        }),
+        Overlay::ConfirmWorktreeDelete => iced::keyboard::on_key_press(|key, _modifiers| {
+            use iced::keyboard::{key::Named, Key};
+            matches!(key, Key::Named(Named::Escape)).then_some(Message::WorktreeDeleteCancelled)
+        }),
+        Overlay::RenameWorktree => iced::keyboard::on_key_press(|key, _modifiers| {
+            use iced::keyboard::{key::Named, Key};
+            matches!(key, Key::Named(Named::Escape)).then_some(Message::WorktreeRenameCancelled)
         }),
     }
 }

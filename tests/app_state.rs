@@ -1,6 +1,6 @@
 //! T011 — extended app base state: defaults + new message wiring (feature 005).
 
-use micold_ai_ide::app::{Message, Overlay, State};
+use micold_ai_ide::app::{on_escape, Message, Overlay, State};
 use micold_ai_ide::naming::ConventionalType;
 use micold_ai_ide::project::{Availability, Project};
 use micold_ai_ide::session::Session;
@@ -106,4 +106,101 @@ fn session_started_selected_and_closed() {
     state.update(Message::SessionCloseRequested(id));
     assert!(state.active_sessions().is_empty());
     assert!(state.active_session.is_none());
+}
+
+// --- Feature 008 US2: worktree delete reducer ---
+
+fn state_with_worktree_and_session(dir: &str) -> State {
+    let mut state = State::default();
+    let path = PathBuf::from("/repo");
+    state.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(path);
+    state.worktrees.push(Worktree {
+        dir_name: dir.to_string(),
+        path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
+        branch: Some(format!("feat/{dir}")),
+        status: WorktreeStatus::Valid,
+    });
+    let session = Session::start_new(dir);
+    state.update(Message::SessionStarted(session));
+    state
+}
+
+#[test]
+fn delete_requested_opens_confirm_then_confirmed_drops_records() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    assert_eq!(state.active_sessions().len(), 1);
+
+    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
+    assert_eq!(state.overlay, Overlay::ConfirmWorktreeDelete);
+    assert_eq!(state.worktree_delete_target.as_deref(), Some("feat-x"));
+    assert!(state.worktree_menu_open.is_none());
+
+    state.update(Message::WorktreeDeleteConfirmed);
+    assert!(state.active_sessions().is_empty(), "sessions dropped");
+    assert!(state.active_session.is_none(), "active cleared");
+    assert!(!state.worktrees.iter().any(|w| w.dir_name == "feat-x"));
+    assert_eq!(state.overlay, Overlay::None);
+    assert!(state.worktree_delete_target.is_none());
+}
+
+#[test]
+fn delete_cancelled_changes_nothing() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
+    state.update(Message::WorktreeDeleteCancelled);
+    assert_eq!(state.overlay, Overlay::None);
+    assert!(state.worktree_delete_target.is_none());
+    assert_eq!(state.active_sessions().len(), 1, "session untouched");
+    assert!(state.worktrees.iter().any(|w| w.dir_name == "feat-x"));
+}
+
+#[test]
+fn escape_cancels_confirm_delete() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
+    assert_eq!(on_escape(&state), Some(Message::WorktreeDeleteCancelled));
+}
+
+// --- Feature 008 US3: worktree rename changes display only ---
+
+#[test]
+fn worktree_rename_changes_display_only_not_branch_or_path() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    let before = state
+        .worktrees
+        .iter()
+        .find(|w| w.dir_name == "feat-x")
+        .unwrap()
+        .clone();
+    let tags_before = state.worktree_tree()[0].tags.clone();
+
+    state.update(Message::WorktreeRenameStarted("feat-x".to_string()));
+    state.update(Message::WorktreeRenameTextChanged("Renamed".to_string()));
+    state.update(Message::WorktreeRenameConfirmed);
+
+    assert_eq!(state.worktree_display_name("feat-x"), "Renamed");
+    let after = state
+        .worktrees
+        .iter()
+        .find(|w| w.dir_name == "feat-x")
+        .unwrap();
+    // FR-007/FR-014: the on-disk identity is untouched.
+    assert_eq!(after.dir_name, "feat-x");
+    assert_eq!(after.path, before.path);
+    assert_eq!(after.branch, before.branch);
+    // FR-016: tags still derive from the branch/dir, unaffected by the rename.
+    assert_eq!(state.worktree_tree()[0].tags, tags_before);
+}
+
+#[test]
+fn escape_cancels_worktree_rename() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    state.update(Message::WorktreeRenameStarted("feat-x".to_string()));
+    assert_eq!(on_escape(&state), Some(Message::WorktreeRenameCancelled));
 }

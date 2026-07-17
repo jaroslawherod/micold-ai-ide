@@ -98,6 +98,7 @@ pub struct MenuOverlay<'a, M> {
     on_dismiss: M,
     roles: Roles,
     progress: f32,
+    anchor: Option<iced::Point>,
 }
 
 impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
@@ -115,12 +116,21 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
             on_dismiss,
             roles,
             progress: 1.0,
+            anchor: None,
         }
     }
 
     /// Fade progress (0 = hidden → returns `base` as-is; 1 = fully shown).
     pub fn progress(mut self, progress: f32) -> Self {
         self.progress = progress;
+        self
+    }
+
+    /// Anchor the panel at a top-left offset (window coordinates) instead of the default
+    /// toolbar-relative top-right position (feature 008 context menu). The panel's top-left
+    /// corner is placed at `point`.
+    pub fn anchor(mut self, point: iced::Point) -> Self {
+        self.anchor = Some(point);
         self
     }
 }
@@ -133,6 +143,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Element<'a, M> {
             on_dismiss,
             roles: r,
             progress,
+            anchor,
         } = m;
         if progress <= 0.001 {
             return base;
@@ -147,17 +158,32 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Element<'a, M> {
             progress,
             style::color(r.surface),
         );
-        let panel = container(panel_box)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Right)
-            .align_y(iced::alignment::Vertical::Top)
-            .padding(iced::Padding {
-                top: TOP_OFFSET,
-                right: spacing::SM as f32,
-                bottom: 0.0,
-                left: 0.0,
-            });
+        let panel = match anchor {
+            // Context-menu anchor: place the panel's top-left corner at `point`.
+            Some(point) => container(panel_box)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Left)
+                .align_y(iced::alignment::Vertical::Top)
+                .padding(iced::Padding {
+                    top: point.y,
+                    right: 0.0,
+                    bottom: 0.0,
+                    left: point.x,
+                }),
+            // Default: anchored top-right below the toolbar.
+            None => container(panel_box)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Right)
+                .align_y(iced::alignment::Vertical::Top)
+                .padding(iced::Padding {
+                    top: TOP_OFFSET,
+                    right: spacing::SM as f32,
+                    bottom: 0.0,
+                    left: 0.0,
+                }),
+        };
 
         // Invisible backdrop that dismisses the menu on any outside click.
         let backdrop = mouse_area(

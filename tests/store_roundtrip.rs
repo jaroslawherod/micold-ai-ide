@@ -116,6 +116,45 @@ fn corrupt_file_is_preserved_as_backup() {
     assert!(path.with_extension("json.bak").exists());
 }
 
+// --- Feature 008 US3: per-worktree display-name override persistence ---
+
+#[test]
+fn worktree_display_name_override_roundtrips() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/repo", "repo", true));
+    ws.active = Some(PathBuf::from("/repo"));
+    ws.set_worktree_name("feat-abc-123-login-page", "My Login")
+        .unwrap();
+    store.save(&ws).unwrap();
+
+    let out = store.load();
+    assert_eq!(out.status, LoadStatus::Loaded);
+    assert_eq!(out.workspace.active, Some(PathBuf::from("/repo")));
+    assert_eq!(
+        out.workspace.worktree_name("feat-abc-123-login-page"),
+        Some("My Login")
+    );
+}
+
+#[test]
+fn missing_worktree_names_field_loads_without_override() {
+    // An older file (no `worktree_display_names`) loads fine — no schema bump (FR-015).
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    let json = r#"{"schema_version":1,"last_active":"/repo",
+                   "projects":[{"path":"/repo","display_name":"repo","is_git_repo":true}]}"#;
+    std::fs::write(&path, json).unwrap();
+    let store = JsonFileStore::at(path);
+
+    let out = store.load();
+    assert_eq!(out.status, LoadStatus::Loaded);
+    assert_eq!(out.workspace.active, Some(PathBuf::from("/repo")));
+    assert_eq!(out.workspace.worktree_name("feat-x"), None);
+}
+
 #[test]
 fn save_is_atomic_and_leaves_no_temp_file() {
     let dir = tempdir().unwrap();

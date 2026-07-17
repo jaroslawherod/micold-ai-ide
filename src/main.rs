@@ -10,7 +10,9 @@ mod ui;
 
 use iced::time::every;
 use iced::{Subscription, Task};
-use micold_ai_ide::app::{Message, Overlay, RenameDraft, SettingsDraft, State, WorktreeForm};
+use micold_ai_ide::app::{
+    Message, Overlay, RenameDraft, SettingsDraft, State, WorktreeForm, WorktreeRenameDraft,
+};
 use micold_ai_ide::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_ai_ide::git::{Git, GitCli};
 use micold_ai_ide::motion::Animator;
@@ -21,7 +23,9 @@ use micold_ai_ide::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_ai_ide::store::{JsonFileStore, ProjectStore};
 use micold_ai_ide::terminal::{LaunchMode, LaunchSpec};
 use micold_ai_ide::theme::SystemScheme;
-use micold_ai_ide::worktree::{create_worktree, parse_worktrees, reconcile, CreateError, Worktree};
+use micold_ai_ide::worktree::{
+    create_worktree, parse_worktrees, reconcile, remove_worktree, CreateError, Worktree,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -52,6 +56,8 @@ const MAIN_FADE: Duration = Duration::from_millis(90);
 const SIDEBAR_SLIDE: Duration = Duration::from_millis(114);
 /// Resize-handle hover highlight — preserves the prior gentle ~0.8s ramp (was step 0.02).
 const HANDLE_HOVER: Duration = Duration::from_millis(800);
+/// Hover-revealed row actions fade (feature 008) — quick, so the icons feel responsive.
+const ROW_ACTIONS_FADE: Duration = Duration::from_millis(120);
 
 /// Convert an animation `duration` into the per-tick progress step the [`Animator`] advances by
 /// on each [`ANIM_TICK`], clamped to `(0, 1]`.
@@ -70,6 +76,8 @@ enum ClosingOverlay {
     Rename(RenameDraft),
     Worktree(WorktreeForm, Option<String>),
     Settings(SettingsDraft),
+    ConfirmDelete(String),
+    WorktreeRename(WorktreeRenameDraft),
 }
 
 /// The binary's application state: the pure core plus gui-only runtime handles.
@@ -90,6 +98,12 @@ struct App {
     /// The overlay currently fading out (rendered from this snapshot until its fade completes),
     /// or `None` when no overlay is leaving.
     dismissing: Option<ClosingOverlay>,
+    /// Per-worktree hover-reveal fade tracks (feature 008), keyed by a hash of `dir_name` so each
+    /// row's action icons fade in/out independently (hovering one while another fades out).
+    row_fx: Animator<u64>,
+    /// The worktree hovered on the previous update, to detect hover-enter/leave transitions and
+    /// start the corresponding fade.
+    prev_hovered: Option<String>,
 }
 
 /// Identity of the main content area, used to trigger a fade when it changes.
@@ -158,7 +172,7 @@ fn motion_animating(app: &App) -> bool {
         .any(|(key, target, _)| (app.motion.get(*key) - target).abs() > f32::EPSILON);
     let overlay =
         (app.motion.get(MotionKey::Overlay) - overlay_motion_target(app)).abs() > f32::EPSILON;
-    steady || overlay
+    steady || overlay || app.row_fx.animating()
 }
 
 impl Drop for App {
@@ -241,6 +255,8 @@ fn boot() -> (App, Task<Message>) {
             main_key,
             handle_hovered: false,
             dismissing: None,
+            row_fx: Animator::new(),
+            prev_hovered: None,
         },
         Task::none(),
     )
@@ -325,6 +341,25 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
         app.main_key = key;
         app.motion.set(MotionKey::Main, 0.0);
     }
+
+    // On a hover-enter/leave transition, animate the row's action icons: fade the newly hovered
+    // row in (from hidden) and the previously hovered row out (feature 008).
+    if app.core.hovered_worktree != app.prev_hovered {
+        let s = step(ROW_ACTIONS_FADE);
+        if let Some(old) = &app.prev_hovered {
+            app.row_fx.to(ui::worktree_fx_key(old), 0.0, s);
+        }
+        if let Some(new) = &app.core.hovered_worktree {
+            let key = ui::worktree_fx_key(new);
+            // Start from hidden so it animates in (unless it's mid-fade-out and re-hovered).
+            if app.row_fx.get(key) <= f32::EPSILON {
+                app.row_fx.set(key, 0.0);
+            }
+            app.row_fx.to(key, 1.0, s);
+        }
+        app.prev_hovered = app.core.hovered_worktree.clone();
+    }
+
     task
 }
 
@@ -346,6 +381,16 @@ fn capture_overlay(app: &App) -> Option<ClosingOverlay> {
             .settings_draft
             .clone()
             .map(ClosingOverlay::Settings),
+        Overlay::ConfirmWorktreeDelete => app
+            .core
+            .worktree_delete_target
+            .clone()
+            .map(ClosingOverlay::ConfirmDelete),
+        Overlay::RenameWorktree => app
+            .core
+            .worktree_rename_draft
+            .clone()
+            .map(ClosingOverlay::WorktreeRename),
     }
 }
 
@@ -355,6 +400,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::AnimationTick => {
             apply_motion_targets(app);
             app.motion.tick();
+            app.row_fx.tick();
             // Once the leaving overlay has fully faded, release its snapshot.
             if app.dismissing.is_some() && app.motion.get(MotionKey::Overlay) <= 0.001 {
                 app.dismissing = None;
@@ -419,6 +465,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::RenameConfirmed => {
             app.core.update(Message::RenameConfirmed);
+            persist(&app.core);
+            Task::none()
+        }
+        // Worktree rename (feature 008, FR-014/FR-015): apply the display-name override in the
+        // core, then persist it so it survives a restart. Never touches the folder or branch.
+        Message::WorktreeRenameConfirmed => {
+            app.core.update(Message::WorktreeRenameConfirmed);
             persist(&app.core);
             Task::none()
         }
@@ -672,6 +725,34 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             handle_process_exits(app);
             Task::none()
         }
+        // Confirmed worktree delete (feature 008, FR-020): terminate the worktree's session
+        // processes, remove its git worktree + branch + directory, then drop the records and
+        // persist. Ordered per `CleanupStep`; every git step is idempotent (FR-023).
+        Message::WorktreeDeleteConfirmed => {
+            let target = app.core.worktree_delete_target.clone();
+            if let (Some(dir), Some(repo)) = (target, app.core.workspace.active.clone()) {
+                // Facts to remove — captured before the reducer drops them from state.
+                let wt = app.core.worktrees.iter().find(|w| w.dir_name == dir).cloned();
+                // Terminate this worktree's running sessions first.
+                for id in app.core.sessions_in_worktree(&dir) {
+                    if let Some(mut rt) = app.terminals.remove(&id) {
+                        let _ = rt.kill();
+                    }
+                }
+                if let Some(wt) = wt {
+                    let _ =
+                        remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref());
+                    let _ = std::fs::remove_dir_all(&wt.path);
+                }
+                // Drop the session/worktree records in the core, then reconcile from git truth.
+                app.core.update(Message::WorktreeDeleteConfirmed);
+                app.core.worktrees = discover_worktrees(&repo);
+                persist(&app.core);
+            } else {
+                app.core.update(Message::WorktreeDeleteConfirmed);
+            }
+            Task::none()
+        }
         other => {
             app.core.update(other);
             Task::none()
@@ -685,7 +766,13 @@ fn view(app: &App) -> iced::Element<'_, Message> {
         .core
         .active_session
         .and_then(|id| app.terminals.get(&id));
-    ui::view(&app.core, terminal, &app.motion, app.dismissing.as_ref())
+    ui::view(
+        &app.core,
+        terminal,
+        &app.motion,
+        app.dismissing.as_ref(),
+        &app.row_fx,
+    )
 }
 
 fn theme(app: &App) -> iced::Theme {

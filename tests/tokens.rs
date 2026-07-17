@@ -5,8 +5,9 @@
 //! Contrast is computed with the WCAG 2.x relative-luminance formula so a future palette
 //! tweak that breaks legibility fails CI (contracts/design-tokens.md).
 
+use micold_ai_ide::naming::ConventionalType;
 use micold_ai_ide::theme::ColorScheme;
-use micold_ai_ide::tokens::{roles, Rgb, Roles};
+use micold_ai_ide::tokens::{roles, sidebar, type_scale, Rgb, Roles};
 
 /// Linearize a single 0..=255 sRGB channel per the WCAG definition.
 fn linearize(channel: u8) -> f64 {
@@ -30,9 +31,10 @@ fn contrast(a: Rgb, b: Rgb) -> f64 {
     (hi + 0.05) / (lo + 0.05)
 }
 
-/// The foreground/surface pairs that carry text and must meet AA.
-fn pairs(r: &Roles) -> [(&'static str, Rgb, Rgb); 5] {
-    [
+/// The foreground/surface pairs that carry text and must meet AA. Includes the worktree tag
+/// chips (feature 008): every per-type fill and the issue fill, paired with `on_tag`.
+fn pairs(r: &Roles) -> Vec<(&'static str, Rgb, Rgb)> {
+    let mut out = vec![
         ("on_background/background", r.on_background, r.background),
         ("on_surface/surface", r.on_surface, r.surface),
         (
@@ -42,7 +44,14 @@ fn pairs(r: &Roles) -> [(&'static str, Rgb, Rgb); 5] {
         ),
         ("on_primary/primary", r.on_primary, r.primary),
         ("on_error/error", r.on_error, r.error),
-    ]
+    ];
+    for &t in ConventionalType::ALL {
+        let (fill, on) = r.type_tag(t);
+        out.push((t.as_str(), on, fill));
+    }
+    let (issue_fill, issue_on) = r.issue_tag();
+    out.push(("tag_issue", issue_on, issue_fill));
+    out
 }
 
 const AA_NORMAL: f64 = 4.5;
@@ -69,4 +78,27 @@ fn dark_scheme_meets_aa_contrast() {
             "dark {name}: contrast {ratio:.2} < {AA_NORMAL} (fg {fg:?} on bg {bg:?})"
         );
     }
+}
+
+/// Every worktree type has a distinct fill in both schemes (FR-005).
+#[test]
+fn type_tag_fills_are_distinct() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = roles(scheme);
+        let fills: Vec<Rgb> = ConventionalType::ALL.iter().map(|&t| r.tag_fill(t)).collect();
+        for i in 0..fills.len() {
+            for j in (i + 1)..fills.len() {
+                assert_ne!(fills[i], fills[j], "{scheme:?}: type tag fills {i} and {j} collide");
+            }
+        }
+    }
+}
+
+/// Sidebar sizes are exactly 80% of the app-wide scale, rounded (FR-012).
+#[test]
+fn sidebar_sizes_are_eighty_percent() {
+    let round80 = |base: u16| ((base as f64) * 0.8).round() as u16;
+    assert_eq!(sidebar::NAME, round80(type_scale::BODY));
+    assert_eq!(sidebar::TAG, round80(type_scale::LABEL));
+    assert_eq!(sidebar::SESSION, round80(type_scale::BODY));
 }

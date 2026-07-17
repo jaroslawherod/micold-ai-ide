@@ -5,13 +5,14 @@
 //! user-configurable in a future version without touching the creation flow (FR-006a).
 //! Contract: `specs/005-worktree-session-terminal/contracts/naming.md`.
 
+use crate::worktree::WorktreeStatus;
 use std::fmt;
 
 /// The Conventional-Commits type vocabulary offered by the add-worktree form (FR-005a).
 ///
 /// A closed enum: an invalid type is unrepresentable (Constitution Principle V). Fixed
 /// defaults this version; the whole ruleset is designed to become configurable later.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ConventionalType {
     Feat,
     Fix,
@@ -39,6 +40,12 @@ impl ConventionalType {
         ConventionalType::Perf,
         ConventionalType::Style,
     ];
+
+    /// Parse a lowercase token (as produced by [`as_str`](Self::as_str)) back into a type.
+    /// Used when deriving tags from an existing directory name (FR-002, FR-008).
+    pub fn from_token(token: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|t| t.as_str() == token)
+    }
 
     /// The lowercase token used in derived directory/branch names.
     pub const fn as_str(self) -> &'static str {
@@ -205,4 +212,113 @@ pub fn derive(input: &WorktreeNaming) -> Result<DerivedNames, NamingError> {
     }
 
     Ok(DerivedNames { dir_name, branch })
+}
+
+/// A typed, structured label shown beneath a worktree's name in the sidebar and used for
+/// filtering (FR-001..005). Derived from the existing directory name — never persisted — so
+/// the branch/directory naming convention is untouched (FR-007).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Tag {
+    /// Conventional-Commits type parsed from the leading name segment.
+    Type(ConventionalType),
+    /// Jira-style issue key (e.g. `ABC-123`), upper-cased, when the name embeds one.
+    Issue(String),
+    /// On-disk health, injected at render time for non-`Valid` worktrees (FR-011). Never
+    /// produced by [`parse_tags`].
+    Status(WorktreeStatus),
+}
+
+/// True when `seg` looks like a Jira project key component: starts with a letter, then
+/// letters/digits (e.g. `abc`, `abc2`). Lowercase because directory names are slugified.
+fn is_issue_project(seg: &str) -> bool {
+    let mut chars = seg.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_lowercase())
+        && seg.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+}
+
+/// Locate the adjacent `(project, number)` segment pair forming an issue key, e.g. the
+/// `abc` + `123` in `feat-abc-123-login-page`. Returns the index of the project segment.
+fn issue_pair_index(segments: &[&str]) -> Option<usize> {
+    (0..segments.len().saturating_sub(1)).find(|&i| {
+        is_issue_project(segments[i]) && !segments[i + 1].is_empty()
+            && segments[i + 1].chars().all(|c| c.is_ascii_digit())
+    })
+}
+
+/// Sentence-case a string whose remainder is already lowercase (slugified): upper-case only
+/// the first character.
+fn sentence_case(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(first) => first.to_ascii_uppercase().to_string() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
+/// Parse the tags embedded in a worktree directory name (FR-002, FR-003, FR-008).
+///
+/// Returns at most one [`Tag::Type`] (when the leading segment is a known type) followed by
+/// at most one [`Tag::Issue`] (when an adjacent project+number pair is present). Never returns
+/// a [`Tag::Status`] — health is injected by the caller. A non-conforming name yields no
+/// `Type` tag (it is matched by the "untyped" filter bucket instead).
+pub fn parse_tags(dir_name: &str) -> Vec<Tag> {
+    let segments: Vec<&str> = dir_name.split('-').filter(|s| !s.is_empty()).collect();
+    let mut tags = Vec::new();
+
+    // Type: the leading segment, if it is a known Conventional-Commits token.
+    let type_offset = match segments.first().and_then(|s| ConventionalType::from_token(s)) {
+        Some(t) => {
+            tags.push(Tag::Type(t));
+            1
+        }
+        None => 0,
+    };
+
+    // Issue: the first project+number pair in the remaining segments.
+    if let Some(i) = issue_pair_index(&segments[type_offset..]) {
+        let i = i + type_offset;
+        let key = format!("{}-{}", segments[i], segments[i + 1]).to_ascii_uppercase();
+        tags.push(Tag::Issue(key));
+    }
+
+    tags
+}
+
+/// Derive a human-friendly display name from a worktree directory name (FR-017).
+///
+/// Removes the leading type token and any embedded issue key, turns `-` separators into
+/// spaces, and sentence-cases. Falls back to a readable form of the whole `dir_name` when the
+/// descriptive remainder is empty (e.g. a name that is only a type + issue). Never empty.
+pub fn display_name(dir_name: &str) -> String {
+    let segments: Vec<&str> = dir_name.split('-').filter(|s| !s.is_empty()).collect();
+
+    let type_offset = match segments.first().and_then(|s| ConventionalType::from_token(s)) {
+        Some(_) => 1,
+        None => 0,
+    };
+
+    // Indices to drop for the issue key (relative to the full segment list).
+    let issue = issue_pair_index(&segments[type_offset..]).map(|i| i + type_offset);
+
+    let remainder: Vec<&str> = segments
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i >= type_offset)
+        .filter(|(i, _)| issue.map(|j| *i != j && *i != j + 1).unwrap_or(true))
+        .map(|(_, s)| *s)
+        .collect();
+
+    let joined = if remainder.is_empty() {
+        // Fallback: the whole directory name, dashes as spaces.
+        segments.join(" ")
+    } else {
+        remainder.join(" ")
+    };
+
+    let out = sentence_case(&joined);
+    if out.is_empty() {
+        sentence_case(dir_name)
+    } else {
+        out
+    }
 }

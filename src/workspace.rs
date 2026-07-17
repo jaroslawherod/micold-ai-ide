@@ -26,6 +26,10 @@ pub struct Workspace {
     /// Persisted sessions per project path (feature 005, FR-020). Keyed by the project's
     /// canonical path; restored `Idle` and resumed on reopen (FR-023a).
     pub sessions: BTreeMap<PathBuf, Vec<Session>>,
+    /// Per-worktree display-name overrides (feature 008, FR-014/FR-015). Keyed by project
+    /// path, then by worktree `dir_name`. Purely a display label — never the folder or branch
+    /// on disk. Persisted; absent for worktrees never renamed.
+    pub worktree_names: BTreeMap<PathBuf, BTreeMap<String, String>>,
 }
 
 impl Workspace {
@@ -76,6 +80,44 @@ impl Workspace {
             project.display_name = name;
         }
         Ok(())
+    }
+
+    /// The custom display name for a worktree of the active project, if one was set (feature
+    /// 008, FR-014). `None` ⇒ the caller derives the name from the directory name.
+    pub fn worktree_name(&self, dir_name: &str) -> Option<&str> {
+        let path = self.active.as_ref()?;
+        self.worktree_names
+            .get(path)?
+            .get(dir_name)
+            .map(String::as_str)
+    }
+
+    /// Set (or overwrite) a worktree's custom display name for the active project (feature 008,
+    /// FR-014). The name is validated + trimmed (FR-020); on success ONLY the stored label
+    /// changes — never the folder or git branch (FR-007). No active project ⇒ no-op.
+    pub fn set_worktree_name(&mut self, dir_name: &str, new_name: &str) -> Result<(), RenameError> {
+        let name = validate_rename(new_name)?;
+        if let Some(path) = self.active.clone() {
+            self.worktree_names
+                .entry(path)
+                .or_default()
+                .insert(dir_name.to_string(), name);
+        }
+        Ok(())
+    }
+
+    /// Remove a worktree's display-name override for the active project (feature 008), reverting
+    /// it to the derived name. No error if absent — used to clean up on delete.
+    pub fn clear_worktree_name(&mut self, dir_name: &str) {
+        if let Some(path) = self.active.as_ref() {
+            if let Some(map) = self.worktree_names.get_mut(path) {
+                map.remove(dir_name);
+                if map.is_empty() {
+                    let path = path.clone();
+                    self.worktree_names.remove(&path);
+                }
+            }
+        }
     }
 
     /// Recompute every project's availability from the filesystem (FR-022). Called after
