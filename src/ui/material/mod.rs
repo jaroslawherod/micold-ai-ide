@@ -9,6 +9,7 @@
 //! [`Roles`]: micold_ai_ide::tokens::Roles
 
 mod animation;
+mod filter_panel;
 mod icon_button;
 mod menu;
 mod modal;
@@ -18,14 +19,15 @@ mod terminal_pane;
 mod toolbar;
 mod tree_view;
 
-pub use animation::{fade, scale, slide};
+pub use animation::{expand, fade, scale, slide};
+pub use filter_panel::FilterTrigger;
 pub use icon_button::IconButton;
 pub use menu::{ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};
 pub use tag::Tag;
-pub use terminal_pane::TerminalPane;
 pub(crate) use terminal_pane::target_offset_delta;
+pub use terminal_pane::TerminalPane;
 #[cfg(test)]
 pub(crate) use terminal_pane::{scrollbar_metrics, viewport_row};
 pub use toolbar::Toolbar;
@@ -65,4 +67,31 @@ impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
             .gap(spacing::XS)
             .into()
     }
+}
+
+/// The themed surface every floating popover's inner panel sits on (`MenuOverlay`,
+/// `ContextMenu`, `ProjectSwitcherOverlay`, the sidebar's filter accordion): padded content on
+/// the `menu_surface` background, at `width` (pass `Length::Shrink` for a natural-width panel
+/// like the filter accordion, or `Length::Fixed(...)` for a fixed-width dropdown). Factors out
+/// what was otherwise the identical `container(...).padding(...).style(...)` chain repeated at
+/// every popover call site. `bordered` drops the outline for panels that already read as
+/// distinct without one (the filter accordion sits inline in the sidebar rather than floating,
+/// so its own outline would be redundant next to the sidebar's edge).
+pub fn menu_panel<'a, M: 'a>(
+    content: impl Into<Element<'a, M>>,
+    width: impl Into<iced::Length>,
+    roles: Roles,
+    bordered: bool,
+) -> Element<'a, M> {
+    container(content)
+        .padding(spacing::XS)
+        .width(width)
+        .style(move |theme: &iced::Theme| {
+            let mut panel_style = style::menu_surface(roles)(theme);
+            if !bordered {
+                panel_style.border.width = 0.0;
+            }
+            panel_style
+        })
+        .into()
 }

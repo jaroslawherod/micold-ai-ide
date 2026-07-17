@@ -113,7 +113,10 @@ fn state_with_named_worktrees(dirs: &[(&str, WorktreeStatus)]) -> State {
     state
 }
 
-fn node<'a>(state: &'a [micold_ai_ide::app::WorktreeNode], dir: &str) -> &'a micold_ai_ide::app::WorktreeNode {
+fn node<'a>(
+    state: &'a [micold_ai_ide::app::WorktreeNode],
+    dir: &str,
+) -> &'a micold_ai_ide::app::WorktreeNode {
     state.iter().find(|n| n.worktree.dir_name == dir).unwrap()
 }
 
@@ -174,7 +177,10 @@ fn worktree_node_display_name_derived_when_no_override() {
         ("my-experiment", WorktreeStatus::Valid),
     ]);
     let tree = state.worktree_tree();
-    assert_eq!(node(&tree, "feat-abc-123-login-page").display_name, "Login page");
+    assert_eq!(
+        node(&tree, "feat-abc-123-login-page").display_name,
+        "Login page"
+    );
     assert_eq!(node(&tree, "my-experiment").display_name, "My experiment");
 }
 
@@ -202,14 +208,37 @@ fn empty_filter_shows_all() {
 #[test]
 fn type_filter_selects_only_that_type() {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(ConventionalType::Fix)));
-    assert_eq!(dirs(&state.filtered_worktree_tree()), vec!["fix-crash", "fix-def-9-thing"]);
+    state.update(Message::SidebarFilterToggled(TagFilter::Type(
+        ConventionalType::Fix,
+    )));
+    assert_eq!(
+        dirs(&state.filtered_worktree_tree()),
+        vec!["fix-crash", "fix-def-9-thing"]
+    );
+}
+
+#[test]
+fn filtered_tree_is_unaffected_by_the_filter_panels_open_state() {
+    // Feature 009 FR-007/FR-008: showing/hiding the filter panel is purely a display change and
+    // must never affect which worktrees are considered filtered.
+    let mut state = filtered_state();
+    state.update(Message::SidebarFilterToggled(TagFilter::Type(
+        ConventionalType::Fix,
+    )));
+    let expected = dirs(&state.filtered_worktree_tree());
+
+    state.update(Message::SidebarFilterMenuToggled); // open
+    assert_eq!(dirs(&state.filtered_worktree_tree()), expected);
+    state.update(Message::SidebarFilterMenuToggled); // close
+    assert_eq!(dirs(&state.filtered_worktree_tree()), expected);
 }
 
 #[test]
 fn filters_combine_with_or() {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(ConventionalType::Feat)));
+    state.update(Message::SidebarFilterToggled(TagFilter::Type(
+        ConventionalType::Feat,
+    )));
     state.update(Message::SidebarFilterToggled(TagFilter::Untyped));
     // feat + untyped ⇒ the feat worktree and the non-conforming one.
     assert_eq!(
@@ -249,23 +278,32 @@ fn available_filters_reflect_present_tags() {
 #[test]
 fn filter_recomputes_after_delete(/* FR-028 / C1 */) {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(ConventionalType::Fix)));
+    state.update(Message::SidebarFilterToggled(TagFilter::Type(
+        ConventionalType::Fix,
+    )));
     assert_eq!(state.filtered_worktree_tree().len(), 2);
     // Remove one fix worktree via the delete reducer path.
     state.update(Message::WorktreeDeleteRequested("fix-crash".to_string()));
     state.update(Message::WorktreeDeleteConfirmed);
-    assert_eq!(dirs(&state.filtered_worktree_tree()), vec!["fix-def-9-thing"]);
+    assert_eq!(
+        dirs(&state.filtered_worktree_tree()),
+        vec!["fix-def-9-thing"]
+    );
 }
 
 #[test]
 fn filter_recomputes_after_rename(/* FR-028 / C1 */) {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(ConventionalType::Fix)));
+    state.update(Message::SidebarFilterToggled(TagFilter::Type(
+        ConventionalType::Fix,
+    )));
     // Renaming changes only the display name; tags (and thus the filter result) are unchanged.
     state.update(Message::WorktreeRenameStarted("fix-crash".to_string()));
     state.update(Message::WorktreeRenameTextChanged("Hotfix".to_string()));
     state.update(Message::WorktreeRenameConfirmed);
     assert_eq!(state.filtered_worktree_tree().len(), 2);
-    let renamed = node(&state.filtered_worktree_tree(), "fix-crash").display_name.clone();
+    let renamed = node(&state.filtered_worktree_tree(), "fix-crash")
+        .display_name
+        .clone();
     assert_eq!(renamed, "Hotfix");
 }

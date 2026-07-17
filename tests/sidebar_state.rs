@@ -1,7 +1,8 @@
 //! Sidebar hide/show + adjustable-width state (feature 005 UI enhancement).
 
 use micold_ai_ide::app::{
-    Message, Overlay, State, TagFilter, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
+    on_escape, Message, Overlay, State, TagFilter, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH,
+    SIDEBAR_MIN_WIDTH,
 };
 use micold_ai_ide::naming::ConventionalType;
 use micold_ai_ide::project::{Availability, Project};
@@ -100,7 +101,10 @@ fn worktree_rename_seeds_edits_and_applies() {
     assert_eq!(draft.text, "Login page"); // seeded from the derived name
 
     state.update(Message::WorktreeRenameTextChanged("My Login".to_string()));
-    assert_eq!(state.worktree_rename_draft.as_ref().unwrap().text, "My Login");
+    assert_eq!(
+        state.worktree_rename_draft.as_ref().unwrap().text,
+        "My Login"
+    );
 
     state.update(Message::WorktreeRenameConfirmed);
     assert_eq!(state.overlay, Overlay::None);
@@ -119,7 +123,12 @@ fn worktree_rename_empty_keeps_prior_name_with_error() {
     state.update(Message::WorktreeRenameConfirmed);
     // Stays open with an error; no override applied → still the derived name.
     assert_eq!(state.overlay, Overlay::RenameWorktree);
-    assert!(state.worktree_rename_draft.as_ref().unwrap().error.is_some());
+    assert!(state
+        .worktree_rename_draft
+        .as_ref()
+        .unwrap()
+        .error
+        .is_some());
     assert_eq!(state.worktree_display_name("feat-x"), "X");
 }
 
@@ -168,4 +177,104 @@ fn sidebar_filter_toggles_and_clears() {
     assert_eq!(state.sidebar_filters.len(), 2);
     state.update(Message::SidebarFiltersCleared);
     assert!(state.sidebar_filters.is_empty());
+}
+
+// --- Feature 009: sidebar filter panel toggle ---
+
+#[test]
+fn sidebar_filter_panel_starts_closed() {
+    let state = State::default();
+    assert!(!state.sidebar_filter_open);
+}
+
+#[test]
+fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
+    let mut state = State::default();
+    state.help_menu_open = true;
+
+    state.update(Message::SidebarFilterMenuToggled);
+    assert!(state.sidebar_filter_open);
+    // Opening the filter panel closes the sibling popovers (mutual exclusion, symmetric with
+    // the existing HelpMenuToggled/ProjectSwitcherToggled pair).
+    assert!(!state.help_menu_open);
+    assert!(!state.project_switcher_open);
+
+    state.update(Message::SidebarFilterMenuToggled);
+    assert!(!state.sidebar_filter_open);
+}
+
+#[test]
+fn opening_help_menu_or_project_switcher_closes_the_filter_panel() {
+    let mut state = State::default();
+    state.update(Message::SidebarFilterMenuToggled);
+    assert!(state.sidebar_filter_open);
+
+    state.update(Message::HelpMenuToggled);
+    assert!(!state.sidebar_filter_open);
+
+    state.update(Message::SidebarFilterMenuToggled);
+    assert!(state.sidebar_filter_open);
+
+    state.update(Message::ProjectSwitcherToggled);
+    assert!(!state.sidebar_filter_open);
+}
+
+#[test]
+fn closing_the_filter_panel_never_changes_active_filters() {
+    let mut state = State::default();
+    let feat = TagFilter::Type(ConventionalType::Feat);
+    state.update(Message::SidebarFilterToggled(feat));
+    assert!(state.sidebar_filters.contains(&feat));
+
+    state.update(Message::SidebarFilterMenuToggled); // open
+    assert!(state.sidebar_filters.contains(&feat));
+    state.update(Message::SidebarFilterMenuToggled); // close
+    assert!(
+        state.sidebar_filters.contains(&feat),
+        "toggling panel visibility must not alter the active filter set (FR-007/FR-008)"
+    );
+}
+
+#[test]
+fn escape_dismisses_the_open_filter_panel_when_no_overlay_is_open() {
+    let mut state = State::default();
+    assert_eq!(on_escape(&state), None);
+
+    state.sidebar_filter_open = true;
+    assert_eq!(
+        on_escape(&state),
+        Some(Message::SidebarFilterMenuToggled),
+        "Escape must dismiss the filter panel while it's open"
+    );
+}
+
+#[test]
+fn escape_prefers_an_open_overlay_over_the_filter_panel() {
+    // Mirrors the keyboard subscription's guard exactly (`ui::subscription()`): if a modal
+    // overlay is somehow open at the same time as the filter panel, the overlay's own Escape
+    // handling takes priority, not the filter panel's. In practice `State::open_overlay()`
+    // keeps this combination from ever occurring (see the next test), but `on_escape` must not
+    // silently disagree with the live subscription if that invariant is ever violated.
+    let mut state = State::default();
+    state.sidebar_filter_open = true;
+    state.overlay = Overlay::AddWorktree;
+    assert_eq!(on_escape(&state), Some(Message::AddWorktreeCancelled));
+}
+
+#[test]
+fn opening_an_overlay_closes_the_filter_panel() {
+    // Regression test: previously, opening a modal overlay (e.g. the Add Worktree form) while
+    // the filter accordion was open left `sidebar_filter_open` untouched, so `on_escape` and
+    // the live keyboard subscription disagreed about what Escape should dismiss. Every
+    // overlay-open now routes through `State::open_overlay`, which resets it unconditionally.
+    let mut state = State::default();
+    state.update(Message::SidebarFilterMenuToggled);
+    assert!(state.sidebar_filter_open);
+
+    state.update(Message::AddWorktreeOpened);
+    assert!(
+        !state.sidebar_filter_open,
+        "opening an overlay must close the filter panel"
+    );
+    assert_eq!(state.overlay, Overlay::AddWorktree);
 }

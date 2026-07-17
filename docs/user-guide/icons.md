@@ -25,9 +25,10 @@ icons re-color together with the rest of the window.
 ## Appearance and licensing
 
 The icons come from Google's Material Symbols, distributed under the Apache License 2.0 — the
-same license as this project. Only the handful of glyphs the app actually uses are bundled, so
-the icon font adds almost nothing to the download. The font is embedded in the application and
-needs no internet connection.
+same license as this project. The bundled font ships with full glyph coverage (every icon the
+upstream font defines), so adding a new icon never requires touching the font file itself — see
+[`assets/fonts/PROVENANCE.md`](../../assets/fonts/PROVENANCE.md). The font is embedded in the
+application and needs no internet connection.
 
 ## For contributors: adding a new icon
 
@@ -37,11 +38,10 @@ through to a blank box at runtime. To add one:
 
 1. Find the glyph's codepoint in the upstream
    [`.codepoints`](https://github.com/google/material-design-icons) manifest.
-2. Re-run the subset step in [`assets/fonts/PROVENANCE.md`](../../assets/fonts/PROVENANCE.md)
-   with the new codepoint added to `--unicodes`.
-3. Add an `Icon` variant and its codepoint in `src/icons.rs`, and add a row to the mapping
+2. Add an `Icon` variant and its codepoint in `src/icons.rs`, and add a row to the mapping
    table in `PROVENANCE.md`.
-4. Extend the mapping assertion in `tests/icons.rs`. The font-integrity test
-   (`tests/icons_font.rs`) then verifies the new glyph is really present in the bundled font.
+3. Extend the mapping assertion in `tests/icons.rs`. The font-integrity test
+   (`tests/icons_font.rs`) then verifies the glyph is present in the bundled font — which it
+   already is, since the font carries full upstream coverage.
 
 See [Appearance & Theming](appearance-theming.md) for how themes and colors work.

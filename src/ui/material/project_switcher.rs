@@ -7,7 +7,7 @@
 //! background-session count, and an unavailable badge; a trailing "Add project…" row opens the
 //! folder browser. Reuses the shared backdrop/stack overlay machinery rather than forking one.
 
-use super::Tooltip;
+use super::{menu_panel, Tooltip};
 use crate::ui::{icon, style};
 use iced::widget::{button, column, container, mouse_area, row, text, Space};
 use iced::{Alignment, Element, Length};
@@ -172,22 +172,17 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Element<'a, M> {
             .on_press(on_add),
         );
 
-        let panel = container(
-            container(list)
-                .padding(spacing::XS)
-                .width(Length::Fixed(PANEL_WIDTH))
-                .style(style::menu_surface(r)),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(iced::alignment::Horizontal::Right)
-        .align_y(iced::alignment::Vertical::Top)
-        .padding(iced::Padding {
-            top: TOP_OFFSET,
-            right: spacing::SM as f32,
-            bottom: 0.0,
-            left: 0.0,
-        });
+        let panel = container(menu_panel(list, Length::Fixed(PANEL_WIDTH), r, true))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Right)
+            .align_y(iced::alignment::Vertical::Top)
+            .padding(iced::Padding {
+                top: TOP_OFFSET,
+                right: spacing::SM as f32,
+                bottom: 0.0,
+                left: 0.0,
+            });
 
         // Invisible backdrop that dismisses the switcher on any outside click.
         let backdrop = mouse_area(

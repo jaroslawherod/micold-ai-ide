@@ -5,7 +5,7 @@
 //! overlay (Angular-Material `mat-menu` style) — so opening it never reflows the toolbar.
 //! Reused for the toolbar's overflow menu; any future dropdown should reuse it.
 
-use crate::ui::material::IconButton;
+use crate::ui::material::{menu_panel, IconButton};
 use crate::ui::{icon, style};
 use iced::widget::{button, column, container, mouse_area, row, text, Space};
 use iced::{Alignment, Element, Length};
@@ -151,10 +151,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Element<'a, M> {
 
         // Fade the panel box itself (scrim of its own surface color), then anchor it top-right.
         let panel_box = super::fade(
-            container(item_column(items, r))
-                .padding(spacing::XS)
-                .width(Length::Fixed(PANEL_WIDTH))
-                .style(style::menu_surface(r)),
+            menu_panel(item_column(items, r), Length::Fixed(PANEL_WIDTH), r, true),
             progress,
             style::color(r.surface),
         );
@@ -240,12 +237,12 @@ impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Element<'a, M> {
         } = m;
 
         // Anchor the panel's top-left at the click point via top/left padding on a fill container.
-        let panel = container(
-            container(item_column(items, r))
-                .padding(spacing::XS)
-                .width(Length::Fixed(CONTEXT_MENU_WIDTH))
-                .style(style::menu_surface(r)),
-        )
+        let panel = container(menu_panel(
+            item_column(items, r),
+            Length::Fixed(CONTEXT_MENU_WIDTH),
+            r,
+            true,
+        ))
         .width(Length::Fill)
         .height(Length::Fill)
         .align_x(iced::alignment::Horizontal::Left)

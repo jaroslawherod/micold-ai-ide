@@ -16,8 +16,8 @@ use micold_ai_ide::app::{
 use micold_ai_ide::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_ai_ide::git::{Git, GitCli};
 use micold_ai_ide::motion::Animator;
-use micold_ai_ide::selector::{Selector, SelectorStatus};
 use micold_ai_ide::provider::{AiCliProvider, ClaudeProvider};
+use micold_ai_ide::selector::{Selector, SelectorStatus};
 use micold_ai_ide::session::{RestartDecision, Session, SessionId, SessionLabel, SessionLifecycle};
 use micold_ai_ide::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_ai_ide::store::{JsonFileStore, ProjectStore};
@@ -123,7 +123,7 @@ fn main_content_key(core: &State) -> String {
 ///
 /// `MotionKey::Overlay` is intentionally absent: it is driven by the overlay open/close
 /// lifecycle in `update`, not by steady-state.
-fn motion_targets(app: &App) -> [(MotionKey, f32, Duration); 4] {
+fn motion_targets(app: &App) -> [(MotionKey, f32, Duration); 5] {
     [
         (
             MotionKey::Menu,
@@ -140,6 +140,15 @@ fn motion_targets(app: &App) -> [(MotionKey, f32, Duration); 4] {
             MotionKey::HandleHover,
             if app.handle_hovered { 1.0 } else { 0.0 },
             HANDLE_HOVER,
+        ),
+        (
+            MotionKey::SidebarFilter,
+            if app.core.sidebar_filter_open {
+                1.0
+            } else {
+                0.0
+            },
+            MENU_FADE,
         ),
     ]
 }
@@ -245,6 +254,7 @@ fn boot() -> (App, Task<Message>) {
     motion.set(MotionKey::Main, 1.0);
     motion.set(MotionKey::HandleHover, 0.0);
     motion.set(MotionKey::Overlay, 0.0);
+    motion.set(MotionKey::SidebarFilter, 0.0);
     let main_key = main_content_key(&core);
     (
         App {
@@ -416,7 +426,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::ProjectSelectorOpened => {
             let dir = start_dir();
             app.core.selector = Some(Selector::open_at(dir.clone()));
-            app.core.overlay = Overlay::ProjectSelector;
+            app.core.open_overlay(Overlay::ProjectSelector);
             scan_task(dir)
         }
         Message::SelectorNavigatedInto(_) | Message::SelectorNavigatedUp => {
@@ -732,7 +742,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             let target = app.core.worktree_delete_target.clone();
             if let (Some(dir), Some(repo)) = (target, app.core.workspace.active.clone()) {
                 // Facts to remove — captured before the reducer drops them from state.
-                let wt = app.core.worktrees.iter().find(|w| w.dir_name == dir).cloned();
+                let wt = app
+                    .core
+                    .worktrees
+                    .iter()
+                    .find(|w| w.dir_name == dir)
+                    .cloned();
                 // Terminate this worktree's running sessions first.
                 for id in app.core.sessions_in_worktree(&dir) {
                     if let Some(mut rt) = app.terminals.remove(&id) {
@@ -740,8 +755,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     }
                 }
                 if let Some(wt) = wt {
-                    let _ =
-                        remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref());
+                    let _ = remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref());
                     let _ = std::fs::remove_dir_all(&wt.path);
                 }
                 // Drop the session/worktree records in the core, then reconcile from git truth.
@@ -813,7 +827,9 @@ fn sync_session_titles(app: &mut App) {
         if !session.is_active() {
             continue;
         }
-        let cwd = project.join(".claude/worktrees").join(&session.worktree_dir);
+        let cwd = project
+            .join(".claude/worktrees")
+            .join(&session.worktree_dir);
         if let Some(title) = provider.read_title(&config, &cwd, session.id.0) {
             if session.label != SessionLabel::Named(title.clone()) {
                 updates.push((session.id, title));

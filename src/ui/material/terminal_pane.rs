@@ -138,7 +138,7 @@ impl<'a> TerminalPane<'a> {
         }
     }
 
-    /// Mark the pane focused (draws the accent focus border).
+    /// Mark the pane focused (routes keyboard input to it; no border is drawn for this).
     pub fn focused(mut self, focused: bool) -> Self {
         self.focused = focused;
         self
@@ -325,15 +325,6 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 frame.fill(&thumb, Color { a: 0.5, ..fg });
             }
 
-            // Focus indicator: an accent border when the terminal holds input focus (FR-010).
-            if self.focused {
-                frame.stroke(
-                    &Path::rectangle(bounds.position(), bounds.size()),
-                    Stroke::default()
-                        .with_width(1.5)
-                        .with_color(self.palette.accent()),
-                );
-            }
         }
 
         renderer.draw_geometry(frame.into_geometry());

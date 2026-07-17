@@ -1,7 +1,9 @@
 //! The left navigation sidebar: worktrees (top level) → sessions (sub-items), built from the
 //! shared [`tree_view`] primitive (FR-002, FR-003, Constitution Principle VIII).
 
-use crate::ui::material::{IconButton, Tooltip, TreeItem, TreeView};
+use crate::ui::material::{
+    expand, menu_panel, FilterTrigger, IconButton, Tooltip, TreeItem, TreeView,
+};
 use crate::ui::style;
 use iced::widget::{button, column, container, mouse_area, row, scrollable, text, Space};
 use iced::{Alignment, Background, Border, Color, Element, Length};
@@ -16,15 +18,6 @@ use micold_ai_ide::worktree::WorktreeStatus;
 const HANDLE_WIDTH: f32 = 6.0;
 /// Width of the collapsed strip that hosts the "show sidebar" button.
 const STRIP_WIDTH: f32 = 32.0;
-
-/// A low-contrast color for separator/border lines (the sidebar edge and the resize handle):
-/// the outline role softened with reduced alpha so it reads as a subtle divider, not a hard rule.
-fn separator_color(r: Roles) -> iced::Color {
-    iced::Color {
-        a: 0.4,
-        ..style::color(r.outline)
-    }
-}
 
 /// Linearly interpolate between two colors (`t` 0→1), for the handle's animated hover highlight.
 fn lerp_color(from: iced::Color, to: iced::Color, t: f32) -> iced::Color {
@@ -43,11 +36,18 @@ pub fn view<'a>(
     state: &'a State,
     scheme: micold_ai_ide::theme::ColorScheme,
     row_fx: &micold_ai_ide::motion::Animator<u64>,
+    filter_progress: f32,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let width = state.sidebar_width_px() as f32;
 
-    // Header: title (fill) + add-worktree + hide, the actions grouped on the right.
+    // Header: filter (left) + title (fill) + add-worktree + hide.
+    // Toggles the filter accordion below (feature 009); tinted to show whether any filter is
+    // currently active even while the accordion is collapsed (FR-005, US2).
+    let filter_toggle: Element<'_, Message> =
+        FilterTrigger::new(Message::SidebarFilterMenuToggled, r)
+            .active(!state.sidebar_filters.is_empty())
+            .into();
     let add_worktree = Tooltip::new(
         IconButton::new(Icon::AddWorktree, r)
             .tint(r.primary)
@@ -63,6 +63,7 @@ pub fn view<'a>(
         r,
     );
     let header = row![
+        filter_toggle,
         text("Worktrees")
             .size(type_scale::TITLE)
             .width(Length::Fill),
@@ -71,6 +72,21 @@ pub fn view<'a>(
     ]
     .align_y(Alignment::Center)
     .spacing(spacing::XS);
+
+    // The filter chips (feature 008) live in an accordion that expands/collapses below the
+    // header (feature 009) — collapsed to zero height by default, pushing the worktree list
+    // down rather than floating over it. Skip building `filter_bar()` (an O(worktrees) scan
+    // plus a chip `Element` tree) while fully collapsed — the common steady state — since it
+    // would only be thrown away as invisible; `expand()` itself already renders a bare
+    // zero-height node with no content to lay out or hit-test in that case.
+    let filter_accordion: Element<'_, Message> = if filter_progress > 0.001 {
+        expand(
+            menu_panel(filter_bar(state, r), Length::Shrink, r, false),
+            filter_progress,
+        )
+    } else {
+        Space::with_height(Length::Fixed(0.0)).into()
+    };
 
     let body: Element<'_, Message> = if state.worktrees.is_empty() {
         container(
@@ -101,9 +117,8 @@ pub fn view<'a>(
                 .into()
         };
         // Scroll the list when it exceeds the sidebar height, with a thin themed scrollbar.
-        // The list gets a little right padding so rows never sit under the scrollbar, and the
-        // filter bar stays fixed above it.
-        let scrolled = scrollable(container(list).padding(iced::Padding {
+        // The list gets a little right padding so rows never sit under the scrollbar.
+        scrollable(container(list).padding(iced::Padding {
             top: 0.0,
             right: spacing::SM as f32,
             bottom: 0.0,
@@ -116,16 +131,13 @@ pub fn view<'a>(
                 .margin(1.0),
         ))
         .height(Length::Fill)
-        .style(style::scrollbar(r));
-        column![filter_bar(state, r), scrolled]
-            .spacing(spacing::SM)
-            .height(Length::Fill)
-            .into()
+        .style(style::scrollbar(r))
+        .into()
     };
 
     // Minimal left/right padding to maximize name/tag width (FR-009); a little vertical breathing
     // room is kept.
-    let content = column![header, body]
+    let content = column![header, filter_accordion, body]
         .spacing(spacing::SM)
         .padding(iced::Padding {
             top: spacing::SM as f32,
@@ -156,7 +168,7 @@ pub fn handle(scheme: micold_ai_ide::theme::ColorScheme, hover: f32) -> Element<
         .height(Length::Fill)
         .style(style::sidebar_surface(r));
     // The separator brightens toward the accent as the pointer hovers (animated via `hover`).
-    let line_color = lerp_color(separator_color(r), style::color(r.primary), hover);
+    let line_color = lerp_color(style::separator(r), style::color(r.primary), hover);
     let line = container(Space::new(Length::Fixed(1.0), Length::Fill))
         .height(Length::Fill)
         .style(move |_t: &iced::Theme| iced::widget::container::Style {
@@ -195,7 +207,7 @@ pub fn collapsed_strip(scheme: micold_ai_ide::theme::ColorScheme) -> Element<'st
     let border = container(Space::new(Length::Fixed(1.0), Length::Fill))
         .height(Length::Fill)
         .style(move |_t: &iced::Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(separator_color(r))),
+            background: Some(iced::Background::Color(style::separator(r))),
             ..Default::default()
         });
 
@@ -230,32 +242,47 @@ fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Me
             right: spacing::SM as f32,
         })
         .on_press(Message::SidebarFilterToggled(filter))
-        .style(move |_theme: &iced::Theme, _status| iced::widget::button::Style {
-            background: Some(Background::Color(if active { fill } else { Color::TRANSPARENT })),
-            text_color: if active { on } else { muted },
-            border: Border {
-                color: if active { fill } else { outline },
-                width: if active { 0.0 } else { 1.0 },
-                radius: (shape::FULL as f32).into(),
+        .style(
+            move |_theme: &iced::Theme, _status| iced::widget::button::Style {
+                background: Some(Background::Color(if active {
+                    fill
+                } else {
+                    Color::TRANSPARENT
+                })),
+                text_color: if active { on } else { muted },
+                border: Border {
+                    color: if active { fill } else { outline },
+                    width: if active { 0.0 } else { 1.0 },
+                    radius: (shape::FULL as f32).into(),
+                },
+                ..Default::default()
             },
-            ..Default::default()
-        })
+        )
         .into()
 }
 
-/// The filter chip bar shown above the worktree list (feature 008, FR-024/FR-026). One chip per
-/// available filter (chunked into rows so they never overflow the sidebar), plus a "Clear"
-/// control when any filter is active.
+/// The filter chip bar, shown inside the sidebar's filter accordion (feature 009) rather than
+/// always visible above the worktree list. One chip per available filter (chunked into rows so
+/// they never overflow the panel), plus a "Clear" control when any filter is active (feature
+/// 008, FR-024/FR-026). When no tags exist anywhere yet, shows a short message instead of an
+/// empty panel (FR-009).
 fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
     let available = state.available_tag_filters();
     if available.is_empty() {
-        return Space::with_height(Length::Fixed(0.0)).into();
+        return text("No tags to filter yet.")
+            .size(sidebar::TAG)
+            .style(style::muted(r))
+            .into();
     }
     let mut col = column![].spacing(spacing::XS);
     for chunk in available.chunks(3) {
         let mut rw = row![].spacing(spacing::XS).align_y(Alignment::Center);
         for &filter in chunk {
-            rw = rw.push(filter_chip(filter, state.sidebar_filters.contains(&filter), r));
+            rw = rw.push(filter_chip(
+                filter,
+                state.sidebar_filters.contains(&filter),
+                r,
+            ));
         }
         col = col.push(rw);
     }
@@ -380,8 +407,7 @@ fn build_items(
             WorktreeStatus::Missing | WorktreeStatus::Invalid => r.error,
         };
 
-        let tags: Vec<(String, Rgb)> =
-            node.tags.iter().map(|tag| tag_chip(tag, r)).collect();
+        let tags: Vec<(String, Rgb)> = node.tags.iter().map(|tag| tag_chip(tag, r)).collect();
         let dir = wt.dir_name.clone();
 
         let mut item = TreeItem::new(0, node.display_name.clone(), tint)
@@ -391,7 +417,10 @@ fn build_items(
                 Message::WorktreeHovered(dir.clone()),
                 Message::WorktreeUnhovered(dir.clone()),
             )
-            .expandable(node.expanded, Message::WorktreeExpansionToggled(dir.clone()));
+            .expandable(
+                node.expanded,
+                Message::WorktreeExpansionToggled(dir.clone()),
+            );
 
         // Always reserve the action cluster's width so hovering never reflows the row; each row
         // fades its icons in/out independently via its own animation track (feature 008). The

@@ -293,6 +293,9 @@ pub enum Message {
     SidebarFilterToggled(TagFilter),
     /// Clear all active tag filters, restoring the full list (FR-026).
     SidebarFiltersCleared,
+    /// Toggle the sidebar's tag-filter panel open/closed (feature 009). Mutually exclusive
+    /// with `help_menu_open` and `project_switcher_open`.
+    SidebarFilterMenuToggled,
     /// The pointer entered a worktree row (feature 008), by `dir_name`; reveals its row actions.
     WorktreeHovered(String),
     /// The pointer left a worktree row (feature 008), by `dir_name`; hides its row actions.
@@ -461,6 +464,10 @@ pub struct State {
     /// Active sidebar tag filters (feature 008, FR-024). Empty ⇒ all worktrees shown. Multiple
     /// filters combine with OR (FR-025). Transient — not persisted.
     pub sidebar_filters: BTreeSet<TagFilter>,
+    /// Whether the sidebar's tag-filter panel is shown (feature 009, FR-002/FR-003). Mutually
+    /// exclusive with `help_menu_open`/`project_switcher_open`. Transient — not persisted;
+    /// closing it never alters `sidebar_filters` (FR-007/FR-008).
+    pub sidebar_filter_open: bool,
     /// The worktree row the pointer is currently over, by `dir_name` (feature 008). Drives the
     /// hover-revealed row actions (add-session + delete). Transient.
     pub hovered_worktree: Option<String>,
@@ -473,22 +480,38 @@ impl State {
         resolve(self.theme_pref, self.system_scheme)
     }
 
+    /// Open a modal overlay, closing any lightweight popover first. The two are meant to be
+    /// mutually exclusive (`on_escape` and the keyboard subscription both assume it — feature
+    /// 009 code review), but before this helper existed each overlay-opening arm had to
+    /// remember to reset the popovers by hand, and none of them reset `sidebar_filter_open`,
+    /// so it was possible to open e.g. the Add Worktree form while the filter panel was still
+    /// (invisibly) open, leaving Escape's two implementations disagreeing about what to
+    /// dismiss. Routing every overlay-open through here makes that reset unconditional.
+    pub fn open_overlay(&mut self, overlay: Overlay) {
+        self.overlay = overlay;
+        self.help_menu_open = false;
+        self.project_switcher_open = false;
+        self.sidebar_filter_open = false;
+    }
+
     /// Apply a [`Message`], transitioning the state. Pure and side-effect free.
     pub fn update(&mut self, message: Message) {
         match message {
             Message::HelpMenuToggled => {
                 self.help_menu_open = !self.help_menu_open;
-                // The overflow menu and the project switcher are mutually exclusive.
+                // The overflow menu, the project switcher, and the sidebar filter panel are
+                // mutually exclusive (feature 009).
                 self.project_switcher_open = false;
+                self.sidebar_filter_open = false;
             }
             Message::ProjectSwitcherToggled => {
                 self.project_switcher_open = !self.project_switcher_open;
                 self.help_menu_open = false;
+                self.sidebar_filter_open = false;
             }
             Message::AboutOpened => {
                 // Idempotent: opening while already open keeps a single instance (FR-015).
-                self.overlay = Overlay::About;
-                self.help_menu_open = false;
+                self.open_overlay(Overlay::About);
             }
             Message::AboutClosed => {
                 // No-op when nothing is open (edge case); otherwise return to the
@@ -532,7 +555,7 @@ impl State {
                         text: name,
                         error: None,
                     });
-                    self.overlay = Overlay::RenameProject;
+                    self.open_overlay(Overlay::RenameProject);
                 }
             }
             Message::RenameTextChanged(text) => {
@@ -608,7 +631,7 @@ impl State {
             Message::WorktreeDeleteRequested(dir) => {
                 self.worktree_menu_open = None;
                 self.worktree_delete_target = Some(dir);
-                self.overlay = Overlay::ConfirmWorktreeDelete;
+                self.open_overlay(Overlay::ConfirmWorktreeDelete);
             }
             Message::WorktreeDeleteConfirmed => {
                 // Drop the worktree's session records and clear the active session if it was
@@ -650,7 +673,7 @@ impl State {
                     text,
                     error: None,
                 });
-                self.overlay = Overlay::RenameWorktree;
+                self.open_overlay(Overlay::RenameWorktree);
             }
             Message::WorktreeRenameTextChanged(text) => {
                 if let Some(draft) = &mut self.worktree_rename_draft {
@@ -690,6 +713,12 @@ impl State {
             Message::SidebarFiltersCleared => {
                 self.sidebar_filters.clear();
             }
+            Message::SidebarFilterMenuToggled => {
+                self.sidebar_filter_open = !self.sidebar_filter_open;
+                // Mutually exclusive with the other two lightweight popovers (feature 009).
+                self.help_menu_open = false;
+                self.project_switcher_open = false;
+            }
             Message::WorktreeHovered(dir) => {
                 self.hovered_worktree = Some(dir);
             }
@@ -701,7 +730,7 @@ impl State {
                 }
             }
             Message::AddWorktreeOpened => {
-                self.overlay = Overlay::AddWorktree;
+                self.open_overlay(Overlay::AddWorktree);
                 self.worktree_form = Some(WorktreeForm::default());
                 self.worktree_error = None;
             }
@@ -829,8 +858,7 @@ impl State {
                 self.terminal_context_menu = None;
             }
             Message::SettingsOpened => {
-                self.overlay = Overlay::Settings;
-                self.help_menu_open = false;
+                self.open_overlay(Overlay::Settings);
                 // The binary seeds the current value; ensure a draft exists for the reducer path.
                 if self.settings_draft.is_none() {
                     self.settings_draft = Some(SettingsDraft::default());
@@ -962,8 +990,8 @@ impl State {
     pub fn restore_after_activation(&mut self, path: &Path) {
         let key = canonicalize_best_effort(path);
         self.active_session = self.restore_foreground(&key); // STEP 3
-        // BUG-001 / focus-model.md: switching (or opening) a project does not carry terminal focus
-        // across — re-focusing the restored session is a fresh explicit action (or a select/start).
+                                                             // BUG-001 / focus-model.md: switching (or opening) a project does not carry terminal focus
+                                                             // across — re-focusing the restored session is a fresh explicit action (or a select/start).
         self.terminal_focused = false;
         self.arm_notice(&key); // STEP 4
     }
@@ -1119,7 +1147,18 @@ impl State {
 /// Returns `Some(AboutClosed)` only while the About overlay is open (FR-011); returns
 /// `None` otherwise, so pressing Esc with no dialog open has no effect (edge case). The
 /// iced keyboard subscription in the binary delegates to this pure function.
+///
+/// Checks the sidebar filter panel first (feature 009): it's a lightweight popover, not a
+/// modal `Overlay`, and the two are mutually exclusive in practice, so this takes priority
+/// without needing `state.overlay` to be `None`.
 pub fn on_escape(state: &State) -> Option<Message> {
+    // Matches the keyboard subscription's guard exactly (`ui::subscription()`) — both require
+    // no modal `Overlay` before prioritizing the filter panel. `open_overlay()` keeps this
+    // combination unreachable in practice, but checking it here too means the two Escape
+    // implementations can never disagree even if that invariant is ever violated elsewhere.
+    if state.overlay == Overlay::None && state.sidebar_filter_open {
+        return Some(Message::SidebarFilterMenuToggled);
+    }
     match state.overlay {
         Overlay::About => Some(Message::AboutClosed),
         Overlay::ProjectSelector => Some(Message::ProjectSelectorClosed),
