@@ -7,20 +7,20 @@ use crate::ui::style;
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Length};
 use micold_ai_ide::app::Message;
-use micold_ai_ide::naming::display_name;
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale};
 
-/// Stack the confirm-delete dialog for the worktree `dir_name` as a modal over `base`, at
-/// transition `progress` (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
+/// Stack the confirm-delete dialog for the worktree `dir_name` (shown by its `friendly` display
+/// name — the rename override when set) as a modal over `base`, at transition `progress`
+/// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
 pub fn modal<'a>(
     base: Element<'a, Message>,
     dir_name: &str,
+    friendly: &str,
     scheme: ColorScheme,
     progress: f32,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
-    let friendly = display_name(dir_name);
 
     let warning = format!(
         "This permanently removes the worktree directory \

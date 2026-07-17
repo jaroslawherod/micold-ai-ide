@@ -234,7 +234,7 @@ fn boot() -> (App, Task<Message>) {
     core.system_scheme = detect_system_scheme();
     // If a project is already active from a previous run, discover its worktrees.
     if let Some(repo) = core.workspace.active.clone() {
-        core.worktrees = discover_worktrees(&repo);
+        core.set_worktrees(discover_worktrees(&repo));
     }
     let mut motion = Animator::new();
     motion.set(MotionKey::Menu, 0.0);
@@ -446,7 +446,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 .workspace
                 .open_or_activate(path.clone(), &StdFolderScanner::new());
             app.core.restore_after_activation(&path);
-            app.core.worktrees = discover_worktrees(&path);
+            app.core.set_worktrees(discover_worktrees(&path));
             app.core.worktree_error = None;
             persist(&app.core);
             Task::none()
@@ -458,7 +458,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // Non-destructive switch: keep the outgoing project's sessions running in the
             // background and restore the target project's foreground (feature 008, BS-1/BS-3).
             if app.core.switch_active(&path) {
-                app.core.worktrees = discover_worktrees(&path);
+                app.core.set_worktrees(discover_worktrees(&path));
                 persist(&app.core);
             }
             Task::none()
@@ -746,7 +746,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 }
                 // Drop the session/worktree records in the core, then reconcile from git truth.
                 app.core.update(Message::WorktreeDeleteConfirmed);
-                app.core.worktrees = discover_worktrees(&repo);
+                app.core.set_worktrees(discover_worktrees(&repo));
                 persist(&app.core);
             } else {
                 app.core.update(Message::WorktreeDeleteConfirmed);

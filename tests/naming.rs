@@ -147,6 +147,17 @@ fn parse_tags_type_only_when_no_issue() {
 }
 
 #[test]
+fn parse_tags_ignores_trailing_number_in_name() {
+    // A number at the END of a multi-word name is NOT a ticket — the ticket immediately follows
+    // the type. So `feat-add-retry-3` is name "add retry 3", not issue "RETRY-3".
+    assert_eq!(
+        parse_tags("feat-add-retry-3"),
+        vec![Tag::Type(ConventionalType::Feat)]
+    );
+    assert_eq!(display_name("feat-add-retry-3"), "Add retry 3");
+}
+
+#[test]
 fn parse_tags_untyped_when_no_known_type() {
     assert!(parse_tags("my-experiment").is_empty());
     assert!(parse_tags("main").is_empty());

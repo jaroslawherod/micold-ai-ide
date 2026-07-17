@@ -581,12 +581,8 @@ impl State {
                 self.worktree_error = Some(message);
             }
             Message::WorktreesLoaded(worktrees) => {
-                self.worktrees = worktrees;
                 self.worktree_error = None;
-                // Drop expansion state for worktrees that no longer exist.
-                let names: BTreeSet<String> =
-                    self.worktrees.iter().map(|w| w.dir_name.clone()).collect();
-                self.expanded.retain(|d| names.contains(d));
+                self.set_worktrees(worktrees);
             }
             Message::WorktreeExpansionToggled(dir) => {
                 if !self.expanded.remove(&dir) {
@@ -904,6 +900,49 @@ impl State {
                 available: p.availability == Availability::Available,
             })
             .collect()
+    }
+
+    /// Replace the discovered worktrees and reconcile every piece of state that references a
+    /// worktree by `dir_name`, so nothing points at a worktree that no longer exists (feature
+    /// 008). The single path used by both the `WorktreesLoaded` reducer and the binary's direct
+    /// re-discovery, so a worktree removed in-app OR externally cannot leave stale expansion,
+    /// hover, context-menu, delete-confirmation, or rename-override state behind.
+    pub fn set_worktrees(&mut self, worktrees: Vec<Worktree>) {
+        self.worktrees = worktrees;
+        let names: BTreeSet<String> =
+            self.worktrees.iter().map(|w| w.dir_name.clone()).collect();
+
+        self.expanded.retain(|d| names.contains(d));
+        if self
+            .worktree_menu_open
+            .as_deref()
+            .is_some_and(|d| !names.contains(d))
+        {
+            self.worktree_menu_open = None;
+        }
+        if self
+            .hovered_worktree
+            .as_deref()
+            .is_some_and(|d| !names.contains(d))
+        {
+            self.hovered_worktree = None;
+        }
+        if self
+            .worktree_delete_target
+            .as_deref()
+            .is_some_and(|d| !names.contains(d))
+        {
+            self.worktree_delete_target = None;
+            if self.overlay == Overlay::ConfirmWorktreeDelete {
+                self.overlay = Overlay::None;
+            }
+        }
+        // Prune rename overrides for the active project's worktrees that are gone (FR-015).
+        if let Some(active) = self.workspace.active.clone() {
+            if let Some(map) = self.workspace.worktree_names.get_mut(&active) {
+                map.retain(|dir, _| names.contains(dir));
+            }
+        }
     }
 
     /// Session ids of the active project hosted by the worktree `dir_name` (feature 008

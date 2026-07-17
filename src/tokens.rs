@@ -113,18 +113,20 @@ pub const LIGHT: Roles = Roles {
     outline: Rgb::hex(0x73777F),
     error: Rgb::hex(0xBA1A1A),
     on_error: Rgb::hex(0xFFFFFF),
-    // Deep, saturated fills carrying white text (`on_tag`).
-    tag_feat: Rgb::hex(0x2E7D32),
-    tag_fix: Rgb::hex(0xC62828),
-    tag_chore: Rgb::hex(0x5D4037),
-    tag_docs: Rgb::hex(0x00695C),
-    tag_refactor: Rgb::hex(0x7B1FA2),
-    tag_test: Rgb::hex(0x1565C0),
-    tag_build: Rgb::hex(0xBF360C),
-    tag_ci: Rgb::hex(0x283593),
-    tag_perf: Rgb::hex(0xAD1457),
-    tag_style: Rgb::hex(0x827717),
-    tag_issue: Rgb::hex(0x455A64),
+    // Deep 900-shade fills: dark enough to be AA as the tonal chip's TEXT on a faint tint of
+    // themselves (tests/tokens.rs::tonal_tag_chips_meet_aa_contrast), and to carry white text on
+    // the solid filter chip. Distinct hues; feat = green.
+    tag_feat: Rgb::hex(0x1B5E20),
+    tag_fix: Rgb::hex(0xB71C1C),
+    tag_chore: Rgb::hex(0x4E342E),
+    tag_docs: Rgb::hex(0x004D40),
+    tag_refactor: Rgb::hex(0x4A148C),
+    tag_test: Rgb::hex(0x0D47A1),
+    tag_build: Rgb::hex(0x7A2600),
+    tag_ci: Rgb::hex(0x1A237E),
+    tag_perf: Rgb::hex(0x880E4F),
+    tag_style: Rgb::hex(0x33691E),
+    tag_issue: Rgb::hex(0x37474F),
     on_tag: Rgb::hex(0xFFFFFF),
     // NOTE: tag_build uses deep-orange 900 (not 800) so white text clears AA (4.5:1).
 };

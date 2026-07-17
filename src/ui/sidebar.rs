@@ -96,7 +96,7 @@ pub fn view<'a>(
             .spacing(spacing::XS)
             .into()
         } else {
-            TreeView::new(build_items(state, r, row_fx), r)
+            TreeView::new(build_items(state, filtered, r, row_fx), r)
                 .label_size(sidebar::NAME)
                 .into()
         };
@@ -365,13 +365,14 @@ fn row_actions_cluster(
 /// `row_actions_progress`).
 fn build_items(
     state: &State,
+    nodes: Vec<micold_ai_ide::app::WorktreeNode>,
     r: Roles,
     row_fx: &micold_ai_ide::motion::Animator<u64>,
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
     let hovered = state.hovered_worktree.as_deref();
 
-    for node in state.filtered_worktree_tree() {
+    for node in nodes {
         let wt = &node.worktree;
         // No leading git icon (FR-010); a non-Valid worktree is cued by an error-tinted name
         // plus a status tag (FR-011).

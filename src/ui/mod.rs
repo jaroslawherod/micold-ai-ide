@@ -221,7 +221,13 @@ pub fn view<'a>(
             None => base,
         },
         Overlay::ConfirmWorktreeDelete => match &state.worktree_delete_target {
-            Some(dir) => confirm_delete::modal(base, dir, scheme, overlay_progress),
+            Some(dir) => confirm_delete::modal(
+                base,
+                dir,
+                &state.worktree_display_name(dir),
+                scheme,
+                overlay_progress,
+            ),
             None => base,
         },
         Overlay::RenameWorktree => match &state.worktree_rename_draft {
@@ -267,7 +273,12 @@ fn dismissing_modal<'a>(
             worktree_form::modal(base, form, error.as_deref(), scheme, progress)
         }
         ClosingOverlay::Settings(draft) => settings_form::modal(base, draft, scheme, progress),
-        ClosingOverlay::ConfirmDelete(dir) => confirm_delete::modal(base, dir, scheme, progress),
+        ClosingOverlay::ConfirmDelete(dir) => {
+            // Fading-out snapshot: the override may already be gone, so fall back to the derived
+            // name for the exit animation.
+            let friendly = micold_ai_ide::naming::display_name(dir);
+            confirm_delete::modal(base, dir, &friendly, scheme, progress)
+        }
         ClosingOverlay::WorktreeRename(draft) => {
             worktree_rename::modal(base, draft, scheme, progress)
         }

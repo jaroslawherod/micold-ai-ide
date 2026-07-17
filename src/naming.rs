@@ -236,13 +236,18 @@ fn is_issue_project(seg: &str) -> bool {
         && seg.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
 }
 
-/// Locate the adjacent `(project, number)` segment pair forming an issue key, e.g. the
-/// `abc` + `123` in `feat-abc-123-login-page`. Returns the index of the project segment.
-fn issue_pair_index(segments: &[&str]) -> Option<usize> {
-    (0..segments.len().saturating_sub(1)).find(|&i| {
-        is_issue_project(segments[i]) && !segments[i + 1].is_empty()
-            && segments[i + 1].chars().all(|c| c.is_ascii_digit())
-    })
+/// Whether the first two segments of `rest` form an issue key: a project part (starts with a
+/// letter, letters/digits only) followed by an all-digit number, e.g. `abc` + `123`.
+///
+/// Only the START of the descriptive remainder is considered, because the naming convention
+/// places the ticket immediately after the type (`{type}-{ticket}-{name}`). Scanning the whole
+/// name would misread a trailing number in the descriptive part (e.g. `feat-add-retry-3`) as an
+/// issue key.
+fn issue_at_start(rest: &[&str]) -> bool {
+    rest.len() >= 2
+        && is_issue_project(rest[0])
+        && !rest[1].is_empty()
+        && rest[1].chars().all(|c| c.is_ascii_digit())
 }
 
 /// Sentence-case a string whose remainder is already lowercase (slugified): upper-case only
@@ -274,10 +279,11 @@ pub fn parse_tags(dir_name: &str) -> Vec<Tag> {
         None => 0,
     };
 
-    // Issue: the first project+number pair in the remaining segments.
-    if let Some(i) = issue_pair_index(&segments[type_offset..]) {
-        let i = i + type_offset;
-        let key = format!("{}-{}", segments[i], segments[i + 1]).to_ascii_uppercase();
+    // Issue: the ticket sits immediately after the type (naming convention), so only the first
+    // pair of the remaining segments is considered.
+    let rest = &segments[type_offset..];
+    if issue_at_start(rest) {
+        let key = format!("{}-{}", rest[0], rest[1]).to_ascii_uppercase();
         tags.push(Tag::Issue(key));
     }
 
@@ -297,16 +303,12 @@ pub fn display_name(dir_name: &str) -> String {
         None => 0,
     };
 
-    // Indices to drop for the issue key (relative to the full segment list).
-    let issue = issue_pair_index(&segments[type_offset..]).map(|i| i + type_offset);
+    // The issue key, when present, occupies the two segments right after the type; the
+    // descriptive name is whatever follows it.
+    let rest = &segments[type_offset..];
+    let desc_offset = type_offset + if issue_at_start(rest) { 2 } else { 0 };
 
-    let remainder: Vec<&str> = segments
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| *i >= type_offset)
-        .filter(|(i, _)| issue.map(|j| *i != j && *i != j + 1).unwrap_or(true))
-        .map(|(_, s)| *s)
-        .collect();
+    let remainder: Vec<&str> = segments.iter().skip(desc_offset).copied().collect();
 
     let joined = if remainder.is_empty() {
         // Fallback: the whole directory name, dashes as spaces.

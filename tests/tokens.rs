@@ -80,6 +80,43 @@ fn dark_scheme_meets_aa_contrast() {
     }
 }
 
+/// Alpha-composite `fg` at opacity `a` over opaque `bg` (straight-alpha "over").
+fn composite(fg: Rgb, bg: Rgb, a: f64) -> Rgb {
+    let mix = |f: u8, b: u8| ((f as f64) * a + (b as f64) * (1.0 - a)).round() as u8;
+    Rgb {
+        r: mix(fg.r, bg.r),
+        g: mix(fg.g, bg.g),
+        b: mix(fg.b, bg.b),
+    }
+}
+
+/// The tag chip's tint opacity — MUST match `alpha(accent, _)` in `ui::style::chip`.
+const CHIP_TINT_ALPHA: f64 = 0.20;
+
+/// The sidebar tags render as TONAL chips: accent-colored text on a faint accent tint over the
+/// sidebar surface (see `ui::style::chip`). Verify that rendered text meets AA in both schemes,
+/// for every type accent and the issue accent (SC-007). This is the combination actually drawn;
+/// the solid pairs above cover the filter chips' active (filled) state.
+#[test]
+fn tonal_tag_chips_meet_aa_contrast() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = roles(scheme);
+        let mut accents: Vec<(&str, Rgb)> = ConventionalType::ALL
+            .iter()
+            .map(|&t| (t.as_str(), r.tag_fill(t)))
+            .collect();
+        accents.push(("issue", r.tag_issue));
+        for (name, accent) in accents {
+            let bg = composite(accent, r.surface, CHIP_TINT_ALPHA);
+            let ratio = contrast(accent, bg);
+            assert!(
+                ratio >= AA_NORMAL,
+                "{scheme:?} tonal tag {name}: contrast {ratio:.2} < {AA_NORMAL} (accent {accent:?} on tint {bg:?})"
+            );
+        }
+    }
+}
+
 /// Every worktree type has a distinct fill in both schemes (FR-005).
 #[test]
 fn type_tag_fills_are_distinct() {
