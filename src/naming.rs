@@ -233,7 +233,9 @@ pub enum Tag {
 fn is_issue_project(seg: &str) -> bool {
     let mut chars = seg.chars();
     matches!(chars.next(), Some(c) if c.is_ascii_lowercase())
-        && seg.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && seg
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
 }
 
 /// Whether the first two segments of `rest` form an issue key: a project part (starts with a
@@ -271,7 +273,10 @@ pub fn parse_tags(dir_name: &str) -> Vec<Tag> {
     let mut tags = Vec::new();
 
     // Type: the leading segment, if it is a known Conventional-Commits token.
-    let type_offset = match segments.first().and_then(|s| ConventionalType::from_token(s)) {
+    let type_offset = match segments
+        .first()
+        .and_then(|s| ConventionalType::from_token(s))
+    {
         Some(t) => {
             tags.push(Tag::Type(t));
             1
@@ -298,7 +303,10 @@ pub fn parse_tags(dir_name: &str) -> Vec<Tag> {
 pub fn display_name(dir_name: &str) -> String {
     let segments: Vec<&str> = dir_name.split('-').filter(|s| !s.is_empty()).collect();
 
-    let type_offset = match segments.first().and_then(|s| ConventionalType::from_token(s)) {
+    let type_offset = match segments
+        .first()
+        .and_then(|s| ConventionalType::from_token(s))
+    {
         Some(_) => 1,
         None => 0,
     };

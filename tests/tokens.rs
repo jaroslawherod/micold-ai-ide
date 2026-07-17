@@ -122,10 +122,16 @@ fn tonal_tag_chips_meet_aa_contrast() {
 fn type_tag_fills_are_distinct() {
     for scheme in [ColorScheme::Light, ColorScheme::Dark] {
         let r = roles(scheme);
-        let fills: Vec<Rgb> = ConventionalType::ALL.iter().map(|&t| r.tag_fill(t)).collect();
+        let fills: Vec<Rgb> = ConventionalType::ALL
+            .iter()
+            .map(|&t| r.tag_fill(t))
+            .collect();
         for i in 0..fills.len() {
             for j in (i + 1)..fills.len() {
-                assert_ne!(fills[i], fills[j], "{scheme:?}: type tag fills {i} and {j} collide");
+                assert_ne!(
+                    fills[i], fills[j],
+                    "{scheme:?}: type tag fills {i} and {j} collide"
+                );
             }
         }
     }

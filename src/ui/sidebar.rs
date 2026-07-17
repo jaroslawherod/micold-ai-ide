@@ -230,16 +230,22 @@ fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Me
             right: spacing::SM as f32,
         })
         .on_press(Message::SidebarFilterToggled(filter))
-        .style(move |_theme: &iced::Theme, _status| iced::widget::button::Style {
-            background: Some(Background::Color(if active { fill } else { Color::TRANSPARENT })),
-            text_color: if active { on } else { muted },
-            border: Border {
-                color: if active { fill } else { outline },
-                width: if active { 0.0 } else { 1.0 },
-                radius: (shape::FULL as f32).into(),
+        .style(
+            move |_theme: &iced::Theme, _status| iced::widget::button::Style {
+                background: Some(Background::Color(if active {
+                    fill
+                } else {
+                    Color::TRANSPARENT
+                })),
+                text_color: if active { on } else { muted },
+                border: Border {
+                    color: if active { fill } else { outline },
+                    width: if active { 0.0 } else { 1.0 },
+                    radius: (shape::FULL as f32).into(),
+                },
+                ..Default::default()
             },
-            ..Default::default()
-        })
+        )
         .into()
 }
 
@@ -255,7 +261,11 @@ fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
     for chunk in available.chunks(3) {
         let mut rw = row![].spacing(spacing::XS).align_y(Alignment::Center);
         for &filter in chunk {
-            rw = rw.push(filter_chip(filter, state.sidebar_filters.contains(&filter), r));
+            rw = rw.push(filter_chip(
+                filter,
+                state.sidebar_filters.contains(&filter),
+                r,
+            ));
         }
         col = col.push(rw);
     }
@@ -381,8 +391,7 @@ fn build_items(
             WorktreeStatus::Missing | WorktreeStatus::Invalid => r.error,
         };
 
-        let tags: Vec<(String, Rgb)> =
-            node.tags.iter().map(|tag| tag_chip(tag, r)).collect();
+        let tags: Vec<(String, Rgb)> = node.tags.iter().map(|tag| tag_chip(tag, r)).collect();
         let dir = wt.dir_name.clone();
 
         let mut item = TreeItem::new(0, node.display_name.clone(), tint)
@@ -392,7 +401,10 @@ fn build_items(
                 Message::WorktreeHovered(dir.clone()),
                 Message::WorktreeUnhovered(dir.clone()),
             )
-            .expandable(node.expanded, Message::WorktreeExpansionToggled(dir.clone()));
+            .expandable(
+                node.expanded,
+                Message::WorktreeExpansionToggled(dir.clone()),
+            );
 
         // Always reserve the action cluster's width so hovering never reflows the row; each row
         // fades its icons in/out independently via its own animation track (feature 008). The

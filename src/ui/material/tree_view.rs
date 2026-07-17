@@ -236,10 +236,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 for (label, accent) in item.tags {
                     tag_row = tag_row.push(super::Tag::new(label, accent));
                 }
-                column![line, tag_row]
-                    .spacing(2)
-                    .width(Length::Fill)
-                    .into()
+                column![line, tag_row].spacing(2).width(Length::Fill).into()
             };
 
             // The whole row is a low-emphasis button when it has a press action, so selection

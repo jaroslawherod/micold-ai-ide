@@ -64,7 +64,10 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
     }
     remove_worktree(&git, &repo, &target, Some(branch)).unwrap();
 
-    assert!(git.worktrees(&repo).is_empty(), "worktree registration removed");
+    assert!(
+        git.worktrees(&repo).is_empty(),
+        "worktree registration removed"
+    );
     assert!(
         !git.branches(&repo).contains(&branch.to_string()),
         "branch deleted"

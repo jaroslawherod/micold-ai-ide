@@ -7,11 +7,13 @@ use std::path::{Path, PathBuf};
 use support::{running_session, workspace_with};
 
 fn two_projects_active_b() -> State {
-    let mut st = State::default();
-    st.workspace = workspace_with(vec![
-        ("/a", vec![running_session("wa")]),
-        ("/b", vec![running_session("wb")]),
-    ]);
+    let mut st = State {
+        workspace: workspace_with(vec![
+            ("/a", vec![running_session("wa")]),
+            ("/b", vec![running_session("wb")]),
+        ]),
+        ..Default::default()
+    };
     st.workspace.active = Some(PathBuf::from("/b")); // /a is inactive
     st.active_session = Some(st.workspace.sessions[Path::new("/b")][0].id);
     st

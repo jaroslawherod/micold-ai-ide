@@ -16,8 +16,8 @@ use micold_ai_ide::app::{
 use micold_ai_ide::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_ai_ide::git::{Git, GitCli};
 use micold_ai_ide::motion::Animator;
-use micold_ai_ide::selector::{Selector, SelectorStatus};
 use micold_ai_ide::provider::{AiCliProvider, ClaudeProvider};
+use micold_ai_ide::selector::{Selector, SelectorStatus};
 use micold_ai_ide::session::{RestartDecision, Session, SessionId, SessionLabel, SessionLifecycle};
 use micold_ai_ide::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_ai_ide::store::{JsonFileStore, ProjectStore};
@@ -740,7 +740,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             let target = app.core.worktree_delete_target.clone();
             if let (Some(dir), Some(repo)) = (target, app.core.workspace.active.clone()) {
                 // Facts to remove — captured before the reducer drops them from state.
-                let wt = app.core.worktrees.iter().find(|w| w.dir_name == dir).cloned();
+                let wt = app
+                    .core
+                    .worktrees
+                    .iter()
+                    .find(|w| w.dir_name == dir)
+                    .cloned();
                 // Terminate this worktree's running sessions first.
                 for id in app.core.sessions_in_worktree(&dir) {
                     if let Some(mut rt) = app.terminals.remove(&id) {
@@ -748,8 +753,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     }
                 }
                 if let Some(wt) = wt {
-                    let _ =
-                        remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref());
+                    let _ = remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref());
                     let _ = std::fs::remove_dir_all(&wt.path);
                 }
                 // Drop the session/worktree records in the core, then reconcile from git truth.
@@ -821,7 +825,9 @@ fn sync_session_titles(app: &mut App) {
         if !session.is_active() {
             continue;
         }
-        let cwd = project.join(".claude/worktrees").join(&session.worktree_dir);
+        let cwd = project
+            .join(".claude/worktrees")
+            .join(&session.worktree_dir);
         if let Some(title) = provider.read_title(&config, &cwd, session.id.0) {
             if session.label != SessionLabel::Named(title.clone()) {
                 updates.push((session.id, title));

@@ -24,8 +24,8 @@ pub use menu::{ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};
 pub use tag::Tag;
-pub use terminal_pane::TerminalPane;
 pub(crate) use terminal_pane::target_offset_delta;
+pub use terminal_pane::TerminalPane;
 #[cfg(test)]
 pub(crate) use terminal_pane::{scrollbar_metrics, viewport_row};
 pub use toolbar::Toolbar;

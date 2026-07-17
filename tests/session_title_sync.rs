@@ -17,7 +17,9 @@ fn sync_once(state: &mut State, config_dir: &Path, project: &Path) {
     let provider = ClaudeProvider;
     let mut updates = Vec::new();
     for session in state.active_sessions() {
-        let cwd = project.join(".claude/worktrees").join(&session.worktree_dir);
+        let cwd = project
+            .join(".claude/worktrees")
+            .join(&session.worktree_dir);
         if let Some(title) = provider.read_title(config_dir, &cwd, session.id.0) {
             if session.label.display() != title {
                 updates.push((session.id, title));
@@ -47,7 +49,11 @@ fn write_title(config_dir: &Path, project: &Path, worktree_dir: &str, id: uuid::
     let cwd = project.join(".claude/worktrees").join(worktree_dir);
     let path = ClaudeProvider.transcript_path(config_dir, &cwd, id);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(&path, format!(r#"{{"type":"ai-title","aiTitle":"{title}"}}"#)).unwrap();
+    std::fs::write(
+        &path,
+        format!(r#"{{"type":"ai-title","aiTitle":"{title}"}}"#),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -61,7 +67,13 @@ fn label_goes_pending_then_named_then_resyncs_on_change() {
     assert_eq!(state.active_sessions()[0].label.display(), "New session");
 
     // Provider assigns a title → a sync reconciles the label from Pending to Named.
-    write_title(config.path(), &project, worktree, session.id.0, "Investigate flaky test");
+    write_title(
+        config.path(),
+        &project,
+        worktree,
+        session.id.0,
+        "Investigate flaky test",
+    );
     sync_once(&mut state, config.path(), &project);
     assert_eq!(
         state.active_sessions()[0].label.display(),
@@ -69,7 +81,13 @@ fn label_goes_pending_then_named_then_resyncs_on_change() {
     );
 
     // Provider later changes the title → the label re-syncs (never stays diverged, SC-009).
-    write_title(config.path(), &project, worktree, session.id.0, "Fix flaky test race");
+    write_title(
+        config.path(),
+        &project,
+        worktree,
+        session.id.0,
+        "Fix flaky test race",
+    );
     sync_once(&mut state, config.path(), &project);
     assert_eq!(
         state.active_sessions()[0].label.display(),

@@ -11,11 +11,13 @@ use std::path::{Path, PathBuf};
 use support::{running_session, workspace_with};
 
 fn two_projects_active_a() -> State {
-    let mut st = State::default();
-    st.workspace = workspace_with(vec![
-        ("/a", vec![running_session("wa1"), running_session("wa2")]),
-        ("/b", vec![running_session("wb")]),
-    ]);
+    let mut st = State {
+        workspace: workspace_with(vec![
+            ("/a", vec![running_session("wa1"), running_session("wa2")]),
+            ("/b", vec![running_session("wb")]),
+        ]),
+        ..Default::default()
+    };
     st.workspace.active = Some(PathBuf::from("/a"));
     // Foreground on /a = the SECOND session, to prove exact restore.
     st.active_session = Some(st.workspace.sessions[Path::new("/a")][1].id);
@@ -69,7 +71,7 @@ fn switch_to_unavailable_is_rejected_and_leaves_state_unchanged() {
     let mut st = two_projects_active_a();
     let fg_a = st.active_session.unwrap();
     for p in &mut st.workspace.projects {
-        if p.path == PathBuf::from("/b") {
+        if p.path.as_path() == Path::new("/b") {
             p.availability = Availability::Unavailable;
         }
     }

@@ -29,7 +29,10 @@ fn opening_switcher_closes_the_overflow_menu() {
 
     st.update(Message::ProjectSwitcherToggled);
     assert!(st.project_switcher_open);
-    assert!(!st.help_menu_open, "opening the switcher closes the overflow menu");
+    assert!(
+        !st.help_menu_open,
+        "opening the switcher closes the overflow menu"
+    );
 }
 
 #[test]
@@ -40,23 +43,28 @@ fn opening_the_overflow_menu_closes_the_switcher() {
 
     st.update(Message::HelpMenuToggled);
     assert!(st.help_menu_open);
-    assert!(!st.project_switcher_open, "opening the overflow menu closes the switcher");
+    assert!(
+        !st.project_switcher_open,
+        "opening the overflow menu closes the switcher"
+    );
 }
 
 // --- US2/US3: switcher row data (FR-006, FR-007, FR-008) ---
 
 #[test]
 fn switcher_entries_reflect_active_running_and_availability() {
-    let mut st = State::default();
-    st.workspace = workspace_with(vec![
-        ("/a", vec![running_session("w1"), running_session("w2")]),
-        ("/b", vec![idle_session("w3")]),
-        ("/c", vec![]),
-    ]);
+    let mut st = State {
+        workspace: workspace_with(vec![
+            ("/a", vec![running_session("w1"), running_session("w2")]),
+            ("/b", vec![idle_session("w3")]),
+            ("/c", vec![]),
+        ]),
+        ..Default::default()
+    };
     st.workspace.active = Some(PathBuf::from("/b"));
     // Mark /c unavailable.
     for p in &mut st.workspace.projects {
-        if p.path == PathBuf::from("/c") {
+        if p.path.as_path() == Path::new("/c") {
             p.availability = Availability::Unavailable;
         }
     }

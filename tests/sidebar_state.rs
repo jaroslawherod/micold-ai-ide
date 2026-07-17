@@ -112,7 +112,10 @@ fn worktree_rename_seeds_edits_and_applies() {
     assert_eq!(draft.text, "Login page"); // seeded from the derived name
 
     state.update(Message::WorktreeRenameTextChanged("My Login".to_string()));
-    assert_eq!(state.worktree_rename_draft.as_ref().unwrap().text, "My Login");
+    assert_eq!(
+        state.worktree_rename_draft.as_ref().unwrap().text,
+        "My Login"
+    );
 
     state.update(Message::WorktreeRenameConfirmed);
     assert_eq!(state.overlay, Overlay::None);
@@ -131,7 +134,12 @@ fn worktree_rename_empty_keeps_prior_name_with_error() {
     state.update(Message::WorktreeRenameConfirmed);
     // Stays open with an error; no override applied → still the derived name.
     assert_eq!(state.overlay, Overlay::RenameWorktree);
-    assert!(state.worktree_rename_draft.as_ref().unwrap().error.is_some());
+    assert!(state
+        .worktree_rename_draft
+        .as_ref()
+        .unwrap()
+        .error
+        .is_some());
     assert_eq!(state.worktree_display_name("feat-x"), "X");
 }
 

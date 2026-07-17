@@ -47,5 +47,8 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .unwrap_or_else(|| "Select project".to_string());
     let switcher = ProjectSwitcherTrigger::new(switcher_label, Message::ProjectSwitcherToggled, r);
     let menu = MenuTrigger::new(Icon::Menu, Message::HelpMenuToggled, r);
-    Toolbar::new(meta.name, r).action(switcher).action(menu).into()
+    Toolbar::new(meta.name, r)
+        .action(switcher)
+        .action(menu)
+        .into()
 }

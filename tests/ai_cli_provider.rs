@@ -98,7 +98,10 @@ fn parse_title_skips_malformed_lines_and_empties() {
         "\n",
         "{ broken json\n",
     );
-    assert_eq!(ClaudeProvider.parse_title(transcript), Some("Good".to_string()));
+    assert_eq!(
+        ClaudeProvider.parse_title(transcript),
+        Some("Good".to_string())
+    );
 }
 
 #[test]

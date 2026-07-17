@@ -167,7 +167,10 @@ fn parse_tags_untyped_when_no_known_type() {
 fn parse_tags_returns_at_most_one_type_and_issue() {
     let tags = parse_tags("feat-abc-123-def-456-thing");
     assert_eq!(tags.iter().filter(|t| matches!(t, Tag::Type(_))).count(), 1);
-    assert_eq!(tags.iter().filter(|t| matches!(t, Tag::Issue(_))).count(), 1);
+    assert_eq!(
+        tags.iter().filter(|t| matches!(t, Tag::Issue(_))).count(),
+        1
+    );
     // First issue pair wins.
     assert_eq!(tags[1], Tag::Issue("ABC-123".to_string()));
 }
@@ -175,7 +178,9 @@ fn parse_tags_returns_at_most_one_type_and_issue() {
 #[test]
 fn parse_tags_never_yields_status() {
     for name in ["feat-x", "main", "fix-abc-1-y"] {
-        assert!(parse_tags(name).iter().all(|t| !matches!(t, Tag::Status(_))));
+        assert!(parse_tags(name)
+            .iter()
+            .all(|t| !matches!(t, Tag::Status(_))));
     }
 }
 

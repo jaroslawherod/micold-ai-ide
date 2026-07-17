@@ -913,8 +913,7 @@ impl State {
     /// hover, context-menu, delete-confirmation, or rename-override state behind.
     pub fn set_worktrees(&mut self, worktrees: Vec<Worktree>) {
         self.worktrees = worktrees;
-        let names: BTreeSet<String> =
-            self.worktrees.iter().map(|w| w.dir_name.clone()).collect();
+        let names: BTreeSet<String> = self.worktrees.iter().map(|w| w.dir_name.clone()).collect();
 
         self.expanded.retain(|d| names.contains(d));
         if self
@@ -1005,8 +1004,8 @@ impl State {
     pub fn restore_after_activation(&mut self, path: &Path) {
         let key = canonicalize_best_effort(path);
         self.active_session = self.restore_foreground(&key); // STEP 3
-        // BUG-001 / focus-model.md: switching (or opening) a project does not carry terminal focus
-        // across — re-focusing the restored session is a fresh explicit action (or a select/start).
+                                                             // BUG-001 / focus-model.md: switching (or opening) a project does not carry terminal focus
+                                                             // across — re-focusing the restored session is a fresh explicit action (or a select/start).
         self.terminal_focused = false;
         self.arm_notice(&key); // STEP 4
     }

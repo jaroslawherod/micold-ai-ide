@@ -980,7 +980,8 @@ mod tests {
         assert!(scrollbar_metrics(100.0, rows, history, term.grid().display_offset()).is_none());
 
         // Scroll all the way up: the thumb pins to the very top of the track.
-        term.grid_mut().scroll_display(Scroll::Delta(history as i32));
+        term.grid_mut()
+            .scroll_display(Scroll::Delta(history as i32));
         let sb = scrollbar_metrics(100.0, rows, history, term.grid().display_offset())
             .expect("scrollbar visible while scrolled back");
         assert_eq!(sb.thumb_top, 0.0);

@@ -794,7 +794,10 @@ mod tests {
         for &t in &targets {
             live = apply(live, target_offset_delta(live as usize, t));
         }
-        assert_eq!(live, 61, "absolute targeting lands on the last drag position");
+        assert_eq!(
+            live, 61,
+            "absolute targeting lands on the last drag position"
+        );
 
         // The reported flicker: computing every batched delta against the pre-batch offset makes
         // the additive applies overshoot and clamp to an extreme instead of converging.
@@ -802,6 +805,9 @@ mod tests {
         for &t in &targets {
             batched = apply(batched, t as i32 - start as i32);
         }
-        assert_ne!(batched, 61, "stale relative deltas accumulate instead of converging");
+        assert_ne!(
+            batched, 61,
+            "stale relative deltas accumulate instead of converging"
+        );
     }
 }
