@@ -154,7 +154,8 @@ A developer opens application Settings from a dropdown menu in the toolbar and a
 
 - **FR-014**: The size the terminal reports to the process (rows × columns) MUST match the visible character area, so the process lays out its interface to fit.
 - **FR-015**: When the window or terminal pane is resized, the terminal MUST reflow and report the updated size to the process, rather than remaining at a fixed size.
-- **FR-016**: The terminal MUST retain a bounded scrollback history and allow the user to scroll back through earlier output. The maximum length MUST be the user-configured scrollback limit (FR-020), defaulting to a sensible value until changed.
+- **FR-016**: The terminal MUST retain a bounded scrollback history and allow the user to scroll back through earlier output. Scrolling back MUST reposition the visible viewport over the scrollback — revealing earlier lines at the top and shifting the current content down — rather than leaving the visible text in place. Scrolling MUST be driven at least by the mouse wheel. The maximum length MUST be the user-configured scrollback limit (FR-020), defaulting to a sensible value until changed.
+- **FR-016a**: While the user is scrolled back into the history, the terminal MUST display a scrollbar on the pane indicating the viewport's position and size within the scrollback. The scrollbar MUST be draggable to reposition the view and MUST support clicking the track to page through the history. It MUST be hidden while the terminal is parked at the live bottom (nothing scrolled back), and MUST follow the application's Material Design light/dark theming (FR-022).
 
 #### Terminal settings
 

@@ -118,6 +118,16 @@ impl RuntimeTerminal {
         }
     }
 
+    /// Lines currently scrolled up into the scrollback (0 = live bottom) (FR-016).
+    pub fn display_offset(&self) -> usize {
+        self.term.grid().display_offset()
+    }
+
+    /// Number of lines retained in the scrollback history (FR-016).
+    pub fn history_size(&self) -> usize {
+        self.term.grid().history_size()
+    }
+
     /// Resize the PTY and the VT grid to `cols`×`rows` (FR-014, FR-015).
     pub fn resize(&mut self, cols: u16, rows: u16) -> std::io::Result<()> {
         if cols == 0 || rows == 0 || (cols as usize == self.cols && rows as usize == self.rows) {
@@ -755,5 +765,109 @@ mod tests {
         let m = CellMetrics::new(TERM_FONT_SIZE);
         assert_eq!(m.grid_size(0.0, 0.0), (1, 1));
         assert_eq!(m.grid_size(3.0, 3.0), (1, 1));
+    }
+
+    /// End-to-end scroll behaviour against a real `alacritty_terminal` grid (no PTY, no window):
+    /// feed more lines than fit, then scroll up and confirm the viewport slides down to reveal
+    /// earlier lines while every row stays populated. Reproduces the reported bug where the top
+    /// text stayed frozen and the bottom rows blanked (feature 006, FR-016).
+    #[test]
+    fn scrolling_up_reveals_earlier_lines_and_keeps_the_viewport_full() {
+        use crate::ui::material::viewport_row;
+        use alacritty_terminal::grid::Scroll;
+
+        let rows = 5usize;
+        let cols = 20usize;
+        let dims = TermDimensions { rows, cols };
+        let config = Config {
+            scrolling_history: 100,
+            ..Config::default()
+        };
+        let mut term = Term::new(config, &dims, VoidListener);
+        let mut parser: Processor = Processor::new();
+
+        // Print 10 lines (L0..L9), newline-separated with no trailing newline, so the bottom row
+        // holds real text (L9) and the earliest lines spill into the scrollback history.
+        let total = rows + 5;
+        let mut bytes = Vec::new();
+        for i in 0..total {
+            if i > 0 {
+                bytes.extend_from_slice(b"\r\n");
+            }
+            bytes.extend_from_slice(format!("L{i}").as_bytes());
+        }
+        parser.advance(&mut term, &bytes);
+
+        // Snapshot the visible rows, mapping buffer lines to viewport rows exactly as `draw` does.
+        let snapshot = |term: &Term<VoidListener>| -> Vec<String> {
+            let content = term.renderable_content();
+            let offset = content.display_offset;
+            let mut grid = vec![String::new(); rows];
+            for indexed in content.display_iter {
+                if let Some(r) = viewport_row(indexed.point.line.0, offset, rows) {
+                    grid[r].push(indexed.cell.c);
+                }
+            }
+            grid.into_iter().map(|s| s.trim_end().to_string()).collect()
+        };
+
+        let before = snapshot(&term);
+        assert_eq!(before, vec!["L5", "L6", "L7", "L8", "L9"]);
+
+        // Scroll two lines up into the scrollback.
+        term.grid_mut().scroll_display(Scroll::Delta(2));
+        let after = snapshot(&term);
+
+        // Correct behaviour: the whole viewport shifts down by two, revealing L3/L4 at the top,
+        // and no row is left blank. The bug produced ["L5","L6","L7","",""] instead.
+        assert!(
+            after.iter().all(|r| !r.is_empty()),
+            "scrolling blanked viewport rows (reported bug): {after:?}"
+        );
+        assert_eq!(after, vec!["L3", "L4", "L5", "L6", "L7"]);
+        assert_eq!(
+            after[2], before[0],
+            "row 0 should slide down to row 2 after scrolling up two lines"
+        );
+    }
+
+    /// The scrollbar thumb tracks the real scrollback position: hidden at the live bottom, pinned
+    /// to the top when fully scrolled up (feature 006, FR-016). Headless — no PTY, no window.
+    #[test]
+    fn scrollbar_thumb_tracks_scrollback_position() {
+        use crate::ui::material::scrollbar_metrics;
+        use alacritty_terminal::grid::Scroll;
+
+        let rows = 5usize;
+        let cols = 20usize;
+        let dims = TermDimensions { rows, cols };
+        let config = Config {
+            scrolling_history: 100,
+            ..Config::default()
+        };
+        let mut term = Term::new(config, &dims, VoidListener);
+        let mut parser: Processor = Processor::new();
+
+        // 25 lines → well more than the 5 visible rows, so a real history builds up.
+        let mut bytes = Vec::new();
+        for i in 0..25 {
+            if i > 0 {
+                bytes.extend_from_slice(b"\r\n");
+            }
+            bytes.extend_from_slice(format!("L{i}").as_bytes());
+        }
+        parser.advance(&mut term, &bytes);
+
+        let history = term.grid().history_size();
+        assert!(history > 0, "expected scrollback history");
+
+        // At the live bottom (offset 0): the scrollbar is hidden.
+        assert!(scrollbar_metrics(100.0, rows, history, term.grid().display_offset()).is_none());
+
+        // Scroll all the way up: the thumb pins to the very top of the track.
+        term.grid_mut().scroll_display(Scroll::Delta(history as i32));
+        let sb = scrollbar_metrics(100.0, rows, history, term.grid().display_offset())
+            .expect("scrollbar visible while scrolled back");
+        assert_eq!(sb.thumb_top, 0.0);
     }
 }

@@ -17,8 +17,8 @@ use iced::advanced::widget::{tree, Tree, Widget};
 use iced::advanced::{Clipboard, Shell};
 use iced::widget::canvas::{Frame, Path, Stroke, Text};
 use iced::{
-    alignment, event, keyboard, mouse, Element, Event, Length, Point, Rectangle, Renderer, Size,
-    Theme,
+    alignment, event, keyboard, mouse, Color, Element, Event, Length, Point, Rectangle, Renderer,
+    Size, Theme,
 };
 use micold_ai_ide::app::{Message, SelectKind};
 use micold_ai_ide::keymap::{self, KeyOutput};
@@ -32,6 +32,9 @@ struct PaneState {
     last_click: Option<Click>,
     /// Last reported grid size, to detect resizes and notify the PTY (FR-014/FR-015).
     last_grid: (u16, u16),
+    /// While dragging the scrollbar thumb: the cursor's offset below the thumb's top edge, so the
+    /// grabbed point stays under the pointer (FR-016).
+    scrollbar_grab: Option<f32>,
 }
 
 /// The grid cell (col, line) under a cursor position within `bounds`.
@@ -39,6 +42,75 @@ fn grid_at(pos: Point, bounds: Rectangle, metrics: CellMetrics) -> (u16, u16) {
     let col = ((pos.x - bounds.x) / metrics.width).floor().max(0.0) as u16;
     let line = ((pos.y - bounds.y) / metrics.height).floor().max(0.0) as u16;
     (col, line)
+}
+
+/// The viewport row (0 = top) for a `buffer_line` yielded by `display_iter`, given the current
+/// scrollback `display_offset` and the number of visible `rows`. Buffer lines are 0 at the screen
+/// top and negative up in the scrollback history; `None` when the line is outside the viewport.
+pub(crate) fn viewport_row(buffer_line: i32, display_offset: usize, rows: usize) -> Option<usize> {
+    let row = buffer_line + display_offset as i32;
+    usize::try_from(row).ok().filter(|&r| r < rows)
+}
+
+/// Width of the scrollback scrollbar track/thumb, in pixels.
+const SCROLLBAR_WIDTH: f32 = 10.0;
+/// Smallest thumb height so it stays grabbable over a deep history (FR-016).
+const MIN_THUMB_HEIGHT: f32 = 24.0;
+
+/// Geometry of the scrollback scrollbar thumb within its track (both measured from the pane top).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Scrollbar {
+    pub thumb_top: f32,
+    pub thumb_height: f32,
+}
+
+/// The thumb height used for a given track/viewport/history — proportional to the visible fraction,
+/// clamped to a grabbable minimum and to the track itself.
+fn thumb_height(track_height: f32, screen_lines: usize, history_size: usize) -> f32 {
+    let total = (history_size + screen_lines).max(1) as f32;
+    let proportional = track_height * screen_lines as f32 / total;
+    proportional.clamp(MIN_THUMB_HEIGHT.min(track_height), track_height)
+}
+
+/// Thumb geometry for the scrollback scrollbar, or `None` when it should be hidden — parked at the
+/// live bottom (`display_offset == 0`), no history, or a degenerate track. The thumb is pinned to
+/// the top when fully scrolled up and to the bottom when barely scrolled (feature 006, FR-016).
+pub(crate) fn scrollbar_metrics(
+    track_height: f32,
+    screen_lines: usize,
+    history_size: usize,
+    display_offset: usize,
+) -> Option<Scrollbar> {
+    if history_size == 0 || display_offset == 0 || track_height <= 0.0 {
+        return None;
+    }
+    let thumb_height = thumb_height(track_height, screen_lines, history_size);
+    let travel = track_height - thumb_height;
+    // frac: 1.0 just off the bottom, 0.0 at the very top of the history.
+    let frac = (history_size.saturating_sub(display_offset)) as f32 / history_size as f32;
+    Some(Scrollbar {
+        thumb_top: travel * frac,
+        thumb_height,
+    })
+}
+
+/// The `display_offset` that places the thumb's top edge at `thumb_top` px — the inverse of
+/// [`scrollbar_metrics`], used while dragging. Clamped to `[0, history_size]`.
+pub(crate) fn offset_for_thumb_top(
+    track_height: f32,
+    screen_lines: usize,
+    history_size: usize,
+    thumb_top: f32,
+) -> usize {
+    if history_size == 0 {
+        return 0;
+    }
+    let travel = track_height - thumb_height(track_height, screen_lines, history_size);
+    if travel <= 0.0 {
+        return history_size;
+    }
+    let frac = (thumb_top / travel).clamp(0.0, 1.0);
+    (history_size as f32 * (1.0 - frac)).round() as usize
 }
 
 /// The colour terminal widget for a live session runtime (Principle VIII builder form):
@@ -119,15 +191,18 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             let content = self.rt.renderable();
             let cursor_point = content.cursor.point;
             let show_cursor = shows_cursor(content.mode);
+            // Buffer lines from `display_iter` are 0 at the screen top and negative up in the
+            // scrollback; map them to viewport rows using the current scroll offset (FR-016).
+            let display_offset = content.display_offset;
+            let rows = self.rt.size().1 as usize;
 
             for indexed in content.display_iter {
-                let line = indexed.point.line.0;
-                if line < 0 {
+                let Some(row) = viewport_row(indexed.point.line.0, display_offset, rows) else {
                     continue;
-                }
+                };
                 let col = indexed.point.column.0 as f32;
                 let x = bounds.x + col * metrics.width;
-                let y = bounds.y + (line as f32) * metrics.height;
+                let y = bounds.y + (row as f32) * metrics.height;
 
                 let flags = indexed.cell.flags;
                 let (fg, bg) = cell_colors(&self.palette, indexed.cell.fg, indexed.cell.bg, flags);
@@ -200,6 +275,32 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 }
             }
 
+            // Scrollback scrollbar: a right-edge track + thumb, shown only while scrolled back into
+            // history so it stays out of the way during a live session (FR-016).
+            let screen_lines = self.rt.size().1 as usize;
+            if let Some(sb) = scrollbar_metrics(
+                bounds.height,
+                screen_lines,
+                self.rt.history_size(),
+                display_offset,
+            ) {
+                let fg = self.palette.foreground();
+                let track_x = bounds.x + bounds.width - SCROLLBAR_WIDTH;
+                frame.fill_rectangle(
+                    iced::Point::new(track_x, bounds.y),
+                    Size::new(SCROLLBAR_WIDTH, bounds.height),
+                    Color { a: 0.08, ..fg },
+                );
+                let pad = 2.0;
+                let thumb_w = SCROLLBAR_WIDTH - pad * 2.0;
+                let thumb = Path::rounded_rectangle(
+                    iced::Point::new(track_x + pad, bounds.y + sb.thumb_top),
+                    Size::new(thumb_w, sb.thumb_height),
+                    (thumb_w / 2.0).into(),
+                );
+                frame.fill(&thumb, Color { a: 0.5, ..fg });
+            }
+
             // Focus indicator: an accent border when the terminal holds input focus (FR-010).
             if self.focused {
                 frame.stroke(
@@ -251,6 +352,63 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 if !cursor.is_over(bounds) {
                     shell.publish(Message::TerminalFocusReleased);
                 }
+            }
+        }
+
+        // ---- Scrollbar: drag the right-edge thumb or click the track to page (FR-016). Handled
+        // before selection so a drag on the scrollbar never starts a text selection.
+        {
+            let screen_lines = self.rt.size().1 as usize;
+            let history = self.rt.history_size();
+            let offset = self.rt.display_offset();
+            match &event {
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                    if let Some(pos) = cursor.position() {
+                        let over_strip = cursor.is_over(bounds)
+                            && pos.x >= bounds.x + bounds.width - SCROLLBAR_WIDTH;
+                        if over_strip {
+                            if let Some(sb) =
+                                scrollbar_metrics(bounds.height, screen_lines, history, offset)
+                            {
+                                let thumb_y0 = bounds.y + sb.thumb_top;
+                                let thumb_y1 = thumb_y0 + sb.thumb_height;
+                                if (thumb_y0..thumb_y1).contains(&pos.y) {
+                                    // Grab the thumb; remember where within it we grabbed.
+                                    state.scrollbar_grab = Some(pos.y - thumb_y0);
+                                } else {
+                                    // Click the track: page a viewport toward the click.
+                                    let delta = if pos.y < thumb_y0 {
+                                        screen_lines as i32
+                                    } else {
+                                        -(screen_lines as i32)
+                                    };
+                                    shell.publish(Message::TerminalScrolled(delta));
+                                }
+                                return event::Status::Captured;
+                            }
+                        }
+                    }
+                }
+                Event::Mouse(mouse::Event::CursorMoved { position })
+                    if state.scrollbar_grab.is_some() =>
+                {
+                    let grab_dy = state.scrollbar_grab.unwrap_or(0.0);
+                    let thumb_top = position.y - bounds.y - grab_dy;
+                    let target =
+                        offset_for_thumb_top(bounds.height, screen_lines, history, thumb_top);
+                    let delta = target as i32 - offset as i32;
+                    if delta != 0 {
+                        shell.publish(Message::TerminalScrolled(delta));
+                    }
+                    return event::Status::Captured;
+                }
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+                    if state.scrollbar_grab.is_some() =>
+                {
+                    state.scrollbar_grab = None;
+                    return event::Status::Captured;
+                }
+                _ => {}
             }
         }
 
@@ -491,5 +649,99 @@ mod tests {
             height: 100.0,
         };
         assert_eq!(grid_at(Point::new(0.0, 0.0), bounds, metrics), (0, 0));
+    }
+
+    #[test]
+    fn viewport_row_maps_buffer_line_to_screen_row_at_zero_offset() {
+        // With no scrollback offset, buffer lines are viewport rows 1:1.
+        assert_eq!(viewport_row(0, 0, 30), Some(0));
+        assert_eq!(viewport_row(29, 0, 30), Some(29));
+    }
+
+    #[test]
+    fn viewport_row_shifts_scrollback_history_into_the_viewport() {
+        // Scrolled up by 3: the three revealed history lines (-3..=-1) fill the top rows and
+        // every on-screen line slides down by 3 — nothing is dropped from the bottom (FR-016).
+        // This is the reported bug: without the offset, negative history lines were discarded and
+        // the visible text stayed frozen while the bottom rows blanked.
+        assert_eq!(viewport_row(-3, 3, 30), Some(0));
+        assert_eq!(viewport_row(-1, 3, 30), Some(2));
+        assert_eq!(viewport_row(0, 3, 30), Some(3));
+        assert_eq!(viewport_row(26, 3, 30), Some(29));
+    }
+
+    #[test]
+    fn viewport_row_rejects_lines_outside_the_visible_area() {
+        // One line above the top row and one below the bottom row both map to nothing.
+        assert_eq!(viewport_row(-4, 3, 30), None);
+        assert_eq!(viewport_row(27, 3, 30), None);
+    }
+
+    #[test]
+    fn scrollbar_hidden_at_live_bottom_and_without_history() {
+        // Parked at the bottom (offset 0) → hidden, even with history to show.
+        assert_eq!(scrollbar_metrics(100.0, 30, 500, 0), None);
+        // No scrollback history at all → hidden.
+        assert_eq!(scrollbar_metrics(100.0, 30, 0, 0), None);
+        // Degenerate track height → hidden (nothing to draw).
+        assert_eq!(scrollbar_metrics(0.0, 30, 500, 10), None);
+    }
+
+    #[test]
+    fn scrollbar_thumb_reaches_top_when_fully_scrolled() {
+        // display_offset == history_size: viewing the oldest line → thumb pinned to the top.
+        let sb = scrollbar_metrics(200.0, 40, 200, 200).unwrap();
+        assert_eq!(sb.thumb_top, 0.0);
+    }
+
+    #[test]
+    fn scrollbar_thumb_sits_near_bottom_when_barely_scrolled() {
+        // Scrolled up a single line out of a deep history → thumb near the track bottom.
+        let track = 200.0;
+        let sb = scrollbar_metrics(track, 40, 200, 1).unwrap();
+        let travel = track - sb.thumb_height;
+        assert!(
+            (sb.thumb_top - travel).abs() < 1.0,
+            "thumb_top {} should sit near the track bottom {travel}",
+            sb.thumb_top
+        );
+    }
+
+    #[test]
+    fn scrollbar_thumb_is_proportional_to_the_viewport() {
+        // Viewport is 40 of 240 total lines → thumb ≈ 1/6 of a 240px track (40px).
+        let sb = scrollbar_metrics(240.0, 40, 200, 100).unwrap();
+        assert!(
+            (sb.thumb_height - 40.0).abs() < 0.5,
+            "thumb_height {} should be ~40px",
+            sb.thumb_height
+        );
+    }
+
+    #[test]
+    fn scrollbar_thumb_respects_minimum_height_and_stays_within_track() {
+        // A one-line viewport over a huge history would give a sub-pixel thumb; clamp to the min.
+        let sb = scrollbar_metrics(300.0, 1, 100_000, 50_000).unwrap();
+        assert!(sb.thumb_height >= MIN_THUMB_HEIGHT - f32::EPSILON);
+        assert!(sb.thumb_top >= 0.0 && sb.thumb_top + sb.thumb_height <= 300.0 + 0.01);
+    }
+
+    #[test]
+    fn offset_for_thumb_top_inverts_scrollbar_metrics() {
+        let (track, screen, history) = (200.0, 40, 200);
+        for offset in [1usize, 50, 137, 200] {
+            let sb = scrollbar_metrics(track, screen, history, offset).unwrap();
+            let back = offset_for_thumb_top(track, screen, history, sb.thumb_top);
+            assert_eq!(back, offset, "round-trip failed for offset {offset}");
+        }
+    }
+
+    #[test]
+    fn offset_for_thumb_top_clamps_positions_outside_the_track() {
+        let (track, screen, history) = (200.0, 40, 200);
+        // Dragged above the top → fully scrolled up (max offset).
+        assert_eq!(offset_for_thumb_top(track, screen, history, -50.0), history);
+        // Dragged below the bottom → back to the live bottom (offset 0).
+        assert_eq!(offset_for_thumb_top(track, screen, history, 10_000.0), 0);
     }
 }
