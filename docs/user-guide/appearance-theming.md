@@ -50,3 +50,21 @@ next mode**:
 The cycle order is Auto → Light → Dark → Auto. The menu stays open while you cycle so you can
 click again. Your choice takes effect immediately and is remembered across restarts. Cycling
 back to **Auto** resumes tracking your OS preference and switching live when it changes.
+
+## Motion & animations
+
+The interface uses brief, consistent motion so changes feel considered rather than abrupt:
+
+- **Dialogs fade in and out.** Every dialog — About, the project browser, rename project, add
+  worktree, and Settings — fades and gently lifts into view when it opens (about 0.25 s), and
+  fades back out when you close it (about 0.2 s), whether you close it with **Cancel**, the
+  **Esc** key, or a successful **Save/Create**. As a dialog leaves, the app behind it becomes
+  visible again through the fade, rather than the dialog blinking away in a single frame. (A
+  dialog that reports an error on submit — for example an invalid Settings value — stays open
+  instead, so nothing animates away.)
+- **The rest of the interface keeps its familiar motion.** The overflow menu still fades, the
+  worktree sidebar still slides as it collapses and expands, the main area cross-fades when its
+  content changes, and the sidebar's resize handle highlights on hover — all unchanged.
+
+Motion only runs while something is actually moving, so it never adds ongoing background work
+when the interface is at rest. There is currently no reduced-motion setting.

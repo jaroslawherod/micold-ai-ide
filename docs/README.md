@@ -11,7 +11,8 @@ verified in CI.
 - [Project Selection & Workspace Management](user-guide/project-selection.md) — opening a
   project, the known-projects list, git repository marking, and renaming.
 - [Appearance & Theming](user-guide/appearance-theming.md) — the Material Design layout, the
-  light and dark themes, following the system preference, and choosing a theme.
+  light and dark themes, following the system preference, choosing a theme, and interface motion
+  (dialog fades and the app's other animations).
 - [Icons](user-guide/icons.md) — the shared Material icon set, where each icon appears, theming,
   licensing, and how to add a new icon.
 - [Worktrees & Sessions](user-guide/worktrees-and-sessions.md) — opening a git project, the
