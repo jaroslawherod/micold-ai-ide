@@ -324,7 +324,6 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 );
                 frame.fill(&thumb, Color { a: 0.5, ..fg });
             }
-
         }
 
         renderer.draw_geometry(frame.into_geometry());
