@@ -529,10 +529,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 return Task::none();
             };
             app.core.update(Message::WorktreeCreateStarted);
-            Task::perform(async move { create(&repo, &names) }, |result| match result {
-                Ok(worktree) => Message::WorktreeCreated(worktree),
-                Err(err) => Message::WorktreeCreateFailed(describe_create_error(err)),
-            })
+            Task::perform(
+                async move { create(&repo, &names) },
+                |result| match result {
+                    Ok(worktree) => Message::WorktreeCreated(worktree),
+                    Err(err) => Message::WorktreeCreateFailed(describe_create_error(err)),
+                },
+            )
         }
         // Start a new session on a worktree: spawn `claude` and stream it (FR-010/012/013).
         Message::SessionStartRequested { worktree_dir } => {
