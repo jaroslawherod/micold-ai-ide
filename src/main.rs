@@ -116,6 +116,11 @@ struct App {
     /// terminal/OS-theme poll subscriptions: `true` until the first `Unfocused` event,
     /// which matches iced's behavior of not emitting an initial `Focused` on launch.
     window_focused: bool,
+    /// The terminal pane's last-known `(cols, rows)`, reported by `Message::TerminalResized`.
+    /// Seeds newly-spawned sessions so they fill the pane immediately instead of starting at the
+    /// hardcoded default and waiting for the next window resize to reconcile (bugfix: new
+    /// terminal not starting fullscreen).
+    last_grid: Option<(u16, u16)>,
 }
 
 /// Identity of the main content area, used to trigger a fade when it changes.
@@ -280,6 +285,7 @@ fn boot() -> (App, Task<Message>) {
             row_fx: Animator::new(),
             prev_hovered: None,
             window_focused: true,
+            last_grid: None,
         },
         Task::none(),
     )
@@ -533,6 +539,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 match spawn_pty(
                     &launch_spec(&cwd, id, LaunchMode::Fresh),
                     app.scrollback_lines,
+                    app.last_grid,
                 ) {
                     Ok(rt) => {
                         app.terminals.insert(id, rt);
@@ -563,6 +570,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     if let Ok(rt) = spawn_pty(
                         &launch_spec(&cwd, id, LaunchMode::Resume),
                         app.scrollback_lines,
+                        app.last_grid,
                     ) {
                         app.terminals.insert(id, rt);
                         app.core.update(Message::SessionRunning(id));
@@ -640,6 +648,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Reflow the displayed session's PTY + grid to the visible size (FR-014/FR-015).
         Message::TerminalResized { cols, rows } => {
+            // Remember the pane's live size so the next spawned session starts at it too, rather
+            // than the hardcoded default (bugfix: new terminal not starting fullscreen).
+            app.last_grid = Some((cols, rows));
             if let Some(rt) = app
                 .core
                 .active_session
@@ -940,6 +951,7 @@ fn handle_process_exits(app: &mut App) {
             if let Ok(rt) = spawn_pty(
                 &launch_spec(&cwd, id, LaunchMode::Resume),
                 app.scrollback_lines,
+                app.last_grid,
             ) {
                 app.terminals.insert(id, rt);
                 // Mark the (possibly background) session Running directly — SessionRunning only
@@ -1166,6 +1178,7 @@ mod tests {
             row_fx: Animator::new(),
             prev_hovered: None,
             window_focused: true,
+            last_grid: None,
         };
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
@@ -1173,5 +1186,46 @@ mod tests {
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(true));
         assert!(app.window_focused);
+    }
+
+    #[test]
+    fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
+        // Reproduces the reported bug: a freshly spawned session used to always start at the
+        // hardcoded INIT_ROWS x INIT_COLS default, filling only that fixed area until the next
+        // window resize reconciled it. `TerminalResized` (published by the pane widget whenever
+        // its live size changes) must now be remembered on `App` so `spawn_pty` call sites can
+        // seed new sessions at the pane's actual current size instead.
+        let mut app = App {
+            core: State::default(),
+            terminals: HashMap::new(),
+            scrollback_lines: micold_ai_ide::settings::DEFAULT_SCROLLBACK_LINES,
+            motion: Animator::new(),
+            main_key: main_content_key(&State::default()),
+            handle_hovered: false,
+            dismissing: None,
+            row_fx: Animator::new(),
+            prev_hovered: None,
+            window_focused: true,
+            last_grid: None,
+        };
+        assert_eq!(app.last_grid, None);
+
+        let _ = update_inner(
+            &mut app,
+            Message::TerminalResized {
+                cols: 220,
+                rows: 60,
+            },
+        );
+        assert_eq!(app.last_grid, Some((220, 60)));
+
+        let _ = update_inner(
+            &mut app,
+            Message::TerminalResized {
+                cols: 180,
+                rows: 45,
+            },
+        );
+        assert_eq!(app.last_grid, Some((180, 45)));
     }
 }
