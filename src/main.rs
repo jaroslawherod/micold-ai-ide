@@ -11,7 +11,8 @@ mod ui;
 use iced::time::every;
 use iced::{Subscription, Task};
 use micold_ai_ide::app::{
-    Message, Overlay, RenameDraft, SettingsDraft, State, WorktreeForm, WorktreeRenameDraft,
+    Message, Overlay, RenameDraft, SettingsDraft, State, WorktreeForm, WorktreeFormStatus,
+    WorktreeRenameDraft,
 };
 use micold_ai_ide::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_ai_ide::git::{Git, GitCli};
@@ -509,25 +510,29 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             persist_settings(&app.core);
             Task::none()
         }
-        // Validate the form, then create the worktree via git (FR-006/006b).
+        // Validate the form, then create the worktree (incl. any submodule fetch) via git,
+        // off the update() thread so a slow fetch doesn't freeze the UI (feature 010,
+        // research R4). AddWorktreeSubmitted/WorktreeCreated/WorktreeCreateFailed keep their
+        // existing meaning; WorktreeCreateStarted is dispatched first so the form can show it.
         Message::AddWorktreeSubmitted => {
             app.core.update(Message::AddWorktreeSubmitted);
             let Some(form) = app.core.worktree_form.clone() else {
                 return Task::none();
             };
+            if form.status != WorktreeFormStatus::Editing {
+                return Task::none(); // a create is already in flight — no double-submit.
+            }
             let Ok(names) = form.preview() else {
                 return Task::none(); // validation error already recorded by the reducer
             };
             let Some(repo) = app.core.workspace.active.clone() else {
                 return Task::none();
             };
-            match create(&repo, &names) {
-                Ok(worktree) => app.core.update(Message::WorktreeCreated(worktree)),
-                Err(err) => app
-                    .core
-                    .update(Message::WorktreeCreateFailed(describe_create_error(err))),
-            }
-            Task::none()
+            app.core.update(Message::WorktreeCreateStarted);
+            Task::perform(async move { create(&repo, &names) }, |result| match result {
+                Ok(worktree) => Message::WorktreeCreated(worktree),
+                Err(err) => Message::WorktreeCreateFailed(describe_create_error(err)),
+            })
         }
         // Start a new session on a worktree: spawn `claude` and stream it (FR-010/012/013).
         Message::SessionStartRequested { worktree_dir } => {

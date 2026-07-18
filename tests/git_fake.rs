@@ -64,3 +64,30 @@ fn failing_next_add_leaves_branch_but_no_worktree() {
     assert!(git.branch_exists(&repo(), "feat/x").unwrap());
     assert!(git.worktrees(&repo()).is_empty());
 }
+
+#[test]
+fn has_submodules_reflects_priming() {
+    let path = PathBuf::from("/repo/.claude/worktrees/feat-x");
+    let git = FakeGit::new().with_repo(repo()).with_submodules(&path);
+    assert!(git.has_submodules(&path));
+    assert!(!git.has_submodules(Path::new("/repo/.claude/worktrees/feat-y")));
+}
+
+#[test]
+fn submodule_update_records_call_and_defaults_to_success() {
+    let git = FakeGit::new().with_repo(repo());
+    let path = PathBuf::from("/repo/.claude/worktrees/feat-x");
+    git.submodule_update_init_recursive(&path).unwrap();
+    assert_eq!(git.submodule_update_calls(), vec![path]);
+}
+
+#[test]
+fn failing_next_submodule_update_errors_once() {
+    let git = FakeGit::new()
+        .with_repo(repo())
+        .failing_next_submodule_update();
+    let path = PathBuf::from("/repo/.claude/worktrees/feat-x");
+    assert!(git.submodule_update_init_recursive(&path).is_err());
+    // Primed to fail only once — a retry would succeed (mirrors failing_next_add's shape).
+    assert!(git.submodule_update_init_recursive(&path).is_ok());
+}

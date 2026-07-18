@@ -52,6 +52,27 @@ fn duplicate_target_dir_is_rejected() {
 }
 
 #[test]
+fn submodules_are_fetched_when_present() {
+    let git = FakeGit::new().with_repo("/repo").with_submodules(target());
+    let repo = PathBuf::from("/repo");
+
+    let wt = create_worktree(&git, &repo, &target(), &names(), false).unwrap();
+
+    assert_eq!(wt.status, WorktreeStatus::Valid);
+    assert_eq!(git.submodule_update_calls(), vec![target()]);
+}
+
+#[test]
+fn submodule_fetch_is_skipped_when_absent() {
+    let git = FakeGit::new().with_repo("/repo");
+    let repo = PathBuf::from("/repo");
+
+    create_worktree(&git, &repo, &target(), &names(), false).unwrap();
+
+    assert!(git.submodule_update_calls().is_empty());
+}
+
+#[test]
 fn duplicate_registered_worktree_is_rejected() {
     let git = FakeGit::new().with_repo("/repo");
     let repo = PathBuf::from("/repo");

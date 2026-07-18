@@ -77,6 +77,18 @@ pub enum Overlay {
     RenameWorktree,
 }
 
+/// Transient creation status for the add-worktree form (feature 010, research R4). Not
+/// persisted — reset to `Editing` whenever the form is (re)opened.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum WorktreeFormStatus {
+    /// The user is filling in the form; no create is in flight.
+    #[default]
+    Editing,
+    /// `WorktreeCreateStarted` was dispatched; the async create (including any submodule
+    /// fetch) is running. The form shows a "Creating worktree…" state and disables submission.
+    Creating,
+}
+
 /// In-progress add-worktree form state, present only while the form overlay is open (FR-005).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorktreeForm {
@@ -88,6 +100,8 @@ pub struct WorktreeForm {
     pub name: String,
     /// The last validation error shown after a rejected submit.
     pub error: Option<NamingError>,
+    /// Whether a create is in flight (feature 010, data-model.md).
+    pub status: WorktreeFormStatus,
 }
 
 impl WorktreeForm {
@@ -315,6 +329,9 @@ pub enum Message {
     AddWorktreeSubmitted,
     /// Dismiss the form without creating (Cancel or Esc).
     AddWorktreeCancelled,
+    /// The binary is about to run the async create (feature 010, research R4); marks the form
+    /// `Creating` so it shows an in-progress state instead of appearing to hang.
+    WorktreeCreateStarted,
     /// The binary created a worktree successfully (FR-007); add it and close the form.
     WorktreeCreated(Worktree),
     /// The binary reported a worktree create failure (FR-017); show it, keep the form open.
@@ -757,16 +774,24 @@ impl State {
             }
             Message::AddWorktreeSubmitted => {
                 // Validate only (FR-008); the binary performs the git create on a valid form
-                // and dispatches WorktreeCreated / WorktreeCreateFailed.
+                // and dispatches WorktreeCreated / WorktreeCreateFailed. A create already in
+                // flight (feature 010) makes this a no-op — no double-submit.
                 if let Some(form) = &mut self.worktree_form {
-                    if let Err(error) = form.preview() {
-                        form.error = Some(error);
+                    if form.status == WorktreeFormStatus::Editing {
+                        if let Err(error) = form.preview() {
+                            form.error = Some(error);
+                        }
                     }
                 }
             }
             Message::AddWorktreeCancelled => {
                 self.overlay = Overlay::None;
                 self.worktree_form = None;
+            }
+            Message::WorktreeCreateStarted => {
+                if let Some(form) = &mut self.worktree_form {
+                    form.status = WorktreeFormStatus::Creating;
+                }
             }
             Message::WorktreeCreated(worktree) => {
                 if !self
@@ -782,8 +807,12 @@ impl State {
                 self.worktree_error = None;
             }
             Message::WorktreeCreateFailed(message) => {
-                // Keep the form open so the user can adjust; show the error (FR-017).
+                // Keep the form open so the user can adjust; show the error (FR-017). Reset to
+                // Editing (feature 010) so the user can retry instead of staying stuck Creating.
                 self.worktree_error = Some(message);
+                if let Some(form) = &mut self.worktree_form {
+                    form.status = WorktreeFormStatus::Editing;
+                }
             }
             Message::SessionStarted(session) => {
                 let id = session.id;

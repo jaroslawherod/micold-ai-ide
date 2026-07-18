@@ -1,6 +1,6 @@
 //! T011 — extended app base state: defaults + new message wiring (feature 005).
 
-use micold_ai_ide::app::{on_escape, Message, Overlay, State};
+use micold_ai_ide::app::{on_escape, Message, Overlay, State, WorktreeFormStatus};
 use micold_ai_ide::naming::ConventionalType;
 use micold_ai_ide::project::{Availability, Project};
 use micold_ai_ide::session::Session;
@@ -73,6 +73,45 @@ fn created_worktree_is_added_and_form_closed() {
     assert_eq!(state.overlay, Overlay::None);
     assert!(state.worktree_form.is_none());
     assert_eq!(state.worktrees.len(), 1);
+}
+
+#[test]
+fn create_started_marks_form_creating() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeCreateStarted);
+    assert_eq!(
+        state.worktree_form.as_ref().unwrap().status,
+        WorktreeFormStatus::Creating
+    );
+}
+
+#[test]
+fn create_failed_keeps_form_open_and_resets_status_to_editing() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateFailed("boom".to_string()));
+    assert_eq!(state.worktree_error.as_deref(), Some("boom"));
+    assert!(state.worktree_form.is_some(), "form stays open for retry");
+    assert_eq!(
+        state.worktree_form.as_ref().unwrap().status,
+        WorktreeFormStatus::Editing
+    );
+}
+
+#[test]
+fn resubmitting_while_creating_is_a_no_op() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
+    state.update(Message::AddWorktreeNameChanged("Login".to_string()));
+    state.update(Message::WorktreeCreateStarted);
+    // Corrupt the form to prove the guard skips validation entirely while Creating —
+    // an unguarded AddWorktreeSubmitted would call preview() and record an error here.
+    state.update(Message::AddWorktreeNameChanged(String::new()));
+    state.update(Message::AddWorktreeSubmitted);
+    assert!(state.worktree_form.as_ref().unwrap().error.is_none());
 }
 
 #[test]

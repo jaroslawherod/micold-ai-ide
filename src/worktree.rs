@@ -246,30 +246,43 @@ pub fn create_worktree(
         return Err(CreateError::DuplicateDir);
     }
 
-    match git.worktree_add_new_branch(repo, &names.branch, target_path) {
-        Ok(()) => Ok(Worktree {
-            dir_name: names.dir_name.clone(),
-            path: target_path.to_path_buf(),
-            branch: Some(names.branch.clone()),
-            status: WorktreeStatus::Valid,
-        }),
-        Err(e) => {
-            // Run the git steps of the rollback plan in order (RemoveDir is the caller's).
-            for step in rollback_plan() {
-                match step {
-                    CleanupStep::WorktreeRemove => {
-                        let _ = git.worktree_remove(repo, target_path, true);
-                    }
-                    CleanupStep::WorktreePrune => {
-                        let _ = git.worktree_prune(repo);
-                    }
-                    CleanupStep::BranchDelete => {
-                        let _ = git.branch_delete(repo, &names.branch);
-                    }
-                    CleanupStep::RemoveDir => {}
-                }
+    if let Err(e) = git.worktree_add_new_branch(repo, &names.branch, target_path) {
+        run_rollback(git, repo, target_path, &names.branch);
+        return Err(CreateError::RolledBack(e.to_string()));
+    }
+
+    // Submodules, if any, are fetched from the worktree's own checkout (feature 010,
+    // research R1) — a failure here rolls back the whole creation exactly like a failed
+    // `worktree_add_new_branch` above (spec FR-005), via the same rollback plan.
+    if git.has_submodules(target_path) {
+        if let Err(e) = git.submodule_update_init_recursive(target_path) {
+            run_rollback(git, repo, target_path, &names.branch);
+            return Err(CreateError::RolledBack(e.to_string()));
+        }
+    }
+
+    Ok(Worktree {
+        dir_name: names.dir_name.clone(),
+        path: target_path.to_path_buf(),
+        branch: Some(names.branch.clone()),
+        status: WorktreeStatus::Valid,
+    })
+}
+
+/// Run the git steps of the rollback plan in order (RemoveDir is the caller's — [`CleanupStep::RemoveDir`]).
+fn run_rollback(git: &dyn Git, repo: &Path, target_path: &Path, branch: &str) {
+    for step in rollback_plan() {
+        match step {
+            CleanupStep::WorktreeRemove => {
+                let _ = git.worktree_remove(repo, target_path, true);
             }
-            Err(CreateError::RolledBack(e.to_string()))
+            CleanupStep::WorktreePrune => {
+                let _ = git.worktree_prune(repo);
+            }
+            CleanupStep::BranchDelete => {
+                let _ = git.branch_delete(repo, branch);
+            }
+            CleanupStep::RemoveDir => {}
         }
     }
 }

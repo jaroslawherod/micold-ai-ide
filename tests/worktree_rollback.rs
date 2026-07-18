@@ -47,3 +47,51 @@ fn failed_create_rolls_back_leaving_no_orphan_branch_or_worktree() {
     assert!(!git.branch_exists(&repo, "feat/x").unwrap());
     assert!(git.worktrees(&repo).is_empty());
 }
+
+#[test]
+fn failed_submodule_fetch_rolls_back_the_whole_worktree() {
+    let target = PathBuf::from("/repo/.claude/worktrees/feat-x");
+    let git = FakeGit::new()
+        .with_repo("/repo")
+        .with_submodules(&target)
+        .failing_next_submodule_update();
+    let repo = PathBuf::from("/repo");
+    let names = DerivedNames {
+        dir_name: "feat-x".to_string(),
+        branch: "feat/x".to_string(),
+    };
+
+    let err = create_worktree(&git, &repo, &target, &names, false).unwrap_err();
+    assert!(matches!(err, CreateError::RolledBack(_)));
+
+    // Same full rollback as a worktree-add failure (spec FR-005): no worktree, no branch.
+    assert!(!git.branch_exists(&repo, "feat/x").unwrap());
+    assert!(git.worktrees(&repo).is_empty());
+}
+
+/// FR-006 regression test (US3): nothing between the failing `submodule_update_init_recursive`
+/// call and the `CreateError` handed to the caller re-classifies or drops the underlying git
+/// error text — it survives verbatim, the same way a `worktree_add` failure's text already did.
+/// This already passes once T005 lands (no new production code for US3 — see tasks.md).
+#[test]
+fn submodule_failure_message_is_preserved_verbatim_for_the_user() {
+    let target = PathBuf::from("/repo/.claude/worktrees/feat-x");
+    let git = FakeGit::new()
+        .with_repo("/repo")
+        .with_submodules(&target)
+        .failing_next_submodule_update();
+    let repo = PathBuf::from("/repo");
+    let names = DerivedNames {
+        dir_name: "feat-x".to_string(),
+        branch: "feat/x".to_string(),
+    };
+
+    let err = create_worktree(&git, &repo, &target, &names, false).unwrap_err();
+    let CreateError::RolledBack(message) = err else {
+        panic!("expected RolledBack, got {err:?}");
+    };
+    assert!(
+        message.contains("simulated submodule update failure"),
+        "expected the underlying git error text to survive verbatim, got: {message}"
+    );
+}

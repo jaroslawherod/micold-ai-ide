@@ -35,6 +35,16 @@ pub trait Git {
 
     /// Delete a local branch (FR-006b). Idempotent: absence is not an error.
     fn branch_delete(&self, repo: &Path, branch: &str) -> io::Result<()>;
+
+    /// Whether the checked-out tree at `worktree_path` declares any submodules (a
+    /// `.gitmodules` file is present at its root) — checked against the worktree's own
+    /// checkout, not the source repo (feature 010, contracts/git-trait-submodules.md).
+    fn has_submodules(&self, worktree_path: &Path) -> bool;
+
+    /// Initialize, fetch, and check out every submodule declared under `worktree_path`,
+    /// recursively (submodules of submodules included):
+    /// `git -C <worktree_path> submodule update --init --recursive` (feature 010).
+    fn submodule_update_init_recursive(&self, worktree_path: &Path) -> io::Result<()>;
 }
 
 /// Production [`Git`] backed by the user's `git` binary (research R7). Cross-platform via the
@@ -122,6 +132,18 @@ impl Git for GitCli {
         let _ = run_git(repo, &["branch", "-D", branch]);
         Ok(())
     }
+
+    fn has_submodules(&self, worktree_path: &Path) -> bool {
+        worktree_path.join(".gitmodules").is_file()
+    }
+
+    fn submodule_update_init_recursive(&self, worktree_path: &Path) -> io::Result<()> {
+        run_git(
+            worktree_path,
+            &["submodule", "update", "--init", "--recursive"],
+        )
+        .map(|_| ())
+    }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -149,6 +171,13 @@ struct FakeState {
     /// When true, the next `worktree_add_new_branch` fails (after creating the branch, to
     /// mimic a checkout failure) so rollback ordering can be asserted.
     fail_next_add: bool,
+    /// Worktree paths primed to report `has_submodules == true` (feature 010).
+    submodules: BTreeSet<PathBuf>,
+    /// When true, the next `submodule_update_init_recursive` call fails (feature 010).
+    fail_next_submodule_update: bool,
+    /// Log of paths passed to `submodule_update_init_recursive`, in call order (test
+    /// assertions, feature 010).
+    submodule_update_calls: Vec<PathBuf>,
 }
 
 impl FakeGit {
@@ -178,6 +207,28 @@ impl FakeGit {
     pub fn failing_next_add(self) -> Self {
         self.inner.borrow_mut().fail_next_add = true;
         self
+    }
+
+    /// Prime `worktree_path` to report `has_submodules == true` (feature 010).
+    pub fn with_submodules(self, worktree_path: impl Into<PathBuf>) -> Self {
+        self.inner
+            .borrow_mut()
+            .submodules
+            .insert(worktree_path.into());
+        self
+    }
+
+    /// Prime the next `submodule_update_init_recursive` call to fail (rollback tests,
+    /// feature 010).
+    pub fn failing_next_submodule_update(self) -> Self {
+        self.inner.borrow_mut().fail_next_submodule_update = true;
+        self
+    }
+
+    /// Snapshot of paths passed to `submodule_update_init_recursive`, in call order (test
+    /// assertions, feature 010).
+    pub fn submodule_update_calls(&self) -> Vec<PathBuf> {
+        self.inner.borrow().submodule_update_calls.clone()
     }
 
     /// Snapshot the branches known for a repo (test assertions).
@@ -264,6 +315,22 @@ impl Git for FakeGit {
     fn branch_delete(&self, repo: &Path, branch: &str) -> io::Result<()> {
         if let Some(b) = self.inner.borrow_mut().branches.get_mut(repo) {
             b.remove(branch);
+        }
+        Ok(())
+    }
+
+    fn has_submodules(&self, worktree_path: &Path) -> bool {
+        self.inner.borrow().submodules.contains(worktree_path)
+    }
+
+    fn submodule_update_init_recursive(&self, worktree_path: &Path) -> io::Result<()> {
+        let mut state = self.inner.borrow_mut();
+        state
+            .submodule_update_calls
+            .push(worktree_path.to_path_buf());
+        if state.fail_next_submodule_update {
+            state.fail_next_submodule_update = false;
+            return Err(io::Error::other("simulated submodule update failure"));
         }
         Ok(())
     }
