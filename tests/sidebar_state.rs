@@ -201,8 +201,10 @@ fn sidebar_filter_panel_starts_closed() {
 
 #[test]
 fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
-    let mut state = State::default();
-    state.help_menu_open = true;
+    let mut state = State {
+        help_menu_open: true,
+        ..Default::default()
+    };
 
     state.update(Message::SidebarFilterMenuToggled);
     assert!(state.sidebar_filter_open);
@@ -267,9 +269,11 @@ fn escape_prefers_an_open_overlay_over_the_filter_panel() {
     // handling takes priority, not the filter panel's. In practice `State::open_overlay()`
     // keeps this combination from ever occurring (see the next test), but `on_escape` must not
     // silently disagree with the live subscription if that invariant is ever violated.
-    let mut state = State::default();
-    state.sidebar_filter_open = true;
-    state.overlay = Overlay::AddWorktree;
+    let state = State {
+        sidebar_filter_open: true,
+        overlay: Overlay::AddWorktree,
+        ..Default::default()
+    };
     assert_eq!(on_escape(&state), Some(Message::AddWorktreeCancelled));
 }
 
