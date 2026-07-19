@@ -21,7 +21,7 @@ fn happy_path_creates_branch_and_worktree() {
     let git = FakeGit::new().with_repo("/repo");
     let repo = PathBuf::from("/repo");
 
-    let wt = create_worktree(&git, &repo, &target(), &names(), false).unwrap();
+    let wt = create_worktree(&git, &repo, &target(), &names(), false, &mut |_| {}).unwrap();
 
     assert_eq!(wt.status, WorktreeStatus::Valid);
     assert_eq!(wt.dir_name, "feat-abc-123-login");
@@ -37,7 +37,7 @@ fn duplicate_branch_is_rejected_without_mutation() {
         .with_branch("/repo", "feat/abc-123-login");
     let repo = PathBuf::from("/repo");
 
-    let err = create_worktree(&git, &repo, &target(), &names(), false).unwrap_err();
+    let err = create_worktree(&git, &repo, &target(), &names(), false, &mut |_| {}).unwrap_err();
     assert_eq!(err, CreateError::DuplicateBranch);
     assert!(git.worktrees(&repo).is_empty());
 }
@@ -47,8 +47,47 @@ fn duplicate_target_dir_is_rejected() {
     let git = FakeGit::new().with_repo("/repo");
     let repo = PathBuf::from("/repo");
     // target_exists = true simulates the fs check.
-    let err = create_worktree(&git, &repo, &target(), &names(), true).unwrap_err();
+    let err = create_worktree(&git, &repo, &target(), &names(), true, &mut |_| {}).unwrap_err();
     assert_eq!(err, CreateError::DuplicateDir);
+}
+
+#[test]
+fn submodules_are_fetched_when_present() {
+    let git = FakeGit::new()
+        .with_repo("/repo")
+        .with_submodules(target())
+        .with_submodule_progress_lines(vec!["Cloning into 'vendor/sub'...".to_string()]);
+    let repo = PathBuf::from("/repo");
+    let mut log = Vec::new();
+
+    let wt = create_worktree(&git, &repo, &target(), &names(), false, &mut |line| {
+        log.push(line)
+    })
+    .unwrap();
+
+    assert_eq!(wt.status, WorktreeStatus::Valid);
+    assert_eq!(git.submodule_update_calls(), vec![target()]);
+    // The executed commands and the submodule fetch's live output both reach the caller
+    // (feature 010 follow-up — progress visibility).
+    assert!(log
+        .iter()
+        .any(|l| l.contains("git worktree add") && l.contains("feat/abc-123-login")));
+    assert!(log
+        .iter()
+        .any(|l| l.contains("git submodule update --init --recursive")));
+    assert!(log
+        .iter()
+        .any(|l| l.contains("Cloning into 'vendor/sub'...")));
+}
+
+#[test]
+fn submodule_fetch_is_skipped_when_absent() {
+    let git = FakeGit::new().with_repo("/repo");
+    let repo = PathBuf::from("/repo");
+
+    create_worktree(&git, &repo, &target(), &names(), false, &mut |_| {}).unwrap();
+
+    assert!(git.submodule_update_calls().is_empty());
 }
 
 #[test]
@@ -56,12 +95,12 @@ fn duplicate_registered_worktree_is_rejected() {
     let git = FakeGit::new().with_repo("/repo");
     let repo = PathBuf::from("/repo");
     // Pre-register the same path via a first successful create.
-    create_worktree(&git, &repo, &target(), &names(), false).unwrap();
+    create_worktree(&git, &repo, &target(), &names(), false, &mut |_| {}).unwrap();
     // A second create with a different branch but the same path → DuplicateDir.
     let other = DerivedNames {
         dir_name: "feat-abc-123-login".to_string(),
         branch: "feat/other".to_string(),
     };
-    let err = create_worktree(&git, &repo, &target(), &other, false).unwrap_err();
+    let err = create_worktree(&git, &repo, &target(), &other, false, &mut |_| {}).unwrap_err();
     assert_eq!(err, CreateError::DuplicateDir);
 }

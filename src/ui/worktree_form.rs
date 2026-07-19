@@ -5,9 +5,9 @@
 
 use crate::ui::material::Modal;
 use crate::ui::style;
-use iced::widget::{button, column, container, row, text, text_input, Space};
+use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Element, Length};
-use micold_ai_ide::app::{Message, WorktreeForm};
+use micold_ai_ide::app::{Message, WorktreeForm, WorktreeFormStatus};
 use micold_ai_ide::naming::ConventionalType;
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale, Roles};
@@ -22,6 +22,7 @@ pub fn modal<'a>(
     progress: f32,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
+    let is_creating = form.status == WorktreeFormStatus::Creating;
 
     let heading = text("New worktree").size(type_scale::HEADLINE);
 
@@ -74,10 +75,35 @@ pub fn modal<'a>(
         ));
     }
 
+    // In-progress state while the async create (and any submodule fetch) is running (feature
+    // 010, research R4) — reuses the existing text-based loading pattern (SelectorStatus::Loading
+    // → "Loading…"), not a new spinner component (Constitution VIII).
+    if is_creating {
+        fields = fields.push(text("Creating worktree…").size(type_scale::LABEL));
+    }
+
+    // Progress log display (feature 010 follow-up) — show a scrollable area with executed commands
+    // and live output from submodule fetches so the user can see what's happening.
+    if !form.log.is_empty() {
+        let mut log_content = column![].spacing(spacing::XS);
+        for line in &form.log {
+            log_content =
+                log_content.push(text(line).size(type_scale::LABEL).style(style::muted(r)));
+        }
+        let log_area = container(scrollable(log_content))
+            .width(Length::Fill)
+            .height(Length::Fixed(150.0))
+            .style(style::dialog(r));
+        fields = fields.push(log_area);
+    }
+
+    let create_button = button(text("Create").size(type_scale::BODY)).style(style::filled(r));
     let actions = row![
-        button(text("Create").size(type_scale::BODY))
-            .on_press(Message::AddWorktreeSubmitted)
-            .style(style::filled(r)),
+        if is_creating {
+            create_button
+        } else {
+            create_button.on_press(Message::AddWorktreeSubmitted)
+        },
         button(text("Cancel").size(type_scale::BODY))
             .on_press(Message::AddWorktreeCancelled)
             .style(style::outlined(r)),

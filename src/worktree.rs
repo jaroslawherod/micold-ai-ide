@@ -224,12 +224,18 @@ pub fn remove_worktree(
 /// Pre-flight duplicate checks run before any mutation. `target_exists` is the binary's `fs`
 /// check that the target directory is already present/non-empty. On a git failure the
 /// [`rollback_plan`] git steps run (the caller removes the directory — [`CleanupStep::RemoveDir`]).
+///
+/// `on_progress` is called with a human-readable line for each executed command and, for the
+/// (potentially slow) submodule fetch, its live output — so the caller can surface progress
+/// instead of the operation appearing to hang (feature 010 follow-up). Callers that don't care
+/// about progress can pass `&mut |_| {}`.
 pub fn create_worktree(
     git: &dyn Git,
     repo: &Path,
     target_path: &Path,
     names: &DerivedNames,
     target_exists: bool,
+    on_progress: &mut dyn FnMut(String),
 ) -> Result<Worktree, CreateError> {
     // Pre-flight (fail fast, no mutation).
     if git
@@ -246,30 +252,53 @@ pub fn create_worktree(
         return Err(CreateError::DuplicateDir);
     }
 
-    match git.worktree_add_new_branch(repo, &names.branch, target_path) {
-        Ok(()) => Ok(Worktree {
-            dir_name: names.dir_name.clone(),
-            path: target_path.to_path_buf(),
-            branch: Some(names.branch.clone()),
-            status: WorktreeStatus::Valid,
-        }),
-        Err(e) => {
-            // Run the git steps of the rollback plan in order (RemoveDir is the caller's).
-            for step in rollback_plan() {
-                match step {
-                    CleanupStep::WorktreeRemove => {
-                        let _ = git.worktree_remove(repo, target_path, true);
-                    }
-                    CleanupStep::WorktreePrune => {
-                        let _ = git.worktree_prune(repo);
-                    }
-                    CleanupStep::BranchDelete => {
-                        let _ = git.branch_delete(repo, &names.branch);
-                    }
-                    CleanupStep::RemoveDir => {}
-                }
+    on_progress(format!(
+        "$ git worktree add -b {} {} HEAD",
+        names.branch,
+        target_path.display()
+    ));
+    if let Err(e) = git.worktree_add_new_branch(repo, &names.branch, target_path) {
+        on_progress(format!("worktree add failed: {e}"));
+        on_progress("Rolling back…".to_string());
+        run_rollback(git, repo, target_path, &names.branch);
+        return Err(CreateError::RolledBack(e.to_string()));
+    }
+
+    // Submodules, if any, are fetched from the worktree's own checkout (feature 010,
+    // research R1) — a failure here rolls back the whole creation exactly like a failed
+    // `worktree_add_new_branch` above (spec FR-005), via the same rollback plan.
+    if git.has_submodules(target_path) {
+        on_progress("$ git submodule update --init --recursive".to_string());
+        if let Err(e) = git.submodule_update_init_recursive(target_path, on_progress) {
+            on_progress(format!("submodule update failed: {e}"));
+            on_progress("Rolling back…".to_string());
+            run_rollback(git, repo, target_path, &names.branch);
+            return Err(CreateError::RolledBack(e.to_string()));
+        }
+    }
+
+    Ok(Worktree {
+        dir_name: names.dir_name.clone(),
+        path: target_path.to_path_buf(),
+        branch: Some(names.branch.clone()),
+        status: WorktreeStatus::Valid,
+    })
+}
+
+/// Run the git steps of the rollback plan in order (RemoveDir is the caller's — [`CleanupStep::RemoveDir`]).
+fn run_rollback(git: &dyn Git, repo: &Path, target_path: &Path, branch: &str) {
+    for step in rollback_plan() {
+        match step {
+            CleanupStep::WorktreeRemove => {
+                let _ = git.worktree_remove(repo, target_path, true);
             }
-            Err(CreateError::RolledBack(e.to_string()))
+            CleanupStep::WorktreePrune => {
+                let _ = git.worktree_prune(repo);
+            }
+            CleanupStep::BranchDelete => {
+                let _ = git.branch_delete(repo, branch);
+            }
+            CleanupStep::RemoveDir => {}
         }
     }
 }
