@@ -92,6 +92,13 @@ pub fn view<'a>(
     // `sidebar_entries()` — so, unlike before this feature, the sidebar is never truly "empty":
     // a zero-worktree or filtered-to-nothing project still shows the Default row and its
     // start-session action, with a muted hint appended below about worktrees specifically.
+    //
+    // Computed once and reused for both the hint and the tree below (rather than calling
+    // `filtered_worktree_tree()`/`sidebar_entries()` twice per render) — `sidebar_entries()`
+    // always puts the Default entry first, so "only that one entry survived" is equivalent to
+    // "no worktree entries matched" without a second filter pass.
+    let entries = state.sidebar_entries();
+    let no_worktree_entries = entries.len() <= 1;
     let hint: Option<Element<'_, Message>> = if state.worktrees.is_empty() {
         Some(
             text("No worktrees yet. Add one to get started.")
@@ -99,7 +106,7 @@ pub fn view<'a>(
                 .style(style::muted(r))
                 .into(),
         )
-    } else if state.filtered_worktree_tree().is_empty() {
+    } else if no_worktree_entries {
         // Active filter matched nothing (FR-027): a message + a one-tap clear.
         Some(
             column![
@@ -118,10 +125,9 @@ pub fn view<'a>(
         None
     };
 
-    let tree: Element<'_, Message> =
-        TreeView::new(build_items(state, state.sidebar_entries(), r, row_fx), r)
-            .label_size(sidebar::NAME)
-            .into();
+    let tree: Element<'_, Message> = TreeView::new(build_items(state, entries, r, row_fx), r)
+        .label_size(sidebar::NAME)
+        .into();
     let list: Element<'_, Message> = match hint {
         Some(hint) => column![tree, hint].spacing(spacing::SM).into(),
         None => tree,
@@ -504,14 +510,18 @@ fn build_default_item(
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
 
-    let start_session = Tooltip::new(
-        IconButton::new(Icon::AddSession, r)
-            .size(sidebar::NAME)
-            .tint(r.primary)
-            .on_press(Message::SessionStartRequested {
-                location: SessionLocation::Default,
-            }),
+    // `active: true, progress: 1.0` gives the always-visible, always-pressable button this row
+    // needs (see the doc comment above), reusing the same construction as a worktree row's
+    // hover-revealed action icons instead of hand-rebuilding it.
+    let start_session = action_icon(
+        Icon::AddSession,
+        r.primary,
+        Message::SessionStartRequested {
+            location: SessionLocation::Default,
+        },
         "Start a new session in the project root",
+        true,
+        1.0,
         r,
     );
 

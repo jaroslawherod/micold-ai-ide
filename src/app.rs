@@ -698,10 +698,10 @@ impl State {
                         if let Some(list) = self.workspace.sessions.get_mut(&path) {
                             let removed: Vec<SessionId> = list
                                 .iter()
-                                .filter(|s| s.location == SessionLocation::Worktree(dir.clone()))
+                                .filter(|s| s.location.is_worktree(&dir))
                                 .map(|s| s.id)
                                 .collect();
-                            list.retain(|s| s.location != SessionLocation::Worktree(dir.clone()));
+                            list.retain(|s| !s.location.is_worktree(&dir));
                             if self
                                 .active_session
                                 .is_some_and(|a| removed.contains(&a))
@@ -1048,7 +1048,7 @@ impl State {
     pub fn sessions_in_worktree(&self, dir_name: &str) -> Vec<SessionId> {
         self.active_sessions()
             .iter()
-            .filter(|s| s.location == SessionLocation::Worktree(dir_name.to_string()))
+            .filter(|s| s.location.is_worktree(dir_name))
             .map(|s| s.id)
             .collect()
     }
@@ -1102,6 +1102,10 @@ impl State {
                                                              // BUG-001 / focus-model.md: switching (or opening) a project does not carry terminal focus
                                                              // across — re-focusing the restored session is a fresh explicit action (or a select/start).
         self.terminal_focused = false;
+        // `default_expanded` is not keyed per project (unlike `expanded`, which is pruned by
+        // worktree `dir_name` in `set_worktrees`) — reset it explicitly so a Default entry
+        // expanded in one project doesn't render pre-expanded in another (feature 010).
+        self.default_expanded = false;
         self.arm_notice(&key); // STEP 4
     }
 
@@ -1197,7 +1201,7 @@ impl State {
                 expanded: self.expanded.contains(&worktree.dir_name),
                 sessions: sessions
                     .iter()
-                    .filter(|s| s.location == SessionLocation::Worktree(worktree.dir_name.clone()))
+                    .filter(|s| s.location.is_worktree(&worktree.dir_name))
                     .cloned()
                     .collect(),
                 worktree: worktree.clone(),

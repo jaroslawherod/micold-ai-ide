@@ -8,6 +8,7 @@
 //! `contracts/terminal-backend-trait.md`.
 
 use std::fmt;
+use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 /// Stable session identity — the app-generated UUID passed to `claude --session-id` and used
@@ -98,6 +99,25 @@ pub enum SessionLocation {
     /// Hosted directly by the project's own root directory — no worktree. Presented to users
     /// as "Default".
     Default,
+}
+
+impl SessionLocation {
+    /// The resolved working directory for a session at this location, given the project's
+    /// root (`repo`). The single authoritative implementation — every cwd-resolution call site
+    /// (`src/main.rs`) and test that needs this decision calls through here rather than
+    /// re-deriving the `Worktree`/`Default` branch by hand.
+    pub fn cwd(&self, repo: &Path) -> PathBuf {
+        match self {
+            SessionLocation::Worktree(dir) => repo.join(".claude/worktrees").join(dir),
+            SessionLocation::Default => repo.to_path_buf(),
+        }
+    }
+
+    /// Whether this location is the worktree named `dir` — a borrowing comparison so callers
+    /// don't need to allocate a `SessionLocation::Worktree(dir.to_string())` just to compare.
+    pub fn is_worktree(&self, dir: &str) -> bool {
+        matches!(self, SessionLocation::Worktree(d) if d == dir)
+    }
 }
 
 /// A unit of work bound to a single [`SessionLocation`], with one embedded terminal

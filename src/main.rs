@@ -309,15 +309,14 @@ fn prune_empty_sessions(workspace: &mut micold_ai_ide::workspace::Workspace) {
 }
 
 /// Resolve a session's working directory from `repo` (the project root) and its
-/// [`SessionLocation`] (feature 010, research.md R2 — the single authoritative
-/// implementation of all five cwd-resolution call sites): a worktree session joins
-/// `.claude/worktrees/<dir>`; a Default session runs directly in the project root, with no
-/// join/suffix and no worktree created as a side effect (FR-002/FR-003).
+/// [`SessionLocation`] (feature 010, research.md R2). Thin wrapper around
+/// [`SessionLocation::cwd`] — the pure library method is the single authoritative
+/// implementation of the `Worktree`/`Default` decision, so it's also what
+/// `tests/session_default_location.rs` and `tests/session_title_sync.rs` call directly,
+/// rather than each hand-copying this match. All five cwd-resolution call sites in this
+/// binary go through this wrapper.
 fn session_cwd_for_location(repo: &Path, location: &SessionLocation) -> PathBuf {
-    match location {
-        SessionLocation::Worktree(dir) => repo.join(".claude/worktrees").join(dir),
-        SessionLocation::Default => repo.to_path_buf(),
-    }
+    location.cwd(repo)
 }
 
 /// Whether the AI CLI provider has recorded a conversation transcript for this session
