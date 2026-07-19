@@ -1044,9 +1044,10 @@ fn create(
         // CleanupStep::RemoveDir (the fs half of the rollback plan).
         let _ = std::fs::remove_dir_all(&target);
     }
-    result
-        .map(|wt| (wt, progress))
-        .map_err(|err| (err, progress))
+    match result {
+        Ok(wt) => Ok((wt, progress)),
+        Err(err) => Err((err, progress)),
+    }
 }
 
 fn describe_create_error(err: CreateError) -> String {
