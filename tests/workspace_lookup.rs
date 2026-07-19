@@ -2,9 +2,19 @@
 
 mod support;
 
-use micold_ai_ide::session::{SessionId, SessionLifecycle};
+use micold_ai_ide::session::{SessionId, SessionLifecycle, SessionLocation};
 use std::path::Path;
 use support::{failed_session, idle_session, running_session, workspace_with};
+
+// T006 (010-root-dir-session): `find_session`/`running_session_count` still correctly
+// attribute sessions after `worktree_dir: String` became `location: SessionLocation`.
+#[test]
+fn find_session_matches_on_session_location_not_a_bare_string() {
+    let ws = workspace_with(vec![("/a", vec![running_session("wt-a")])]);
+    let id = ws.sessions[Path::new("/a")][0].id;
+    let (_, sess) = ws.find_session(id).expect("resolved");
+    assert_eq!(sess.location, SessionLocation::Worktree("wt-a".to_string()));
+}
 
 #[test]
 fn find_session_resolves_in_non_active_project() {

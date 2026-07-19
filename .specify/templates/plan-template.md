@@ -45,7 +45,7 @@ deviation in Complexity Tracking):
 
 - [ ] **I. Test-First (NON-NEGOTIABLE)**: Every unit of production code is preceded by a failing, reviewed test (Red-Green-Refactor). No code path is planned without covering tests.
 - [ ] **II. Multi-Session Support**: New state is scoped per session; sessions stay independently addressable, persisted, restorable, and leak no state into one another.
-- [ ] **III. Worktree Integration**: File/VCS operations are worktree-aware; the app owns worktree create/switch/cleanup with no manual git steps required of the user.
+- [ ] **III. Worktree Integration**: File/VCS operations are worktree-aware; the app owns worktree create/switch/cleanup with no manual git steps required of the user; every session maps to a worktree or to the project root as the sanctioned "Default" location — no other non-worktree location is used.
 - [ ] **IV. Local-First Storage (NON-NEGOTIABLE)**: All state lives on the local filesystem; the feature works fully offline; nothing leaves the device without explicit opt-in.
 - [ ] **V. Rust + iced Stack**: Implemented in Rust with iced only; invalid session/worktree states are made unrepresentable via the type system.
 - [ ] **VI. Cross-Platform Parity**: Feature behaves equivalently on Linux, macOS, and Windows; platform-specific code sits behind clear abstractions; CI covers all three.

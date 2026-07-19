@@ -1,10 +1,10 @@
 //! T038 — project close/switch stops sessions → Idle without auto-restart (FR-023/023a).
 
-use micold_ai_ide::session::{Session, SessionLifecycle};
+use micold_ai_ide::session::{Session, SessionLifecycle, SessionLocation};
 
 #[test]
 fn project_change_stops_to_idle_preserving_identity() {
-    let mut s = Session::start_new("feat-x");
+    let mut s = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     s.mark_running();
     let id = s.id;
     s.set_title("Work in progress");
@@ -20,7 +20,7 @@ fn project_change_stops_to_idle_preserving_identity() {
 
 #[test]
 fn intentional_stop_does_not_count_as_a_crash() {
-    let mut s = Session::start_new("feat-x");
+    let mut s = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     s.mark_running();
     s.stop_for_project_change();
 

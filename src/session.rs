@@ -1,12 +1,15 @@
 //! Session domain model and lifecycle state machine (FR-010, FR-015a, FR-020–023a).
 //!
 //! Pure and unit-testable; no process spawning (that lives behind
-//! [`crate::terminal::TerminalBackend`]). A session is bound to one worktree (by `dir_name`)
-//! and one `claude` process; its identity + `claude`-provided title are persisted so it
-//! restores across restarts (FR-020). Contract: `contracts/terminal-backend-trait.md`.
+//! [`crate::terminal::TerminalBackend`]). A session is bound to one [`SessionLocation`] — either
+//! a worktree (by `dir_name`) or, as of feature 010, the project's own root directory (the
+//! "Default" location, constitution v1.3.0) — and one `claude` process; its identity +
+//! `claude`-provided title are persisted so it restores across restarts (FR-020). Contract:
+//! `contracts/terminal-backend-trait.md`.
 
 use crate::icons::Icon;
 use std::fmt;
+use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 /// Stable session identity — the app-generated UUID passed to `claude --session-id` and used
@@ -171,13 +174,47 @@ impl ShellLifecycle {
     }
 }
 
-/// A unit of work bound to a single worktree, with one embedded terminal (data-model.md).
+/// Where a session's working directory lives (feature 010, data-model.md). A closed enum
+/// (Constitution Principle V) so a session can never be ambiguously "maybe a worktree, maybe
+/// not" — every session maps to exactly one of these two sanctioned locations (constitution
+/// v1.3.0, Principle III).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionLocation {
+    /// Hosted by a worktree, identified by its `dir_name` (identity, unchanged from before
+    /// feature 010).
+    Worktree(String),
+    /// Hosted directly by the project's own root directory — no worktree. Presented to users
+    /// as "Default".
+    Default,
+}
+
+impl SessionLocation {
+    /// The resolved working directory for a session at this location, given the project's
+    /// root (`repo`). The single authoritative implementation — every cwd-resolution call site
+    /// (`src/main.rs`) and test that needs this decision calls through here rather than
+    /// re-deriving the `Worktree`/`Default` branch by hand.
+    pub fn cwd(&self, repo: &Path) -> PathBuf {
+        match self {
+            SessionLocation::Worktree(dir) => repo.join(".claude/worktrees").join(dir),
+            SessionLocation::Default => repo.to_path_buf(),
+        }
+    }
+
+    /// Whether this location is the worktree named `dir` — a borrowing comparison so callers
+    /// don't need to allocate a `SessionLocation::Worktree(dir.to_string())` just to compare.
+    pub fn is_worktree(&self, dir: &str) -> bool {
+        matches!(self, SessionLocation::Worktree(d) if d == dir)
+    }
+}
+
+/// A unit of work bound to a single [`SessionLocation`], with one embedded terminal
+/// (data-model.md).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Session {
     /// Stable identity + `--resume` handle.
     pub id: SessionId,
-    /// The hosting worktree's `dir_name`.
-    pub worktree_dir: String,
+    /// Where this session's working directory lives — a worktree or the project root.
+    pub location: SessionLocation,
     /// Sidebar label (from `claude`).
     pub label: SessionLabel,
     /// Runtime state of the AI CLI process (transient — not persisted).
@@ -189,12 +226,12 @@ pub struct Session {
 }
 
 impl Session {
-    /// A brand-new session on `worktree_dir`, starting immediately (FR-010). Always starts
+    /// A brand-new session at `location`, starting immediately (FR-010). Always starts
     /// attached to the AI CLI (feature 010 FR-010 — today's only behavior for a fresh session).
-    pub fn start_new(worktree_dir: impl Into<String>) -> Self {
+    pub fn start_new(location: SessionLocation) -> Self {
         Self {
             id: SessionId::new(),
-            worktree_dir: worktree_dir.into(),
+            location,
             label: SessionLabel::Pending,
             lifecycle: SessionLifecycle::Starting,
             mode: TerminalMode::AiCli,
@@ -207,13 +244,13 @@ impl Session {
     /// since no process survives an app restart.
     pub fn restored(
         id: SessionId,
-        worktree_dir: impl Into<String>,
+        location: SessionLocation,
         label: SessionLabel,
         mode: TerminalMode,
     ) -> Self {
         Self {
             id,
-            worktree_dir: worktree_dir.into(),
+            location,
             label,
             lifecycle: SessionLifecycle::Idle,
             mode,

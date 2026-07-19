@@ -2,7 +2,11 @@
 //! mode→icon/tooltip mapping, and lifecycle independence (feature 010, FR-001–FR-010, FR-013).
 
 use micold_ai_ide::icons::Icon;
-use micold_ai_ide::session::{Session, ShellLifecycle, TerminalMode};
+use micold_ai_ide::session::{Session, SessionLocation, ShellLifecycle, TerminalMode};
+
+fn worktree(name: &str) -> SessionLocation {
+    SessionLocation::Worktree(name.to_string())
+}
 
 #[test]
 fn terminal_mode_defaults_to_ai_cli() {
@@ -62,7 +66,7 @@ fn shell_lifecycle_is_active() {
 
 #[test]
 fn session_start_new_defaults_mode_and_shell_lifecycle() {
-    let s = Session::start_new("feature-x");
+    let s = Session::start_new(worktree("feature-x"));
     assert_eq!(s.mode, TerminalMode::AiCli);
     assert_eq!(s.shell_lifecycle, ShellLifecycle::NotStarted);
 }
@@ -72,7 +76,7 @@ fn session_restored_takes_the_persisted_mode() {
     use micold_ai_ide::session::{SessionId, SessionLabel};
     let s = Session::restored(
         SessionId::new(),
-        "feature-x",
+        worktree("feature-x"),
         SessionLabel::Pending,
         TerminalMode::Regular,
     );
@@ -82,7 +86,7 @@ fn session_restored_takes_the_persisted_mode() {
 
 #[test]
 fn session_set_mode_always_succeeds_regardless_of_process_state() {
-    let mut s = Session::start_new("feature-x");
+    let mut s = Session::start_new(worktree("feature-x"));
     s.set_mode(TerminalMode::Regular);
     assert_eq!(s.mode, TerminalMode::Regular);
     s.set_mode(TerminalMode::AiCli);
@@ -91,7 +95,7 @@ fn session_set_mode_always_succeeds_regardless_of_process_state() {
 
 #[test]
 fn session_shell_transitions_delegate_to_shell_lifecycle() {
-    let mut s = Session::start_new("feature-x");
+    let mut s = Session::start_new(worktree("feature-x"));
     s.start_shell();
     assert_eq!(s.shell_lifecycle, ShellLifecycle::Starting);
     s.mark_shell_running();
@@ -133,7 +137,7 @@ fn mode_tooltip_is_distinct_per_variant() {
 fn shell_transitions_never_mutate_ai_cli_lifecycle() {
     use micold_ai_ide::session::SessionLifecycle;
 
-    let mut s = Session::start_new("feature-x");
+    let mut s = Session::start_new(worktree("feature-x"));
     s.mark_running();
     let ai_cli_before = s.lifecycle;
     assert_eq!(ai_cli_before, SessionLifecycle::Running);

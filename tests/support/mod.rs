@@ -8,7 +8,9 @@
 
 use micold_ai_ide::fs_scan::FolderScanner;
 use micold_ai_ide::project::{canonicalize_best_effort, FolderEntry};
-use micold_ai_ide::session::{RestartDecision, Session, SessionId, SessionLabel, TerminalMode};
+use micold_ai_ide::session::{
+    RestartDecision, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_ai_ide::workspace::Workspace;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -42,7 +44,14 @@ impl FolderScanner for FakeScanner {
 
 /// A session that is currently `Running`.
 pub fn running_session(worktree_dir: &str) -> Session {
-    let mut s = Session::start_new(worktree_dir);
+    let mut s = Session::start_new(SessionLocation::Worktree(worktree_dir.to_string()));
+    s.mark_running();
+    s
+}
+
+/// A `SessionLocation::Default` session that is currently `Running` (feature 010).
+pub fn running_default_session() -> Session {
+    let mut s = Session::start_new(SessionLocation::Default);
     s.mark_running();
     s
 }
@@ -51,7 +60,7 @@ pub fn running_session(worktree_dir: &str) -> Session {
 pub fn idle_session(worktree_dir: &str) -> Session {
     Session::restored(
         SessionId::new(),
-        worktree_dir,
+        SessionLocation::Worktree(worktree_dir.to_string()),
         SessionLabel::Pending,
         TerminalMode::AiCli,
     )
@@ -59,7 +68,7 @@ pub fn idle_session(worktree_dir: &str) -> Session {
 
 /// A session driven to `Failed` via repeated unexpected exits (crash-loop guard).
 pub fn failed_session(worktree_dir: &str) -> Session {
-    let mut s = Session::start_new(worktree_dir);
+    let mut s = Session::start_new(SessionLocation::Worktree(worktree_dir.to_string()));
     s.mark_running();
     loop {
         if s.on_unexpected_exit() == RestartDecision::GiveUp {

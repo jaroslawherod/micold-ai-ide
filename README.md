@@ -10,7 +10,8 @@ fully functional offline (Constitution Principle IV).
 
 - Open a git project and manage its worktrees (one branch per line of work) from a Material
   Design sidebar.
-- Run multiple concurrent `claude` sessions, each in its own worktree, in an embedded terminal.
+- Run multiple concurrent `claude` sessions, each in its own worktree or directly in the
+  project root ("Default"), in an embedded terminal.
 - A real terminal emulator: full ANSI color + text styling, live keyboard and mouse input,
   focus-gated key routing, resize, scrollback, and copy/paste.
 - Light/dark theming that follows your OS preference; configurable terminal scrollback.

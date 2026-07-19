@@ -2,7 +2,7 @@
 //! contracts/persistence-schema.md).
 
 use micold_ai_ide::project::{Availability, Project};
-use micold_ai_ide::session::{Session, SessionId, SessionLabel, TerminalMode};
+use micold_ai_ide::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use micold_ai_ide::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_ai_ide::workspace::Workspace;
 use std::collections::BTreeMap;
@@ -14,7 +14,12 @@ fn workspace_with(mode: TerminalMode) -> (Workspace, PathBuf, SessionId) {
     let mut sessions = BTreeMap::new();
     sessions.insert(
         path.clone(),
-        vec![Session::restored(id, "feat-x", SessionLabel::Pending, mode)],
+        vec![Session::restored(
+            id,
+            SessionLocation::Worktree("feat-x".to_string()),
+            SessionLabel::Pending,
+            mode,
+        )],
     );
     (
         Workspace {

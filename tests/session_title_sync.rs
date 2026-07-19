@@ -8,18 +8,19 @@
 use micold_ai_ide::app::{Message, State};
 use micold_ai_ide::project::{Availability, Project};
 use micold_ai_ide::provider::{AiCliProvider, ClaudeProvider};
-use micold_ai_ide::session::Session;
+use micold_ai_ide::session::{Session, SessionLocation};
 use std::path::{Path, PathBuf};
 
-/// The runtime sync step, mirrored from the main loop: read the provider's current title for a
-/// session and, when it differs from the current label, emit `SessionTitleUpdated`.
+/// The runtime sync step, mirrored from the main loop (`sync_session_titles`, one of the five
+/// cwd-resolution call sites, research.md R2): read the provider's current title for a session
+/// and, when it differs from the current label, emit `SessionTitleUpdated`. The cwd decision
+/// itself delegates to `SessionLocation::cwd` (`src/session.rs`), the single authoritative
+/// implementation, rather than re-deriving the `Worktree`/`Default` branch here.
 fn sync_once(state: &mut State, config_dir: &Path, project: &Path) {
     let provider = ClaudeProvider;
     let mut updates = Vec::new();
     for session in state.active_sessions() {
-        let cwd = project
-            .join(".claude/worktrees")
-            .join(&session.worktree_dir);
+        let cwd = session.location.cwd(project);
         if let Some(title) = provider.read_title(config_dir, &cwd, session.id.0) {
             if session.label.display() != title {
                 updates.push((session.id, title));
@@ -40,7 +41,7 @@ fn state_with_active_session(project: &Path, worktree_dir: &str) -> (State, Sess
         availability: Availability::Available,
     });
     state.workspace.active = Some(project.to_path_buf());
-    let session = Session::start_new(worktree_dir);
+    let session = Session::start_new(SessionLocation::Worktree(worktree_dir.to_string()));
     state.update(Message::SessionStarted(session.clone()));
     (state, session)
 }

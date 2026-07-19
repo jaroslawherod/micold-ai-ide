@@ -61,6 +61,9 @@ pub enum Icon {
     RegularTerminal,
     /// Release the terminal's keyboard focus (feature 006/010 bottom bar).
     ReleaseFocus,
+    /// The "Default" project-root sidebar entry (feature 010) — distinct from the git/branch
+    /// iconography used for worktree rows (FR-006).
+    ProjectRoot,
 }
 
 impl Icon {
@@ -89,6 +92,7 @@ impl Icon {
         Icon::AiCli,
         Icon::RegularTerminal,
         Icon::ReleaseFocus,
+        Icon::ProjectRoot,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -118,6 +122,7 @@ impl Icon {
             Icon::AiCli => '\u{e65f}',
             Icon::RegularTerminal => '\u{eb8e}',
             Icon::ReleaseFocus => '\u{e31a}',
+            Icon::ProjectRoot => '\u{e88a}',
         }
     }
 }

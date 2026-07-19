@@ -1,11 +1,12 @@
 //! Sidebar hide/show + adjustable-width state (feature 005 UI enhancement).
 
 use micold_ai_ide::app::{
-    on_escape, Message, Overlay, State, TagFilter, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH,
-    SIDEBAR_MIN_WIDTH,
+    on_escape, Message, Overlay, SidebarEntry, State, TagFilter, SIDEBAR_DEFAULT_WIDTH,
+    SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
 };
 use micold_ai_ide::naming::ConventionalType;
 use micold_ai_ide::project::{Availability, Project};
+use micold_ai_ide::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
 fn state_with_active() -> State {
@@ -293,4 +294,39 @@ fn opening_an_overlay_closes_the_filter_panel() {
         "opening an overlay must close the filter panel"
     );
     assert_eq!(state.overlay, Overlay::AddWorktree);
+}
+
+// T020 (010-root-dir-session, FR-011, research.md R4): the Default entry is exempt from the
+// sidebar's tag-filter panel — it stays visible no matter which filters are active.
+#[test]
+fn default_entry_stays_visible_with_an_active_tag_filter() {
+    let mut state = state_with_active();
+    state.worktrees = vec![Worktree {
+        dir_name: "feat-a".to_string(),
+        path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+        branch: Some("feat/a".to_string()),
+        status: WorktreeStatus::Valid,
+    }];
+
+    // Sanity: a filter matching nothing still leaves worktree entries empty...
+    state.update(Message::SidebarFilterToggled(TagFilter::Type(
+        ConventionalType::Fix, // no `fix` worktree exists — this filter matches nothing
+    )));
+    assert!(
+        !state.available_tag_filters().is_empty(),
+        "feat-a offers a filter to toggle"
+    );
+    let entries = state.sidebar_entries();
+    assert!(
+        entries
+            .iter()
+            .any(|e| matches!(e, SidebarEntry::Default(_))),
+        "Default entry must remain present even when the active filter matches zero worktrees"
+    );
+    assert!(
+        !entries
+            .iter()
+            .any(|e| matches!(e, SidebarEntry::Worktree(_))),
+        "the worktree portion is still correctly filtered out"
+    );
 }

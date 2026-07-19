@@ -155,6 +155,43 @@ fn missing_worktree_names_field_loads_without_override() {
     assert_eq!(out.workspace.worktree_name("feat-x"), None);
 }
 
+// T026 (010-root-dir-session, contracts/storage-schema.md backward-compatibility guarantee):
+// a `projects.json` shaped exactly as it was before this feature — `worktree_dir` always a
+// plain JSON string, across multiple sessions and multiple projects — loads unchanged, with
+// zero `SessionLocation::Default` sessions inferred anywhere.
+#[test]
+fn pre_feature_010_catalog_with_multiple_sessions_loads_as_all_worktree_located() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    let json = r#"{"schema_version":1,"last_active":"/repo-a","projects":[
+        {"path":"/repo-a","display_name":"repo-a","is_git_repo":true,"sessions":[
+            {"id":"11111111-1111-1111-1111-111111111111","worktree_dir":"feat-one","title":"One"},
+            {"id":"22222222-2222-2222-2222-222222222222","worktree_dir":"feat-two","title":null}
+        ]},
+        {"path":"/repo-b","display_name":"repo-b","is_git_repo":true,"sessions":[
+            {"id":"33333333-3333-3333-3333-333333333333","worktree_dir":"chore-cleanup","title":null}
+        ]}
+    ]}"#;
+    std::fs::write(&path, json).unwrap();
+    let store = JsonFileStore::at(path);
+
+    let out = store.load();
+    assert_eq!(out.status, LoadStatus::Loaded);
+
+    use micold_ai_ide::session::SessionLocation;
+    let all_sessions = out.workspace.sessions.values().flat_map(|list| list.iter());
+    let mut count = 0;
+    for session in all_sessions {
+        count += 1;
+        assert!(
+            matches!(session.location, SessionLocation::Worktree(_)),
+            "a pre-feature-010 session must never be misread as Default: {:?}",
+            session.location
+        );
+    }
+    assert_eq!(count, 3, "all three legacy sessions loaded");
+}
+
 #[test]
 fn save_is_atomic_and_leaves_no_temp_file() {
     let dir = tempdir().unwrap();

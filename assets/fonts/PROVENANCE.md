@@ -62,6 +62,7 @@ pyftsubset _static.ttf \
 | `AiCli`        | `auto_awesome`         | `E65F`         |
 | `RegularTerminal` | `terminal`          | `EB8E`         |
 | `ReleaseFocus` | `keyboard_hide`        | `E31A`         |
+| `ProjectRoot`  | `home`                 | `E88A`         |
 
 This table documents which of the font's (now much larger) set of glyphs the app actually
 *uses* — it is no longer the list of what the shipped file *contains* (that's every upstream
