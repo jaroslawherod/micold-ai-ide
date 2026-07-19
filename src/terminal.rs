@@ -44,6 +44,25 @@ pub fn claude_args(spec: &LaunchSpec) -> Vec<String> {
     crate::provider::ClaudeProvider.launch_args(spec.session_id, spec.mode)
 }
 
+/// Resolve the platform's default interactive shell command (feature 010, research R3;
+/// contracts/shell-process.md). Pure and argument-driven — the impure `std::env::var("SHELL")`
+/// / `std::env::var("COMSPEC")` reads happen at the call site, not here, so this is testable
+/// under `--no-default-features` without touching process env. An empty env value is treated
+/// the same as absent (matches `ClaudeProvider::config_dir`'s existing convention).
+pub fn default_shell_command(shell_env: Option<&str>, comspec_env: Option<&str>) -> String {
+    if cfg!(windows) {
+        comspec_env
+            .filter(|s| !s.is_empty())
+            .unwrap_or("cmd.exe")
+            .to_string()
+    } else {
+        shell_env
+            .filter(|s| !s.is_empty())
+            .unwrap_or("/bin/sh")
+            .to_string()
+    }
+}
+
 /// A live handle to one running session's terminal. `Send` so its reader can live on a worker
 /// thread (research R4).
 pub trait TerminalHandle: Send {

@@ -20,16 +20,26 @@ fn mark_running_transitions_from_starting() {
 
 #[test]
 fn restored_session_is_idle_and_inactive() {
-    use micold_ai_ide::session::{SessionId, SessionLabel};
-    let s = Session::restored(SessionId::new(), "feat-x", SessionLabel::Pending);
+    use micold_ai_ide::session::{SessionId, SessionLabel, TerminalMode};
+    let s = Session::restored(
+        SessionId::new(),
+        "feat-x",
+        SessionLabel::Pending,
+        TerminalMode::AiCli,
+    );
     assert_eq!(s.lifecycle, SessionLifecycle::Idle);
     assert!(!s.is_active());
 }
 
 #[test]
 fn idle_session_can_start_again() {
-    use micold_ai_ide::session::{SessionId, SessionLabel};
-    let mut s = Session::restored(SessionId::new(), "feat-x", SessionLabel::Pending);
+    use micold_ai_ide::session::{SessionId, SessionLabel, TerminalMode};
+    let mut s = Session::restored(
+        SessionId::new(),
+        "feat-x",
+        SessionLabel::Pending,
+        TerminalMode::AiCli,
+    );
     s.start();
     assert_eq!(s.lifecycle, SessionLifecycle::Starting);
 }

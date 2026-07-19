@@ -204,3 +204,47 @@ fn escape_cancels_worktree_rename() {
     state.update(Message::WorktreeRenameStarted("feat-x".to_string()));
     assert_eq!(on_escape(&state), Some(Message::WorktreeRenameCancelled));
 }
+
+// --- Feature 010: switchable regular terminal mode ---
+
+#[test]
+fn terminal_mode_toggled_flips_the_active_sessions_mode() {
+    use micold_ai_ide::session::TerminalMode;
+
+    let mut state = state_with_worktree_and_session("feat-x");
+    assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
+
+    state.update(Message::TerminalModeToggled);
+    assert_eq!(state.active_sessions()[0].mode, TerminalMode::Regular);
+
+    state.update(Message::TerminalModeToggled);
+    assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
+}
+
+#[test]
+fn terminal_mode_toggled_is_a_no_op_with_no_active_session() {
+    let mut state = State::default();
+    // No panic, no-op: there is no active session to address.
+    state.update(Message::TerminalModeToggled);
+    assert!(state.active_session.is_none());
+}
+
+#[test]
+fn shell_session_running_and_exited_update_shell_lifecycle() {
+    use micold_ai_ide::session::ShellLifecycle;
+
+    let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+
+    state.update(Message::ShellSessionRunning(id));
+    assert_eq!(
+        state.active_sessions()[0].shell_lifecycle,
+        ShellLifecycle::Running
+    );
+
+    state.update(Message::ShellSessionExited(id));
+    assert_eq!(
+        state.active_sessions()[0].shell_lifecycle,
+        ShellLifecycle::Exited
+    );
+}

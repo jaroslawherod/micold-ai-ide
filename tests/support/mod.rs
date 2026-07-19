@@ -8,7 +8,7 @@
 
 use micold_ai_ide::fs_scan::FolderScanner;
 use micold_ai_ide::project::{canonicalize_best_effort, FolderEntry};
-use micold_ai_ide::session::{RestartDecision, Session, SessionId, SessionLabel};
+use micold_ai_ide::session::{RestartDecision, Session, SessionId, SessionLabel, TerminalMode};
 use micold_ai_ide::workspace::Workspace;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -49,7 +49,12 @@ pub fn running_session(worktree_dir: &str) -> Session {
 
 /// A persisted session restored as `Idle`.
 pub fn idle_session(worktree_dir: &str) -> Session {
-    Session::restored(SessionId::new(), worktree_dir, SessionLabel::Pending)
+    Session::restored(
+        SessionId::new(),
+        worktree_dir,
+        SessionLabel::Pending,
+        TerminalMode::AiCli,
+    )
 }
 
 /// A session driven to `Failed` via repeated unexpected exits (crash-loop guard).

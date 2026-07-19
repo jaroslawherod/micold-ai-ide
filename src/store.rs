@@ -7,7 +7,7 @@
 //! durable contract in `specs/002-project-workspace-management/contracts/storage-schema.md`.
 
 use crate::project::{Availability, Project};
-use crate::session::{Session, SessionId, SessionLabel};
+use crate::session::{Session, SessionId, SessionLabel, TerminalMode};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -82,13 +82,44 @@ struct StoredProject {
 }
 
 /// The persisted shape of a session (FR-020): identity, worktree binding, last-known title.
-/// Lifecycle and terminal buffers are never persisted (FR-021).
+/// Lifecycle and terminal buffers are never persisted (FR-021). `mode` is the one addition from
+/// feature 010 (FR-011; contracts/persistence-schema.md).
 #[derive(Debug, Serialize, Deserialize)]
 struct StoredSession {
     id: uuid::Uuid,
     worktree_dir: String,
     #[serde(default)]
     title: Option<String>,
+    #[serde(default)]
+    mode: StoredTerminalMode,
+}
+
+/// Serde-mapped mirror of [`TerminalMode`] (feature 010, research R5): kept as a separate type
+/// rather than deriving `Serialize`/`Deserialize` directly on the pure-core enum, so the
+/// persisted *shape* can evolve independently (mirrors `title`/`SessionLabel`).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+enum StoredTerminalMode {
+    #[default]
+    AiCli,
+    Regular,
+}
+
+impl From<TerminalMode> for StoredTerminalMode {
+    fn from(mode: TerminalMode) -> Self {
+        match mode {
+            TerminalMode::AiCli => StoredTerminalMode::AiCli,
+            TerminalMode::Regular => StoredTerminalMode::Regular,
+        }
+    }
+}
+
+impl From<StoredTerminalMode> for TerminalMode {
+    fn from(mode: StoredTerminalMode) -> Self {
+        match mode {
+            StoredTerminalMode::AiCli => TerminalMode::AiCli,
+            StoredTerminalMode::Regular => TerminalMode::Regular,
+        }
+    }
 }
 
 impl StoredCatalog {
@@ -115,6 +146,7 @@ impl StoredCatalog {
                                         SessionLabel::Named(t) => Some(t.clone()),
                                         SessionLabel::Pending => None,
                                     },
+                                    mode: s.mode.into(),
                                 })
                                 .collect()
                         })
@@ -144,7 +176,12 @@ impl StoredCatalog {
                             Some(t) => SessionLabel::Named(t),
                             None => SessionLabel::Pending,
                         };
-                        Session::restored(SessionId::from_uuid(s.id), s.worktree_dir, label)
+                        Session::restored(
+                            SessionId::from_uuid(s.id),
+                            s.worktree_dir,
+                            label,
+                            s.mode.into(),
+                        )
                     })
                     .collect();
                 if !restored.is_empty() {

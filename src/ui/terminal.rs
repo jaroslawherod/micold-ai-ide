@@ -8,7 +8,7 @@
 //! in colour via a custom canvas widget ([`crate::ui::material::terminal_pane`]) and streams
 //! keystrokes back to the PTY.
 
-use crate::ui::material::{ContextMenu, MenuItem, TerminalPane};
+use crate::ui::material::{ContextMenu, IconButton, MenuItem, TerminalPane, Tooltip};
 use crate::ui::style;
 use alacritty_terminal::event::VoidListener;
 use alacritty_terminal::grid::Dimensions;
@@ -23,7 +23,9 @@ use iced::{Alignment, Color, Element, Font, Length};
 use micold_ai_ide::app::SelectKind;
 use micold_ai_ide::app::{Message, State};
 use micold_ai_ide::provider::{AiCliProvider, ClaudeProvider};
-use micold_ai_ide::session::{SessionId, SessionLifecycle};
+use micold_ai_ide::session::{
+    mode_glyph, mode_tooltip, SessionId, SessionLifecycle, ShellLifecycle, TerminalMode,
+};
 use micold_ai_ide::terminal::{claude_args, LaunchSpec, TerminalBackend, TerminalHandle};
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale, Rgb};
@@ -263,6 +265,46 @@ impl TerminalHandle for RuntimeTerminal {
 /// Spawn `claude` for `spec` in a PTY and start streaming its output. `scrollback_lines` sets the
 /// VT grid's history depth (feature 006, FR-016/FR-020).
 pub fn spawn_pty(spec: &LaunchSpec, scrollback_lines: usize) -> std::io::Result<RuntimeTerminal> {
+    let mut cmd = CommandBuilder::new(ClaudeProvider.command());
+    cmd.cwd(&spec.cwd);
+    for (k, v) in &spec.env {
+        cmd.env(k, v);
+    }
+    for arg in claude_args(spec) {
+        cmd.arg(arg);
+    }
+    spawn_command_pty(cmd, scrollback_lines)
+}
+
+/// Spawn the platform's plain shell in `cwd` and start streaming its output (feature 010,
+/// research R4, contracts/shell-process.md). No `LaunchMode`/`session_id`/extra args — those are
+/// `claude`-specific concepts that don't apply to a shell.
+pub fn spawn_shell_pty(
+    cwd: &std::path::Path,
+    env: &[(String, String)],
+    scrollback_lines: usize,
+) -> std::io::Result<RuntimeTerminal> {
+    let shell_env = std::env::var("SHELL").ok();
+    let comspec_env = std::env::var("COMSPEC").ok();
+    let command = micold_ai_ide::terminal::default_shell_command(
+        shell_env.as_deref(),
+        comspec_env.as_deref(),
+    );
+    let mut cmd = CommandBuilder::new(command);
+    cmd.cwd(cwd);
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    spawn_command_pty(cmd, scrollback_lines)
+}
+
+/// Shared PTY-open + `Term`-construction body for [`spawn_pty`] and [`spawn_shell_pty`] (feature
+/// 010, research R4) — opens the PTY, spawns `cmd` as its child, starts the reader thread, and
+/// builds the VT emulator. `scrollback_lines` sets the VT grid's history depth.
+fn spawn_command_pty(
+    cmd: CommandBuilder,
+    scrollback_lines: usize,
+) -> std::io::Result<RuntimeTerminal> {
     let pty = native_pty_system();
     let pair = pty
         .openpty(PtySize {
@@ -272,15 +314,6 @@ pub fn spawn_pty(spec: &LaunchSpec, scrollback_lines: usize) -> std::io::Result<
             pixel_height: 0,
         })
         .map_err(std::io::Error::other)?;
-
-    let mut cmd = CommandBuilder::new(ClaudeProvider.command());
-    cmd.cwd(&spec.cwd);
-    for (k, v) in &spec.env {
-        cmd.env(k, v);
-    }
-    for arg in claude_args(spec) {
-        cmd.arg(arg);
-    }
 
     let child = pair
         .slave
@@ -328,6 +361,53 @@ pub fn spawn_pty(spec: &LaunchSpec, scrollback_lines: usize) -> std::io::Result<
         rows: INIT_ROWS as usize,
         cols: INIT_COLS as usize,
     })
+}
+
+/// A session's two independent background processes — the AI CLI and the plain shell (feature
+/// 010, data-model.md). At most one slot exists per kind (spec Assumptions); [`TerminalMode`]
+/// (on the session) says which is currently *attached* to the visible pane, independent of
+/// which slots are populated.
+#[derive(Default)]
+pub struct SessionTerminals {
+    pub ai_cli: Option<RuntimeTerminal>,
+    pub shell: Option<RuntimeTerminal>,
+}
+
+impl SessionTerminals {
+    /// The runtime for `mode`'s process, if it has been spawned.
+    pub fn attached(&self, mode: micold_ai_ide::session::TerminalMode) -> Option<&RuntimeTerminal> {
+        match mode {
+            micold_ai_ide::session::TerminalMode::AiCli => self.ai_cli.as_ref(),
+            micold_ai_ide::session::TerminalMode::Regular => self.shell.as_ref(),
+        }
+    }
+
+    /// Mutable access to `mode`'s process, if it has been spawned.
+    pub fn attached_mut(
+        &mut self,
+        mode: micold_ai_ide::session::TerminalMode,
+    ) -> Option<&mut RuntimeTerminal> {
+        match mode {
+            micold_ai_ide::session::TerminalMode::AiCli => self.ai_cli.as_mut(),
+            micold_ai_ide::session::TerminalMode::Regular => self.shell.as_mut(),
+        }
+    }
+
+    /// Both populated slots, mutably — used to pump/poll whichever process(es) exist regardless
+    /// of which is attached (research R6: both are kept alive and serviced in the background).
+    pub fn each_mut(&mut self) -> impl Iterator<Item = &mut RuntimeTerminal> {
+        self.ai_cli.iter_mut().chain(self.shell.iter_mut())
+    }
+
+    /// Kill and drop every populated slot (session close/teardown, FR-014).
+    pub fn kill_all(&mut self) {
+        if let Some(mut rt) = self.ai_cli.take() {
+            let _ = rt.kill();
+        }
+        if let Some(mut rt) = self.shell.take() {
+            let _ = rt.kill();
+        }
+    }
 }
 
 /// The production [`TerminalBackend`] (constitution seam). The binary uses [`spawn_pty`] directly
@@ -610,16 +690,40 @@ pub fn pane<'a>(
         None => body,
     };
 
-    // A slim bottom status bar: the current session name (left) and its lifecycle status
-    // (right). A live activity indicator (spinner/idle icon) is a planned follow-up feature.
+    // A slim bottom status bar: the mode toggle + current session name (left) and its attached-
+    // process status (right). A live activity indicator (spinner/idle icon) is a planned
+    // follow-up feature.
+    let mode = session_mode(state, active);
     let status = session_status(state, active);
+    let toggle: Element<'a, Message> = Tooltip::new(
+        IconButton::new(mode_glyph(mode), r).on_press(Message::TerminalModeToggled),
+        mode_tooltip(mode),
+        r,
+    )
+    .into();
     let mut bar = row![
+        toggle,
         text(session_title(state, active)).size(type_scale::LABEL),
         Space::with_width(Length::Fill),
         text(status).size(type_scale::LABEL).style(style::muted(r)),
     ]
     .spacing(spacing::SM)
     .align_y(Alignment::Center);
+    // The attached process (per the current mode) isn't running — offer a manual restart
+    // (FR-013; contracts/terminal-mode-lifecycle.md). Absent whenever it's already
+    // running/starting, since there is nothing to restart.
+    if attached_process_restartable(state, active) {
+        bar = bar.push(
+            button(
+                text("restart")
+                    .size(type_scale::LABEL)
+                    .style(style::muted(r)),
+            )
+            .padding(spacing::XS)
+            .style(style::text_button(r))
+            .on_press(Message::TerminalRestartRequested),
+        );
+    }
     // While the terminal holds focus, offer an explicit way out (FR-011) alongside the reserved
     // Ctrl+Shift+E chord and click-outside.
     if state.terminal_focused {
@@ -659,19 +763,57 @@ fn session_title(state: &State, id: SessionId) -> String {
         .unwrap_or_else(|| "Session".to_string())
 }
 
-fn session_status(state: &State, id: SessionId) -> &'static str {
-    match state
+/// The session's currently-attached mode (feature 010) — defaults to `AiCli` if the session
+/// can't be found (shouldn't happen for an `active` id, but keeps this total).
+fn session_mode(state: &State, id: SessionId) -> TerminalMode {
+    state
         .active_sessions()
         .iter()
         .find(|s| s.id == id)
-        .map(|s| s.lifecycle)
-    {
-        Some(SessionLifecycle::Running) => "running",
-        Some(SessionLifecycle::Starting) => "starting…",
-        Some(SessionLifecycle::Restarting { .. }) => "restarting…",
-        Some(SessionLifecycle::Failed) => "failed",
-        Some(SessionLifecycle::Idle) => "idle",
-        None => "",
+        .map(|s| s.mode)
+        .unwrap_or_default()
+}
+
+/// Status text for the process currently attached to the pane (feature 010) — the AI CLI's
+/// `SessionLifecycle` in `AiCli` mode, the shell's `ShellLifecycle` in `Regular` mode
+/// (contracts/terminal-mode-lifecycle.md: `TerminalMode` never determines *running*, only
+/// *displayed* — so the status shown must follow the same split).
+fn session_status(state: &State, id: SessionId) -> &'static str {
+    let Some(session) = state.active_sessions().iter().find(|s| s.id == id) else {
+        return "";
+    };
+    match session.mode {
+        TerminalMode::AiCli => match session.lifecycle {
+            SessionLifecycle::Running => "running",
+            SessionLifecycle::Starting => "starting…",
+            SessionLifecycle::Restarting { .. } => "restarting…",
+            SessionLifecycle::Failed => "failed",
+            SessionLifecycle::Idle => "idle",
+        },
+        TerminalMode::Regular => match session.shell_lifecycle {
+            ShellLifecycle::Running => "running",
+            ShellLifecycle::Starting => "starting…",
+            ShellLifecycle::Exited => "exited",
+            ShellLifecycle::NotStarted => "idle",
+        },
+    }
+}
+
+/// Whether the bottom-bar restart control should show (FR-013): the currently-attached process
+/// (per `Session.mode`) is not running (contracts/terminal-mode-lifecycle.md's predicate).
+fn attached_process_restartable(state: &State, id: SessionId) -> bool {
+    let Some(session) = state.active_sessions().iter().find(|s| s.id == id) else {
+        return false;
+    };
+    match session.mode {
+        TerminalMode::AiCli => matches!(
+            session.lifecycle,
+            SessionLifecycle::Idle | SessionLifecycle::Failed
+        ),
+        TerminalMode::Regular => matches!(
+            session.shell_lifecycle,
+            ShellLifecycle::NotStarted | ShellLifecycle::Exited
+        ),
     }
 }
 

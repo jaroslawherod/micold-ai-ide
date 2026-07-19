@@ -55,6 +55,10 @@ pub enum Icon {
     Copy,
     /// Toggle the sidebar tag-filter panel (feature 009).
     Filter,
+    /// The AI CLI (`claude`) terminal mode (feature 010).
+    AiCli,
+    /// The regular/plain shell terminal mode (feature 010).
+    RegularTerminal,
 }
 
 impl Icon {
@@ -80,6 +84,8 @@ impl Icon {
         Icon::Delete,
         Icon::Copy,
         Icon::Filter,
+        Icon::AiCli,
+        Icon::RegularTerminal,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -106,6 +112,8 @@ impl Icon {
             Icon::Delete => '\u{e872}',
             Icon::Copy => '\u{e14d}',
             Icon::Filter => '\u{e152}',
+            Icon::AiCli => '\u{f882}',
+            Icon::RegularTerminal => '\u{eb8e}',
         }
     }
 }

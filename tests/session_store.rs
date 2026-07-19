@@ -1,7 +1,7 @@
 //! T040 — session persistence roundtrip (FR-020/021, SC-008, storage option A).
 
 use micold_ai_ide::project::{Availability, Project};
-use micold_ai_ide::session::{Session, SessionId, SessionLabel, SessionLifecycle};
+use micold_ai_ide::session::{Session, SessionId, SessionLabel, SessionLifecycle, TerminalMode};
 use micold_ai_ide::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_ai_ide::workspace::Workspace;
 use std::collections::BTreeMap;
@@ -21,11 +21,17 @@ fn workspace_with_sessions() -> (Workspace, PathBuf, SessionId) {
     sessions.insert(
         path.clone(),
         vec![
-            Session::restored(id, "feat-x", SessionLabel::Named("Add login".to_string())),
+            Session::restored(
+                id,
+                "feat-x",
+                SessionLabel::Named("Add login".to_string()),
+                TerminalMode::AiCli,
+            ),
             Session::restored(
                 SessionId::from_uuid(Uuid::from_u128(0x5678)),
                 "chore-cleanup",
                 SessionLabel::Pending,
+                TerminalMode::AiCli,
             ),
         ],
     );
@@ -83,6 +89,7 @@ fn null_title_restores_as_pending() {
             SessionId::new(),
             "feat-x",
             SessionLabel::Pending,
+            TerminalMode::AiCli,
         )],
     );
     let ws = Workspace {

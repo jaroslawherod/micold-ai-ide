@@ -134,6 +134,30 @@ placeholder is shown.
 
 > Requires the `claude` CLI on your `PATH`. If it is missing, starting a session reports an error.
 
+## Switching to a regular terminal
+
+Each session's terminal can also run a plain shell instead of `claude` — useful for running git
+commands, scripts, or anything else scoped to that session's worktree without leaving the app.
+
+- The toggle button in the terminal's bottom bar switches the pane between **AI CLI** mode
+  (`claude`) and **Regular Terminal** mode (a plain shell). Its icon changes to show which mode
+  you're currently in, and hovering it shows a tooltip naming the current mode and what pressing
+  it switches to. This icon+tooltip is the single place to check which process your keystrokes
+  are going to — there is no separate indicator, and it always reflects the current mode
+  immediately after a switch.
+- The shell starts with its working directory set to the session's worktree, same as `claude` —
+  so `git status`, build scripts, and so on all run against the right branch.
+- **Both processes keep running** while you switch — toggling away from AI CLI mode never stops
+  or restarts `claude`, and toggling away from Regular mode leaves the shell running in the
+  background. Switching back reattaches to whichever process was already there, exactly as you
+  left it.
+- If the shell exits (you typed `exit`, or it crashed), a **restart** control appears in the same
+  bar so you can start a fresh one; unlike `claude`, the shell never restarts on its own.
+- Switching to Regular mode never stops, restarts, or otherwise touches your `claude`
+  conversation — even mid-turn. It keeps running in the background exactly as it was, including
+  its own crash-auto-restart if it happens to exit while you're looking at the shell, and
+  switching back reattaches to that same conversation with nothing lost.
+
 ## Sessions in the background
 
 Switching to a different project **does not stop your sessions**. When you change the active
