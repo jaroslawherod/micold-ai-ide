@@ -264,8 +264,17 @@ impl TerminalHandle for RuntimeTerminal {
 }
 
 /// Spawn `claude` for `spec` in a PTY and start streaming its output. `scrollback_lines` sets the
-/// VT grid's history depth (feature 006, FR-016/FR-020).
-pub fn spawn_pty(spec: &LaunchSpec, scrollback_lines: usize) -> std::io::Result<RuntimeTerminal> {
+/// VT grid's history depth (feature 006, FR-016/FR-020). `initial_size` seeds the PTY/grid at the
+/// pane's last-known `(cols, rows)` so a session spawned into an already-sized pane (a new session
+/// started after the window has been resized once, a resumed session, an auto-restart) fills it
+/// immediately instead of waiting for the next window-resize event to reconcile — falls back to
+/// the `INIT_COLS`×`INIT_ROWS` default only when no pane size has been reported yet (bugfix: new
+/// terminal not starting fullscreen).
+pub fn spawn_pty(
+    spec: &LaunchSpec,
+    scrollback_lines: usize,
+    initial_size: Option<(u16, u16)>,
+) -> std::io::Result<RuntimeTerminal> {
     let mut cmd = CommandBuilder::new(ClaudeProvider.command());
     cmd.cwd(&spec.cwd);
     for (k, v) in &spec.env {
@@ -274,16 +283,18 @@ pub fn spawn_pty(spec: &LaunchSpec, scrollback_lines: usize) -> std::io::Result<
     for arg in claude_args(spec) {
         cmd.arg(arg);
     }
-    spawn_command_pty(cmd, scrollback_lines)
+    spawn_command_pty(cmd, scrollback_lines, initial_size)
 }
 
 /// Spawn the platform's plain shell in `cwd` and start streaming its output (feature 010,
 /// research R4, contracts/shell-process.md). No `LaunchMode`/`session_id`/extra args — those are
-/// `claude`-specific concepts that don't apply to a shell.
+/// `claude`-specific concepts that don't apply to a shell. `initial_size` has the same
+/// pane-seeding purpose as in `spawn_pty` above.
 pub fn spawn_shell_pty(
     cwd: &std::path::Path,
     env: &[(String, String)],
     scrollback_lines: usize,
+    initial_size: Option<(u16, u16)>,
 ) -> std::io::Result<RuntimeTerminal> {
     let shell_env = std::env::var("SHELL").ok();
     let comspec_env = std::env::var("COMSPEC").ok();
@@ -296,21 +307,25 @@ pub fn spawn_shell_pty(
     for (k, v) in env {
         cmd.env(k, v);
     }
-    spawn_command_pty(cmd, scrollback_lines)
+    spawn_command_pty(cmd, scrollback_lines, initial_size)
 }
 
 /// Shared PTY-open + `Term`-construction body for [`spawn_pty`] and [`spawn_shell_pty`] (feature
 /// 010, research R4) — opens the PTY, spawns `cmd` as its child, starts the reader thread, and
-/// builds the VT emulator. `scrollback_lines` sets the VT grid's history depth.
+/// builds the VT emulator. `scrollback_lines` sets the VT grid's history depth; `initial_size`
+/// seeds the PTY/grid size (falls back to `INIT_COLS`×`INIT_ROWS`, bugfix: new terminal not
+/// starting fullscreen).
 fn spawn_command_pty(
     cmd: CommandBuilder,
     scrollback_lines: usize,
+    initial_size: Option<(u16, u16)>,
 ) -> std::io::Result<RuntimeTerminal> {
+    let (cols, rows) = initial_size.unwrap_or((INIT_COLS, INIT_ROWS));
     let pty = native_pty_system();
     let pair = pty
         .openpty(PtySize {
-            rows: INIT_ROWS,
-            cols: INIT_COLS,
+            rows,
+            cols,
             pixel_width: 0,
             pixel_height: 0,
         })
@@ -342,8 +357,8 @@ fn spawn_command_pty(
     });
 
     let dims = TermDimensions {
-        rows: INIT_ROWS as usize,
-        cols: INIT_COLS as usize,
+        rows: rows as usize,
+        cols: cols as usize,
     };
     let config = Config {
         scrolling_history: scrollback_lines,
@@ -359,8 +374,8 @@ fn spawn_command_pty(
         output,
         term,
         parser,
-        rows: INIT_ROWS as usize,
-        cols: INIT_COLS as usize,
+        rows: rows as usize,
+        cols: cols as usize,
     })
 }
 
@@ -419,7 +434,7 @@ pub struct PtyTerminalBackend;
 
 impl TerminalBackend for PtyTerminalBackend {
     fn spawn(&self, spec: LaunchSpec) -> std::io::Result<Box<dyn TerminalHandle>> {
-        Ok(Box::new(spawn_pty(&spec, 10_000)?))
+        Ok(Box::new(spawn_pty(&spec, 10_000, None)?))
     }
 }
 
