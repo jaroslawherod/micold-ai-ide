@@ -59,6 +59,7 @@ pyftsubset _static.ttf \
 | `Delete`       | `delete`               | `E872`         |
 | `Copy`         | `content_copy`         | `E14D`         |
 | `Filter`       | `filter_list`          | `E152`         |
+| `ProjectRoot`  | `home`                 | `E88A`         |
 
 This table documents which of the font's (now much larger) set of glyphs the app actually
 *uses* — it is no longer the list of what the shipped file *contains* (that's every upstream

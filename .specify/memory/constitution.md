@@ -1,6 +1,43 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.2.0 → 1.3.0
+Bump rationale: MINOR bump — Principle III (Native Worktree Integration) gains one
+  narrowly-scoped, explicitly-named exception: a session MAY now map to the project's
+  own root directory (presented to users as "Default") instead of a git worktree. This
+  is a material expansion of the principle's allowed session locations, not a removal
+  or redefinition of its core commitment — worktree-bound sessions are entirely
+  unaffected, the app still owns worktree lifecycle natively, and no other non-worktree
+  location is sanctioned. Treated as MINOR, consistent with how Principle VIII's 1.2.0
+  builder-API sub-rule (a comparable in-scope tightening/expansion) was treated as MINOR
+  rather than MAJOR.
+
+Modified in 1.3.0:
+  - Principle III — added the "Default" project-root session exception: every session
+    MUST map to either a git worktree or the project's root directory (the sanctioned
+    "Default" location); no other non-worktree location is permitted. A Default session
+    MUST NOT create/modify/remove a worktree and MUST NOT be presented as one.
+  - Development Workflow & Quality Gates — Isolation & lifecycle gate now also requires
+    integration-test coverage of the Default-session exception, not just worktree
+    lifecycle.
+  - Templates: ✅ .specify/templates/plan-template.md — Principle III Constitution-Check
+    line updated to name the Default exception.
+  - Templates: ✅ .specify/templates/spec-template.md — technology-agnostic; no principle
+    conflict, no edit required.
+  - Templates: ✅ .specify/templates/tasks-template.md — no task-category change required;
+    the Default exception is covered by the existing Isolation & lifecycle gate's
+    integration-test requirement.
+  - Templates: ✅ .specify/templates/checklist-template.md — generic sample items; no
+    principle references to reconcile, no edit required.
+  Follow-up (non-artifact): tracked by feature `specs/010-root-dir-session/` (start a
+    session in the project root without a worktree). This amendment was made to unblock
+    that feature's `/speckit-plan` Constitution Check gate. User-guide docs
+    (`docs/user-guide/worktrees-and-sessions.md`, `README.md`) still describe only
+    worktree-bound sessions — intentionally left as-is here, since the Default-session
+    behavior does not exist yet; updating them is that feature's own Documentation gate
+    (Principle VII) deliverable, not part of this constitution amendment.
+
+Prior report (1.1.0 → 1.2.0):
 Version change: 1.1.0 → 1.2.0
 Bump rationale: MINOR bump — Principle VIII (Reusable UI Component Foundation) was
   materially expanded with a builder-style component-API convention, and the
@@ -115,18 +152,30 @@ makes concurrent, interruptible workflows reliable rather than accidental.
 
 ### III. Native Worktree Integration
 
-Git worktrees are first-class primitives. Every session MUST map to a git worktree, and
-the application MUST manage worktree lifecycle natively.
+Git worktrees are first-class primitives. The application MUST manage worktree
+lifecycle natively. Every session MUST map to either a git worktree or the project's
+own root directory — the single, sanctioned non-worktree location, presented to users
+as "Default". No session may run in any other unmanaged or arbitrary directory.
 
 - The application MUST create, switch between, and clean up worktrees on the user's
   behalf, without requiring the user to run manual git steps in a terminal.
 - All file and version-control operations MUST be worktree-aware, operating against the
-  worktree bound to the active session.
+  worktree — or, for a Default session, the project root — bound to the active session.
+- The project root MAY host session(s) under the "Default" label, alongside its
+  worktrees. A Default session MUST NOT create, modify, or remove any git worktree, and
+  MUST NOT be presented or styled as one.
+- This exception is scoped narrowly to the project's own root: it exists solely to let
+  a session run directly against the project's current checkout when branch isolation
+  is unnecessary or undesired. It does not extend to any other non-worktree directory.
 
 Rationale: Binding each isolated session to its own worktree is what makes true
 concurrent, isolated development possible on a shared repository. Owning the worktree
 lifecycle inside the application removes an entire class of user error and keeps session
-isolation (Principle II) enforceable at the VCS layer.
+isolation (Principle II) enforceable at the VCS layer for worktree-bound sessions. A
+single, explicitly-named exception for the project root — rather than allowing sessions
+against arbitrary non-worktree directories — accommodates work that is deliberately not
+branch-isolated (quick commands, inspecting the current checkout) without opening the
+door to unmanaged, ad hoc session locations.
 
 ### IV. Local-First Storage (NON-NEGOTIABLE)
 
@@ -253,8 +302,9 @@ every call site — which itself removes a common excuse to fork a bespoke widge
   a shared component using a free-function / many-positional-parameter signature instead of
   the chainable builder-into-`Element` form (Principle VIII) MUST be rejected in review,
   unless explicitly justified and recorded. This gate operationalizes Principle VIII.
-- **Isolation & lifecycle gate**: Session isolation (Principle II) and worktree lifecycle
-  (Principle III) MUST be covered by integration tests, not unit tests alone.
+- **Isolation & lifecycle gate**: Session isolation (Principle II), worktree lifecycle,
+  and the project-root ("Default") session exception (Principle III) MUST be covered by
+  integration tests, not unit tests alone.
 
 ## Governance
 
@@ -275,4 +325,4 @@ convention, or habit conflicts with it, this constitution prevails.
   principles. Complexity that violates a principle MUST be either removed or explicitly
   justified and recorded.
 
-**Version**: 1.2.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-16
+**Version**: 1.3.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-18

@@ -55,6 +55,9 @@ pub enum Icon {
     Copy,
     /// Toggle the sidebar tag-filter panel (feature 009).
     Filter,
+    /// The "Default" project-root sidebar entry (feature 010) — distinct from the git/branch
+    /// iconography used for worktree rows (FR-006).
+    ProjectRoot,
 }
 
 impl Icon {
@@ -80,6 +83,7 @@ impl Icon {
         Icon::Delete,
         Icon::Copy,
         Icon::Filter,
+        Icon::ProjectRoot,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -106,6 +110,7 @@ impl Icon {
             Icon::Delete => '\u{e872}',
             Icon::Copy => '\u{e14d}',
             Icon::Filter => '\u{e152}',
+            Icon::ProjectRoot => '\u{e88a}',
         }
     }
 }

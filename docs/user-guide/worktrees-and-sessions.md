@@ -3,7 +3,9 @@
 Micold AI IDE organizes your work into **worktrees** (isolated git branches checked out under
 your project) and **sessions** (interactive `claude` runs inside a worktree). The left sidebar
 shows worktrees at the top level and their sessions as sub-items; the right side hosts the
-embedded terminal for the active session.
+embedded terminal for the active session. The sidebar also always shows one **Default** entry —
+a session location that isn't a worktree at all, for work you don't want to isolate onto its own
+branch (see [The "Default" entry](#the-default-entry-sessions-without-a-worktree) below).
 
 ## Opening a project (git repositories only)
 
@@ -65,6 +67,37 @@ so you can tell filtering is on even with the panel closed.
 - **Hide**: click the **hide** button (panel-collapse icon) in the sidebar header, next to
   **add worktree**. The sidebar collapses to a thin strip.
 - **Show**: click the **show** button (panel-open icon) on the collapsed strip to bring it back.
+
+## The "Default" entry: sessions without a worktree
+
+Above your worktrees, the sidebar always shows one **Default** entry — even before you've
+created any worktree at all. Starting a session from it runs directly in your project's own
+root directory (whatever branch you currently have checked out there), instead of inside an
+isolated worktree.
+
+Use it for work that doesn't need its own branch: quick one-off commands, inspecting or running
+the project exactly as it's currently checked out, or anything you deliberately don't want
+isolated into a throwaway worktree. Creating a worktree first, just to run a quick command,
+is unnecessary overhead this avoids.
+
+- The Default entry is **not a worktree** — it has its own icon (a house) rather than the
+  worktree iconography, so it's never mistaken for one, and it has no type/issue/status tags
+  and no right-click menu (no rename, delete, or copy-name — those are worktree-only actions).
+- Starting a session from it **never creates, modifies, or removes a worktree or branch**.
+- It supports the same session actions as a worktree — start, switch, close, and it persists
+  and restores across restarts exactly like a worktree-bound session (see
+  [Starting, switching, and closing sessions](#starting-switching-and-closing-sessions) below,
+  which applies equally here).
+- You can run **multiple concurrent sessions** from the Default entry, the same as a worktree.
+- Because every Default session shares your project's single checkout, actions that change the
+  working tree (like switching branches from within one Default session's terminal) are visible
+  to every other Default session too — this is expected, not a bug, since there's no worktree
+  isolating them from each other.
+- The Default entry is **never hidden by the sidebar's tag filters** — since it isn't a
+  worktree, filtering by branch-derived tags doesn't apply to it; it always stays visible.
+- Hover any sidebar entry, Default or worktree, to see a tooltip with its location relative to
+  the project (e.g. the project root itself for Default, or a worktree's relative directory
+  path) — useful for confirming exactly where a session is about to run before you start it.
 
 ## Creating a worktree
 

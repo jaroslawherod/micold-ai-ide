@@ -10,7 +10,7 @@ use iced::{Alignment, Background, Border, Color, Element, Length};
 use micold_ai_ide::app::{Message, State, TagFilter};
 use micold_ai_ide::icons::Icon;
 use micold_ai_ide::naming::Tag;
-use micold_ai_ide::session::SessionLifecycle;
+use micold_ai_ide::session::{SessionLifecycle, SessionLocation};
 use micold_ai_ide::tokens::{self, shape, sidebar, spacing, type_scale, Rgb, Roles};
 use micold_ai_ide::worktree::WorktreeStatus;
 
@@ -88,18 +88,20 @@ pub fn view<'a>(
         Space::with_height(Length::Fixed(0.0)).into()
     };
 
-    let body: Element<'_, Message> = if state.worktrees.is_empty() {
-        container(
+    // The "Default" entry (feature 010) is always present once a project is open — see
+    // `sidebar_entries()` — so, unlike before this feature, the sidebar is never truly "empty":
+    // a zero-worktree or filtered-to-nothing project still shows the Default row and its
+    // start-session action, with a muted hint appended below about worktrees specifically.
+    let hint: Option<Element<'_, Message>> = if state.worktrees.is_empty() {
+        Some(
             text("No worktrees yet. Add one to get started.")
                 .size(type_scale::LABEL)
-                .style(style::muted(r)),
+                .style(style::muted(r))
+                .into(),
         )
-        .padding(spacing::MD)
-        .into()
-    } else {
-        let filtered = state.filtered_worktree_tree();
-        let list: Element<'_, Message> = if filtered.is_empty() {
-            // Active filter matched nothing (FR-027): a message + a one-tap clear.
+    } else if state.filtered_worktree_tree().is_empty() {
+        // Active filter matched nothing (FR-027): a message + a one-tap clear.
+        Some(
             column![
                 text("No worktrees match the filter.")
                     .size(type_scale::LABEL)
@@ -110,30 +112,37 @@ pub fn view<'a>(
                     .on_press(Message::SidebarFiltersCleared),
             ]
             .spacing(spacing::XS)
-            .into()
-        } else {
-            TreeView::new(build_items(state, filtered, r, row_fx), r)
-                .label_size(sidebar::NAME)
-                .into()
-        };
-        // Scroll the list when it exceeds the sidebar height, with a thin themed scrollbar.
-        // The list gets a little right padding so rows never sit under the scrollbar.
-        scrollable(container(list).padding(iced::Padding {
-            top: 0.0,
-            right: spacing::SM as f32,
-            bottom: 0.0,
-            left: 0.0,
-        }))
-        .direction(scrollable::Direction::Vertical(
-            scrollable::Scrollbar::new()
-                .width(4.0)
-                .scroller_width(4.0)
-                .margin(1.0),
-        ))
-        .height(Length::Fill)
-        .style(style::scrollbar(r))
-        .into()
+            .into(),
+        )
+    } else {
+        None
     };
+
+    let tree: Element<'_, Message> =
+        TreeView::new(build_items(state, state.sidebar_entries(), r, row_fx), r)
+            .label_size(sidebar::NAME)
+            .into();
+    let list: Element<'_, Message> = match hint {
+        Some(hint) => column![tree, hint].spacing(spacing::SM).into(),
+        None => tree,
+    };
+    // Scroll the list when it exceeds the sidebar height, with a thin themed scrollbar.
+    // The list gets a little right padding so rows never sit under the scrollbar.
+    let body: Element<'_, Message> = scrollable(container(list).padding(iced::Padding {
+        top: 0.0,
+        right: spacing::SM as f32,
+        bottom: 0.0,
+        left: 0.0,
+    }))
+    .direction(scrollable::Direction::Vertical(
+        scrollable::Scrollbar::new()
+            .width(4.0)
+            .scroller_width(4.0)
+            .margin(1.0),
+    ))
+    .height(Length::Fill)
+    .style(style::scrollbar(r))
+    .into();
 
     // Minimal left/right padding to maximize name/tag width (FR-009); a little vertical breathing
     // room is kept.
@@ -367,7 +376,7 @@ fn row_actions_cluster(
             Icon::AddSession,
             r.primary,
             Message::SessionStartRequested {
-                worktree_dir: dir.to_string(),
+                location: SessionLocation::Worktree(dir.to_string()),
             },
             "Start a new session in this worktree",
             active,
@@ -387,19 +396,26 @@ fn row_actions_cluster(
     cluster.into()
 }
 
-/// Flatten the worktree tree into ordered [`TreeItem`]s (worktrees, then their sessions when
-/// expanded). `actions_row` is the worktree currently showing its hover actions (faded by
-/// `row_actions_progress`).
+/// Flatten the sidebar's location list (feature 010: the "Default" entry, then worktrees) into
+/// ordered [`TreeItem`]s, each followed by its sessions when expanded.
 fn build_items(
     state: &State,
-    nodes: Vec<micold_ai_ide::app::WorktreeNode>,
+    entries: Vec<micold_ai_ide::app::SidebarEntry>,
     r: Roles,
     row_fx: &micold_ai_ide::motion::Animator<u64>,
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
     let hovered = state.hovered_worktree.as_deref();
+    let project_root = state.workspace.active.as_deref();
 
-    for node in nodes {
+    for entry in entries {
+        let node = match entry {
+            micold_ai_ide::app::SidebarEntry::Default(node) => {
+                items.extend(build_default_item(state, &node, r));
+                continue;
+            }
+            micold_ai_ide::app::SidebarEntry::Worktree(node) => node,
+        };
         let wt = &node.worktree;
         // No leading git icon (FR-010); a non-Valid worktree is cued by an error-tinted name
         // plus a status tag (FR-011).
@@ -422,6 +438,10 @@ fn build_items(
                 node.expanded,
                 Message::WorktreeExpansionToggled(dir.clone()),
             );
+        // Location tooltip (feature 010, FR-010): the worktree's path relative to the project.
+        if let Some(root) = project_root {
+            item = item.row_tooltip(micold_ai_ide::app::worktree_location_label(root, wt));
+        }
 
         // Always reserve the action cluster's width so hovering never reflows the row; each row
         // fades its icons in/out independently via its own animation track (feature 008). The
@@ -439,24 +459,74 @@ fn build_items(
 
         if node.expanded {
             for session in &node.sessions {
-                let tint = match session.lifecycle {
-                    SessionLifecycle::Failed => r.error,
-                    SessionLifecycle::Idle => r.on_surface_variant,
-                    _ => r.on_surface,
-                };
-                let selected = state.active_session == Some(session.id);
-                items.push(
-                    TreeItem::new(1, session.label.display().to_string(), tint)
-                        .with_icon(Icon::ActiveMarker)
-                        .selected(selected)
-                        .on_press(Message::SessionSelected(session.id))
-                        .trailing(
-                            Icon::Unavailable,
-                            Message::SessionCloseRequested(session.id),
-                            "Close this session",
-                        ),
-                );
+                items.push(session_tree_item(session, state.active_session, r));
             }
+        }
+    }
+
+    items
+}
+
+/// One session sub-item, depth 1 — shared by worktree rows and the "Default" row (feature 010)
+/// so the two locations render their sessions identically (FR-005 lifecycle parity).
+fn session_tree_item(
+    session: &micold_ai_ide::session::Session,
+    active_session: Option<micold_ai_ide::session::SessionId>,
+    r: Roles,
+) -> TreeItem<'static, Message> {
+    let tint = match session.lifecycle {
+        SessionLifecycle::Failed => r.error,
+        SessionLifecycle::Idle => r.on_surface_variant,
+        _ => r.on_surface,
+    };
+    let selected = active_session == Some(session.id);
+    TreeItem::new(1, session.label.display().to_string(), tint)
+        .with_icon(Icon::ActiveMarker)
+        .selected(selected)
+        .on_press(Message::SessionSelected(session.id))
+        .trailing(
+            Icon::Unavailable,
+            Message::SessionCloseRequested(session.id),
+            "Close this session",
+        )
+}
+
+/// The "Default" (project-root) row + its session sub-items when expanded (feature 010, US1).
+/// Always present when a project is open (`sidebar_entries`'s first entry); its "start a
+/// session" action reuses the same `IconButton`/`Icon::AddSession` affordance as a worktree row,
+/// but — unlike worktree rows' hover-revealed cluster — is always shown, since it is the row's
+/// sole action and there is only ever one Default row to keep tidy (no reflow/clutter concern
+/// that motivated the fade-on-hover treatment for the potentially-many worktree rows).
+fn build_default_item(
+    state: &State,
+    node: &micold_ai_ide::app::DefaultNode,
+    r: Roles,
+) -> Vec<TreeItem<'static, Message>> {
+    let mut items = Vec::new();
+
+    let start_session = Tooltip::new(
+        IconButton::new(Icon::AddSession, r)
+            .size(sidebar::NAME)
+            .tint(r.primary)
+            .on_press(Message::SessionStartRequested {
+                location: SessionLocation::Default,
+            }),
+        "Start a new session in the project root",
+        r,
+    );
+
+    let item = TreeItem::new(0, node.display_name.to_string(), r.on_surface)
+        // Distinct icon (FR-006): never the git/branch iconography used for worktree rows.
+        .with_icon(Icon::ProjectRoot)
+        .expandable(node.expanded, Message::DefaultExpansionToggled)
+        .trailing_element(start_session)
+        // Location tooltip (FR-010): fixed, since the Default entry is always the project root.
+        .row_tooltip(micold_ai_ide::app::DEFAULT_LOCATION_LABEL);
+    items.push(item);
+
+    if node.expanded {
+        for session in &node.sessions {
+            items.push(session_tree_item(session, state.active_session, r));
         }
     }
 

@@ -18,7 +18,9 @@ use micold_ai_ide::git::{Git, GitCli};
 use micold_ai_ide::motion::Animator;
 use micold_ai_ide::provider::{AiCliProvider, ClaudeProvider};
 use micold_ai_ide::selector::{Selector, SelectorStatus};
-use micold_ai_ide::session::{RestartDecision, Session, SessionId, SessionLabel, SessionLifecycle};
+use micold_ai_ide::session::{
+    RestartDecision, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation,
+};
 use micold_ai_ide::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_ai_ide::store::{JsonFileStore, ProjectStore};
 use micold_ai_ide::terminal::{LaunchMode, LaunchSpec};
@@ -306,16 +308,27 @@ fn prune_empty_sessions(workspace: &mut micold_ai_ide::workspace::Workspace) {
         .retain(|_, sessions| !sessions.is_empty());
 }
 
+/// Resolve a session's working directory from `repo` (the project root) and its
+/// [`SessionLocation`] (feature 010, research.md R2 — the single authoritative
+/// implementation of all five cwd-resolution call sites): a worktree session joins
+/// `.claude/worktrees/<dir>`; a Default session runs directly in the project root, with no
+/// join/suffix and no worktree created as a side effect (FR-002/FR-003).
+fn session_cwd_for_location(repo: &Path, location: &SessionLocation) -> PathBuf {
+    match location {
+        SessionLocation::Worktree(dir) => repo.join(".claude/worktrees").join(dir),
+        SessionLocation::Default => repo.to_path_buf(),
+    }
+}
+
 /// Whether the AI CLI provider has recorded a conversation transcript for this session
 /// (research R6, FR-020a). Routed through the provider seam (FR-024, bugfix BUG-002).
+/// Cwd site 1/5 (research.md R2).
 fn session_has_conversation(
     project_path: &Path,
     session: &micold_ai_ide::session::Session,
 ) -> bool {
     let provider = ClaudeProvider;
-    let cwd = project_path
-        .join(".claude/worktrees")
-        .join(&session.worktree_dir);
+    let cwd = session_cwd_for_location(project_path, &session.location);
     let Some(config) = provider.config_dir() else {
         // Cannot determine the provider config dir — do not drop the session on uncertainty.
         return true;
@@ -523,12 +536,15 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        // Start a new session on a worktree: spawn `claude` and stream it (FR-010/012/013).
-        Message::SessionStartRequested { worktree_dir } => {
+        // Start a new session at a location — a worktree or the project root ("Default",
+        // feature 010): spawn `claude` and stream it (FR-010/012/013). A `Default` location
+        // never creates, modifies, or removes a worktree (FR-002) — it simply runs in `repo`
+        // itself, so this arm never calls into `micold_ai_ide::worktree`.
+        Message::SessionStartRequested { location } => {
             let mut started = false;
             if let Some(repo) = app.core.workspace.active.clone() {
-                let cwd = repo.join(".claude/worktrees").join(&worktree_dir);
-                let session = Session::start_new(&worktree_dir);
+                let cwd = session_cwd_for_location(&repo, &location);
+                let session = Session::start_new(location);
                 let id = session.id;
                 match spawn_pty(
                     &launch_spec(&cwd, id, LaunchMode::Fresh),
@@ -884,7 +900,7 @@ fn window_focus_message(
 ///
 /// Best-effort I/O: a missing/unreadable transcript is a no-op and never fails the session.
 /// Collect the updates first (immutable borrow of the sessions) then apply, avoiding a borrow
-/// conflict with the reducer.
+/// conflict with the reducer. Cwd site 3/5 (research.md R2).
 fn sync_session_titles(app: &mut App) {
     let provider = ClaudeProvider;
     let Some(config) = provider.config_dir() else {
@@ -898,9 +914,7 @@ fn sync_session_titles(app: &mut App) {
         if !session.is_active() {
             continue;
         }
-        let cwd = project
-            .join(".claude/worktrees")
-            .join(&session.worktree_dir);
+        let cwd = session_cwd_for_location(&project, &session.location);
         if let Some(title) = provider.read_title(&config, &cwd, session.id.0) {
             if session.label != SessionLabel::Named(title.clone()) {
                 updates.push((session.id, title));
@@ -954,22 +968,22 @@ fn handle_process_exits(app: &mut App) {
     }
 }
 
-/// The worktree cwd + current lifecycle for a session of the active project.
+/// The session's cwd (worktree or project root) + current lifecycle, for a session of the
+/// active project. Cwd site 4/5 (research.md R2).
 fn session_cwd(core: &State, id: SessionId) -> Option<(PathBuf, SessionLifecycle)> {
     let repo = core.workspace.active.clone()?;
     let session = core.active_sessions().iter().find(|s| s.id == id)?;
-    let cwd = repo.join(".claude/worktrees").join(&session.worktree_dir);
+    let cwd = session_cwd_for_location(&repo, &session.location);
     Some((cwd, session.lifecycle))
 }
 
-/// The worktree cwd + current lifecycle for a session in ANY project (feature 008). Unlike
-/// [`session_cwd`], this resolves sessions of inactive projects too, so the crash-loop guard
-/// applies to background sessions (BS-6).
+/// The session's cwd (worktree or project root) + current lifecycle, for a session in ANY
+/// project (feature 008). Unlike [`session_cwd`], this resolves sessions of inactive projects
+/// too, so the crash-loop guard applies to background sessions (BS-6). Cwd site 5/5
+/// (research.md R2).
 fn session_cwd_any(core: &State, id: SessionId) -> Option<(PathBuf, SessionLifecycle)> {
     let (project, session) = core.workspace.find_session(id)?;
-    let cwd = project
-        .join(".claude/worktrees")
-        .join(&session.worktree_dir);
+    let cwd = session_cwd_for_location(project, &session.location);
     Some((cwd, session.lifecycle))
 }
 

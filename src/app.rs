@@ -16,7 +16,7 @@ use crate::naming::{
 };
 use crate::project::{canonicalize_best_effort, Availability, FolderEntry, RenameError};
 use crate::selector::Selector;
-use crate::session::{Session, SessionId};
+use crate::session::{Session, SessionId, SessionLocation};
 use crate::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
 use crate::worktree::{Worktree, WorktreeStatus};
 use std::collections::{BTreeMap, BTreeSet};
@@ -122,6 +122,31 @@ pub struct SwitcherEntry {
     pub available: bool,
 }
 
+/// One row in the sidebar's location list (feature 010): either a worktree or the single
+/// "Default" project-root entry. A closed enum (Principle V) so a row can never be ambiguously
+/// styled as a worktree when it isn't one (FR-006).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SidebarEntry {
+    /// A discovered worktree row.
+    Worktree(WorktreeNode),
+    /// The single project-root row (constitution v1.3.0, Principle III exception).
+    Default(DefaultNode),
+}
+
+/// The "Default" (project-root) sidebar row, joined with its sessions (feature 010, FR-001,
+/// FR-006). Unlike [`WorktreeNode`] it carries no [`Tag`]s and is never subject to the sidebar's
+/// tag-filter panel (feature 009) — type/issue/status tags are derived from worktree branch
+/// naming and do not apply to the project root (research.md R4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefaultNode {
+    /// Always the literal "Default" (FR-006) — never derived or user-renamable.
+    pub display_name: &'static str,
+    /// Whether its session sub-items are shown.
+    pub expanded: bool,
+    /// Sessions with `SessionLocation::Default` for the active project.
+    pub sessions: Vec<Session>,
+}
+
 /// One worktree row in the sidebar tree, joined with its (expanded) sessions (FR-002/003).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeNode {
@@ -163,6 +188,24 @@ pub fn matches_filters(tags: &[Tag], filters: &BTreeSet<TagFilter>) -> bool {
         TagFilter::HasIssue => tags.iter().any(|tag| matches!(tag, Tag::Issue(_))),
         TagFilter::Untyped => !tags.iter().any(|tag| matches!(tag, Tag::Type(_))),
     })
+}
+
+/// The fixed location-tooltip label for the "Default" sidebar entry (feature 010, FR-010) —
+/// unlike a worktree's label, this never varies, since the Default entry is always exactly the
+/// project root.
+pub const DEFAULT_LOCATION_LABEL: &str = "Project root";
+
+/// A worktree's location, expressed relative to the project root, for its sidebar tooltip
+/// (feature 010, FR-010, research.md R6). Every worktree lives directly under
+/// `<project_root>/.claude/worktrees/`, so a plain `strip_prefix` suffices — no
+/// general-purpose relative-path algorithm is needed. Falls back to the absolute path in the
+/// unreachable case where a worktree's path is not actually under the project root.
+pub fn worktree_location_label(project_root: &Path, worktree: &Worktree) -> String {
+    worktree
+        .path
+        .strip_prefix(project_root)
+        .map(|rel| rel.display().to_string())
+        .unwrap_or_else(|_| worktree.path.display().to_string())
 }
 
 /// The kind of text selection to begin (feature 006, FR-013): single click = character range,
@@ -267,6 +310,9 @@ pub enum Message {
     WorktreesLoaded(Vec<Worktree>),
     /// Expand/collapse a worktree's session sub-items (FR-003), by `dir_name`.
     WorktreeExpansionToggled(String),
+    /// Expand/collapse the "Default" (project-root) entry's session sub-items (feature 010,
+    /// mirrors `WorktreeExpansionToggled`).
+    DefaultExpansionToggled,
 
     // ---- Feature 008: worktree sidebar refinement ----
     /// Open (or close, if already open) a worktree's right-click context menu, by `dir_name`.
@@ -319,8 +365,9 @@ pub enum Message {
     WorktreeCreated(Worktree),
     /// The binary reported a worktree create failure (FR-017); show it, keep the form open.
     WorktreeCreateFailed(String),
-    /// Start a new session on the given worktree (FR-010). The binary spawns `claude`.
-    SessionStartRequested { worktree_dir: String },
+    /// Start a new session at the given location — a worktree or, as of feature 010, the
+    /// project root ("Default", FR-001) — (FR-010). The binary spawns `claude`.
+    SessionStartRequested { location: SessionLocation },
     /// A session was started/added for the active project (FR-011).
     SessionStarted(Session),
     /// Select a session to display its terminal (FR-015); other sessions keep running.
@@ -426,6 +473,10 @@ pub struct State {
     pub worktrees: Vec<Worktree>,
     /// Which worktree rows are expanded to reveal their sessions (FR-003). By `dir_name`.
     pub expanded: BTreeSet<String>,
+    /// Whether the "Default" (project-root) sidebar row is expanded to reveal its sessions
+    /// (feature 010, mirrors `expanded` for worktree rows — a dedicated field rather than a
+    /// sentinel key in `expanded`, since there is always exactly one Default row).
+    pub default_expanded: bool,
     /// The currently displayed session, if any (FR-012, FR-015).
     pub active_session: Option<SessionId>,
     /// The add-worktree form, present only while its overlay is shown (FR-005).
@@ -619,6 +670,9 @@ impl State {
                     self.expanded.insert(dir);
                 }
             }
+            Message::DefaultExpansionToggled => {
+                self.default_expanded = !self.default_expanded;
+            }
             Message::WorktreeMenuToggled(dir) => {
                 // Toggle: same worktree closes; a different one replaces (only one open).
                 self.worktree_menu_open = if self.worktree_menu_open.as_deref() == Some(dir.as_str())
@@ -644,10 +698,10 @@ impl State {
                         if let Some(list) = self.workspace.sessions.get_mut(&path) {
                             let removed: Vec<SessionId> = list
                                 .iter()
-                                .filter(|s| s.worktree_dir == dir)
+                                .filter(|s| s.location == SessionLocation::Worktree(dir.clone()))
                                 .map(|s| s.id)
                                 .collect();
-                            list.retain(|s| s.worktree_dir != dir);
+                            list.retain(|s| s.location != SessionLocation::Worktree(dir.clone()));
                             if self
                                 .active_session
                                 .is_some_and(|a| removed.contains(&a))
@@ -787,7 +841,7 @@ impl State {
             }
             Message::SessionStarted(session) => {
                 let id = session.id;
-                let worktree_dir = session.worktree_dir.clone();
+                let location = session.location.clone();
                 if let Some(path) = self.workspace.active.clone() {
                     self.workspace
                         .sessions
@@ -795,7 +849,14 @@ impl State {
                         .or_default()
                         .push(session);
                 }
-                self.expanded.insert(worktree_dir);
+                match location {
+                    SessionLocation::Worktree(dir) => {
+                        self.expanded.insert(dir);
+                    }
+                    SessionLocation::Default => {
+                        self.default_expanded = true;
+                    }
+                }
                 self.active_session = Some(id);
                 // BUG-001: making a session the displayed session auto-focuses its terminal so the
                 // user can interact with the AI CLI immediately (FR-010/FR-010a). The gui path
@@ -987,7 +1048,7 @@ impl State {
     pub fn sessions_in_worktree(&self, dir_name: &str) -> Vec<SessionId> {
         self.active_sessions()
             .iter()
-            .filter(|s| s.worktree_dir == dir_name)
+            .filter(|s| s.location == SessionLocation::Worktree(dir_name.to_string()))
             .map(|s| s.id)
             .collect()
     }
@@ -1136,7 +1197,7 @@ impl State {
                 expanded: self.expanded.contains(&worktree.dir_name),
                 sessions: sessions
                     .iter()
-                    .filter(|s| s.worktree_dir == worktree.dir_name)
+                    .filter(|s| s.location == SessionLocation::Worktree(worktree.dir_name.clone()))
                     .cloned()
                     .collect(),
                 worktree: worktree.clone(),
@@ -1153,6 +1214,31 @@ impl State {
             .into_iter()
             .filter(|node| matches_filters(&node.tags, &self.sidebar_filters))
             .collect()
+    }
+
+    /// The full sidebar location list (feature 010): the "Default" entry first, then worktree
+    /// entries narrowed to the active tag filters (`filtered_worktree_tree`). Empty when no
+    /// project is open (contracts/sidebar-default-entry.md invariant 1) — mirrors how
+    /// `worktree_tree` is empty with no active project. The Default entry is exempt from tag
+    /// filtering (FR-011, research.md R4): it is included unconditionally whenever a project is
+    /// open, regardless of `sidebar_filters`.
+    pub fn sidebar_entries(&self) -> Vec<SidebarEntry> {
+        if self.workspace.active.is_none() {
+            return Vec::new();
+        }
+        let default_sessions: Vec<Session> = self
+            .active_sessions()
+            .iter()
+            .filter(|s| s.location == SessionLocation::Default)
+            .cloned()
+            .collect();
+        let mut entries = vec![SidebarEntry::Default(DefaultNode {
+            display_name: "Default",
+            expanded: self.default_expanded,
+            sessions: default_sessions,
+        })];
+        entries.extend(self.filtered_worktree_tree().into_iter().map(SidebarEntry::Worktree));
+        entries
     }
 
     /// The distinct tag filters offered for the current worktrees (feature 008, FR-024): a

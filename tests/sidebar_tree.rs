@@ -1,9 +1,9 @@
 //! T017 — sidebar tree building + expand/collapse (FR-002/003).
 
-use micold_ai_ide::app::{Message, State, TagFilter};
+use micold_ai_ide::app::{Message, SidebarEntry, State, TagFilter};
 use micold_ai_ide::naming::{ConventionalType, Tag};
 use micold_ai_ide::project::{Availability, Project};
-use micold_ai_ide::session::Session;
+use micold_ai_ide::session::{Session, SessionLocation};
 use micold_ai_ide::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -34,7 +34,12 @@ fn state_with_active_project() -> State {
     state
         .workspace
         .sessions
-        .insert(path, vec![Session::start_new("feat-a")]);
+        .insert(
+            path,
+            vec![Session::start_new(SessionLocation::Worktree(
+                "feat-a".to_string(),
+            ))],
+        );
     state
 }
 
@@ -184,6 +189,26 @@ fn worktree_node_display_name_derived_when_no_override() {
     assert_eq!(node(&tree, "my-experiment").display_name, "My experiment");
 }
 
+// --- Feature 010 US2: location tooltip text (FR-010) ---
+
+// T019: the worktree location label is the worktree's path relative to the project root
+// (research.md R6 — Path::strip_prefix, since every worktree always lives directly under
+// `<project_root>/.claude/worktrees/`).
+#[test]
+fn worktree_location_label_is_relative_to_project_root() {
+    let root = PathBuf::from("/repo");
+    let wt = worktree("feat-a", WorktreeStatus::Valid);
+    assert_eq!(
+        micold_ai_ide::app::worktree_location_label(&root, &wt),
+        ".claude/worktrees/feat-a"
+    );
+}
+
+#[test]
+fn default_location_label_is_a_fixed_project_root_string() {
+    assert_eq!(micold_ai_ide::app::DEFAULT_LOCATION_LABEL, "Project root");
+}
+
 // --- Feature 008 US4: tag filtering ---
 
 fn dirs(tree: &[micold_ai_ide::app::WorktreeNode]) -> Vec<String> {
@@ -289,6 +314,74 @@ fn filter_recomputes_after_delete(/* FR-028 / C1 */) {
         dirs(&state.filtered_worktree_tree()),
         vec!["fix-def-9-thing"]
     );
+}
+
+// --- Feature 010 US1/US2: the "Default" (project-root) sidebar entry ---
+
+// T014: the Default entry is always present for an open project, ahead of any worktree
+// entries, and absent when no project is open (contracts/sidebar-default-entry.md
+// invariant 1, previously untested).
+
+#[test]
+fn default_entry_present_and_first_even_with_no_worktrees() {
+    let mut state = State::default();
+    let path = PathBuf::from("/repo");
+    state.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(path);
+    // No worktrees at all.
+    state.worktrees = vec![];
+
+    let entries = state.sidebar_entries();
+    assert_eq!(entries.len(), 1, "Default entry alone, no worktrees yet");
+    assert!(matches!(entries[0], SidebarEntry::Default(_)));
+}
+
+#[test]
+fn default_entry_precedes_worktree_entries() {
+    let state = state_with_active_project();
+    let entries = state.sidebar_entries();
+    assert!(matches!(entries[0], SidebarEntry::Default(_)));
+    assert_eq!(entries.len(), 1 + 2, "Default + the 2 worktrees");
+    assert!(entries[1..]
+        .iter()
+        .all(|e| matches!(e, SidebarEntry::Worktree(_))));
+}
+
+#[test]
+fn no_default_entry_when_no_project_is_open() {
+    let state = State::default();
+    assert!(state.workspace.active.is_none());
+    assert!(
+        state.sidebar_entries().is_empty(),
+        "no project open must yield no sidebar entries at all, not a stray Default"
+    );
+}
+
+#[test]
+fn default_sessions_are_attached_to_the_default_entry_only() {
+    let mut state = state_with_active_project(); // has one Worktree("feat-a") session
+    let path = state.workspace.active.clone().unwrap();
+    state
+        .workspace
+        .sessions
+        .get_mut(&path)
+        .unwrap()
+        .push(Session::start_new(SessionLocation::Default));
+
+    let entries = state.sidebar_entries();
+    let SidebarEntry::Default(default_node) = &entries[0] else {
+        panic!("expected the Default entry first");
+    };
+    assert_eq!(default_node.sessions.len(), 1);
+    assert!(default_node
+        .sessions
+        .iter()
+        .all(|s| s.location == SessionLocation::Default));
 }
 
 #[test]
