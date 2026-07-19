@@ -44,7 +44,15 @@ pub trait Git {
     /// Initialize, fetch, and check out every submodule declared under `worktree_path`,
     /// recursively (submodules of submodules included):
     /// `git -C <worktree_path> submodule update --init --recursive` (feature 010).
-    fn submodule_update_init_recursive(&self, worktree_path: &Path) -> io::Result<()>;
+    ///
+    /// `on_line` is called with each line of git's own stdout/stderr as it is produced, so a
+    /// slow fetch is visible to the user in real time instead of appearing to hang (feature
+    /// 010 follow-up).
+    fn submodule_update_init_recursive(
+        &self,
+        worktree_path: &Path,
+        on_line: &mut dyn FnMut(String),
+    ) -> io::Result<()>;
 }
 
 /// Production [`Git`] backed by the user's `git` binary (research R7). Cross-platform via the
@@ -137,12 +145,62 @@ impl Git for GitCli {
         worktree_path.join(".gitmodules").is_file()
     }
 
-    fn submodule_update_init_recursive(&self, worktree_path: &Path) -> io::Result<()> {
-        run_git(
-            worktree_path,
-            &["submodule", "update", "--init", "--recursive"],
-        )
-        .map(|_| ())
+    fn submodule_update_init_recursive(
+        &self,
+        worktree_path: &Path,
+        on_line: &mut dyn FnMut(String),
+    ) -> io::Result<()> {
+        use std::io::{BufRead, BufReader};
+        use std::process::Stdio;
+        use std::sync::mpsc;
+
+        let mut child = Command::new("git")
+            .arg("-C")
+            .arg(worktree_path)
+            .args(["submodule", "update", "--init", "--recursive"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        // git interleaves progress/status lines across stdout and stderr; stream both live
+        // (rather than buffering with `Command::output()` until the whole fetch finishes) so
+        // a slow clone is visible line-by-line as it happens.
+        let stdout = child.stdout.take().expect("child spawned with piped stdout");
+        let stderr = child.stderr.take().expect("child spawned with piped stderr");
+        let (tx, rx) = mpsc::channel::<String>();
+
+        let tx_stdout = tx.clone();
+        let stdout_handle = std::thread::spawn(move || {
+            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                if tx_stdout.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        let stderr_handle = std::thread::spawn(move || {
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                if tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+
+        // Both senders above were moved into the reader threads, so this loop ends once both
+        // threads finish (all output drained) and their senders drop.
+        for line in rx {
+            on_line(line);
+        }
+        let _ = stdout_handle.join();
+        let _ = stderr_handle.join();
+
+        let status = child.wait()?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(io::Error::other(
+                "git submodule update --init --recursive failed",
+            ))
+        }
     }
 }
 
@@ -178,6 +236,10 @@ struct FakeState {
     /// Log of paths passed to `submodule_update_init_recursive`, in call order (test
     /// assertions, feature 010).
     submodule_update_calls: Vec<PathBuf>,
+    /// Canned lines fed to `on_line` on the next `submodule_update_init_recursive` call, to
+    /// exercise the progress-streaming plumbing without a real subprocess (feature 010
+    /// follow-up).
+    submodule_progress_lines: Vec<String>,
 }
 
 impl FakeGit {
@@ -222,6 +284,13 @@ impl FakeGit {
     /// feature 010).
     pub fn failing_next_submodule_update(self) -> Self {
         self.inner.borrow_mut().fail_next_submodule_update = true;
+        self
+    }
+
+    /// Prime the next `submodule_update_init_recursive` call to report `lines` via `on_line`,
+    /// in order, before returning (feature 010 follow-up — exercises progress streaming).
+    pub fn with_submodule_progress_lines(self, lines: Vec<String>) -> Self {
+        self.inner.borrow_mut().submodule_progress_lines = lines;
         self
     }
 
@@ -323,15 +392,27 @@ impl Git for FakeGit {
         self.inner.borrow().submodules.contains(worktree_path)
     }
 
-    fn submodule_update_init_recursive(&self, worktree_path: &Path) -> io::Result<()> {
+    fn submodule_update_init_recursive(
+        &self,
+        worktree_path: &Path,
+        on_line: &mut dyn FnMut(String),
+    ) -> io::Result<()> {
         let mut state = self.inner.borrow_mut();
         state
             .submodule_update_calls
             .push(worktree_path.to_path_buf());
-        if state.fail_next_submodule_update {
-            state.fail_next_submodule_update = false;
-            return Err(io::Error::other("simulated submodule update failure"));
+        let lines = std::mem::take(&mut state.submodule_progress_lines);
+        let should_fail = state.fail_next_submodule_update;
+        state.fail_next_submodule_update = false;
+        drop(state);
+
+        for line in lines {
+            on_line(line);
         }
-        Ok(())
+        if should_fail {
+            Err(io::Error::other("simulated submodule update failure"))
+        } else {
+            Ok(())
+        }
     }
 }

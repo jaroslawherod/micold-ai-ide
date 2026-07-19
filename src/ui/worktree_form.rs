@@ -5,7 +5,7 @@
 
 use crate::ui::material::Modal;
 use crate::ui::style;
-use iced::widget::{button, column, container, row, text, text_input, Space};
+use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Element, Length};
 use micold_ai_ide::app::{Message, WorktreeForm, WorktreeFormStatus};
 use micold_ai_ide::naming::ConventionalType;
@@ -80,6 +80,24 @@ pub fn modal<'a>(
     // → "Loading…"), not a new spinner component (Constitution VIII).
     if is_creating {
         fields = fields.push(text("Creating worktree…").size(type_scale::LABEL));
+    }
+
+    // Progress log display (feature 010 follow-up) — show a scrollable area with executed commands
+    // and live output from submodule fetches so the user can see what's happening.
+    if !form.log.is_empty() {
+        let mut log_content = column![].spacing(spacing::XS);
+        for line in &form.log {
+            log_content = log_content.push(
+                text(line)
+                    .size(type_scale::LABEL)
+                    .style(style::muted(r)),
+            );
+        }
+        let log_area = container(scrollable(log_content))
+            .width(Length::Fill)
+            .height(Length::Fixed(150.0))
+            .style(style::dialog(r));
+        fields = fields.push(log_area);
     }
 
     let create_button = button(text("Create").size(type_scale::BODY)).style(style::filled(r));

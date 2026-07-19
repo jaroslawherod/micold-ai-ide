@@ -87,6 +87,63 @@ fn create_started_marks_form_creating() {
 }
 
 #[test]
+fn field_edits_are_ignored_while_creating() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
+    state.update(Message::AddWorktreeNameChanged("Login".to_string()));
+    state.update(Message::WorktreeCreateStarted);
+
+    // The whole form is inactive while a create is in flight (feature 010 follow-up), not
+    // just the submit button — edits during this window must be no-ops.
+    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Fix));
+    state.update(Message::AddWorktreeTicketChanged("ABC-1".to_string()));
+    state.update(Message::AddWorktreeNameChanged("Something else".to_string()));
+
+    let form = state.worktree_form.as_ref().unwrap();
+    assert_eq!(form.type_, Some(ConventionalType::Feat));
+    assert_eq!(form.ticket, "");
+    assert_eq!(form.name, "Login");
+}
+
+#[test]
+fn create_log_lines_accumulate_and_reset_on_new_attempt() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateLogAppended(vec![
+        "$ git worktree add -b feat/x .claude/worktrees/feat-x HEAD".to_string(),
+    ]));
+    state.update(Message::WorktreeCreateLogAppended(vec![
+        "$ git submodule update --init --recursive".to_string(),
+        "Cloning into 'vendor/sub'...".to_string(),
+    ]));
+    assert_eq!(state.worktree_form.as_ref().unwrap().log.len(), 3);
+
+    // A fresh attempt clears the previous attempt's log (feature 010 follow-up).
+    state.update(Message::WorktreeCreateStarted);
+    assert!(state.worktree_form.as_ref().unwrap().log.is_empty());
+}
+
+#[test]
+fn create_failed_keeps_the_log_visible_for_diagnosis() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateLogAppended(vec![
+        "submodule update failed: network error".to_string(),
+    ]));
+    state.update(Message::WorktreeCreateFailed("boom".to_string()));
+
+    // Unlike on success (form closes entirely), a failure keeps the form open with its log
+    // intact so the user can see what happened before retrying.
+    assert_eq!(
+        state.worktree_form.as_ref().unwrap().log,
+        vec!["submodule update failed: network error".to_string()]
+    );
+}
+
+#[test]
 fn create_failed_keeps_form_open_and_resets_status_to_editing() {
     let mut state = State::default();
     state.update(Message::AddWorktreeOpened);

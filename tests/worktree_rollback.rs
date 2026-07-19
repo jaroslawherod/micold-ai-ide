@@ -40,12 +40,17 @@ fn failed_create_rolls_back_leaving_no_orphan_branch_or_worktree() {
     };
     let target = PathBuf::from("/repo/.claude/worktrees/feat-x");
 
-    let err = create_worktree(&git, &repo, &target, &names, false).unwrap_err();
+    let mut log = Vec::new();
+    let err = create_worktree(&git, &repo, &target, &names, false, &mut |line| log.push(line))
+        .unwrap_err();
     assert!(matches!(err, CreateError::RolledBack(_)));
 
     // The orphan branch git created before the simulated failure must be cleaned up.
     assert!(!git.branch_exists(&repo, "feat/x").unwrap());
     assert!(git.worktrees(&repo).is_empty());
+    // The failure and the rollback both surface to the caller (feature 010 follow-up).
+    assert!(log.iter().any(|l| l.contains("worktree add failed")));
+    assert!(log.iter().any(|l| l.contains("Rolling back")));
 }
 
 #[test]
@@ -61,7 +66,7 @@ fn failed_submodule_fetch_rolls_back_the_whole_worktree() {
         branch: "feat/x".to_string(),
     };
 
-    let err = create_worktree(&git, &repo, &target, &names, false).unwrap_err();
+    let err = create_worktree(&git, &repo, &target, &names, false, &mut |_| {}).unwrap_err();
     assert!(matches!(err, CreateError::RolledBack(_)));
 
     // Same full rollback as a worktree-add failure (spec FR-005): no worktree, no branch.
@@ -86,7 +91,7 @@ fn submodule_failure_message_is_preserved_verbatim_for_the_user() {
         branch: "feat/x".to_string(),
     };
 
-    let err = create_worktree(&git, &repo, &target, &names, false).unwrap_err();
+    let err = create_worktree(&git, &repo, &target, &names, false, &mut |_| {}).unwrap_err();
     let CreateError::RolledBack(message) = err else {
         panic!("expected RolledBack, got {err:?}");
     };

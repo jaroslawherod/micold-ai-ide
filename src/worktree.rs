@@ -224,12 +224,18 @@ pub fn remove_worktree(
 /// Pre-flight duplicate checks run before any mutation. `target_exists` is the binary's `fs`
 /// check that the target directory is already present/non-empty. On a git failure the
 /// [`rollback_plan`] git steps run (the caller removes the directory — [`CleanupStep::RemoveDir`]).
+///
+/// `on_progress` is called with a human-readable line for each executed command and, for the
+/// (potentially slow) submodule fetch, its live output — so the caller can surface progress
+/// instead of the operation appearing to hang (feature 010 follow-up). Callers that don't care
+/// about progress can pass `&mut |_| {}`.
 pub fn create_worktree(
     git: &dyn Git,
     repo: &Path,
     target_path: &Path,
     names: &DerivedNames,
     target_exists: bool,
+    on_progress: &mut dyn FnMut(String),
 ) -> Result<Worktree, CreateError> {
     // Pre-flight (fail fast, no mutation).
     if git
@@ -246,7 +252,14 @@ pub fn create_worktree(
         return Err(CreateError::DuplicateDir);
     }
 
+    on_progress(format!(
+        "$ git worktree add -b {} {} HEAD",
+        names.branch,
+        target_path.display()
+    ));
     if let Err(e) = git.worktree_add_new_branch(repo, &names.branch, target_path) {
+        on_progress(format!("worktree add failed: {e}"));
+        on_progress("Rolling back…".to_string());
         run_rollback(git, repo, target_path, &names.branch);
         return Err(CreateError::RolledBack(e.to_string()));
     }
@@ -255,7 +268,10 @@ pub fn create_worktree(
     // research R1) — a failure here rolls back the whole creation exactly like a failed
     // `worktree_add_new_branch` above (spec FR-005), via the same rollback plan.
     if git.has_submodules(target_path) {
-        if let Err(e) = git.submodule_update_init_recursive(target_path) {
+        on_progress("$ git submodule update --init --recursive".to_string());
+        if let Err(e) = git.submodule_update_init_recursive(target_path, on_progress) {
+            on_progress(format!("submodule update failed: {e}"));
+            on_progress("Rolling back…".to_string());
             run_rollback(git, repo, target_path, &names.branch);
             return Err(CreateError::RolledBack(e.to_string()));
         }

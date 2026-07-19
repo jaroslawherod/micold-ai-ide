@@ -531,9 +531,18 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::WorktreeCreateStarted);
             Task::perform(
                 async move { create(&repo, &names) },
-                |result| match result {
-                    Ok(worktree) => Message::WorktreeCreated(worktree),
-                    Err(err) => Message::WorktreeCreateFailed(describe_create_error(err)),
+                |result| {
+                    let (inner_result, progress) = match result {
+                        Ok((worktree, progress)) => (Ok(worktree), progress),
+                        Err((err, progress)) => (
+                            Err(describe_create_error(err)),
+                            progress,
+                        ),
+                    };
+                    Message::WorktreeCreationDone {
+                        result: inner_result,
+                        progress,
+                    }
                 },
             )
         }
@@ -598,6 +607,14 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 let _ = rt.kill();
             }
             app.core.update(Message::SessionCloseRequested(id));
+            persist(&app.core);
+            Task::none()
+        }
+        // Worktree creation completed: apply progress to the form, then dispatch the result
+        // (success or failure). This splits the combined result into two state transitions so
+        // progress is displayed before the form closes or error shows (feature 010 follow-up).
+        Message::WorktreeCreationDone { result, progress } => {
+            app.core.update(Message::WorktreeCreationDone { result, progress });
             persist(&app.core);
             Task::none()
         }
@@ -1014,21 +1031,25 @@ fn discover_worktrees(repo: &Path) -> Vec<Worktree> {
 }
 
 /// Create a branch + worktree, removing the target dir if the git step fails (FR-006/006b).
+/// Returns both the result and the progress log so the binary can display progress to the user.
 fn create(
     repo: &Path,
     names: &micold_ai_ide::naming::DerivedNames,
-) -> Result<Worktree, CreateError> {
+) -> Result<(Worktree, Vec<String>), (CreateError, Vec<String>)> {
     let git = GitCli::new();
     let root = repo.join(".claude/worktrees");
     let target = root.join(&names.dir_name);
     let _ = std::fs::create_dir_all(&root);
     let target_exists = target.exists() && dir_nonempty(&target);
-    let result = create_worktree(&git, repo, &target, names, target_exists);
+    let mut progress = Vec::new();
+    let result = create_worktree(&git, repo, &target, names, target_exists, &mut |line| {
+        progress.push(line);
+    });
     if result.is_err() {
         // CleanupStep::RemoveDir (the fs half of the rollback plan).
         let _ = std::fs::remove_dir_all(&target);
     }
-    result
+    result.map(|wt| (wt, progress)).map_err(|err| (err, progress))
 }
 
 fn describe_create_error(err: CreateError) -> String {

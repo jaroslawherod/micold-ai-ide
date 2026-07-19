@@ -77,7 +77,8 @@ fn has_submodules_reflects_priming() {
 fn submodule_update_records_call_and_defaults_to_success() {
     let git = FakeGit::new().with_repo(repo());
     let path = PathBuf::from("/repo/.claude/worktrees/feat-x");
-    git.submodule_update_init_recursive(&path).unwrap();
+    git.submodule_update_init_recursive(&path, &mut |_| {})
+        .unwrap();
     assert_eq!(git.submodule_update_calls(), vec![path]);
 }
 
@@ -87,7 +88,30 @@ fn failing_next_submodule_update_errors_once() {
         .with_repo(repo())
         .failing_next_submodule_update();
     let path = PathBuf::from("/repo/.claude/worktrees/feat-x");
-    assert!(git.submodule_update_init_recursive(&path).is_err());
+    assert!(git
+        .submodule_update_init_recursive(&path, &mut |_| {})
+        .is_err());
     // Primed to fail only once — a retry would succeed (mirrors failing_next_add's shape).
-    assert!(git.submodule_update_init_recursive(&path).is_ok());
+    assert!(git
+        .submodule_update_init_recursive(&path, &mut |_| {})
+        .is_ok());
+}
+
+#[test]
+fn submodule_update_reports_primed_progress_lines_in_order() {
+    let git = FakeGit::new().with_repo(repo()).with_submodule_progress_lines(vec![
+        "Cloning into 'vendor/sub'...".to_string(),
+        "done.".to_string(),
+    ]);
+    let path = PathBuf::from("/repo/.claude/worktrees/feat-x");
+    let mut received = Vec::new();
+    git.submodule_update_init_recursive(&path, &mut |line| received.push(line))
+        .unwrap();
+    assert_eq!(
+        received,
+        vec![
+            "Cloning into 'vendor/sub'...".to_string(),
+            "done.".to_string(),
+        ]
+    );
 }

@@ -102,6 +102,11 @@ pub struct WorktreeForm {
     pub error: Option<NamingError>,
     /// Whether a create is in flight (feature 010, data-model.md).
     pub status: WorktreeFormStatus,
+    /// The executed git commands and their live output for the in-flight (or most recently
+    /// failed) create, shown in a small log area so a slow submodule fetch reads as "working"
+    /// rather than "stuck" (feature 010 follow-up). Cleared when a new attempt starts; kept on
+    /// failure so the user can see what happened.
+    pub log: Vec<String>,
 }
 
 impl WorktreeForm {
@@ -332,10 +337,21 @@ pub enum Message {
     /// The binary is about to run the async create (feature 010, research R4); marks the form
     /// `Creating` so it shows an in-progress state instead of appearing to hang.
     WorktreeCreateStarted,
+    /// A batch of progress/log lines from the in-flight create — the executed git commands
+    /// and their live output (feature 010 follow-up). Appended to the form's log; a no-op if
+    /// the form has since closed.
+    WorktreeCreateLogAppended(Vec<String>),
     /// The binary created a worktree successfully (FR-007); add it and close the form.
     WorktreeCreated(Worktree),
     /// The binary reported a worktree create failure (FR-017); show it, keep the form open.
     WorktreeCreateFailed(String),
+    /// Internal: carries both the creation result and progress lines; dispatched by the binary
+    /// after the async task completes. Used to send progress before the final result.
+    #[doc(hidden)]
+    WorktreeCreationDone {
+        result: Result<Worktree, String>,
+        progress: Vec<String>,
+    },
     /// Start a new session on the given worktree (FR-010). The binary spawns `claude`.
     SessionStartRequested { worktree_dir: String },
     /// A session was started/added for the active project (FR-011).
@@ -756,20 +772,28 @@ impl State {
             }
             Message::AddWorktreeTypeSelected(type_) => {
                 if let Some(form) = &mut self.worktree_form {
-                    form.type_ = Some(type_);
-                    form.error = None;
+                    // Ignored while a create is in flight (feature 010 follow-up) — the form
+                    // is inactive until it resolves, not just the submit button.
+                    if form.status == WorktreeFormStatus::Editing {
+                        form.type_ = Some(type_);
+                        form.error = None;
+                    }
                 }
             }
             Message::AddWorktreeTicketChanged(text) => {
                 if let Some(form) = &mut self.worktree_form {
-                    form.ticket = text;
-                    form.error = None;
+                    if form.status == WorktreeFormStatus::Editing {
+                        form.ticket = text;
+                        form.error = None;
+                    }
                 }
             }
             Message::AddWorktreeNameChanged(text) => {
                 if let Some(form) = &mut self.worktree_form {
-                    form.name = text;
-                    form.error = None;
+                    if form.status == WorktreeFormStatus::Editing {
+                        form.name = text;
+                        form.error = None;
+                    }
                 }
             }
             Message::AddWorktreeSubmitted => {
@@ -791,6 +815,12 @@ impl State {
             Message::WorktreeCreateStarted => {
                 if let Some(form) = &mut self.worktree_form {
                     form.status = WorktreeFormStatus::Creating;
+                    form.log.clear();
+                }
+            }
+            Message::WorktreeCreateLogAppended(lines) => {
+                if let Some(form) = &mut self.worktree_form {
+                    form.log.extend(lines);
                 }
             }
             Message::WorktreeCreated(worktree) => {
@@ -812,6 +842,18 @@ impl State {
                 self.worktree_error = Some(message);
                 if let Some(form) = &mut self.worktree_form {
                     form.status = WorktreeFormStatus::Editing;
+                }
+            }
+            Message::WorktreeCreationDone { result, progress } => {
+                // Append progress first, then dispatch the result message so all logs are visible
+                // before the form closes (on success) or error shows (on failure).
+                if let Some(form) = &mut self.worktree_form {
+                    form.log.extend(progress);
+                }
+                // Dispatch the underlying result message to complete the flow.
+                match result {
+                    Ok(worktree) => self.update(Message::WorktreeCreated(worktree)),
+                    Err(err) => self.update(Message::WorktreeCreateFailed(err)),
                 }
             }
             Message::SessionStarted(session) => {
