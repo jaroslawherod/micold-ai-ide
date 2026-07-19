@@ -99,10 +99,12 @@ fn failing_next_submodule_update_errors_once() {
 
 #[test]
 fn submodule_update_reports_primed_progress_lines_in_order() {
-    let git = FakeGit::new().with_repo(repo()).with_submodule_progress_lines(vec![
-        "Cloning into 'vendor/sub'...".to_string(),
-        "done.".to_string(),
-    ]);
+    let git = FakeGit::new()
+        .with_repo(repo())
+        .with_submodule_progress_lines(vec![
+            "Cloning into 'vendor/sub'...".to_string(),
+            "done.".to_string(),
+        ]);
     let path = PathBuf::from("/repo/.claude/worktrees/feat-x");
     let mut received = Vec::new();
     git.submodule_update_init_recursive(&path, &mut |line| received.push(line))

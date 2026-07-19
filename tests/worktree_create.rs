@@ -75,7 +75,9 @@ fn submodules_are_fetched_when_present() {
     assert!(log
         .iter()
         .any(|l| l.contains("git submodule update --init --recursive")));
-    assert!(log.iter().any(|l| l.contains("Cloning into 'vendor/sub'...")));
+    assert!(log
+        .iter()
+        .any(|l| l.contains("Cloning into 'vendor/sub'...")));
 }
 
 #[test]
@@ -99,7 +101,6 @@ fn duplicate_registered_worktree_is_rejected() {
         dir_name: "feat-abc-123-login".to_string(),
         branch: "feat/other".to_string(),
     };
-    let err =
-        create_worktree(&git, &repo, &target(), &other, false, &mut |_| {}).unwrap_err();
+    let err = create_worktree(&git, &repo, &target(), &other, false, &mut |_| {}).unwrap_err();
     assert_eq!(err, CreateError::DuplicateDir);
 }

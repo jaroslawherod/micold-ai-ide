@@ -529,22 +529,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 return Task::none();
             };
             app.core.update(Message::WorktreeCreateStarted);
-            Task::perform(
-                async move { create(&repo, &names) },
-                |result| {
-                    let (inner_result, progress) = match result {
-                        Ok((worktree, progress)) => (Ok(worktree), progress),
-                        Err((err, progress)) => (
-                            Err(describe_create_error(err)),
-                            progress,
-                        ),
-                    };
-                    Message::WorktreeCreationDone {
-                        result: inner_result,
-                        progress,
-                    }
-                },
-            )
+            Task::perform(async move { create(&repo, &names) }, |result| {
+                let (inner_result, progress) = match result {
+                    Ok((worktree, progress)) => (Ok(worktree), progress),
+                    Err((err, progress)) => (Err(describe_create_error(err)), progress),
+                };
+                Message::WorktreeCreationDone {
+                    result: inner_result,
+                    progress,
+                }
+            })
         }
         // Start a new session on a worktree: spawn `claude` and stream it (FR-010/012/013).
         Message::SessionStartRequested { worktree_dir } => {
@@ -614,7 +608,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // (success or failure). This splits the combined result into two state transitions so
         // progress is displayed before the form closes or error shows (feature 010 follow-up).
         Message::WorktreeCreationDone { result, progress } => {
-            app.core.update(Message::WorktreeCreationDone { result, progress });
+            app.core
+                .update(Message::WorktreeCreationDone { result, progress });
             persist(&app.core);
             Task::none()
         }
@@ -1049,7 +1044,9 @@ fn create(
         // CleanupStep::RemoveDir (the fs half of the rollback plan).
         let _ = std::fs::remove_dir_all(&target);
     }
-    result.map(|wt| (wt, progress)).map_err(|err| (err, progress))
+    result
+        .map(|wt| (wt, progress))
+        .map_err(|err| (err, progress))
 }
 
 fn describe_create_error(err: CreateError) -> String {

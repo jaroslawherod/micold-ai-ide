@@ -87,11 +87,8 @@ pub fn modal<'a>(
     if !form.log.is_empty() {
         let mut log_content = column![].spacing(spacing::XS);
         for line in &form.log {
-            log_content = log_content.push(
-                text(line)
-                    .size(type_scale::LABEL)
-                    .style(style::muted(r)),
-            );
+            log_content =
+                log_content.push(text(line).size(type_scale::LABEL).style(style::muted(r)));
         }
         let log_area = container(scrollable(log_content))
             .width(Length::Fill)

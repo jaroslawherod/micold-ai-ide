@@ -41,8 +41,10 @@ fn failed_create_rolls_back_leaving_no_orphan_branch_or_worktree() {
     let target = PathBuf::from("/repo/.claude/worktrees/feat-x");
 
     let mut log = Vec::new();
-    let err = create_worktree(&git, &repo, &target, &names, false, &mut |line| log.push(line))
-        .unwrap_err();
+    let err = create_worktree(&git, &repo, &target, &names, false, &mut |line| {
+        log.push(line)
+    })
+    .unwrap_err();
     assert!(matches!(err, CreateError::RolledBack(_)));
 
     // The orphan branch git created before the simulated failure must be cleaned up.

@@ -165,8 +165,14 @@ impl Git for GitCli {
         // git interleaves progress/status lines across stdout and stderr; stream both live
         // (rather than buffering with `Command::output()` until the whole fetch finishes) so
         // a slow clone is visible line-by-line as it happens.
-        let stdout = child.stdout.take().expect("child spawned with piped stdout");
-        let stderr = child.stderr.take().expect("child spawned with piped stderr");
+        let stdout = child
+            .stdout
+            .take()
+            .expect("child spawned with piped stdout");
+        let stderr = child
+            .stderr
+            .take()
+            .expect("child spawned with piped stderr");
         let (tx, rx) = mpsc::channel::<String>();
 
         let tx_stdout = tx.clone();

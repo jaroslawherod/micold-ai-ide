@@ -98,7 +98,9 @@ fn field_edits_are_ignored_while_creating() {
     // just the submit button — edits during this window must be no-ops.
     state.update(Message::AddWorktreeTypeSelected(ConventionalType::Fix));
     state.update(Message::AddWorktreeTicketChanged("ABC-1".to_string()));
-    state.update(Message::AddWorktreeNameChanged("Something else".to_string()));
+    state.update(Message::AddWorktreeNameChanged(
+        "Something else".to_string(),
+    ));
 
     let form = state.worktree_form.as_ref().unwrap();
     assert_eq!(form.type_, Some(ConventionalType::Feat));
