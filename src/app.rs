@@ -1241,7 +1241,11 @@ impl State {
             expanded: self.default_expanded,
             sessions: default_sessions,
         })];
-        entries.extend(self.filtered_worktree_tree().into_iter().map(SidebarEntry::Worktree));
+        entries.extend(
+            self.filtered_worktree_tree()
+                .into_iter()
+                .map(SidebarEntry::Worktree),
+        );
         entries
     }
 

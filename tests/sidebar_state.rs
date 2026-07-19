@@ -312,7 +312,10 @@ fn default_entry_stays_visible_with_an_active_tag_filter() {
     state.update(Message::SidebarFilterToggled(TagFilter::Type(
         ConventionalType::Fix, // no `fix` worktree exists — this filter matches nothing
     )));
-    assert!(!state.available_tag_filters().is_empty(), "feat-a offers a filter to toggle");
+    assert!(
+        !state.available_tag_filters().is_empty(),
+        "feat-a offers a filter to toggle"
+    );
     let entries = state.sidebar_entries();
     assert!(
         entries

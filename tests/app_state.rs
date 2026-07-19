@@ -132,7 +132,10 @@ fn default_session_started_enters_workspace_sessions() {
 
     assert_eq!(state.active_session, Some(id));
     assert_eq!(state.active_sessions().len(), 1);
-    assert_eq!(state.active_sessions()[0].location, SessionLocation::Default);
+    assert_eq!(
+        state.active_sessions()[0].location,
+        SessionLocation::Default
+    );
     // The Default row's own expansion flag opens, not the worktree `expanded` set.
     assert!(state.default_expanded);
 }

@@ -31,15 +31,12 @@ fn state_with_active_project() -> State {
         worktree("feat-b", WorktreeStatus::Valid),
     ];
     // A session on feat-a.
-    state
-        .workspace
-        .sessions
-        .insert(
-            path,
-            vec![Session::start_new(SessionLocation::Worktree(
-                "feat-a".to_string(),
-            ))],
-        );
+    state.workspace.sessions.insert(
+        path,
+        vec![Session::start_new(SessionLocation::Worktree(
+            "feat-a".to_string(),
+        ))],
+    );
     state
 }
 

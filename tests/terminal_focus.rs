@@ -122,7 +122,9 @@ fn starting_a_session_focuses_its_terminal() {
     use micold_ai_ide::app::Message;
     use micold_ai_ide::session::Session;
     let mut s = State::default();
-    s.update(Message::SessionStarted(Session::start_new(SessionLocation::Worktree("feat-x".to_string()))));
+    s.update(Message::SessionStarted(Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+    )));
     assert!(
         s.terminal_focused,
         "starting a session must auto-focus its terminal (BUG-001, FR-010/FR-010a)"
@@ -134,7 +136,9 @@ fn releasing_focus_after_auto_focus_still_works() {
     use micold_ai_ide::app::Message;
     use micold_ai_ide::session::Session;
     let mut s = State::default();
-    s.update(Message::SessionSelected(Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id));
+    s.update(Message::SessionSelected(
+        Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id,
+    ));
     assert!(s.terminal_focused);
     s.update(Message::TerminalFocusReleased);
     assert!(

@@ -22,7 +22,11 @@ fn new_default_session_has_no_worktree_identity() {
 #[test]
 fn restored_default_session_is_idle_and_inactive() {
     use micold_ai_ide::session::{SessionId, SessionLabel};
-    let s = Session::restored(SessionId::new(), SessionLocation::Default, SessionLabel::Pending);
+    let s = Session::restored(
+        SessionId::new(),
+        SessionLocation::Default,
+        SessionLabel::Pending,
+    );
     assert_eq!(s.lifecycle, SessionLifecycle::Idle);
     assert_eq!(s.location, SessionLocation::Default);
     assert!(!s.is_active());

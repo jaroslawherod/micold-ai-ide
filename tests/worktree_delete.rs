@@ -45,7 +45,8 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
     });
     state.workspace.active = Some(repo.clone());
     state.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
-    let target_session = Session::start_new(SessionLocation::Worktree("feat-abc-123-x".to_string()));
+    let target_session =
+        Session::start_new(SessionLocation::Worktree("feat-abc-123-x".to_string()));
     let other_session = Session::start_new(SessionLocation::Worktree("other".to_string()));
     let (target_id, other_id) = (target_session.id, other_session.id);
     state.update(Message::SessionStarted(target_session));

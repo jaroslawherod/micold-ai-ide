@@ -179,11 +179,7 @@ fn pre_feature_010_catalog_with_multiple_sessions_loads_as_all_worktree_located(
     assert_eq!(out.status, LoadStatus::Loaded);
 
     use micold_ai_ide::session::SessionLocation;
-    let all_sessions = out
-        .workspace
-        .sessions
-        .values()
-        .flat_map(|list| list.iter());
+    let all_sessions = out.workspace.sessions.values().flat_map(|list| list.iter());
     let mut count = 0;
     for session in all_sessions {
         count += 1;

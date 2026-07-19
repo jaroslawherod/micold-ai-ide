@@ -15,7 +15,10 @@ fn default_session_cwd_is_the_project_root_exactly() {
     let repo = PathBuf::from("/home/dev/proj");
     let session = Session::start_new(SessionLocation::Default);
     let cwd = session.location.cwd(&repo);
-    assert_eq!(cwd, repo, "Default session cwd must be the project root, no join/suffix");
+    assert_eq!(
+        cwd, repo,
+        "Default session cwd must be the project root, no join/suffix"
+    );
 }
 
 #[test]
@@ -31,7 +34,11 @@ fn restored_default_session_cwd_is_also_the_project_root() {
     // Covers the reopen/resume call sites (session_cwd, session_cwd_any), not just fresh start.
     use micold_ai_ide::session::{SessionId, SessionLabel};
     let repo = PathBuf::from("/home/dev/proj");
-    let session = Session::restored(SessionId::new(), SessionLocation::Default, SessionLabel::Pending);
+    let session = Session::restored(
+        SessionId::new(),
+        SessionLocation::Default,
+        SessionLabel::Pending,
+    );
     let cwd = session.location.cwd(&repo);
     assert_eq!(cwd, repo);
 }
