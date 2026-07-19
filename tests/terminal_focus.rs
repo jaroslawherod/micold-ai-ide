@@ -3,7 +3,7 @@
 
 use micold_ai_ide::app::{route_key, should_write_to, KeyRouting, Overlay, State};
 use micold_ai_ide::keymap::KeyOutput;
-use micold_ai_ide::session::SessionLifecycle;
+use micold_ai_ide::session::{SessionLifecycle, SessionLocation};
 
 #[test]
 fn base_state_defaults() {
@@ -108,7 +108,7 @@ fn selecting_a_session_focuses_its_terminal() {
     use micold_ai_ide::session::Session;
     let mut s = State::default();
     assert!(!s.terminal_focused, "precondition: starts unfocused");
-    let id = Session::start_new("feat-x").id;
+    let id = Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id;
     s.update(Message::SessionSelected(id));
     assert!(
         s.terminal_focused,
@@ -122,7 +122,9 @@ fn starting_a_session_focuses_its_terminal() {
     use micold_ai_ide::app::Message;
     use micold_ai_ide::session::Session;
     let mut s = State::default();
-    s.update(Message::SessionStarted(Session::start_new("feat-x")));
+    s.update(Message::SessionStarted(Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+    )));
     assert!(
         s.terminal_focused,
         "starting a session must auto-focus its terminal (BUG-001, FR-010/FR-010a)"
@@ -134,7 +136,9 @@ fn releasing_focus_after_auto_focus_still_works() {
     use micold_ai_ide::app::Message;
     use micold_ai_ide::session::Session;
     let mut s = State::default();
-    s.update(Message::SessionSelected(Session::start_new("feat-x").id));
+    s.update(Message::SessionSelected(
+        Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id,
+    ));
     assert!(s.terminal_focused);
     s.update(Message::TerminalFocusReleased);
     assert!(
@@ -148,7 +152,7 @@ fn closing_the_displayed_session_clears_focus() {
     use micold_ai_ide::app::Message;
     use micold_ai_ide::session::Session;
     let mut s = State::default();
-    let session = Session::start_new("feat-x");
+    let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     let id = session.id;
     s.update(Message::SessionStarted(session));
     assert!(s.terminal_focused);

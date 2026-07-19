@@ -1,7 +1,9 @@
 //! T040 — session persistence roundtrip (FR-020/021, SC-008, storage option A).
+//! T004 (010-root-dir-session) — StoredSession.worktree_dir widened to Option<String>;
+//! `None`/`null` round-trips to `SessionLocation::Default`.
 
 use micold_ai_ide::project::{Availability, Project};
-use micold_ai_ide::session::{Session, SessionId, SessionLabel, SessionLifecycle};
+use micold_ai_ide::session::{Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation};
 use micold_ai_ide::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_ai_ide::workspace::Workspace;
 use std::collections::BTreeMap;
@@ -21,10 +23,14 @@ fn workspace_with_sessions() -> (Workspace, PathBuf, SessionId) {
     sessions.insert(
         path.clone(),
         vec![
-            Session::restored(id, "feat-x", SessionLabel::Named("Add login".to_string())),
+            Session::restored(
+                id,
+                SessionLocation::Worktree("feat-x".to_string()),
+                SessionLabel::Named("Add login".to_string()),
+            ),
             Session::restored(
                 SessionId::from_uuid(Uuid::from_u128(0x5678)),
-                "chore-cleanup",
+                SessionLocation::Worktree("chore-cleanup".to_string()),
                 SessionLabel::Pending,
             ),
         ],
@@ -59,14 +65,17 @@ fn sessions_roundtrip_through_the_store() {
     assert_eq!(sessions.len(), 2);
 
     let named = sessions.iter().find(|s| s.id == id).unwrap();
-    assert_eq!(named.worktree_dir, "feat-x");
+    assert_eq!(
+        named.location,
+        SessionLocation::Worktree("feat-x".to_string())
+    );
     assert_eq!(named.label, SessionLabel::Named("Add login".to_string()));
     // Lifecycle is not persisted — restored sessions are Idle (FR-021).
     assert_eq!(named.lifecycle, SessionLifecycle::Idle);
 
     let pending = sessions
         .iter()
-        .find(|s| s.worktree_dir == "chore-cleanup")
+        .find(|s| s.location == SessionLocation::Worktree("chore-cleanup".to_string()))
         .unwrap();
     assert_eq!(pending.label, SessionLabel::Pending);
 }
@@ -81,7 +90,7 @@ fn null_title_restores_as_pending() {
         path.clone(),
         vec![Session::restored(
             SessionId::new(),
-            "feat-x",
+            SessionLocation::Worktree("feat-x".to_string()),
             SessionLabel::Pending,
         )],
     );
@@ -101,6 +110,72 @@ fn null_title_restores_as_pending() {
     let loaded = store.load();
     let restored = &loaded.workspace.sessions.get(&path).unwrap()[0];
     assert_eq!(restored.label, SessionLabel::Pending);
+}
+
+#[test]
+fn default_session_persists_as_null_worktree_dir_and_roundtrips() {
+    // contracts/storage-schema.md: SessionLocation::Default -> StoredSession { worktree_dir: None }.
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    let path = PathBuf::from("/home/dev/proj");
+    let mut sessions = BTreeMap::new();
+    sessions.insert(
+        path.clone(),
+        vec![Session::restored(
+            SessionId::new(),
+            SessionLocation::Default,
+            SessionLabel::Pending,
+        )],
+    );
+    let ws = Workspace {
+        projects: vec![Project {
+            path: path.clone(),
+            display_name: "proj".to_string(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        }],
+        active: None,
+        sessions,
+        worktree_names: Default::default(),
+    };
+
+    store.save(&ws).unwrap();
+    let raw = std::fs::read_to_string(dir.path().join("projects.json")).unwrap();
+    assert!(
+        raw.contains("\"worktree_dir\": null") || raw.contains("\"worktree_dir\":null"),
+        "expected a null worktree_dir for a Default session, got: {raw}"
+    );
+
+    let loaded = store.load();
+    let restored = &loaded.workspace.sessions.get(&path).unwrap()[0];
+    assert_eq!(restored.location, SessionLocation::Default);
+}
+
+#[test]
+fn legacy_string_worktree_dir_loads_as_worktree_location() {
+    // Backward compatibility (contracts/storage-schema.md): a file written before feature
+    // 010 has worktree_dir as a plain JSON string, never null. It must still load correctly
+    // as SessionLocation::Worktree, not be misread as Default.
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("projects.json");
+    std::fs::write(
+        &file,
+        r#"{"schema_version":1,"last_active":null,"projects":[{"path":"/p","display_name":"p","is_git_repo":true,"sessions":[{"id":"11111111-1111-1111-1111-111111111111","worktree_dir":"feat-legacy","title":null}]}]}"#,
+    )
+    .unwrap();
+    let store = JsonFileStore::at(file);
+    let loaded = store.load();
+    assert_eq!(loaded.status, LoadStatus::Loaded);
+    let sessions = loaded
+        .workspace
+        .sessions
+        .get(&PathBuf::from("/p"))
+        .expect("sessions present");
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(
+        sessions[0].location,
+        SessionLocation::Worktree("feat-legacy".to_string())
+    );
 }
 
 #[test]

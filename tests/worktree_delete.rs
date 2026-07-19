@@ -8,7 +8,7 @@
 use micold_ai_ide::app::{Message, State};
 use micold_ai_ide::git::{FakeGit, Git};
 use micold_ai_ide::project::{Availability, Project};
-use micold_ai_ide::session::Session;
+use micold_ai_ide::session::{Session, SessionLocation};
 use micold_ai_ide::terminal::{FakeHandle, TerminalHandle};
 use micold_ai_ide::worktree::{remove_worktree, Worktree, WorktreeStatus};
 use std::collections::HashMap;
@@ -45,8 +45,9 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
     });
     state.workspace.active = Some(repo.clone());
     state.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
-    let target_session = Session::start_new("feat-abc-123-x");
-    let other_session = Session::start_new("other");
+    let target_session =
+        Session::start_new(SessionLocation::Worktree("feat-abc-123-x".to_string()));
+    let other_session = Session::start_new(SessionLocation::Worktree("other".to_string()));
     let (target_id, other_id) = (target_session.id, other_session.id);
     state.update(Message::SessionStarted(target_session));
     state.update(Message::SessionStarted(other_session));

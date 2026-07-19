@@ -3,7 +3,7 @@
 use micold_ai_ide::app::{on_escape, Message, Overlay, State, WorktreeFormStatus};
 use micold_ai_ide::naming::ConventionalType;
 use micold_ai_ide::project::{Availability, Project};
-use micold_ai_ide::session::Session;
+use micold_ai_ide::session::{Session, SessionLocation};
 use micold_ai_ide::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -185,7 +185,7 @@ fn session_started_selected_and_closed() {
     });
     state.workspace.active = Some(path);
 
-    let session = Session::start_new("feat-x");
+    let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     let id = session.id;
     state.update(Message::SessionStarted(session));
     assert_eq!(state.active_session, Some(id));
@@ -206,6 +206,38 @@ fn session_started_selected_and_closed() {
     assert!(state.active_session.is_none());
 }
 
+// T015 (010-root-dir-session): a Default-located session enters `Workspace.sessions` exactly
+// like a worktree session. Note: `Message::SessionStartRequested` itself has no pure-reducer
+// effect for ANY location (it's an I/O trigger the binary consumes to spawn a PTY before
+// dispatching `SessionStarted` — see `src/app.rs`'s `on_escape`-adjacent no-op arm list); the
+// pure-core assertion point is `SessionStarted`, exercised identically to the existing
+// `session_started_selected_and_closed` test above.
+#[test]
+fn default_session_started_enters_workspace_sessions() {
+    let mut state = State::default();
+    let path = PathBuf::from("/repo");
+    state.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(path);
+
+    let session = Session::start_new(SessionLocation::Default);
+    let id = session.id;
+    state.update(Message::SessionStarted(session));
+
+    assert_eq!(state.active_session, Some(id));
+    assert_eq!(state.active_sessions().len(), 1);
+    assert_eq!(
+        state.active_sessions()[0].location,
+        SessionLocation::Default
+    );
+    // The Default row's own expansion flag opens, not the worktree `expanded` set.
+    assert!(state.default_expanded);
+}
+
 // --- Feature 008 US2: worktree delete reducer ---
 
 fn state_with_worktree_and_session(dir: &str) -> State {
@@ -224,7 +256,7 @@ fn state_with_worktree_and_session(dir: &str) -> State {
         branch: Some(format!("feat/{dir}")),
         status: WorktreeStatus::Valid,
     });
-    let session = Session::start_new(dir);
+    let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
     state.update(Message::SessionStarted(session));
     state
 }

@@ -44,6 +44,9 @@ pub struct TreeItem<'a, M> {
     /// A pre-built trailing cluster (e.g. hover-revealed row actions). When set it replaces the
     /// simple `trailing` icon button. Carries its own lifetime `'a`.
     pub trailing_custom: Option<Element<'a, M>>,
+    /// A hover tooltip describing the row's own location (feature 010, FR-010) — distinct from
+    /// `trailing_tooltip`, which describes only the trailing action button.
+    pub row_tooltip: Option<String>,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
@@ -67,8 +70,16 @@ impl<'a, M> TreeItem<'a, M> {
             on_hover: None,
             on_unhover: None,
             trailing_custom: None,
+            row_tooltip: None,
             _marker: std::marker::PhantomData,
         }
+    }
+
+    /// A hover tooltip describing this row's own location (feature 010, FR-010) — shown for
+    /// the whole row, not just a trailing action.
+    pub fn row_tooltip(mut self, text: impl Into<String>) -> Self {
+        self.row_tooltip = Some(text.into());
+        self
     }
 
     /// Emit `on_hover` when the pointer enters the row and `on_unhover` when it leaves
@@ -274,7 +285,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
 
             // Wrap the row in a mouse_area when it needs pointer interactions: a right-click
             // context menu and/or hover-reveal of its actions (feature 008).
-            let final_el: Element<'a, M> = if item.on_right_press.is_some()
+            let interactive: Element<'a, M> = if item.on_right_press.is_some()
                 || item.on_hover.is_some()
                 || item.on_unhover.is_some()
             {
@@ -291,6 +302,12 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 area.into()
             } else {
                 styled
+            };
+            // A row-level location tooltip (feature 010, FR-010) wraps everything, including any
+            // right-click/hover interaction area above.
+            let final_el: Element<'a, M> = match item.row_tooltip {
+                Some(tip) => super::Tooltip::new(interactive, tip, r).into(),
+                None => interactive,
             };
             col = col.push(final_el);
         }

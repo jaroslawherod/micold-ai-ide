@@ -7,7 +7,7 @@
 //! durable contract in `specs/002-project-workspace-management/contracts/storage-schema.md`.
 
 use crate::project::{Availability, Project};
-use crate::session::{Session, SessionId, SessionLabel};
+use crate::session::{Session, SessionId, SessionLabel, SessionLocation};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -81,14 +81,35 @@ struct StoredProject {
     worktree_display_names: BTreeMap<String, String>,
 }
 
-/// The persisted shape of a session (FR-020): identity, worktree binding, last-known title.
-/// Lifecycle and terminal buffers are never persisted (FR-021).
+/// The persisted shape of a session (FR-020): identity, location, last-known title. Lifecycle
+/// and terminal buffers are never persisted (FR-021). `worktree_dir` widened to
+/// `Option<String>` in feature 010 (contracts/010-root-dir-session/storage-schema.md):
+/// `Some(dir)` -> [`SessionLocation::Worktree`], `None`/absent -> [`SessionLocation::Default`].
+/// Every session persisted before feature 010 has `worktree_dir` as a plain JSON string, which
+/// `serde_json` deserializes into `Some(String)` unchanged — no migration, no schema bump.
 #[derive(Debug, Serialize, Deserialize)]
 struct StoredSession {
     id: uuid::Uuid,
-    worktree_dir: String,
+    #[serde(default)]
+    worktree_dir: Option<String>,
     #[serde(default)]
     title: Option<String>,
+}
+
+impl StoredSession {
+    fn location_to_stored(location: &SessionLocation) -> Option<String> {
+        match location {
+            SessionLocation::Worktree(dir) => Some(dir.clone()),
+            SessionLocation::Default => None,
+        }
+    }
+
+    fn stored_to_location(worktree_dir: Option<String>) -> SessionLocation {
+        match worktree_dir {
+            Some(dir) => SessionLocation::Worktree(dir),
+            None => SessionLocation::Default,
+        }
+    }
 }
 
 impl StoredCatalog {
@@ -110,7 +131,7 @@ impl StoredCatalog {
                             list.iter()
                                 .map(|s| StoredSession {
                                     id: s.id.0,
-                                    worktree_dir: s.worktree_dir.clone(),
+                                    worktree_dir: StoredSession::location_to_stored(&s.location),
                                     title: match &s.label {
                                         SessionLabel::Named(t) => Some(t.clone()),
                                         SessionLabel::Pending => None,
@@ -144,7 +165,11 @@ impl StoredCatalog {
                             Some(t) => SessionLabel::Named(t),
                             None => SessionLabel::Pending,
                         };
-                        Session::restored(SessionId::from_uuid(s.id), s.worktree_dir, label)
+                        Session::restored(
+                            SessionId::from_uuid(s.id),
+                            StoredSession::stored_to_location(s.worktree_dir),
+                            label,
+                        )
                     })
                     .collect();
                 if !restored.is_empty() {
