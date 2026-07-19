@@ -9,7 +9,7 @@
 //! keystrokes back to the PTY.
 
 use crate::ui::material::{ContextMenu, IconButton, MenuItem, TerminalPane, Tooltip};
-use crate::ui::style;
+use crate::ui::{icon, style};
 use alacritty_terminal::event::VoidListener;
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Point, Side};
@@ -22,6 +22,7 @@ use iced::widget::{button, column, container, row, text, Space};
 use iced::{Alignment, Color, Element, Font, Length};
 use micold_ai_ide::app::SelectKind;
 use micold_ai_ide::app::{Message, State};
+use micold_ai_ide::icons::Icon;
 use micold_ai_ide::provider::{AiCliProvider, ClaudeProvider};
 use micold_ai_ide::session::{
     mode_glyph, mode_tooltip, SessionId, SessionLifecycle, ShellLifecycle, TerminalMode,
@@ -690,19 +691,12 @@ pub fn pane<'a>(
         None => body,
     };
 
-    // A slim bottom status bar: the mode toggle + current session name (left) and its attached-
-    // process status (right). A live activity indicator (spinner/idle icon) is a planned
-    // follow-up feature.
+    // A slim bottom status bar: the current session name (left) and its attached-process status
+    // (right), with the mode toggle anchored in the bottom-right corner as the bar's last
+    // element. A live activity indicator (spinner/idle icon) is a planned follow-up feature.
     let mode = session_mode(state, active);
     let status = session_status(state, active);
-    let toggle: Element<'a, Message> = Tooltip::new(
-        IconButton::new(mode_glyph(mode), r).on_press(Message::TerminalModeToggled),
-        mode_tooltip(mode),
-        r,
-    )
-    .into();
     let mut bar = row![
-        toggle,
         text(session_title(state, active)).size(type_scale::LABEL),
         Space::with_width(Length::Fill),
         text(status).size(type_scale::LABEL).style(style::muted(r)),
@@ -725,19 +719,34 @@ pub fn pane<'a>(
         );
     }
     // While the terminal holds focus, offer an explicit way out (FR-011) alongside the reserved
-    // Ctrl+Shift+E chord and click-outside.
+    // Ctrl+Shift+E chord and click-outside. Uses `Icon::ReleaseFocus` rather than a raw `⎋`
+    // text character — that character isn't covered by the bundled Material Symbols font (or
+    // any default UI font glyph set) and rendered as a tofu box.
     if state.terminal_focused {
         bar = bar.push(
             button(
-                text("⎋ release focus (Ctrl+Shift+E)")
-                    .size(type_scale::LABEL)
-                    .style(style::muted(r)),
+                row![
+                    icon(Icon::ReleaseFocus, type_scale::LABEL, r.on_surface_variant),
+                    text("release focus (Ctrl+Shift+E)")
+                        .size(type_scale::LABEL)
+                        .style(style::muted(r)),
+                ]
+                .spacing(spacing::XS)
+                .align_y(Alignment::Center),
             )
             .padding(spacing::XS)
             .style(style::text_button(r))
             .on_press(Message::TerminalFocusReleased),
         );
     }
+    // The mode toggle anchors the bar's bottom-right corner (spec Clarifications, 2026-07-18) —
+    // pushed last so it always sits at the far right regardless of which other controls are
+    // present.
+    bar = bar.push(Tooltip::new(
+        IconButton::new(mode_glyph(mode), r).on_press(Message::TerminalModeToggled),
+        mode_tooltip(mode),
+        r,
+    ));
     let bottom_bar = container(bar)
         .width(Length::Fill)
         .padding(spacing::SM)

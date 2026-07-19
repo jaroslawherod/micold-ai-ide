@@ -59,6 +59,8 @@ pub enum Icon {
     AiCli,
     /// The regular/plain shell terminal mode (feature 010).
     RegularTerminal,
+    /// Release the terminal's keyboard focus (feature 006/010 bottom bar).
+    ReleaseFocus,
 }
 
 impl Icon {
@@ -86,6 +88,7 @@ impl Icon {
         Icon::Filter,
         Icon::AiCli,
         Icon::RegularTerminal,
+        Icon::ReleaseFocus,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -112,8 +115,9 @@ impl Icon {
             Icon::Delete => '\u{e872}',
             Icon::Copy => '\u{e14d}',
             Icon::Filter => '\u{e152}',
-            Icon::AiCli => '\u{f882}',
+            Icon::AiCli => '\u{e65f}',
             Icon::RegularTerminal => '\u{eb8e}',
+            Icon::ReleaseFocus => '\u{e31a}',
         }
     }
 }

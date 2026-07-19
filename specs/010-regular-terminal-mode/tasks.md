@@ -40,8 +40,17 @@ reference it — two new icon glyphs (no other new dependency; research R7).
   `assets/fonts/PROVENANCE.md`'s codepoint table (research R7). Chosen + visually verified by
   rendering both glyphs: `Icon::AiCli` = `smart_toy` `U+F882`, `Icon::RegularTerminal` =
   `terminal` `U+EB8E`.
+  **Superseded** (post-implementation user feedback: "use more explicit icons" + a rendered
+  screenshot showing the release-focus control's tofu box): `Icon::AiCli` is now `auto_awesome`
+  `U+E65F` (a sparkle — the icon Google's own products use as the universal "AI-powered"
+  indicator; the U+F882 codepoint originally labeled `smart_toy` here was actually the
+  upstream manifest's `robot` glyph — `smart_toy` is really `U+F06C` — so the old label was
+  wrong regardless). A third variant, `Icon::ReleaseFocus` = `keyboard_hide` `U+E31A`, was also
+  added to replace the bottom bar's literal `⎋` (U+238B) text character, which the bundled
+  Material Symbols font does not cover and rendered as a tofu box (see T020a).
 - [X] T002 Update `tests/icons.rs`'s pinned `expected()` codepoint table to regression-lock the
-  two new icons chosen in T001 (depends on T001).
+  two new icons chosen in T001 (depends on T001). Extended again for the T001 supersession above
+  (`AiCli` → `E65F`, new `ReleaseFocus` → `E31A`).
 
 ---
 
