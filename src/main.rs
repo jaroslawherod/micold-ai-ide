@@ -11,7 +11,8 @@ mod ui;
 use iced::time::every;
 use iced::{Subscription, Task};
 use micold_ai_ide::app::{
-    Message, Overlay, RenameDraft, SettingsDraft, State, WorktreeForm, WorktreeRenameDraft,
+    Message, Overlay, RenameDraft, SettingsDraft, State, WorktreeForm, WorktreeFormStatus,
+    WorktreeRenameDraft,
 };
 use micold_ai_ide::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_ai_ide::git::{Git, GitCli};
@@ -543,25 +544,35 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             persist_settings(&app.core);
             Task::none()
         }
-        // Validate the form, then create the worktree via git (FR-006/006b).
+        // Validate the form, then create the worktree (incl. any submodule fetch) via git,
+        // off the update() thread so a slow fetch doesn't freeze the UI (feature 010,
+        // research R4). AddWorktreeSubmitted/WorktreeCreated/WorktreeCreateFailed keep their
+        // existing meaning; WorktreeCreateStarted is dispatched first so the form can show it.
         Message::AddWorktreeSubmitted => {
             app.core.update(Message::AddWorktreeSubmitted);
             let Some(form) = app.core.worktree_form.clone() else {
                 return Task::none();
             };
+            if form.status != WorktreeFormStatus::Editing {
+                return Task::none(); // a create is already in flight — no double-submit.
+            }
             let Ok(names) = form.preview() else {
                 return Task::none(); // validation error already recorded by the reducer
             };
             let Some(repo) = app.core.workspace.active.clone() else {
                 return Task::none();
             };
-            match create(&repo, &names) {
-                Ok(worktree) => app.core.update(Message::WorktreeCreated(worktree)),
-                Err(err) => app
-                    .core
-                    .update(Message::WorktreeCreateFailed(describe_create_error(err))),
-            }
-            Task::none()
+            app.core.update(Message::WorktreeCreateStarted);
+            Task::perform(async move { create(&repo, &names) }, |result| {
+                let (inner_result, progress) = match result {
+                    Ok((worktree, progress)) => (Ok(worktree), progress),
+                    Err((err, progress)) => (Err(describe_create_error(err)), progress),
+                };
+                Message::WorktreeCreationDone {
+                    result: inner_result,
+                    progress,
+                }
+            })
         }
         // Start a new session on a worktree: spawn `claude` and stream it (FR-010/012/013).
         Message::SessionStartRequested { worktree_dir } => {
@@ -645,6 +656,15 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             if let Some(id) = app.core.active_session {
                 ensure_attached_process(app, id);
             }
+            Task::none()
+        }
+        // Worktree creation completed: apply progress to the form, then dispatch the result
+        // (success or failure). This splits the combined result into two state transitions so
+        // progress is displayed before the form closes or error shows (feature 010 follow-up).
+        Message::WorktreeCreationDone { result, progress } => {
+            app.core
+                .update(Message::WorktreeCreationDone { result, progress });
+            persist(&app.core);
             Task::none()
         }
         // Stream live keystrokes/paste to the displayed session's currently-ATTACHED process
@@ -1110,21 +1130,28 @@ fn discover_worktrees(repo: &Path) -> Vec<Worktree> {
 }
 
 /// Create a branch + worktree, removing the target dir if the git step fails (FR-006/006b).
+/// Returns both the result and the progress log so the binary can display progress to the user.
 fn create(
     repo: &Path,
     names: &micold_ai_ide::naming::DerivedNames,
-) -> Result<Worktree, CreateError> {
+) -> Result<(Worktree, Vec<String>), (CreateError, Vec<String>)> {
     let git = GitCli::new();
     let root = repo.join(".claude/worktrees");
     let target = root.join(&names.dir_name);
     let _ = std::fs::create_dir_all(&root);
     let target_exists = target.exists() && dir_nonempty(&target);
-    let result = create_worktree(&git, repo, &target, names, target_exists);
+    let mut progress = Vec::new();
+    let result = create_worktree(&git, repo, &target, names, target_exists, &mut |line| {
+        progress.push(line);
+    });
     if result.is_err() {
         // CleanupStep::RemoveDir (the fs half of the rollback plan).
         let _ = std::fs::remove_dir_all(&target);
     }
-    result
+    match result {
+        Ok(wt) => Ok((wt, progress)),
+        Err(err) => Err((err, progress)),
+    }
 }
 
 fn describe_create_error(err: CreateError) -> String {

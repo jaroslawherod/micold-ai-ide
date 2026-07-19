@@ -87,6 +87,18 @@ Creating a worktree makes the new git branch and worktree for you — no manual 
 name collides with an existing worktree or branch, creation is blocked with a message. If anything
 fails partway, the app rolls back so no half-created branch or directory is left behind.
 
+If the project uses git submodules, they're fetched automatically as part of creating the
+worktree — including submodules nested inside other submodules — so the new worktree is ready to
+use immediately, with no extra `git submodule` commands to run yourself. Projects without
+submodules are unaffected. While a worktree is being created, the form shows a "Creating
+worktree…" state — this can take a little longer than usual for a repository with submodules to
+fetch, so it's expected rather than a sign the app is stuck.
+
+If fetching a submodule fails (for example, a network problem or a private submodule remote you
+aren't authenticated against), the worktree is not created — the branch and directory are rolled
+back the same way any other creation failure is, and the error names the submodule that failed
+and why, so you can fix the problem and try again.
+
 > Naming formats are fixed in this version and are intended to become configurable later.
 
 ## Managing a worktree (right-click)
