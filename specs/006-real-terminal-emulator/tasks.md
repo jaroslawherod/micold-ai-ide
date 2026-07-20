@@ -120,7 +120,7 @@ standalone terminal, character-by-character (no line buffering).
 > Write these FIRST and ensure they FAIL before implementation.
 
 - [X] T015 [P] [US2] Write failing pure tests for `keymap::encode` in `tests/keymap.rs` (`--no-default-features`): named-key base encodings; arrows/Home/End in and out of `app_cursor`; Ctrl+`a`..`z` full range incl. the **Ctrl+U == `\x15`** regression; reserved focus-out chord → `ReleaseFocus`; copy/paste chords → `Copy`/`Paste` (per-`cfg`); printable `text` → `Bytes`; unmapped → `Ignore`; totality (contracts/key-encoding.md).
-- [X] T016 [P] [US2] Write failing gui tests for `TerminalPane` mouse handling (`--features gui`), adapting iced_term's `view.rs` suite: left press/drag → `SelectStart`/`SelectUpdate` (single/double/triple = simple/semantic/lines); `MouseReport` when `TermMode::MOUSE_MODE`; Shift forces selection while mouse-mode; and the focus gate (`is_focused == false` ⇒ event `Ignored`) (contracts/terminal-render-input.md, FR-013, FR-013a, FR-013b, FR-009). *(Corrected 2026-07-20: originally named `tests/terminal_mouse.rs`, which was never created — the coverage landed inline: `press_routing_*` in `src/ui/material/terminal_pane.rs` for the report-vs-local routing, the Shift override and the focus gate; `fr_013a_*` / `sgr_mouse_report_*` / `no_mouse_report_when_mouse_mode_off` in `src/ui/terminal.rs` for the report encoding; `fr_013_*` there for selection extraction.)* ⚠️ **Coverage gap**: the click-cadence clause of this task — single/double/triple → `SelectKind::Simple`/`Semantic`/`Lines` — has **no test**. That mapping is inline in `on_event` (`terminal_pane.rs:559-561`) and is unreachable from a unit test for the same renderer reason as T055; closing it needs the same treatment (extract a pure `select_kind(click::Kind)` helper and assert it). Tracked as T057.
+- [X] T016 [P] [US2] Write failing gui tests for `TerminalPane` mouse handling (`--features gui`), adapting iced_term's `view.rs` suite: left press/drag → `SelectStart`/`SelectUpdate` (single/double/triple = simple/semantic/lines); `MouseReport` when `TermMode::MOUSE_MODE`; Shift forces selection while mouse-mode; and the focus gate (`is_focused == false` ⇒ event `Ignored`) (contracts/terminal-render-input.md, FR-013, FR-013a, FR-013b, FR-009). *(Corrected 2026-07-20: originally named `tests/terminal_mouse.rs`, which was never created — the coverage landed inline: `press_routing_*` in `src/ui/material/terminal_pane.rs` for the report-vs-local routing, the Shift override and the focus gate; `fr_013a_*` / `sgr_mouse_report_*` / `no_mouse_report_when_mouse_mode_off` in `src/ui/terminal.rs` for the report encoding; `fr_013_*` there for selection extraction.)* ✅ **Coverage gap closed by T057**: the click-cadence clause of this task — single/double/triple → `SelectKind::Simple`/`Semantic`/`Lines` — had no test, since that mapping sat inline in `on_event` and was unreachable for the same renderer reason as T055. Now covered via the extracted pure `select_kind` helper.
 
 ### Implementation for User Story 2
 
@@ -304,14 +304,15 @@ through the scrollback and the scrollbar appears.
 
 ### Follow-up from the T028/T010/T016 reference audit
 
-- [ ] T057 [US2] Close the click-cadence coverage gap left by T016: the `click::Kind` →
-  `SelectKind` mapping at `src/ui/material/terminal_pane.rs:559-561` (single → `Simple`,
-  double → `Semantic`, triple → `Lines`, FR-013) has no test, because it sits inline in
-  `on_event`, which cannot be unit-tested (it takes a concrete `&iced::Renderer` needing a GPU —
-  see the T055 note). Apply the same treatment: extract a pure `select_kind(click::Kind) ->
-  SelectKind` helper, dispatch on it from `on_event`, and assert all three cadences in the inline
-  `#[cfg(test)] mod tests`. Not a BUG-002 task — surfaced by the 2026-07-20 audit that found three
-  gui test files named in tasks/plan had never been created.
+- [X] T057 [US2] Close the click-cadence coverage gap left by T016: the `click::Kind` →
+  `SelectKind` mapping (single → `Simple`, double → `Semantic`, triple → `Lines`, FR-013) had no
+  test, because it sat inline in `on_event`, which cannot be unit-tested (it takes a concrete
+  `&iced::Renderer` needing a GPU — see the T055 note). Extracted a pure
+  `select_kind(click::Kind) -> SelectKind` helper in `src/ui/material/terminal_pane.rs`, which
+  `on_event`'s left-press branch now calls; all three cadences asserted in the inline
+  `#[cfg(test)] mod tests`. No behaviour change — the same match, moved somewhere it can be
+  tested. Not a BUG-002 task — surfaced by the 2026-07-20 audit that found three gui test files
+  named in tasks/plan had never been created.
 
 **Checkpoint**: Touchpad scrolling moves the viewport on every supported platform and windowing
 system; discrete-wheel behavior is unchanged.

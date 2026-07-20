@@ -87,6 +87,20 @@ pub(crate) fn press_routing(focused: bool, mouse_mode: bool, shift: bool) -> Pre
     }
 }
 
+/// Selection granularity for a click cadence: one click selects characters, two the word under
+/// the pointer, three the whole line (FR-013).
+///
+/// Factored out of `on_event` for the same reason as [`press_routing`] and [`wheel_routing`] —
+/// `on_event` takes a concrete `&iced::Renderer` that needs a GPU device, so anything left inline
+/// there cannot be unit-tested (T057).
+pub(crate) fn select_kind(kind: click::Kind) -> SelectKind {
+    match kind {
+        click::Kind::Single => SelectKind::Simple,
+        click::Kind::Double => SelectKind::Semantic,
+        click::Kind::Triple => SelectKind::Lines,
+    }
+}
+
 /// What a wheel event does once [`wheel_lines`] has resolved it to whole lines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WheelRouting {
@@ -555,11 +569,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     state.reported_cell = Some((col, line));
                 } else {
                     let c = Click::new(pos, mouse::Button::Left, state.last_click);
-                    let kind = match c.kind() {
-                        click::Kind::Single => SelectKind::Simple,
-                        click::Kind::Double => SelectKind::Semantic,
-                        click::Kind::Triple => SelectKind::Lines,
-                    };
+                    let kind = select_kind(c.kind());
                     state.last_click = Some(c);
                     state.dragging = true;
                     shell.publish(Message::TerminalSelectStart { col, line, kind });
@@ -863,6 +873,24 @@ mod tests {
             press_routing(false, true, false),
             PressRouting::HandleLocally
         );
+    }
+
+    // --- Click cadence → selection granularity (T057, FR-013) ---
+
+    #[test]
+    fn a_single_click_starts_a_plain_character_selection() {
+        assert_eq!(select_kind(click::Kind::Single), SelectKind::Simple);
+    }
+
+    #[test]
+    fn a_double_click_selects_the_word_under_the_pointer() {
+        // "Semantic" is alacritty's word-granularity selection — the usual double-click-a-word.
+        assert_eq!(select_kind(click::Kind::Double), SelectKind::Semantic);
+    }
+
+    #[test]
+    fn a_triple_click_selects_whole_lines() {
+        assert_eq!(select_kind(click::Kind::Triple), SelectKind::Lines);
     }
 
     // --- Wheel delta → lines (BUG-002: touchpad scrolling under Wayland) ---
