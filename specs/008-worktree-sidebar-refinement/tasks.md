@@ -225,7 +225,7 @@ reaches the user (FR-023b). Satisfies SC-004a and closes reopened T018/T024.
 
 - [X] T054 [US2] In `src/main.rs` (`WorktreeDeleteConfirmed`), treat `io::ErrorKind::NotFound` from the post-removal `fs::remove_dir_all` as success and suppress the notification; report only other error kinds. Mirror the existing create-rollback treatment at `CleanupStep::RemoveDir`. Makes T051/T052 green and closes T024's "idempotent" requirement.
 - [X] T055 [US2] In `src/git.rs`, stop `GitCli::worktree_remove` from discarding git failures — propagate the error so FR-023/FR-023b's path is reachable in the shipped app, keeping "already-absent worktree" idempotent (the rollback case the current swallow was protecting). Makes T053 green.
-- [ ] T056 [P] [US2] Re-run the delete section of `quickstart.md` manually: delete a worktree with a running session and confirm the sidebar updates with no error banner.
+- [ ] T056 [P] [US2] Re-run the delete section of `quickstart.md` manually: delete a worktree with a running session and confirm the sidebar updates with no error banner. (Attempted 2026-07-20 — inconclusive: the delete was reported as showing no error banner, but the only instance confirmed running at the time was the installed `/usr/bin` build of 2026-07-18, which predates this fix. Re-run against a build verified to come from this branch.)
 
 **Checkpoint**: Deleting a worktree is silent on success and still loud on genuine failure.
 
