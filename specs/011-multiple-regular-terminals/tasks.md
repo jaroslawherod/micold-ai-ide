@@ -471,3 +471,15 @@ implementation, found by `/speckit-converge` after Phase 7 was completed.
   simply untouched (still `NotStarted`/`Exited`), so its restart affordance stays visible and the
   same button can be pressed again. Verified: `cargo fmt --check`, both build configs, both test
   suites (0 failures), and `cargo clippy --all-targets` (both configs) all clean.
+  **Follow-up hardening** (same fix pass): `ensure_attached_process`'s `Regular` branch was
+  additionally guarded so it only ever spawns for an `active_shell` instance that is still
+  `Starting` (freshly opened, never yet spawned) — previously it would spawn for *any*
+  `active_shell` id, which meant toggling modes (or `close_shell`'s FR-012 fallback reassigning
+  `active_shell` to an already-`Exited` sibling) could silently auto-respawn an exited instance,
+  contradicting FR-008's "no automatic restart on unexpected exit". An already-`Exited` instance
+  now only restarts via the explicit `Message::ShellInstanceRestartRequested` path. Also added a
+  `still_open` guard to `ShellInstanceRestartRequested`'s own handler so a restart request for an
+  id that was closed in the meantime is a no-op rather than resurrecting a removed instance.
+  Deduplicated the repeated spawn-success/failure block across all three call sites into
+  `spawn_and_register_shell_instance`. Re-verified clean after this follow-up: `cargo fmt --check`,
+  both build configs, both test suites, `cargo clippy --all-targets` (both configs).

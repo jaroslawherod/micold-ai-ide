@@ -21,7 +21,7 @@ use micold_ai_ide::provider::{AiCliProvider, ClaudeProvider};
 use micold_ai_ide::selector::{Selector, SelectorStatus};
 use micold_ai_ide::session::{
     RestartDecision, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation,
-    ShellInstanceId, TerminalMode,
+    ShellInstanceId, ShellLifecycle, TerminalMode,
 };
 use micold_ai_ide::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_ai_ide::store::{JsonFileStore, ProjectStore};
@@ -692,8 +692,15 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     .terminals
                     .get(&id)
                     .is_some_and(|st| st.shells.contains_key(&shell_id));
-                if let (false, Some((cwd, _, _))) = (
+                let still_open = app
+                    .core
+                    .active_sessions()
+                    .iter()
+                    .find(|s| s.id == id)
+                    .is_some_and(|s| s.shells.iter().any(|sh| sh.id == shell_id));
+                if let (false, true, Some((cwd, _, _))) = (
                     already_running,
+                    still_open,
                     session_cwd_mode_and_active_shell(&app.core, id),
                 ) {
                     // Spawn first, only transition pure state on success (mirrors
@@ -701,21 +708,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     // `Starting` before the spawn is attempted would strand the instance there
                     // forever if `spawn_shell_pty` fails, since the restart affordance is only
                     // shown for `NotStarted`/`Exited` (convergence T034, FR-010).
-                    let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
-                    match spawn_shell_pty(&cwd, &env, app.scrollback_lines, app.last_grid) {
-                        Ok(rt) => {
-                            app.terminals
-                                .entry(id)
-                                .or_default()
-                                .shells
-                                .insert(shell_id, rt);
-                            app.core.update(Message::ShellInstanceRunning(id, shell_id));
-                            persist(&app.core);
-                        }
-                        Err(err) => app
-                            .core
-                            .notify_error(format!("Could not start the shell: {err}")),
-                    }
+                    spawn_and_register_shell_instance(app, id, shell_id, &cwd);
+                    persist(&app.core);
                 }
             }
             Task::none()
@@ -735,21 +729,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         return Task::none();
                     };
                     let shell_id = session.open_shell_instance();
-                    let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
-                    match spawn_shell_pty(&cwd, &env, app.scrollback_lines, app.last_grid) {
-                        Ok(rt) => {
-                            app.terminals
-                                .entry(id)
-                                .or_default()
-                                .shells
-                                .insert(shell_id, rt);
-                            app.core.update(Message::ShellInstanceRunning(id, shell_id));
-                            persist(&app.core);
-                        }
-                        Err(err) => app
-                            .core
-                            .notify_error(format!("Could not start the shell: {err}")),
-                    }
+                    spawn_and_register_shell_instance(app, id, shell_id, &cwd);
+                    persist(&app.core);
                 }
             }
             Task::none()
@@ -1222,6 +1203,32 @@ fn session_cwd_mode_and_active_shell(
     Some((cwd, session.mode, session.active_shell))
 }
 
+/// Spawn a shell process for `shell_id` and, on success, register it as that instance's runtime
+/// and dispatch `ShellInstanceRunning`; on failure, surface the error (never dropped — the same
+/// silent-failure fix as `SessionStartRequested`, feature 005 FR-017). Shared by every call site
+/// that spawns a Regular Terminal instance's process (feature 011).
+fn spawn_and_register_shell_instance(
+    app: &mut App,
+    id: SessionId,
+    shell_id: ShellInstanceId,
+    cwd: &Path,
+) {
+    let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
+    match spawn_shell_pty(cwd, &env, app.scrollback_lines, app.last_grid) {
+        Ok(rt) => {
+            app.terminals
+                .entry(id)
+                .or_default()
+                .shells
+                .insert(shell_id, rt);
+            app.core.update(Message::ShellInstanceRunning(id, shell_id));
+        }
+        Err(err) => app
+            .core
+            .notify_error(format!("Could not start the shell: {err}")),
+    }
+}
+
 /// Ensure the process matching `id`'s current mode is attached/running, spawning it if there is
 /// nothing to reattach to (feature 010, FR-003/FR-004/FR-005/FR-011) — reattaches to an
 /// already-running process for free (no spawn call at all); only reaches the process boundary
@@ -1243,9 +1250,6 @@ fn ensure_attached_process(app: &mut App, id: SessionId) {
     if already_attached {
         return;
     }
-    // A failed spawn is reported, never dropped: discarding it here would leave the mode toggle
-    // doing nothing at all with no explanation — the same silent failure fixed for
-    // `SessionStartRequested` (feature 005 FR-017).
     match mode {
         TerminalMode::AiCli => {
             match spawn_pty(
@@ -1264,7 +1268,24 @@ fn ensure_attached_process(app: &mut App, id: SessionId) {
         }
         TerminalMode::Regular => {
             let shell_id = match active_shell {
-                Some(shell_id) => shell_id,
+                // Only reattach here for an instance that has never been spawned yet (freshly
+                // opened via `open_shell_instance`, still `Starting`) — an instance that has
+                // already `Exited` must never be auto-respawned (FR-008), even if `active_shell`
+                // now names it because `Session::close_shell` reassigned it there as the fallback
+                // after closing a sibling. That case requires the user's explicit
+                // `Message::ShellInstanceRestartRequested`.
+                Some(shell_id)
+                    if app
+                        .core
+                        .active_sessions()
+                        .iter()
+                        .find(|s| s.id == id)
+                        .and_then(|s| s.shells.iter().find(|sh| sh.id == shell_id))
+                        .is_some_and(|sh| sh.lifecycle == ShellLifecycle::Starting) =>
+                {
+                    shell_id
+                }
+                Some(_) => return,
                 None => {
                     // The session has never had a Regular Terminal instance — open its first one
                     // lazily (feature 011 FR-007), mirroring feature 010's original "start the
@@ -1275,20 +1296,7 @@ fn ensure_attached_process(app: &mut App, id: SessionId) {
                     session.open_shell_instance()
                 }
             };
-            let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
-            match spawn_shell_pty(&cwd, &env, app.scrollback_lines, app.last_grid) {
-                Ok(rt) => {
-                    app.terminals
-                        .entry(id)
-                        .or_default()
-                        .shells
-                        .insert(shell_id, rt);
-                    app.core.update(Message::ShellInstanceRunning(id, shell_id));
-                }
-                Err(err) => app
-                    .core
-                    .notify_error(format!("Could not start the shell: {err}")),
-            }
+            spawn_and_register_shell_instance(app, id, shell_id, &cwd);
         }
     }
 }
