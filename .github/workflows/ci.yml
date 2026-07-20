@@ -26,14 +26,14 @@ jobs:
       - name: clippy (gui)
         run: cargo clippy --features gui --all-targets -- -D warnings
 
-  # Constitution Principle VI calls for Linux, macOS, and Windows, but macOS/Windows are
-  # disabled for now (matrix trimmed to Linux only).
+  # Constitution Principle VI: Linux, macOS, and Windows. `fail-fast: false` so one platform's
+  # failure still reports the others — the point of the matrix is seeing *which* platforms differ.
   test:
     name: build + test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

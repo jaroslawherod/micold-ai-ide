@@ -72,7 +72,7 @@ existing line-input box still sends commands, so the pane is usable as an MVP.)
 
 > Write these FIRST and ensure they FAIL before implementation.
 
-- [X] T010 [P] [US1] Write failing gui tests for the color/style mapping in `tests/terminal_palette.rs` (run with `--features gui`): `ansi::Color::Spec` → truecolor; `Indexed(0..=15)`/`Named` → 16+bright+dim palette; `Indexed(16..)` → 256-cube; and default fg/bg derive from a given light/dark theme (contracts/terminal-render-input.md, research R3).
+- [X] T010 [P] [US1] Write failing gui tests for the color/style mapping (run with `--features gui`): `ansi::Color::Spec` → truecolor; `Indexed(0..=15)`/`Named` → 16+bright+dim palette; `Indexed(16..)` → 256-cube; and default fg/bg derive from a given light/dark theme (contracts/terminal-render-input.md, research R3). *(Corrected 2026-07-20: originally named `tests/terminal_palette.rs`, which was never created — the coverage landed in the inline `#[cfg(test)] mod tests` of `src/ui/terminal.rs`: `spec_maps_to_truecolor`, `indexed_0_to_15_use_the_ansi16_palette`, `named_black_and_bright_white_match_ansi16`, `indexed_256_cube_starts_at_black`, `default_fg_bg_follow_the_theme`, plus `inverse_flag_swaps_fg_and_bg` / `selected_cells_swap_fg_and_bg` / `selection_over_inverse_cell_cancels_the_swap`. All four stated areas are covered.)*
 
 ### Implementation for User Story 1
 
@@ -120,7 +120,7 @@ standalone terminal, character-by-character (no line buffering).
 > Write these FIRST and ensure they FAIL before implementation.
 
 - [X] T015 [P] [US2] Write failing pure tests for `keymap::encode` in `tests/keymap.rs` (`--no-default-features`): named-key base encodings; arrows/Home/End in and out of `app_cursor`; Ctrl+`a`..`z` full range incl. the **Ctrl+U == `\x15`** regression; reserved focus-out chord → `ReleaseFocus`; copy/paste chords → `Copy`/`Paste` (per-`cfg`); printable `text` → `Bytes`; unmapped → `Ignore`; totality (contracts/key-encoding.md).
-- [X] T016 [P] [US2] Write failing gui tests for `TerminalPane` mouse handling in `tests/terminal_mouse.rs` (`--features gui`), adapting iced_term's `view.rs` suite: left press/drag → `SelectStart`/`SelectUpdate` (single/double/triple = simple/semantic/lines); `MouseReport` when `TermMode::MOUSE_MODE`; Shift forces selection while mouse-mode; and the focus gate (`is_focused == false` ⇒ event `Ignored`) (contracts/terminal-render-input.md, FR-013, FR-013a, FR-013b, FR-009).
+- [X] T016 [P] [US2] Write failing gui tests for `TerminalPane` mouse handling (`--features gui`), adapting iced_term's `view.rs` suite: left press/drag → `SelectStart`/`SelectUpdate` (single/double/triple = simple/semantic/lines); `MouseReport` when `TermMode::MOUSE_MODE`; Shift forces selection while mouse-mode; and the focus gate (`is_focused == false` ⇒ event `Ignored`) (contracts/terminal-render-input.md, FR-013, FR-013a, FR-013b, FR-009). *(Corrected 2026-07-20: originally named `tests/terminal_mouse.rs`, which was never created — the coverage landed inline: `press_routing_*` in `src/ui/material/terminal_pane.rs` for the report-vs-local routing, the Shift override and the focus gate; `fr_013a_*` / `sgr_mouse_report_*` / `no_mouse_report_when_mouse_mode_off` in `src/ui/terminal.rs` for the report encoding; `fr_013_*` there for selection extraction.)* ⚠️ **Coverage gap**: the click-cadence clause of this task — single/double/triple → `SelectKind::Simple`/`Semantic`/`Lines` — has **no test**. That mapping is inline in `on_event` (`terminal_pane.rs:559-561`) and is unreachable from a unit test for the same renderer reason as T055; closing it needs the same treatment (extract a pure `select_kind(click::Kind)` helper and assert it). Tracked as T057.
 
 ### Implementation for User Story 2
 
@@ -175,7 +175,7 @@ redraw; produce more output than fits and scroll back up to the scrollback limit
 
 > Write these FIRST and ensure they FAIL before implementation.
 
-- [X] T028 [P] [US4] Write failing gui tests in `tests/terminal_resize_scroll.rs` (`--features gui`): layout+cell-metrics → (cols, rows) computation; wheel delta → `Scroll(n)`; alt-screen scroll forwarded to the PTY vs local scrollback (adapting iced_term `view.rs`/`backend.rs` behavior) (contracts/terminal-render-input.md, research R5). *(BUG-002: the "wheel delta" coverage here was whole-line only; pixel-precision deltas are covered by T053 and widened by T055.)*
+- [X] T028 [P] [US4] Write failing gui tests (`--features gui`): layout+cell-metrics → (cols, rows) computation; wheel delta → `Scroll(n)`; alt-screen scroll forwarded to the PTY vs local scrollback (adapting iced_term `view.rs`/`backend.rs` behavior) (contracts/terminal-render-input.md, research R5). *(Corrected 2026-07-20: this task originally named `tests/terminal_resize_scroll.rs`, which was never created — the coverage landed as inline `#[cfg(test)]` modules instead: `grid_size_*` in `src/ui/terminal.rs` for the (cols, rows) computation, and the wheel/pointer tests in `src/ui/material/terminal_pane.rs`.)* *(BUG-002: the "wheel delta" coverage here was whole-line only; pixel-precision deltas are covered by T053 and the widget-level routing by T055.)*
 
 ### Implementation for User Story 4
 
@@ -277,14 +277,41 @@ through the scrollback and the scrollbar appears.
   `WheelScrolled` arm for both the local-scrollback and mouse-report branches, replacing the
   per-event `.round()` that discarded any delta under one line. Make T053 pass (FR-016, FR-016b,
   FR-013a). Completed in `31a6e48`.
-- [ ] T055 [BUG-002] ⚠️ Reopened scope of T028 — extend `tests/terminal_resize_scroll.rs` so the
-  widget-level wheel coverage exercises pixel-precision deltas end-to-end (event → `TerminalScrolled`
-  / mouse report), not just the pure mapping helper. T028 tested only whole-line deltas, which is
+- [X] T055 [BUG-002] ⚠️ Reopened scope of T028 — cover the wheel *routing* branch, which T028 left
+  untested: a non-mouse-reporting or unfocused pane scrolls the local scrollback, while a focused
+  pane over a mouse-reporting process emits one wheel report (button 64 up / 65 down) per
+  accumulated line, and a gesture of sub-line `ScrollDelta::Pixels` events reaches each of those
+  outcomes once the residual crosses a cell height. T028 tested only whole-line deltas, which is
   why BUG-002 was invisible to CI on every platform.
+  **Approach changed during implementation (2026-07-20).** Driving `Widget::on_event` directly is
+  not achievable: its signature takes a concrete `&iced::Renderer`, which resolves to
+  `iced_wgpu::Renderer` and needs a real GPU device. A test requiring one would not run on the
+  headless CI runners — reintroducing exactly the blind spot BUG-002 was about (see the Principle
+  VI amendment in `plan.md`). Instead the routing decision was extracted into a pure
+  `wheel_routing(lines, focused, mouse_mode) -> WheelRouting` helper in
+  `src/ui/material/terminal_pane.rs`, mirroring the existing `press_routing` — which exists for
+  this same reason — and `on_event`'s `WheelScrolled` arm now dispatches on it (no behaviour
+  change; the `Ignore` arm still falls through unhandled so sub-line travel stays banked). Six
+  tests added to the inline `#[cfg(test)] mod tests` (`cargo test --features gui --bins`): both
+  routing branches, the unfocused case, the sub-line no-op, and two whole-gesture tests composing
+  `wheel_lines` + `wheel_routing` over the local-scrollback and mouse-report (FR-013a) paths.
+  *(Retargeted 2026-07-20: originally named `tests/terminal_resize_scroll.rs`, a file that was
+  never created — see the T028 correction.)*
 - [X] T056 [BUG-002] Update `docs/user-guide/worktrees-and-sessions.md` (T031) to state that
   scrolling works with a mouse wheel *and* a touchpad/precision pointing device (Principle VII).
   Also documents the scrollbar's hide-at-live-bottom behavior, since "no scrollbar" was the
   user-visible face of BUG-002 and is otherwise easy to read as a defect.
+
+### Follow-up from the T028/T010/T016 reference audit
+
+- [ ] T057 [US2] Close the click-cadence coverage gap left by T016: the `click::Kind` →
+  `SelectKind` mapping at `src/ui/material/terminal_pane.rs:559-561` (single → `Simple`,
+  double → `Semantic`, triple → `Lines`, FR-013) has no test, because it sits inline in
+  `on_event`, which cannot be unit-tested (it takes a concrete `&iced::Renderer` needing a GPU —
+  see the T055 note). Apply the same treatment: extract a pure `select_kind(click::Kind) ->
+  SelectKind` helper, dispatch on it from `on_event`, and assert all three cadences in the inline
+  `#[cfg(test)] mod tests`. Not a BUG-002 task — surfaced by the 2026-07-20 audit that found three
+  gui test files named in tasks/plan had never been created.
 
 **Checkpoint**: Touchpad scrolling moves the viewport on every supported platform and windowing
 system; discrete-wheel behavior is unchanged.
@@ -337,7 +364,7 @@ original scope was met. Added Phase 10 (T053–T056) for the sub-line scroll acc
 ```bash
 # Write the failing tests first (parallel — different files):
 Task: "keymap::encode failing tests in tests/keymap.rs"          # T015
-Task: "TerminalPane mouse failing gui tests in tests/terminal_mouse.rs"  # T016
+Task: "TerminalPane mouse failing gui tests"                      # T016 (landed inline in src/ui/material/terminal_pane.rs)
 # Then implement (keymap before its widget consumers):
 Task: "Implement src/keymap.rs encode()"                          # T017
 Task: "TerminalPane keyboard on_event in src/ui/components/terminal_pane.rs"  # T018

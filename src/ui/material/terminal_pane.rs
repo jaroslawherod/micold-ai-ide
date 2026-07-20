@@ -87,6 +87,39 @@ pub(crate) fn press_routing(focused: bool, mouse_mode: bool, shift: bool) -> Pre
     }
 }
 
+/// What a wheel event does once [`wheel_lines`] has resolved it to whole lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WheelRouting {
+    /// Forward the scroll to the process as wheel reports (FR-013a) — `count` reports of
+    /// `button`, one per line.
+    MouseReport { button: u8, count: u32 },
+    /// Move the pane's own scrollback view by `lines` (FR-016).
+    ScrollLocally { lines: i32 },
+    /// Nothing to do: the travel so far is under one line and stays banked in the residual.
+    Ignore,
+}
+
+/// Route a wheel scroll between the process and the pane's own scrollback.
+///
+/// Mirrors [`press_routing`] for the wheel: reports are process *input*, so only a focused pane
+/// over a mouse-reporting process produces them; everything else scrolls our own view. `lines`
+/// is the already-accumulated whole-line count from [`wheel_lines`], so a gesture made entirely
+/// of sub-line touchpad deltas routes to [`WheelRouting::Ignore`] until the residual crosses a
+/// cell — which is the BUG-002 case, and why this is factored out where it can be tested.
+pub(crate) fn wheel_routing(lines: i32, focused: bool, mouse_mode: bool) -> WheelRouting {
+    if lines == 0 {
+        WheelRouting::Ignore
+    } else if focused && mouse_mode {
+        WheelRouting::MouseReport {
+            // Wheel-up is button 64, wheel-down 65, one report per line travelled.
+            button: if lines > 0 { 64 } else { 65 },
+            count: lines.unsigned_abs(),
+        }
+    } else {
+        WheelRouting::ScrollLocally { lines }
+    }
+}
+
 /// Whole lines of scrollback for a wheel `delta`, carrying the sub-line remainder in `residual`.
 ///
 /// Discrete wheels (and X11 touchpads, which arrive as legacy button-4/5 events) deliver
@@ -651,24 +684,28 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 // Sub-line deltas from a high-resolution touchpad accumulate rather than being
                 // rounded away, or fine-grained scrolling would never move at all (BUG-002).
                 let lines = wheel_lines(*delta, metrics.height, &mut state.scroll_residual);
-                if lines != 0 {
-                    if self.focused && self.rt.mouse_mode() {
+                match wheel_routing(lines, self.focused, self.rt.mouse_mode()) {
+                    WheelRouting::MouseReport { button, count } => {
                         let (col, line) = cursor
                             .position()
                             .map(|p| grid_at(p, bounds, metrics))
                             .unwrap_or((0, 0));
-                        let btn = if lines > 0 { 64 } else { 65 };
                         let km = to_keymap_mods(state.modifiers);
-                        for _ in 0..lines.abs() {
-                            if let Some(seq) = self.rt.mouse_report_bytes(btn, col, line, true, km)
+                        for _ in 0..count {
+                            if let Some(seq) =
+                                self.rt.mouse_report_bytes(button, col, line, true, km)
                             {
                                 shell.publish(Message::TerminalBytes(seq));
                             }
                         }
-                    } else {
-                        shell.publish(Message::TerminalScrolled(lines));
+                        return event::Status::Captured;
                     }
-                    return event::Status::Captured;
+                    WheelRouting::ScrollLocally { lines } => {
+                        shell.publish(Message::TerminalScrolled(lines));
+                        return event::Status::Captured;
+                    }
+                    // Sub-line travel is banked in the residual; leave the event unhandled.
+                    WheelRouting::Ignore => {}
                 }
             }
             _ => {}
@@ -953,6 +990,110 @@ mod tests {
                 &mut residual
             ),
             -3
+        );
+    }
+
+    // --- Wheel routing: local scrollback vs mouse report (T055, BUG-002 / FR-013a / FR-016b) ---
+
+    #[test]
+    fn wheel_scrolls_the_local_scrollback_when_the_process_has_no_mouse_reporting() {
+        // The ordinary case: the wheel drives our own scrollback view, not the process.
+        assert_eq!(
+            wheel_routing(3, true, false),
+            WheelRouting::ScrollLocally { lines: 3 }
+        );
+        assert_eq!(
+            wheel_routing(-2, true, false),
+            WheelRouting::ScrollLocally { lines: -2 }
+        );
+    }
+
+    #[test]
+    fn wheel_is_reported_to_a_focused_mouse_reporting_process() {
+        // A full-screen program that owns the mouse scrolls itself (FR-013a). Wheel-up is
+        // button 64 and wheel-down 65, one report per accumulated line.
+        assert_eq!(
+            wheel_routing(1, true, true),
+            WheelRouting::MouseReport {
+                button: 64,
+                count: 1
+            }
+        );
+        assert_eq!(
+            wheel_routing(-3, true, true),
+            WheelRouting::MouseReport {
+                button: 65,
+                count: 3
+            }
+        );
+    }
+
+    #[test]
+    fn wheel_on_an_unfocused_pane_scrolls_locally_rather_than_reporting() {
+        // Mouse reports are process input, so an unfocused pane must not generate them even
+        // while the process has mouse mode on — the wheel still moves our own view.
+        assert_eq!(
+            wheel_routing(2, false, true),
+            WheelRouting::ScrollLocally { lines: 2 }
+        );
+    }
+
+    #[test]
+    fn a_wheel_event_that_accumulated_no_whole_line_does_nothing() {
+        // The sub-line case must fall through unhandled so the event stays available to other
+        // widgets — it is banked in the residual, not consumed (BUG-002).
+        assert_eq!(wheel_routing(0, true, false), WheelRouting::Ignore);
+        assert_eq!(wheel_routing(0, true, true), WheelRouting::Ignore);
+    }
+
+    #[test]
+    fn a_sub_line_touchpad_gesture_eventually_scrolls_the_local_scrollback() {
+        // The whole BUG-002 defect end-to-end over the two helpers on_event composes: a gesture
+        // made only of sub-line pixel deltas must reach a real scroll rather than vanishing.
+        let cell = CellMetrics::new(TERM_FONT_SIZE).height; // 18.2
+        let mut residual = 0.0;
+        let mut scrolled = 0;
+
+        for _ in 0..4 {
+            let lines = wheel_lines(
+                mouse::ScrollDelta::Pixels { x: 0.0, y: 5.0 },
+                cell,
+                &mut residual,
+            );
+            if let WheelRouting::ScrollLocally { lines } = wheel_routing(lines, true, false) {
+                scrolled += lines;
+            }
+        }
+
+        assert_eq!(
+            scrolled, 1,
+            "four 5px touchpad deltas must scroll exactly one line, not zero (BUG-002)"
+        );
+    }
+
+    #[test]
+    fn a_sub_line_touchpad_gesture_eventually_reports_a_wheel_to_the_process() {
+        // The same gesture over the FR-013a path: a touchpad must generate wheel reports for a
+        // mouse-reporting process too, which the pre-BUG-002 quantization also prevented.
+        let cell = CellMetrics::new(TERM_FONT_SIZE).height;
+        let mut residual = 0.0;
+        let mut reports = Vec::new();
+
+        for _ in 0..4 {
+            let lines = wheel_lines(
+                mouse::ScrollDelta::Pixels { x: 0.0, y: 5.0 },
+                cell,
+                &mut residual,
+            );
+            if let WheelRouting::MouseReport { button, count } = wheel_routing(lines, true, true) {
+                reports.push((button, count));
+            }
+        }
+
+        assert_eq!(
+            reports,
+            vec![(64, 1)],
+            "the gesture must produce exactly one wheel-up report once the residual crosses a line"
         );
     }
 

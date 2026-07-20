@@ -42,7 +42,7 @@ Turn feature 005's plain-text embedded terminal into a real terminal emulator: r
 - [x] **III. Worktree Integration**: Unchanged and reaffirmed — sessions still run `claude` with cwd = the session's worktree. This is precisely why `iced_term`'s cwd-less backend is rejected. No manual git steps introduced.
 - [x] **IV. Local-First Storage (NON-NEGOTIABLE)**: The scrollback preference persists in the existing local settings file; live scrollback is in-memory only. Nothing leaves the device.
 - [x] **V. Rust + iced Stack**: Rust + iced 0.13 only; the terminal view is a native iced `advanced::Widget`. A dependency is *removed*, not added (`iced_term`); retained crates (`alacritty_terminal`, `portable-pty`) were already vetted in 005. Adapted MIT code is attributed. Enums make focus/lifecycle/term-mode states explicit.
-- [x] **VI. Cross-Platform Parity**: Color rendering, key encoding, resize, scroll, and copy/paste are platform-agnostic; platform-varying copy/paste chords (Cmd on macOS vs Ctrl+Shift elsewhere) are isolated in `keymap` behind `cfg`, mirroring iced_term's `platform_keyboard_bindings`. `portable-pty` and iced's clipboard cover all three OSes. CI builds/tests all three. **Amended 2026-07-20 (BUG-002)**: "scroll is platform-agnostic" was not true as implemented. Parity is not only a per-OS property — the *windowing system* changes the unit iced reports scroll travel in (X11: line-based; Wayland: pixel-based), and the wheel handler behaved correctly for one and not at all for the other. Building and testing on all three OSes did not catch it because CI exercised neither a Wayland session nor a pixel-precision device. Scroll handling must therefore be unit-agnostic by construction (FR-016b), since coverage alone will not surface this class of defect.
+- [x] **VI. Cross-Platform Parity**: Color rendering, key encoding, resize, scroll, and copy/paste are platform-agnostic; platform-varying copy/paste chords (Cmd on macOS vs Ctrl+Shift elsewhere) are isolated in `keymap` behind `cfg`, mirroring iced_term's `platform_keyboard_bindings`. `portable-pty` and iced's clipboard cover all three OSes. CI builds/tests all three. **Amended 2026-07-20 (BUG-002)**: "scroll is platform-agnostic" was not true as implemented. Parity is not only a per-OS property — the *windowing system* changes the unit iced reports scroll travel in (X11: line-based; Wayland: pixel-based), and the wheel handler behaved correctly for one and not at all for the other. The "CI builds/tests all three" claim above was also untrue when written — the matrix had been trimmed to `ubuntu-latest` only. That is corrected as of 2026-07-20 (all three OSes restored), but restoring it would **not** have caught BUG-002: hosted runners are headless, have no touchpad, and run no Wayland session, so the `ScrollDelta::Pixels` path is never exercised on any of them. Scroll handling must therefore be unit-agnostic by construction (FR-016b) and covered by unit tests over both delta variants, since no achievable CI matrix will surface this class of defect.
 - [x] **VII. Documentation First-Class**: The user guide gains terminal-usage docs (colors, focus in/out, control keys, copy/paste, mouse, scrollback) and the Settings form, in the same change; verified by the CI docs build.
 - [x] **VIII. Reusable UI Component Foundation**: `TerminalPane` is a reusable primitive in the shared `src/ui/material/` library, exposed as a chainable **builder** terminating in `.into()` per the Constitution v1.2.0 builder-API rule (`TerminalPane::new(rt, palette).focused(b).into()`); the Settings form and toolbar `Settings` entry (a builder `MenuItem`/`Toolbar`) reuse the shared components; a shared `Icon::Settings` is added. The pre-existing `material/` components were migrated to the builder form (Phase 3b). No forked one-off widgets.
 
@@ -107,10 +107,24 @@ tests/                      # pure-core tests (--no-default-features) + gui-gate
 ├── keymap.rs               # NEW (pure): exhaustive key/modifier/mode → bytes/action encoding
 ├── terminal_focus.rs       # NEW (pure): focus-routing predicate (app vs terminal; release chord)
 ├── settings_scrollback.rs  # NEW (pure): scrollback serde default/roundtrip/clamp
-├── terminal_palette.rs     # NEW (gui): ansi::Color → iced Color mapping incl. theme defaults
-├── terminal_mouse.rs       # NEW (gui): TerminalPane selection vs mouse-report + focus gate
-├── terminal_resize_scroll.rs # NEW (gui): layout→(cols,rows) + wheel→scroll/alt-screen forward
 └── (existing tests reused, incl. session/terminal seams)
+
+# Corrected 2026-07-20: the three planned gui-gated files below were never created — the gui
+# coverage landed as inline `#[cfg(test)]` modules next to the code instead (run with
+# `cargo test --features gui`). Recorded here so the tree matches the repo:
+#   terminal_palette.rs     → src/ui/style.rs (2 tests) + src/ui/terminal.rs
+#                             ansi::Color → iced Color mapping incl. theme defaults
+#   terminal_mouse.rs       → src/ui/material/terminal_pane.rs (21 tests)
+#                             selection vs mouse-report + focus gate, pointer→grid mapping
+#   terminal_resize_scroll.rs → src/ui/terminal.rs (23 tests, incl. `grid_size_*` for
+#                             layout→(cols,rows) and scrollback viewport) + terminal_pane.rs
+#                             (`wheel_lines_*` for wheel→scroll, `wheel_routing` for the
+#                             mouse-report vs local-scrollback branch, added by T055).
+#
+# Note (T055): `Widget::on_event` cannot be unit-tested — it takes a concrete `&iced::Renderer`
+# (`iced_wgpu::Renderer`), which needs a GPU device the headless CI runners do not have. Input
+# routing decisions are therefore factored into pure helpers (`press_routing`, `wheel_routing`)
+# that `on_event` dispatches on, which is what keeps them coverable at all.
 
 docs/user-guide/
 ├── worktrees-and-sessions.md   # extend: real terminal — colors, focus in/out, keys, copy/paste,
