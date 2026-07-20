@@ -2236,7 +2236,7 @@ dependencies = [
 
 [[package]]
 name = "micold-ai-ide"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "alacritty_terminal",
  "dark-light 2.0.0",
