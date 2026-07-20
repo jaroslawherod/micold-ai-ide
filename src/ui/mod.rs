@@ -35,10 +35,17 @@ pub const MATERIAL_SYMBOLS: Font = Font::with_name("Material Symbols Outlined");
 /// role (FR-004). Reuses [`style::color`] so tint follows the active theme exactly like all
 /// other text, giving light/dark and disabled states for free (FR-007).
 pub fn icon<'a, M: 'a>(icon: Icon, size: u16, color: Rgb) -> Element<'a, M> {
+    icon_colored(icon, size, style::color(color))
+}
+
+/// [`icon`] with an already-resolved color, so callers can apply alpha — notably
+/// [`style::disabled_color`], since a glyph that colors itself does not inherit a disabled
+/// button's `text_color`.
+pub fn icon_colored<'a, M: 'a>(icon: Icon, size: u16, color: iced::Color) -> Element<'a, M> {
     text(icon.glyph().to_string())
         .font(MATERIAL_SYMBOLS)
         .size(size)
-        .color(style::color(color))
+        .color(color)
         .into()
 }
 
