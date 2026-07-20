@@ -107,10 +107,24 @@ tests/                      # pure-core tests (--no-default-features) + gui-gate
 ├── keymap.rs               # NEW (pure): exhaustive key/modifier/mode → bytes/action encoding
 ├── terminal_focus.rs       # NEW (pure): focus-routing predicate (app vs terminal; release chord)
 ├── settings_scrollback.rs  # NEW (pure): scrollback serde default/roundtrip/clamp
-├── terminal_palette.rs     # NEW (gui): ansi::Color → iced Color mapping incl. theme defaults
-├── terminal_mouse.rs       # NEW (gui): TerminalPane selection vs mouse-report + focus gate
-├── terminal_resize_scroll.rs # NEW (gui): layout→(cols,rows) + wheel→scroll/alt-screen forward
 └── (existing tests reused, incl. session/terminal seams)
+
+# Corrected 2026-07-20: the three planned gui-gated files below were never created — the gui
+# coverage landed as inline `#[cfg(test)]` modules next to the code instead (run with
+# `cargo test --features gui`). Recorded here so the tree matches the repo:
+#   terminal_palette.rs     → src/ui/style.rs (2 tests) + src/ui/terminal.rs
+#                             ansi::Color → iced Color mapping incl. theme defaults
+#   terminal_mouse.rs       → src/ui/material/terminal_pane.rs (21 tests)
+#                             selection vs mouse-report + focus gate, pointer→grid mapping
+#   terminal_resize_scroll.rs → src/ui/terminal.rs (23 tests, incl. `grid_size_*` for
+#                             layout→(cols,rows) and scrollback viewport) + terminal_pane.rs
+#                             (`wheel_lines_*` for wheel→scroll, `wheel_routing` for the
+#                             mouse-report vs local-scrollback branch, added by T055).
+#
+# Note (T055): `Widget::on_event` cannot be unit-tested — it takes a concrete `&iced::Renderer`
+# (`iced_wgpu::Renderer`), which needs a GPU device the headless CI runners do not have. Input
+# routing decisions are therefore factored into pure helpers (`press_routing`, `wheel_routing`)
+# that `on_event` dispatches on, which is what keeps them coverable at all.
 
 docs/user-guide/
 ├── worktrees-and-sessions.md   # extend: real terminal — colors, focus in/out, keys, copy/paste,

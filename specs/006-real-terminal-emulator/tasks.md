@@ -175,7 +175,7 @@ redraw; produce more output than fits and scroll back up to the scrollback limit
 
 > Write these FIRST and ensure they FAIL before implementation.
 
-- [X] T028 [P] [US4] Write failing gui tests in `tests/terminal_resize_scroll.rs` (`--features gui`): layout+cell-metrics → (cols, rows) computation; wheel delta → `Scroll(n)`; alt-screen scroll forwarded to the PTY vs local scrollback (adapting iced_term `view.rs`/`backend.rs` behavior) (contracts/terminal-render-input.md, research R5). *(BUG-002: the "wheel delta" coverage here was whole-line only; pixel-precision deltas are covered by T053 and widened by T055.)*
+- [X] T028 [P] [US4] Write failing gui tests (`--features gui`): layout+cell-metrics → (cols, rows) computation; wheel delta → `Scroll(n)`; alt-screen scroll forwarded to the PTY vs local scrollback (adapting iced_term `view.rs`/`backend.rs` behavior) (contracts/terminal-render-input.md, research R5). *(Corrected 2026-07-20: this task originally named `tests/terminal_resize_scroll.rs`, which was never created — the coverage landed as inline `#[cfg(test)]` modules instead: `grid_size_*` in `src/ui/terminal.rs` for the (cols, rows) computation, and the wheel/pointer tests in `src/ui/material/terminal_pane.rs`.)* *(BUG-002: the "wheel delta" coverage here was whole-line only; pixel-precision deltas are covered by T053 and the widget-level routing by T055.)*
 
 ### Implementation for User Story 4
 
@@ -277,10 +277,26 @@ through the scrollback and the scrollbar appears.
   `WheelScrolled` arm for both the local-scrollback and mouse-report branches, replacing the
   per-event `.round()` that discarded any delta under one line. Make T053 pass (FR-016, FR-016b,
   FR-013a). Completed in `31a6e48`.
-- [ ] T055 [BUG-002] ⚠️ Reopened scope of T028 — extend `tests/terminal_resize_scroll.rs` so the
-  widget-level wheel coverage exercises pixel-precision deltas end-to-end (event → `TerminalScrolled`
-  / mouse report), not just the pure mapping helper. T028 tested only whole-line deltas, which is
+- [X] T055 [BUG-002] ⚠️ Reopened scope of T028 — cover the wheel *routing* branch, which T028 left
+  untested: a non-mouse-reporting or unfocused pane scrolls the local scrollback, while a focused
+  pane over a mouse-reporting process emits one wheel report (button 64 up / 65 down) per
+  accumulated line, and a gesture of sub-line `ScrollDelta::Pixels` events reaches each of those
+  outcomes once the residual crosses a cell height. T028 tested only whole-line deltas, which is
   why BUG-002 was invisible to CI on every platform.
+  **Approach changed during implementation (2026-07-20).** Driving `Widget::on_event` directly is
+  not achievable: its signature takes a concrete `&iced::Renderer`, which resolves to
+  `iced_wgpu::Renderer` and needs a real GPU device. A test requiring one would not run on the
+  headless CI runners — reintroducing exactly the blind spot BUG-002 was about (see the Principle
+  VI amendment in `plan.md`). Instead the routing decision was extracted into a pure
+  `wheel_routing(lines, focused, mouse_mode) -> WheelRouting` helper in
+  `src/ui/material/terminal_pane.rs`, mirroring the existing `press_routing` — which exists for
+  this same reason — and `on_event`'s `WheelScrolled` arm now dispatches on it (no behaviour
+  change; the `Ignore` arm still falls through unhandled so sub-line travel stays banked). Six
+  tests added to the inline `#[cfg(test)] mod tests` (`cargo test --features gui --bins`): both
+  routing branches, the unfocused case, the sub-line no-op, and two whole-gesture tests composing
+  `wheel_lines` + `wheel_routing` over the local-scrollback and mouse-report (FR-013a) paths.
+  *(Retargeted 2026-07-20: originally named `tests/terminal_resize_scroll.rs`, a file that was
+  never created — see the T028 correction.)*
 - [X] T056 [BUG-002] Update `docs/user-guide/worktrees-and-sessions.md` (T031) to state that
   scrolling works with a mouse wheel *and* a touchpad/precision pointing device (Principle VII).
   Also documents the scrollbar's hide-at-live-bottom behavior, since "no scrollbar" was the
