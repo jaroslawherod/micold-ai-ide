@@ -123,7 +123,8 @@ tests/                      # pure-core tests (--no-default-features) + gui-gate
 #
 # Note (T055): `Widget::on_event` cannot be unit-tested — it takes a concrete `&iced::Renderer`
 # (`iced_wgpu::Renderer`), which needs a GPU device the headless CI runners do not have. Input
-# routing decisions are therefore factored into pure helpers (`press_routing`, `wheel_routing`)
+# routing decisions are therefore factored into pure helpers (`press_routing`, `wheel_routing`,
+# `select_kind`)
 # that `on_event` dispatches on, which is what keeps them coverable at all.
 
 docs/user-guide/

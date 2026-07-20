@@ -90,6 +90,82 @@ Open the project, expand a worktree, and start (or select) a session so its term
 - Quit and relaunch the app, reopen Settings. **Expect**: the changed value persists.
 - Provide an out-of-range value. **Expect**: a clear validation message; not saved.
 
+## 10. Bugfix verification — BUG-001 (auto-focus) and BUG-002 (scroll)
+
+Added 2026-07-20. These cover the two patched bugs and the paths their unit tests cannot reach.
+`on_event` needs a GPU-backed renderer, so every step below is manual by necessity — the routing
+helpers (`press_routing`, `wheel_routing`, `select_kind`) are unit-tested, but nothing proves the
+events actually arrive and are dispatched except running the app.
+
+Mark each ✅/❌ as you go.
+
+### 10a. Touchpad scrolling — SC-010, FR-016b
+1. Fill the terminal past one screen (`yes | head -n 500`, or a long `git log`).
+2. Two-finger scroll **up** on the pane, slowly.
+   - **Expect**: the viewport moves through the scrollback. ✅ *Verified 2026-07-20 (Wayland/GNOME).*
+3. Scroll up in the smallest increments you can manage — barely-moving flicks.
+   - **Expect**: still scrolls. Each flick is under one line; they must accumulate, not vanish.
+     This is the exact BUG-002 defect.
+4. Scroll **up**, then immediately reverse to **down** without lifting.
+   - **Expect**: the reversal responds promptly and in the right direction. Banked upward travel
+     must not cancel the first downward movement (residual reset on direction change).
+5. Scroll back to the very bottom.
+   - **Expect**: parks cleanly at the live bottom, no overshoot or stickiness.
+
+### 10b. Scrollbar — FR-016a
+6. While scrolled back, look at the right edge of the pane.
+   - **Expect**: a scrollbar is visible; the thumb sits proportional to position and to how much
+     history exists. *(This was the visible face of BUG-002 — the branch is named after it.)*
+     ✅ *Verified 2026-07-20.*
+7. Return to the live bottom.
+   - **Expect**: the scrollbar disappears. Hidden at the bottom is correct, not a defect.
+     ✅ *Verified 2026-07-20.*
+8. Drag the thumb up and down.
+   - **Expect**: the view follows the grabbed point smoothly; no flicker or drift.
+9. Click the scrollbar track above and below the thumb.
+   - **Expect**: pages through the history.
+10. Toggle app theme while the scrollbar is visible.
+    - **Expect**: it follows Material light/dark (FR-022).
+
+### 10c. Touchpad inside a mouse-reporting program — FR-013a
+> The branch I could unit-test but never run. A mouse-reporting TUI gets wheel *reports* instead
+> of local scrolling, and before BUG-002 a touchpad generated none at all.
+11. Focus the terminal and run a mouse-mode TUI — `htop`, or `less -X --mouse` on a long file.
+12. Two-finger scroll over it.
+    - **Expect**: the *program* scrolls its own view. The pane's scrollback must not move and no
+      scrollbar should appear. ✅ *Verified 2026-07-20 with `htop` — the FR-013a wheel-report path
+      works from a touchpad, which it did not before BUG-002.*
+13. Sub-line flicks again inside that program.
+    - **Expect**: still scrolls it — accumulation applies on this path too.
+14. Quit the TUI, scroll again.
+    - **Expect**: back to local scrollback + scrollbar.
+
+### 10d. Discrete wheel — regression check
+15. If you have a mouse, wheel up/down over the pane; repeat inside `htop`.
+    - **Expect**: unchanged from before the fix. Line-based deltas pass straight through.
+
+### 10e. Auto-focus on select/start — SC-009, FR-010/FR-010a (BUG-001)
+16. Start a **new** session. Without clicking anything, type.
+    - **Expect**: characters reach `claude` immediately. No click needed.
+17. With session A focused, click session **B** in the sidebar, then type without clicking the pane.
+    - **Expect**: keys go to B. The sidebar click is a click *outside* the pane, which would
+      normally release focus — the auto-focus must win (FR-010a).
+      ✅ *Verified 2026-07-20 — the precedence rule holds in the real event ordering.*
+18. Press **Ctrl+Shift+E**, then type.
+    - **Expect**: keys drive the app, not the terminal. The session keeps running.
+19. Close a session / switch project.
+    - **Expect**: focus is cleared; keys drive the app.
+
+### 10f. Selection granularity — FR-013 (T057)
+20. **Single**-click and drag across some text. **Expect**: character-level selection.
+21. **Double**-click a word. **Expect**: the word is selected.
+22. **Triple**-click a line. **Expect**: the whole line is selected.
+23. With `htop` running, **Shift+drag**. **Expect**: selection works despite mouse mode (FR-013b).
+
+### 10g. Scrollback limit interaction — SC-007
+24. Set a small scrollback limit in Settings, start a new session, flood output past it, scroll up.
+    - **Expect**: history is bounded at the limit; scrolling stops there rather than misbehaving.
+
 ## Cross-platform — SC-006
 
 Repeat the manual flow on Linux, macOS, and Windows (CI builds/tests all three). Note the
