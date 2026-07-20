@@ -1120,22 +1120,35 @@ fn ensure_attached_process(app: &mut App, id: SessionId) {
     if already_attached {
         return;
     }
+    // A failed spawn is reported, never dropped: discarding it here would leave the mode toggle
+    // doing nothing at all with no explanation — the same silent failure fixed for
+    // `SessionStartRequested` (feature 005 FR-017).
     match mode {
         TerminalMode::AiCli => {
-            if let Ok(rt) = spawn_pty(
+            match spawn_pty(
                 &launch_spec(&cwd, id, LaunchMode::Resume),
                 app.scrollback_lines,
                 app.last_grid,
             ) {
-                app.terminals.entry(id).or_default().ai_cli = Some(rt);
-                app.core.update(Message::SessionRunning(id));
+                Ok(rt) => {
+                    app.terminals.entry(id).or_default().ai_cli = Some(rt);
+                    app.core.update(Message::SessionRunning(id));
+                }
+                Err(err) => app
+                    .core
+                    .notify_error(format!("Could not start the AI CLI: {err}")),
             }
         }
         TerminalMode::Regular => {
             let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
-            if let Ok(rt) = spawn_shell_pty(&cwd, &env, app.scrollback_lines, app.last_grid) {
-                app.terminals.entry(id).or_default().shell = Some(rt);
-                app.core.update(Message::ShellSessionRunning(id));
+            match spawn_shell_pty(&cwd, &env, app.scrollback_lines, app.last_grid) {
+                Ok(rt) => {
+                    app.terminals.entry(id).or_default().shell = Some(rt);
+                    app.core.update(Message::ShellSessionRunning(id));
+                }
+                Err(err) => app
+                    .core
+                    .notify_error(format!("Could not start the shell: {err}")),
             }
         }
     }
