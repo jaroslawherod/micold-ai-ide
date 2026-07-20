@@ -387,17 +387,20 @@ pub enum Message {
     /// and their live output (feature 010 follow-up). Appended to the form's log; a no-op if
     /// the form has since closed.
     WorktreeCreateLogAppended(Vec<String>),
+    /// Tick while a create is in flight: the binary drains the lines the worker has produced
+    /// so far and feeds them to [`Message::WorktreeCreateLogAppended`]. Without this the log
+    /// only arrived in one batch at completion, so a multi-minute submodule fetch showed a
+    /// static "Creating worktree…". No pure reducer effect.
+    WorktreeCreateProgressPolled,
     /// The binary created a worktree successfully (FR-007); add it and close the form.
     WorktreeCreated(Worktree),
     /// The binary reported a worktree create failure (FR-017); show it, keep the form open.
     WorktreeCreateFailed(String),
-    /// Internal: carries both the creation result and progress lines; dispatched by the binary
-    /// after the async task completes. Used to send progress before the final result.
+    /// Internal: the create finished; dispatched by the binary after the async task completes.
+    /// Progress no longer rides along — it streams via [`Message::WorktreeCreateLogAppended`]
+    /// while the create runs, and the binary drains the tail before dispatching this.
     #[doc(hidden)]
-    WorktreeCreationDone {
-        result: Result<Worktree, String>,
-        progress: Vec<String>,
-    },
+    WorktreeCreationDone { result: Result<Worktree, String> },
     /// Start a new session at the given location — a worktree or, as of feature 010, the
     /// project root ("Default", FR-001) — (FR-010). The binary spawns `claude`.
     SessionStartRequested { location: SessionLocation },
@@ -973,13 +976,9 @@ impl State {
                     form.status = WorktreeFormStatus::Editing;
                 }
             }
-            Message::WorktreeCreationDone { result, progress } => {
-                // Append progress first, then dispatch the result message so all logs are visible
-                // before the form closes (on success) or error shows (on failure).
-                if let Some(form) = &mut self.worktree_form {
-                    form.log.extend(progress);
-                }
-                // Dispatch the underlying result message to complete the flow.
+            Message::WorktreeCreationDone { result } => {
+                // Progress has already been streamed in via `WorktreeCreateLogAppended`,
+                // including the tail the binary drains immediately before dispatching this.
                 match result {
                     Ok(worktree) => self.update(Message::WorktreeCreated(worktree)),
                     Err(err) => self.update(Message::WorktreeCreateFailed(err)),
@@ -1138,6 +1137,9 @@ impl State {
             | Message::TerminalPasteRequested
             | Message::TextCopyRequested(_)
             | Message::SidebarHandleHovered(_)
+            // The binary drains the in-flight create's shared progress buffer and re-dispatches
+            // the lines as `WorktreeCreateLogAppended`.
+            | Message::WorktreeCreateProgressPolled
             // Focus state is tracked by the binary (gui runtime), not the pure core.
             | Message::WindowFocusChanged(_) => {}
         }
