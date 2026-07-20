@@ -116,8 +116,10 @@ Mark each ✅/❌ as you go.
 6. While scrolled back, look at the right edge of the pane.
    - **Expect**: a scrollbar is visible; the thumb sits proportional to position and to how much
      history exists. *(This was the visible face of BUG-002 — the branch is named after it.)*
+     ✅ *Verified 2026-07-20.*
 7. Return to the live bottom.
    - **Expect**: the scrollbar disappears. Hidden at the bottom is correct, not a defect.
+     ✅ *Verified 2026-07-20.*
 8. Drag the thumb up and down.
    - **Expect**: the view follows the grabbed point smoothly; no flicker or drift.
 9. Click the scrollbar track above and below the thumb.
@@ -131,7 +133,8 @@ Mark each ✅/❌ as you go.
 11. Focus the terminal and run a mouse-mode TUI — `htop`, or `less -X --mouse` on a long file.
 12. Two-finger scroll over it.
     - **Expect**: the *program* scrolls its own view. The pane's scrollback must not move and no
-      scrollbar should appear.
+      scrollbar should appear. ✅ *Verified 2026-07-20 with `htop` — the FR-013a wheel-report path
+      works from a touchpad, which it did not before BUG-002.*
 13. Sub-line flicks again inside that program.
     - **Expect**: still scrolls it — accumulation applies on this path too.
 14. Quit the TUI, scroll again.
@@ -147,6 +150,7 @@ Mark each ✅/❌ as you go.
 17. With session A focused, click session **B** in the sidebar, then type without clicking the pane.
     - **Expect**: keys go to B. The sidebar click is a click *outside* the pane, which would
       normally release focus — the auto-focus must win (FR-010a).
+      ✅ *Verified 2026-07-20 — the precedence rule holds in the real event ordering.*
 18. Press **Ctrl+Shift+E**, then type.
     - **Expect**: keys drive the app, not the terminal. The session keeps running.
 19. Close a session / switch project.
