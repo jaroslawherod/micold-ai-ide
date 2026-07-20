@@ -64,6 +64,9 @@ pub enum Icon {
     /// The "Default" project-root sidebar entry (feature 010) — distinct from the git/branch
     /// iconography used for worktree rows (FR-006).
     ProjectRoot,
+    /// Close/dismiss action (e.g. a session row's trailing button). Distinct from
+    /// [`Icon::Delete`]: closing ends a session, it does not destroy anything on disk.
+    Close,
 }
 
 impl Icon {
@@ -93,6 +96,7 @@ impl Icon {
         Icon::RegularTerminal,
         Icon::ReleaseFocus,
         Icon::ProjectRoot,
+        Icon::Close,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -123,6 +127,7 @@ impl Icon {
             Icon::RegularTerminal => '\u{eb8e}',
             Icon::ReleaseFocus => '\u{e31a}',
             Icon::ProjectRoot => '\u{e88a}',
+            Icon::Close => '\u{e5cd}',
         }
     }
 }

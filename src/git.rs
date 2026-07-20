@@ -87,6 +87,20 @@ fn run_git(repo: &Path, args: &[&str]) -> io::Result<String> {
     }
 }
 
+/// Whether two paths name the same location, resolving symlinks when both sides exist.
+///
+/// `git worktree list --porcelain` reports the fully resolved real path, while the app builds
+/// its paths from the project root as the user opened it. When that root traverses a symlink
+/// (a symlinked checkout, a symlinked home, `/tmp` on macOS) a raw `==` never matches. Falls
+/// back to a literal comparison when either side cannot be canonicalized — the "already gone"
+/// case, where the path no longer exists on disk. Mirrors [`GitCli::is_repo_root`].
+fn same_path(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
 impl Git for GitCli {
     fn is_repo_root(&self, dir: &Path) -> bool {
         let Ok(out) = run_git(dir, &["rev-parse", "--show-toplevel"]) else {
@@ -120,15 +134,42 @@ impl Git for GitCli {
     }
 
     fn worktree_remove(&self, repo: &Path, path: &Path, force: bool) -> io::Result<()> {
-        let path = path.to_string_lossy();
+        let path_arg = path.to_string_lossy();
         let mut args = vec!["worktree", "remove"];
         if force {
             args.push("--force");
         }
-        args.push(&path);
-        // Idempotent: a missing worktree is not a failure for rollback.
-        let _ = run_git(repo, &args);
-        Ok(())
+        args.push(&path_arg);
+        let Err(err) = run_git(repo, &args) else {
+            return Ok(());
+        };
+        // Idempotent, but not silent (feature 008, FR-023b). This previously discarded every
+        // result with `let _ = ...` so that rollback and the missing-worktree edge case stayed
+        // quiet — which also swallowed real failures like a locked worktree, reporting success
+        // while the worktree survived on disk (BUG-001).
+        //
+        // Distinguish the two by outcome rather than by parsing git's message: prune the stale
+        // registrations git itself would drop, then ask whether this path is still registered.
+        // Gone => the caller got what it asked for. Still there => a genuine refusal.
+        //
+        // The prune is only a diagnostic step, so its own failure must not replace the reason
+        // the removal failed — fall through to reporting `err`.
+        let still_registered = self
+            .worktree_prune(repo)
+            .and_then(|()| self.worktree_list_porcelain(repo))
+            .map(|list| {
+                crate::worktree::parse_worktrees(&list)
+                    .iter()
+                    .any(|r| same_path(&r.path, path))
+            })
+            // Can't tell (not a repo, git missing) — surface the original failure rather than
+            // inventing a success.
+            .unwrap_or(true);
+        if still_registered {
+            Err(err)
+        } else {
+            Ok(())
+        }
     }
 
     fn worktree_prune(&self, repo: &Path) -> io::Result<()> {

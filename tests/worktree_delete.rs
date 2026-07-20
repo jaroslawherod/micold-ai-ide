@@ -6,11 +6,11 @@
 //! process or repository (Constitution Principle I).
 
 use micold_ai_ide::app::{Message, NoticeLevel, State};
-use micold_ai_ide::git::{FakeGit, Git};
+use micold_ai_ide::git::{FakeGit, Git, GitCli};
 use micold_ai_ide::project::{Availability, Project};
 use micold_ai_ide::session::{Session, SessionLocation};
 use micold_ai_ide::terminal::{FakeHandle, TerminalHandle};
-use micold_ai_ide::worktree::{remove_worktree, Worktree, WorktreeStatus};
+use micold_ai_ide::worktree::{remove_worktree, remove_worktree_dir, Worktree, WorktreeStatus};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -127,4 +127,164 @@ fn remove_worktree_is_idempotent_when_already_gone() {
     // Nothing registered — removal must not error.
     remove_worktree(&git, &repo, &target, Some("feat/gone")).unwrap();
     assert!(git.worktrees(&repo).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// BUG-001 — the follow-up directory cleanup (FR-023a/FR-023b).
+//
+// `git worktree remove` deletes the working directory itself, so the binary's follow-up
+// `fs` cleanup normally finds nothing left. Reporting that as a failure made *every*
+// successful delete raise "its folder could not be removed: No such file or directory".
+// These cover both directions: silent on success, still loud on a genuine leftover.
+// ---------------------------------------------------------------------------
+
+/// The message the binary builds when the directory genuinely survives removal. Kept here so
+/// the tests assert on the same shape the user sees.
+fn leftover_notice(name: &str, path: &Path, err: &std::io::Error) -> String {
+    format!(
+        "Deleted worktree \"{name}\", but its folder could not be removed: {err}. Left at {}",
+        path.display()
+    )
+}
+
+/// T051 / FR-023a: the ordinary success path is silent.
+///
+/// By the time the cleanup runs, git has already deleted the directory — so `remove_worktree_dir`
+/// must treat "already gone" as success. This is the exact BUG-001 scenario: the delete fully
+/// succeeded, yet an error banner appeared naming a path that no longer existed.
+#[test]
+fn fr_023a_successful_delete_is_silent_when_git_already_removed_the_dir() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().to_path_buf();
+    let target = repo.join(".claude/worktrees/feat-gone");
+    let branch = "feat/gone";
+
+    let git = FakeGit::new().with_repo(repo.clone());
+    git.worktree_add_new_branch(&repo, branch, &target).unwrap();
+
+    let mut state = State {
+        worktrees: vec![wt("feat-gone", &repo)],
+        ..Default::default()
+    };
+
+    // Mirror the binary's confirmed-delete flow. `target` is deliberately never created on
+    // disk — that is precisely the state git leaves behind after removing the worktree.
+    remove_worktree(&git, &repo, &target, Some(branch)).unwrap();
+    if let Err(err) = remove_worktree_dir(&target) {
+        state.notify_error(leftover_notice("feat-gone", &target, &err));
+    }
+
+    assert!(
+        state.notifications.is_empty(),
+        "a fully successful delete must report nothing, got: {:?}",
+        state.notifications
+    );
+}
+
+/// T052 / FR-023: the converse — a directory that genuinely survives is still reported.
+///
+/// Guards against "fixing" the false positive by muting the branch outright. A plain file
+/// stands in for a surviving directory: `remove_dir_all` fails with a kind other than
+/// `NotFound`, which is exactly the class of failure FR-023 must still surface.
+#[test]
+fn fr_023_leftover_directory_is_still_reported() {
+    let tmp = tempfile::tempdir().unwrap();
+    let target = tmp.path().join("feat-leftover");
+    std::fs::write(&target, b"not a directory").unwrap();
+
+    let mut state = State::default();
+    if let Err(err) = remove_worktree_dir(&target) {
+        state.notify_error(leftover_notice("feat-leftover", &target, &err));
+    }
+
+    assert_eq!(
+        state.notifications.len(),
+        1,
+        "a genuine leftover must still reach the user"
+    );
+    assert_eq!(state.notifications[0].level, NoticeLevel::Error);
+    assert!(state.notifications[0].message.contains("feat-leftover"));
+}
+
+// ---------------------------------------------------------------------------
+// T053 / FR-023b — `GitCli` must not swallow genuine git failures.
+//
+// `FakeGit` can be told to fail, so the FR-023 error path *looks* covered. `GitCli` discarded
+// every `git worktree remove` result with `let _ =` and always returned `Ok(())`, so in the
+// shipped app that path was unreachable — a locked worktree reported success. The swallow
+// existed to keep removal idempotent (create-rollback and the missing-worktree edge case rely
+// on it), so the fix must keep "already gone" quiet while letting real failures through.
+//
+// These exercise the real `git` binary against a throwaway repository.
+// ---------------------------------------------------------------------------
+
+fn git_run(repo: &Path, args: &[&str]) -> std::process::Output {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output()
+        .expect("git must be installed to run this test");
+    assert!(
+        out.status.success(),
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    out
+}
+
+/// A throwaway repository with one commit, so `git worktree add` has a HEAD to branch from.
+fn init_repo(dir: &Path) {
+    git_run(dir, &["init", "--quiet"]);
+    git_run(dir, &["config", "user.email", "test@example.com"]);
+    git_run(dir, &["config", "user.name", "Test"]);
+    git_run(dir, &["commit", "--quiet", "--allow-empty", "-m", "init"]);
+}
+
+#[test]
+fn fr_023b_gitcli_reports_a_genuine_worktree_remove_failure() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().to_path_buf();
+    init_repo(&repo);
+
+    let target = repo.join("wt-locked");
+    let git = GitCli::new();
+    git.worktree_add_new_branch(&repo, "feat/locked", &target)
+        .unwrap();
+    // A locked worktree is git's own "refuse to remove this" — a real failure the user must
+    // hear about, and one that leaves the registration in place.
+    git_run(&repo, &["worktree", "lock", target.to_str().unwrap()]);
+
+    git.worktree_remove(&repo, &target, true)
+        .expect_err("a locked worktree must not report success");
+
+    // Nothing was half-removed behind the error.
+    assert!(
+        target.exists(),
+        "the locked worktree's directory must survive"
+    );
+}
+
+#[test]
+fn fr_023b_gitcli_worktree_remove_stays_idempotent_when_nothing_is_registered() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().to_path_buf();
+    init_repo(&repo);
+
+    let git = GitCli::new();
+
+    // Never registered at all — the create-rollback case. Must stay quiet.
+    git.worktree_remove(&repo, &repo.join("never-existed"), true)
+        .expect("removing an unregistered path is not a failure");
+
+    // Registered, but the directory was deleted outside the app — the "missing/invalid worktree
+    // can still be cleaned up" edge case. `git worktree remove` errors here, but the follow-up
+    // prune clears the stale registration, so this must also stay quiet.
+    let stale = repo.join("wt-stale");
+    git.worktree_add_new_branch(&repo, "feat/stale", &stale)
+        .unwrap();
+    std::fs::remove_dir_all(&stale).unwrap();
+    git.worktree_remove(&repo, &stale, true)
+        .expect("a stale registration is cleaned up, not reported");
 }

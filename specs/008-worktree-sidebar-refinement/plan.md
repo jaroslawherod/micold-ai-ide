@@ -74,6 +74,14 @@ handful of sessions. Touches ~10 source files plus tests and user-guide docs.
 - [x] **III. Worktree Integration**: Deletion is fully app-owned via the existing `Git` trait
   (`worktree_remove(force)` → `worktree_prune` → `branch_delete`) plus `fs::remove_dir_all`,
   reusing the `CleanupStep` ordering; the user runs no manual git.
+  - **BUG-001 note**: `git worktree remove` already deletes the working directory, so the
+    trailing `fs::remove_dir_all` is *best-effort* cleanup for the residual case, not a step
+    whose failure is meaningful. `ErrorKind::NotFound` from it is the expected success outcome
+    and MUST NOT be reported (FR-023a). Mirror the existing create-rollback treatment at
+    `CleanupStep::RemoveDir` (`src/main.rs`), which deliberately discards the result.
+  - **BUG-001 note**: `GitCli::worktree_remove` currently discards every git failure and always
+    returns `Ok(())`, which makes FR-023's real error path unreachable in the shipped app (it
+    is exercised only by `FakeGit`). Genuine step failures must propagate (FR-023b).
 - [x] **IV. Local-First Storage (NON-NEGOTIABLE)**: The display-name override persists to the
   existing local `projects.json`; nothing is transmitted off-device; the feature works fully
   offline.
@@ -160,3 +168,11 @@ the `src/main.rs` boundary. New shared UI primitive goes in `src/ui/material/`.
 No constitutional violations. Extending `MenuOverlay` with an anchor and `TreeView` with a
 two-line/tag row are enhancements of shared primitives (Principle VIII), not forks, so no
 deviation needs justification.
+
+**Edge case (BUG-001)**: The delete orchestration spans two layers with overlapping
+responsibility for the same directory — git removes it, then the fs step tries again. Fakes
+cover the git layer only (`FakeGit` never touches disk), so the interaction between the two
+layers is invisible to the existing test suite. Any test for the "already gone" path must
+assert on *notification output* rather than on `Git` call records.
+
+**Bugfix**: 2026-07-20 — BUG-001 Updated from bugfix patch

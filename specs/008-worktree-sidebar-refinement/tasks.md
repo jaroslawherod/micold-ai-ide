@@ -105,7 +105,7 @@ sessions, and branch gone; cancel → nothing removed.
 
 - [x] T016 [P] [US2] `tests/sidebar_state.rs`: `worktree_menu_open: Option<String>` single-open invariant — `WorktreeMenuToggled` opens/closes; opening one closes another; `WorktreeMenuDismissed` clears.
 - [x] T017 [P] [US2] `tests/app_state.rs`: `WorktreeDeleteRequested` opens `Overlay::ConfirmWorktreeDelete`; `WorktreeDeleteConfirmed` drops the target worktree's session records and clears `active_session` if it matched; `WorktreeDeleteCancelled` is a no-op; `on_escape` maps the confirm overlay → cancel.
-- [x] T018 [P] [US2] `tests/worktree_delete.rs`: with `FakeGit` + `FakeTerminalBackend`, confirm ⇒ FakeGit records worktree removed + branch deleted and the matching sessions' `FakeHandle` recorded `killed` while non-matching sessions are untouched; cancel ⇒ no `Git`/kill calls occur.
+- [X] T018 [P] [US2] `tests/worktree_delete.rs`: with `FakeGit` + `FakeTerminalBackend`, confirm ⇒ FakeGit records worktree removed + branch deleted and the matching sessions' `FakeHandle` recorded `killed` while non-matching sessions are untouched; cancel ⇒ no `Git`/kill calls occur. (reopened then resolved — BUG-001: coverage asserts on `Git` call records only, so the post-removal filesystem step is untested; the existing locked-worktree error assertion holds for `FakeGit` but is unreachable for `GitCli`, which swallows git failures. Extended per T051/T053; closed 2026-07-20.)
 
 ### Implementation
 
@@ -114,7 +114,7 @@ sessions, and branch gone; cancel → nothing removed.
 - [x] T021 [US2] Wire right-click in `src/ui/sidebar.rs`: wrap each worktree row in `mouse_area(...).on_right_press(WorktreeMenuToggled(dir))` and render the anchored `MenuOverlay` (items: Rename → `WorktreeRenameStarted`, Delete → `WorktreeDeleteRequested`).
 - [x] T022 [US2] Add `Overlay::ConfirmWorktreeDelete { dir_name }` + `WorktreeDeleteRequested/Confirmed/Cancelled` messages + reducers + `on_escape` arm in `src/app.rs`.
 - [x] T023 [US2] Render the delete confirmation modal (naming the directory, its sessions, and the branch) in `src/ui/mod.rs`, with the Esc subscription and `ClosingOverlay` handling.
-- [x] T024 [US2] Implement delete orchestration in `src/main.rs` on `WorktreeDeleteConfirmed`: kill sessions whose `worktree_dir == dir_name` (via `terminals`), then `worktree_remove(force=true)` → `worktree_prune` → `branch_delete` → `fs::remove_dir_all`, then `update` reducer → `discover_worktrees` → `persist` (order per `CleanupStep`, idempotent).
+- [X] T024 [US2] Implement delete orchestration in `src/main.rs` on `WorktreeDeleteConfirmed`: kill sessions whose `worktree_dir == dir_name` (via `terminals`), then `worktree_remove(force=true)` → `worktree_prune` → `branch_delete` → `fs::remove_dir_all`, then `update` reducer → `discover_worktrees` → `persist` (order per `CleanupStep`, idempotent). (reopened then resolved — BUG-001: the `fs::remove_dir_all` step is **not** idempotent as this task required — it reports `ErrorKind::NotFound` as a user-facing failure on every successful delete, since `git worktree remove` already deleted the directory. Fixed per T054; closed 2026-07-20.)
 - [x] T025 [P] [US2] Document the right-click Delete action and its confirmation semantics (dir + sessions + branch) in `docs/`.
 
 **Checkpoint**: Worktrees are deletable with confirmation; running sessions terminate first.
@@ -210,6 +210,27 @@ missing/invalid cue.
 
 ---
 
+## Phase 9: BUG-001 — Delete reports a folder-removal error despite succeeding
+
+**Goal**: A fully-successful delete is silent (FR-023, FR-023a); a genuine removal failure still
+reaches the user (FR-023b). Satisfies SC-004a and closes reopened T018/T024.
+
+### Tests (write first, must FAIL)
+
+- [X] T051 [US2] `tests/worktree_delete.rs`: after a confirmed delete whose working directory is already absent by the time the filesystem cleanup runs (the normal case — git removed it), assert **no** notification is pushed. Drive it through the real orchestration path with a temp dir so the fs step actually executes; assert on notification output, not on `Git` call records (`FakeGit` never touches disk).
+- [X] T052 [US2] `tests/worktree_delete.rs`: assert the converse — a working directory that genuinely survives removal still produces exactly one error notification naming the leftover path (guards against fixing T053 by muting the branch entirely).
+- [X] T053 [P] [US2] `tests/worktree_delete.rs`: assert a genuine `git worktree remove` failure surfaces an error rather than being swallowed, and reconcile the existing locked-worktree assertion (currently passes only under `FakeGit`; `GitCli` returns `Ok(())` unconditionally).
+
+### Implementation
+
+- [X] T054 [US2] In `src/main.rs` (`WorktreeDeleteConfirmed`), treat `io::ErrorKind::NotFound` from the post-removal `fs::remove_dir_all` as success and suppress the notification; report only other error kinds. Mirror the existing create-rollback treatment at `CleanupStep::RemoveDir`. Makes T051/T052 green and closes T024's "idempotent" requirement.
+- [X] T055 [US2] In `src/git.rs`, stop `GitCli::worktree_remove` from discarding git failures — propagate the error so FR-023/FR-023b's path is reachable in the shipped app, keeping "already-absent worktree" idempotent (the rollback case the current swallow was protecting). Makes T053 green.
+- [ ] T056 [P] [US2] Re-run the delete section of `quickstart.md` manually: delete a worktree with a running session and confirm the sidebar updates with no error banner. (Attempted 2026-07-20 — inconclusive: the delete was reported as showing no error banner, but the only instance confirmed running at the time was the installed `/usr/bin` build of 2026-07-18, which predates this fix. Re-run against a build verified to come from this branch.)
+
+**Checkpoint**: Deleting a worktree is silent on success and still loud on genuine failure.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -222,6 +243,7 @@ missing/invalid cue.
 - **US4 (Phase 6)**: after Foundational + US1 (needs per-row tags).
 - **US5 (Phase 7)**: after Foundational + US1 (row redesign).
 - **Polish (Phase 8)**: after all targeted stories.
+- **BUG-001 (Phase 9)**: after US2 (Phase 4). Independent of Phases 5–8.
 
 ### User Story Dependencies
 
@@ -283,3 +305,7 @@ story is a shippable increment; run its tests + `quickstart.md` slice before mov
 - US2 introduces the context menu; US3 reuses it — implement US2 before US3.
 - The display-name derivation is introduced in US1 (T012, derived-only) and completed in US3
   (T033, override-preferred) — expect T033 to edit the T012 code path.
+- Phase 9 (BUG-001) depends only on US2 being implemented; T051–T053 must fail before T054/T055.
+  T055 changes shared `Git` behaviour — re-run the full suite, not just `worktree_delete.rs`.
+
+**Bugfix**: 2026-07-20 — BUG-001 Updated from bugfix patch

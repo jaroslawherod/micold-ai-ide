@@ -219,6 +219,20 @@ pub fn remove_worktree(
     Ok(())
 }
 
+/// Remove the worktree's working directory once git has released it (feature 008, FR-023a).
+///
+/// `git worktree remove` deletes the working directory itself, so this normally finds nothing
+/// left — that is the ordinary success path, not a failure. Reporting `NotFound` made every
+/// successful delete raise "its folder could not be removed: No such file or directory"
+/// naming a path that no longer existed (BUG-001). Any other error kind means the directory
+/// really did survive and is still worth telling the user about (FR-023).
+pub fn remove_worktree_dir(path: &Path) -> io::Result<()> {
+    match std::fs::remove_dir_all(path) {
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        other => other,
+    }
+}
+
 /// Create a branch + worktree from derived names, rolling back on failure (FR-006/006b/009).
 ///
 /// Pre-flight duplicate checks run before any mutation. `target_exists` is the binary's `fs`
