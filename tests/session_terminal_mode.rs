@@ -65,10 +65,10 @@ fn shell_lifecycle_is_active() {
 }
 
 #[test]
-fn session_start_new_defaults_mode_and_shell_lifecycle() {
+fn session_start_new_defaults_mode_and_has_no_shell_instances() {
     let s = Session::start_new(worktree("feature-x"));
     assert_eq!(s.mode, TerminalMode::AiCli);
-    assert_eq!(s.shell_lifecycle, ShellLifecycle::NotStarted);
+    assert!(s.shells.is_empty());
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn session_restored_takes_the_persisted_mode() {
         TerminalMode::Regular,
     );
     assert_eq!(s.mode, TerminalMode::Regular);
-    assert_eq!(s.shell_lifecycle, ShellLifecycle::NotStarted);
+    assert!(s.shells.is_empty());
 }
 
 #[test]
@@ -93,16 +93,10 @@ fn session_set_mode_always_succeeds_regardless_of_process_state() {
     assert_eq!(s.mode, TerminalMode::AiCli);
 }
 
-#[test]
-fn session_shell_transitions_delegate_to_shell_lifecycle() {
-    let mut s = Session::start_new(worktree("feature-x"));
-    s.start_shell();
-    assert_eq!(s.shell_lifecycle, ShellLifecycle::Starting);
-    s.mark_shell_running();
-    assert_eq!(s.shell_lifecycle, ShellLifecycle::Running);
-    s.mark_shell_exited();
-    assert_eq!(s.shell_lifecycle, ShellLifecycle::Exited);
-}
+// Shell *instance* mechanics (open/select/close/restart, id allocation) are covered by
+// tests/session_shell_instances.rs (feature 011) — this file keeps only what's still exclusively
+// its own concern: the `TerminalMode`/`ShellLifecycle` enums themselves, `set_mode`, and the
+// mode -> icon/tooltip mapping below.
 
 // --- T016 (US1): the mode -> icon/tooltip mapping is total and distinct per variant ---
 
@@ -131,10 +125,12 @@ fn mode_tooltip_is_distinct_per_variant() {
     assert!(!regular.is_empty());
 }
 
-// --- T022 (US2): the two lifecycles are independent by construction (FR-006) ---
+// --- T022 (feature 010, US2): set_mode never mutates the AI CLI lifecycle (FR-006) ---
+// (Shell-instance-mutator independence from `lifecycle` is covered by
+// tests/session_shell_instances.rs's `shell_instance_mutators_never_touch_ai_cli_lifecycle`.)
 
 #[test]
-fn shell_transitions_never_mutate_ai_cli_lifecycle() {
+fn set_mode_never_mutates_ai_cli_lifecycle() {
     use micold_ai_ide::session::SessionLifecycle;
 
     let mut s = Session::start_new(worktree("feature-x"));
@@ -146,23 +142,5 @@ fn shell_transitions_never_mutate_ai_cli_lifecycle() {
     assert_eq!(
         s.lifecycle, ai_cli_before,
         "set_mode must not touch lifecycle"
-    );
-
-    s.start_shell();
-    assert_eq!(
-        s.lifecycle, ai_cli_before,
-        "start_shell must not touch lifecycle"
-    );
-
-    s.mark_shell_running();
-    assert_eq!(
-        s.lifecycle, ai_cli_before,
-        "mark_shell_running must not touch lifecycle"
-    );
-
-    s.mark_shell_exited();
-    assert_eq!(
-        s.lifecycle, ai_cli_before,
-        "mark_shell_exited must not touch lifecycle"
     );
 }

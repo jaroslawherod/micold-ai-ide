@@ -38,23 +38,39 @@ use iced::widget::{container, text, tooltip};
 use iced::Element;
 use micold_ai_ide::tokens::{spacing, type_scale, Roles};
 
+/// Re-exported so call sites can pick a `Tooltip::position(...)` without reaching into `iced`
+/// directly.
+pub use iced::widget::tooltip::Position as TooltipPosition;
+
 /// Wrap any element with a hover tooltip describing the action it triggers (Principle VIII
-/// builder-API rule: construct with the required content + label + roles, then `.into()`).
-/// Theme-aware surface styling; shown below the element.
+/// builder-API rule: construct with the required content + label + roles, then optionally
+/// `.position(...)`, then `.into()`). Theme-aware surface styling; shown below the element by
+/// default.
 pub struct Tooltip<'a, M> {
     content: Element<'a, M>,
     label: String,
     roles: Roles,
+    position: tooltip::Position,
 }
 
 impl<'a, M: 'a> Tooltip<'a, M> {
-    /// Wrap `content` with a hover tooltip showing `label`, themed by `roles`.
+    /// Wrap `content` with a hover tooltip showing `label`, themed by `roles`. Defaults to
+    /// showing below the content — override with `.position(...)` for content near an edge
+    /// (e.g. `tooltip::Position::Left` for controls pinned to the right edge of their
+    /// container, so the tooltip opens inward instead of overflowing off-screen).
     pub fn new(content: impl Into<Element<'a, M>>, label: impl Into<String>, roles: Roles) -> Self {
         Self {
             content: content.into(),
             label: label.into(),
             roles,
+            position: tooltip::Position::Bottom,
         }
+    }
+
+    /// Override where the tooltip opens relative to its content.
+    pub fn position(mut self, position: tooltip::Position) -> Self {
+        self.position = position;
+        self
     }
 }
 
@@ -63,9 +79,7 @@ impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
         let tip = container(text(t.label).size(type_scale::LABEL))
             .padding(spacing::XS)
             .style(style::surface(t.roles));
-        tooltip(t.content, tip, tooltip::Position::Bottom)
-            .gap(spacing::XS)
-            .into()
+        tooltip(t.content, tip, t.position).gap(spacing::XS).into()
     }
 }
 

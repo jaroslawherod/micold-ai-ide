@@ -360,22 +360,28 @@ fn terminal_mode_toggled_is_a_no_op_with_no_active_session() {
 }
 
 #[test]
-fn shell_session_running_and_exited_update_shell_lifecycle() {
+fn shell_instance_running_and_exited_update_that_instances_lifecycle() {
     use micold_ai_ide::session::ShellLifecycle;
 
     let mut state = state_with_worktree_and_session("feat-x");
     let id = state.active_session.unwrap();
+    let shell_id = state
+        .workspace
+        .find_session_mut(id)
+        .unwrap()
+        .1
+        .open_shell_instance();
 
-    state.update(Message::ShellSessionRunning(id));
+    state.update(Message::ShellInstanceRunning(id, shell_id));
     assert_eq!(
-        state.active_sessions()[0].shell_lifecycle,
-        ShellLifecycle::Running
+        state.active_sessions()[0].active_shell_lifecycle(),
+        Some(ShellLifecycle::Running)
     );
 
-    state.update(Message::ShellSessionExited(id));
+    state.update(Message::ShellInstanceExited(id, shell_id));
     assert_eq!(
-        state.active_sessions()[0].shell_lifecycle,
-        ShellLifecycle::Exited
+        state.active_sessions()[0].active_shell_lifecycle(),
+        Some(ShellLifecycle::Exited)
     );
 }
 

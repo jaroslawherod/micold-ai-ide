@@ -64,8 +64,12 @@ pub enum Icon {
     /// The "Default" project-root sidebar entry (feature 010) — distinct from the git/branch
     /// iconography used for worktree rows (FR-006).
     ProjectRoot,
-    /// Close/dismiss action (e.g. a session row's trailing button). Distinct from
-    /// [`Icon::Delete`]: closing ends a session, it does not destroy anything on disk.
+    /// Open an additional Regular Terminal instance for a session (feature 011, FR-001;
+    /// `add_box` — distinct from `AddSession`'s plain `add` glyph).
+    AddTerminalInstance,
+    /// Close/dismiss action (an "×" glyph) — e.g. a session row's trailing button, or closing a
+    /// Regular Terminal instance (feature 011, FR-011). Distinct from [`Icon::Delete`] (a trash
+    /// can): closing dismisses something without destroying anything on disk.
     Close,
 }
 
@@ -96,6 +100,7 @@ impl Icon {
         Icon::RegularTerminal,
         Icon::ReleaseFocus,
         Icon::ProjectRoot,
+        Icon::AddTerminalInstance,
         Icon::Close,
     ];
 
@@ -127,6 +132,7 @@ impl Icon {
             Icon::RegularTerminal => '\u{eb8e}',
             Icon::ReleaseFocus => '\u{e31a}',
             Icon::ProjectRoot => '\u{e88a}',
+            Icon::AddTerminalInstance => '\u{e146}',
             Icon::Close => '\u{e5cd}',
         }
     }

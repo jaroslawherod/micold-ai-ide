@@ -97,6 +97,9 @@ pub enum KeyOutput {
     Paste,
     /// The reserved focus-out chord was pressed (never forwarded to the PTY).
     ReleaseFocus,
+    /// The reserved "open a new Regular Terminal instance" chord was pressed (feature 011,
+    /// FR-019; never forwarded to the PTY).
+    NewTerminalInstance,
     /// Not handled here — let the app/subscription see it.
     Ignore,
 }
@@ -107,6 +110,11 @@ pub fn encode(input: &KeyInput, mode: TermMode) -> KeyOutput {
     // 1. Reserved focus-out chord (highest precedence; never forwarded).
     if is_release_chord(&input.key, input.mods) {
         return KeyOutput::ReleaseFocus;
+    }
+    // 1a. Reserved open-new-terminal-instance chord (feature 011; same precedence tier as the
+    // focus-out chord above — never forwarded to the PTY either).
+    if is_new_terminal_chord(&input.key, input.mods) {
+        return KeyOutput::NewTerminalInstance;
     }
     // 2. Copy / paste chords.
     if let Some(action) = copy_paste_action(&input.key, input.mods) {
@@ -161,6 +169,24 @@ fn printable_or_ignore(input: &KeyInput) -> KeyOutput {
 fn is_release_chord(key: &Key, mods: Mods) -> bool {
     let is_e = matches!(key, Key::Char(c) if c.eq_ignore_ascii_case(&'e'));
     if !is_e || !mods.shift {
+        return false;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        mods.logo && !mods.ctrl && !mods.alt
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        mods.ctrl && !mods.logo && !mods.alt
+    }
+}
+
+/// Whether the press is the reserved "open a new Regular Terminal instance" chord (feature 011,
+/// FR-019; macOS `Cmd+Shift+T`, else `Ctrl+Shift+T`) — structurally identical to
+/// [`is_release_chord`] above (contracts/keyboard-shortcut.md).
+fn is_new_terminal_chord(key: &Key, mods: Mods) -> bool {
+    let is_t = matches!(key, Key::Char(c) if c.eq_ignore_ascii_case(&'t'));
+    if !is_t || !mods.shift {
         return false;
     }
     #[cfg(target_os = "macos")]

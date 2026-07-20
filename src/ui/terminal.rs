@@ -8,8 +8,10 @@
 //! in colour via a custom canvas widget ([`crate::ui::material::terminal_pane`]) and streams
 //! keystrokes back to the PTY.
 
-use crate::ui::material::{ContextMenu, IconButton, MenuItem, TerminalPane, Tooltip};
-use crate::ui::{icon, style};
+use crate::ui::material::{
+    ContextMenu, IconButton, MenuItem, TerminalPane, Tooltip, TooltipPosition,
+};
+use crate::ui::style;
 use alacritty_terminal::event::VoidListener;
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Point, Side};
@@ -390,48 +392,68 @@ fn spawn_command_pty(
     })
 }
 
-/// A session's two independent background processes — the AI CLI and the plain shell (feature
-/// 010, data-model.md). At most one slot exists per kind (spec Assumptions); [`TerminalMode`]
-/// (on the session) says which is currently *attached* to the visible pane, independent of
-/// which slots are populated.
+/// A session's background processes — the AI CLI and, since feature 011, zero or more
+/// independent Regular Terminal instances (data-model.md). [`TerminalMode`]/`active_shell` (on
+/// the session) say which one is currently *attached* to the visible pane, independent of which
+/// slots/entries are populated.
 #[derive(Default)]
 pub struct SessionTerminals {
     pub ai_cli: Option<RuntimeTerminal>,
-    pub shell: Option<RuntimeTerminal>,
+    /// One entry per open Regular Terminal instance, keyed by the id the pure `Session.shells`
+    /// list already tracks (feature 011). Replaces the single `shell: Option<RuntimeTerminal>`
+    /// slot from feature 010.
+    pub shells: std::collections::HashMap<micold_ai_ide::session::ShellInstanceId, RuntimeTerminal>,
 }
 
 impl SessionTerminals {
-    /// The runtime for `mode`'s process, if it has been spawned.
-    pub fn attached(&self, mode: micold_ai_ide::session::TerminalMode) -> Option<&RuntimeTerminal> {
+    /// The runtime currently attached to the visible pane, if any: the AI CLI process for
+    /// `AiCli` mode, or `active_shell`'s entry (if populated) for `Regular` mode.
+    pub fn attached(
+        &self,
+        mode: micold_ai_ide::session::TerminalMode,
+        active_shell: Option<micold_ai_ide::session::ShellInstanceId>,
+    ) -> Option<&RuntimeTerminal> {
         match mode {
             micold_ai_ide::session::TerminalMode::AiCli => self.ai_cli.as_ref(),
-            micold_ai_ide::session::TerminalMode::Regular => self.shell.as_ref(),
+            micold_ai_ide::session::TerminalMode::Regular => self.shells.get(&active_shell?),
         }
     }
 
-    /// Mutable access to `mode`'s process, if it has been spawned.
+    /// Mutable counterpart of [`Self::attached`].
     pub fn attached_mut(
         &mut self,
         mode: micold_ai_ide::session::TerminalMode,
+        active_shell: Option<micold_ai_ide::session::ShellInstanceId>,
     ) -> Option<&mut RuntimeTerminal> {
         match mode {
             micold_ai_ide::session::TerminalMode::AiCli => self.ai_cli.as_mut(),
-            micold_ai_ide::session::TerminalMode::Regular => self.shell.as_mut(),
+            micold_ai_ide::session::TerminalMode::Regular => self.shells.get_mut(&active_shell?),
         }
     }
 
-    /// Both populated slots, mutably — used to pump/poll whichever process(es) exist regardless
-    /// of which is attached (research R6: both are kept alive and serviced in the background).
+    /// The AI CLI process plus every open shell instance, mutably — used to pump/poll every
+    /// live process regardless of which is attached (research R6: all are kept alive and
+    /// serviced in the background).
     pub fn each_mut(&mut self) -> impl Iterator<Item = &mut RuntimeTerminal> {
-        self.ai_cli.iter_mut().chain(self.shell.iter_mut())
+        self.ai_cli.iter_mut().chain(self.shells.values_mut())
     }
 
-    /// Kill and drop every populated slot (session close/teardown, FR-014).
+    /// Kill and remove exactly one shell instance's `RuntimeTerminal` (feature 011,
+    /// `ShellInstanceCloseRequested`) — leaves the AI CLI process and every sibling instance
+    /// untouched.
+    pub fn close_shell(&mut self, id: micold_ai_ide::session::ShellInstanceId) {
+        if let Some(mut rt) = self.shells.remove(&id) {
+            let _ = rt.kill();
+        }
+    }
+
+    /// Kill and drop every populated process — the AI CLI plus every shell instance (session
+    /// close/teardown, FR-018).
     pub fn kill_all(&mut self) {
         if let Some(mut rt) = self.ai_cli.take() {
             let _ = rt.kill();
         }
-        if let Some(mut rt) = self.shell.take() {
+        for (_, mut rt) in self.shells.drain() {
             let _ = rt.kill();
         }
     }
@@ -739,40 +761,66 @@ pub fn pane<'a>(
                     .size(type_scale::LABEL)
                     .style(style::muted(r)),
             )
-            .padding(spacing::XS)
+            .padding(spacing::SM)
             .style(style::text_button(r))
             .on_press(Message::TerminalRestartRequested),
         );
     }
     // While the terminal holds focus, offer an explicit way out (FR-011) alongside the reserved
-    // Ctrl+Shift+E chord and click-outside. Uses `Icon::ReleaseFocus` rather than a raw `⎋`
-    // text character — that character isn't covered by the bundled Material Symbols font (or
-    // any default UI font glyph set) and rendered as a tofu box.
+    // Ctrl+Shift+E chord and click-outside. Icon-only (with a tooltip carrying the label and
+    // chord) rather than an icon+text button — keeps the bar compact; `Icon::ReleaseFocus` reads
+    // clearly on its own and the tooltip still surfaces the reserved chord on hover.
     if state.terminal_focused {
         bar = bar.push(
-            button(
-                row![
-                    icon(Icon::ReleaseFocus, type_scale::LABEL, r.on_surface_variant),
-                    text("release focus (Ctrl+Shift+E)")
-                        .size(type_scale::LABEL)
-                        .style(style::muted(r)),
-                ]
-                .spacing(spacing::XS)
-                .align_y(Alignment::Center),
+            Tooltip::new(
+                IconButton::new(Icon::ReleaseFocus, r)
+                    .padding(spacing::SM)
+                    .on_press(Message::TerminalFocusReleased),
+                "Release focus (Ctrl+Shift+E)",
+                r,
             )
-            .padding(spacing::XS)
-            .style(style::text_button(r))
-            .on_press(Message::TerminalFocusReleased),
+            // This control sits mid-bar, not at an edge — opening below would run past the
+            // window's bottom edge since the bar is the last row on screen, so open upward.
+            .position(TooltipPosition::Top),
+        );
+    }
+    // The instance-switching control: one entry per open Regular Terminal instance, visible only
+    // once a session has more than one (feature 011, FR-004/FR-005). Placed just before the
+    // "open a new instance" control, both ahead of the primary mode toggle.
+    if let Some(switcher) = instance_switcher_row(state, active, r) {
+        bar = bar.push(switcher);
+    }
+    // Open an additional Regular Terminal instance (feature 011, FR-001/FR-005) — visible
+    // whenever the session is in Regular mode, regardless of how many instances are already
+    // open (including zero or one), so there is always a way to go from one instance to two.
+    if mode == TerminalMode::Regular {
+        bar = bar.push(
+            Tooltip::new(
+                IconButton::new(Icon::AddTerminalInstance, r)
+                    .padding(spacing::SM)
+                    .on_press(Message::ShellInstanceOpenRequested),
+                "Open a new terminal instance (Ctrl+Shift+T)",
+                r,
+            )
+            // This button sits at (or very near) the bar's right edge — open the tooltip to the
+            // left so it opens inward instead of overflowing past the window edge.
+            .position(TooltipPosition::Left),
         );
     }
     // The mode toggle anchors the bar's bottom-right corner (spec Clarifications, 2026-07-18) —
     // pushed last so it always sits at the far right regardless of which other controls are
     // present.
-    bar = bar.push(Tooltip::new(
-        IconButton::new(mode_glyph(mode), r).on_press(Message::TerminalModeToggled),
-        mode_tooltip(mode),
-        r,
-    ));
+    bar = bar.push(
+        Tooltip::new(
+            IconButton::new(mode_glyph(mode), r)
+                .padding(spacing::SM)
+                .on_press(Message::TerminalModeToggled),
+            mode_tooltip(mode),
+            r,
+        )
+        // Always the rightmost element in the bar — same reasoning as the "+" button above.
+        .position(TooltipPosition::Left),
+    );
     let bottom_bar = container(bar)
         .width(Length::Fill)
         .padding(spacing::SM)
@@ -825,11 +873,11 @@ fn session_status(state: &State, id: SessionId) -> &'static str {
             SessionLifecycle::Failed => "failed",
             SessionLifecycle::Idle => "idle",
         },
-        TerminalMode::Regular => match session.shell_lifecycle {
-            ShellLifecycle::Running => "running",
-            ShellLifecycle::Starting => "starting…",
-            ShellLifecycle::Exited => "exited",
-            ShellLifecycle::NotStarted => "idle",
+        TerminalMode::Regular => match session.active_shell_lifecycle() {
+            Some(ShellLifecycle::Running) => "running",
+            Some(ShellLifecycle::Starting) => "starting…",
+            Some(ShellLifecycle::Exited) => "exited",
+            Some(ShellLifecycle::NotStarted) | None => "idle",
         },
     }
 }
@@ -846,10 +894,81 @@ fn attached_process_restartable(state: &State, id: SessionId) -> bool {
             SessionLifecycle::Idle | SessionLifecycle::Failed
         ),
         TerminalMode::Regular => matches!(
-            session.shell_lifecycle,
-            ShellLifecycle::NotStarted | ShellLifecycle::Exited
+            session.active_shell_lifecycle(),
+            None | Some(ShellLifecycle::NotStarted | ShellLifecycle::Exited)
         ),
     }
+}
+
+/// The instance-switching control (feature 011, FR-004/FR-005; contracts/terminal-instance-
+/// switcher-ui.md): one tab per open Regular Terminal instance, in creation order, labeled by
+/// its `ShellInstanceId`'s numeric value (the only display identity an instance has). `None`
+/// when the session isn't found or has zero/one instance — pixel-identical to the pre-feature-011
+/// single-instance experience in that case (FR-005).
+///
+/// Each tab is one `button` spanning the whole entry — a press anywhere on it selects that
+/// instance — with the close (and, when shown, restart) controls nested inside as their own
+/// buttons. iced's `Button` always gives its content first crack at an event, so a press that
+/// lands on the nested close/restart button is captured there and never reaches the tab's own
+/// `on_press`; a press anywhere else on the tab falls through to select it. The active tab is
+/// marked with a solid fill (`style::filled`) vs. the low-emphasis `style::text_button` every
+/// other tab uses — a background-color difference is legible at a glance, unlike a thin edge
+/// accent (SC-004: users must be able to tell which instance is active from this row alone).
+fn instance_switcher_row<'a>(
+    state: &'a State,
+    id: SessionId,
+    r: tokens::Roles,
+) -> Option<Element<'a, Message>> {
+    let session = state.active_sessions().iter().find(|s| s.id == id)?;
+    if session.shells.len() <= 1 {
+        return None;
+    }
+    let mut entries = row![].spacing(spacing::SM).align_y(Alignment::Center);
+    for instance in &session.shells {
+        let is_active = session.active_shell == Some(instance.id);
+        let label = text(instance.id.0.to_string()).size(type_scale::LABEL);
+        let close = Tooltip::new(
+            IconButton::new(Icon::Close, r)
+                .size(type_scale::LABEL)
+                .padding(spacing::XS)
+                .circular()
+                .on_press(Message::ShellInstanceCloseRequested(id, instance.id)),
+            "Close this terminal instance",
+            r,
+        )
+        .position(TooltipPosition::Top);
+        let mut content = row![label, close]
+            .spacing(spacing::XS)
+            .align_y(Alignment::Center);
+        // Per-instance restart affordance (feature 011 FR-010): shown exactly when this
+        // instance's own lifecycle is not-running, independent of every sibling — a background
+        // instance can be restarted without switching to it first.
+        if matches!(
+            instance.lifecycle,
+            ShellLifecycle::NotStarted | ShellLifecycle::Exited
+        ) {
+            content = content.push(
+                button(
+                    text("restart")
+                        .size(type_scale::LABEL)
+                        .style(style::muted(r)),
+                )
+                .padding(spacing::SM)
+                .style(style::text_button(r))
+                .on_press(Message::ShellInstanceRestartRequested(id, instance.id)),
+            );
+        }
+        let tab = button(content)
+            .padding(spacing::SM)
+            .on_press(Message::ShellInstanceSelected(id, instance.id));
+        let tab = if is_active {
+            tab.style(style::filled(r))
+        } else {
+            tab.style(style::text_button(r))
+        };
+        entries = entries.push(tab);
+    }
+    Some(entries.into())
 }
 
 #[cfg(test)]

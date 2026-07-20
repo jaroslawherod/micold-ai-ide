@@ -148,6 +148,65 @@ fn reserved_focus_out_chord_releases_focus() {
     assert_eq!(out, KeyOutput::ReleaseFocus);
 }
 
+// ---- Open-new-terminal-instance chord (feature 011, FR-019) ----
+
+#[test]
+fn new_terminal_instance_chord_is_detected() {
+    #[cfg(target_os = "macos")]
+    let mods = Mods {
+        logo: true,
+        shift: true,
+        ..Mods::NONE
+    };
+    #[cfg(not(target_os = "macos"))]
+    let mods = Mods {
+        ctrl: true,
+        shift: true,
+        ..Mods::NONE
+    };
+    let out = encode(&ki(Key::Char('t'), mods, Some("t")), TermMode::default());
+    assert_eq!(out, KeyOutput::NewTerminalInstance);
+
+    // Case-insensitive on the letter itself (matches the existing release-focus chord's rule).
+    let out = encode(&ki(Key::Char('T'), mods, Some("T")), TermMode::default());
+    assert_eq!(out, KeyOutput::NewTerminalInstance);
+}
+
+#[test]
+fn new_terminal_instance_chord_does_not_fire_on_plain_t_or_shift_t() {
+    let out = encode(
+        &ki(Key::Char('t'), Mods::NONE, Some("t")),
+        TermMode::default(),
+    );
+    assert_eq!(bytes(out), b"t");
+
+    let shift_only = Mods {
+        shift: true,
+        ..Mods::NONE
+    };
+    let out = encode(
+        &ki(Key::Char('t'), shift_only, Some("T")),
+        TermMode::default(),
+    );
+    assert_eq!(bytes(out), b"T");
+}
+
+#[test]
+fn new_terminal_instance_chord_takes_precedence_over_printable_handling() {
+    // On non-macOS, Ctrl+Shift+T without the chord check would otherwise fall through to a
+    // control-chord/printable path; confirm the chord wins outright.
+    #[cfg(not(target_os = "macos"))]
+    {
+        let mods = Mods {
+            ctrl: true,
+            shift: true,
+            ..Mods::NONE
+        };
+        let out = encode(&ki(Key::Char('t'), mods, None), TermMode::default());
+        assert_eq!(out, KeyOutput::NewTerminalInstance);
+    }
+}
+
 // ---- Copy / paste chords ----
 
 #[test]

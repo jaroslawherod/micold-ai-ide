@@ -749,6 +749,10 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     shell.publish(Message::TerminalFocusReleased);
                     event::Status::Captured
                 }
+                KeyOutput::NewTerminalInstance => {
+                    shell.publish(Message::ShellInstanceOpenRequested);
+                    event::Status::Captured
+                }
                 KeyOutput::Copy => {
                     clipboard.write(ClipboardKind::Standard, self.rt.selectable_content());
                     event::Status::Captured
