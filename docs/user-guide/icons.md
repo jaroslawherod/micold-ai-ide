@@ -9,14 +9,25 @@ status markers.
 
 | Icon | Meaning | Where you see it |
 |------|---------|------------------|
-| Help (question mark) | Open the Help menu | Top app bar |
-| Info | Open the About dialog | Help menu |
-| Open folder | Open or choose a project | Empty state, "Open another project", the known-projects **Open** button, and "Open this folder" in the selector |
-| Pencil | Rename a known project | Known-projects list |
+| Menu (three lines) | Open the overflow menu | Top app bar |
+| Info | Open the About dialog | Overflow menu |
+| Settings (gear) | Open the Settings dialog | Overflow menu |
+| Light mode (sun) | The theme is following light mode | Theme toggle in the overflow menu |
+| Dark mode (moon) | The theme is following dark mode | Theme toggle in the overflow menu |
+| Auto mode | The theme is following your operating system | Theme toggle in the overflow menu |
+| Open folder | Open or choose a project | Empty state, "Open another project", the known-projects **Open** button, the project switcher, and "Open this folder" in the selector |
+| Pencil | Rename a known project | Known-projects list, project right-click menu |
 | Commit | This folder is a git repository | "git" badge in the known-projects list and the project selector |
-| Check circle | This is the active project | Known-projects list |
-| Error | This project's folder is currently unavailable | Known-projects list |
-| Up arrow | Go up one folder | Project selector |
+| Check circle | This is the active project | Known-projects list, project switcher |
+| Error | This project's folder is currently unavailable | Known-projects list, project switcher, sidebar |
+| Up arrow | Go up one folder | Project selector, folder tree |
+| Hide sidebar | Collapse the sidebar | Sidebar header |
+| Show sidebar | Expand the sidebar | Collapsed sidebar |
+| Add session | Start a new session | Sidebar worktree rows |
+| Add worktree | Create a new worktree | Sidebar header |
+| Delete | Delete a worktree | Sidebar worktree rows |
+| Filter | Toggle the tag-filter panel | Sidebar toolbar |
+| Project root | The repository's own working directory | Sidebar **Default** entry |
 | Copy | Copy a worktree's name to the clipboard | Worktree right-click menu (**Copy name**) |
 
 Every icon follows the active theme: it is tinted to match the text around it and is legible
@@ -46,3 +57,11 @@ through to a blank box at runtime. To add one:
    already is, since the font carries full upstream coverage.
 
 See [Appearance & Theming](appearance-theming.md) for how themes and colors work.
+
+---
+
+**Alignment**: 2026-07-20 — Spec/code alignment audit (spec 004 FR-013). The table advertised a
+"Help (question mark)" app-bar icon that no longer exists — the top app bar renders `Icon::Menu`
+— and listed 9 of the 21 icons the application defines. All rendered icons are now documented.
+`Icon::Help` remains defined in `src/icons.rs` with zero call sites and is deliberately omitted
+here; it is tracked as orphaned code for removal.

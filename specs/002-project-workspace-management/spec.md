@@ -97,7 +97,7 @@ The user renames a project. Renaming changes only the display name stored by the
 
 - **FR-001**: The application shell MUST provide a way to open a project selector.
 - **FR-002**: The project selector MUST let the user browse the local filesystem and select a folder.
-- **FR-003**: The system MUST allow any folder to be chosen as a project, whether or not it is a git repository.
+- **FR-003**: ~~The system MUST allow any folder to be chosen as a project, whether or not it is a git repository.~~ (Superseded — spec/code alignment 2026-07-20: directly reversed by feature 005 FR-001a, which restricts projects to git repositories because every session maps to a git worktree.) The system MUST refuse to open a non-git directory as a project, per feature 005 FR-001a. The git-repository flag of FR-006/FR-007 therefore distinguishes *openable* folders in the browser rather than annotating projects that may be opened either way.
 - **FR-004**: When a folder is chosen, the system MUST create a project whose default display name is the folder's name.
 - **FR-005**: Choosing a folder (or reopening a known project) MUST make that project the active working space.
 
@@ -177,3 +177,5 @@ The following are explicitly **not** part of this feature:
 - Initializing git in a non-git folder.
 - Renaming, moving, or deleting anything on the filesystem (all rename behavior affects only the application-stored display name).
 - Removing entries from the known-projects list (managing/pruning the list is not addressed here).
+
+**Alignment**: 2026-07-20 — Spec/code alignment audit. FR-003 amended: "any folder, git or not" was directly reversed by feature 005 FR-001a (git repositories only), because every session maps to a git worktree. The code has enforced the git-only gate since feature 005; this spec had not been updated. No behaviour change. Separately, a real defect was found on this path and is tracked for fix, not spec'd away: the refusal message is written to a state field whose only render site is the add-worktree modal, so a non-git folder is refused silently (see feature 005 FR-001a, which requires informing the user).
