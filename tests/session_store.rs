@@ -3,7 +3,9 @@
 //! `None`/`null` round-trips to `SessionLocation::Default`.
 
 use micold_ai_ide::project::{Availability, Project};
-use micold_ai_ide::session::{Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation};
+use micold_ai_ide::session::{
+    Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,
+};
 use micold_ai_ide::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_ai_ide::workspace::Workspace;
 use std::collections::BTreeMap;
@@ -27,11 +29,13 @@ fn workspace_with_sessions() -> (Workspace, PathBuf, SessionId) {
                 id,
                 SessionLocation::Worktree("feat-x".to_string()),
                 SessionLabel::Named("Add login".to_string()),
+                TerminalMode::AiCli,
             ),
             Session::restored(
                 SessionId::from_uuid(Uuid::from_u128(0x5678)),
                 SessionLocation::Worktree("chore-cleanup".to_string()),
                 SessionLabel::Pending,
+                TerminalMode::AiCli,
             ),
         ],
     );
@@ -92,6 +96,7 @@ fn null_title_restores_as_pending() {
             SessionId::new(),
             SessionLocation::Worktree("feat-x".to_string()),
             SessionLabel::Pending,
+            TerminalMode::AiCli,
         )],
     );
     let ws = Workspace {
@@ -125,6 +130,7 @@ fn default_session_persists_as_null_worktree_dir_and_roundtrips() {
             SessionId::new(),
             SessionLocation::Default,
             SessionLabel::Pending,
+            TerminalMode::AiCli,
         )],
     );
     let ws = Workspace {

@@ -21,11 +21,12 @@ fn new_default_session_has_no_worktree_identity() {
 
 #[test]
 fn restored_default_session_is_idle_and_inactive() {
-    use micold_ai_ide::session::{SessionId, SessionLabel};
+    use micold_ai_ide::session::{SessionId, SessionLabel, TerminalMode};
     let s = Session::restored(
         SessionId::new(),
         SessionLocation::Default,
         SessionLabel::Pending,
+        TerminalMode::AiCli,
     );
     assert_eq!(s.lifecycle, SessionLifecycle::Idle);
     assert_eq!(s.location, SessionLocation::Default);
@@ -42,11 +43,12 @@ fn mark_running_transitions_from_starting() {
 
 #[test]
 fn restored_session_is_idle_and_inactive() {
-    use micold_ai_ide::session::{SessionId, SessionLabel};
+    use micold_ai_ide::session::{SessionId, SessionLabel, TerminalMode};
     let s = Session::restored(
         SessionId::new(),
         SessionLocation::Worktree("feat-x".to_string()),
         SessionLabel::Pending,
+        TerminalMode::AiCli,
     );
     assert_eq!(s.lifecycle, SessionLifecycle::Idle);
     assert!(!s.is_active());
@@ -54,11 +56,12 @@ fn restored_session_is_idle_and_inactive() {
 
 #[test]
 fn idle_session_can_start_again() {
-    use micold_ai_ide::session::{SessionId, SessionLabel};
+    use micold_ai_ide::session::{SessionId, SessionLabel, TerminalMode};
     let mut s = Session::restored(
         SessionId::new(),
         SessionLocation::Worktree("feat-x".to_string()),
         SessionLabel::Pending,
+        TerminalMode::AiCli,
     );
     s.start();
     assert_eq!(s.lifecycle, SessionLifecycle::Starting);

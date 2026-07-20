@@ -8,7 +8,9 @@
 
 use micold_ai_ide::fs_scan::FolderScanner;
 use micold_ai_ide::project::{canonicalize_best_effort, FolderEntry};
-use micold_ai_ide::session::{RestartDecision, Session, SessionId, SessionLabel, SessionLocation};
+use micold_ai_ide::session::{
+    RestartDecision, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_ai_ide::workspace::Workspace;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -60,6 +62,7 @@ pub fn idle_session(worktree_dir: &str) -> Session {
         SessionId::new(),
         SessionLocation::Worktree(worktree_dir.to_string()),
         SessionLabel::Pending,
+        TerminalMode::AiCli,
     )
 }
 

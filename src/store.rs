@@ -7,7 +7,7 @@
 //! durable contract in `specs/002-project-workspace-management/contracts/storage-schema.md`.
 
 use crate::project::{Availability, Project};
-use crate::session::{Session, SessionId, SessionLabel, SessionLocation};
+use crate::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -87,6 +87,8 @@ struct StoredProject {
 /// `Some(dir)` -> [`SessionLocation::Worktree`], `None`/absent -> [`SessionLocation::Default`].
 /// Every session persisted before feature 010 has `worktree_dir` as a plain JSON string, which
 /// `serde_json` deserializes into `Some(String)` unchanged — no migration, no schema bump.
+/// `mode` is a second, independent feature 010 addition (FR-011;
+/// contracts/persistence-schema.md).
 #[derive(Debug, Serialize, Deserialize)]
 struct StoredSession {
     id: uuid::Uuid,
@@ -94,6 +96,36 @@ struct StoredSession {
     worktree_dir: Option<String>,
     #[serde(default)]
     title: Option<String>,
+    #[serde(default)]
+    mode: StoredTerminalMode,
+}
+
+/// Serde-mapped mirror of [`TerminalMode`] (feature 010, research R5): kept as a separate type
+/// rather than deriving `Serialize`/`Deserialize` directly on the pure-core enum, so the
+/// persisted *shape* can evolve independently (mirrors `title`/`SessionLabel`).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+enum StoredTerminalMode {
+    #[default]
+    AiCli,
+    Regular,
+}
+
+impl From<TerminalMode> for StoredTerminalMode {
+    fn from(mode: TerminalMode) -> Self {
+        match mode {
+            TerminalMode::AiCli => StoredTerminalMode::AiCli,
+            TerminalMode::Regular => StoredTerminalMode::Regular,
+        }
+    }
+}
+
+impl From<StoredTerminalMode> for TerminalMode {
+    fn from(mode: StoredTerminalMode) -> Self {
+        match mode {
+            StoredTerminalMode::AiCli => TerminalMode::AiCli,
+            StoredTerminalMode::Regular => TerminalMode::Regular,
+        }
+    }
 }
 
 impl StoredSession {
@@ -136,6 +168,7 @@ impl StoredCatalog {
                                         SessionLabel::Named(t) => Some(t.clone()),
                                         SessionLabel::Pending => None,
                                     },
+                                    mode: s.mode.into(),
                                 })
                                 .collect()
                         })
@@ -169,6 +202,7 @@ impl StoredCatalog {
                             SessionId::from_uuid(s.id),
                             StoredSession::stored_to_location(s.worktree_dir),
                             label,
+                            s.mode.into(),
                         )
                     })
                     .collect();

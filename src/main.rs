@@ -21,6 +21,7 @@ use micold_ai_ide::provider::{AiCliProvider, ClaudeProvider};
 use micold_ai_ide::selector::{Selector, SelectorStatus};
 use micold_ai_ide::session::{
     RestartDecision, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation,
+    TerminalMode,
 };
 use micold_ai_ide::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_ai_ide::store::{JsonFileStore, ProjectStore};
@@ -32,7 +33,7 @@ use micold_ai_ide::worktree::{
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use ui::terminal::{spawn_pty, RuntimeTerminal};
+use ui::terminal::{spawn_pty, spawn_shell_pty, RuntimeTerminal, SessionTerminals};
 use ui::MotionKey;
 
 /// How often the OS light/dark preference is polled (research R4).
@@ -94,8 +95,10 @@ enum ClosingOverlay {
 /// The binary's application state: the pure core plus gui-only runtime handles.
 struct App {
     core: State,
-    /// Live PTY sessions, keyed by session id (never part of the pure core — not Clone/Eq).
-    terminals: HashMap<SessionId, RuntimeTerminal>,
+    /// Live PTY sessions, keyed by session id (never part of the pure core — not Clone/Eq). Each
+    /// session may hold up to two live processes — AI CLI and shell (feature 010) — of which at
+    /// most one is attached to the visible pane at a time, per that session's `TerminalMode`.
+    terminals: HashMap<SessionId, SessionTerminals>,
     /// The configured terminal scrollback limit (feature 006), loaded from settings and applied
     /// to newly spawned sessions.
     scrollback_lines: usize,
@@ -205,11 +208,41 @@ fn motion_animating(app: &App) -> bool {
 }
 
 impl Drop for App {
-    /// Kill every child `claude` process on shutdown so none are orphaned (research R5, T057).
+    /// Kill every child process (AI CLI and shell) on shutdown so none are orphaned (research
+    /// R5, T057; feature 010 extends this to both processes per session).
     fn drop(&mut self) {
-        for rt in self.terminals.values_mut() {
-            let _ = rt.kill();
+        for st in self.terminals.values_mut() {
+            st.kill_all();
         }
+    }
+}
+
+impl App {
+    /// The `RuntimeTerminal` currently attached to the active session's displayed pane, if any
+    /// (feature 010, FR-007) — routes through that session's current `TerminalMode` rather than
+    /// assuming the AI CLI, so every keystroke/render/selection call site is automatically
+    /// correct in either mode without a mode check at each call site.
+    fn attached_terminal_mut(&mut self) -> Option<&mut RuntimeTerminal> {
+        let id = self.core.active_session?;
+        let mode = self
+            .core
+            .active_sessions()
+            .iter()
+            .find(|s| s.id == id)?
+            .mode;
+        self.terminals.get_mut(&id)?.attached_mut(mode)
+    }
+
+    /// Read-only counterpart of [`App::attached_terminal_mut`].
+    fn attached_terminal(&self) -> Option<&RuntimeTerminal> {
+        let id = self.core.active_session?;
+        let mode = self
+            .core
+            .active_sessions()
+            .iter()
+            .find(|s| s.id == id)?
+            .mode;
+        self.terminals.get(&id)?.attached(mode)
     }
 }
 
@@ -571,7 +604,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     app.last_grid,
                 ) {
                     Ok(rt) => {
-                        app.terminals.insert(id, rt);
+                        app.terminals.insert(
+                            id,
+                            SessionTerminals {
+                                ai_cli: Some(rt),
+                                shell: None,
+                            },
+                        );
                         app.core.update(Message::SessionStarted(session));
                         app.core.update(Message::SessionRunning(id));
                         persist(&app.core);
@@ -595,21 +634,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 Task::none()
             }
         }
-        // Selecting an Idle (restored) session resumes it via `claude --resume` (FR-023a).
+        // Selecting a session reattaches/resumes whichever process its persisted mode selects
+        // (FR-005, FR-011) — an Idle AI CLI session resumes via `claude --resume` (FR-023a); a
+        // session last left in Regular mode gets a fresh shell instead.
         Message::SessionSelected(id) => {
             app.core.update(Message::SessionSelected(id));
-            if !app.terminals.contains_key(&id) {
-                if let Some((cwd, _)) = session_cwd(&app.core, id) {
-                    if let Ok(rt) = spawn_pty(
-                        &launch_spec(&cwd, id, LaunchMode::Resume),
-                        app.scrollback_lines,
-                        app.last_grid,
-                    ) {
-                        app.terminals.insert(id, rt);
-                        app.core.update(Message::SessionRunning(id));
-                    }
-                }
-            }
+            ensure_attached_process(app, id);
             // BUG-001: auto-focus the selected session's terminal (FR-010/FR-010a). Selecting from
             // the sidebar is a click *outside* the pane, so a currently-focused pane also publishes
             // `TerminalFocusReleased` for the same click. Re-assert focus via a follow-up message,
@@ -617,13 +647,36 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // regardless of the intra-batch order of `SessionSelected` vs `TerminalFocusReleased`.
             Task::done(Message::TerminalFocused)
         }
-        // Close a session: kill its process and drop the runtime handle (FR-015a).
+        // Close a session: kill both its processes (AI CLI and shell, feature 010 FR-014) and
+        // drop the runtime handles (FR-015a).
         Message::SessionCloseRequested(id) => {
-            if let Some(mut rt) = app.terminals.remove(&id) {
-                let _ = rt.kill();
+            if let Some(mut st) = app.terminals.remove(&id) {
+                st.kill_all();
             }
             app.core.update(Message::SessionCloseRequested(id));
             persist(&app.core);
+            Task::none()
+        }
+        // Switch the active session's terminal between AI CLI and Regular modes (feature 010,
+        // FR-001–FR-004, FR-010): flip the mode, then reattach/spawn whichever process it now
+        // selects. Neither process is ever killed as a side effect (FR-006) — the previously-
+        // attached one simply stops being displayed/written to and keeps running in the
+        // background (research R6).
+        Message::TerminalModeToggled => {
+            app.core.update(Message::TerminalModeToggled);
+            if let Some(id) = app.core.active_session {
+                ensure_attached_process(app, id);
+                persist(&app.core);
+            }
+            Task::none()
+        }
+        // Manually restart the active session's currently-attached, not-running process
+        // (FR-013) — the shell never auto-restarts, so this is its only path back; also covers
+        // an Idle/Failed AI CLI, which previously had no explicit affordance.
+        Message::TerminalRestartRequested => {
+            if let Some(id) = app.core.active_session {
+                ensure_attached_process(app, id);
+            }
             Task::none()
         }
         // Worktree creation completed: apply progress to the form, then dispatch the result
@@ -635,8 +688,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             persist(&app.core);
             Task::none()
         }
-        // Stream live keystrokes/paste to the displayed session's PTY (FR-008), but only while
-        // it is Running (FR-012a): input to a non-running process is discarded, not buffered.
+        // Stream live keystrokes/paste to the displayed session's currently-ATTACHED process
+        // (FR-007/FR-008), but only while that process is Running (FR-012a, feature 010 extends
+        // the write-gate to the shell): input to a non-running process is discarded, not
+        // buffered.
         Message::TerminalBytes(bytes) => {
             if let Some(id) = app.core.active_session {
                 let running = app
@@ -644,10 +699,15 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     .active_sessions()
                     .iter()
                     .find(|s| s.id == id)
-                    .map(|s| micold_ai_ide::app::should_write_to(s.lifecycle))
+                    .map(|s| match s.mode {
+                        TerminalMode::AiCli => micold_ai_ide::app::should_write_to(s.lifecycle),
+                        TerminalMode::Regular => {
+                            micold_ai_ide::app::should_write_to_shell(s.shell_lifecycle)
+                        }
+                    })
                     .unwrap_or(false);
                 if running {
-                    if let Some(rt) = app.terminals.get_mut(&id) {
+                    if let Some(rt) = app.attached_terminal_mut() {
                         let _ = rt.write(&bytes);
                     }
                     // The user interacted, so `claude` now has a conversation — persist it so it
@@ -659,31 +719,19 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Mouse text selection on the displayed session's grid (FR-013).
         Message::TerminalSelectStart { col, line, kind } => {
-            if let Some(rt) = app
-                .core
-                .active_session
-                .and_then(|id| app.terminals.get_mut(&id))
-            {
+            if let Some(rt) = app.attached_terminal_mut() {
                 rt.selection_start(col, line, kind);
             }
             Task::none()
         }
         Message::TerminalSelectUpdate { col, line } => {
-            if let Some(rt) = app
-                .core
-                .active_session
-                .and_then(|id| app.terminals.get_mut(&id))
-            {
+            if let Some(rt) = app.attached_terminal_mut() {
                 rt.selection_update(col, line);
             }
             Task::none()
         }
         Message::TerminalSelectCleared => {
-            if let Some(rt) = app
-                .core
-                .active_session
-                .and_then(|id| app.terminals.get_mut(&id))
-            {
+            if let Some(rt) = app.attached_terminal_mut() {
                 rt.selection_clear();
             }
             Task::none()
@@ -693,22 +741,14 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // Remember the pane's live size so the next spawned session starts at it too, rather
             // than the hardcoded default (bugfix: new terminal not starting fullscreen).
             app.last_grid = Some((cols, rows));
-            if let Some(rt) = app
-                .core
-                .active_session
-                .and_then(|id| app.terminals.get_mut(&id))
-            {
+            if let Some(rt) = app.attached_terminal_mut() {
                 let _ = rt.resize(cols, rows);
             }
             Task::none()
         }
         // Scroll the displayed session's local scrollback (FR-016).
         Message::TerminalScrolled(delta) => {
-            if let Some(rt) = app
-                .core
-                .active_session
-                .and_then(|id| app.terminals.get_mut(&id))
-            {
+            if let Some(rt) = app.attached_terminal_mut() {
                 rt.scroll(delta);
             }
             Task::none()
@@ -717,11 +757,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // here at apply time so a burst of batched drag messages converges instead of accumulating
         // stale relative deltas (drag flicker fix, FR-016).
         Message::TerminalScrolledTo(target) => {
-            if let Some(rt) = app
-                .core
-                .active_session
-                .and_then(|id| app.terminals.get_mut(&id))
-            {
+            if let Some(rt) = app.attached_terminal_mut() {
                 rt.scroll(ui::target_offset_delta(rt.display_offset(), target));
             }
             Task::none()
@@ -730,9 +766,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::TerminalCopyRequested => {
             app.core.update(Message::TerminalContextMenuClosed);
             let content = app
-                .core
-                .active_session
-                .and_then(|id| app.terminals.get(&id))
+                .attached_terminal()
                 .map(|rt| rt.selectable_content())
                 .unwrap_or_default();
             if content.is_empty() {
@@ -802,8 +836,14 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::TerminalTick => {
-            for rt in app.terminals.values_mut() {
-                rt.pump();
+            // Pump BOTH of a session's processes every tick, regardless of which is attached
+            // (research R6) — this is what keeps a backgrounded AI CLI's crash-loop restart
+            // working while Regular mode is displayed, and keeps the detached process's `Term`
+            // state current so re-attaching renders instantly correct.
+            for st in app.terminals.values_mut() {
+                for rt in st.each_mut() {
+                    rt.pump();
+                }
             }
             sync_session_titles(app);
             handle_process_exits(app);
@@ -826,10 +866,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     .iter()
                     .find(|w| w.dir_name == dir)
                     .cloned();
-                // Terminate this worktree's running sessions first.
+                // Terminate this worktree's running sessions first (both processes per
+                // session, feature 010 FR-014).
                 for id in app.core.sessions_in_worktree(&dir) {
-                    if let Some(mut rt) = app.terminals.remove(&id) {
-                        let _ = rt.kill();
+                    if let Some(mut st) = app.terminals.remove(&id) {
+                        st.kill_all();
                     }
                 }
                 if let Some(wt) = wt {
@@ -876,11 +917,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
 }
 
 fn view(app: &App) -> iced::Element<'_, Message> {
-    // Supply the active session's live terminal runtime to the colour-rendering pane (feature 006).
-    let terminal = app
-        .core
-        .active_session
-        .and_then(|id| app.terminals.get(&id));
+    // Supply the active session's currently-ATTACHED live terminal runtime to the
+    // colour-rendering pane (feature 006; feature 010 routes this through `TerminalMode` rather
+    // than assuming AI CLI — this is what makes FR-008 identical-real-terminal-behavior true by
+    // construction: both modes render through the same pane).
+    let terminal = app.attached_terminal();
     ui::view(
         &app.core,
         terminal,
@@ -987,17 +1028,28 @@ fn sync_session_titles(app: &mut App) {
 }
 
 fn handle_process_exits(app: &mut App) {
-    let mut exited: Vec<SessionId> = Vec::new();
-    for (id, rt) in app.terminals.iter_mut() {
-        if rt.has_exited() {
-            exited.push(*id);
+    // Detect each slot's exit independently (feature 010) — a session may have one, both, or
+    // neither process exit in the same tick, and they're handled by entirely different policies
+    // (AI CLI: crash-loop auto-restart; shell: never auto-restarted, FR-013).
+    let mut ai_cli_exited: Vec<SessionId> = Vec::new();
+    let mut shell_exited: Vec<SessionId> = Vec::new();
+    for (id, st) in app.terminals.iter_mut() {
+        if st.ai_cli.as_mut().is_some_and(|rt| rt.has_exited()) {
+            ai_cli_exited.push(*id);
+        }
+        if st.shell.as_mut().is_some_and(|rt| rt.has_exited()) {
+            shell_exited.push(*id);
         }
     }
 
-    for id in exited {
-        app.terminals.remove(&id);
+    for id in ai_cli_exited {
+        if let Some(st) = app.terminals.get_mut(&id) {
+            st.ai_cli = None;
+        }
         // Resolve the exited session in ANY project — a background session of an inactive
-        // project must still be handled, not silently dropped (feature 008, BS-6).
+        // project must still be handled, not silently dropped (feature 008, BS-6). This is
+        // unconditional on `TerminalMode` (research R6): the AI CLI's crash-loop guard applies
+        // whether or not Regular mode is currently displayed.
         let Some((cwd, lifecycle)) = session_cwd_any(&app.core, id) else {
             continue;
         };
@@ -1016,7 +1068,7 @@ fn handle_process_exits(app: &mut App) {
                 app.scrollback_lines,
                 app.last_grid,
             ) {
-                app.terminals.insert(id, rt);
+                app.terminals.entry(id).or_default().ai_cli = Some(rt);
                 // Mark the (possibly background) session Running directly — SessionRunning only
                 // reaches the active project. If it was restarted while its project is inactive,
                 // record it so the user is notified on return (feature 008, BS-6/BS-7).
@@ -1027,21 +1079,72 @@ fn handle_process_exits(app: &mut App) {
             }
         }
     }
+
+    // Shell exit (feature 010, FR-013): never auto-restarted, regardless of intentional exit or
+    // crash — just mark `Exited` via a direct workspace mutation (mirrors the ai_cli branch's
+    // cross-project-safe pattern above) so a backgrounded session's shell exit is reflected even
+    // if its project isn't active. No restart decision, no crash-loop counter.
+    for id in shell_exited {
+        if let Some(st) = app.terminals.get_mut(&id) {
+            st.shell = None;
+        }
+        if let Some((_, s)) = app.core.workspace.find_session_mut(id) {
+            s.mark_shell_exited();
+        }
+    }
 }
 
-/// The session's cwd (worktree or project root) + current lifecycle, for a session of the
-/// active project. Cwd site 4/5 (research.md R2).
-fn session_cwd(core: &State, id: SessionId) -> Option<(PathBuf, SessionLifecycle)> {
+/// The session's cwd (worktree or project root) + current `TerminalMode`, for a session of the
+/// active project (feature 010).
+fn session_cwd_and_mode(core: &State, id: SessionId) -> Option<(PathBuf, TerminalMode)> {
     let repo = core.workspace.active.clone()?;
     let session = core.active_sessions().iter().find(|s| s.id == id)?;
     let cwd = session_cwd_for_location(&repo, &session.location);
-    Some((cwd, session.lifecycle))
+    Some((cwd, session.mode))
+}
+
+/// Ensure the process matching `id`'s current mode is attached/running, spawning it if the
+/// corresponding slot is empty (feature 010, FR-003/FR-004/FR-005/FR-011) — reattaches to an
+/// already-running process for free (no spawn call at all); only reaches the network/process
+/// boundary when there is genuinely nothing to reattach to. Used by `SessionSelected` (initial
+/// reopen, mode-aware), `TerminalModeToggled`, and `TerminalRestartRequested`.
+fn ensure_attached_process(app: &mut App, id: SessionId) {
+    let Some((cwd, mode)) = session_cwd_and_mode(&app.core, id) else {
+        return;
+    };
+    let already_attached = app
+        .terminals
+        .get(&id)
+        .and_then(|st| st.attached(mode))
+        .is_some();
+    if already_attached {
+        return;
+    }
+    match mode {
+        TerminalMode::AiCli => {
+            if let Ok(rt) = spawn_pty(
+                &launch_spec(&cwd, id, LaunchMode::Resume),
+                app.scrollback_lines,
+                app.last_grid,
+            ) {
+                app.terminals.entry(id).or_default().ai_cli = Some(rt);
+                app.core.update(Message::SessionRunning(id));
+            }
+        }
+        TerminalMode::Regular => {
+            let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
+            if let Ok(rt) = spawn_shell_pty(&cwd, &env, app.scrollback_lines, app.last_grid) {
+                app.terminals.entry(id).or_default().shell = Some(rt);
+                app.core.update(Message::ShellSessionRunning(id));
+            }
+        }
+    }
 }
 
 /// The session's cwd (worktree or project root) + current lifecycle, for a session in ANY
-/// project (feature 008). Unlike [`session_cwd`], this resolves sessions of inactive projects
-/// too, so the crash-loop guard applies to background sessions (BS-6). Cwd site 5/5
-/// (research.md R2).
+/// project (feature 008). Unlike [`session_cwd_and_mode`] (active project only), this resolves
+/// sessions of inactive projects too, so the crash-loop guard applies to background sessions
+/// (BS-6). Cwd site 5/5 (research.md R2).
 fn session_cwd_any(core: &State, id: SessionId) -> Option<(PathBuf, SessionLifecycle)> {
     let (project, session) = core.workspace.find_session(id)?;
     let cwd = session_cwd_for_location(project, &session.location);

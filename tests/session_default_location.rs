@@ -1,7 +1,8 @@
 //! T008 (010-root-dir-session) — a SessionLocation::Default session's resolved cwd equals the
 //! project root exactly, for the pure logic these five call sites in `src/main.rs` share
 //! (research.md R2): `session_has_conversation`, the `SessionStartRequested` handler,
-//! `sync_session_titles`, `session_cwd`, `session_cwd_any`. All five delegate to
+//! `sync_session_titles`, `session_cwd_and_mode` (feature 010's mode-aware replacement for the
+//! original `session_cwd`), `session_cwd_any`. All five delegate to
 //! `SessionLocation::cwd` (`src/session.rs`), the single authoritative implementation of the
 //! `Worktree`/`Default` decision — exercised directly here rather than a hand-copied mirror, so
 //! this test can't silently drift from the real logic. `main.rs`'s thin wrapper over it is
@@ -32,12 +33,13 @@ fn worktree_session_cwd_is_unchanged_by_this_feature() {
 #[test]
 fn restored_default_session_cwd_is_also_the_project_root() {
     // Covers the reopen/resume call sites (session_cwd, session_cwd_any), not just fresh start.
-    use micold_ai_ide::session::{SessionId, SessionLabel};
+    use micold_ai_ide::session::{SessionId, SessionLabel, TerminalMode};
     let repo = PathBuf::from("/home/dev/proj");
     let session = Session::restored(
         SessionId::new(),
         SessionLocation::Default,
         SessionLabel::Pending,
+        TerminalMode::AiCli,
     );
     let cwd = session.location.cwd(&repo);
     assert_eq!(cwd, repo);
