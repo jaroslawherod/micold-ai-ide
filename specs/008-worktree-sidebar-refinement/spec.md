@@ -87,6 +87,9 @@ updates. Repeat and cancel at the confirmation step; verify nothing is removed.
 5. **Given** the deleted worktree currently held the active session, **When** deletion
    completes, **Then** the application settles on a consistent state with no session from
    the removed worktree still active.
+6. **Given** a deletion that fully completes, **When** the sidebar updates, **Then** no error,
+   warning, or leftover-path notice is shown — the absence of the working directory after
+   removal is the success case, not a failure. *(Added by BUG-001.)*
 
 ---
 
@@ -196,6 +199,10 @@ smaller (80%), while remaining legible in light and dark themes.
   their existing close action and are not deleted/renamed by this menu.
 - **Missing/invalid worktree deletion**: A worktree that is already missing or invalid on
   disk can still be removed (cleaned up) through Delete.
+- **Directory already gone at cleanup time**: Removing the git worktree also removes its
+  working directory, so the follow-up directory cleanup normally finds nothing left. This is
+  the ordinary success path and MUST be silent; only a directory that genuinely survives
+  removal is worth reporting (see FR-023a).
 
 ## Requirements *(mandatory)*
 
@@ -259,8 +266,19 @@ smaller (80%), while remaining legible in light and dark themes.
 - **FR-021**: On cancellation, the system MUST remove nothing.
 - **FR-022**: If the deleted worktree held the active session, the system MUST settle into a
   consistent state with no session from the removed worktree still active.
-- **FR-023**: If removal cannot fully complete, the system MUST surface a clear error and
-  leave the system in a consistent state (no partially-removed worktree lingering).
+- **FR-023**: ~~If removal cannot fully complete, the system MUST surface a clear error and
+  leave the system in a consistent state (no partially-removed worktree lingering).~~
+  *(Superseded by BUG-001: the one-directional phrasing never required the success path to be
+  silent, so an unconditional error on a fully-successful delete did not violate the letter of
+  this requirement.)* Removal reporting MUST be exact in **both** directions: if removal
+  cannot fully complete, the system MUST surface a clear error and leave the system in a
+  consistent state (no partially-removed worktree lingering); and if removal **does** fully
+  complete, the system MUST surface **no** error, warning, or leftover-path notice.
+- **FR-023a**: A cleanup step that finds its target already absent MUST be treated as success,
+  not as a failure. Specifically, removing the working directory after git has already removed
+  it is the expected outcome, not an error condition.
+- **FR-023b**: A genuine failure of any removal step MUST NOT be silently swallowed — it MUST
+  reach the user via FR-023's error path.
 
 **Filtering**
 
@@ -300,6 +318,9 @@ smaller (80%), while remaining legible in light and dark themes.
   100% of cases.
 - **SC-004**: Deleting a worktree removes its directory, all of its sessions, and its branch,
   and 0% of deletions occur without an explicit confirmation step.
+- **SC-004a**: 0% of fully-successful deletions produce an error, warning, or leftover-path
+  notice, and 100% of deletions that genuinely leave something behind produce one.
+  *(Added by BUG-001.)*
 - **SC-005**: Renaming a worktree changes only its displayed name in 100% of cases — the
   on-disk directory, the git branch, and the derived tags are unchanged — and the new name
   survives an application restart.
@@ -333,3 +354,13 @@ smaller (80%), while remaining legible in light and dark themes.
   application's existing local, offline storage; nothing is sent off-device.
 - **80% coverage**: The 80% reduction applies uniformly to all text scales used within the
   sidebar.
+- **Git removes the working directory**: `git worktree remove` deletes the worktree's working
+  directory itself. Any follow-up directory cleanup is therefore best-effort belt-and-braces
+  for the case where something survives; finding the directory already absent is success.
+
+**Bugfix**: 2026-07-20 — BUG-001 Every worktree delete reported a folder-removal error despite
+fully succeeding, because the post-removal directory cleanup treated "already gone" as a
+failure. FR-023 amended to require exact reporting in both directions (success MUST be silent),
+FR-023a added (an absent cleanup target is success), FR-023b added (a genuine failure MUST NOT
+be swallowed), US2 acceptance scenario 6 added, SC-004a added, plus an edge case and an
+assumption recording that `git worktree remove` deletes the directory itself.

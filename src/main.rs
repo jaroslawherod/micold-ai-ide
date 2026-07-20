@@ -29,7 +29,8 @@ use micold_ai_ide::store::{JsonFileStore, ProjectStore};
 use micold_ai_ide::terminal::{LaunchMode, LaunchSpec};
 use micold_ai_ide::theme::SystemScheme;
 use micold_ai_ide::worktree::{
-    create_worktree, parse_worktrees, reconcile, remove_worktree, CreateError, Worktree,
+    create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir, CreateError,
+    Worktree,
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -1027,7 +1028,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         // deleting the working files of a still-registered worktree would
                         // leave a worse mess than the failure being reported.
                         Ok(()) => {
-                            if let Err(err) = std::fs::remove_dir_all(&wt.path) {
+                            // `remove_worktree_dir` treats an already-absent directory as
+                            // success — git removed it as part of releasing the worktree, so
+                            // "not found" here is the happy path, not a leftover (FR-023a).
+                            if let Err(err) = remove_worktree_dir(&wt.path) {
                                 app.core.notify_error(format!(
                                     "Deleted worktree \"{name}\", but its folder could not be \
                                      removed: {err}. Left at {}",

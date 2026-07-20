@@ -120,15 +120,38 @@ impl Git for GitCli {
     }
 
     fn worktree_remove(&self, repo: &Path, path: &Path, force: bool) -> io::Result<()> {
-        let path = path.to_string_lossy();
+        let path_arg = path.to_string_lossy();
         let mut args = vec!["worktree", "remove"];
         if force {
             args.push("--force");
         }
-        args.push(&path);
-        // Idempotent: a missing worktree is not a failure for rollback.
-        let _ = run_git(repo, &args);
-        Ok(())
+        args.push(&path_arg);
+        let Err(err) = run_git(repo, &args) else {
+            return Ok(());
+        };
+        // Idempotent, but not silent (feature 008, FR-023b). This previously discarded every
+        // result with `let _ = ...` so that rollback and the missing-worktree edge case stayed
+        // quiet — which also swallowed real failures like a locked worktree, reporting success
+        // while the worktree survived on disk (BUG-001).
+        //
+        // Distinguish the two by outcome rather than by parsing git's message: prune the stale
+        // registrations git itself would drop, then ask whether this path is still registered.
+        // Gone => the caller got what it asked for. Still there => a genuine refusal.
+        self.worktree_prune(repo)?;
+        let still_registered = run_git(repo, &["worktree", "list", "--porcelain"])
+            .map(|list| {
+                crate::worktree::parse_worktrees(&list)
+                    .iter()
+                    .any(|r| r.path == path)
+            })
+            // Can't tell (not a repo, git missing) — surface the original failure rather than
+            // inventing a success.
+            .unwrap_or(true);
+        if still_registered {
+            Err(err)
+        } else {
+            Ok(())
+        }
     }
 
     fn worktree_prune(&self, repo: &Path) -> io::Result<()> {
