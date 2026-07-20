@@ -42,6 +42,10 @@ struct PaneState {
     /// The last grid cell reported to the process, so motion reports are emitted once per cell
     /// crossed rather than once per pixel of pointer movement.
     reported_cell: Option<(u16, u16)>,
+    /// Sub-line wheel travel not yet turned into a scrolled line, in pixels. High-resolution
+    /// touchpads deliver deltas smaller than one cell, which would otherwise round away to nothing
+    /// (BUG-002). See [`wheel_lines`].
+    scroll_residual: f32,
 }
 
 /// The grid cell (col, line) under a cursor position within `bounds`.
@@ -57,6 +61,39 @@ fn grid_at(pos: Point, bounds: Rectangle, metrics: CellMetrics) -> (u16, u16) {
 pub(crate) fn viewport_row(buffer_line: i32, display_offset: usize, rows: usize) -> Option<usize> {
     let row = buffer_line + display_offset as i32;
     usize::try_from(row).ok().filter(|&r| r < rows)
+}
+
+/// Whole lines of scrollback for a wheel `delta`, carrying the sub-line remainder in `residual`.
+///
+/// Discrete wheels (and X11 touchpads, which arrive as legacy button-4/5 events) deliver
+/// [`ScrollDelta::Lines`] and pass straight through. High-resolution touchpads — the norm under
+/// Wayland, and on macOS/Windows precision devices — deliver [`ScrollDelta::Pixels`] in increments
+/// far smaller than one cell. Quantizing each event on its own would round every one of them to
+/// zero and scrolling would never happen at all (BUG-002), so the fraction is retained here until
+/// it accumulates into a line. Reversing direction drops the stale residual so an interrupted
+/// gesture cannot cancel out the new one.
+///
+/// [`ScrollDelta::Lines`]: mouse::ScrollDelta::Lines
+/// [`ScrollDelta::Pixels`]: mouse::ScrollDelta::Pixels
+pub(crate) fn wheel_lines(delta: mouse::ScrollDelta, cell_height: f32, residual: &mut f32) -> i32 {
+    match delta {
+        mouse::ScrollDelta::Lines { y, .. } => {
+            *residual = 0.0;
+            y.round() as i32
+        }
+        mouse::ScrollDelta::Pixels { y, .. } => {
+            if cell_height <= 0.0 {
+                return 0;
+            }
+            if y != 0.0 && *residual != 0.0 && residual.signum() != y.signum() {
+                *residual = 0.0;
+            }
+            *residual += y;
+            let lines = (*residual / cell_height).trunc();
+            *residual -= lines * cell_height;
+            lines as i32
+        }
+    }
 }
 
 /// Width of the scrollback scrollbar track/thumb, in pixels.
@@ -583,10 +620,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             // Wheel scrolls the local scrollback, or forwards to a mouse-reporting program on
             // the alternate screen (FR-016 + wheel edge case).
             Event::Mouse(mouse::Event::WheelScrolled { delta }) if cursor.is_over(bounds) => {
-                let lines = match delta {
-                    mouse::ScrollDelta::Lines { y, .. } => y.round() as i32,
-                    mouse::ScrollDelta::Pixels { y, .. } => (y / metrics.height).round() as i32,
-                };
+                // Sub-line deltas from a high-resolution touchpad accumulate rather than being
+                // rounded away, or fine-grained scrolling would never move at all (BUG-002).
+                let lines = wheel_lines(*delta, metrics.height, &mut state.scroll_residual);
                 if lines != 0 {
                     if self.focused && self.rt.mouse_mode() {
                         let (col, line) = cursor
@@ -729,6 +765,134 @@ mod tests {
     //! Bin unit tests for the pane's pointer→grid mapping (feature 006 US2, T016). Run with
     //! `cargo test --features gui`.
     use super::*;
+
+    // --- Wheel delta → lines (BUG-002: touchpad scrolling under Wayland) ---
+
+    #[test]
+    fn wheel_lines_accumulates_sub_line_pixel_deltas() {
+        let cell = CellMetrics::new(TERM_FONT_SIZE).height; // 18.2
+        let mut residual = 0.0;
+
+        // A high-resolution touchpad emits deltas far smaller than one cell. Individually they
+        // must not scroll, but they must NOT be discarded either.
+        assert_eq!(
+            wheel_lines(
+                mouse::ScrollDelta::Pixels { x: 0.0, y: 5.0 },
+                cell,
+                &mut residual
+            ),
+            0,
+            "a 5px delta is less than one 18.2px line, so it cannot scroll yet"
+        );
+        assert_eq!(
+            wheel_lines(
+                mouse::ScrollDelta::Pixels { x: 0.0, y: 5.0 },
+                cell,
+                &mut residual
+            ),
+            0,
+            "10px accumulated is still under one line"
+        );
+        assert_eq!(
+            wheel_lines(
+                mouse::ScrollDelta::Pixels { x: 0.0, y: 5.0 },
+                cell,
+                &mut residual
+            ),
+            0,
+            "15px accumulated is still under one line"
+        );
+        // 20px total now exceeds one 18.2px line.
+        assert_eq!(
+            wheel_lines(
+                mouse::ScrollDelta::Pixels { x: 0.0, y: 5.0 },
+                cell,
+                &mut residual
+            ),
+            1,
+            "four 5px deltas sum past one line and must produce exactly one line of scroll"
+        );
+    }
+
+    #[test]
+    fn wheel_lines_keeps_the_fraction_after_emitting_a_line() {
+        let cell = 10.0;
+        let mut residual = 0.0;
+        // 15px = one whole line plus 5px left over.
+        assert_eq!(
+            wheel_lines(
+                mouse::ScrollDelta::Pixels { x: 0.0, y: 15.0 },
+                cell,
+                &mut residual
+            ),
+            1
+        );
+        // The retained 5px plus another 5px completes the second line.
+        assert_eq!(
+            wheel_lines(
+                mouse::ScrollDelta::Pixels { x: 0.0, y: 5.0 },
+                cell,
+                &mut residual
+            ),
+            1,
+            "the 5px remainder must carry over rather than being thrown away"
+        );
+    }
+
+    #[test]
+    fn wheel_lines_drops_residual_on_direction_change() {
+        let cell = 10.0;
+        let mut residual = 0.0;
+        assert_eq!(
+            wheel_lines(
+                mouse::ScrollDelta::Pixels { x: 0.0, y: 8.0 },
+                cell,
+                &mut residual
+            ),
+            0
+        );
+        // Reversing direction must not let the stale upward 8px cancel the new downward motion.
+        assert_eq!(
+            wheel_lines(
+                mouse::ScrollDelta::Pixels { x: 0.0, y: -8.0 },
+                cell,
+                &mut residual
+            ),
+            0
+        );
+        assert_eq!(
+            wheel_lines(
+                mouse::ScrollDelta::Pixels { x: 0.0, y: -4.0 },
+                cell,
+                &mut residual
+            ),
+            -1,
+            "12px of downward travel since the reversal is one line down"
+        );
+    }
+
+    #[test]
+    fn wheel_lines_passes_through_discrete_line_deltas() {
+        let cell = 18.2;
+        let mut residual = 0.0;
+        // X11 / discrete wheels deliver whole lines; behavior must be unchanged.
+        assert_eq!(
+            wheel_lines(
+                mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 },
+                cell,
+                &mut residual
+            ),
+            1
+        );
+        assert_eq!(
+            wheel_lines(
+                mouse::ScrollDelta::Lines { x: 0.0, y: -3.0 },
+                cell,
+                &mut residual
+            ),
+            -3
+        );
+    }
 
     #[test]
     fn grid_at_maps_pixels_to_cells() {
