@@ -411,6 +411,19 @@ pub enum Message {
     SessionRunning(SessionId),
     /// The session's `claude` title became available/changed (FR-011a).
     SessionTitleUpdated { id: SessionId, title: String },
+
+    // ---- Feature 010: switchable regular terminal mode ----
+    /// The mode toggle was pressed for the active session (FR-001–FR-004, FR-010).
+    TerminalModeToggled,
+    /// The manual restart affordance was pressed for the active session's currently-attached,
+    /// not-running process (FR-013; contracts/terminal-mode-lifecycle.md).
+    TerminalRestartRequested,
+    /// The session's shell process reported it is running.
+    ShellSessionRunning(SessionId),
+    /// The session's shell process exited (intentional or crash) — never auto-restarted
+    /// (FR-013).
+    ShellSessionExited(SessionId),
+
     /// Periodic redraw tick while a terminal is live (drives streamed-output repaint).
     TerminalTick,
     /// Hide or show the sidebar (toggle).
@@ -949,6 +962,29 @@ impl State {
                     session.set_title(title);
                 }
             }
+            Message::TerminalModeToggled => {
+                if let Some(id) = self.active_session {
+                    if let Some(session) = self.session_mut(id) {
+                        let next = session.mode.other();
+                        session.set_mode(next);
+                    }
+                }
+            }
+            Message::TerminalRestartRequested => {
+                // No pure state to update here — the binary decides which process to spawn
+                // based on the current mode and follows up with SessionRunning/
+                // ShellSessionRunning once it's actually up (mirrors SessionStartRequested).
+            }
+            Message::ShellSessionRunning(id) => {
+                if let Some(session) = self.session_mut(id) {
+                    session.mark_shell_running();
+                }
+            }
+            Message::ShellSessionExited(id) => {
+                if let Some(session) = self.session_mut(id) {
+                    session.mark_shell_exited();
+                }
+            }
             Message::SessionCloseRequested(id) => {
                 if let Some(path) = self.workspace.active.clone() {
                     if let Some(list) = self.workspace.sessions.get_mut(&path) {
@@ -1423,4 +1459,10 @@ pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> Ke
 /// work.
 pub fn should_write_to(lifecycle: crate::session::SessionLifecycle) -> bool {
     matches!(lifecycle, crate::session::SessionLifecycle::Running)
+}
+
+/// Whether keystrokes may be written to a session's shell PTY given its `ShellLifecycle`
+/// (feature 010, mirrors [`should_write_to`] for the shell process): only while `Running`.
+pub fn should_write_to_shell(shell_lifecycle: crate::session::ShellLifecycle) -> bool {
+    matches!(shell_lifecycle, crate::session::ShellLifecycle::Running)
 }

@@ -17,5 +17,6 @@ verified in CI.
   licensing, and how to add a new icon.
 - [Worktrees & Sessions](user-guide/worktrees-and-sessions.md) — opening a git project, the
   worktree sidebar, creating worktrees, and running `claude` sessions in the embedded terminal
-  (colored real-terminal rendering, interactive keyboard/mouse input, focus, resize, scrollback).
+  (colored real-terminal rendering, interactive keyboard/mouse input, focus, resize, scrollback,
+  and toggling a session's terminal to a plain shell scoped to its worktree).
 - [Settings](user-guide/settings.md) — the Settings dialog and the terminal scrollback limit.
