@@ -267,7 +267,12 @@ Keystrokes stream straight to `claude` as you press them, exactly like a standal
 - The terminal tells `claude` how many rows and columns are actually visible, so its interface
   lays out to fit. **Resizing** the window or dragging the sidebar reflows the terminal and the
   running interface to the new size.
-- **Scroll** the mouse wheel to move back through earlier output (up to the scrollback limit).
-  When a full-screen program has taken over the mouse, the wheel is forwarded to it instead.
+- **Scroll** with the mouse wheel *or* a touchpad to move back through earlier output (up to the
+  scrollback limit). Two-finger touchpad scrolling works the same as a wheel, including the fine,
+  slow gestures that move less than a line at a time. When a full-screen program has taken over the
+  mouse, the scroll is forwarded to it instead.
+- A **scrollbar** appears on the right edge of the pane while you are scrolled back, showing where
+  you are in the history. Drag it to move, or click the track to page. It hides itself once you
+  return to the live bottom, so no scrollbar simply means there is nothing scrolled back.
 
 > The scrollback limit is configurable — see [Settings](./settings.md).

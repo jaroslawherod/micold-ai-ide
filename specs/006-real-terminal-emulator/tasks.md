@@ -175,7 +175,7 @@ redraw; produce more output than fits and scroll back up to the scrollback limit
 
 > Write these FIRST and ensure they FAIL before implementation.
 
-- [X] T028 [P] [US4] Write failing gui tests in `tests/terminal_resize_scroll.rs` (`--features gui`): layout+cell-metrics → (cols, rows) computation; wheel delta → `Scroll(n)`; alt-screen scroll forwarded to the PTY vs local scrollback (adapting iced_term `view.rs`/`backend.rs` behavior) (contracts/terminal-render-input.md, research R5).
+- [X] T028 [P] [US4] Write failing gui tests in `tests/terminal_resize_scroll.rs` (`--features gui`): layout+cell-metrics → (cols, rows) computation; wheel delta → `Scroll(n)`; alt-screen scroll forwarded to the PTY vs local scrollback (adapting iced_term `view.rs`/`backend.rs` behavior) (contracts/terminal-render-input.md, research R5). *(BUG-002: the "wheel delta" coverage here was whole-line only; pixel-precision deltas are covered by T053 and widened by T055.)*
 
 ### Implementation for User Story 4
 
@@ -249,6 +249,49 @@ Release focus (Ctrl+Shift+E / click outside) → keys drive the app again; the s
 **Checkpoint**: Selecting/starting a session focuses its terminal immediately; release still works; no key leakage to non-`Running` or background sessions.
 
 **Bugfix**: 2026-07-17 — BUG-001 Updated from bugfix patch. T025 `SessionSelected`-clears-focus clause superseded; added Phase 9 (T050–T052) for auto-focus on select/start.
+
+---
+
+## Phase 10: Bugfix BUG-002 — sub-line scroll deltas discarded (touchpad scrolling dead)
+
+**Goal**: Scrolling works with continuous, high-resolution scroll sources, not just discrete wheels
+(FR-016b, SC-010).
+
+**Independent Test**: In a session that reports scroll travel in units finer than one text line
+(e.g. a touchpad under Wayland), two-finger scroll over the terminal pane moves the viewport
+through the scrollback and the scrollbar appears.
+
+### Tests for BUG-002
+
+- [X] T053 [BUG-002] Write failing gui tests for the delta→lines mapping in
+  `src/ui/material/terminal_pane.rs` (`cargo test --features gui`): successive sub-line
+  `ScrollDelta::Pixels` events summing past one cell height produce exactly one line; the
+  remainder after a whole line carries into the next event; reversing direction discards the banked
+  residual; `ScrollDelta::Lines` passthrough is unchanged (contracts/terminal-render-input.md,
+  FR-016b). Completed in `31a6e48`.
+
+### Implementation for BUG-002
+
+- [X] T054 [BUG-002] Extract `wheel_lines(delta, cell_height, &mut residual)` in
+  `src/ui/material/terminal_pane.rs`, add `PaneState.scroll_residual`, and use it in the
+  `WheelScrolled` arm for both the local-scrollback and mouse-report branches, replacing the
+  per-event `.round()` that discarded any delta under one line. Make T053 pass (FR-016, FR-016b,
+  FR-013a). Completed in `31a6e48`.
+- [ ] T055 [BUG-002] ⚠️ Reopened scope of T028 — extend `tests/terminal_resize_scroll.rs` so the
+  widget-level wheel coverage exercises pixel-precision deltas end-to-end (event → `TerminalScrolled`
+  / mouse report), not just the pure mapping helper. T028 tested only whole-line deltas, which is
+  why BUG-002 was invisible to CI on every platform.
+- [X] T056 [BUG-002] Update `docs/user-guide/worktrees-and-sessions.md` (T031) to state that
+  scrolling works with a mouse wheel *and* a touchpad/precision pointing device (Principle VII).
+  Also documents the scrollbar's hide-at-live-bottom behavior, since "no scrollbar" was the
+  user-visible face of BUG-002 and is otherwise easy to read as a defect.
+
+**Checkpoint**: Touchpad scrolling moves the viewport on every supported platform and windowing
+system; discrete-wheel behavior is unchanged.
+
+**Bugfix**: 2026-07-20 — BUG-002 Updated from bugfix patch. T028's "wheel delta → `Scroll(n)`" test
+scope was too narrow (whole-line deltas only) — widened via T055 rather than reopening T028, whose
+original scope was met. Added Phase 10 (T053–T056) for the sub-line scroll accumulator.
 
 ---
 
