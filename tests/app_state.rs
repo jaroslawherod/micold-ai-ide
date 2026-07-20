@@ -378,3 +378,55 @@ fn shell_session_running_and_exited_update_shell_lifecycle() {
         ShellLifecycle::Exited
     );
 }
+
+// Feature 011 (environment-include) — contracts/settings-ui.md.
+
+#[test]
+fn settings_env_include_enabled_toggled_updates_only_that_field() {
+    let mut state = State::default();
+    state.update(Message::SettingsOpened);
+    state.update(Message::SettingsEnvIncludeEnabledToggled(false));
+
+    let draft = state.settings_draft.as_ref().unwrap();
+    assert!(!draft.env_include_enabled);
+}
+
+#[test]
+fn settings_env_include_path_changed_updates_only_that_field() {
+    let mut state = State::default();
+    state.update(Message::SettingsOpened);
+    state.update(Message::SettingsEnvIncludePathChanged(
+        "/custom/script.sh".to_string(),
+    ));
+
+    let draft = state.settings_draft.as_ref().unwrap();
+    assert_eq!(draft.env_include_script_path, "/custom/script.sh");
+}
+
+#[test]
+fn settings_env_include_timeout_changed_updates_only_that_field() {
+    let mut state = State::default();
+    state.update(Message::SettingsOpened);
+    state.update(Message::SettingsEnvIncludeTimeoutChanged("30".to_string()));
+
+    let draft = state.settings_draft.as_ref().unwrap();
+    assert_eq!(draft.env_include_timeout, "30");
+}
+
+#[test]
+fn env_include_field_changes_leave_other_draft_fields_untouched() {
+    let mut state = State::default();
+    state.update(Message::SettingsOpened);
+    state.update(Message::SettingsScrollbackChanged("25000".to_string()));
+    state.update(Message::SettingsEnvIncludeEnabledToggled(false));
+    state.update(Message::SettingsEnvIncludePathChanged(
+        "/custom/script.sh".to_string(),
+    ));
+    state.update(Message::SettingsEnvIncludeTimeoutChanged("30".to_string()));
+
+    let draft = state.settings_draft.as_ref().unwrap();
+    assert_eq!(draft.scrollback_lines, "25000");
+    assert!(!draft.env_include_enabled);
+    assert_eq!(draft.env_include_script_path, "/custom/script.sh");
+    assert_eq!(draft.env_include_timeout, "30");
+}

@@ -1,6 +1,32 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.3.0 → 1.4.0
+Bump rationale: MINOR bump — Principle I (Test-First Development) gains one narrowly-scoped,
+  explicitly-named exception: thin GUI/process-spawn wiring in the `gui`-feature binary
+  (`src/main.rs`, `src/ui/`) that only invokes already-unit-tested pure/core logic, with no
+  decision logic or branching of its own, MAY be validated by a recorded `quickstart.md` manual
+  procedure instead of an automated test — because this codebase's binary/library split (the
+  render-free `lib` core vs. the `gui`-only binary) makes such glue structurally unreachable from
+  `tests/`. This formalizes a practice already used (and already merged) in features 006 and 010,
+  rather than introducing a new allowance. Treated as MINOR, consistent with how Principle III's
+  1.3.0 Default-session exception and Principle VIII's 1.2.0 builder-API sub-rule were both
+  treated as MINOR narrow expansions rather than MAJOR redefinitions.
+
+Modified in 1.4.0:
+  - Principle I — added the GUI/process-spawn wiring exception: this specific, narrow category of
+    code MAY rely on `quickstart.md` validation instead of an automated test; all other production
+    code is unaffected — the NON-NEGOTIABLE Red-Green-Refactor requirement is untouched for
+    anything with decision logic, branching, or business rules of its own.
+  - Templates: no edit required — `.specify/templates/plan-template.md`'s Constitution Check
+    Principle I line already asks for the same TDD confirmation this exception narrows, not
+    broadens.
+  Follow-up (non-artifact): tracked by feature `specs/011-env-include-script/` — its
+    `/speckit-analyze` pass surfaced that several of its tasks rely on this exact undocumented
+    practice (mirroring features 006/010's own precedent), which prompted this amendment rather
+    than leaving the tension unresolved.
+
+Prior report (1.2.0 → 1.3.0):
 Version change: 1.2.0 → 1.3.0
 Bump rationale: MINOR bump — Principle III (Native Worktree Integration) gains one
   narrowly-scoped, explicitly-named exception: a session MAY now map to the project's
@@ -129,6 +155,14 @@ implementation that satisfies it.
   written; implementation proceeds only until the test passes (Green); refactoring
   follows under a green suite.
 - No feature is considered "done" until its tests exist, are meaningful, and pass.
+- **Exception — GUI/process-spawn wiring.** Thin glue code in the `gui`-feature binary
+  (`src/main.rs`, `src/ui/`) that only invokes already-unit-tested pure/core logic — with no
+  decision logic, branching, or business rule of its own — MAY be validated by a recorded
+  `quickstart.md` manual procedure instead of an automated test, because this codebase's
+  binary/library split (the render-free `lib` core vs. the `gui`-only binary) makes such glue
+  structurally unreachable from `tests/`. This exception does NOT cover any code with decision
+  logic, branching, or a business rule of its own — that MUST still land in the tested core first,
+  and MUST still follow Red-Green-Refactor there.
 
 Rationale: Tests written after the fact codify existing behavior rather than intended
 behavior. Writing and reviewing the failing test first forces the specification of
@@ -325,4 +359,4 @@ convention, or habit conflicts with it, this constitution prevails.
   principles. Complexity that violates a principle MUST be either removed or explicitly
   justified and recorded.
 
-**Version**: 1.3.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-18
+**Version**: 1.4.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-20

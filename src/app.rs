@@ -245,6 +245,13 @@ pub enum SelectKind {
 pub struct SettingsDraft {
     /// The editable scrollback-limit value (parsed/validated on save).
     pub scrollback_lines: String,
+    /// Whether environment-include is enabled (feature 011, FR-001).
+    pub env_include_enabled: bool,
+    /// The editable environment-include script path (FR-002).
+    pub env_include_script_path: String,
+    /// The editable environment-include timeout, in seconds as text (parsed/validated on save,
+    /// FR-003).
+    pub env_include_timeout: String,
     /// The last validation error shown after a rejected save.
     pub error: Option<String>,
 }
@@ -486,6 +493,12 @@ pub enum Message {
     SettingsOpened,
     /// The Settings scrollback field changed.
     SettingsScrollbackChanged(String),
+    /// The Settings environment-include enabled checkbox was toggled (feature 011, FR-001).
+    SettingsEnvIncludeEnabledToggled(bool),
+    /// The Settings environment-include script path field changed (FR-002).
+    SettingsEnvIncludePathChanged(String),
+    /// The Settings environment-include timeout field changed (FR-003).
+    SettingsEnvIncludeTimeoutChanged(String),
     /// Save the Settings form (validated + persisted by the binary) (FR-020, FR-021).
     SettingsSaved,
     /// Dismiss the Settings form without saving (Cancel or Esc).
@@ -1099,6 +1112,24 @@ impl State {
             Message::SettingsScrollbackChanged(text) => {
                 if let Some(draft) = &mut self.settings_draft {
                     draft.scrollback_lines = text;
+                    draft.error = None;
+                }
+            }
+            Message::SettingsEnvIncludeEnabledToggled(enabled) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.env_include_enabled = enabled;
+                    draft.error = None;
+                }
+            }
+            Message::SettingsEnvIncludePathChanged(text) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.env_include_script_path = text;
+                    draft.error = None;
+                }
+            }
+            Message::SettingsEnvIncludeTimeoutChanged(text) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.env_include_timeout = text;
                     draft.error = None;
                 }
             }

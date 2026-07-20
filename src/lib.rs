@@ -9,6 +9,7 @@
 //! the `gui` feature.
 
 pub mod app;
+pub mod env_include;
 pub mod fs_scan;
 pub mod git;
 pub mod icons;

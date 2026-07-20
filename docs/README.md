@@ -19,4 +19,6 @@ verified in CI.
   worktree sidebar, creating worktrees, and running `claude` sessions in the embedded terminal
   (colored real-terminal rendering, interactive keyboard/mouse input, focus, resize, scrollback,
   and toggling a session's terminal to a plain shell scoped to its worktree).
-- [Settings](user-guide/settings.md) — the Settings dialog and the terminal scrollback limit.
+- [Settings](user-guide/settings.md) — the Settings dialog, the terminal scrollback limit, and
+  environment-include (auto-picking up your shell environment for sessions, configuring or
+  disabling it, and recovering from a failed script).

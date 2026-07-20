@@ -14,6 +14,7 @@ use micold_ai_ide::app::{
     Message, Overlay, RenameDraft, SettingsDraft, State, WorktreeForm, WorktreeFormStatus,
     WorktreeRenameDraft,
 };
+use micold_ai_ide::env_include::{self, EnvIncludeOutcome};
 use micold_ai_ide::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_ai_ide::git::{Git, GitCli};
 use micold_ai_ide::motion::Animator;
@@ -146,6 +147,51 @@ struct App {
     /// hardcoded default and waiting for the next window resize to reconcile (bugfix: new
     /// terminal not starting fullscreen).
     last_grid: Option<(u16, u16)>,
+    /// The current environment-include settings (feature 011), loaded from settings and mirrored
+    /// here the same way `scrollback_lines` is — so the Settings form can be seeded/saved without
+    /// re-reading the settings file.
+    env_include_enabled: bool,
+    env_include_script_path: String,
+    env_include_timeout_secs: u64,
+    /// The shared, in-memory-only resolved-environment snapshot (data-model.md). One instance per
+    /// app run, applied uniformly to every session's spawn call site — never persisted (FR-008).
+    env_include: EnvIncludeSnapshot,
+}
+
+/// The result of the most recently resolved (or not-yet-attempted) environment-include snapshot
+/// (feature 011, data-model.md). `vars` is empty for every non-`Success` outcome.
+struct EnvIncludeSnapshot {
+    vars: Vec<(String, String)>,
+    outcome: EnvIncludeOutcome,
+}
+
+/// Resolve the environment-include snapshot from the given settings values, short-circuiting to
+/// `Disabled` (no subprocess spawned) when the feature is off or the path is blank — mirrors the
+/// spec's Edge Cases and contracts/env-include-resolution.md's Non-goals (the engine itself never
+/// decides whether to run). Shared by `boot()` (T013) and `refresh_env_include` (T020) so both
+/// triggers apply the exact same short-circuit + resolution logic.
+fn resolve_env_include(enabled: bool, script_path: &str, timeout_secs: u64) -> EnvIncludeSnapshot {
+    if !enabled || script_path.trim().is_empty() {
+        return EnvIncludeSnapshot {
+            vars: Vec::new(),
+            outcome: EnvIncludeOutcome::Disabled,
+        };
+    }
+    let (vars, outcome) =
+        env_include::resolve(Path::new(script_path), Duration::from_secs(timeout_secs));
+    EnvIncludeSnapshot { vars, outcome }
+}
+
+/// Force a fresh re-source of the environment-include script from `app`'s current settings,
+/// replacing `app.env_include` wholesale (feature 011, FR-007). Called on a `SettingsSaved` that
+/// touched the enabled/path/timeout fields, and on `TerminalRestartRequested` for any session —
+/// the two refresh triggers the spec's Clarifications name.
+fn refresh_env_include(app: &mut App) {
+    app.env_include = resolve_env_include(
+        app.env_include_enabled,
+        &app.env_include_script_path,
+        app.env_include_timeout_secs,
+    );
 }
 
 /// Identity of the main content area, used to trigger a fade when it changes.
@@ -307,11 +353,22 @@ fn boot() -> (App, Task<Message>) {
         prune_empty_sessions(&mut core.workspace);
     }
     let mut scrollback_lines = micold_ai_ide::settings::DEFAULT_SCROLLBACK_LINES;
+    let mut env_include_enabled = micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_ENABLED;
+    let mut env_include_script_path = Settings::default().env_include_script_path;
+    let mut env_include_timeout_secs = micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS;
     if let Some(store) = JsonFileSettingsStore::default_location() {
         let loaded = store.load().settings;
         core.theme_pref = loaded.theme;
         scrollback_lines = loaded.scrollback_lines;
+        env_include_enabled = loaded.env_include_enabled;
+        env_include_script_path = loaded.env_include_script_path;
+        env_include_timeout_secs = loaded.env_include_timeout_secs;
     }
+    let env_include = resolve_env_include(
+        env_include_enabled,
+        &env_include_script_path,
+        env_include_timeout_secs,
+    );
     core.system_scheme = detect_system_scheme();
     // If a project is already active from a previous run, discover its worktrees.
     if let Some(repo) = core.workspace.active.clone() {
@@ -342,6 +399,10 @@ fn boot() -> (App, Task<Message>) {
             window_focused: true,
             create_progress: Arc::new(Mutex::new(Vec::new())),
             last_grid: None,
+            env_include_enabled,
+            env_include_script_path,
+            env_include_timeout_secs,
+            env_include,
         },
         Task::none(),
     )
@@ -397,11 +458,12 @@ fn session_has_conversation(
 
 fn persist_settings(core: &State) {
     if let Some(store) = JsonFileSettingsStore::default_location() {
-        // Preserve the persisted scrollback limit (feature 006) when saving a theme change.
-        let scrollback_lines = store.load().settings.scrollback_lines;
+        // Preserve the persisted scrollback limit (feature 006) and environment-include settings
+        // (feature 011) when saving a theme change — this function only ever changes `theme`.
+        let existing = store.load().settings;
         let _ = store.save(&Settings {
             theme: core.theme_pref,
-            scrollback_lines,
+            ..existing
         });
     }
 }
@@ -617,7 +679,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 let session = Session::start_new(location);
                 let id = session.id;
                 match spawn_pty(
-                    &launch_spec(&cwd, id, LaunchMode::Fresh),
+                    &launch_spec(&cwd, id, LaunchMode::Fresh, &app.env_include.vars),
                     app.scrollback_lines,
                     app.last_grid,
                 ) {
@@ -690,8 +752,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Manually restart the active session's currently-attached, not-running process
         // (FR-013) — the shell never auto-restarts, so this is its only path back; also covers
-        // an Idle/Failed AI CLI, which previously had no explicit affordance.
+        // an Idle/Failed AI CLI, which previously had no explicit affordance. Also re-sources the
+        // environment-include script fresh (feature 011, FR-007) — the spec's Clarifications name
+        // this restart control as a manual-retry path for a previously-failed script, alongside
+        // the Settings-save refresh trigger.
         Message::TerminalRestartRequested => {
+            refresh_env_include(app);
             if let Some(id) = app.core.active_session {
                 ensure_attached_process(app, id);
             }
@@ -833,41 +899,75 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::SettingsOpened);
             if let Some(draft) = app.core.settings_draft.as_mut() {
                 draft.scrollback_lines = app.scrollback_lines.to_string();
+                draft.env_include_enabled = app.env_include_enabled;
+                draft.env_include_script_path = app.env_include_script_path.clone();
+                draft.env_include_timeout = app.env_include_timeout_secs.to_string();
             }
             Task::none()
         }
-        // Save Settings: validate the scrollback field; on success persist + apply and close, on
-        // failure keep the form open with an error (FR-020/FR-021).
+        // Save Settings: validate the scrollback and environment-include timeout fields; on
+        // success persist + apply + refresh + close, on failure keep the form open with an error
+        // (FR-020/FR-021; environment-include: FR-014, contracts/settings-ui.md).
         Message::SettingsSaved => {
-            let parsed = app
-                .core
-                .settings_draft
-                .as_ref()
-                .and_then(|d| d.scrollback_lines.trim().parse::<usize>().ok());
-            let min = micold_ai_ide::settings::MIN_SCROLLBACK_LINES;
-            let max = micold_ai_ide::settings::MAX_SCROLLBACK_LINES;
-            match parsed {
-                Some(n) if (min..=max).contains(&n) => {
-                    app.scrollback_lines = n;
-                    if let Some(store) = JsonFileSettingsStore::default_location() {
-                        let _ = store.save(&Settings {
-                            theme: app.core.theme_pref,
-                            scrollback_lines: n,
-                        });
+            let Some(draft) = app.core.settings_draft.clone() else {
+                return Task::none();
+            };
+
+            let scrollback_min = micold_ai_ide::settings::MIN_SCROLLBACK_LINES;
+            let scrollback_max = micold_ai_ide::settings::MAX_SCROLLBACK_LINES;
+            let scrollback_lines = match draft.scrollback_lines.trim().parse::<usize>() {
+                Ok(n) if (scrollback_min..=scrollback_max).contains(&n) => n,
+                Ok(_) => {
+                    if let Some(d) = app.core.settings_draft.as_mut() {
+                        d.error = Some(format!(
+                            "Enter a number between {scrollback_min} and {scrollback_max}."
+                        ));
                     }
-                    app.core.update(Message::SettingsSaved); // closes the overlay
+                    return Task::none();
                 }
-                Some(_) => {
-                    if let Some(draft) = app.core.settings_draft.as_mut() {
-                        draft.error = Some(format!("Enter a number between {min} and {max}."));
+                Err(_) => {
+                    if let Some(d) = app.core.settings_draft.as_mut() {
+                        d.error = Some("Enter a whole number of lines.".to_string());
                     }
+                    return Task::none();
                 }
-                None => {
-                    if let Some(draft) = app.core.settings_draft.as_mut() {
-                        draft.error = Some("Enter a whole number of lines.".to_string());
+            };
+
+            let timeout_min = micold_ai_ide::settings::MIN_ENV_INCLUDE_TIMEOUT_SECS;
+            let timeout_max = micold_ai_ide::settings::MAX_ENV_INCLUDE_TIMEOUT_SECS;
+            let env_include_timeout_secs = match draft.env_include_timeout.trim().parse::<u64>() {
+                Ok(t) if (timeout_min..=timeout_max).contains(&t) => t,
+                Ok(_) => {
+                    if let Some(d) = app.core.settings_draft.as_mut() {
+                        d.error = Some(format!(
+                            "Enter a timeout between {timeout_min} and {timeout_max} seconds."
+                        ));
                     }
+                    return Task::none();
                 }
+                Err(_) => {
+                    if let Some(d) = app.core.settings_draft.as_mut() {
+                        d.error = Some("Enter a whole number of seconds.".to_string());
+                    }
+                    return Task::none();
+                }
+            };
+
+            app.scrollback_lines = scrollback_lines;
+            app.env_include_enabled = draft.env_include_enabled;
+            app.env_include_script_path = draft.env_include_script_path;
+            app.env_include_timeout_secs = env_include_timeout_secs;
+            if let Some(store) = JsonFileSettingsStore::default_location() {
+                let _ = store.save(&Settings {
+                    theme: app.core.theme_pref,
+                    scrollback_lines,
+                    env_include_enabled: app.env_include_enabled,
+                    env_include_script_path: app.env_include_script_path.clone(),
+                    env_include_timeout_secs,
+                });
             }
+            refresh_env_include(app);
+            app.core.update(Message::SettingsSaved); // closes the overlay
             Task::none()
         }
         Message::TerminalTick => {
@@ -970,6 +1070,7 @@ fn view(app: &App) -> iced::Element<'_, Message> {
         &app.motion,
         app.dismissing.as_ref(),
         &app.row_fx,
+        &app.env_include.outcome,
     )
 }
 
@@ -1127,7 +1228,7 @@ fn handle_process_exits(app: &mut App) {
             .map(|(_, s)| s.on_unexpected_exit());
         if decision == Some(RestartDecision::Resume) {
             if let Ok(rt) = spawn_pty(
-                &launch_spec(&cwd, id, LaunchMode::Resume),
+                &launch_spec(&cwd, id, LaunchMode::Resume, &app.env_include.vars),
                 app.scrollback_lines,
                 app.last_grid,
             ) {
@@ -1189,7 +1290,7 @@ fn ensure_attached_process(app: &mut App, id: SessionId) {
     match mode {
         TerminalMode::AiCli => {
             match spawn_pty(
-                &launch_spec(&cwd, id, LaunchMode::Resume),
+                &launch_spec(&cwd, id, LaunchMode::Resume, &app.env_include.vars),
                 app.scrollback_lines,
                 app.last_grid,
             ) {
@@ -1203,7 +1304,7 @@ fn ensure_attached_process(app: &mut App, id: SessionId) {
             }
         }
         TerminalMode::Regular => {
-            let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
+            let env = env_include::merge_with_term(&app.env_include.vars);
             match spawn_shell_pty(&cwd, &env, app.scrollback_lines, app.last_grid) {
                 Ok(rt) => {
                     app.terminals.entry(id).or_default().shell = Some(rt);
@@ -1227,13 +1328,20 @@ fn session_cwd_any(core: &State, id: SessionId) -> Option<(PathBuf, SessionLifec
     Some((cwd, session.lifecycle))
 }
 
-/// Build a launch spec for a session in a worktree (claude-cli.md).
-fn launch_spec(cwd: &Path, id: SessionId, mode: LaunchMode) -> LaunchSpec {
+/// Build a launch spec for a session in a worktree (claude-cli.md). `resolved_env` is the
+/// environment-include snapshot's captured variables (feature 011); merged with the hardcoded
+/// `TERM` pair, which always wins on collision (FR-009).
+fn launch_spec(
+    cwd: &Path,
+    id: SessionId,
+    mode: LaunchMode,
+    resolved_env: &[(String, String)],
+) -> LaunchSpec {
     LaunchSpec {
         cwd: cwd.to_path_buf(),
         session_id: id.0,
         mode,
-        env: vec![("TERM".to_string(), "xterm-256color".to_string())],
+        env: env_include::merge_with_term(resolved_env),
     }
 }
 
@@ -1457,6 +1565,13 @@ mod tests {
             window_focused: true,
             create_progress: Arc::new(Mutex::new(Vec::new())),
             last_grid: None,
+            env_include_enabled: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_ENABLED,
+            env_include_script_path: String::new(),
+            env_include_timeout_secs: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
+            env_include: EnvIncludeSnapshot {
+                vars: Vec::new(),
+                outcome: EnvIncludeOutcome::Disabled,
+            },
         };
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
@@ -1600,6 +1715,13 @@ mod tests {
             window_focused: true,
             create_progress: Arc::new(Mutex::new(Vec::new())),
             last_grid: None,
+            env_include_enabled: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_ENABLED,
+            env_include_script_path: String::new(),
+            env_include_timeout_secs: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
+            env_include: EnvIncludeSnapshot {
+                vars: Vec::new(),
+                outcome: EnvIncludeOutcome::Disabled,
+            },
         };
         assert_eq!(app.last_grid, None);
 
