@@ -33,6 +33,7 @@ fn expected(icon: Icon) -> char {
         Icon::ReleaseFocus => '\u{e31a}',
         Icon::ProjectRoot => '\u{e88a}',
         Icon::AddTerminalInstance => '\u{e146}',
+        Icon::Close => '\u{e5cd}',
     }
 }
 
@@ -52,8 +53,8 @@ fn all_covers_every_variant_without_duplicates() {
     // Curated icon set (research R5 / PROVENANCE.md); +1 for Settings (feature 006),
     // +1 for Delete (feature 008), +1 for Copy (cross-app clipboard), +1 for Filter
     // (feature 009), +3 for AiCli/RegularTerminal/ReleaseFocus, +1 for ProjectRoot (T012)
-    // (all feature 010), +1 for AddTerminalInstance (feature 011).
-    assert_eq!(Icon::ALL.len(), 25, "curated set size");
+    // (all feature 010), +2 for AddTerminalInstance/Close (feature 011).
+    assert_eq!(Icon::ALL.len(), 26, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

@@ -642,7 +642,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // session last left in Regular mode gets a fresh shell instead.
         Message::SessionSelected(id) => {
             app.core.update(Message::SessionSelected(id));
-            ensure_attached_process(app, id);
+            ensure_attached_process(app, id, false);
             // BUG-001: auto-focus the selected session's terminal (FR-010/FR-010a). Selecting from
             // the sidebar is a click *outside* the pane, so a currently-focused pane also publishes
             // `TerminalFocusReleased` for the same click. Re-assert focus via a follow-up message,
@@ -668,49 +668,54 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::TerminalModeToggled => {
             app.core.update(Message::TerminalModeToggled);
             if let Some(id) = app.core.active_session {
-                ensure_attached_process(app, id);
+                ensure_attached_process(app, id, false);
                 persist(&app.core);
             }
             Task::none()
         }
         // Manually restart the active session's currently-attached, not-running process
         // (FR-013) — the shell never auto-restarts, so this is its only path back; also covers
-        // an Idle/Failed AI CLI, which previously had no explicit affordance.
+        // an Idle/Failed AI CLI, which previously had no explicit affordance. Unlike the passive
+        // reattach callers below, this is a direct user restart request, so it must also cover a
+        // Regular Terminal instance that has already `Exited` — `explicit_restart = true` lets
+        // `ensure_attached_process`'s `Regular` branch spawn it, the same case
+        // `Message::ShellInstanceRestartRequested` handles for a background instance.
         Message::TerminalRestartRequested => {
             if let Some(id) = app.core.active_session {
-                ensure_attached_process(app, id);
+                ensure_attached_process(app, id, true);
             }
             Task::none()
         }
         // Manually restart one specific Regular Terminal instance (feature 011, FR-010) —
         // independent of `active_shell`, so a background instance can be restarted without first
         // switching to it. A no-op if that instance's process is already running (idempotent,
-        // mirrors `ensure_attached_process`'s reattach-for-free check).
-        Message::ShellInstanceRestartRequested(shell_id) => {
-            if let Some(id) = app.core.active_session {
-                let already_running = app
-                    .terminals
-                    .get(&id)
-                    .is_some_and(|st| st.shells.contains_key(&shell_id));
-                let still_open = app
-                    .core
-                    .active_sessions()
-                    .iter()
-                    .find(|s| s.id == id)
-                    .is_some_and(|s| s.shells.iter().any(|sh| sh.id == shell_id));
-                if let (false, true, Some((cwd, _, _))) = (
-                    already_running,
-                    still_open,
-                    session_cwd_mode_and_active_shell(&app.core, id),
-                ) {
-                    // Spawn first, only transition pure state on success (mirrors
-                    // `ensure_attached_process`'s Regular branch) — pre-transitioning to
-                    // `Starting` before the spawn is attempted would strand the instance there
-                    // forever if `spawn_shell_pty` fails, since the restart affordance is only
-                    // shown for `NotStarted`/`Exited` (convergence T034, FR-010).
-                    spawn_and_register_shell_instance(app, id, shell_id, &cwd);
-                    persist(&app.core);
-                }
+        // mirrors `ensure_attached_process`'s reattach-for-free check). Addressed by the
+        // originating `SessionId` (not `app.core.active_session`) so this can't misapply to a
+        // same-numbered instance of a different session if the active session changed in the
+        // same message batch.
+        Message::ShellInstanceRestartRequested(id, shell_id) => {
+            let already_running = app
+                .terminals
+                .get(&id)
+                .is_some_and(|st| st.shells.contains_key(&shell_id));
+            let still_open = app
+                .core
+                .active_sessions()
+                .iter()
+                .find(|s| s.id == id)
+                .is_some_and(|s| s.shells.iter().any(|sh| sh.id == shell_id));
+            if let (false, true, Some((cwd, _, _))) = (
+                already_running,
+                still_open,
+                session_cwd_mode_and_active_shell(&app.core, id),
+            ) {
+                // Spawn first, only transition pure state on success (mirrors
+                // `ensure_attached_process`'s Regular branch) — pre-transitioning to
+                // `Starting` before the spawn is attempted would strand the instance there
+                // forever if `spawn_shell_pty` fails, since the restart affordance is only
+                // shown for `NotStarted`/`Exited` (convergence T034, FR-010).
+                spawn_and_register_shell_instance(app, id, shell_id, &cwd);
+                persist(&app.core);
             }
             Task::none()
         }
@@ -740,17 +745,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // leaving sibling instances and the AI CLI process untouched. If this was the session's
         // last instance, the pure reducer flips `mode` back to `AiCli` (FR-013); reattach the AI
         // CLI process via the same shared path the primary toggle already uses (a no-op if it's
-        // already attached).
-        Message::ShellInstanceCloseRequested(shell_id) => {
-            if let Some(id) = app.core.active_session {
-                if let Some(st) = app.terminals.get_mut(&id) {
-                    st.close_shell(shell_id);
-                }
-                app.core
-                    .update(Message::ShellInstanceCloseRequested(shell_id));
-                ensure_attached_process(app, id);
-                persist(&app.core);
+        // already attached). Addressed by the originating `SessionId` (not
+        // `app.core.active_session`) — see `Message::ShellInstanceSelected`'s doc comment.
+        Message::ShellInstanceCloseRequested(id, shell_id) => {
+            if let Some(st) = app.terminals.get_mut(&id) {
+                st.close_shell(shell_id);
             }
+            app.core
+                .update(Message::ShellInstanceCloseRequested(id, shell_id));
+            ensure_attached_process(app, id, false);
+            persist(&app.core);
             Task::none()
         }
         // Worktree creation completed: apply progress to the form, then dispatch the result
@@ -1234,11 +1238,18 @@ fn spawn_and_register_shell_instance(
 /// already-running process for free (no spawn call at all); only reaches the process boundary
 /// when there is genuinely nothing to reattach to. For `Regular` mode (feature 011), this means
 /// whichever instance `active_shell` names — lazily opening the session's first-ever instance if
-/// it has none yet (FR-007). Used by `SessionSelected` (initial reopen, mode-aware),
-/// `TerminalModeToggled`, and `TerminalRestartRequested` (the session-level "restart whichever is
-/// currently attached" baseline — restarting a specific *background* instance directly is
-/// `Message::ShellInstanceRestartRequested`, feature 011 US4).
-fn ensure_attached_process(app: &mut App, id: SessionId) {
+/// it has none yet (FR-007).
+///
+/// `explicit_restart` distinguishes a user-initiated restart (`Message::TerminalRestartRequested`,
+/// `explicit_restart = true`) from every other, passive reattach call
+/// (`SessionSelected`/`TerminalModeToggled`/post-close reattach, `explicit_restart = false`):
+/// passive callers must never auto-respawn an `active_shell` instance that has already `Exited`
+/// (FR-008) — even though `active_shell` can end up naming one, e.g. because
+/// `Session::close_shell` reassigned it there as the fallback after closing a sibling — while an
+/// explicit restart request is exactly what should bring that instance back, the session-level
+/// analog of `Message::ShellInstanceRestartRequested` (feature 011 US4) for a specific background
+/// instance.
+fn ensure_attached_process(app: &mut App, id: SessionId, explicit_restart: bool) {
     let Some((cwd, mode, active_shell)) = session_cwd_mode_and_active_shell(&app.core, id) else {
         return;
     };
@@ -1268,20 +1279,19 @@ fn ensure_attached_process(app: &mut App, id: SessionId) {
         }
         TerminalMode::Regular => {
             let shell_id = match active_shell {
-                // Only reattach here for an instance that has never been spawned yet (freshly
-                // opened via `open_shell_instance`, still `Starting`) — an instance that has
-                // already `Exited` must never be auto-respawned (FR-008), even if `active_shell`
-                // now names it because `Session::close_shell` reassigned it there as the fallback
-                // after closing a sibling. That case requires the user's explicit
-                // `Message::ShellInstanceRestartRequested`.
+                // Reattach here either for an instance that has never been spawned yet (freshly
+                // opened via `open_shell_instance`, still `Starting`), or — only when this call is
+                // an explicit user restart request — one that has already `Exited`. A passive
+                // reattach must never auto-respawn an `Exited` instance (FR-008).
                 Some(shell_id)
-                    if app
-                        .core
-                        .active_sessions()
-                        .iter()
-                        .find(|s| s.id == id)
-                        .and_then(|s| s.shells.iter().find(|sh| sh.id == shell_id))
-                        .is_some_and(|sh| sh.lifecycle == ShellLifecycle::Starting) =>
+                    if explicit_restart
+                        || app
+                            .core
+                            .active_sessions()
+                            .iter()
+                            .find(|s| s.id == id)
+                            .and_then(|s| s.shells.iter().find(|sh| sh.id == shell_id))
+                            .is_some_and(|sh| sh.lifecycle == ShellLifecycle::Starting) =>
                 {
                     shell_id
                 }

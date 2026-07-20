@@ -8,8 +8,10 @@
 //! in colour via a custom canvas widget ([`crate::ui::material::terminal_pane`]) and streams
 //! keystrokes back to the PTY.
 
-use crate::ui::material::{ContextMenu, IconButton, MenuItem, TerminalPane, Tooltip};
-use crate::ui::{icon, style};
+use crate::ui::material::{
+    ContextMenu, IconButton, MenuItem, TerminalPane, Tooltip, TooltipPosition,
+};
+use crate::ui::style;
 use alacritty_terminal::event::VoidListener;
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Point, Side};
@@ -759,30 +761,27 @@ pub fn pane<'a>(
                     .size(type_scale::LABEL)
                     .style(style::muted(r)),
             )
-            .padding(spacing::XS)
+            .padding(spacing::SM)
             .style(style::text_button(r))
             .on_press(Message::TerminalRestartRequested),
         );
     }
     // While the terminal holds focus, offer an explicit way out (FR-011) alongside the reserved
-    // Ctrl+Shift+E chord and click-outside. Uses `Icon::ReleaseFocus` rather than a raw `⎋`
-    // text character — that character isn't covered by the bundled Material Symbols font (or
-    // any default UI font glyph set) and rendered as a tofu box.
+    // Ctrl+Shift+E chord and click-outside. Icon-only (with a tooltip carrying the label and
+    // chord) rather than an icon+text button — keeps the bar compact; `Icon::ReleaseFocus` reads
+    // clearly on its own and the tooltip still surfaces the reserved chord on hover.
     if state.terminal_focused {
         bar = bar.push(
-            button(
-                row![
-                    icon(Icon::ReleaseFocus, type_scale::LABEL, r.on_surface_variant),
-                    text("release focus (Ctrl+Shift+E)")
-                        .size(type_scale::LABEL)
-                        .style(style::muted(r)),
-                ]
-                .spacing(spacing::XS)
-                .align_y(Alignment::Center),
+            Tooltip::new(
+                IconButton::new(Icon::ReleaseFocus, r)
+                    .padding(spacing::SM)
+                    .on_press(Message::TerminalFocusReleased),
+                "Release focus (Ctrl+Shift+E)",
+                r,
             )
-            .padding(spacing::XS)
-            .style(style::text_button(r))
-            .on_press(Message::TerminalFocusReleased),
+            // This control sits mid-bar, not at an edge — opening below would run past the
+            // window's bottom edge since the bar is the last row on screen, so open upward.
+            .position(TooltipPosition::Top),
         );
     }
     // The instance-switching control: one entry per open Regular Terminal instance, visible only
@@ -795,21 +794,33 @@ pub fn pane<'a>(
     // whenever the session is in Regular mode, regardless of how many instances are already
     // open (including zero or one), so there is always a way to go from one instance to two.
     if mode == TerminalMode::Regular {
-        bar = bar.push(Tooltip::new(
-            IconButton::new(Icon::AddTerminalInstance, r)
-                .on_press(Message::ShellInstanceOpenRequested),
-            "Open a new terminal instance (Ctrl+Shift+T)",
-            r,
-        ));
+        bar = bar.push(
+            Tooltip::new(
+                IconButton::new(Icon::AddTerminalInstance, r)
+                    .padding(spacing::SM)
+                    .on_press(Message::ShellInstanceOpenRequested),
+                "Open a new terminal instance (Ctrl+Shift+T)",
+                r,
+            )
+            // This button sits at (or very near) the bar's right edge — open the tooltip to the
+            // left so it opens inward instead of overflowing past the window edge.
+            .position(TooltipPosition::Left),
+        );
     }
     // The mode toggle anchors the bar's bottom-right corner (spec Clarifications, 2026-07-18) —
     // pushed last so it always sits at the far right regardless of which other controls are
     // present.
-    bar = bar.push(Tooltip::new(
-        IconButton::new(mode_glyph(mode), r).on_press(Message::TerminalModeToggled),
-        mode_tooltip(mode),
-        r,
-    ));
+    bar = bar.push(
+        Tooltip::new(
+            IconButton::new(mode_glyph(mode), r)
+                .padding(spacing::SM)
+                .on_press(Message::TerminalModeToggled),
+            mode_tooltip(mode),
+            r,
+        )
+        // Always the rightmost element in the bar — same reasoning as the "+" button above.
+        .position(TooltipPosition::Left),
+    );
     let bottom_bar = container(bar)
         .width(Length::Fill)
         .padding(spacing::SM)
@@ -890,10 +901,19 @@ fn attached_process_restartable(state: &State, id: SessionId) -> bool {
 }
 
 /// The instance-switching control (feature 011, FR-004/FR-005; contracts/terminal-instance-
-/// switcher-ui.md): one entry per open Regular Terminal instance, in creation order, labeled by
+/// switcher-ui.md): one tab per open Regular Terminal instance, in creation order, labeled by
 /// its `ShellInstanceId`'s numeric value (the only display identity an instance has). `None`
 /// when the session isn't found or has zero/one instance — pixel-identical to the pre-feature-011
 /// single-instance experience in that case (FR-005).
+///
+/// Each tab is one `button` spanning the whole entry — a press anywhere on it selects that
+/// instance — with the close (and, when shown, restart) controls nested inside as their own
+/// buttons. iced's `Button` always gives its content first crack at an event, so a press that
+/// lands on the nested close/restart button is captured there and never reaches the tab's own
+/// `on_press`; a press anywhere else on the tab falls through to select it. The active tab is
+/// marked with a solid fill (`style::filled`) vs. the low-emphasis `style::text_button` every
+/// other tab uses — a background-color difference is legible at a glance, unlike a thin edge
+/// accent (SC-004: users must be able to tell which instance is active from this row alone).
 fn instance_switcher_row<'a>(
     state: &'a State,
     id: SessionId,
@@ -907,18 +927,17 @@ fn instance_switcher_row<'a>(
     for instance in &session.shells {
         let is_active = session.active_shell == Some(instance.id);
         let label = text(instance.id.0.to_string()).size(type_scale::LABEL);
-        let select = button(label)
-            .padding(spacing::XS)
-            .on_press(Message::ShellInstanceSelected(instance.id));
-        let select = if is_active {
-            select.style(style::filled(r))
-        } else {
-            select.style(style::text_button(r))
-        };
-        let close = IconButton::new(Icon::Delete, r)
-            .size(type_scale::LABEL)
-            .on_press(Message::ShellInstanceCloseRequested(instance.id));
-        let mut entry = row![select, close]
+        let close = Tooltip::new(
+            IconButton::new(Icon::Close, r)
+                .size(type_scale::LABEL)
+                .padding(spacing::XS)
+                .circular()
+                .on_press(Message::ShellInstanceCloseRequested(id, instance.id)),
+            "Close this terminal instance",
+            r,
+        )
+        .position(TooltipPosition::Top);
+        let mut content = row![label, close]
             .spacing(spacing::XS)
             .align_y(Alignment::Center);
         // Per-instance restart affordance (feature 011 FR-010): shown exactly when this
@@ -928,18 +947,26 @@ fn instance_switcher_row<'a>(
             instance.lifecycle,
             ShellLifecycle::NotStarted | ShellLifecycle::Exited
         ) {
-            entry = entry.push(
+            content = content.push(
                 button(
                     text("restart")
                         .size(type_scale::LABEL)
                         .style(style::muted(r)),
                 )
-                .padding(spacing::XS)
+                .padding(spacing::SM)
                 .style(style::text_button(r))
-                .on_press(Message::ShellInstanceRestartRequested(instance.id)),
+                .on_press(Message::ShellInstanceRestartRequested(id, instance.id)),
             );
         }
-        entries = entries.push(entry);
+        let tab = button(content)
+            .padding(spacing::SM)
+            .on_press(Message::ShellInstanceSelected(id, instance.id));
+        let tab = if is_active {
+            tab.style(style::filled(r))
+        } else {
+            tab.style(style::text_button(r))
+        };
+        entries = entries.push(tab);
     }
     Some(entries.into())
 }

@@ -64,6 +64,7 @@ pyftsubset _static.ttf \
 | `ReleaseFocus` | `keyboard_hide`        | `E31A`         |
 | `ProjectRoot`  | `home`                 | `E88A`         |
 | `AddTerminalInstance` | `add_box`      | `E146`         |
+| `Close`       | `close`                | `E5CD`         |
 
 This table documents which of the font's (now much larger) set of glyphs the app actually
 *uses* — it is no longer the list of what the shipped file *contains* (that's every upstream

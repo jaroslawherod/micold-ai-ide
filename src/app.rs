@@ -426,17 +426,23 @@ pub enum Message {
     /// No pure reducer body: mirrors `TerminalRestartRequested`/`SessionStartRequested`, which
     /// only trigger binary-side spawn logic.
     ShellInstanceOpenRequested,
-    /// Switch the visible pane to a different open Regular Terminal instance for the active
-    /// session (FR-004; the instance-switching control in `pane()`).
-    ShellInstanceSelected(ShellInstanceId),
-    /// Close an individual Regular Terminal instance for the active session (FR-011–FR-013) —
-    /// may flip the session's `mode` back to `AiCli` if this was the last remaining instance.
-    ShellInstanceCloseRequested(ShellInstanceId),
-    /// Manually restart a specific Regular Terminal instance after it exited — independent of
-    /// whether that instance is the one currently attached to the pane (FR-010; a background
-    /// instance can be restarted without first switching to it). No pure reducer body: mirrors
-    /// `TerminalRestartRequested`, which only triggers binary-side spawn logic.
-    ShellInstanceRestartRequested(ShellInstanceId),
+    /// Switch the visible pane to a different open Regular Terminal instance of `SessionId`
+    /// (FR-004; the instance-switching control in `pane()`). Carries the owning session
+    /// explicitly, not just the instance id, because `ShellInstanceId` is only unique within its
+    /// own session — resolving against whatever `active_session` happens to be when this message
+    /// is processed (rather than the session it was actually raised for) could otherwise apply it
+    /// to a same-numbered instance of a different session if the active session changes first.
+    ShellInstanceSelected(SessionId, ShellInstanceId),
+    /// Close an individual Regular Terminal instance of `SessionId` (FR-011–FR-013) — may flip
+    /// that session's `mode` back to `AiCli` if this was the last remaining instance. Carries the
+    /// owning session explicitly for the same reason as `ShellInstanceSelected`.
+    ShellInstanceCloseRequested(SessionId, ShellInstanceId),
+    /// Manually restart a specific Regular Terminal instance of `SessionId` after it exited —
+    /// independent of whether that instance is the one currently attached to the pane (FR-010; a
+    /// background instance can be restarted without first switching to it). No pure reducer
+    /// body: mirrors `TerminalRestartRequested`, which only triggers binary-side spawn logic.
+    /// Carries the owning session explicitly for the same reason as `ShellInstanceSelected`.
+    ShellInstanceRestartRequested(SessionId, ShellInstanceId),
     /// A Regular Terminal instance reported it is running (feature 011; replaces feature 010's
     /// `ShellSessionRunning(SessionId)`, now id-addressed since a session may have more than one
     /// instance).
@@ -1063,21 +1069,17 @@ impl State {
                 // is in Regular mode, opens the instance (`Session::open_shell_instance`), and
                 // spawns its process, following up with `ShellInstanceRunning` once it's up.
             }
-            Message::ShellInstanceSelected(shell_id) => {
-                if let Some(id) = self.active_session {
-                    if let Some(session) = self.session_mut(id) {
-                        session.select_shell(shell_id);
-                    }
+            Message::ShellInstanceSelected(id, shell_id) => {
+                if let Some(session) = self.session_mut(id) {
+                    session.select_shell(shell_id);
                 }
             }
-            Message::ShellInstanceCloseRequested(shell_id) => {
-                if let Some(id) = self.active_session {
-                    if let Some(session) = self.session_mut(id) {
-                        session.close_shell(shell_id);
-                    }
+            Message::ShellInstanceCloseRequested(id, shell_id) => {
+                if let Some(session) = self.session_mut(id) {
+                    session.close_shell(shell_id);
                 }
             }
-            Message::ShellInstanceRestartRequested(_) => {
+            Message::ShellInstanceRestartRequested(..) => {
                 // No pure state to update here — the binary spawns the process and follows up
                 // with ShellInstanceRunning once it's up (mirrors TerminalRestartRequested).
             }

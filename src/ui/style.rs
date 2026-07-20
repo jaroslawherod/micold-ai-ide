@@ -297,6 +297,32 @@ pub fn text_button(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style
     }
 }
 
+/// A small icon-only button with a fully-rounded hit area (`IconButton::circular`) — same
+/// hover/press fill and label color as [`text_button`], but a `shape::FULL` border radius so a
+/// roughly-square button (small, uniform padding) reads as a circle around the glyph rather than
+/// a rounded square.
+pub fn circular_icon_button(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_theme, status| {
+        let prim = color(r.primary);
+        let fill = match status {
+            button::Status::Hovered => Some(Background::Color(alpha(prim, 0.08))),
+            button::Status::Pressed => Some(Background::Color(alpha(prim, 0.12))),
+            _ => None,
+        };
+        let text = if matches!(status, button::Status::Disabled) {
+            alpha(prim, 0.38)
+        } else {
+            prim
+        };
+        button::Style {
+            background: fill,
+            text_color: text,
+            border: radius(shape::FULL),
+            ..button::Style::default()
+        }
+    }
+}
+
 /// Secondary/caption text color (paths, labels, badges) — `on_surface_variant`.
 pub fn muted(r: Roles) -> impl Fn(&Theme) -> text::Style {
     move |_theme| text::Style {

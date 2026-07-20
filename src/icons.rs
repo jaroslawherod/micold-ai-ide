@@ -67,6 +67,10 @@ pub enum Icon {
     /// Open an additional Regular Terminal instance for a session (feature 011, FR-001;
     /// `add_box` — distinct from `AddSession`'s plain `add` glyph).
     AddTerminalInstance,
+    /// Close/dismiss action (an "×" glyph) — e.g. closing a Regular Terminal instance
+    /// (feature 011, FR-011). Distinct from `Delete` (a trash can), for actions that dismiss
+    /// something rather than send it to trash.
+    Close,
 }
 
 impl Icon {
@@ -97,6 +101,7 @@ impl Icon {
         Icon::ReleaseFocus,
         Icon::ProjectRoot,
         Icon::AddTerminalInstance,
+        Icon::Close,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -128,6 +133,7 @@ impl Icon {
             Icon::ReleaseFocus => '\u{e31a}',
             Icon::ProjectRoot => '\u{e88a}',
             Icon::AddTerminalInstance => '\u{e146}',
+            Icon::Close => '\u{e5cd}',
         }
     }
 }
