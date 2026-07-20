@@ -221,7 +221,7 @@ restart → value retained; out-of-range input → validation message, not saved
 - [X] T039 Confirm `iced_term` is gone from `Cargo.lock` (`cargo update -p iced_term --dry-run` / a clean `cargo build --features gui`) and no reference remains (Principle V).
 - [X] T040 Regression checkpoint for feature 005 (FR-017): confirm the existing session lifecycle, isolation, persistence, and crash-restart tests (e.g. `tests/session_lifecycle.rs`, `tests/session_store.rs`) still pass unchanged, proving this feature altered only rendering/input.
 - [ ] T041 **(DEFERRED)** Verify build + full test suite pass on Linux, macOS, and Windows in CI (Principle VI), both `--no-default-features` and `--features gui` (SC-006). Linux verified locally; macOS + Windows postponed to CI.
-- [ ] T042 **(DEFERRED)** Run `specs/006-real-terminal-emulator/quickstart.md` end-to-end (all 9 manual steps + SC checks, incl. SC-008 responsiveness under flood). Postponed — needs a manual GUI run on a display.
+- [ ] T042 **(DEFERRED)** Run `specs/006-real-terminal-emulator/quickstart.md` end-to-end (all 10 manual steps + SC checks, incl. SC-008 responsiveness under flood). Postponed — needs a manual GUI run on a display. *(2026-07-20: step 10 added covering BUG-001 auto-focus + BUG-002 scrolling, since neither is reachable from a unit test — `on_event` needs a GPU-backed renderer. Step 10a.2 verified by the user on Wayland/GNOME: touchpad scrolling moves the viewport, confirming BUG-002 fixed end-to-end. The remainder of step 10 is still unrun.)*
 
 ---
 
