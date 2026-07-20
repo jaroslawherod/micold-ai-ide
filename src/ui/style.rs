@@ -6,6 +6,7 @@
 
 use iced::widget::{button, container, scrollable, text, text_input};
 use iced::{Background, Border, Color, Theme};
+use micold_ai_ide::app::NoticeLevel;
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, shape, Rgb, Roles};
 
@@ -190,6 +191,23 @@ pub fn list_item(r: Roles) -> impl Fn(&Theme) -> container::Style {
         text_color: Some(color(r.on_surface)),
         border: radius(shape::MD),
         ..container::Style::default()
+    }
+}
+
+/// A global notification banner. `Error` uses the error role so a failed action reads as one
+/// at a glance; `Info` reuses the neutral list-row surface.
+pub fn notification(r: Roles, level: NoticeLevel) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| {
+        let (bg, fg) = match level {
+            NoticeLevel::Error => (r.error, r.on_error),
+            NoticeLevel::Info => (r.surface_variant, r.on_surface),
+        };
+        container::Style {
+            background: Some(Background::Color(color(bg))),
+            text_color: Some(color(fg)),
+            border: radius(shape::MD),
+            ..container::Style::default()
+        }
     }
 }
 

@@ -472,6 +472,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Open the chosen folder as a project — but only if it is a git repository (FR-001a).
         Message::FolderChosen(path) => {
+            // Close the picker BEFORE the git gate. Notifications render inside `base`, which
+            // every modal wraps behind its scrim, so a refusal reported while the selector was
+            // still open would be dimmed out of view.
             app.core.selector = None;
             app.core.overlay = Overlay::None;
             if !GitCli::new().is_repo_root(&path) {
@@ -575,7 +578,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         started = true;
                     }
                     Err(err) => {
-                        app.core.worktree_error = Some(format!("Could not start session: {err}"));
+                        // Feature 005 FR-017. Previously stored in `worktree_error`, whose only
+                        // render site is inside the Add Worktree modal — not open here, so a
+                        // failed spawn (typically `claude` missing from PATH) was silent.
+                        app.core
+                            .notify_error(format!("Could not start session: {err}"));
                     }
                 }
             }
@@ -826,8 +833,31 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     }
                 }
                 if let Some(wt) = wt {
-                    let _ = remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref());
-                    let _ = std::fs::remove_dir_all(&wt.path);
+                    // FR-023: both results were previously discarded with `let _ =`, so a
+                    // locked worktree, a branch checked out elsewhere, or a permission error
+                    // made the row vanish from the sidebar while the branch and directory
+                    // survived on disk. The reconcile below restores a truthful sidebar; these
+                    // report *why* it did not go away.
+                    let name = app.core.worktree_display_name(&dir);
+                    match remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref()) {
+                        // Only remove the directory once git has released the worktree —
+                        // deleting the working files of a still-registered worktree would
+                        // leave a worse mess than the failure being reported.
+                        Ok(()) => {
+                            if let Err(err) = std::fs::remove_dir_all(&wt.path) {
+                                app.core.notify_error(format!(
+                                    "Deleted worktree \"{name}\", but its folder could not be \
+                                     removed: {err}. Left at {}",
+                                    wt.path.display()
+                                ));
+                            }
+                        }
+                        Err(err) => {
+                            app.core.notify_error(format!(
+                                "Could not delete worktree \"{name}\": {err}"
+                            ));
+                        }
+                    }
                 }
                 // Drop the session/worktree records in the core, then reconcile from git truth.
                 app.core.update(Message::WorktreeDeleteConfirmed);
