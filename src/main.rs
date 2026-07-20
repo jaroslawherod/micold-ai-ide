@@ -1595,6 +1595,13 @@ mod tests {
             window_focused: true,
             create_progress: Arc::new(Mutex::new(Vec::new())),
             last_grid: None,
+            env_include_enabled: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_ENABLED,
+            env_include_script_path: String::new(),
+            env_include_timeout_secs: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
+            env_include: EnvIncludeSnapshot {
+                vars: Vec::new(),
+                outcome: EnvIncludeOutcome::Disabled,
+            },
         }
     }
 
