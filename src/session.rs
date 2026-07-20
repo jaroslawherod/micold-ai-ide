@@ -174,6 +174,24 @@ impl ShellLifecycle {
     }
 }
 
+/// Identifies one Regular Terminal instance within a single session (feature 011, research R1).
+/// Allocated from `Session.next_shell_id`, a per-session monotonic counter — unique only within
+/// its owning session, for the lifetime of the running app; never persisted, never compared
+/// across sessions. Doubles as the switcher row's display label (spec Assumptions: instances are
+/// identified by creation order) — there is no separate "display name" field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ShellInstanceId(pub u32);
+
+/// One of possibly several Regular Terminal instances a session may have open (feature 011,
+/// contracts/shell-instance-lifecycle.md). `lifecycle` reuses [`ShellLifecycle`] unchanged — an
+/// instance's state machine is identical to the single-shell case feature 010 established, just
+/// now scoped to one element of `Session.shells` instead of the session's whole Regular side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShellInstance {
+    pub id: ShellInstanceId,
+    pub lifecycle: ShellLifecycle,
+}
+
 /// Where a session's working directory lives (feature 010, data-model.md). A closed enum
 /// (Constitution Principle V) so a session can never be ambiguously "maybe a worktree, maybe
 /// not" — every session maps to exactly one of these two sanctioned locations (constitution
@@ -221,8 +239,17 @@ pub struct Session {
     pub lifecycle: SessionLifecycle,
     /// Which process is attached to the visible pane (feature 010). Persisted (FR-011).
     pub mode: TerminalMode,
-    /// Runtime state of the shell process (feature 010; transient — not persisted).
-    pub shell_lifecycle: ShellLifecycle,
+    /// Every currently-open Regular Terminal instance, in creation ("open") order (feature 011;
+    /// transient — not persisted, mirrors `lifecycle`'s non-persistence). Replaces feature 010's
+    /// single `shell_lifecycle: ShellLifecycle` field.
+    pub shells: Vec<ShellInstance>,
+    /// Which instance is attached to the visible pane when `mode == Regular` (feature 011).
+    /// Invariant: `Some(id)` names a live element of `shells`, or `None` iff `shells` is empty —
+    /// enforced by construction by the methods below; no other code path writes this field.
+    pub active_shell: Option<ShellInstanceId>,
+    /// Monotonic counter allocating the next `ShellInstanceId` (feature 011, research R1) —
+    /// never decremented or reused, even after every instance is closed.
+    pub next_shell_id: u32,
 }
 
 impl Session {
@@ -235,13 +262,16 @@ impl Session {
             label: SessionLabel::Pending,
             lifecycle: SessionLifecycle::Starting,
             mode: TerminalMode::AiCli,
-            shell_lifecycle: ShellLifecycle::NotStarted,
+            shells: Vec::new(),
+            active_shell: None,
+            next_shell_id: 1,
         }
     }
 
     /// A persisted session restored from disk — `Idle` until reopened (FR-020, FR-023a).
-    /// `mode` is the persisted value (feature 010 FR-011); the shell is always `NotStarted`
-    /// since no process survives an app restart.
+    /// `mode` is the persisted value (feature 010 FR-011); `shells` is always empty since no
+    /// process survives an app restart (feature 011 FR-017 — at most one instance is ever
+    /// restored, lazily, on first switch into Regular mode).
     pub fn restored(
         id: SessionId,
         location: SessionLocation,
@@ -254,7 +284,9 @@ impl Session {
             label,
             lifecycle: SessionLifecycle::Idle,
             mode,
-            shell_lifecycle: ShellLifecycle::NotStarted,
+            shells: Vec::new(),
+            active_shell: None,
+            next_shell_id: 1,
         }
     }
 
@@ -264,19 +296,84 @@ impl Session {
         self.mode = mode;
     }
 
-    /// Begin (re)starting the shell process (feature 010 FR-003/FR-004/FR-013).
-    pub fn start_shell(&mut self) {
-        self.shell_lifecycle.start_shell();
+    /// Open a new Regular Terminal instance: always succeeds (feature 011 FR-001, FR-007;
+    /// contracts/shell-instance-lifecycle.md). Allocates the next id, appends a `Starting`
+    /// instance to the end of `shells` (append-on-open order), and makes it the active one.
+    /// Used both for an explicit "open an additional instance" action and for lazily creating a
+    /// session's first-ever instance on its first switch into Regular mode.
+    pub fn open_shell_instance(&mut self) -> ShellInstanceId {
+        let id = ShellInstanceId(self.next_shell_id);
+        self.next_shell_id += 1;
+        let mut instance = ShellInstance {
+            id,
+            lifecycle: ShellLifecycle::NotStarted,
+        };
+        instance.lifecycle.start_shell();
+        self.shells.push(instance);
+        self.active_shell = Some(id);
+        id
     }
 
-    /// The shell process is up (feature 010).
-    pub fn mark_shell_running(&mut self) {
-        self.shell_lifecycle.mark_running();
+    /// Switch which instance is attached to the visible pane (feature 011 FR-004). A no-op if
+    /// `id` does not name a live element of `shells` (e.g. a race with a concurrent close).
+    pub fn select_shell(&mut self, id: ShellInstanceId) {
+        if self.shells.iter().any(|s| s.id == id) {
+            self.active_shell = Some(id);
+        }
     }
 
-    /// The shell process exited — no restart decision (feature 010 FR-013).
-    pub fn mark_shell_exited(&mut self) {
-        self.shell_lifecycle.mark_exited();
+    /// Close one Regular Terminal instance (feature 011 FR-011–FR-013). A no-op if `id` does not
+    /// name a live instance. If the closed instance was the active one, reassigns `active_shell`
+    /// to the element now sitting at the removed position (the former *next* instance in list
+    /// order) or, if there is none, the new last element (FR-012 — resolved 2026-07-20: "next in
+    /// list, else previous"). If `shells` is empty afterward, `active_shell` is already `None`
+    /// from that fallback chain, and `mode` reverts to `TerminalMode::AiCli` (FR-013).
+    pub fn close_shell(&mut self, id: ShellInstanceId) {
+        let Some(pos) = self.shells.iter().position(|s| s.id == id) else {
+            return;
+        };
+        self.shells.remove(pos);
+        if self.active_shell == Some(id) {
+            self.active_shell = self
+                .shells
+                .get(pos)
+                .or_else(|| self.shells.last())
+                .map(|s| s.id);
+        }
+        if self.shells.is_empty() {
+            self.mode = TerminalMode::AiCli;
+        }
+    }
+
+    /// Manually restart one instance after it exited (feature 011 FR-010) — a no-op if `id` is
+    /// absent, else delegates to that instance's unchanged `ShellLifecycle::start_shell`
+    /// (idempotent: also a no-op if that instance is already `Starting`/`Running`).
+    pub fn restart_shell_instance(&mut self, id: ShellInstanceId) {
+        if let Some(instance) = self.shells.iter_mut().find(|s| s.id == id) {
+            instance.lifecycle.start_shell();
+        }
+    }
+
+    /// The shell process for instance `id` is up (feature 011). No-op if `id` is absent.
+    pub fn mark_shell_running(&mut self, id: ShellInstanceId) {
+        if let Some(instance) = self.shells.iter_mut().find(|s| s.id == id) {
+            instance.lifecycle.mark_running();
+        }
+    }
+
+    /// Instance `id`'s shell process exited — no restart decision (feature 011 FR-008). No-op if
+    /// `id` is absent.
+    pub fn mark_shell_exited(&mut self, id: ShellInstanceId) {
+        if let Some(instance) = self.shells.iter_mut().find(|s| s.id == id) {
+            instance.lifecycle.mark_exited();
+        }
+    }
+
+    /// The currently-active instance's lifecycle, or `None` if `shells` is empty (feature 011;
+    /// replaces direct `session.shell_lifecycle` field reads at feature-010-era call sites).
+    pub fn active_shell_lifecycle(&self) -> Option<ShellLifecycle> {
+        let id = self.active_shell?;
+        self.shells.iter().find(|s| s.id == id).map(|s| s.lifecycle)
     }
 
     /// Whether the session currently has a running/launching process.

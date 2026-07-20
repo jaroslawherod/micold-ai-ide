@@ -23,6 +23,7 @@ fn unfocused_routes_every_key_to_the_app() {
         KeyOutput::Copy,
         KeyOutput::Paste,
         KeyOutput::ReleaseFocus,
+        KeyOutput::NewTerminalInstance,
         KeyOutput::Ignore,
     ] {
         assert_eq!(route_key(false, out), KeyRouting::App);
@@ -45,6 +46,14 @@ fn release_focus_never_yields_pty_bytes() {
     match route_key(true, KeyOutput::ReleaseFocus) {
         KeyRouting::ReleaseFocus => {}
         other => panic!("expected ReleaseFocus, got {other:?}"),
+    }
+}
+
+#[test]
+fn new_terminal_instance_chord_never_yields_pty_bytes() {
+    match route_key(true, KeyOutput::NewTerminalInstance) {
+        KeyRouting::NewTerminalInstance => {}
+        other => panic!("expected NewTerminalInstance, got {other:?}"),
     }
 }
 

@@ -203,6 +203,39 @@ commands, scripts, or anything else scoped to that session's worktree without le
   its own crash-auto-restart if it happens to exit while you're looking at the shell, and
   switching back reattaches to that same conversation with nothing lost.
 
+### Running more than one Regular Terminal instance
+
+A session isn't limited to a single Regular Terminal — you can open as many independent shell
+instances as you need, side by side.
+
+- Whenever a session is in Regular Terminal mode, an **open a new instance** button sits in the
+  bottom bar next to the mode toggle. Press it (or use **Ctrl+Shift+T** / **Cmd+Shift+T** on
+  macOS while the terminal has focus) to start another independent shell, scoped to the same
+  session working directory as the first. The button is there even when only one instance is
+  open, so you can always go from one to two.
+- The keyboard shortcut only opens a new instance while the session is already showing a Regular
+  Terminal — pressing it in AI CLI mode does nothing and does not switch modes.
+- Each instance is a fully separate shell process: running a long command in one never affects
+  the others, and closing or restarting one instance never touches its siblings or your `claude`
+  conversation.
+- Once a session has two or more open instances, a numbered switcher appears in the bottom bar
+  (numbered in the order you opened them) — the currently active one is highlighted. Click any
+  entry to bring that instance's shell to the front; the one you switch away from keeps running
+  untouched in the background. With only one instance open, the switcher stays hidden — the
+  terminal looks exactly as it did before this feature.
+- The primary AI CLI/Regular toggle always shows whichever instance was last active when you
+  switch back into Regular mode — not an arbitrary one.
+- Each entry in the switcher has its own close button. Closing a background instance leaves
+  everything else exactly as it was. Closing the instance you're currently looking at
+  automatically brings up the next instance in the list (or the previous one, if you closed the
+  last one in the list) — the pane is never left showing a closed instance. Closing your very
+  last remaining instance falls back to AI CLI mode, same as today's single-terminal behavior.
+- Each instance tracks its own running/exited state independently, including instances you're
+  not currently looking at. If a background instance exits (or crashes) while you're viewing a
+  different one, its switcher entry gains its own **restart** button — press it to start a fresh
+  shell for just that instance, without switching to it first and without touching any sibling
+  instance or your `claude` conversation.
+
 ## Sessions in the background
 
 Switching to a different project **does not stop your sessions**. When you change the active

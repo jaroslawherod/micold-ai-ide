@@ -64,6 +64,9 @@ pub enum Icon {
     /// The "Default" project-root sidebar entry (feature 010) — distinct from the git/branch
     /// iconography used for worktree rows (FR-006).
     ProjectRoot,
+    /// Open an additional Regular Terminal instance for a session (feature 011, FR-001;
+    /// `add_box` — distinct from `AddSession`'s plain `add` glyph).
+    AddTerminalInstance,
 }
 
 impl Icon {
@@ -93,6 +96,7 @@ impl Icon {
         Icon::RegularTerminal,
         Icon::ReleaseFocus,
         Icon::ProjectRoot,
+        Icon::AddTerminalInstance,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -123,6 +127,7 @@ impl Icon {
             Icon::RegularTerminal => '\u{eb8e}',
             Icon::ReleaseFocus => '\u{e31a}',
             Icon::ProjectRoot => '\u{e88a}',
+            Icon::AddTerminalInstance => '\u{e146}',
         }
     }
 }

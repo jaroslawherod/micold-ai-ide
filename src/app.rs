@@ -16,7 +16,7 @@ use crate::naming::{
 };
 use crate::project::{canonicalize_best_effort, Availability, FolderEntry, RenameError};
 use crate::selector::Selector;
-use crate::session::{Session, SessionId, SessionLocation};
+use crate::session::{Session, SessionId, SessionLocation, ShellInstanceId};
 use crate::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
 use crate::worktree::{Worktree, WorktreeStatus};
 use std::collections::{BTreeMap, BTreeSet};
@@ -416,13 +416,34 @@ pub enum Message {
     /// The mode toggle was pressed for the active session (FR-001–FR-004, FR-010).
     TerminalModeToggled,
     /// The manual restart affordance was pressed for the active session's currently-attached,
-    /// not-running process (FR-013; contracts/terminal-mode-lifecycle.md).
+    /// not-running process — for the AI CLI branch, and for whichever Regular Terminal instance
+    /// is currently active (FR-013; contracts/terminal-mode-lifecycle.md).
     TerminalRestartRequested,
-    /// The session's shell process reported it is running.
-    ShellSessionRunning(SessionId),
-    /// The session's shell process exited (intentional or crash) — never auto-restarted
-    /// (FR-013).
-    ShellSessionExited(SessionId),
+
+    // ---- Feature 011: multiple Regular Terminal instances per session ----
+    /// Open an additional Regular Terminal instance for the active session (the "+" control or
+    /// the `Ctrl+Shift+T`/`Cmd+Shift+T` shortcut, FR-001, FR-019) — a no-op outside Regular mode.
+    /// No pure reducer body: mirrors `TerminalRestartRequested`/`SessionStartRequested`, which
+    /// only trigger binary-side spawn logic.
+    ShellInstanceOpenRequested,
+    /// Switch the visible pane to a different open Regular Terminal instance for the active
+    /// session (FR-004; the instance-switching control in `pane()`).
+    ShellInstanceSelected(ShellInstanceId),
+    /// Close an individual Regular Terminal instance for the active session (FR-011–FR-013) —
+    /// may flip the session's `mode` back to `AiCli` if this was the last remaining instance.
+    ShellInstanceCloseRequested(ShellInstanceId),
+    /// Manually restart a specific Regular Terminal instance after it exited — independent of
+    /// whether that instance is the one currently attached to the pane (FR-010; a background
+    /// instance can be restarted without first switching to it). No pure reducer body: mirrors
+    /// `TerminalRestartRequested`, which only triggers binary-side spawn logic.
+    ShellInstanceRestartRequested(ShellInstanceId),
+    /// A Regular Terminal instance reported it is running (feature 011; replaces feature 010's
+    /// `ShellSessionRunning(SessionId)`, now id-addressed since a session may have more than one
+    /// instance).
+    ShellInstanceRunning(SessionId, ShellInstanceId),
+    /// A Regular Terminal instance's shell process exited (intentional or crash) — never
+    /// auto-restarted (FR-008; replaces feature 010's `ShellSessionExited(SessionId)`).
+    ShellInstanceExited(SessionId, ShellInstanceId),
 
     /// Periodic redraw tick while a terminal is live (drives streamed-output repaint).
     TerminalTick,
@@ -1035,16 +1056,39 @@ impl State {
             Message::TerminalRestartRequested => {
                 // No pure state to update here — the binary decides which process to spawn
                 // based on the current mode and follows up with SessionRunning/
-                // ShellSessionRunning once it's actually up (mirrors SessionStartRequested).
+                // ShellInstanceRunning once it's actually up (mirrors SessionStartRequested).
             }
-            Message::ShellSessionRunning(id) => {
-                if let Some(session) = self.session_mut(id) {
-                    session.mark_shell_running();
+            Message::ShellInstanceOpenRequested => {
+                // No pure state to update here — the binary decides whether the active session
+                // is in Regular mode, opens the instance (`Session::open_shell_instance`), and
+                // spawns its process, following up with `ShellInstanceRunning` once it's up.
+            }
+            Message::ShellInstanceSelected(shell_id) => {
+                if let Some(id) = self.active_session {
+                    if let Some(session) = self.session_mut(id) {
+                        session.select_shell(shell_id);
+                    }
                 }
             }
-            Message::ShellSessionExited(id) => {
-                if let Some(session) = self.session_mut(id) {
-                    session.mark_shell_exited();
+            Message::ShellInstanceCloseRequested(shell_id) => {
+                if let Some(id) = self.active_session {
+                    if let Some(session) = self.session_mut(id) {
+                        session.close_shell(shell_id);
+                    }
+                }
+            }
+            Message::ShellInstanceRestartRequested(_) => {
+                // No pure state to update here — the binary spawns the process and follows up
+                // with ShellInstanceRunning once it's up (mirrors TerminalRestartRequested).
+            }
+            Message::ShellInstanceRunning(session_id, shell_id) => {
+                if let Some(session) = self.session_mut(session_id) {
+                    session.mark_shell_running(shell_id);
+                }
+            }
+            Message::ShellInstanceExited(session_id, shell_id) => {
+                if let Some(session) = self.session_mut(session_id) {
+                    session.mark_shell_exited(shell_id);
                 }
             }
             Message::SessionCloseRequested(id) => {
@@ -1503,6 +1547,8 @@ pub enum KeyRouting {
     Paste,
     /// Release terminal focus back to the application.
     ReleaseFocus,
+    /// Open a new Regular Terminal instance for the active session (feature 011, FR-019).
+    NewTerminalInstance,
     /// Focused, but the key has no terminal meaning — drop it.
     Ignore,
 }
@@ -1518,6 +1564,7 @@ pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> Ke
         KeyOutput::Copy => KeyRouting::Copy,
         KeyOutput::Paste => KeyRouting::Paste,
         KeyOutput::ReleaseFocus => KeyRouting::ReleaseFocus,
+        KeyOutput::NewTerminalInstance => KeyRouting::NewTerminalInstance,
         KeyOutput::Ignore => KeyRouting::Ignore,
     }
 }
