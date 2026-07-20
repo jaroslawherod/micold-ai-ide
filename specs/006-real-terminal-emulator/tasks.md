@@ -281,8 +281,10 @@ through the scrollback and the scrollbar appears.
   widget-level wheel coverage exercises pixel-precision deltas end-to-end (event → `TerminalScrolled`
   / mouse report), not just the pure mapping helper. T028 tested only whole-line deltas, which is
   why BUG-002 was invisible to CI on every platform.
-- [ ] T056 [BUG-002] Update `docs/user-guide/worktrees-and-sessions.md` (T031) to state that
+- [X] T056 [BUG-002] Update `docs/user-guide/worktrees-and-sessions.md` (T031) to state that
   scrolling works with a mouse wheel *and* a touchpad/precision pointing device (Principle VII).
+  Also documents the scrollbar's hide-at-live-bottom behavior, since "no scrollbar" was the
+  user-visible face of BUG-002 and is otherwise easy to read as a defect.
 
 **Checkpoint**: Touchpad scrolling moves the viewport on every supported platform and windowing
 system; discrete-wheel behavior is unchanged.
