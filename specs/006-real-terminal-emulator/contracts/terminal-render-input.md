@@ -47,6 +47,15 @@ Canvas render over `content.grid.display_iter()`:
     lines). Holding **Shift** forces selection even under mouse mode. (FR-013, FR-013b)
   - Wheel → `TerminalAction(Scroll(lines))`; the binary forwards to the PTY on
     `ALT_SCREEN|ALTERNATE_SCROLL`, else scrolls local scrollback. (FR-016 + wheel edge case)
+  - **Delta → lines (BUG-002, FR-016b).** Scroll deltas arrive in two units and both MUST scroll:
+    line-based deltas (discrete wheels; X11 touchpads, delivered as legacy button-4/5 events) pass
+    through as whole lines. Pixel-based deltas (high-resolution touchpads — the norm under Wayland,
+    and on macOS/Windows precision devices) are divided by the cell height. The sub-line remainder
+    MUST be retained in per-pane widget state across events and consumed once it reaches a whole
+    line; it MUST NOT be rounded away per event, or a gesture made entirely of sub-line increments
+    scrolls by nothing at all. Reversing direction discards the banked residual so an interrupted
+    gesture cannot offset the new one. The same mapping applies to the mouse-report branch, so a
+    touchpad generates wheel reports for a mouse-reporting process (FR-013a).
 - Any produced action ⇒ `Status::Captured`.
 
 ## Focusable
@@ -67,5 +76,10 @@ The binary applies `Message::TerminalAction(a)` to the displayed, focused sessio
 
 - GUI-gated unit tests adapting iced_term's `view.rs` suite: left-press selection vs mouse
   report; cursor-moved grid mapping; wheel→scroll; focus gate (unfocused ⇒ `Ignored`).
+- Delta→lines (BUG-002): a single sub-line pixel delta scrolls by 0 but is retained; successive
+  sub-line deltas summing past one cell height scroll by exactly one line; the remainder after a
+  whole line carries into the next event; reversing direction does not leak the banked residual;
+  line-based deltas are unaffected. Note that testing only whole-line deltas is what let BUG-002
+  ship — the pixel path MUST be covered explicitly.
 - Pure `keymap` + `route_key` tests cover the key path (see other contracts).
 - End-to-end via `quickstart.md`.
