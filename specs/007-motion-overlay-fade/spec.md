@@ -77,7 +77,7 @@ Overlay animations are slow enough to be clearly noticed (the previous micro-ani
 - **FR-002**: Each modal overlay MUST animate a fade-out when it is dismissed, for every dismissal path: Cancel, Esc, and successful submit/confirm.
 - **FR-003**: During an overlay's fade-out, the underlying application content MUST become progressively visible; the overlay MUST NOT disappear in a single frame.
 - **FR-004**: Overlay open and close animations MUST be clearly perceptible to a user (not an imperceptible flash).
-- **FR-005**: Overlay fade-in SHOULD last approximately 300 ms and fade-out approximately 240 ms (informed defaults, tunable).
+- **FR-005**: Overlay fade-in SHOULD last approximately 250 ms and fade-out approximately 200 ms (informed defaults, tunable; originally specified as 300 ms / 240 ms and tuned down during implementation — both sets sit inside SC-002's 0.15–0.5 s band).
 - **FR-006**: While an overlay animates out, its displayed content MUST remain visually consistent with its last shown state (no abrupt content change during exit).
 - **FR-007**: All UI animations — the existing overflow-menu fade, sidebar slide, main-view fade, and resize-handle hover, plus the new overlay fades — MUST be driven by a single shared animation mechanism.
 - **FR-008**: Registering a new animated element MUST NOT require adding element-specific state or plumbing in multiple places; it MUST require only naming the element, setting a target, and reading its progress.
@@ -119,3 +119,5 @@ Overlay animations are slow enough to be clearly noticed (the previous micro-ani
 - The fade-out is handled entirely in the rendering layer; the pure application core (overlay lifecycle, drafts, persistence) is not modified.
 - The extraction requirement is met by making the animation mechanism's **core** self-contained, framework-agnostic, and app-agnostic, with a documented public API. Whether that core is physically split into a separately published package now or kept as a self-contained internal module prepared for extraction is a delivery decision recorded in the plan (see `plan.md` / `research.md`).
 - The animation library has two layers: a **framework-agnostic core** (the animatable-value engine — reusable in any project) and a thin set of **rendering helpers** that necessarily depend on the GUI framework (reusable by other applications built on the same GUI framework). Only the core is required to be free of GUI-framework coupling; the rendering helpers are a separate, optional layer.
+
+**Alignment**: 2026-07-20 — Spec/code alignment audit. FR-005's informed defaults updated from 300 ms / 240 ms to the implemented 250 ms / 200 ms. Both sets sit inside SC-002's 0.15–0.5 s band and FR-005 is a SHOULD with an explicit "tunable" allowance, so this records the tuning rather than changing a requirement. Feature 007 is otherwise fully conformant — all 17 FRs satisfied with no wiring gaps.

@@ -492,8 +492,33 @@ pub enum Message {
     /// Toggle the top-bar project switcher panel (feature 008, FR-004). Mutually exclusive
     /// with the overflow menu.
     ProjectSwitcherToggled,
-    /// Dismiss the "restarted while you were away" notice banner (feature 008, SC-007).
-    NoticeDismissed,
+
+    // ---- Global notification surface ----
+    /// Dismiss the notification at this index. Out-of-range indices are ignored, so a stale
+    /// click delivered after the list shrank is harmless.
+    NotificationDismissed(usize),
+}
+
+/// How prominently a [`Notification`] is presented.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoticeLevel {
+    /// Something happened that the user should know about, but nothing failed.
+    Info,
+    /// An action the user asked for could not be completed.
+    Error,
+}
+
+/// A transient, user-visible message not owned by any modal.
+///
+/// Exists because every feature that needed to report a failure invented its own error field
+/// with a single modal-specific render site, and those sites became unreachable as the UI grew
+/// (a session that fails to start, a folder that is refused). Notifications render
+/// unconditionally in [`crate::ui::view`], outside every branch that can bypass them, so a
+/// message pushed here cannot be silently swallowed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Notification {
+    pub level: NoticeLevel,
+    pub message: String,
 }
 
 /// Root application state for the single main window.
@@ -550,9 +575,13 @@ pub struct State {
     /// Sessions that were auto-restarted while their project was inactive, pending a return
     /// notification. Cleared when the user returns to the owner.
     pub restarted_while_inactive: BTreeSet<SessionId>,
-    /// A transient banner shown on return when a background restart occurred.
-    /// Presentation-only; cleared by [`Message::NoticeDismissed`] or the next switch.
-    pub notice: Option<String>,
+    /// Global messages, newest last. Rendered unconditionally so no failure can be swallowed by
+    /// an unreachable render path — see [`Notification`]. Never persisted.
+    ///
+    /// A message stays until the user dismisses it or it is evicted by newer ones. Nothing
+    /// clears these implicitly: a report that vanishes on unrelated activity (a background
+    /// worktree re-scan, say) is how these failures became invisible in the first place.
+    pub notifications: Vec<Notification>,
     /// Whether the top-bar project switcher panel is open. Mutually exclusive with
     /// `help_menu_open`.
     pub project_switcher_open: bool,
@@ -582,6 +611,36 @@ impl State {
     /// (FR-005, FR-007, FR-018). See [`crate::theme::resolve`].
     pub fn color_scheme(&self) -> ColorScheme {
         resolve(self.theme_pref, self.system_scheme)
+    }
+
+    /// The most notifications kept at once. Older ones are dropped rather than growing a
+    /// banner stack tall enough to crowd out the application.
+    const MAX_NOTIFICATIONS: usize = 3;
+
+    /// Surface a failed action to the user (see [`Notification`]).
+    ///
+    /// Use this for anything the user asked for that could not be completed. Do not add a new
+    /// error field with its own render site — that is the pattern that produced the silent
+    /// failures this surface replaces.
+    pub fn notify_error(&mut self, message: impl Into<String>) {
+        self.push_notification(NoticeLevel::Error, message.into());
+    }
+
+    /// Surface something the user should know about that is not a failure.
+    pub fn notify_info(&mut self, message: impl Into<String>) {
+        self.push_notification(NoticeLevel::Info, message.into());
+    }
+
+    fn push_notification(&mut self, level: NoticeLevel, message: String) {
+        let notification = Notification { level, message };
+        // Repeating an action that keeps failing should not stack identical banners.
+        if self.notifications.contains(&notification) {
+            return;
+        }
+        self.notifications.push(notification);
+        if self.notifications.len() > Self::MAX_NOTIFICATIONS {
+            self.notifications.remove(0);
+        }
     }
 
     /// Open a modal overlay, closing any lightweight popover first. The two are meant to be
@@ -705,7 +764,10 @@ impl State {
             }
             Message::ProjectOpenRefused(message) => {
                 // Non-git directory refused (FR-001a); the active project is unchanged.
-                self.worktree_error = Some(message);
+                // Reported through the global surface, not `worktree_error`: the refusal
+                // arrives with the selector already closed, so the Add Worktree modal that
+                // owns `worktree_error` is not open and the message was never drawn.
+                self.notify_error(message);
             }
             Message::WorktreesLoaded(worktrees) => {
                 self.worktree_error = None;
@@ -1050,8 +1112,10 @@ impl State {
                 self.overlay = Overlay::None;
                 self.settings_draft = None;
             }
-            Message::NoticeDismissed => {
-                self.notice = None;
+            Message::NotificationDismissed(index) => {
+                if index < self.notifications.len() {
+                    self.notifications.remove(index);
+                }
             }
 
             // Performed by the binary at the I/O boundary (needs the home directory + a
@@ -1246,8 +1310,12 @@ impl State {
             for id in &restarted {
                 self.restarted_while_inactive.remove(id);
             }
-            self.notice =
-                Some("A background session was restarted while you were away.".to_string());
+            // Reported through the global surface. The previous dedicated `notice` field was
+            // drawn only by `shell::view`, which is the *else* branch of
+            // `if state.active_session.is_some()` — and returning to a project restores its
+            // foreground session, so the banner was unreachable in exactly the case it exists
+            // for (FR-011 / SC-007).
+            self.notify_info("A background session was restarted while you were away.");
         }
     }
 

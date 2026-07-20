@@ -6,6 +6,7 @@
 
 use iced::widget::{button, container, scrollable, text, text_input};
 use iced::{Background, Border, Color, Theme};
+use micold_ai_ide::app::NoticeLevel;
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, shape, Rgb, Roles};
 
@@ -17,6 +18,17 @@ pub fn color(c: Rgb) -> Color {
 /// The same color at a given alpha (for state layers and disabled states).
 fn alpha(c: Color, a: f32) -> Color {
     Color { a, ..c }
+}
+
+/// The Material opacity for disabled content. The button style fns below apply it to their own
+/// labels; widgets that draw their own content (an icon glyph, say) must apply it themselves —
+/// an explicit `.color()` on the content overrides the button's inherited `text_color`, so a
+/// disabled button cannot grey out content that colors itself.
+pub const DISABLED_OPACITY: f32 = 0.38;
+
+/// A token color at the disabled opacity, for content a widget colors itself.
+pub fn disabled_color(c: Rgb) -> Color {
+    alpha(color(c), DISABLED_OPACITY)
 }
 
 /// A low-contrast divider color (thin 1px separator lines, e.g. under a toolbar or beside the
@@ -193,6 +205,23 @@ pub fn list_item(r: Roles) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A global notification banner. `Error` uses the error role so a failed action reads as one
+/// at a glance; `Info` reuses the neutral list-row surface.
+pub fn notification(r: Roles, level: NoticeLevel) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| {
+        let (bg, fg) = match level {
+            NoticeLevel::Error => (r.error, r.on_error),
+            NoticeLevel::Info => (r.surface_variant, r.on_surface),
+        };
+        container::Style {
+            background: Some(Background::Color(color(bg))),
+            text_color: Some(color(fg)),
+            border: radius(shape::MD),
+            ..container::Style::default()
+        }
+    }
+}
+
 /// Filled button: primary fill, `on_primary` label (the single primary action, FR-015).
 pub fn filled(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_theme, status| {
@@ -294,5 +323,31 @@ pub fn input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_input::Sty
             value: color(r.on_surface),
             selection: alpha(color(r.primary), 0.3),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Bin unit tests — run with `cargo test --features gui`.
+    use super::*;
+    use iced::widget::button::Status;
+
+    /// A glyph that colors itself does not inherit a disabled button's `text_color`, so
+    /// `IconButton` greys it via `disabled_color`. That must match what the button style fn
+    /// applies to its own label, or a disabled icon button and a disabled text button would
+    /// disagree about how faded "disabled" looks.
+    #[test]
+    fn disabled_color_matches_the_button_styles_disabled_label() {
+        let r = tokens::roles(ColorScheme::Dark);
+        let style = text_button(r)(&iced::Theme::Dark, Status::Disabled);
+        assert_eq!(disabled_color(r.primary), style.text_color);
+    }
+
+    /// The enabled path must stay fully opaque — greying is the disabled state alone.
+    #[test]
+    fn enabled_icon_tint_is_opaque() {
+        let r = tokens::roles(ColorScheme::Dark);
+        assert_eq!(color(r.on_surface).a, 1.0);
+        assert_eq!(disabled_color(r.on_surface).a, DISABLED_OPACITY);
     }
 }

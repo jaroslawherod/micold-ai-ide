@@ -5,7 +5,7 @@
 //! kill seam (`TerminalHandle::kill`) — against `FakeGit` + `FakeHandle`, with no real
 //! process or repository (Constitution Principle I).
 
-use micold_ai_ide::app::{Message, State};
+use micold_ai_ide::app::{Message, NoticeLevel, State};
 use micold_ai_ide::git::{FakeGit, Git};
 use micold_ai_ide::project::{Availability, Project};
 use micold_ai_ide::session::{Session, SessionLocation};
@@ -81,6 +81,41 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
         !*handles[&other_id].killed.lock().unwrap(),
         "unrelated session left running"
     );
+}
+
+/// FR-023: a delete that fails must tell the user, and must not leave the sidebar claiming the
+/// worktree is gone.
+///
+/// The binary previously ran both cleanup calls as `let _ = ...`, so a locked worktree or a
+/// branch checked out elsewhere made the row disappear while the branch and directory survived
+/// on disk. This mirrors the binary's failure flow: the git removal errors, the error is
+/// surfaced, and the reconcile from git truth puts the row back.
+#[test]
+fn fr_023_failed_delete_is_reported_and_the_worktree_survives() {
+    let repo = PathBuf::from("/repo");
+    let target = repo.join(".claude/worktrees/feat-locked");
+    let branch = "feat/locked";
+
+    let git = FakeGit::new().with_repo(repo.clone()).failing_next_remove();
+    git.worktree_add_new_branch(&repo, branch, &target).unwrap();
+
+    let mut state = State {
+        worktrees: vec![wt("feat-locked", &repo)],
+        ..Default::default()
+    };
+
+    let err = remove_worktree(&git, &repo, &target, Some(branch))
+        .expect_err("a locked worktree must not report success");
+    state.notify_error(format!("Could not delete worktree \"feat-locked\": {err}"));
+
+    // The failure reached the user through the surface that always renders.
+    assert_eq!(state.notifications.len(), 1);
+    assert_eq!(state.notifications[0].level, NoticeLevel::Error);
+    assert!(state.notifications[0].message.contains("feat-locked"));
+
+    // Git still owns the worktree and its branch — nothing was silently half-removed.
+    assert_eq!(git.worktrees(&repo).len(), 1, "registration survives");
+    assert!(git.branches(&repo).contains(&branch.to_string()));
 }
 
 #[test]

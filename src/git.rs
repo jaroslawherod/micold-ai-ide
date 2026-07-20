@@ -235,6 +235,9 @@ struct FakeState {
     /// When true, the next `worktree_add_new_branch` fails (after creating the branch, to
     /// mimic a checkout failure) so rollback ordering can be asserted.
     fail_next_add: bool,
+    /// When true, the next `worktree_remove` fails, standing in for a locked worktree or a
+    /// branch checked out elsewhere (feature 008, FR-023).
+    fail_next_remove: bool,
     /// Worktree paths primed to report `has_submodules == true` (feature 010).
     submodules: BTreeSet<PathBuf>,
     /// When true, the next `submodule_update_init_recursive` call fails (feature 010).
@@ -274,6 +277,13 @@ impl FakeGit {
     /// Prime the next `worktree_add_new_branch` to fail (rollback tests).
     pub fn failing_next_add(self) -> Self {
         self.inner.borrow_mut().fail_next_add = true;
+        self
+    }
+
+    /// Prime the next `worktree_remove` to fail — a locked worktree, a branch checked out
+    /// elsewhere, or a permission error (feature 008, FR-023 delete-failure reporting).
+    pub fn failing_next_remove(self) -> Self {
+        self.inner.borrow_mut().fail_next_remove = true;
         self
     }
 
@@ -377,6 +387,15 @@ impl Git for FakeGit {
     }
 
     fn worktree_remove(&self, repo: &Path, path: &Path, _force: bool) -> io::Result<()> {
+        {
+            let mut state = self.inner.borrow_mut();
+            if state.fail_next_remove {
+                state.fail_next_remove = false;
+                // Nothing is unregistered — the worktree survives, as it would on a real
+                // locked-worktree failure.
+                return Err(io::Error::other("simulated worktree remove failure"));
+            }
+        }
         if let Some(list) = self.inner.borrow_mut().worktrees.get_mut(repo) {
             list.retain(|(p, _)| p != path);
         }

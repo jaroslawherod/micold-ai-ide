@@ -15,13 +15,13 @@ mod toolbar;
 mod worktree_form;
 mod worktree_rename;
 
-use iced::widget::{column, container, mouse_area, row, stack, text, Space};
+use iced::widget::{button, column, container, mouse_area, row, stack, text, Space};
 use iced::{Element, Font, Length, Subscription};
 use micold_ai_ide::app::{Message, Overlay, State};
 use micold_ai_ide::icons::Icon;
 use micold_ai_ide::motion::Animator;
 use micold_ai_ide::theme::ColorScheme;
-use micold_ai_ide::tokens::{self, Rgb};
+use micold_ai_ide::tokens::{self, spacing, type_scale, Rgb, Roles};
 
 /// The embedded Material Symbols (Outlined) icon font. Registered once at startup in
 /// `main` so every icon glyph resolves; see `assets/fonts/PROVENANCE.md`.
@@ -35,10 +35,17 @@ pub const MATERIAL_SYMBOLS: Font = Font::with_name("Material Symbols Outlined");
 /// role (FR-004). Reuses [`style::color`] so tint follows the active theme exactly like all
 /// other text, giving light/dark and disabled states for free (FR-007).
 pub fn icon<'a, M: 'a>(icon: Icon, size: u16, color: Rgb) -> Element<'a, M> {
+    icon_colored(icon, size, style::color(color))
+}
+
+/// [`icon`] with an already-resolved color, so callers can apply alpha — notably
+/// [`style::disabled_color`], since a glyph that colors itself does not inherit a disabled
+/// button's `text_color`.
+pub fn icon_colored<'a, M: 'a>(icon: Icon, size: u16, color: iced::Color) -> Element<'a, M> {
     text(icon.glyph().to_string())
         .font(MATERIAL_SYMBOLS)
         .size(size)
-        .color(style::color(color))
+        .color(color)
         .into()
 }
 
@@ -77,6 +84,38 @@ pub fn worktree_fx_key(dir_name: &str) -> u64 {
 /// color scheme's design tokens. `motion` carries all material motion progress (menu fade,
 /// sidebar slide, main-view fade, handle hover, and the overlay fade). `dismissing` is the
 /// snapshot of a just-closed overlay still fading out (rendered instead of a live overlay when
+/// The stack of dismissible global notification banners, newest last. Empty when there is
+/// nothing to report, in which case it occupies no space.
+fn notifications<'a>(state: &'a State, r: Roles) -> Element<'a, Message> {
+    let mut stack = column![].spacing(spacing::SM);
+    for (index, notification) in state.notifications.iter().enumerate() {
+        let banner = row![
+            text(notification.message.clone())
+                .size(type_scale::BODY)
+                .width(Length::Fill),
+            button(text("Dismiss").size(type_scale::LABEL))
+                .on_press(Message::NotificationDismissed(index))
+                .style(style::outlined(r)),
+        ]
+        .spacing(spacing::SM)
+        .align_y(iced::Alignment::Center);
+        stack = stack.push(
+            container(banner)
+                .padding(spacing::MD)
+                .width(Length::Fill)
+                .style(style::notification(r, notification.level)),
+        );
+    }
+    if state.notifications.is_empty() {
+        stack.into()
+    } else {
+        container(stack)
+            .padding([spacing::SM, spacing::MD])
+            .width(Length::Fill)
+            .into()
+    }
+}
+
 /// `state.overlay` is already `None` — see [`crate::ClosingOverlay`]).
 pub fn view<'a>(
     state: &'a State,
@@ -120,11 +159,19 @@ pub fn view<'a>(
         material::fade(shell::view(state, scheme), motion.get(MotionKey::Main), bg)
     };
 
-    let mut base: Element<'a, Message> = container(column![toolbar::view(state, scheme), body])
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(style::window_bg(roles))
-        .into();
+    // The global notification surface, rendered here — between the toolbar and the body, above
+    // every branch that decides what the body is. Deliberately unconditional: the failures this
+    // replaces were all cases where state was set correctly but the only render site sat inside
+    // a branch that could not be taken. Nothing may nest this inside an `if`.
+    let mut base: Element<'a, Message> = container(column![
+        toolbar::view(state, scheme),
+        notifications(state, roles),
+        body
+    ])
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .style(style::window_bg(roles))
+    .into();
 
     // While resizing, a full-window capture layer tracks the cursor and ends the drag on
     // release, so the drag continues even when the pointer leaves the thin handle.

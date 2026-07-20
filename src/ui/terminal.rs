@@ -189,6 +189,16 @@ impl RuntimeTerminal {
             .intersects(TermMode::MOUSE_MODE)
     }
 
+    /// Whether the process wants pointer *motion* reported, not just button presses
+    /// (feature 006, FR-013a). `MOUSE_DRAG` asks for motion while a button is held;
+    /// `MOUSE_MOTION` asks for it unconditionally.
+    pub fn mouse_motion_mode(&self) -> bool {
+        self.term
+            .renderable_content()
+            .mode
+            .intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION)
+    }
+
     /// The grid point for a viewport cell, accounting for scrollback offset.
     fn viewport_point(&self, col: u16, line: u16) -> Point {
         let display_offset = self.term.grid().display_offset();
@@ -235,20 +245,21 @@ impl RuntimeTerminal {
         encode_mouse_report(mode, button, col, line, pressed, mods)
     }
 
-    /// The currently-selected text, or empty when there is no selection (feature 006 copy).
+    /// The currently-selected text, or empty when there is no selection (feature 006 FR-013).
     pub fn selectable_content(&self) -> String {
-        let content = self.term.renderable_content();
-        let Some(range) = content.selection else {
-            return String::new();
-        };
-        let mut out = String::new();
-        for cell in content.display_iter {
-            if range.contains(cell.point) {
-                out.push(cell.c);
-            }
-        }
-        out
+        selection_text(&self.term)
     }
+}
+
+/// Extract the selected region as text (feature 006, FR-013).
+///
+/// Delegates to the VT emulator's own extraction rather than walking `renderable_content`:
+/// `display_iter` covers only the visible viewport and yields bare characters, so a hand-rolled
+/// walk drops every line break and silently truncates any part of the selection that has
+/// scrolled into scrollback. `selection_to_string` reads the grid by absolute line, so it spans
+/// scrollback, emits newlines at line ends, and handles tabs and wide characters.
+fn selection_text(term: &Term<VoidListener>) -> String {
+    term.selection_to_string().unwrap_or_default()
 }
 
 impl TerminalHandle for RuntimeTerminal {
@@ -1001,6 +1012,59 @@ mod tests {
         assert!(saw_unselected, "expected some cells outside the selection");
     }
 
+    /// Build a `Term` with `history` lines of scrollback and feed it `input`.
+    fn term_with(rows: usize, cols: usize, history: usize, input: &[u8]) -> Term<VoidListener> {
+        let dims = TermDimensions { rows, cols };
+        let config = Config {
+            scrolling_history: history,
+            ..Config::default()
+        };
+        let mut term = Term::new(config, &dims, VoidListener);
+        let mut parser: Processor = Processor::new();
+        parser.advance(&mut term, input);
+        term
+    }
+
+    /// Drive a selection the way `selection_start`/`selection_update` do: `Side::Left` on both
+    /// ends, so `to` is the cell *after* the last selected character.
+    fn select(term: &mut Term<VoidListener>, from: (i32, usize), to: (i32, usize)) {
+        use alacritty_terminal::index::{Column, Line, Point as GridPoint, Side};
+        use alacritty_terminal::selection::{Selection, SelectionType};
+        let mut sel = Selection::new(
+            SelectionType::Simple,
+            GridPoint::new(Line(from.0), Column(from.1)),
+            Side::Left,
+        );
+        sel.update(GridPoint::new(Line(to.0), Column(to.1)), Side::Left);
+        term.selection = Some(sel);
+    }
+
+    #[test]
+    fn fr_013_no_selection_copies_nothing() {
+        let term = term_with(3, 10, 0, b"hello");
+        assert_eq!(selection_text(&term), "");
+    }
+
+    /// A selection spanning several rows must copy as several lines. The previous implementation
+    /// walked `display_iter` pushing bare characters, producing one run-on string.
+    #[test]
+    fn fr_013_multiline_selection_preserves_line_breaks() {
+        let mut term = term_with(3, 10, 0, b"one\r\ntwo\r\nthree");
+        select(&mut term, (0, 0), (2, 5));
+        assert_eq!(selection_text(&term), "one\ntwo\nthree");
+    }
+
+    /// A selection dragged up into scrollback must copy the off-screen part too. `display_iter`
+    /// covers only the viewport, so the previous implementation silently truncated it.
+    #[test]
+    fn fr_013_selection_spanning_scrollback_is_not_truncated() {
+        // Five lines through a 2-row grid: "one".."three" scroll into history.
+        let mut term = term_with(2, 10, 100, b"one\r\ntwo\r\nthree\r\nfour\r\nfive");
+        // Negative lines address scrollback; line 0 is the top of the viewport.
+        select(&mut term, (-3, 0), (1, 4));
+        assert_eq!(selection_text(&term), "one\ntwo\nthree\nfour\nfive");
+    }
+
     #[test]
     fn no_mouse_report_when_mouse_mode_off() {
         let mods = micold_ai_ide::keymap::Mods::NONE;
@@ -1032,6 +1096,60 @@ mod tests {
         };
         let seq = encode_mouse_report(mode, 0, 0, 0, true, mods).unwrap();
         assert_eq!(seq, b"\x1b[<4;1;1M");
+    }
+
+    /// FR-013a: the legacy (non-SGR) encoding reports every release as button 3, so a release
+    /// must actually be sent — the process cannot infer which button came up.
+    #[test]
+    fn fr_013a_legacy_release_uses_the_button_release_code() {
+        let mode = TermMode::MOUSE_REPORT_CLICK;
+        let mods = micold_ai_ide::keymap::Mods::NONE;
+        let press = encode_mouse_report(mode, 0, 3, 4, true, mods).unwrap();
+        let release = encode_mouse_report(mode, 0, 3, 4, false, mods).unwrap();
+        assert_eq!(press, vec![0x1b, b'[', b'M', 32, 36, 37]);
+        assert_eq!(release, vec![0x1b, b'[', b'M', 35, 36, 37]);
+    }
+
+    /// FR-013a: middle (1) and right (2) are distinct button codes. Both were previously
+    /// consumed locally — by middle-click paste and the context menu — and never reached a
+    /// mouse-tracking process.
+    #[test]
+    fn fr_013a_middle_and_right_buttons_encode_distinctly() {
+        let mode = TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE;
+        let mods = micold_ai_ide::keymap::Mods::NONE;
+        assert_eq!(
+            encode_mouse_report(mode, 1, 0, 0, true, mods).unwrap(),
+            b"\x1b[<1;1;1M"
+        );
+        assert_eq!(
+            encode_mouse_report(mode, 2, 0, 0, true, mods).unwrap(),
+            b"\x1b[<2;1;1M"
+        );
+    }
+
+    /// FR-013a: motion is the held button's code plus 32. Nothing emitted motion reports
+    /// before, so a drag inside a mouse-tracking program did nothing.
+    #[test]
+    fn fr_013a_motion_report_adds_the_motion_bit() {
+        let mode = TermMode::MOUSE_DRAG | TermMode::SGR_MOUSE;
+        let mods = micold_ai_ide::keymap::Mods::NONE;
+        // Left button (0) held, moving to col 5 line 6 → button code 0 + 32.
+        const MOTION_BIT: u8 = 32;
+        assert_eq!(
+            encode_mouse_report(mode, MOTION_BIT, 5, 6, true, mods).unwrap(),
+            b"\x1b[<32;6;7M"
+        );
+    }
+
+    /// The widget asks for motion only when the process requested it; plain click-reporting
+    /// must not produce a motion stream.
+    #[test]
+    fn fr_013a_motion_mode_is_distinct_from_click_reporting() {
+        assert!(
+            !TermMode::MOUSE_REPORT_CLICK.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION)
+        );
+        assert!(TermMode::MOUSE_DRAG.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION));
+        assert!(TermMode::MOUSE_MOTION.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION));
     }
 
     #[test]

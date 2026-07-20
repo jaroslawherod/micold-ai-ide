@@ -1,6 +1,6 @@
 //! T015 — open-project git-only gate (FR-001a, SC-003a).
 
-use micold_ai_ide::app::{Message, State};
+use micold_ai_ide::app::{Message, NoticeLevel, Notification, State};
 use micold_ai_ide::git::{FakeGit, Git};
 use std::path::Path;
 
@@ -16,23 +16,38 @@ fn non_git_directory_fails_the_gate() {
     assert!(!git.is_repo_root(Path::new("/plain/dir")));
 }
 
+/// The refusal goes to the global notification surface, which renders unconditionally.
+///
+/// This assertion previously read `state.worktree_error == Some(..)` and passed green for the
+/// entire time the refusal was invisible to users: `worktree_error`'s only render site is
+/// inside the Add Worktree modal, which is never open when a folder is refused.
 #[test]
-fn refusal_message_is_surfaced_in_state() {
+fn refusal_message_is_surfaced_to_the_user() {
     let mut state = State::default();
-    assert!(state.worktree_error.is_none());
+    assert!(state.notifications.is_empty());
     state.update(Message::ProjectOpenRefused(
         "Only git repositories can be opened".to_string(),
     ));
     assert_eq!(
-        state.worktree_error.as_deref(),
-        Some("Only git repositories can be opened")
+        state.notifications,
+        vec![Notification {
+            level: NoticeLevel::Error,
+            message: "Only git repositories can be opened".to_string(),
+        }]
     );
+    // Not stashed in the modal-owned field that made it unreachable.
+    assert!(state.worktree_error.is_none());
 }
 
+/// A refusal stays until the user dismisses it — it is not cleared by unrelated activity such
+/// as a worktree re-scan, which can fire at any time.
 #[test]
-fn loading_worktrees_clears_the_error() {
+fn refusal_persists_until_dismissed() {
     let mut state = State::default();
     state.update(Message::ProjectOpenRefused("nope".to_string()));
     state.update(Message::WorktreesLoaded(vec![]));
-    assert!(state.worktree_error.is_none());
+    assert_eq!(state.notifications.len(), 1);
+
+    state.update(Message::NotificationDismissed(0));
+    assert!(state.notifications.is_empty());
 }

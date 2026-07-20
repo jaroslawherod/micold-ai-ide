@@ -5,7 +5,7 @@
 //! the required glyph + roles, then set optional size/tint/press before converting to an
 //! `Element`. Reused across the sidebar and any icon action rather than each feature forking one.
 
-use crate::ui::{icon, style};
+use crate::ui::{icon, icon_colored, style};
 use iced::widget::button;
 use iced::Element;
 use micold_ai_ide::icons::Icon;
@@ -65,7 +65,15 @@ impl<'a, M: Clone + 'a> IconButton<'a, M> {
 impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
     fn from(b: IconButton<'a, M>) -> Self {
         let tint = b.tint.unwrap_or(b.roles.on_surface);
-        let content = icon(b.glyph, b.size, tint);
+        // Grey the glyph here rather than relying on `text_button`'s `Status::Disabled` branch:
+        // `icon` sets an explicit `.color()`, which overrides the button's inherited
+        // `text_color`, so the style fn could never reach the glyph and a disabled icon button
+        // rendered at full strength — contradicting this type's own doc comment.
+        let content = if b.on_press.is_none() {
+            icon_colored(b.glyph, b.size, style::disabled_color(tint))
+        } else {
+            icon(b.glyph, b.size, tint)
+        };
         let mut btn = button(content)
             .padding(spacing::XS)
             .style(style::text_button(b.roles));

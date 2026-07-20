@@ -77,27 +77,11 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
 
     let mut body = column![].spacing(spacing::LG);
 
-    // Return notice: shown when a background session was restarted while this project was
-    // inactive (feature 008, SC-007). Dismissible — the state change is surfaced, never silent.
-    if let Some(notice) = &state.notice {
-        let banner = row![
-            text(notice.clone())
-                .size(type_scale::BODY)
-                .width(Length::Fill),
-            button(text("Dismiss").size(type_scale::LABEL))
-                .on_press(Message::NoticeDismissed)
-                .style(style::outlined(r)),
-        ]
-        .spacing(spacing::SM)
-        .align_y(Alignment::Center);
-        body = body.push(
-            container(banner)
-                .padding(spacing::MD)
-                .width(Length::Fill)
-                .style(style::list_item(r)),
-        );
-    }
-
+    // The background-restart return notice (feature 008, FR-011 / SC-007) used to be drawn
+    // here. It never appeared: this function is the *else* branch of
+    // `if state.active_session.is_some()`, and returning to a project restores its foreground
+    // session, so the branch was not taken in the one case the banner existed for. It is now
+    // an ordinary entry on the global notification surface in `ui::view`.
     body = body.push(header);
 
     // Known-projects list: reopen without browsing (FR-011); mark the active one (FR-010)

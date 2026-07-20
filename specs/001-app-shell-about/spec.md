@@ -92,9 +92,9 @@ is focused and unchanged in both cases.
 ### Functional Requirements
 
 - **FR-001**: On launch, the application MUST open a single main window with a toolbar across the top.
-- **FR-002**: The toolbar MUST contain a "Help" entry.
-- **FR-003**: The toolbar MUST NOT expose any entry other than "Help", and "Help" MUST expose only the "About" action (scope boundary).
-- **FR-004**: Selecting "Help" MUST reveal an "About" action.
+- **FR-002**: ~~The toolbar MUST contain a "Help" entry.~~ (Superseded — spec/code alignment 2026-07-20: the labelled "Help" entry became an unlabelled overflow-menu trigger as later features added toolbar actions.) The toolbar MUST contain an overflow-menu trigger that reveals the application's secondary actions, and MAY contain additional top-level triggers introduced by later features.
+- **FR-003**: ~~The toolbar MUST NOT expose any entry other than "Help", and "Help" MUST expose only the "About" action (scope boundary).~~ (Superseded — spec/code alignment 2026-07-20: this scope boundary was intentionally crossed by features 003, 006, and 008, which each added a toolbar surface. It described feature 001's delivery boundary, not a durable product constraint.) The toolbar's overflow menu MUST expose the "About" action; it MAY also expose secondary actions owned by later features (currently the theme-mode toggle from feature 003 and "Settings" from feature 006). The toolbar MAY host additional top-level triggers owned by later features (currently the project switcher from feature 008).
+- **FR-004**: Selecting the toolbar's overflow-menu trigger MUST reveal an "About" action.
 - **FR-005**: Activating "About" MUST open an About dialog.
 - **FR-006**: The About dialog MUST display the application name, exactly "Micold AI IDE".
 - **FR-007**: The About dialog MUST display the current application version, sourced from build/package metadata rather than a hardcoded literal.
@@ -139,3 +139,5 @@ is focused and unchanged in both cases.
 
 - Requires the build/packaging process to expose application metadata (at minimum name and version) to the running application (supports FR-007).
 - Requires the project's OSI-approved license to be selected and available so its name can be displayed (supports FR-008; tracked as a constitution follow-up TODO).
+
+**Alignment**: 2026-07-20 — Spec/code alignment audit. FR-002 and FR-003 amended: the labelled "Help" toolbar entry became an unlabelled overflow-menu trigger, and FR-003's "no entry other than Help" scope boundary was intentionally crossed by features 003 (theme toggle), 006 (Settings), and 008 (project switcher). FR-004 reworded to match. No behaviour change — the code was correct and the spec had gone stale. Note: `app::toolbar_entries()` / `TOOLBAR_ENTRIES` remain in the code exercised only by `tests/toolbar.rs`; they describe the superseded FR-002 wording and should be removed with that test.

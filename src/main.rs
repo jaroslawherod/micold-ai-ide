@@ -36,8 +36,17 @@ use std::time::Duration;
 use ui::terminal::{spawn_pty, spawn_shell_pty, RuntimeTerminal, SessionTerminals};
 use ui::MotionKey;
 
-/// How often the OS light/dark preference is polled (research R4).
+/// How often the OS light/dark preference is polled while the window has input focus
+/// (research R4).
 const OS_THEME_POLL: Duration = Duration::from_millis(500);
+
+/// How often the OS theme is polled while the window is unfocused. Coarser than
+/// [`OS_THEME_POLL`], but never suspended: `window_focused` is *input* focus, and an unfocused
+/// window is usually still on screen (second monitor, side-by-side), so suspending the poll
+/// left a fully visible window showing the wrong theme indefinitely. Changing the OS theme also
+/// means leaving the app, which is exactly what unfocuses it. Kept at 1s so SC-003's
+/// "within 1 second" holds whether or not the window happens to hold focus.
+const BACKGROUND_OS_THEME_POLL: Duration = Duration::from_secs(1);
 
 /// How often live terminals are polled for streamed output + process-exit detection.
 const TERMINAL_POLL: Duration = Duration::from_millis(120);
@@ -505,6 +514,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Open the chosen folder as a project — but only if it is a git repository (FR-001a).
         Message::FolderChosen(path) => {
+            // Close the picker BEFORE the git gate. Notifications render inside `base`, which
+            // every modal wraps behind its scrim, so a refusal reported while the selector was
+            // still open would be dimmed out of view.
             app.core.selector = None;
             app.core.overlay = Overlay::None;
             if !GitCli::new().is_repo_root(&path) {
@@ -614,7 +626,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         started = true;
                     }
                     Err(err) => {
-                        app.core.worktree_error = Some(format!("Could not start session: {err}"));
+                        // Feature 005 FR-017. Previously stored in `worktree_error`, whose only
+                        // render site is inside the Add Worktree modal — not open here, so a
+                        // failed spawn (typically `claude` missing from PATH) was silent.
+                        app.core
+                            .notify_error(format!("Could not start session: {err}"));
                     }
                 }
             }
@@ -844,6 +860,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::WindowFocusChanged(focused) => {
             app.window_focused = focused;
+            // Re-detect on the way back in rather than waiting out the next poll tick: coming
+            // back from the OS theme settings is the single most likely moment for the app's
+            // idea of the scheme to be stale (003 FR-006).
+            if focused {
+                app.core
+                    .update(Message::SystemThemeChanged(detect_system_scheme()));
+            }
             Task::none()
         }
         // Confirmed worktree delete (feature 008, FR-020): terminate the worktree's session
@@ -867,8 +890,31 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     }
                 }
                 if let Some(wt) = wt {
-                    let _ = remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref());
-                    let _ = std::fs::remove_dir_all(&wt.path);
+                    // FR-023: both results were previously discarded with `let _ =`, so a
+                    // locked worktree, a branch checked out elsewhere, or a permission error
+                    // made the row vanish from the sidebar while the branch and directory
+                    // survived on disk. The reconcile below restores a truthful sidebar; these
+                    // report *why* it did not go away.
+                    let name = app.core.worktree_display_name(&dir);
+                    match remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref()) {
+                        // Only remove the directory once git has released the worktree —
+                        // deleting the working files of a still-registered worktree would
+                        // leave a worse mess than the failure being reported.
+                        Ok(()) => {
+                            if let Err(err) = std::fs::remove_dir_all(&wt.path) {
+                                app.core.notify_error(format!(
+                                    "Deleted worktree \"{name}\", but its folder could not be \
+                                     removed: {err}. Left at {}",
+                                    wt.path.display()
+                                ));
+                            }
+                        }
+                        Err(err) => {
+                            app.core.notify_error(format!(
+                                "Could not delete worktree \"{name}\": {err}"
+                            ));
+                        }
+                    }
                 }
                 // Drop the session/worktree records in the core, then reconcile from git truth.
                 app.core.update(Message::WorktreeDeleteConfirmed);
@@ -909,10 +955,8 @@ fn subscription(app: &App) -> Subscription<Message> {
     // Event-driven (not a poll): reports actual OS focus changes, so it costs nothing while
     // the window sits idle either focused or not (idle-CPU fix).
     let mut subs = vec![ui::subscription(&app.core), window_focus_events()];
-    // The OS theme poll only matters while the window is visible to look at.
-    if app.window_focused {
-        subs.push(os_theme_poll());
-    }
+    // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.
+    subs.push(os_theme_poll(os_theme_poll_interval(app.window_focused)));
     if let Some(interval) = terminal_poll_interval(!app.terminals.is_empty(), app.window_focused) {
         subs.push(every(interval).map(|_| Message::TerminalTick));
     }
@@ -921,6 +965,17 @@ fn subscription(app: &App) -> Subscription<Message> {
         subs.push(every(ANIM_TICK).map(|_| Message::AnimationTick));
     }
     Subscription::batch(subs)
+}
+
+/// The OS theme poll interval for this tick. Unlike the terminal poll this is never `None`:
+/// suspending it while unfocused is what let a visible window keep the wrong theme (003 FR-006 /
+/// SC-003). Both cadences satisfy SC-003's one-second bound.
+fn os_theme_poll_interval(window_focused: bool) -> Duration {
+    if window_focused {
+        OS_THEME_POLL
+    } else {
+        BACKGROUND_OS_THEME_POLL
+    }
 }
 
 /// The terminal poll interval for this tick, or `None` if there are no terminals to poll:
@@ -1090,22 +1145,35 @@ fn ensure_attached_process(app: &mut App, id: SessionId) {
     if already_attached {
         return;
     }
+    // A failed spawn is reported, never dropped: discarding it here would leave the mode toggle
+    // doing nothing at all with no explanation — the same silent failure fixed for
+    // `SessionStartRequested` (feature 005 FR-017).
     match mode {
         TerminalMode::AiCli => {
-            if let Ok(rt) = spawn_pty(
+            match spawn_pty(
                 &launch_spec(&cwd, id, LaunchMode::Resume),
                 app.scrollback_lines,
                 app.last_grid,
             ) {
-                app.terminals.entry(id).or_default().ai_cli = Some(rt);
-                app.core.update(Message::SessionRunning(id));
+                Ok(rt) => {
+                    app.terminals.entry(id).or_default().ai_cli = Some(rt);
+                    app.core.update(Message::SessionRunning(id));
+                }
+                Err(err) => app
+                    .core
+                    .notify_error(format!("Could not start the AI CLI: {err}")),
             }
         }
         TerminalMode::Regular => {
             let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
-            if let Ok(rt) = spawn_shell_pty(&cwd, &env, app.scrollback_lines, app.last_grid) {
-                app.terminals.entry(id).or_default().shell = Some(rt);
-                app.core.update(Message::ShellSessionRunning(id));
+            match spawn_shell_pty(&cwd, &env, app.scrollback_lines, app.last_grid) {
+                Ok(rt) => {
+                    app.terminals.entry(id).or_default().shell = Some(rt);
+                    app.core.update(Message::ShellSessionRunning(id));
+                }
+                Err(err) => app
+                    .core
+                    .notify_error(format!("Could not start the shell: {err}")),
             }
         }
     }
@@ -1206,8 +1274,8 @@ fn detect_system_scheme() -> SystemScheme {
         .unwrap_or(SystemScheme::Unspecified)
 }
 
-fn os_theme_poll() -> Subscription<Message> {
-    every(OS_THEME_POLL).map(|_instant| Message::SystemThemeChanged(detect_system_scheme()))
+fn os_theme_poll(interval: Duration) -> Subscription<Message> {
+    every(interval).map(|_instant| Message::SystemThemeChanged(detect_system_scheme()))
 }
 
 fn start_dir() -> PathBuf {
@@ -1260,6 +1328,22 @@ mod tests {
             terminal_poll_interval(true, false),
             Some(BACKGROUND_TERMINAL_POLL)
         );
+    }
+
+    /// 003 FR-006 / SC-003: the theme poll must keep running while unfocused. It used to be
+    /// dropped entirely, so a visible-but-unfocused window kept the wrong theme indefinitely —
+    /// and leaving the app to change the OS theme is what unfocuses it in the first place.
+    #[test]
+    fn fr_006_os_theme_poll_never_stops_while_unfocused() {
+        assert_eq!(os_theme_poll_interval(true), OS_THEME_POLL);
+        assert_eq!(os_theme_poll_interval(false), BACKGROUND_OS_THEME_POLL);
+    }
+
+    /// SC-003 bounds the update at one second whether or not the window holds focus.
+    #[test]
+    fn sc_003_both_theme_poll_cadences_stay_within_one_second() {
+        assert!(os_theme_poll_interval(true) <= Duration::from_secs(1));
+        assert!(os_theme_poll_interval(false) <= Duration::from_secs(1));
     }
 
     fn dummy_status() -> iced::event::Status {
