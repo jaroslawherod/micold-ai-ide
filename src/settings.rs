@@ -11,11 +11,13 @@ use crate::store::LoadStatus;
 use crate::theme::ThemePreference;
 use serde::{Deserialize, Serialize};
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The current on-disk settings schema version (see the settings-schema contract). Bumped to
 /// `2` in feature 006 when `scrollback_lines` was added (missing field still defaults on read).
-const SETTINGS_VERSION: u32 = 2;
+/// Bumped to `3` in feature 011 when the environment-include fields were added (same
+/// missing-field-defaults contract).
+const SETTINGS_VERSION: u32 = 3;
 
 /// Default per-session terminal scrollback (lines). Matches `alacritty_terminal 0.25`'s
 /// `Config::scrolling_history` default (feature 006, FR-021).
@@ -34,6 +36,51 @@ pub fn clamp_scrollback(lines: usize) -> usize {
     lines.clamp(MIN_SCROLLBACK_LINES, MAX_SCROLLBACK_LINES)
 }
 
+/// Environment-include default: on by default (feature 011, FR-004).
+pub const DEFAULT_ENV_INCLUDE_ENABLED: bool = true;
+/// Environment-include default timeout, in seconds (FR-004).
+pub const DEFAULT_ENV_INCLUDE_TIMEOUT_SECS: u64 = 10;
+/// Minimum accepted environment-include timeout.
+pub const MIN_ENV_INCLUDE_TIMEOUT_SECS: u64 = 1;
+/// Maximum accepted environment-include timeout.
+pub const MAX_ENV_INCLUDE_TIMEOUT_SECS: u64 = 60;
+
+fn default_env_include_enabled() -> bool {
+    DEFAULT_ENV_INCLUDE_ENABLED
+}
+
+fn default_env_include_timeout_secs() -> u64 {
+    DEFAULT_ENV_INCLUDE_TIMEOUT_SECS
+}
+
+/// The platform's conventional interactive-shell startup file, joined onto `home` (feature 011,
+/// research R7): `<home>/.bashrc` on Linux/macOS (sourced via bash — FR-017), or the current
+/// user's PowerShell profile on Windows (FR-018). Pure and argument-driven, mirroring
+/// `terminal.rs::default_shell_command` — the impure home-directory lookup happens once at the
+/// call site (`default_env_include_script_path_string`), not here.
+pub fn default_env_include_path(home: Option<&Path>) -> PathBuf {
+    let base = home.unwrap_or_else(|| Path::new(""));
+    if cfg!(windows) {
+        base.join("Documents")
+            .join("WindowsPowerShell")
+            .join("profile.ps1")
+    } else {
+        base.join(".bashrc")
+    }
+}
+
+fn default_env_include_script_path_string() -> String {
+    let home = directories::UserDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+    default_env_include_path(home.as_deref())
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// Clamp a requested environment-include timeout into the supported range.
+pub fn clamp_env_include_timeout(secs: u64) -> u64 {
+    secs.clamp(MIN_ENV_INCLUDE_TIMEOUT_SECS, MAX_ENV_INCLUDE_TIMEOUT_SECS)
+}
+
 /// The persisted application settings document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -43,6 +90,16 @@ pub struct Settings {
     /// Per-session embedded-terminal scrollback limit in lines (feature 006, FR-020/FR-021).
     #[serde(default = "default_scrollback")]
     pub scrollback_lines: usize,
+    /// Whether environment-include is active (feature 011, FR-001/FR-004).
+    #[serde(default = "default_env_include_enabled")]
+    pub env_include_enabled: bool,
+    /// The script path to source for environment-include (FR-002/FR-004).
+    #[serde(default = "default_env_include_script_path_string")]
+    pub env_include_script_path: String,
+    /// How long, in seconds, sourcing the script may run before being treated as hung
+    /// (FR-003/FR-004).
+    #[serde(default = "default_env_include_timeout_secs")]
+    pub env_include_timeout_secs: u64,
 }
 
 impl Default for Settings {
@@ -50,6 +107,9 @@ impl Default for Settings {
         Self {
             theme: ThemePreference::default(),
             scrollback_lines: DEFAULT_SCROLLBACK_LINES,
+            env_include_enabled: DEFAULT_ENV_INCLUDE_ENABLED,
+            env_include_script_path: default_env_include_script_path_string(),
+            env_include_timeout_secs: DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
         }
     }
 }
@@ -84,6 +144,15 @@ struct StoredSettings {
     /// Missing in v1 files → defaults to [`DEFAULT_SCROLLBACK_LINES`] (backward compatible).
     #[serde(default = "default_scrollback")]
     scrollback_lines: usize,
+    /// Missing in pre-011 (v2) files → defaults to [`DEFAULT_ENV_INCLUDE_ENABLED`] (`true`).
+    #[serde(default = "default_env_include_enabled")]
+    env_include_enabled: bool,
+    /// Missing in pre-011 (v2) files → defaults to the platform's conventional path.
+    #[serde(default = "default_env_include_script_path_string")]
+    env_include_script_path: String,
+    /// Missing in pre-011 (v2) files → defaults to [`DEFAULT_ENV_INCLUDE_TIMEOUT_SECS`] (`10`).
+    #[serde(default = "default_env_include_timeout_secs")]
+    env_include_timeout_secs: u64,
 }
 
 impl StoredSettings {
@@ -92,6 +161,9 @@ impl StoredSettings {
             settings_version: SETTINGS_VERSION,
             theme: settings.theme,
             scrollback_lines: settings.scrollback_lines,
+            env_include_enabled: settings.env_include_enabled,
+            env_include_script_path: settings.env_include_script_path.clone(),
+            env_include_timeout_secs: settings.env_include_timeout_secs,
         }
     }
 
@@ -99,6 +171,9 @@ impl StoredSettings {
         Settings {
             theme: self.theme,
             scrollback_lines: clamp_scrollback(self.scrollback_lines),
+            env_include_enabled: self.env_include_enabled,
+            env_include_script_path: self.env_include_script_path,
+            env_include_timeout_secs: clamp_env_include_timeout(self.env_include_timeout_secs),
         }
     }
 }

@@ -14,4 +14,55 @@ through (see [Worktrees & sessions → Sizing, resize & scrollback](./worktrees-
 - A changed limit applies to sessions started **after** the change; already-running terminals
   keep their current buffer.
 
-Click **Save** to apply, or **Cancel** (or press Esc) to dismiss without changing anything.
+## Environment include
+
+By default, every session's AI CLI process and regular-terminal process automatically pick up
+your normal shell environment — PATH additions from version managers (nvm, pyenv, rbenv),
+exported API keys, proxy settings, and anything else your shell's startup file sets. This is done
+by actually running that startup file in a real, disposable shell process and capturing what it
+changes — not by parsing its text — so conditionals, sourced sub-files, and version-manager init
+blocks all resolve correctly.
+
+- **Default**: on, sourcing `~/.bashrc` on Linux/macOS (via bash) or your PowerShell profile on
+  Windows.
+- Both the AI CLI process and the regular-terminal process for a session see the identical set of
+  resolved variables.
+
+The Settings dialog groups three fields for this feature together, separate from the scrollback
+limit above:
+
+- **Enabled**: turn environment-include off entirely (no script is sourced) or back on.
+- **Script path**: the file to source. Any path is accepted — whether it resolves to a usable
+  script is only discovered when it's actually used, never rejected at save time.
+- **Timeout (seconds)**: how long sourcing may run before being treated as hung. **Default**: 10
+  seconds. **Range**: 1 – 60 seconds; out-of-range or non-numeric input is rejected with a message
+  and not saved (same as the scrollback field).
+
+A saved change takes effect on the next session or terminal launch — no app restart needed.
+
+**Persistence**: only the enabled flag, script path, and timeout are ever saved to disk. The
+variables the script resolves — and any diagnostic text captured while troubleshooting a failure
+— are held in memory for the running app only and are never written to your settings file, since
+they may include secrets (e.g. exported API keys).
+
+### If the script fails
+
+A missing, broken, or hanging script never blocks or fails opening a session — the session opens
+normally with whatever environment is otherwise available. The most recent attempt's outcome is
+shown directly in this Settings dialog, below the environment-include fields, whenever it didn't
+succeed:
+
+- **Script not found** — the configured path doesn't exist.
+- **Exited with an error** — the script ran but failed; the script's own output is shown verbatim
+  underneath, to help you see what went wrong.
+- **Timed out** — sourcing didn't finish within the configured timeout and was abandoned.
+
+To recover once you've fixed the script: use the existing **restart** control on the affected
+session's terminal (shown whenever that session's process isn't running) — this re-sources the
+script fresh and clears the failure note, without needing to restart the whole app. Saving the
+Settings form (even without changing any value) also triggers a fresh re-source.
+
+---
+
+Click **Save** to apply any changes above, or **Cancel** (or press Esc) to dismiss the dialog
+without changing anything.

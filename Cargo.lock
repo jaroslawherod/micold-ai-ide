@@ -2242,6 +2242,7 @@ dependencies = [
  "dark-light 2.0.0",
  "directories",
  "iced",
+ "libc",
  "portable-pty",
  "serde",
  "serde_json",

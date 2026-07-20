@@ -84,6 +84,7 @@ pub fn view<'a>(
     motion: &Animator<MotionKey>,
     dismissing: Option<&'a crate::ClosingOverlay>,
     row_fx: &micold_ai_ide::motion::Animator<u64>,
+    env_include_outcome: &'a micold_ai_ide::env_include::EnvIncludeOutcome,
 ) -> Element<'a, Message> {
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
@@ -195,7 +196,9 @@ pub fn view<'a>(
         // No overlay open. If one is still fading out, render its snapshot (captured before the
         // core cleared its live state) so the exit animation has something to draw (FR-002).
         Overlay::None => match dismissing {
-            Some(closing) => dismissing_modal(base, closing, scheme, overlay_progress),
+            Some(closing) => {
+                dismissing_modal(base, closing, scheme, overlay_progress, env_include_outcome)
+            }
             None => base,
         },
         Overlay::About => about::modal(base, scheme, overlay_progress),
@@ -219,7 +222,9 @@ pub fn view<'a>(
             None => base,
         },
         Overlay::Settings => match &state.settings_draft {
-            Some(draft) => settings_form::modal(base, draft, scheme, overlay_progress),
+            Some(draft) => {
+                settings_form::modal(base, draft, scheme, overlay_progress, env_include_outcome)
+            }
             None => base,
         },
         Overlay::ConfirmWorktreeDelete => match &state.worktree_delete_target {
@@ -269,6 +274,7 @@ fn dismissing_modal<'a>(
     closing: &'a crate::ClosingOverlay,
     scheme: ColorScheme,
     progress: f32,
+    env_include_outcome: &'a micold_ai_ide::env_include::EnvIncludeOutcome,
 ) -> Element<'a, Message> {
     use crate::ClosingOverlay;
     match closing {
@@ -280,7 +286,9 @@ fn dismissing_modal<'a>(
         ClosingOverlay::Worktree(form, error) => {
             worktree_form::modal(base, form, error.as_deref(), scheme, progress)
         }
-        ClosingOverlay::Settings(draft) => settings_form::modal(base, draft, scheme, progress),
+        ClosingOverlay::Settings(draft) => {
+            settings_form::modal(base, draft, scheme, progress, env_include_outcome)
+        }
         ClosingOverlay::ConfirmDelete(dir) => {
             // Fading-out snapshot: the override may already be gone, so fall back to the derived
             // name for the exit animation.

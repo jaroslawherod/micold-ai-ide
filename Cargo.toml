@@ -55,6 +55,17 @@ directories = "6.0.0"
 # (research R6). Core (non-GUI) dep — needed by the pure session model + persistence.
 uuid = { version = "1.20.0", features = ["v4", "serde"] }
 
+[target.'cfg(unix)'.dependencies]
+# Direct `kill(2)` syscall to send SIGKILL to a whole process group when an environment-include
+# script (feature 011) times out — a sourced rc file may background a process (an agent daemon, a
+# version-manager helper) that would otherwise outlive the killed shell and keep its piped
+# stdout/stderr open forever. Already present transitively (`portable-pty` et al.); pinned here
+# directly because shelling out to the `kill(1)` *binary* instead proved unreliable in sandboxed
+# environments during development (it reported success without actually signalling the group),
+# whereas the direct syscall is unambiguous. Unix-only target dependency — Windows has no
+# process-group `kill(2)` equivalent to call.
+libc = "0.2.186"
+
 # Debian packaging (`cargo deb`). Produces micold-ai-ide_<version>_<arch>.deb; the release
 # workflow builds it natively on amd64 and arm64 runners. Installs a full freedesktop desktop
 # entry — so the app appears in the system application launcher (with its icon, `Terminal=false`,

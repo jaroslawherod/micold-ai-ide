@@ -4,7 +4,7 @@
 //! every surface draws from one place (SC-007). Nothing here holds decision logic; the
 //! values come from `src/tokens.rs` (contracts/design-tokens.md).
 
-use iced::widget::{button, container, scrollable, text, text_input};
+use iced::widget::{button, checkbox as checkbox_widget, container, scrollable, text, text_input};
 use iced::{Background, Border, Color, Theme};
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, shape, Rgb, Roles};
@@ -272,6 +272,35 @@ pub fn text_button(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style
 pub fn muted(r: Roles) -> impl Fn(&Theme) -> text::Style {
     move |_theme| text::Style {
         color: Some(color(r.on_surface_variant)),
+    }
+}
+
+/// A checkbox styled to the design system (feature 011's "Enabled" toggle).
+pub fn checkbox(r: Roles) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbox_widget::Style {
+    move |_theme, status| {
+        let is_checked = matches!(
+            status,
+            checkbox_widget::Status::Active { is_checked: true }
+                | checkbox_widget::Status::Hovered { is_checked: true }
+        );
+        let border_color = match status {
+            checkbox_widget::Status::Hovered { .. } => color(r.primary),
+            _ => color(r.outline),
+        };
+        checkbox_widget::Style {
+            background: Background::Color(if is_checked {
+                color(r.primary)
+            } else {
+                color(r.surface)
+            }),
+            icon_color: color(r.on_primary),
+            border: Border {
+                color: border_color,
+                width: 1.0,
+                radius: (shape::SM as f32).into(),
+            },
+            text_color: Some(color(r.on_surface)),
+        }
     }
 }
 
