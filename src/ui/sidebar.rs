@@ -491,7 +491,7 @@ fn session_tree_item(
         .selected(selected)
         .on_press(Message::SessionSelected(session.id))
         .trailing(
-            Icon::Unavailable,
+            Icon::Close,
             Message::SessionCloseRequested(session.id),
             "Close this session",
         )
