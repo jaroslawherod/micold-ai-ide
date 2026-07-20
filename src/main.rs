@@ -32,6 +32,7 @@ use micold_ai_ide::worktree::{
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use ui::terminal::{spawn_pty, spawn_shell_pty, RuntimeTerminal, SessionTerminals};
 use ui::MotionKey;
@@ -58,6 +59,10 @@ const TERMINAL_POLL: Duration = Duration::from_millis(120);
 /// findings). This still cuts the tick rate — and its full-`view()` rebuild cost — by ~17x
 /// while backgrounded.
 const BACKGROUND_TERMINAL_POLL: Duration = Duration::from_secs(2);
+
+/// How often the in-flight worktree create's progress buffer is drained into the form's log.
+/// Active only while a create is running, so it costs nothing the rest of the time.
+const CREATE_PROGRESS_POLL: Duration = Duration::from_millis(150);
 
 /// The animation clock tick interval (~60fps).
 const ANIM_TICK: Duration = Duration::from_millis(16);
@@ -131,6 +136,11 @@ struct App {
     /// terminal/OS-theme poll subscriptions: `true` until the first `Unfocused` event,
     /// which matches iced's behavior of not emitting an initial `Focused` on launch.
     window_focused: bool,
+    /// Progress lines produced by the in-flight worktree create, shared with the worker running
+    /// it. Drained into the form's log on [`CREATE_PROGRESS_POLL`] — the same
+    /// shared-buffer-plus-tick idiom `RuntimeTerminal` uses to stream PTY output, since the
+    /// producer here is likewise a blocking job that cannot dispatch messages itself.
+    create_progress: Arc<Mutex<Vec<String>>>,
     /// The terminal pane's last-known `(cols, rows)`, reported by `Message::TerminalResized`.
     /// Seeds newly-spawned sessions so they fill the pane immediately instead of starting at the
     /// hardcoded default and waiting for the next window resize to reconcile (bugfix: new
@@ -330,6 +340,7 @@ fn boot() -> (App, Task<Message>) {
             row_fx: Animator::new(),
             prev_hovered: None,
             window_focused: true,
+            create_progress: Arc::new(Mutex::new(Vec::new())),
             last_grid: None,
         },
         Task::none(),
@@ -586,16 +597,14 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 return Task::none();
             };
             app.core.update(Message::WorktreeCreateStarted);
-            Task::perform(async move { create(&repo, &names) }, |result| {
-                let (inner_result, progress) = match result {
-                    Ok((worktree, progress)) => (Ok(worktree), progress),
-                    Err((err, progress)) => (Err(describe_create_error(err)), progress),
-                };
-                Message::WorktreeCreationDone {
-                    result: inner_result,
-                    progress,
-                }
-            })
+            // Starting a create clears the form's log, so drop anything a previous attempt left
+            // buffered — otherwise its tail would be drained into the new attempt's log.
+            let progress = Arc::clone(&app.create_progress);
+            drain_create_progress(&progress);
+            Task::perform(
+                async move { create(&repo, &names, &progress).map_err(describe_create_error) },
+                |result| Message::WorktreeCreationDone { result },
+            )
         }
         // Start a new session at a location — a worktree or the project root ("Default",
         // feature 010): spawn `claude` and stream it (FR-010/012/013). A `Default` location
@@ -691,10 +700,27 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Worktree creation completed: apply progress to the form, then dispatch the result
         // (success or failure). This splits the combined result into two state transitions so
         // progress is displayed before the form closes or error shows (feature 010 follow-up).
-        Message::WorktreeCreationDone { result, progress } => {
-            app.core
-                .update(Message::WorktreeCreationDone { result, progress });
+        Message::WorktreeCreationDone { result } => {
+            // Drain the tail the last poll missed BEFORE the result, so a failure's final lines
+            // ("submodule update failed: …", "Rolling back…") are in the log the form keeps
+            // open for diagnosis.
+            let tail = drain_create_progress(&app.create_progress);
+            if !tail.is_empty() {
+                app.core.update(Message::WorktreeCreateLogAppended(tail));
+            }
+            app.core.update(Message::WorktreeCreationDone { result });
             persist(&app.core);
+            Task::none()
+        }
+        // Tick while a create runs: hand the worker's buffered lines to the form (feature 010
+        // follow-up). This is `WorktreeCreateLogAppended`'s producer — the reducer arm and its
+        // tests existed, but nothing ever dispatched it, so the log only appeared in one batch
+        // at completion and never rendered on success at all.
+        Message::WorktreeCreateProgressPolled => {
+            let lines = drain_create_progress(&app.create_progress);
+            if !lines.is_empty() {
+                app.core.update(Message::WorktreeCreateLogAppended(lines));
+            }
             Task::none()
         }
         // Stream live keystrokes/paste to the displayed session's currently-ATTACHED process
@@ -960,11 +986,23 @@ fn subscription(app: &App) -> Subscription<Message> {
     if let Some(interval) = terminal_poll_interval(!app.terminals.is_empty(), app.window_focused) {
         subs.push(every(interval).map(|_| Message::TerminalTick));
     }
+    // Drain create progress only while a create is actually in flight.
+    if creating_worktree(app) {
+        subs.push(every(CREATE_PROGRESS_POLL).map(|_| Message::WorktreeCreateProgressPolled));
+    }
     // Run the animation clock only while something is actually animating (FR-014).
     if motion_animating(app) {
         subs.push(every(ANIM_TICK).map(|_| Message::AnimationTick));
     }
     Subscription::batch(subs)
+}
+
+/// Whether a worktree create is in flight, so its progress buffer needs draining.
+fn creating_worktree(app: &App) -> bool {
+    app.core
+        .worktree_form
+        .as_ref()
+        .is_some_and(|form| form.status == WorktreeFormStatus::Creating)
 }
 
 /// The OS theme poll interval for this tick. Unlike the terminal poll this is never `None`:
@@ -1210,28 +1248,40 @@ fn discover_worktrees(repo: &Path) -> Vec<Worktree> {
 }
 
 /// Create a branch + worktree, removing the target dir if the git step fails (FR-006/006b).
-/// Returns both the result and the progress log so the binary can display progress to the user.
+///
+/// Progress lines are pushed into `progress` **as they are produced** rather than returned at
+/// the end: this runs as one long blocking job (a submodule fetch can take minutes), so a log
+/// only readable on completion is a log the user never sees during the wait. The UI drains this
+/// buffer on [`CREATE_PROGRESS_POLL`].
 fn create(
     repo: &Path,
     names: &micold_ai_ide::naming::DerivedNames,
-) -> Result<(Worktree, Vec<String>), (CreateError, Vec<String>)> {
+    progress: &Arc<Mutex<Vec<String>>>,
+) -> Result<Worktree, CreateError> {
     let git = GitCli::new();
     let root = repo.join(".claude/worktrees");
     let target = root.join(&names.dir_name);
     let _ = std::fs::create_dir_all(&root);
     let target_exists = target.exists() && dir_nonempty(&target);
-    let mut progress = Vec::new();
     let result = create_worktree(&git, repo, &target, names, target_exists, &mut |line| {
-        progress.push(line);
+        // A poisoned lock must not abort the create; the log is diagnostic, not load-bearing.
+        if let Ok(mut buf) = progress.lock() {
+            buf.push(line);
+        }
     });
     if result.is_err() {
         // CleanupStep::RemoveDir (the fs half of the rollback plan).
         let _ = std::fs::remove_dir_all(&target);
     }
-    match result {
-        Ok(wt) => Ok((wt, progress)),
-        Err(err) => Err((err, progress)),
-    }
+    result
+}
+
+/// Take everything buffered by the in-flight create so far, leaving the buffer empty.
+fn drain_create_progress(buffer: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
+    buffer
+        .lock()
+        .map(|mut buf| std::mem::take(&mut *buf))
+        .unwrap_or_default()
 }
 
 fn describe_create_error(err: CreateError) -> String {
@@ -1405,6 +1455,7 @@ mod tests {
             row_fx: Animator::new(),
             prev_hovered: None,
             window_focused: true,
+            create_progress: Arc::new(Mutex::new(Vec::new())),
             last_grid: None,
         };
 
@@ -1413,6 +1464,120 @@ mod tests {
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(true));
         assert!(app.window_focused);
+    }
+
+    fn test_app() -> App {
+        App {
+            core: State::default(),
+            terminals: HashMap::new(),
+            scrollback_lines: micold_ai_ide::settings::DEFAULT_SCROLLBACK_LINES,
+            motion: Animator::new(),
+            main_key: main_content_key(&State::default()),
+            handle_hovered: false,
+            dismissing: None,
+            row_fx: Animator::new(),
+            prev_hovered: None,
+            window_focused: true,
+            create_progress: Arc::new(Mutex::new(Vec::new())),
+            last_grid: None,
+        }
+    }
+
+    /// Draining takes the lines and leaves the buffer empty, so a line is handed to the form
+    /// exactly once — re-delivering would duplicate every line on each 150ms tick.
+    #[test]
+    fn draining_create_progress_takes_each_line_once() {
+        let buffer = Arc::new(Mutex::new(vec!["$ git worktree add".to_string()]));
+
+        assert_eq!(drain_create_progress(&buffer), vec!["$ git worktree add"]);
+        assert!(drain_create_progress(&buffer).is_empty());
+
+        buffer
+            .lock()
+            .unwrap()
+            .push("Cloning into 'vendor'...".to_string());
+        assert_eq!(
+            drain_create_progress(&buffer),
+            vec!["Cloning into 'vendor'..."]
+        );
+    }
+
+    /// The poll tick is the producer `WorktreeCreateLogAppended` never had: buffered lines must
+    /// reach the form's log *while* the create runs, not only when it finishes.
+    #[test]
+    fn polling_streams_buffered_progress_into_the_form_log() {
+        let mut app = test_app();
+        app.core.update(Message::AddWorktreeOpened);
+        app.core.update(Message::WorktreeCreateStarted);
+        app.create_progress
+            .lock()
+            .unwrap()
+            .push("$ git submodule update --init --recursive".to_string());
+
+        let _ = update_inner(&mut app, Message::WorktreeCreateProgressPolled);
+
+        assert_eq!(
+            app.core.worktree_form.as_ref().unwrap().log,
+            vec!["$ git submodule update --init --recursive".to_string()],
+            "progress must be visible while the create is still running"
+        );
+    }
+
+    /// A failure's final lines are drained before the result, so the form — which stays open on
+    /// failure for diagnosis — keeps them.
+    #[test]
+    fn completion_drains_the_tail_before_reporting_failure() {
+        let mut app = test_app();
+        app.core.update(Message::AddWorktreeOpened);
+        app.core.update(Message::WorktreeCreateStarted);
+        app.create_progress
+            .lock()
+            .unwrap()
+            .push("submodule update failed: network error".to_string());
+
+        let _ = update_inner(
+            &mut app,
+            Message::WorktreeCreationDone {
+                result: Err("boom".to_string()),
+            },
+        );
+
+        let form = app.core.worktree_form.as_ref().expect("form stays open");
+        assert_eq!(form.log, vec!["submodule update failed: network error"]);
+    }
+
+    /// The drain tick runs only while a create is in flight — it must not add a background
+    /// poll to an idle app.
+    #[test]
+    fn progress_polling_is_scoped_to_an_in_flight_create() {
+        let mut app = test_app();
+        assert!(!creating_worktree(&app), "idle app must not poll");
+
+        app.core.update(Message::AddWorktreeOpened);
+        assert!(!creating_worktree(&app), "form open but not yet submitted");
+
+        app.core.update(Message::WorktreeCreateStarted);
+        assert!(creating_worktree(&app), "create in flight");
+
+        app.core
+            .update(Message::WorktreeCreateFailed("boom".to_string()));
+        assert!(!creating_worktree(&app), "create finished");
+    }
+
+    /// A previous attempt's unread tail must not bleed into the next attempt's log, which
+    /// `WorktreeCreateStarted` clears.
+    #[test]
+    fn a_new_attempt_does_not_inherit_stale_buffered_lines() {
+        let app = test_app();
+        app.create_progress
+            .lock()
+            .unwrap()
+            .push("stale line from the failed attempt".to_string());
+
+        // What the AddWorktreeSubmitted arm does before spawning the worker.
+        drain_create_progress(&app.create_progress);
+
+        assert!(drain_create_progress(&app.create_progress).is_empty());
     }
 
     #[test]
@@ -1433,6 +1598,7 @@ mod tests {
             row_fx: Animator::new(),
             prev_hovered: None,
             window_focused: true,
+            create_progress: Arc::new(Mutex::new(Vec::new())),
             last_grid: None,
         };
         assert_eq!(app.last_grid, None);
