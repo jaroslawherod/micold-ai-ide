@@ -63,6 +63,30 @@ pub(crate) fn viewport_row(buffer_line: i32, display_offset: usize, rows: usize)
     usize::try_from(row).ok().filter(|&r| r < rows)
 }
 
+/// Who consumes a mouse-button press over the pane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PressRouting {
+    /// Forward the press to the process as a mouse report (FR-013a).
+    MouseReport,
+    /// Handle it in the pane — left-drag selects text, right-click opens the context menu
+    /// (FR-013 / FR-013b).
+    HandleLocally,
+}
+
+/// Route a button press between the process and the pane's own gestures.
+///
+/// Mouse reports are process *input*, so they are only produced for a focused pane whose process
+/// has enabled mouse reporting. Holding Shift overrides that, which is what keeps selection and
+/// copy reachable under a full-screen program that owns the mouse (FR-013b). Every other
+/// combination — including any press on an unfocused pane — is handled locally.
+pub(crate) fn press_routing(focused: bool, mouse_mode: bool, shift: bool) -> PressRouting {
+    if focused && mouse_mode && !shift {
+        PressRouting::MouseReport
+    } else {
+        PressRouting::HandleLocally
+    }
+}
+
 /// Whole lines of scrollback for a wheel `delta`, carrying the sub-line remainder in `residual`.
 ///
 /// Discrete wheels (and X11 touchpads, which arrive as legacy button-4/5 events) deliver
@@ -481,7 +505,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let pos = cursor.position().unwrap_or_default();
                 let (col, line) = grid_at(pos, bounds, metrics);
                 let shift = state.modifiers.shift();
-                if self.focused && self.rt.mouse_mode() && !shift {
+                if press_routing(self.focused, self.rt.mouse_mode(), shift)
+                    == PressRouting::MouseReport
+                {
                     if let Some(seq) = self.rt.mouse_report_bytes(
                         0,
                         col,
@@ -597,7 +623,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             {
                 let pos = cursor.position().unwrap_or_default();
                 let shift = state.modifiers.shift();
-                if self.focused && self.rt.mouse_mode() && !shift {
+                if press_routing(self.focused, self.rt.mouse_mode(), shift)
+                    == PressRouting::MouseReport
+                {
                     let (col, line) = grid_at(pos, bounds, metrics);
                     if let Some(seq) = self.rt.mouse_report_bytes(
                         2,
@@ -765,6 +793,40 @@ mod tests {
     //! Bin unit tests for the pane's pointer→grid mapping (feature 006 US2, T016). Run with
     //! `cargo test --features gui`.
     use super::*;
+
+    // --- Left-press routing: local selection vs mouse report (FR-013a / FR-013b) ---
+
+    #[test]
+    fn press_is_handled_locally_when_the_process_has_no_mouse_reporting() {
+        // The ordinary case: a shell that never enabled mouse mode. Dragging must select text.
+        assert_eq!(
+            press_routing(true, false, false),
+            PressRouting::HandleLocally
+        );
+    }
+
+    #[test]
+    fn press_is_reported_to_a_mouse_reporting_process() {
+        // A full-screen program that owns the mouse gets the event instead (FR-013a).
+        assert_eq!(press_routing(true, true, false), PressRouting::MouseReport);
+    }
+
+    #[test]
+    fn shift_forces_local_handling_even_under_mouse_reporting() {
+        // FR-013b: selection and copy must stay reachable no matter what the process asked for.
+        // This is the documented escape hatch when a TUI has grabbed the mouse.
+        assert_eq!(press_routing(true, true, true), PressRouting::HandleLocally);
+    }
+
+    #[test]
+    fn press_on_an_unfocused_pane_is_handled_locally_rather_than_reported() {
+        // Mouse reports are process input, so an unfocused pane must not generate them even
+        // while the process has mouse mode on — but selecting for copy is still allowed.
+        assert_eq!(
+            press_routing(false, true, false),
+            PressRouting::HandleLocally
+        );
+    }
 
     // --- Wheel delta → lines (BUG-002: touchpad scrolling under Wayland) ---
 
