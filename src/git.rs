@@ -87,6 +87,20 @@ fn run_git(repo: &Path, args: &[&str]) -> io::Result<String> {
     }
 }
 
+/// Whether two paths name the same location, resolving symlinks when both sides exist.
+///
+/// `git worktree list --porcelain` reports the fully resolved real path, while the app builds
+/// its paths from the project root as the user opened it. When that root traverses a symlink
+/// (a symlinked checkout, a symlinked home, `/tmp` on macOS) a raw `==` never matches. Falls
+/// back to a literal comparison when either side cannot be canonicalized — the "already gone"
+/// case, where the path no longer exists on disk. Mirrors [`GitCli::is_repo_root`].
+fn same_path(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
 impl Git for GitCli {
     fn is_repo_root(&self, dir: &Path) -> bool {
         let Ok(out) = run_git(dir, &["rev-parse", "--show-toplevel"]) else {
@@ -137,12 +151,16 @@ impl Git for GitCli {
         // Distinguish the two by outcome rather than by parsing git's message: prune the stale
         // registrations git itself would drop, then ask whether this path is still registered.
         // Gone => the caller got what it asked for. Still there => a genuine refusal.
-        self.worktree_prune(repo)?;
-        let still_registered = run_git(repo, &["worktree", "list", "--porcelain"])
+        //
+        // The prune is only a diagnostic step, so its own failure must not replace the reason
+        // the removal failed — fall through to reporting `err`.
+        let still_registered = self
+            .worktree_prune(repo)
+            .and_then(|()| self.worktree_list_porcelain(repo))
             .map(|list| {
                 crate::worktree::parse_worktrees(&list)
                     .iter()
-                    .any(|r| r.path == path)
+                    .any(|r| same_path(&r.path, path))
             })
             // Can't tell (not a repo, git missing) — surface the original failure rather than
             // inventing a success.
