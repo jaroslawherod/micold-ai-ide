@@ -186,6 +186,16 @@ impl RuntimeTerminal {
             .intersects(TermMode::MOUSE_MODE)
     }
 
+    /// Whether the process wants pointer *motion* reported, not just button presses
+    /// (feature 006, FR-013a). `MOUSE_DRAG` asks for motion while a button is held;
+    /// `MOUSE_MOTION` asks for it unconditionally.
+    pub fn mouse_motion_mode(&self) -> bool {
+        self.term
+            .renderable_content()
+            .mode
+            .intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION)
+    }
+
     /// The grid point for a viewport cell, accounting for scrollback offset.
     fn viewport_point(&self, col: u16, line: u16) -> Point {
         let display_offset = self.term.grid().display_offset();
@@ -930,6 +940,60 @@ mod tests {
         };
         let seq = encode_mouse_report(mode, 0, 0, 0, true, mods).unwrap();
         assert_eq!(seq, b"\x1b[<4;1;1M");
+    }
+
+    /// FR-013a: the legacy (non-SGR) encoding reports every release as button 3, so a release
+    /// must actually be sent — the process cannot infer which button came up.
+    #[test]
+    fn fr_013a_legacy_release_uses_the_button_release_code() {
+        let mode = TermMode::MOUSE_REPORT_CLICK;
+        let mods = micold_ai_ide::keymap::Mods::NONE;
+        let press = encode_mouse_report(mode, 0, 3, 4, true, mods).unwrap();
+        let release = encode_mouse_report(mode, 0, 3, 4, false, mods).unwrap();
+        assert_eq!(press, vec![0x1b, b'[', b'M', 32, 36, 37]);
+        assert_eq!(release, vec![0x1b, b'[', b'M', 35, 36, 37]);
+    }
+
+    /// FR-013a: middle (1) and right (2) are distinct button codes. Both were previously
+    /// consumed locally — by middle-click paste and the context menu — and never reached a
+    /// mouse-tracking process.
+    #[test]
+    fn fr_013a_middle_and_right_buttons_encode_distinctly() {
+        let mode = TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE;
+        let mods = micold_ai_ide::keymap::Mods::NONE;
+        assert_eq!(
+            encode_mouse_report(mode, 1, 0, 0, true, mods).unwrap(),
+            b"\x1b[<1;1;1M"
+        );
+        assert_eq!(
+            encode_mouse_report(mode, 2, 0, 0, true, mods).unwrap(),
+            b"\x1b[<2;1;1M"
+        );
+    }
+
+    /// FR-013a: motion is the held button's code plus 32. Nothing emitted motion reports
+    /// before, so a drag inside a mouse-tracking program did nothing.
+    #[test]
+    fn fr_013a_motion_report_adds_the_motion_bit() {
+        let mode = TermMode::MOUSE_DRAG | TermMode::SGR_MOUSE;
+        let mods = micold_ai_ide::keymap::Mods::NONE;
+        // Left button (0) held, moving to col 5 line 6 → button code 0 + 32.
+        const MOTION_BIT: u8 = 32;
+        assert_eq!(
+            encode_mouse_report(mode, MOTION_BIT, 5, 6, true, mods).unwrap(),
+            b"\x1b[<32;6;7M"
+        );
+    }
+
+    /// The widget asks for motion only when the process requested it; plain click-reporting
+    /// must not produce a motion stream.
+    #[test]
+    fn fr_013a_motion_mode_is_distinct_from_click_reporting() {
+        assert!(
+            !TermMode::MOUSE_REPORT_CLICK.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION)
+        );
+        assert!(TermMode::MOUSE_DRAG.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION));
+        assert!(TermMode::MOUSE_MOTION.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION));
     }
 
     #[test]

@@ -35,6 +35,13 @@ struct PaneState {
     /// While dragging the scrollbar thumb: the cursor's offset below the thumb's top edge, so the
     /// grabbed point stays under the pointer (FR-016).
     scrollbar_grab: Option<f32>,
+    /// The mouse button currently held down and being reported to the process (FR-013a), or
+    /// `None` when no reported button is down. Held so the matching *release* can be encoded —
+    /// without it the process sees a button go down and never come up.
+    reporting_button: Option<u8>,
+    /// The last grid cell reported to the process, so motion reports are emitted once per cell
+    /// crossed rather than once per pixel of pointer movement.
+    reported_cell: Option<(u16, u16)>,
 }
 
 /// The grid cell (col, line) under a cursor position within `bounds`.
@@ -447,6 +454,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     ) {
                         shell.publish(Message::TerminalBytes(seq));
                     }
+                    // Remember the held button so its release is reported too (FR-013a).
+                    state.reporting_button = Some(0);
+                    state.reported_cell = Some((col, line));
                 } else {
                     let c = Click::new(pos, mouse::Button::Left, state.last_click);
                     let kind = match c.kind() {
@@ -457,6 +467,47 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     state.last_click = Some(c);
                     state.dragging = true;
                     shell.publish(Message::TerminalSelectStart { col, line, kind });
+                }
+                return event::Status::Captured;
+            }
+            // Motion while a reported button is held (FR-013a). Only for processes that asked
+            // for motion (MOUSE_DRAG / MOUSE_MOTION), and only once per grid cell crossed —
+            // reporting every pixel would flood the PTY. Button code +32 marks it as motion.
+            Event::Mouse(mouse::Event::CursorMoved { position })
+                if state.reporting_button.is_some() =>
+            {
+                let (col, line) = grid_at(*position, bounds, metrics);
+                let button = state.reporting_button.unwrap_or(0);
+                if self.rt.mouse_motion_mode() && state.reported_cell != Some((col, line)) {
+                    if let Some(seq) = self.rt.mouse_report_bytes(
+                        button + 32,
+                        col,
+                        line,
+                        true,
+                        to_keymap_mods(state.modifiers),
+                    ) {
+                        shell.publish(Message::TerminalBytes(seq));
+                    }
+                }
+                state.reported_cell = Some((col, line));
+                return event::Status::Captured;
+            }
+            // Release of a reported button (FR-013a). Must come before the selection arms: in
+            // mouse mode `state.dragging` was never set, so the release previously fell through
+            // to `_ => {}` and the process saw a button that never came up.
+            Event::Mouse(mouse::Event::ButtonReleased(_)) if state.reporting_button.is_some() => {
+                let button = state.reporting_button.take().unwrap_or(0);
+                state.reported_cell = None;
+                let pos = cursor.position().unwrap_or_default();
+                let (col, line) = grid_at(pos, bounds, metrics);
+                if let Some(seq) = self.rt.mouse_report_bytes(
+                    button,
+                    col,
+                    line,
+                    false,
+                    to_keymap_mods(state.modifiers),
+                ) {
+                    shell.publish(Message::TerminalBytes(seq));
                 }
                 return event::Status::Captured;
             }
@@ -474,24 +525,59 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 }
                 return event::Status::Captured;
             }
-            // Middle-click pastes the clipboard into the focused process (FR-013).
+            // Middle-click pastes the clipboard into the focused process (FR-013) — unless the
+            // process is tracking the mouse, in which case the gesture belongs to it (FR-013a).
+            // Shift forces the local behaviour, matching the left-button rule above and the
+            // convention every other terminal follows.
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle))
                 if self.focused && cursor.is_over(bounds) =>
             {
-                if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
+                let shift = state.modifiers.shift();
+                if self.rt.mouse_mode() && !shift {
+                    let (col, line) =
+                        grid_at(cursor.position().unwrap_or_default(), bounds, metrics);
+                    if let Some(seq) = self.rt.mouse_report_bytes(
+                        1,
+                        col,
+                        line,
+                        true,
+                        to_keymap_mods(state.modifiers),
+                    ) {
+                        shell.publish(Message::TerminalBytes(seq));
+                    }
+                    state.reporting_button = Some(1);
+                    state.reported_cell = Some((col, line));
+                } else if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
                     shell.publish(Message::TerminalBytes(pasted.into_bytes()));
                 }
                 return event::Status::Captured;
             }
-            // Right-click opens the copy/paste context menu at the cursor, intercepting the
-            // gesture rather than forwarding it to the process (FR-013).
+            // Right-click opens the copy/paste context menu at the cursor (FR-013) — unless the
+            // process is tracking the mouse, in which case it is forwarded (FR-013a). Shift
+            // forces the menu, so it is always reachable.
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
                 if cursor.is_over(bounds) =>
             {
                 let pos = cursor.position().unwrap_or_default();
-                let x = (pos.x - bounds.x).max(0.0) as u16;
-                let y = (pos.y - bounds.y).max(0.0) as u16;
-                shell.publish(Message::TerminalContextMenuOpened { x, y });
+                let shift = state.modifiers.shift();
+                if self.focused && self.rt.mouse_mode() && !shift {
+                    let (col, line) = grid_at(pos, bounds, metrics);
+                    if let Some(seq) = self.rt.mouse_report_bytes(
+                        2,
+                        col,
+                        line,
+                        true,
+                        to_keymap_mods(state.modifiers),
+                    ) {
+                        shell.publish(Message::TerminalBytes(seq));
+                    }
+                    state.reporting_button = Some(2);
+                    state.reported_cell = Some((col, line));
+                } else {
+                    let x = (pos.x - bounds.x).max(0.0) as u16;
+                    let y = (pos.y - bounds.y).max(0.0) as u16;
+                    shell.publish(Message::TerminalContextMenuOpened { x, y });
+                }
                 return event::Status::Captured;
             }
             // Wheel scrolls the local scrollback, or forwards to a mouse-reporting program on
