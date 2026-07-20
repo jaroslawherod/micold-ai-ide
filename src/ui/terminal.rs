@@ -232,20 +232,21 @@ impl RuntimeTerminal {
         encode_mouse_report(mode, button, col, line, pressed, mods)
     }
 
-    /// The currently-selected text, or empty when there is no selection (feature 006 copy).
+    /// The currently-selected text, or empty when there is no selection (feature 006 FR-013).
     pub fn selectable_content(&self) -> String {
-        let content = self.term.renderable_content();
-        let Some(range) = content.selection else {
-            return String::new();
-        };
-        let mut out = String::new();
-        for cell in content.display_iter {
-            if range.contains(cell.point) {
-                out.push(cell.c);
-            }
-        }
-        out
+        selection_text(&self.term)
     }
+}
+
+/// Extract the selected region as text (feature 006, FR-013).
+///
+/// Delegates to the VT emulator's own extraction rather than walking `renderable_content`:
+/// `display_iter` covers only the visible viewport and yields bare characters, so a hand-rolled
+/// walk drops every line break and silently truncates any part of the selection that has
+/// scrolled into scrollback. `selection_to_string` reads the grid by absolute line, so it spans
+/// scrollback, emits newlines at line ends, and handles tabs and wide characters.
+fn selection_text(term: &Term<VoidListener>) -> String {
+    term.selection_to_string().unwrap_or_default()
 }
 
 impl TerminalHandle for RuntimeTerminal {
@@ -843,6 +844,59 @@ mod tests {
         }
         assert!(saw_selected, "expected some cells inside the selection");
         assert!(saw_unselected, "expected some cells outside the selection");
+    }
+
+    /// Build a `Term` with `history` lines of scrollback and feed it `input`.
+    fn term_with(rows: usize, cols: usize, history: usize, input: &[u8]) -> Term<VoidListener> {
+        let dims = TermDimensions { rows, cols };
+        let config = Config {
+            scrolling_history: history,
+            ..Config::default()
+        };
+        let mut term = Term::new(config, &dims, VoidListener);
+        let mut parser: Processor = Processor::new();
+        parser.advance(&mut term, input);
+        term
+    }
+
+    /// Drive a selection the way `selection_start`/`selection_update` do: `Side::Left` on both
+    /// ends, so `to` is the cell *after* the last selected character.
+    fn select(term: &mut Term<VoidListener>, from: (i32, usize), to: (i32, usize)) {
+        use alacritty_terminal::index::{Column, Line, Point as GridPoint, Side};
+        use alacritty_terminal::selection::{Selection, SelectionType};
+        let mut sel = Selection::new(
+            SelectionType::Simple,
+            GridPoint::new(Line(from.0), Column(from.1)),
+            Side::Left,
+        );
+        sel.update(GridPoint::new(Line(to.0), Column(to.1)), Side::Left);
+        term.selection = Some(sel);
+    }
+
+    #[test]
+    fn fr_013_no_selection_copies_nothing() {
+        let term = term_with(3, 10, 0, b"hello");
+        assert_eq!(selection_text(&term), "");
+    }
+
+    /// A selection spanning several rows must copy as several lines. The previous implementation
+    /// walked `display_iter` pushing bare characters, producing one run-on string.
+    #[test]
+    fn fr_013_multiline_selection_preserves_line_breaks() {
+        let mut term = term_with(3, 10, 0, b"one\r\ntwo\r\nthree");
+        select(&mut term, (0, 0), (2, 5));
+        assert_eq!(selection_text(&term), "one\ntwo\nthree");
+    }
+
+    /// A selection dragged up into scrollback must copy the off-screen part too. `display_iter`
+    /// covers only the viewport, so the previous implementation silently truncated it.
+    #[test]
+    fn fr_013_selection_spanning_scrollback_is_not_truncated() {
+        // Five lines through a 2-row grid: "one".."three" scroll into history.
+        let mut term = term_with(2, 10, 100, b"one\r\ntwo\r\nthree\r\nfour\r\nfive");
+        // Negative lines address scrollback; line 0 is the top of the viewport.
+        select(&mut term, (-3, 0), (1, 4));
+        assert_eq!(selection_text(&term), "one\ntwo\nthree\nfour\nfive");
     }
 
     #[test]
