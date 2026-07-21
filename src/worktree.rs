@@ -199,24 +199,43 @@ pub fn rollback_plan() -> [CleanupStep; 4] {
     ]
 }
 
-/// Remove a worktree and its branch, app-owned (feature 008, FR-020). Runs the git steps in
-/// [`CleanupStep`] order — `worktree_remove(force)` → `worktree_prune` → `branch_delete` — so
-/// the checked-out branch can be deleted after its registration is gone. Every step is
-/// idempotent (an already-missing worktree/branch is not an error), so a partially-removed
-/// worktree still resolves to a consistent state (FR-023). The caller removes the directory
-/// (`fs`) and terminates the worktree's session processes.
+/// The result of [`remove_worktree`] (feature 013, FR-011–FR-015). Returned only on `Ok` — the
+/// worktree directory/registration removal itself succeeded; `branch_delete_failed` reports the
+/// separate, non-fatal outcome of the (optional) branch-deletion step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RemoveOutcome {
+    /// `true` when the caller asked to delete the branch (`branch: Some(_)`) and the branch
+    /// genuinely could not be deleted (FR-015). Always `false` when `branch` was `None` (the
+    /// user opted to keep it) — that path never calls `branch_delete` at all.
+    pub branch_delete_failed: bool,
+}
+
+/// Remove a worktree and, optionally, its branch, app-owned (feature 008, FR-020; feature 013,
+/// FR-011–FR-015). Runs the git steps in [`CleanupStep`] order — `worktree_remove(force)` →
+/// `worktree_prune` → conditional `branch_delete` — so a checked-out branch can be deleted after
+/// its registration is gone. `worktree_remove`/`worktree_prune` failures still propagate via `?`
+/// unchanged (an already-missing worktree is not an error, so a partially-removed worktree still
+/// resolves to a consistent state, FR-023); only a `branch_delete` failure (when `branch` is
+/// `Some`) is captured into the returned [`RemoveOutcome`] instead of aborting the function — the
+/// worktree/session cleanup already succeeded independent of whether its branch could be deleted.
+/// `branch: None` (the user opted to keep it) skips `branch_delete` entirely, leaving the branch
+/// untouched. The caller removes the directory (`fs`) and terminates the worktree's session
+/// processes.
 pub fn remove_worktree(
     git: &dyn Git,
     repo: &Path,
     target_path: &Path,
     branch: Option<&str>,
-) -> io::Result<()> {
+) -> io::Result<RemoveOutcome> {
     git.worktree_remove(repo, target_path, true)?;
     git.worktree_prune(repo)?;
-    if let Some(branch) = branch {
-        git.branch_delete(repo, branch)?;
-    }
-    Ok(())
+    let branch_delete_failed = match branch {
+        Some(branch) => git.branch_delete(repo, branch).is_err(),
+        None => false,
+    };
+    Ok(RemoveOutcome {
+        branch_delete_failed,
+    })
 }
 
 /// Remove the worktree's working directory once git has released it (feature 008, FR-023a).
@@ -233,25 +252,68 @@ pub fn remove_worktree_dir(path: &Path) -> io::Result<()> {
     }
 }
 
+/// The named stage a worktree creation is (or was, on failure) currently in (feature 013,
+/// FR-006/FR-007/FR-009). A closed enum (Principle V) so the progress display can never show a
+/// stage that isn't a real, reachable step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreateStage {
+    /// Duplicate-branch / duplicate-directory pre-flight checks (no mutation yet).
+    PreflightCheck,
+    /// `git worktree add -b <branch> <path> HEAD`.
+    CreatingWorktree,
+    /// `git submodule update --init --recursive` — only reached when the new worktree's own
+    /// checkout declares submodules (FR-008).
+    SettingUpSubmodules,
+    /// Unwinding a failed create (`worktree remove` → `prune` → `branch delete`).
+    RollingBack,
+}
+
+impl CreateStage {
+    /// Plain-language description of the current stage, for the progress display (FR-007).
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::PreflightCheck => "Checking for naming conflicts",
+            Self::CreatingWorktree => "Creating branch and worktree",
+            Self::SettingUpSubmodules => "Setting up submodules",
+            Self::RollingBack => "Rolling back",
+        }
+    }
+}
+
+/// One stage-tagged progress line from an in-flight [`create_worktree`] call (feature 013,
+/// replaces the earlier bare-`String` progress channel — the `line` content is unchanged, only
+/// the stage tag is new).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateProgressEvent {
+    /// Which stage produced this line.
+    pub stage: CreateStage,
+    /// The human-readable line itself (an executed command, or live submodule-fetch output).
+    pub line: String,
+}
+
 /// Create a branch + worktree from derived names, rolling back on failure (FR-006/006b/009).
 ///
 /// Pre-flight duplicate checks run before any mutation. `target_exists` is the binary's `fs`
 /// check that the target directory is already present/non-empty. On a git failure the
 /// [`rollback_plan`] git steps run (the caller removes the directory — [`CleanupStep::RemoveDir`]).
 ///
-/// `on_progress` is called with a human-readable line for each executed command and, for the
-/// (potentially slow) submodule fetch, its live output — so the caller can surface progress
-/// instead of the operation appearing to hang (feature 010 follow-up). Callers that don't care
-/// about progress can pass `&mut |_| {}`.
+/// `on_progress` is called with a stage-tagged [`CreateProgressEvent`] for each executed command
+/// and, for the (potentially slow) submodule fetch, its live output — so the caller can surface
+/// progress instead of the operation appearing to hang (feature 010 follow-up; stage tags added
+/// feature 013). Callers that don't care about progress can pass `&mut |_| {}`.
 pub fn create_worktree(
     git: &dyn Git,
     repo: &Path,
     target_path: &Path,
     names: &DerivedNames,
     target_exists: bool,
-    on_progress: &mut dyn FnMut(String),
+    on_progress: &mut dyn FnMut(CreateProgressEvent),
 ) -> Result<Worktree, CreateError> {
     // Pre-flight (fail fast, no mutation).
+    on_progress(CreateProgressEvent {
+        stage: CreateStage::PreflightCheck,
+        line: "Checking for naming conflicts…".to_string(),
+    });
     if git
         .branch_exists(repo, &names.branch)
         .map_err(|e| CreateError::RolledBack(e.to_string()))?
@@ -266,14 +328,23 @@ pub fn create_worktree(
         return Err(CreateError::DuplicateDir);
     }
 
-    on_progress(format!(
-        "$ git worktree add -b {} {} HEAD",
-        names.branch,
-        target_path.display()
-    ));
+    on_progress(CreateProgressEvent {
+        stage: CreateStage::CreatingWorktree,
+        line: format!(
+            "$ git worktree add -b {} {} HEAD",
+            names.branch,
+            target_path.display()
+        ),
+    });
     if let Err(e) = git.worktree_add_new_branch(repo, &names.branch, target_path) {
-        on_progress(format!("worktree add failed: {e}"));
-        on_progress("Rolling back…".to_string());
+        on_progress(CreateProgressEvent {
+            stage: CreateStage::CreatingWorktree,
+            line: format!("worktree add failed: {e}"),
+        });
+        on_progress(CreateProgressEvent {
+            stage: CreateStage::RollingBack,
+            line: "Rolling back…".to_string(),
+        });
         run_rollback(git, repo, target_path, &names.branch);
         return Err(CreateError::RolledBack(e.to_string()));
     }
@@ -282,10 +353,25 @@ pub fn create_worktree(
     // research R1) — a failure here rolls back the whole creation exactly like a failed
     // `worktree_add_new_branch` above (spec FR-005), via the same rollback plan.
     if git.has_submodules(target_path) {
-        on_progress("$ git submodule update --init --recursive".to_string());
-        if let Err(e) = git.submodule_update_init_recursive(target_path, on_progress) {
-            on_progress(format!("submodule update failed: {e}"));
-            on_progress("Rolling back…".to_string());
+        on_progress(CreateProgressEvent {
+            stage: CreateStage::SettingUpSubmodules,
+            line: "$ git submodule update --init --recursive".to_string(),
+        });
+        let mut on_line = |line: String| {
+            on_progress(CreateProgressEvent {
+                stage: CreateStage::SettingUpSubmodules,
+                line,
+            });
+        };
+        if let Err(e) = git.submodule_update_init_recursive(target_path, &mut on_line) {
+            on_progress(CreateProgressEvent {
+                stage: CreateStage::SettingUpSubmodules,
+                line: format!("submodule update failed: {e}"),
+            });
+            on_progress(CreateProgressEvent {
+                stage: CreateStage::RollingBack,
+                line: "Rolling back…".to_string(),
+            });
             run_rollback(git, repo, target_path, &names.branch);
             return Err(CreateError::RolledBack(e.to_string()));
         }

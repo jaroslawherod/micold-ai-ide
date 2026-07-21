@@ -4,8 +4,16 @@ use micold_ai_ide::app::{on_escape, Message, Overlay, State, WorktreeFormStatus}
 use micold_ai_ide::naming::ConventionalType;
 use micold_ai_ide::project::{Availability, Project};
 use micold_ai_ide::session::{Session, SessionLocation};
-use micold_ai_ide::worktree::{Worktree, WorktreeStatus};
+use micold_ai_ide::worktree::{CreateProgressEvent, CreateStage, Worktree, WorktreeStatus};
 use std::path::PathBuf;
+
+/// A stage-tagged progress event, for constructing `WorktreeCreateLogAppended` batches.
+fn event(stage: CreateStage, line: &str) -> CreateProgressEvent {
+    CreateProgressEvent {
+        stage,
+        line: line.to_string(),
+    }
+}
 
 #[test]
 fn defaults_are_empty() {
@@ -113,12 +121,16 @@ fn create_log_lines_accumulate_and_reset_on_new_attempt() {
     let mut state = State::default();
     state.update(Message::AddWorktreeOpened);
     state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateLogAppended(vec![event(
+        CreateStage::CreatingWorktree,
+        "$ git worktree add -b feat/x .claude/worktrees/feat-x HEAD",
+    )]));
     state.update(Message::WorktreeCreateLogAppended(vec![
-        "$ git worktree add -b feat/x .claude/worktrees/feat-x HEAD".to_string(),
-    ]));
-    state.update(Message::WorktreeCreateLogAppended(vec![
-        "$ git submodule update --init --recursive".to_string(),
-        "Cloning into 'vendor/sub'...".to_string(),
+        event(
+            CreateStage::SettingUpSubmodules,
+            "$ git submodule update --init --recursive",
+        ),
+        event(CreateStage::SettingUpSubmodules, "Cloning into 'vendor/sub'..."),
     ]));
     assert_eq!(state.worktree_form.as_ref().unwrap().log.len(), 3);
 
@@ -132,9 +144,10 @@ fn create_failed_keeps_the_log_visible_for_diagnosis() {
     let mut state = State::default();
     state.update(Message::AddWorktreeOpened);
     state.update(Message::WorktreeCreateStarted);
-    state.update(Message::WorktreeCreateLogAppended(vec![
-        "submodule update failed: network error".to_string(),
-    ]));
+    state.update(Message::WorktreeCreateLogAppended(vec![event(
+        CreateStage::SettingUpSubmodules,
+        "submodule update failed: network error",
+    )]));
     state.update(Message::WorktreeCreateFailed("boom".to_string()));
 
     // Unlike on success (form closes entirely), a failure keeps the form open with its log
@@ -143,6 +156,59 @@ fn create_failed_keeps_the_log_visible_for_diagnosis() {
         state.worktree_form.as_ref().unwrap().log,
         vec!["submodule update failed: network error".to_string()]
     );
+}
+
+// --- Feature 013 US3: stage-tagged creation progress ---
+
+#[test]
+fn log_appended_sets_stage_to_the_batch_last_events_stage() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeCreateStarted);
+    assert_eq!(state.worktree_form.as_ref().unwrap().stage, None);
+
+    state.update(Message::WorktreeCreateLogAppended(vec![event(
+        CreateStage::PreflightCheck,
+        "Checking for naming conflicts…",
+    )]));
+    assert_eq!(
+        state.worktree_form.as_ref().unwrap().stage,
+        Some(CreateStage::PreflightCheck)
+    );
+
+    state.update(Message::WorktreeCreateLogAppended(vec![
+        event(CreateStage::CreatingWorktree, "$ git worktree add …"),
+        event(CreateStage::SettingUpSubmodules, "$ git submodule update …"),
+    ]));
+    assert_eq!(
+        state.worktree_form.as_ref().unwrap().stage,
+        Some(CreateStage::SettingUpSubmodules),
+        "the last event in the batch wins"
+    );
+}
+
+#[test]
+fn stage_resets_on_started_opened_and_cancelled() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateLogAppended(vec![event(
+        CreateStage::CreatingWorktree,
+        "$ git worktree add …",
+    )]));
+    assert!(state.worktree_form.as_ref().unwrap().stage.is_some());
+
+    // A fresh attempt clears the previous attempt's stage, same reset point as `log`.
+    state.update(Message::WorktreeCreateStarted);
+    assert_eq!(state.worktree_form.as_ref().unwrap().stage, None);
+
+    state.update(Message::WorktreeCreateLogAppended(vec![event(
+        CreateStage::CreatingWorktree,
+        "$ git worktree add …",
+    )]));
+    state.update(Message::AddWorktreeCancelled);
+    state.update(Message::AddWorktreeOpened);
+    assert_eq!(state.worktree_form.as_ref().unwrap().stage, None);
 }
 
 #[test]
@@ -171,6 +237,36 @@ fn resubmitting_while_creating_is_a_no_op() {
     state.update(Message::AddWorktreeNameChanged(String::new()));
     state.update(Message::AddWorktreeSubmitted);
     assert!(state.worktree_form.as_ref().unwrap().error.is_none());
+}
+
+// --- Feature 013 US1: type field is a Material select (wraps iced's `pick_list`) ---
+
+#[test]
+fn selecting_a_type_sets_the_form_value() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    assert_eq!(state.worktree_form.as_ref().unwrap().type_, None);
+
+    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
+    assert_eq!(
+        state.worktree_form.as_ref().unwrap().type_,
+        Some(ConventionalType::Feat)
+    );
+}
+
+#[test]
+fn type_selection_is_ignored_while_creating() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
+    state.update(Message::AddWorktreeNameChanged("Login".to_string()));
+    state.update(Message::WorktreeCreateStarted);
+
+    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Fix));
+    assert_eq!(
+        state.worktree_form.as_ref().unwrap().type_,
+        Some(ConventionalType::Feat)
+    );
 }
 
 #[test]
@@ -295,6 +391,34 @@ fn escape_cancels_confirm_delete() {
     let mut state = state_with_worktree_and_session("feat-x");
     state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
     assert_eq!(on_escape(&state), Some(Message::WorktreeDeleteCancelled));
+}
+
+// --- Feature 013 US2: delete confirmation's branch-deletion choice ---
+
+#[test]
+fn delete_requested_resets_keep_branch_even_if_previously_set() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
+    state.update(Message::WorktreeDeleteKeepBranchToggled(true));
+    assert!(state.worktree_delete_keep_branch);
+
+    // Cancel and request again on a different worktree — the choice must not carry over.
+    state.update(Message::WorktreeDeleteCancelled);
+    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
+    assert!(!state.worktree_delete_keep_branch);
+}
+
+#[test]
+fn delete_keep_branch_toggled_sets_the_field() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
+    assert!(!state.worktree_delete_keep_branch, "defaults to delete");
+
+    state.update(Message::WorktreeDeleteKeepBranchToggled(true));
+    assert!(state.worktree_delete_keep_branch);
+
+    state.update(Message::WorktreeDeleteKeepBranchToggled(false));
+    assert!(!state.worktree_delete_keep_branch);
 }
 
 // --- Feature 008 US3: worktree rename changes display only ---

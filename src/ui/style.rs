@@ -4,7 +4,10 @@
 //! every surface draws from one place (SC-007). Nothing here holds decision logic; the
 //! values come from `src/tokens.rs` (contracts/design-tokens.md).
 
-use iced::widget::{button, checkbox as checkbox_widget, container, scrollable, text, text_input};
+use iced::overlay::menu;
+use iced::widget::{
+    button, checkbox as checkbox_widget, container, pick_list, scrollable, text, text_input,
+};
 use iced::{Background, Border, Color, Theme};
 use micold_ai_ide::app::NoticeLevel;
 use micold_ai_ide::theme::ColorScheme;
@@ -147,6 +150,46 @@ pub fn menu_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
             radius: (shape::SM as f32).into(),
         },
         ..container::Style::default()
+    }
+}
+
+/// The closed field of a `pick_list`-backed `Select` (feature 013): an outlined box matching
+/// [`input`]'s look, with the outline switching to `primary` while hovered or open.
+pub fn select_field(r: Roles) -> impl Fn(&Theme, pick_list::Status) -> pick_list::Style {
+    move |_theme, status| {
+        let border_color = match status {
+            pick_list::Status::Hovered | pick_list::Status::Opened => color(r.primary),
+            pick_list::Status::Active => color(r.outline),
+        };
+        pick_list::Style {
+            text_color: color(r.on_surface),
+            placeholder_color: color(r.on_surface_variant),
+            handle_color: color(r.on_surface_variant),
+            background: Background::Color(color(r.surface)),
+            border: Border {
+                color: border_color,
+                width: 1.0,
+                radius: (shape::SM as f32).into(),
+            },
+        }
+    }
+}
+
+/// The dropdown list of a `pick_list`-backed `Select` (feature 013): the same look as
+/// [`menu_surface`], with the current selection tinted `primary` (pick_list highlights it on
+/// open the same way it highlights hover, so this doubles as the "reopen shows the current
+/// selection" treatment, FR-003).
+pub fn select_menu(r: Roles) -> impl Fn(&Theme) -> menu::Style {
+    move |_theme| menu::Style {
+        background: Background::Color(color(r.surface)),
+        border: Border {
+            color: alpha(color(r.outline), 0.4),
+            width: 1.0,
+            radius: (shape::SM as f32).into(),
+        },
+        text_color: color(r.on_surface),
+        selected_text_color: color(r.on_primary),
+        selected_background: Background::Color(color(r.primary)),
     }
 }
 

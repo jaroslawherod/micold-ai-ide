@@ -177,9 +177,20 @@ impl Git for GitCli {
     }
 
     fn branch_delete(&self, repo: &Path, branch: &str) -> io::Result<()> {
-        // Idempotent: "branch not found" is fine during rollback.
-        let _ = run_git(repo, &["branch", "-D", branch]);
-        Ok(())
+        // Outcome-based, like `worktree_remove` above (BUG-001): don't trust/parse git's own
+        // exit status or message, ask git directly whether the branch is actually gone
+        // afterward. Idempotent ("branch not found" is fine during rollback), but a branch that
+        // demonstrably still exists (e.g. checked out elsewhere) is a genuine, reportable
+        // refusal (feature 013, FR-015) — not silently swallowed.
+        let attempt = run_git(repo, &["branch", "-D", branch]);
+        match self.branch_exists(repo, branch) {
+            Ok(false) => Ok(()),
+            Ok(true) => Err(attempt.err().unwrap_or_else(|| {
+                io::Error::other(format!("branch '{branch}' could not be deleted"))
+            })),
+            // Can't tell — surface rather than assume success.
+            Err(e) => Err(e),
+        }
     }
 
     fn has_submodules(&self, worktree_path: &Path) -> bool {
@@ -279,6 +290,10 @@ struct FakeState {
     /// When true, the next `worktree_remove` fails, standing in for a locked worktree or a
     /// branch checked out elsewhere (feature 008, FR-023).
     fail_next_remove: bool,
+    /// When true, the next `branch_delete` fails to actually remove the branch — a genuine
+    /// refusal (feature 013, FR-015), as opposed to the ordinary idempotent "already absent"
+    /// case.
+    fail_next_branch_delete: bool,
     /// Worktree paths primed to report `has_submodules == true` (feature 010).
     submodules: BTreeSet<PathBuf>,
     /// When true, the next `submodule_update_init_recursive` call fails (feature 010).
@@ -325,6 +340,13 @@ impl FakeGit {
     /// elsewhere, or a permission error (feature 008, FR-023 delete-failure reporting).
     pub fn failing_next_remove(self) -> Self {
         self.inner.borrow_mut().fail_next_remove = true;
+        self
+    }
+
+    /// Prime the next `branch_delete` to genuinely fail — the branch is left registered rather
+    /// than removed (feature 013, FR-015 delete-failure reporting).
+    pub fn failing_next_branch_delete(self) -> Self {
+        self.inner.borrow_mut().fail_next_branch_delete = true;
         self
     }
 
@@ -448,7 +470,14 @@ impl Git for FakeGit {
     }
 
     fn branch_delete(&self, repo: &Path, branch: &str) -> io::Result<()> {
-        if let Some(b) = self.inner.borrow_mut().branches.get_mut(repo) {
+        let mut state = self.inner.borrow_mut();
+        if state.fail_next_branch_delete {
+            state.fail_next_branch_delete = false;
+            // Left registered — the branch really does survive, as it would on a genuine
+            // real-git refusal.
+            return Err(io::Error::other("simulated branch delete failure"));
+        }
+        if let Some(b) = state.branches.get_mut(repo) {
             b.remove(branch);
         }
         Ok(())

@@ -275,13 +275,22 @@ pub fn view<'a>(
             None => base,
         },
         Overlay::ConfirmWorktreeDelete => match &state.worktree_delete_target {
-            Some(dir) => confirm_delete::modal(
-                base,
-                dir,
-                &state.worktree_display_name(dir),
-                scheme,
-                overlay_progress,
-            ),
+            Some(dir) => {
+                let branch = state
+                    .worktrees
+                    .iter()
+                    .find(|w| &w.dir_name == dir)
+                    .and_then(|w| w.branch.as_deref());
+                confirm_delete::modal(
+                    base,
+                    dir,
+                    &state.worktree_display_name(dir),
+                    branch,
+                    state.worktree_delete_keep_branch,
+                    scheme,
+                    overlay_progress,
+                )
+            }
             None => base,
         },
         Overlay::RenameWorktree => match &state.worktree_rename_draft {
@@ -338,9 +347,11 @@ fn dismissing_modal<'a>(
         }
         ClosingOverlay::ConfirmDelete(dir) => {
             // Fading-out snapshot: the override may already be gone, so fall back to the derived
-            // name for the exit animation.
+            // name for the exit animation. The live state (branch, checkbox choice) is gone by
+            // now too — this non-interactive snapshot fades the dialog without the branch
+            // checkbox rather than reconstructing it.
             let friendly = micold_ai_ide::naming::display_name(dir);
-            confirm_delete::modal(base, dir, &friendly, scheme, progress)
+            confirm_delete::modal(base, dir, &friendly, None, false, scheme, progress)
         }
         ClosingOverlay::WorktreeRename(draft) => {
             worktree_rename::modal(base, draft, scheme, progress)

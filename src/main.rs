@@ -29,8 +29,8 @@ use micold_ai_ide::store::{JsonFileStore, ProjectStore};
 use micold_ai_ide::terminal::{LaunchMode, LaunchSpec};
 use micold_ai_ide::theme::SystemScheme;
 use micold_ai_ide::worktree::{
-    create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir, CreateError,
-    Worktree,
+    create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir,
+    CreateError, CreateProgressEvent, Worktree,
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -142,7 +142,7 @@ struct App {
     /// it. Drained into the form's log on [`CREATE_PROGRESS_POLL`] — the same
     /// shared-buffer-plus-tick idiom `RuntimeTerminal` uses to stream PTY output, since the
     /// producer here is likewise a blocking job that cannot dispatch messages itself.
-    create_progress: Arc<Mutex<Vec<String>>>,
+    create_progress: Arc<Mutex<Vec<CreateProgressEvent>>>,
     /// The terminal pane's last-known `(cols, rows)`, reported by `Message::TerminalResized`.
     /// Seeds newly-spawned sessions so they fill the pane immediately instead of starting at the
     /// hardcoded default and waiting for the next window resize to reconcile (bugfix: new
@@ -1092,11 +1092,18 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     // survived on disk. The reconcile below restores a truthful sidebar; these
                     // report *why* it did not go away.
                     let name = app.core.worktree_display_name(&dir);
-                    match remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref()) {
+                    // The user's explicit branch-deletion choice (feature 013, FR-011): `None`
+                    // (keep it) skips `branch_delete` entirely inside `remove_worktree`.
+                    let branch = if app.core.worktree_delete_keep_branch {
+                        None
+                    } else {
+                        wt.branch.as_deref()
+                    };
+                    match remove_worktree(&GitCli::new(), &repo, &wt.path, branch) {
                         // Only remove the directory once git has released the worktree —
                         // deleting the working files of a still-registered worktree would
                         // leave a worse mess than the failure being reported.
-                        Ok(()) => {
+                        Ok(outcome) => {
                             // `remove_worktree_dir` treats an already-absent directory as
                             // success — git removed it as part of releasing the worktree, so
                             // "not found" here is the happy path, not a leftover (FR-023a).
@@ -1106,6 +1113,18 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                                      removed: {err}. Left at {}",
                                     wt.path.display()
                                 ));
+                            }
+                            // A genuine branch-delete refusal (FR-015) is its own distinct
+                            // notice — the worktree/session removal above already succeeded
+                            // independent of this outcome, so it is not folded into a generic
+                            // delete failure.
+                            if outcome.branch_delete_failed {
+                                if let Some(branch) = branch {
+                                    app.core.notify_error(format!(
+                                        "Deleted worktree \"{name}\", but its branch \
+                                         \"{branch}\" could not be deleted."
+                                    ));
+                                }
                             }
                         }
                         Err(err) => {
@@ -1500,17 +1519,17 @@ fn discover_worktrees(repo: &Path) -> Vec<Worktree> {
 fn create(
     repo: &Path,
     names: &micold_ai_ide::naming::DerivedNames,
-    progress: &Arc<Mutex<Vec<String>>>,
+    progress: &Arc<Mutex<Vec<CreateProgressEvent>>>,
 ) -> Result<Worktree, CreateError> {
     let git = GitCli::new();
     let root = repo.join(".claude/worktrees");
     let target = root.join(&names.dir_name);
     let _ = std::fs::create_dir_all(&root);
     let target_exists = target.exists() && dir_nonempty(&target);
-    let result = create_worktree(&git, repo, &target, names, target_exists, &mut |line| {
+    let result = create_worktree(&git, repo, &target, names, target_exists, &mut |event| {
         // A poisoned lock must not abort the create; the log is diagnostic, not load-bearing.
         if let Ok(mut buf) = progress.lock() {
-            buf.push(line);
+            buf.push(event);
         }
     });
     if result.is_err() {
@@ -1521,7 +1540,7 @@ fn create(
 }
 
 /// Take everything buffered by the in-flight create so far, leaving the buffer empty.
-fn drain_create_progress(buffer: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
+fn drain_create_progress(buffer: &Arc<Mutex<Vec<CreateProgressEvent>>>) -> Vec<CreateProgressEvent> {
     buffer
         .lock()
         .map(|mut buf| std::mem::take(&mut *buf))
@@ -1592,6 +1611,15 @@ fn scan(dir: PathBuf) -> Message {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_ai_ide::worktree::CreateStage;
+
+    /// A stage-tagged progress event, for constructing `create_progress` buffers directly.
+    fn event(stage: CreateStage, line: &str) -> CreateProgressEvent {
+        CreateProgressEvent {
+            stage,
+            line: line.to_string(),
+        }
+    }
 
     #[test]
     fn maps_dark_light_mode_onto_system_scheme() {
@@ -1745,18 +1773,27 @@ mod tests {
     /// exactly once — re-delivering would duplicate every line on each 150ms tick.
     #[test]
     fn draining_create_progress_takes_each_line_once() {
-        let buffer = Arc::new(Mutex::new(vec!["$ git worktree add".to_string()]));
+        let buffer = Arc::new(Mutex::new(vec![event(
+            CreateStage::CreatingWorktree,
+            "$ git worktree add",
+        )]));
 
-        assert_eq!(drain_create_progress(&buffer), vec!["$ git worktree add"]);
-        assert!(drain_create_progress(&buffer).is_empty());
-
-        buffer
-            .lock()
-            .unwrap()
-            .push("Cloning into 'vendor'...".to_string());
         assert_eq!(
             drain_create_progress(&buffer),
-            vec!["Cloning into 'vendor'..."]
+            vec![event(CreateStage::CreatingWorktree, "$ git worktree add")]
+        );
+        assert!(drain_create_progress(&buffer).is_empty());
+
+        buffer.lock().unwrap().push(event(
+            CreateStage::SettingUpSubmodules,
+            "Cloning into 'vendor'...",
+        ));
+        assert_eq!(
+            drain_create_progress(&buffer),
+            vec![event(
+                CreateStage::SettingUpSubmodules,
+                "Cloning into 'vendor'..."
+            )]
         );
     }
 
@@ -1767,10 +1804,10 @@ mod tests {
         let mut app = test_app();
         app.core.update(Message::AddWorktreeOpened);
         app.core.update(Message::WorktreeCreateStarted);
-        app.create_progress
-            .lock()
-            .unwrap()
-            .push("$ git submodule update --init --recursive".to_string());
+        app.create_progress.lock().unwrap().push(event(
+            CreateStage::SettingUpSubmodules,
+            "$ git submodule update --init --recursive",
+        ));
 
         let _ = update_inner(&mut app, Message::WorktreeCreateProgressPolled);
 
@@ -1778,6 +1815,10 @@ mod tests {
             app.core.worktree_form.as_ref().unwrap().log,
             vec!["$ git submodule update --init --recursive".to_string()],
             "progress must be visible while the create is still running"
+        );
+        assert_eq!(
+            app.core.worktree_form.as_ref().unwrap().stage,
+            Some(CreateStage::SettingUpSubmodules)
         );
     }
 
@@ -1788,10 +1829,10 @@ mod tests {
         let mut app = test_app();
         app.core.update(Message::AddWorktreeOpened);
         app.core.update(Message::WorktreeCreateStarted);
-        app.create_progress
-            .lock()
-            .unwrap()
-            .push("submodule update failed: network error".to_string());
+        app.create_progress.lock().unwrap().push(event(
+            CreateStage::SettingUpSubmodules,
+            "submodule update failed: network error",
+        ));
 
         let _ = update_inner(
             &mut app,
@@ -1827,10 +1868,10 @@ mod tests {
     #[test]
     fn a_new_attempt_does_not_inherit_stale_buffered_lines() {
         let app = test_app();
-        app.create_progress
-            .lock()
-            .unwrap()
-            .push("stale line from the failed attempt".to_string());
+        app.create_progress.lock().unwrap().push(event(
+            CreateStage::CreatingWorktree,
+            "stale line from the failed attempt",
+        ));
 
         // What the AddWorktreeSubmitted arm does before spawning the worker.
         drain_create_progress(&app.create_progress);

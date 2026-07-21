@@ -130,6 +130,58 @@ fn remove_worktree_is_idempotent_when_already_gone() {
 }
 
 // ---------------------------------------------------------------------------
+// Feature 013 US2 — the delete confirmation's branch-deletion choice (FR-011–FR-015).
+// ---------------------------------------------------------------------------
+
+/// `branch: None` (the user opted to keep it) removes the worktree but never touches the branch.
+#[test]
+fn keep_branch_path_leaves_the_branch_registered() {
+    let repo = PathBuf::from("/repo");
+    let target = repo.join(".claude/worktrees/feat-keep");
+    let branch = "feat/keep";
+    let git = FakeGit::new().with_repo(repo.clone());
+    git.worktree_add_new_branch(&repo, branch, &target).unwrap();
+
+    let outcome = remove_worktree(&git, &repo, &target, None).unwrap();
+
+    assert!(!outcome.branch_delete_failed);
+    assert!(
+        git.worktrees(&repo).is_empty(),
+        "worktree registration removed"
+    );
+    assert!(
+        git.branches(&repo).contains(&branch.to_string()),
+        "branch left intact — user opted to keep it"
+    );
+}
+
+/// A branch that genuinely can't be deleted (FR-015) must not make the whole removal look like
+/// it failed — the worktree/session cleanup already succeeded independent of this outcome.
+#[test]
+fn branch_delete_failure_is_reported_without_failing_the_whole_removal() {
+    let repo = PathBuf::from("/repo");
+    let target = repo.join(".claude/worktrees/feat-stuck");
+    let branch = "feat/stuck";
+    let git = FakeGit::new().with_repo(repo.clone());
+    git.worktree_add_new_branch(&repo, branch, &target).unwrap();
+    // Primed only after setup, so just the branch_delete step is affected.
+    let git = git.failing_next_branch_delete();
+
+    let outcome = remove_worktree(&git, &repo, &target, Some(branch))
+        .expect("a branch-delete refusal must not fail the whole removal");
+
+    assert!(outcome.branch_delete_failed);
+    assert!(
+        git.worktrees(&repo).is_empty(),
+        "worktree registration is still removed independent of the branch outcome"
+    );
+    assert!(
+        git.branches(&repo).contains(&branch.to_string()),
+        "the branch really does survive when its deletion was refused"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // BUG-001 — the follow-up directory cleanup (FR-023a/FR-023b).
 //
 // `git worktree remove` deletes the working directory itself, so the binary's follow-up
