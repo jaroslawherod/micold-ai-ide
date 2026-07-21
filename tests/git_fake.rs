@@ -65,6 +65,38 @@ fn failing_next_add_leaves_branch_but_no_worktree() {
     assert!(git.worktrees(&repo()).is_empty());
 }
 
+// --- Feature 013 US2: branch_delete becomes outcome-based, not always-Ok ---
+
+#[test]
+fn branch_delete_succeeds_when_the_branch_is_actually_gone() {
+    let git = FakeGit::new().with_repo(repo()).with_branch(repo(), "feat/x");
+    assert!(git.branch_delete(&repo(), "feat/x").is_ok());
+    assert!(!git.branch_exists(&repo(), "feat/x").unwrap());
+}
+
+#[test]
+fn failing_next_branch_delete_reports_a_genuine_refusal() {
+    let git = FakeGit::new()
+        .with_repo(repo())
+        .with_branch(repo(), "feat/x")
+        .failing_next_branch_delete();
+    assert!(git.branch_delete(&repo(), "feat/x").is_err());
+    // Must not have silently succeeded — the branch really is still there.
+    assert!(git.branch_exists(&repo(), "feat/x").unwrap());
+}
+
+#[test]
+fn failing_next_branch_delete_only_fails_once() {
+    let git = FakeGit::new()
+        .with_repo(repo())
+        .with_branch(repo(), "feat/x")
+        .failing_next_branch_delete();
+    assert!(git.branch_delete(&repo(), "feat/x").is_err());
+    // Primed to fail only once — a retry succeeds (mirrors failing_next_add's shape).
+    assert!(git.branch_delete(&repo(), "feat/x").is_ok());
+    assert!(!git.branch_exists(&repo(), "feat/x").unwrap());
+}
+
 #[test]
 fn has_submodules_reflects_priming() {
     let path = PathBuf::from("/repo/.claude/worktrees/feat-x");

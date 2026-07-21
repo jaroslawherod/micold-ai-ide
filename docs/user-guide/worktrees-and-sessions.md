@@ -103,7 +103,9 @@ is unnecessary overhead this avoids.
 
 Click **add** in the sidebar header to open the New worktree form:
 
-1. **Type** — pick a Conventional-Commits type (`feat`, `fix`, `chore`, `docs`, …).
+1. **Type** — a select control: click it to open a list of every Conventional-Commits type
+   (`feat`, `fix`, `chore`, `docs`, …), then click one to choose it. The control always shows the
+   currently chosen type when closed, and marks it in the list when reopened.
 2. **Ticket** — optional reference (e.g. `ABC-123`). Leave blank to omit it.
 3. **Name** — a short description (e.g. `login page`).
 
@@ -123,9 +125,14 @@ fails partway, the app rolls back so no half-created branch or directory is left
 If the project uses git submodules, they're fetched automatically as part of creating the
 worktree — including submodules nested inside other submodules — so the new worktree is ready to
 use immediately, with no extra `git submodule` commands to run yourself. Projects without
-submodules are unaffected. While a worktree is being created, the form shows a "Creating
-worktree…" state — this can take a little longer than usual for a repository with submodules to
-fetch, so it's expected rather than a sign the app is stuck.
+submodules are unaffected. While a worktree is being created, the form shows a progress bar
+alongside a short description of what's currently happening (for example "Checking for naming
+conflicts," "Creating branch and worktree," or "Setting up submodules") — the description only
+ever names a step that's actually part of this creation, so a repository without submodules never
+shows a submodule-related step. This can take a little longer than usual for a repository with
+submodules to fetch, so seeing the description change (rather than a single static message) is
+expected, not a sign the app is stuck. If creation fails, the progress bar stops and the
+description stays on the step where it failed, next to the error message.
 
 If fetching a submodule fails (for example, a network problem or a private submodule remote you
 aren't authenticated against), the worktree is not created — the branch and directory are rolled
@@ -146,11 +153,16 @@ Right-click a worktree in the sidebar to open its context menu:
   keep deriving from the branch). The custom name is remembered across app restarts. Clearing
   it is not needed — just rename again.
 - **Delete** — removes the worktree completely. A confirmation dialog first spells out exactly
-  what will be removed: the worktree directory under `.claude/worktrees/`, **all of its
-  sessions**, and its **git branch**. Confirming terminates any running sessions in that
-  worktree, then deletes the directory, sessions, and branch — this cannot be undone.
-  Cancelling removes nothing. (A worktree that is already missing/invalid can still be cleaned
-  up this way.)
+  what will be removed: the worktree directory under `.claude/worktrees/` and **all of its
+  sessions** — this part is unconditional. If the worktree has an associated git branch, the
+  dialog also offers an **"Also delete the branch"** checkbox, **checked by default** so
+  confirming without changing anything behaves exactly as before (the branch is deleted along
+  with everything else). Uncheck it to keep the branch — the directory and sessions are still
+  removed, but the branch remains an ordinary branch in the repository, usable later (for
+  example, to create a new worktree from it). Confirming terminates any running sessions in
+  that worktree first, then removes the directory, sessions, and (unless unchecked) the branch —
+  this cannot be undone. Cancelling removes nothing, including any change you made to the
+  checkbox. (A worktree that is already missing/invalid can still be cleaned up this way.)
 
 ## Starting, switching, and closing sessions
 

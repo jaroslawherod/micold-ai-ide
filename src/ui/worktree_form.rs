@@ -3,7 +3,7 @@
 //! Captures a Conventional-Commits type, an optional ticket, and a name, and shows the live
 //! derived directory/branch preview so the outcome is predictable before creating (FR-008a).
 
-use crate::ui::material::Modal;
+use crate::ui::material::{Modal, Select, StageProgress};
 use crate::ui::style;
 use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Element, Length};
@@ -26,20 +26,14 @@ pub fn modal<'a>(
 
     let heading = text("New worktree").size(type_scale::HEADLINE);
 
-    // Type selector: one chip per Conventional-Commits type (FR-005a).
-    let mut type_row = row![].spacing(spacing::XS);
-    for &t in ConventionalType::ALL {
-        let selected = form.type_ == Some(t);
-        let label = button(text(t.as_str()).size(type_scale::LABEL)).padding(spacing::XS);
-        // filled/outlined are distinct closure types, so branch on the whole button.
-        let chip = if selected {
-            label.style(style::filled(r))
-        } else {
-            label.style(style::outlined(r))
-        }
-        .on_press(Message::AddWorktreeTypeSelected(t));
-        type_row = type_row.push(chip);
-    }
+    // Type selector: a Material select list, not a row of buttons (feature 013, FR-001–FR-004).
+    let type_select = Select::new(
+        ConventionalType::ALL,
+        form.type_,
+        Message::AddWorktreeTypeSelected,
+        r,
+    )
+    .placeholder("Select a type…");
 
     let ticket = text_input("Ticket (optional, e.g. ABC-123)", &form.ticket)
         .on_input(Message::AddWorktreeTicketChanged)
@@ -55,7 +49,7 @@ pub fn modal<'a>(
     let mut fields = column![
         heading,
         text("Type").size(type_scale::LABEL).style(style::muted(r)),
-        type_row,
+        type_select,
         ticket,
         name,
         preview(form, r),
@@ -76,10 +70,12 @@ pub fn modal<'a>(
     }
 
     // In-progress state while the async create (and any submodule fetch) is running (feature
-    // 010, research R4) — reuses the existing text-based loading pattern (SelectorStatus::Loading
-    // → "Loading…"), not a new spinner component (Constitution VIII).
+    // 010, research R4; replaced feature 010's static "Creating worktree…" text with a
+    // continuously visible progress indicator + the current stage's plain-language description,
+    // feature 013 US3, FR-006/FR-007).
     if is_creating {
-        fields = fields.push(text("Creating worktree…").size(type_scale::LABEL));
+        let label = form.stage.map(|s| s.label()).unwrap_or("Starting…");
+        fields = fields.push(StageProgress::new(label, r));
     }
 
     // Progress log display (feature 010 follow-up) — show a scrollable area with executed commands

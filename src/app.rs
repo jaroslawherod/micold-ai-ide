@@ -18,7 +18,7 @@ use crate::project::{canonicalize_best_effort, Availability, FolderEntry, Rename
 use crate::selector::Selector;
 use crate::session::{Session, SessionId, SessionLocation, ShellInstanceId};
 use crate::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
-use crate::worktree::{Worktree, WorktreeStatus};
+use crate::worktree::{CreateProgressEvent, CreateStage, Worktree, WorktreeStatus};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -107,6 +107,9 @@ pub struct WorktreeForm {
     /// rather than "stuck" (feature 010 follow-up). Cleared when a new attempt starts; kept on
     /// failure so the user can see what happened.
     pub log: Vec<String>,
+    /// The most recently reported stage of the in-flight (or most recently failed) create
+    /// (feature 013). `None` before the first progress event arrives; reset alongside `log`.
+    pub stage: Option<CreateStage>,
 }
 
 impl WorktreeForm {
@@ -352,6 +355,9 @@ pub enum Message {
     WorktreeDeleteConfirmed,
     /// Dismiss the delete confirmation without removing anything (FR-021).
     WorktreeDeleteCancelled,
+    /// The delete confirmation's "also delete the branch" choice changed (feature 013,
+    /// FR-011/FR-012).
+    WorktreeDeleteKeepBranchToggled(bool),
     /// Begin renaming a worktree's displayed name; opens the rename dialog (FR-013), by `dir_name`.
     WorktreeRenameStarted(String),
     /// The worktree-rename dialog's text changed.
@@ -390,10 +396,11 @@ pub enum Message {
     /// The binary is about to run the async create (feature 010, research R4); marks the form
     /// `Creating` so it shows an in-progress state instead of appearing to hang.
     WorktreeCreateStarted,
-    /// A batch of progress/log lines from the in-flight create — the executed git commands
-    /// and their live output (feature 010 follow-up). Appended to the form's log; a no-op if
-    /// the form has since closed.
-    WorktreeCreateLogAppended(Vec<String>),
+    /// A batch of stage-tagged progress events from the in-flight create — the executed git
+    /// commands and their live output (feature 010 follow-up; stage-tagged as of feature 013).
+    /// Each event's line is appended to the form's log and its stage updates
+    /// [`WorktreeForm::stage`]; a no-op if the form has since closed.
+    WorktreeCreateLogAppended(Vec<CreateProgressEvent>),
     /// Tick while a create is in flight: the binary drains the lines the worker has produced
     /// so far and feeds them to [`Message::WorktreeCreateLogAppended`]. Without this the log
     /// only arrived in one batch at completion, so a multi-minute submodule fetch showed a
@@ -634,6 +641,10 @@ pub struct State {
     /// The worktree pending deletion (its `dir_name`), shown in the confirm dialog (feature
     /// 008, FR-018/FR-019). Present only while [`Overlay::ConfirmWorktreeDelete`] is shown.
     pub worktree_delete_target: Option<String>,
+    /// Whether the user has opted to also delete the branch when confirming a worktree delete
+    /// (feature 013). Defaults to `false` = delete (today's unconditional behavior), so an
+    /// unmodified confirm is unchanged. Reset to `false` on every `WorktreeDeleteRequested`.
+    pub worktree_delete_keep_branch: bool,
     /// The in-progress worktree rename, present only while [`Overlay::RenameWorktree`] is shown
     /// (feature 008, FR-013/FR-014).
     pub worktree_rename_draft: Option<WorktreeRenameDraft>,
@@ -839,6 +850,8 @@ impl State {
             Message::WorktreeDeleteRequested(dir) => {
                 self.worktree_menu_open = None;
                 self.worktree_delete_target = Some(dir);
+                // Never carries a choice over from a previously cancelled/confirmed dialog.
+                self.worktree_delete_keep_branch = false;
                 self.open_overlay(Overlay::ConfirmWorktreeDelete);
             }
             Message::WorktreeDeleteConfirmed => {
@@ -872,6 +885,9 @@ impl State {
             Message::WorktreeDeleteCancelled => {
                 self.worktree_delete_target = None;
                 self.overlay = Overlay::None;
+            }
+            Message::WorktreeDeleteKeepBranchToggled(keep) => {
+                self.worktree_delete_keep_branch = keep;
             }
             Message::WorktreeRenameStarted(dir) => {
                 let text = self.worktree_display_name(&dir);
@@ -988,11 +1004,15 @@ impl State {
                 if let Some(form) = &mut self.worktree_form {
                     form.status = WorktreeFormStatus::Creating;
                     form.log.clear();
+                    form.stage = None;
                 }
             }
-            Message::WorktreeCreateLogAppended(lines) => {
+            Message::WorktreeCreateLogAppended(events) => {
                 if let Some(form) = &mut self.worktree_form {
-                    form.log.extend(lines);
+                    if let Some(last) = events.last() {
+                        form.stage = Some(last.stage);
+                    }
+                    form.log.extend(events.into_iter().map(|e| e.line));
                 }
             }
             Message::WorktreeCreated(worktree) => {
