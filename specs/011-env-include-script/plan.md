@@ -209,3 +209,12 @@ Technical Context and research R2.)
 ## Complexity Tracking
 
 *No constitution violations — no entries.*
+
+**Design correction (BUG-001)**: R1's Unix sourcing wrapper (`bash --noprofile --norc -c ...`)
+sources non-interactively, so a script that itself gates on shell-interactivity — Debian/Ubuntu's
+stock `~/.bashrc`, the FR-004 default — returns before running its own exports. The wrapper must
+additionally satisfy that guard (e.g. an `-i` flag, or another mechanism that makes `$-` report
+`i`) while preserving R1/R2's EXIT-trap-based diagnostic capture, timeout, and process-group kill
+behavior unchanged (FR-019). See `bugs/BUG-001.md` and `research.md` R1.
+
+**Bugfix**: 2026-07-21 — BUG-001 Updated from bugfix patch.

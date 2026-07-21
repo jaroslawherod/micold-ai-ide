@@ -98,7 +98,9 @@ green.
   R6); attempt via the `out=$(source "$1" 2>&1); status=$?; printf '%s' "$out" >&2; env -0; exit
   $status` wrapper (research R1), spawned with `Command::spawn()` and polled via `try_wait()`
   bounded by `timeout` (research R2), `kill()`+`TimedOut` on expiry; depends on T007, T008; makes
-  T003 pass (contracts/env-include-resolution.md).
+  T003 pass (contracts/env-include-resolution.md). **Reopened for BUG-001, now re-closed by T031**:
+  the Unix invocation now also passes `-i` so the sourcing shell satisfies a script's own
+  interactive guard (e.g. Debian/Ubuntu's stock `~/.bashrc`) — see T030/T031 and `bugs/BUG-001.md`.
 - [X] T010 Implement pure `merge_with_term(vars: &[(String, String)]) -> Vec<(String, String)>` in
   `src/env_include.rs` (same file — sequential): appends the hardcoded `("TERM",
   "xterm-256color")` pair *last*, so it always wins on key collision regardless of whether `vars`
@@ -315,6 +317,56 @@ recoverable via the existing restart control. All `quickstart.md` scenarios pass
 
 ---
 
+## Phase 7: Bugfix BUG-001 — default `~/.bashrc`'s own interactive guard blocks its exports
+
+**Goal**: Sourcing the platform default script (`~/.bashrc` on Linux/macOS, FR-004) actually
+captures the exports/PATH changes below its own stock interactive-guard, so User Story 1 works
+out of the box on Debian/Ubuntu with no user setup (FR-019, SC-001).
+
+**Independent Test**: Point the configured path at a script shaped like Debian/Ubuntu's stock
+`~/.bashrc` (the standard `case $- in *i*) ;; *) return;; esac` guard followed by an `export`);
+resolve it; confirm the exported variable is present in the result.
+
+### Tests for BUG-001 (MANDATORY — Constitution Principle I) ⚠️
+
+> Written FIRST; confirmed to FAIL before implementation.
+
+- [X] T030 [BUG-001] Add failing real-subprocess test
+  `debian_default_bashrc_guard_blocks_export_from_reaching_session` to `tests/env_include_resolve.rs`
+  (`unix` module): writes a script containing the stock `case $- in *i*) ;; *) return;; esac`
+  guard followed by `export QUICKSTART_MARKER=hello`, calls `resolve()`, asserts
+  `EnvIncludeOutcome::Success` and that `QUICKSTART_MARKER=hello` is present in the returned
+  `Vec` (contracts/env-include-resolution.md, FR-019). Confirmed failing: `resolve()` currently
+  returns `Success` with an empty `Vec` (the guard silently swallows the export) — full suite
+  otherwise green (`bugs/BUG-001.md`).
+
+### Implementation for BUG-001
+
+- [X] T031 [BUG-001] Fix `attempt_env`'s Unix invocation in `src/env_include.rs` so the sourcing
+  shell satisfies a script's own interactive-guard check (e.g. add `-i` alongside the existing
+  `--noprofile --norc -c` arguments, or another mechanism that makes `$-` report `i`), while
+  preserving the existing EXIT-trap diagnostic capture (research R1), timeout/process-group-kill
+  behavior (research R2), and diffing (research R3) unchanged — depends on T009 (reopened above);
+  makes T030 pass. Re-run the full suite (`mise run test`) to confirm no existing
+  `env_include`/`shell_command` case regresses (an interactive shell can print extra banners/
+  prompts-related output that must not leak into the parsed `env -0` dump or the FR-013
+  diagnostic). Done: added `-i` alongside `--noprofile --norc -c` in `attempt_env` (Unix only);
+  `baseline_env` picks it up for free since it reuses `attempt_env` against `/dev/null`. T030 now
+  passes; full suite (`mise run test`, 54 binaries) stays green; `cargo clippy --no-default-features
+  --all-targets -- -D warnings` and `cargo clippy --features gui --all-targets -- -D warnings` and
+  `cargo fmt --check` all clean.
+
+**Checkpoint**: The default, completely unmodified `~/.bashrc` on Debian/Ubuntu resolves its real
+exports into both the AI CLI and regular-terminal processes with no user setup. **Met** — verified
+by T030's real-subprocess test.
+
+**Bugfix**: 2026-07-21 — BUG-001 Added Phase 7 (T030–T031); reopened T009. FR-019 added to
+spec.md; research.md R1 and contracts/env-include-resolution.md annotated with the interactive-
+guard requirement. See `bugs/BUG-001.md`. Resolved 2026-07-21: T031 landed the `-i` fix; T009
+re-closed; full suite + clippy + fmt all green.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -411,3 +463,8 @@ With multiple developers:
 - US2 and US3 share `refresh_env_include` (T020) — build US2's T020 before US3's T024, even though
   they're different priorities in different phases.
 - Commit after each task or logical group; verify tests fail before implementing, then pass after.
+- Phase 7 (BUG-001) depends only on Foundational's T009 already existing — it corrects T009's Unix
+  invocation directly; no dependency on US1/US2/US3's `main.rs` wiring, since none of that wiring
+  changes shape.
+
+**Bugfix**: 2026-07-21 — BUG-001 Updated from bugfix patch.
