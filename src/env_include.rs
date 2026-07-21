@@ -213,7 +213,16 @@ fn attempt_env(path: &Path, timeout: Duration) -> RunOutcome {
     // (SIGKILL is unblockable) — a `TimedOut` outcome's diagnostic may therefore be empty even if
     // the script had already printed something; guaranteed cleanup was chosen over best-effort
     // diagnostics for that one narrow case.
-    cmd.arg("--noprofile").arg("--norc").arg("-c").arg(
+    //
+    // `-i` (BUG-001): without it, `$-` never contains `i`, so a script that itself gates on
+    // shell-interactivity — Debian/Ubuntu's stock `~/.bashrc` (the FR-004 default) opens with
+    // exactly such a guard — returns before running any of its own exports. `-i` makes this a
+    // real interactive shell for `$-`'s purposes while `-c` still just runs the wrapper command
+    // and exits (no prompt is ever read), so the EXIT-trap/timeout/kill/diffing behavior above is
+    // unchanged; stray job-control warnings an interactive shell prints when there's no
+    // controlling tty (e.g. "no job control in this shell") land on stderr, never on the `env -0`
+    // stdout dump this wrapper parses.
+    cmd.arg("--noprofile").arg("--norc").arg("-i").arg("-c").arg(
         r#"diag_file=$(mktemp); trap 'status=$?; printf "%s" "$(cat "$diag_file" 2>/dev/null)" >&2; rm -f "$diag_file"; env -0; exit "$status"' EXIT; source "$1" >"$diag_file" 2>&1"#,
     );
     cmd.arg("--").arg(path);

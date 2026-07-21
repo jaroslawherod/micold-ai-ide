@@ -86,6 +86,45 @@ mod unix {
         assert_eq!(outcome, EnvIncludeOutcome::Success);
         assert!(vars.is_empty());
     }
+
+    /// BUG-001 (specs/011-env-include-script/bugs/BUG-001.md): reproduces the report that
+    /// exported variables from `.bashrc` never reach the AI CLI/regular-terminal processes.
+    ///
+    /// `attempt_env` sources the script via `bash --noprofile --norc -c '...'` — a
+    /// non-interactive shell (no `-i` flag). Debian/Ubuntu's stock `~/.bashrc` (the feature's own
+    /// FR-004 default path) opens with the standard non-interactive guard:
+    /// ```sh
+    /// case $- in
+    ///     *i*) ;;
+    ///       *) return;;
+    /// esac
+    /// ```
+    /// Because the sourcing shell is never interactive, `$-` never contains `i`, so this guard
+    /// `return`s before any of the exports that follow it ever run. On a fresh install pointed at
+    /// the default `~/.bashrc` (User Story 1 / SC-001's "no setup required" promise), this means
+    /// *nothing* below the guard is ever captured — the feature silently no-ops for the exact
+    /// out-of-the-box case it exists to solve.
+    ///
+    /// This test currently FAILS: `vars` comes back empty instead of containing
+    /// `QUICKSTART_MARKER=hello`.
+    #[test]
+    fn debian_default_bashrc_guard_blocks_export_from_reaching_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = write_script(
+            &dir,
+            ".bashrc",
+            "case $- in\n    *i*) ;;\n      *) return;;\nesac\nexport QUICKSTART_MARKER=hello\n",
+        );
+
+        let (vars, outcome) = resolve(&script, Duration::from_secs(5));
+
+        assert_eq!(outcome, EnvIncludeOutcome::Success);
+        assert!(
+            vars.contains(&("QUICKSTART_MARKER".to_string(), "hello".to_string())),
+            "expected QUICKSTART_MARKER to be captured from the default-shaped ~/.bashrc, but \
+             the non-interactive guard blocked it; captured vars: {vars:?}"
+        );
+    }
 }
 
 #[cfg(windows)]

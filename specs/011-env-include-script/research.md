@@ -56,6 +56,18 @@ explicitly requires actually sourcing it, since `PATH`-mutating loops and versio
 conditionals can't be statically evaluated). The original command-substitution approach (rejected
 per the implementation note above — it silently discards every exported variable).
 
+**Bugfix note (BUG-001)**: `bash --noprofile --norc -c '<wrapper>'` sources non-interactively —
+`$-` never contains `i`. Debian/Ubuntu's stock `~/.bashrc` (the FR-004 default path) opens with
+the standard `case $- in *i*) ;; *) return;; esac` guard, which `return`s at that point precisely
+*because* the sourcing shell isn't interactive — so every export below it in a completely
+unmodified, out-of-the-box rc file is silently never captured. This was missed because
+`tests/env_include_resolve.rs`'s scripts all export unconditionally, with no interactive guard, so
+none of them exercised this path. The fix (FR-019) must make the sourcing shell satisfy that
+guard — e.g. adding `-i` alongside the existing `--noprofile --norc -c` invocation — while
+preserving this section's EXIT-trap diagnostic capture, R2's timeout/kill bound, and R3's diffing
+unchanged; an interactive bash still accepts `-c` and still exits via the trap/`exit "$status"` as
+before, so no other part of the wrapper changes shape.
+
 ## R2 — Timeout enforcement: poll `try_wait`, kill the whole process group via `libc`
 
 **Decision** (revised during implementation — see "Implementation note" below): Spawn the attempt

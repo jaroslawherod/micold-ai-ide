@@ -30,7 +30,11 @@ fn resolve(path: &Path, timeout: Duration) -> (Vec<(String, String)>, EnvInclude
    (e.g. `bash` missing from `PATH`), degrade to `EnvIncludeOutcome::NonZeroExit` with a diagnostic
    naming the spawn failure, same as any other subprocess-level failure.
 3. **Attempt**: spawn the sourcing wrapper (research R1/R6) against `path`, polling for exit with
-   the `timeout` bound (research R2).
+   the `timeout` bound (research R2). On Linux/macOS, the wrapper's shell invocation MUST satisfy
+   any interactive-only guard the script itself checks (FR-019, research R1's BUG-001 note) — e.g.
+   Debian/Ubuntu's stock `~/.bashrc` returns immediately from a non-interactive shell — so the
+   default script path (FR-004) resolves its real exports, not just whatever precedes its own
+   interactive-guard check.
    - Exits within `timeout`, status `0`: parse its stdout env dump, `diff_env(baseline, attempt)`
      (research R3), return `(diff, EnvIncludeOutcome::Success)`.
    - Exits within `timeout`, non-zero status: return `(vec![], EnvIncludeOutcome::NonZeroExit {
@@ -66,3 +70,7 @@ fn resolve(path: &Path, timeout: Duration) -> (Vec<(String, String)>, EnvInclude
   - A script that sleeps longer than a short test timeout → `TimedOut`, and the call returns at
     (approximately) the configured timeout, not after the sleep completes.
   - An empty script → `Success`, empty `Vec`.
+  - *(BUG-001)* A script shaped like Debian/Ubuntu's stock `~/.bashrc` — opening with
+    `case $- in *i*) ;; *) return;; esac` followed by an `export` — → `Success`, the exported
+    variable present in the returned `Vec` (FR-019). See
+    `tests/env_include_resolve.rs::debian_default_bashrc_guard_blocks_export_from_reaching_session`.
