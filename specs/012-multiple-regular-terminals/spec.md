@@ -1,6 +1,6 @@
 # Feature Specification: Multiple Regular Terminal Instances per Session
 
-**Feature Branch**: `feat/allow-multiple-regular-terminals` (spec `011-multiple-regular-terminals`)
+**Feature Branch**: `feat/allow-multiple-regular-terminals` (spec `012-multiple-regular-terminals`)
 
 **Created**: 2026-07-20
 

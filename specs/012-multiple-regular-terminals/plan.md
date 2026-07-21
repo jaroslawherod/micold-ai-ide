@@ -1,8 +1,8 @@
 # Implementation Plan: Multiple Regular Terminal Instances per Session
 
-**Branch**: `011-multiple-regular-terminals` (feature branch `feat/allow-multiple-regular-terminals`) | **Date**: 2026-07-20 | **Spec**: [spec.md](./spec.md)
+**Branch**: `012-multiple-regular-terminals` (feature branch `feat/allow-multiple-regular-terminals`) | **Date**: 2026-07-20 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `specs/011-multiple-regular-terminals/spec.md`
+**Input**: Feature specification from `specs/012-multiple-regular-terminals/spec.md`
 
 ## Summary
 
@@ -131,7 +131,7 @@ the number of concurrently open sessions or AI CLI processes.
 ### Documentation (this feature)
 
 ```text
-specs/011-multiple-regular-terminals/
+specs/012-multiple-regular-terminals/
 ├── plan.md              # This file
 ├── research.md          # Phase 0 output
 ├── data-model.md         # Phase 1 output

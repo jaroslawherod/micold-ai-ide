@@ -1,6 +1,6 @@
 # Tasks: Multiple Regular Terminal Instances per Session
 
-**Input**: Design documents from `/specs/011-multiple-regular-terminals/`
+**Input**: Design documents from `/specs/012-multiple-regular-terminals/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/, quickstart.md (all present)
 

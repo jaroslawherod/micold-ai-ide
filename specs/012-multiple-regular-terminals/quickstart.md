@@ -1,6 +1,6 @@
 # Quickstart: Validating Multiple Regular Terminal Instances per Session
 
-Runnable validation for feature 011. Proves a session can run several independent Regular
+Runnable validation for feature 012. Proves a session can run several independent Regular
 Terminal instances at once, that switching/closing/restarting one never disturbs a sibling
 instance or the AI CLI process, and that the switcher control appears only when it's needed.
 Maps each step to Success Criteria (SC-00x).
