@@ -21,10 +21,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: rustfmt
         run: cargo fmt --all -- --check
-      - name: clippy (logic core)
-        run: cargo clippy --no-default-features --all-targets -- -D warnings
-      - name: clippy (gui)
-        run: cargo clippy --features gui --all-targets -- -D warnings
+      # FR-040: the render-free core must lint clean on its own (no iced/PTY in scope).
+      - name: clippy (render-free core)
+        run: cargo clippy -p micold-core --all-targets -- -D warnings
+      - name: clippy (workspace)
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
   # Constitution Principle VI: Linux, macOS, and Windows. `fail-fast: false` so one platform's
   # failure still reports the others — the point of the matrix is seeing *which* platforms differ.
@@ -46,12 +47,17 @@ jobs:
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libx11-dev \
             libxcursor-dev libxrandr-dev libxi-dev
-      # Principle I: the render-free logic core + all integration tests, no GUI.
-      - name: Test (logic core, no GUI)
-        run: cargo test --no-default-features --all-targets
-      # Ensure the full GUI binary compiles on every platform.
-      - name: Build (GUI)
-        run: cargo build --features gui
+      # Principle I: the render-free core compiles and passes with no iced/PTY (FR-040),
+      # verified on every platform.
+      - name: Test (render-free core, no GUI)
+        run: cargo test -p micold-core --all-targets
+      # Ensure the full workspace (client GUI binary + daemon) compiles on every platform.
+      - name: Build (workspace)
+        run: cargo build --workspace
+      # Run the client + daemon test suites where the iced system deps are present.
+      - name: Test (full workspace)
+        if: runner.os == 'Linux'
+        run: cargo test --workspace
 
   # Constitution Principle VII: documentation ships and is verified in CI.
   docs:

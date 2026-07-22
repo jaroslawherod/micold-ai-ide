@@ -1,105 +1,42 @@
-[package]
-name = "micold-ai-ide"
+[workspace]
+resolver = "2"
+members = ["crates/micold-core", "crates/micold-daemon", "crates/micold-client"]
+
+# Shared package metadata — the single source of truth for version/edition/MSRV across
+# all three crates (feature 010, plan Decision 3: workspace split enforces the render-free
+# boundary at compile time — `micold-core` cannot name iced or a PTY type).
+[workspace.package]
 version = "0.3.0"
 edition = "2021"
-description = "A local-first, AI-assisted desktop IDE."
 license = "Apache-2.0"
 repository = "https://github.com/Cumulocity-IoT/micold-ai-ide"
-rust-version = "1.80"
+# MSRV pinned to the latest stable toolchain (plan Decision 1). `std::fs::File::lock`
+# (stable since 1.89) replaces the former `fd-lock` dependency for the daemon singleton.
+rust-version = "1.97"
 
-# Pure, render-free core (state, update logic, metadata). No GUI dependency, so
-# `cargo test --no-default-features` exercises all logic without compiling iced.
-[lib]
-name = "micold_ai_ide"
-path = "src/lib.rs"
-
-# The GUI binary. Only built when the `gui` feature is enabled (the default).
-[[bin]]
-name = "micold-ai-ide"
-path = "src/main.rs"
-required-features = ["gui"]
-
-[features]
-default = ["gui"]
-# `gui` pulls in iced and enables the rendering layer in the binary. It also enables
-# OS dark/light detection (`dark-light`) and the embedded-terminal stack, all needed
-# only by the GUI binary (feature 005 — research R1/R3/R4).
-gui = ["dep:iced", "dep:dark-light", "dep:portable-pty", "dep:alacritty_terminal"]
-
-[dependencies]
-# iced is the only permitted GUI framework (Constitution Principle V). Optional so
-# the logic core and its tests compile without it.
-# The `tokio` feature provides the async runtime backing `iced::time::every` (OS theme poll)
-# and the PTY→UI streaming subscription (research R4). `canvas`/`advanced`/`lazy` back the
-# embedded terminal grid renderer (research R3).
-iced = { version = "0.13", optional = true, features = ["tokio", "canvas", "advanced", "lazy"] }
-# Cross-platform OS light/dark theme detection (XDG portal / registry / AppleInterfaceStyle).
-# GUI-only, so the render-free core still compiles under `cargo test --no-default-features`.
-dark-light = { version = "2.0", optional = true }
-# The embedded terminal is rendered directly (feature 006): a custom iced `advanced::Widget`
-# draws the `alacritty_terminal` grid and encodes keys, adapting `iced_term 0.6.0` (MIT) as a
-# reference. `iced_term` itself is NOT a dependency — its backend cannot set a per-session cwd,
-# which `claude` requires (spec 006 research R1).
-# Cross-platform PTY (openpty / ConPTY) for the `TerminalBackend` impl (research R1). GUI-only.
-portable-pty = { version = "0.9", optional = true }
-# GUI-free VT grid model consumed gui-side only; the pure core never depends on it, keeping
-# `cargo test --no-default-features` lean (research R2, analyze finding C1). GUI-only.
-alacritty_terminal = { version = "0.25", optional = true }
-# Local-first persistence of the known-projects list. These are core (non-GUI) deps,
-# NOT behind the `gui` feature, so `cargo test --no-default-features` compiles them.
+# Shared dependency versions. Crates opt in with `dep = { workspace = true }`, so a version
+# is declared in exactly one place.
+[workspace.dependencies]
+# --- render-free core deps (never iced / never PTY) ---
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
-# Cross-platform per-user data directory (XDG / Application Support / AppData).
-directories = "6.0.0"
-# Pre-generate the `claude --session-id` UUID so the app owns the session id up front
-# (research R6). Core (non-GUI) dep — needed by the pure session model + persistence.
 uuid = { version = "1.20.0", features = ["v4", "serde"] }
-
-[target.'cfg(unix)'.dependencies]
-# Direct `kill(2)` syscall to send SIGKILL to a whole process group when an environment-include
-# script (feature 011) times out — a sourced rc file may background a process (an agent daemon, a
-# version-manager helper) that would otherwise outlive the killed shell and keep its piped
-# stdout/stderr open forever. Already present transitively (`portable-pty` et al.); pinned here
-# directly because shelling out to the `kill(1)` *binary* instead proved unreliable in sandboxed
-# environments during development (it reported success without actually signalling the group),
-# whereas the direct syscall is unambiguous. Unix-only target dependency — Windows has no
-# process-group `kill(2)` equivalent to call.
+directories = "6.0.0"
+# Wire encoding for the client<->daemon protocol (plan W1): compact grid frames.
+postcard = { version = "1.1", features = ["use-std"] }
+# `kill(2)`/`process_group` for the environment-include script timeout (feature 011).
 libc = "0.2.186"
-
-# Debian packaging (`cargo deb`). Produces micold-ai-ide_<version>_<arch>.deb; the release
-# workflow builds it natively on amd64 and arm64 runners. Installs a full freedesktop desktop
-# entry — so the app appears in the system application launcher (with its icon, `Terminal=false`,
-# Development/IDE category), not just as a CLI binary — plus hicolor icons at every standard size
-# and a scalable SVG. Runtime shared-lib deps are auto-detected (`$auto` / dpkg-shlibdeps);
-# desktop-file-utils + hicolor-icon-theme provide the dpkg triggers that refresh the desktop
-# database and icon cache on install so the launcher entry shows up immediately.
-[package.metadata.deb]
-maintainer = "Jaroslaw Herod <jaroslaw.herod@cumulocity.com>"
-copyright = "2026, Micold AI IDE contributors"
-extended-description = "A local-first, AI-assisted desktop IDE for managing Claude Code worktrees and sessions with an embedded terminal."
-section = "devel"
-priority = "optional"
-depends = "$auto, desktop-file-utils, hicolor-icon-theme"
-assets = [
-    ["target/release/micold-ai-ide", "usr/bin/", "755"],
-    ["packaging/micold-ai-ide.desktop", "usr/share/applications/micold-ai-ide.desktop", "644"],
-    ["assets/icon/png/icon-16.png", "usr/share/icons/hicolor/16x16/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-32.png", "usr/share/icons/hicolor/32x32/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-48.png", "usr/share/icons/hicolor/48x48/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-64.png", "usr/share/icons/hicolor/64x64/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-128.png", "usr/share/icons/hicolor/128x128/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-256.png", "usr/share/icons/hicolor/256x256/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-512.png", "usr/share/icons/hicolor/512x512/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/icon.svg", "usr/share/icons/hicolor/scalable/apps/micold-ai-ide.svg", "644"],
-    ["README.md", "usr/share/doc/micold-ai-ide/README.md", "644"],
-]
-
-[lints.clippy]
-all = "warn"
-
-[dev-dependencies]
+# --- client (iced) deps ---
+iced = { version = "0.13", features = ["tokio", "canvas", "advanced", "lazy"] }
+dark-light = "2.0"
+# --- terminal stack (client today; migrates into micold-daemon at T030) ---
+portable-pty = "0.9"
+alacritty_terminal = "0.25"
+# --- shared dev deps ---
 tempfile = "3.27.0"
-# Pure-Rust font parser used only by tests to verify the shipped icon font contains every
-# `Icon` codepoint (no "tofu") and advertises the pinned family name. Already in the tree via
-# iced's text stack; kept GUI-free so the icon asset tests run under `--no-default-features`.
 ttf-parser = "0.21"
+# Internal crate, referenced by path so client & daemon share the one core.
+micold-core = { path = "crates/micold-core" }
+
+[workspace.lints.clippy]
+all = "warn"

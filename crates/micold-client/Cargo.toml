@@ -1,0 +1,62 @@
+[package]
+name = "micold-client"
+description = "Thin iced client for Micold AI IDE (feature 010): renders daemon-hosted sessions."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# The iced library layer (app state/update, keymap, icons, tokens, motion, ui widgets),
+# exposed so integration tests can drive it (`micold_client::app`, `micold_client::ui`).
+[lib]
+name = "micold_client"
+path = "src/lib.rs"
+
+# The GUI binary. Name preserved as `micold-ai-ide` (installed launcher entry, deb package).
+[[bin]]
+name = "micold-ai-ide"
+path = "src/main.rs"
+
+[dependencies]
+micold-core = { workspace = true }
+iced = { workspace = true }
+dark-light = { workspace = true }
+# Terminal stack lives here until T030 migrates PTY/Term ownership into micold-daemon.
+portable-pty = { workspace = true }
+alacritty_terminal = { workspace = true }
+uuid = { workspace = true }
+directories = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+ttf-parser = { workspace = true }
+
+[lints]
+workspace = true
+
+# Debian packaging (`cargo deb -p micold-client`). Asset source paths are relative to the
+# workspace root; the release workflow invokes cargo-deb from there. (Packaging verification
+# tracked separately — not part of the Phase 1 workspace-split checkpoint.)
+[package.metadata.deb]
+maintainer = "Jaroslaw Herod <jaroslaw.herod@cumulocity.com>"
+copyright = "2026, Micold AI IDE contributors"
+extended-description = "A local-first, AI-assisted desktop IDE for managing Claude Code worktrees and sessions with an embedded terminal."
+section = "devel"
+priority = "optional"
+depends = "$auto, desktop-file-utils, hicolor-icon-theme"
+assets = [
+    ["target/release/micold-ai-ide", "usr/bin/", "755"],
+    ["packaging/micold-ai-ide.desktop", "usr/share/applications/micold-ai-ide.desktop", "644"],
+    ["assets/icon/png/icon-16.png", "usr/share/icons/hicolor/16x16/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-32.png", "usr/share/icons/hicolor/32x32/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-48.png", "usr/share/icons/hicolor/48x48/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-64.png", "usr/share/icons/hicolor/64x64/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-128.png", "usr/share/icons/hicolor/128x128/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-256.png", "usr/share/icons/hicolor/256x256/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/png/icon-512.png", "usr/share/icons/hicolor/512x512/apps/micold-ai-ide.png", "644"],
+    ["assets/icon/icon.svg", "usr/share/icons/hicolor/scalable/apps/micold-ai-ide.svg", "644"],
+    ["README.md", "usr/share/doc/micold-ai-ide/README.md", "644"],
+]

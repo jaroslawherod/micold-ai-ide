@@ -1,0 +1,21 @@
+[package]
+name = "micold-daemon"
+description = "User-space session host for Micold AI IDE (feature 010): owns PTY/VT sessions that outlive the UI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "micold-daemon"
+path = "src/main.rs"
+
+# NOTE: the PTY/VT stack (portable-pty, alacritty_terminal 0.26 with the vendored stable-
+# LineId patch — plan Decision 2, tasks T005/T006) lands here when T030 migrates Term
+# ownership out of micold-client. The daemon is a skeleton at the Phase 1 checkpoint.
+[dependencies]
+micold-core = { workspace = true }
+
+[lints]
+workspace = true

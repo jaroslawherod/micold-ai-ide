@@ -1,0 +1,32 @@
+[package]
+name = "micold-core"
+description = "Render-free shared domain model for Micold AI IDE (state, persistence, session/worktree logic, wire protocol)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "micold_core"
+path = "src/lib.rs"
+
+# FR-040 enforcement: this crate declares ONLY render-free dependencies. It has no line
+# for `iced`, `dark-light`, `portable-pty`, or `alacritty_terminal` — so a render or PTY
+# type cannot be named here without a compile error, not merely a convention.
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+directories = { workspace = true }
+postcard = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+# `kill(2)`/`process_group` for the environment-include script timeout (feature 011, `env_include`).
+libc = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
