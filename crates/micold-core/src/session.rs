@@ -7,13 +7,14 @@
 //! `claude`-provided title are persisted so it restores across restarts (FR-020). Contract:
 //! `contracts/terminal-backend-trait.md`.
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 /// Stable session identity — the app-generated UUID passed to `claude --session-id` and used
 /// as the `--resume` handle (research R6).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct SessionId(pub Uuid);
 
 impl SessionId {
@@ -41,7 +42,7 @@ impl fmt::Display for SessionId {
 }
 
 /// The sidebar label for a session — extracted from `claude`, never user-entered (FR-011a).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SessionLabel {
     /// No title from `claude` yet; show a neutral placeholder.
     Pending,

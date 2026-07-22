@@ -58,16 +58,24 @@ re-architecture's spine.
 
 ### Protocol types (micold-core) — contracts/protocol.md, messages.md
 
-- [ ] T008 [P] Define the framing envelope (length prefix, encoding tag, kind byte) in `crates/micold-core/src/protocol/envelope.rs` per protocol.md §3.
-- [ ] T009 [P] Define `ClientMsg` / `DaemonMsg` enums and all message structs in `crates/micold-core/src/protocol/messages.rs` per messages.md (Hello with `schema_hash`, Attach/Detach, session commands, mutating requests, Welcome/Refused/Displaced, operation results).
-- [ ] T010 [P] Define wire grid types (`GridFrame`, `WireLine`, `StyleRun`, `WireStyle`, `WireColor`, `WireCursor`, `CellExtras`) in `crates/micold-core/src/protocol/grid.rs` per messages.md, preserving the RLE + per-frame palette representation rules.
-- [ ] T011 Define `PROTOCOL_VERSION: u32` and add `build.rs` to `crates/micold-core/` producing `const SCHEMA_HASH: [u8; 32]` by hashing the canonical text of `protocol/{messages,grid,envelope}.rs` (Decision 4); expose both from `protocol/version.rs`.
+- [X] T008 [P] Define the framing envelope (length prefix, encoding tag, kind byte) in `crates/micold-core/src/protocol/envelope.rs` per protocol.md §3. **Done**: `EnvelopeHeader` (`encoding`/`kind`/reserved) with `to_bytes`/`parse`; `Encoding` (Json/Postcard/PostcardLz4), `Kind` (Control/Grid); `MAX_FRAME_LENGTH = 16 MiB` and `HEADER_LEN = 4`; a non-zero reserved field and unknown tags are rejected as specific `EnvelopeError`s, never silent defaults.
+- [X] T009 [P] Define `ClientMsg` / `DaemonMsg` enums and all message structs in `crates/micold-core/src/protocol/messages.rs` per messages.md (Hello with `schema_hash`, Attach/Detach, session commands, mutating requests, Welcome/Refused/Displaced, operation results). **Done**: full surface incl. `SessionSummary`, `CatalogSnapshot`/`ProjectSnapshot`/`WorktreeSnapshot`, `DaemonSettings`, `RefusalReason`, `OperationResult`, `ErrorKind`, `LogSink`/`LogEntry`, `ExitStatus`, `ActivitySignal`. Wire lifecycle carried by a dedicated `WireLifecycle` (adds `InterruptedResumable` + `Failed{reason,attempts}` the in-process `SessionLifecycle` lacks — domain↔wire mapping deferred to T073). `SessionId`/`SessionLabel` gained `Serialize`/`Deserialize` (additive).
+- [X] T010 [P] Define wire grid types (`GridFrame`, `WireLine`, `StyleRun`, `WireStyle`, `WireColor`, `WireCursor`, `CellExtras`) in `crates/micold-core/src/protocol/grid.rs` per messages.md, preserving the RLE + per-frame palette representation rules. **Done**, incl. `LineId(i64)` and `WireCursorShape`. **Correctness note**: `skip_serializing_if` is deliberately omitted — the same type serializes under both JSON and `postcard` (non-self-describing), so a skipped field would desync the decoder and break the byte-identical round-trip T012 asserts. Structural sparseness (empty `Vec` = 1 length byte, `None` = 1 tag byte) delivers the size win instead.
+- [X] T011 Define `PROTOCOL_VERSION: u32` and add `build.rs` to `crates/micold-core/` producing `const SCHEMA_HASH: [u8; 32]` by hashing the canonical text of `protocol/{messages,grid,envelope}.rs` (Decision 4); expose both from `protocol/version.rs`. **Done**: `build.rs` `include!`s `protocol/hashing.rs` (dependency-free SHA-256 + canonicalisation) so the generator, the crate, and the guard test share **one** hash implementation — no build-deps, no drift. `version.rs` `include!`s the generated array; `cargo:rerun-if-changed` tracks all four source files.
 
 ### Protocol tests FIRST (Principle I)
 
-- [ ] T012 [P] Test in `crates/micold-core/tests/protocol_roundtrip.rs`: every `ClientMsg`/`DaemonMsg` round-trips under JSON and every grid type round-trips under `postcard`; a `GridFrame` survives encode→decode byte-identical (wide-char spacer + zerowidth preserved).
-- [ ] T013 [P] Test in `crates/micold-core/tests/schema_hash.rs`: editing a message struct changes `SCHEMA_HASH` (guards the guard); a version-only bump also changes the handshake tuple.
-- [ ] T014 [P] Test in `crates/micold-core/tests/handshake.rs`: version mismatch OR schema-hash mismatch both refuse with both sides' version + hash named (FR-021/022).
+- [X] T012 [P] Test in `crates/micold-core/tests/protocol_roundtrip.rs`: every `ClientMsg`/`DaemonMsg` round-trips under JSON and every grid type round-trips under `postcard`; a `GridFrame` survives encode→decode byte-identical (wide-char spacer + zerowidth preserved). **Done** (6 tests, all 25 `ClientMsg` + 17 `DaemonMsg` variants + envelope header exercised).
+- [X] T013 [P] Test in `crates/micold-core/tests/schema_hash.rs`: editing a message struct changes `SCHEMA_HASH` (guards the guard); a version-only bump also changes the handshake tuple. **Done** (6 tests): baked hash matches a recompute over the real source; a struct edit changes it; a comment-only edit does not; a version bump changes the `(version, hash)` tuple.
+- [X] T014 [P] Test in `crates/micold-core/tests/handshake.rs`: version mismatch OR schema-hash mismatch both refuse with both sides' version + hash named (FR-021/022). **Done** (4 tests) via `protocol::handshake::evaluate`.
+
+**Sub-checkpoint (protocol types)**: ✅ T008–T014 complete. The wire surface, framing envelope,
+schema-hash guard, and strict handshake are defined in `micold-core` and covered by 16 tests
+(workspace total 294 → 310, zero regressions; clippy + fmt clean). The single-implementation schema
+hash means two builds that disagree about the wire necessarily refuse each other. **Remaining in
+Phase 2: T015–T026b** (transport, endpoint, single-instance, daemon skeleton, catalog, lifecycle,
+client connection, auto-spawn) — these introduce the `interprocess`/`tokio` async runtime and require
+real cross-process integration tests, so they land as a subsequent unit of work.
 
 ### Transport + framing (micold-daemon, micold-client) — plan W1
 

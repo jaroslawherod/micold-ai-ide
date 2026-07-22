@@ -17,6 +17,7 @@ pub mod git;
 pub mod metadata;
 pub mod naming;
 pub mod project;
+pub mod protocol;
 pub mod provider;
 pub mod selector;
 pub mod session;
