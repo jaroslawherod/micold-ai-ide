@@ -7,15 +7,35 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lib]
+name = "micold_daemon"
+path = "src/lib.rs"
+
 [[bin]]
 name = "micold-daemon"
 path = "src/main.rs"
 
 # NOTE: the PTY/VT stack (portable-pty, alacritty_terminal 0.26 with the vendored stable-
 # LineId patch — plan Decision 2, tasks T005/T006) lands here when T030 migrates Term
-# ownership out of micold-client. The daemon is a skeleton at the Phase 1 checkpoint.
+# ownership out of micold-client.
 [dependencies]
 micold-core = { workspace = true }
+# Transport + runtime (plan W1, tasks T015-T020).
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+interprocess = { workspace = true }
+bytes = { workspace = true }
+listenfd = { workspace = true }
+serde_json = { workspace = true }
+futures-util = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+# Ownership/mode verification for the `/tmp` endpoint fallback (protocol.md §1, FR-030).
+libc = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+uuid = { workspace = true }
 
 [lints]
 workspace = true

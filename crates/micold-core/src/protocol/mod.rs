@@ -12,6 +12,7 @@
 //! - [`handshake`] — strict exact-match handshake evaluation.
 //! - [`hashing`] — the dependency-free hash shared by `build.rs` and the guard test.
 
+pub mod codec;
 pub mod envelope;
 pub mod grid;
 pub mod handshake;

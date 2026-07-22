@@ -70,24 +70,31 @@ re-architecture's spine.
 - [X] T014 [P] Test in `crates/micold-core/tests/handshake.rs`: version mismatch OR schema-hash mismatch both refuse with both sides' version + hash named (FR-021/022). **Done** (4 tests) via `protocol::handshake::evaluate`.
 
 **Sub-checkpoint (protocol types)**: ✅ T008–T014 complete. The wire surface, framing envelope,
-schema-hash guard, and strict handshake are defined in `micold-core` and covered by 16 tests
-(workspace total 294 → 310, zero regressions; clippy + fmt clean). The single-implementation schema
-hash means two builds that disagree about the wire necessarily refuse each other. **Remaining in
-Phase 2: T015–T026b** (transport, endpoint, single-instance, daemon skeleton, catalog, lifecycle,
-client connection, auto-spawn) — these introduce the `interprocess`/`tokio` async runtime and require
-real cross-process integration tests, so they land as a subsequent unit of work.
+schema-hash guard, and strict handshake are defined in `micold-core` and covered by 16 tests. The
+single-implementation schema hash means two builds that disagree about the wire necessarily refuse
+each other.
+
+**Sub-checkpoint (transport + single-instance)**: ✅ T015–T020 complete. The shared framing codec
+(`micold-core`), per-OS endpoint policy + single-instance startup (connect → lock → **re-check** →
+bind → hold-for-life) + the tokio accept loop with the strict handshake (`micold-daemon`) are in and
+covered by 11 more tests (workspace total 294 → 321, zero regressions; clippy + fmt clean; core still
+iced/PTY-free). A client can now open a connection and complete the version+schema handshake against a
+real daemon. **Two scoped deferrals**, both recorded on their tasks: the Windows named-pipe DACL →
+T083/W5 (needs the Windows CI gate to validate), and systemd fd adoption is Linux-only + opportunistic
+by design. **Remaining in Phase 2: T021–T026b** (Catalog state ownership, attach/detach routing +
+catalog push, lifecycle rule, logging, client connection layer, client auto-spawn).
 
 ### Transport + framing (micold-daemon, micold-client) — plan W1
 
-- [ ] T015 Implement the `interprocess` 2.4.2 (tokio) transport with `LengthDelimitedCodec` + explicit `max_frame_length` and the hybrid JSON-control / `postcard`-grid encoder honouring `MICOLD_WIRE=json`, shared via `crates/micold-core/src/protocol/codec.rs`.
-- [ ] T016 Implement per-OS endpoint policy with the macOS `sun_path` length assertion (FR-029a → `$HOME/.micold/run/d.sock`), `/tmp` fallback ownership verification, and Windows named-pipe DACL in `crates/micold-daemon/src/endpoint.rs`.
-- [ ] T017 Implement the single-instance sequence — connect-test → `File::lock` → **RE-CHECK connect** → unlink → bind → hold lock for process lifetime (R1.4) — in `crates/micold-daemon/src/singleton.rs`.
-- [ ] T018 [P] Test in `crates/micold-daemon/tests/daemon_singleton.rs`: two simultaneous starters converge on one daemon; a stale socket is reclaimed; a wrong-owner parent dir causes a loud bail, not a silent bind (Edge: stale endpoint, startup race).
-- [ ] T019 [P] Test in `crates/micold-daemon/tests/framing.rs`: a frame exceeding the cap is rejected loudly; JSON and postcard frames interleave on one stream in total order (messages.md §1).
+- [X] T015 Implement the `interprocess` 2.4.2 (tokio) transport with `LengthDelimitedCodec` + explicit `max_frame_length` and the hybrid JSON-control / `postcard`-grid encoder honouring `MICOLD_WIRE=json`, shared via `crates/micold-core/src/protocol/codec.rs`. **Done**: role-parameterised `WireCodec<In, Out>` (aliases `DaemonCodec` reads `ClientMsg`/writes `DaemonMsg`, `ClientCodec` the mirror) implementing `tokio_util::codec::{Encoder, Decoder}` over a `LengthDelimitedCodec` (u32 LE, 16 MiB cap). Control is always JSON; grid is postcard unless `MICOLD_WIRE=json`. `CodecError` variants are all specific (Io/Envelope/ControlNotJson/Json/Postcard). Core gained `tokio-util` + `bytes` (still no iced/PTY — FR-040 verified).
+- [X] T016 Implement per-OS endpoint policy with the macOS `sun_path` length assertion (FR-029a → `$HOME/.micold/run/d.sock`), `/tmp` fallback ownership verification, and Windows named-pipe DACL in `crates/micold-daemon/src/endpoint.rs`. **Done for Unix** (Linux XDG w/ sticky bit + `/tmp/micold-<uid>` fallback verified via `symlink_metadata` + `uid==geteuid` + mode `0o700`, bailing loudly; macOS `$HOME/.micold/run/d.sock` with the 103-byte `sun_path` assertion). **Windows DACL deferred to T083/W5**: `resolve()` returns `Unsupported` with a clear message — the protected-DACL construction needs `windows-sys` `LookupAccountName` and can only be validated on the Windows CI gate. Recorded as a known limitation.
+- [X] T017 Implement the single-instance sequence — connect-test → `File::lock` → **RE-CHECK connect** → unlink → bind → hold lock for process lifetime (R1.4) — in `crates/micold-daemon/src/singleton.rs`. **Done** exactly per protocol.md §2: `std::fs::File::try_lock` (→ `TryLockError`), the mandatory re-check, `S_ISSOCK`-guarded unlink, and the lock held in `BoundListener` for the daemon's lifetime (`Drop` unlinks on clean shutdown). Windows uses the atomic `create_tokio` create-or-fail path.
+- [X] T018 [P] Test in `crates/micold-daemon/tests/daemon_singleton.rs`: two simultaneous starters converge on one daemon; a stale socket is reclaimed; a wrong-owner parent dir causes a loud bail, not a silent bind (Edge: stale endpoint, startup race). **Done** (3 tests; the wrong-owner bail is covered by the `endpoint::verify_owned_0700` unit test).
+- [X] T019 [P] Test in `crates/micold-daemon/tests/framing.rs`: a frame exceeding the cap is rejected loudly; JSON and postcard frames interleave on one stream in total order (messages.md §1). **Done** (4 tests; over-cap rejected on both encode and decode; `MICOLD_WIRE=json` grid path also covered).
 
 ### Daemon skeleton, state ownership, lifecycle (micold-daemon) — plan W2
 
-- [ ] T020 Implement daemon startup/bind/systemd-fd adoption (`listenfd`) and the tokio accept loop in `crates/micold-daemon/src/main.rs`.
+- [X] T020 Implement daemon startup/bind/systemd-fd adoption (`listenfd`) and the tokio accept loop in `crates/micold-daemon/src/main.rs`. **Done**: daemon is now a lib+bin; `server::run` resolves the endpoint, runs `singleton::acquire` (or exits if a daemon already owns it), and serves each accepted connection via a stream-generic `serve_connection` that speaks the strict handshake (`Hello` → `Welcome`/`Refused`) and answers `Ping`/`Goodbye`. Linux systemd socket activation is adopted opportunistically (`listenfd`, `set_nonblocking(true)`), never required. End-to-end handshake covered by `tests/handshake_flow.rs` (2 tests). Catalog/attach/streaming layer on in T021–T022.
 - [ ] T021 Implement the Catalog as the single writer of durable state (projects, worktrees, sessions, settings), adopting existing `projects.json`/`settings.json` in place (FR-008, FR-012) in `crates/micold-daemon/src/catalog.rs`. (External-modification detection is out of scope — see spec Out of Scope.)
 - [ ] T022 Implement `Attach`/`Detach`/`SetViewedSession` routing and `CatalogChanged`/`SettingsChanged` push projection to all connected clients (FR-011) in `crates/micold-daemon/src/main.rs`.
 - [ ] T023 Implement the "never exit while a session is alive" lifecycle rule and the zero-sessions-zero-clients permitted-exit (FR-002) in `crates/micold-daemon/src/lifecycle.rs`.

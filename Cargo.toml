@@ -24,8 +24,24 @@ uuid = { version = "1.20.0", features = ["v4", "serde"] }
 directories = "6.0.0"
 # Wire encoding for the client<->daemon protocol (plan W1): compact grid frames.
 postcard = { version = "1.1", features = ["use-std"] }
-# `kill(2)`/`process_group` for the environment-include script timeout (feature 011).
+# `kill(2)`/`process_group` for the environment-include script timeout (feature 011) and
+# `geteuid`/`setsid` for the daemon endpoint + detached spawn — one pin for both.
 libc = "0.2.186"
+# --- transport / async (daemon; the client already has tokio via iced) — plan W1 ---
+# The shared framing codec lives in micold-core; the runtime + IPC live in the daemon/client.
+tokio = { version = "1.53", features = [
+    "rt-multi-thread",
+    "net",
+    "io-util",
+    "macros",
+    "sync",
+    "time",
+] }
+tokio-util = { version = "0.7.18", features = ["codec"] }
+interprocess = { version = "2.4.2", features = ["tokio"] }
+bytes = "1"
+listenfd = "1.0.2"
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 # --- client (iced) deps ---
 iced = { version = "0.13", features = ["tokio", "canvas", "advanced", "lazy"] }
 dark-light = "2.0"

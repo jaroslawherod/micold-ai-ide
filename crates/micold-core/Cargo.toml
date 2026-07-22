@@ -20,6 +20,11 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 directories = { workspace = true }
 postcard = { workspace = true }
+# Shared client<->daemon framing codec (protocol::codec). `tokio-util`'s `LengthDelimitedCodec`
+# plus `bytes` — NOT iced and NOT a PTY crate, so FR-040 is intact. Both binaries reuse this one
+# codec so framing can never drift between them.
+tokio-util = { workspace = true }
+bytes = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 # `kill(2)`/`process_group` for the environment-include script timeout (feature 011, `env_include`).
@@ -27,6 +32,8 @@ libc = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+# Round-trip the codec over an in-memory duplex stream in unit tests.
+tokio = { workspace = true }
 
 [lints]
 workspace = true
