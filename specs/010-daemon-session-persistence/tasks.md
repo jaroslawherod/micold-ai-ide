@@ -81,8 +81,16 @@ covered by 11 more tests (workspace total 294 → 321, zero regressions; clippy 
 iced/PTY-free). A client can now open a connection and complete the version+schema handshake against a
 real daemon. **Two scoped deferrals**, both recorded on their tasks: the Windows named-pipe DACL →
 T083/W5 (needs the Windows CI gate to validate), and systemd fd adoption is Linux-only + opportunistic
-by design. **Remaining in Phase 2: T021–T026b** (Catalog state ownership, attach/detach routing +
-catalog push, lifecycle rule, logging, client connection layer, client auto-spawn).
+by design.
+
+**Sub-checkpoint (state ownership + routing)**: ✅ T021–T024 complete. The daemon now owns the durable
+catalog as its single writer (adopted in place — the on-disk shape is unchanged), routes
+attach/detach/viewed-session with one-attachment-per-project + forced takeover, pushes
+`SettingsChanged`/`CatalogChanged` to every connected client, and honours the never-exit-while-a-session-
+lives rule. 12 more tests (workspace total 321 → 333, zero regressions; clippy + fmt clean; core still
+iced/PTY-free). **Remaining in Phase 2: T025** (tracing/logging), **T026** (client connection layer),
+**T026a/T026b** (client auto-spawn + its test) — after which a client auto-spawns a daemon, handshakes,
+and sees live catalog state, and the user stories can begin.
 
 ### Transport + framing (micold-daemon, micold-client) — plan W1
 
@@ -95,10 +103,10 @@ catalog push, lifecycle rule, logging, client connection layer, client auto-spaw
 ### Daemon skeleton, state ownership, lifecycle (micold-daemon) — plan W2
 
 - [X] T020 Implement daemon startup/bind/systemd-fd adoption (`listenfd`) and the tokio accept loop in `crates/micold-daemon/src/main.rs`. **Done**: daemon is now a lib+bin; `server::run` resolves the endpoint, runs `singleton::acquire` (or exits if a daemon already owns it), and serves each accepted connection via a stream-generic `serve_connection` that speaks the strict handshake (`Hello` → `Welcome`/`Refused`) and answers `Ping`/`Goodbye`. Linux systemd socket activation is adopted opportunistically (`listenfd`, `set_nonblocking(true)`), never required. End-to-end handshake covered by `tests/handshake_flow.rs` (2 tests). Catalog/attach/streaming layer on in T021–T022.
-- [ ] T021 Implement the Catalog as the single writer of durable state (projects, worktrees, sessions, settings), adopting existing `projects.json`/`settings.json` in place (FR-008, FR-012) in `crates/micold-daemon/src/catalog.rs`. (External-modification detection is out of scope — see spec Out of Scope.)
-- [ ] T022 Implement `Attach`/`Detach`/`SetViewedSession` routing and `CatalogChanged`/`SettingsChanged` push projection to all connected clients (FR-011) in `crates/micold-daemon/src/main.rs`.
-- [ ] T023 Implement the "never exit while a session is alive" lifecycle rule and the zero-sessions-zero-clients permitted-exit (FR-002) in `crates/micold-daemon/src/lifecycle.rs`.
-- [ ] T024 [P] Test in `crates/micold-daemon/tests/daemon_lifecycle.rs`: daemon stays up with one live session and no clients; may exit at zero/zero; a catalog mutation reaches a second connected client without user action (FR-002, FR-011).
+- [X] T021 Implement the Catalog as the single writer of durable state (projects, worktrees, sessions, settings), adopting existing `projects.json`/`settings.json` in place (FR-008, FR-012) in `crates/micold-daemon/src/catalog.rs`. (External-modification detection is out of scope — see spec Out of Scope.) **Done**: wraps the existing `micold-core` stores so the on-disk shape is unchanged — only the writer changes. Provides `snapshot()` → `CatalogSnapshot`, `sessions_for()`, `settings_wire()`, clamped `set_scrollback()`, atomic `persist()`, and surfaces `LoadStatus` (C4 `Recovered` is now reported rather than swallowed). Worktree entries in the snapshot are derived from the durable knowledge (display-name overrides + session bindings); live git branch/status arrives with the worktree RPCs (T053).
+- [X] T022 Implement `Attach`/`Detach`/`SetViewedSession` routing and `CatalogChanged`/`SettingsChanged` push projection to all connected clients (FR-011) in `crates/micold-daemon/src/main.rs`. **Done** in `state.rs` + `server.rs` (the daemon is a lib+bin, so the routing lives in the library where it is testable). `DaemonState` holds the catalog, a client registry, and per-project attachments; each connection gets a writer task draining an unbounded channel, so a push from *another* connection reaches this one. Attach is exclusive with a `ProjectBusy` refusal naming the holder, `force` displaces (the displaced client is notified, never terminated), and disconnect releases every attachment the client held (T2). `broadcast`/`broadcast_catalog`/`set_scrollback` implement the push projection. The state mutex is never held across an `.await`.
+- [X] T023 Implement the "never exit while a session is alive" lifecycle rule and the zero-sessions-zero-clients permitted-exit (FR-002) in `crates/micold-daemon/src/lifecycle.rs`. **Done**: pure `may_exit(live_sessions, connected_clients)` predicate plus an atomic `Lifecycle` counter tracker wired into client connect/disconnect. Session counters are driven by the supervisor at T031.
+- [X] T024 [P] Test in `crates/micold-daemon/tests/daemon_lifecycle.rs`: daemon stays up with one live session and no clients; may exit at zero/zero; a catalog mutation reaches a second connected client without user action (FR-002, FR-011). **Done** (5 tests, end-to-end through the real `serve_connection` path): all three required assertions, plus attach exclusivity/forced-takeover and attachment release on disconnect. Catalog adoption itself is covered by `tests/catalog_adoption.rs` (5 tests).
 - [ ] T025 Configure `tracing` + `tracing-subscriber` with `JOURNAL_STREAM`/`IsTerminal` context detection and `file-rotate` hard disk cap in `crates/micold-daemon/src/logging.rs`; **no terminal content in logs** (FR-047).
 - [ ] T026 [P] Implement the thin client-side connection layer (connect, handshake, catalog cache, reconnect scaffolding) in `crates/micold-client/src/daemon_conn.rs`, replacing in-process session ownership.
 - [ ] T026a Implement **client auto-spawn**: when connect finds no daemon listening, spawn a *detached* `micold-daemon` (survives the client process — `setsid`/double-fork on Unix, `DETACHED_PROCESS`/`CREATE_NEW_PROCESS_GROUP` on Windows) behind a per-OS spawn abstraction, then retry connect until the endpoint answers or a timeout elapses, in `crates/micold-client/src/daemon_conn.rs` + `crates/micold-client/src/spawn/{unix,windows}.rs`. No install step, no external supervisor (FR-003). This closes the SC-003 cold-start path.

@@ -41,7 +41,7 @@ tokio-util = { version = "0.7.18", features = ["codec"] }
 interprocess = { version = "2.4.2", features = ["tokio"] }
 bytes = "1"
 listenfd = "1.0.2"
-futures-util = { version = "0.3", default-features = false, features = ["sink"] }
+futures-util = { version = "0.3", features = ["sink"] }
 # --- client (iced) deps ---
 iced = { version = "0.13", features = ["tokio", "canvas", "advanced", "lazy"] }
 dark-light = "2.0"

@@ -1,41 +1,40 @@
-//! Daemon startup + accept loop (contracts/protocol.md §2/§4, plan W2, task T020).
+//! Daemon startup + accept loop + per-connection routing (protocol.md §2/§4, plan W2, T020/T022).
 //!
-//! Resolves the endpoint, runs the single-instance sequence (or defers to socket activation), and
-//! serves each accepted connection through the shared [`DaemonCodec`]: read `Hello`, evaluate the
-//! strict handshake, reply `Welcome` or `Refused`. Catalog ownership, attach routing and grid
-//! streaming layer on top in T021–T022; this is the connection spine.
+//! Resolves the endpoint, runs the single-instance sequence (or adopts a systemd socket), then serves
+//! each accepted connection through the shared [`DaemonState`]: strict handshake, then attach/detach,
+//! viewed-session, keepalive, and settings routing, with catalog/settings changes pushed to every
+//! connected client. Grid streaming and the mutating RPCs layer on in Phase 3 / T053.
 
 use std::io;
+use std::sync::Arc;
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::stream::StreamExt;
+use futures_util::SinkExt;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
-use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg, DaemonSettings};
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
+use crate::catalog::Catalog;
 use crate::endpoint;
 use crate::singleton::{self, Acquisition};
+use crate::state::DaemonState;
 
 /// A human-facing build string named in diagnostics and the handshake.
 pub fn daemon_build() -> String {
     format!("micold-daemon {}", env!("CARGO_PKG_VERSION"))
 }
 
-/// The current service settings (placeholder until the Catalog owns them — T021).
-fn default_settings() -> DaemonSettings {
-    DaemonSettings {
-        scrollback_lines: 10_000,
-    }
-}
-
 /// Run the daemon: adopt a systemd socket if present, else acquire the endpoint, then accept.
 pub async fn run() -> io::Result<()> {
+    let state = Arc::new(DaemonState::new(Catalog::load_default()));
+
     // systemd socket activation (Linux, opportunistic — MUST NOT be required; protocol.md §2).
     #[cfg(target_os = "linux")]
     if let Some(listener) = systemd_listener()? {
         eprintln!("micold-daemon: adopted systemd-activated socket");
-        return serve_unix(listener).await;
+        return serve_unix(state, listener).await;
     }
 
     let endpoint = endpoint::resolve()?;
@@ -52,7 +51,7 @@ pub async fn run() -> io::Result<()> {
                 "micold-daemon: listening on {}",
                 bound.socket_path().display()
             );
-            serve_interprocess(bound).await
+            serve_interprocess(state, bound).await
         }
     }
 }
@@ -73,12 +72,16 @@ fn systemd_listener() -> io::Result<Option<tokio::net::UnixListener>> {
 }
 
 /// Accept loop over the single-instance interprocess listener.
-async fn serve_interprocess(bound: singleton::BoundListener) -> io::Result<()> {
+async fn serve_interprocess(
+    state: Arc<DaemonState>,
+    bound: singleton::BoundListener,
+) -> io::Result<()> {
     use interprocess::local_socket::traits::tokio::Listener as _;
     loop {
         let conn = bound.listener.accept().await?;
+        let state = Arc::clone(&state);
         tokio::spawn(async move {
-            if let Err(e) = serve_connection(conn).await {
+            if let Err(e) = serve_connection(state, conn).await {
                 eprintln!("micold-daemon: connection ended: {e}");
             }
         });
@@ -87,29 +90,30 @@ async fn serve_interprocess(bound: singleton::BoundListener) -> io::Result<()> {
 
 /// Accept loop over a systemd-activated Unix listener.
 #[cfg(target_os = "linux")]
-async fn serve_unix(listener: tokio::net::UnixListener) -> io::Result<()> {
+async fn serve_unix(state: Arc<DaemonState>, listener: tokio::net::UnixListener) -> io::Result<()> {
     loop {
         let (conn, _addr) = listener.accept().await?;
+        let state = Arc::clone(&state);
         tokio::spawn(async move {
-            if let Err(e) = serve_connection(conn).await {
+            if let Err(e) = serve_connection(state, conn).await {
                 eprintln!("micold-daemon: connection ended: {e}");
             }
         });
     }
 }
 
-/// Serve one connection: handshake, then the (currently minimal) message loop.
+/// Serve one connection: handshake, register, then route messages until the client hangs up.
 ///
 /// Generic over the stream so the interprocess path, the systemd path, and tests share one
 /// implementation.
-pub async fn serve_connection<S>(stream: S) -> io::Result<()>
+pub async fn serve_connection<S>(state: Arc<DaemonState>, stream: S) -> io::Result<()>
 where
-    S: AsyncRead + AsyncWrite + Unpin,
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let mut framed = Framed::new(stream, DaemonCodec::new());
 
-    // First frame must be a Hello.
-    let hello = match framed.next().await {
+    // --- Handshake: the first frame must be a Hello, and it must match exactly. ---
+    let (client_version, client_hash, client_build) = match framed.next().await {
         Some(Ok(Frame::Control(ClientMsg::Hello {
             protocol_version,
             schema_hash,
@@ -122,41 +126,109 @@ where
             ))
         }
         Some(Err(e)) => return Err(io::Error::other(e)),
-        None => return Ok(()), // client hung up before saying hello
+        None => return Ok(()), // hung up before saying hello
     };
 
-    let (client_version, client_hash, _client_build) = hello;
-    match handshake::evaluate(client_version, client_hash, daemon_build()) {
-        Ok(()) => {
-            let welcome = DaemonMsg::Welcome {
-                daemon_build: daemon_build(),
-                catalog: CatalogSnapshot::default(),
-                settings: default_settings(),
-            };
-            framed
-                .send(Frame::Control(welcome))
-                .await
-                .map_err(io::Error::other)?;
-        }
-        Err(reason) => {
-            framed
-                .send(Frame::Control(DaemonMsg::Refused { reason }))
-                .await
-                .map_err(io::Error::other)?;
-            return Ok(()); // handshake refused; close.
-        }
+    if let Err(reason) = handshake::evaluate(client_version, client_hash, daemon_build()) {
+        framed
+            .send(Frame::Control(DaemonMsg::Refused { reason }))
+            .await
+            .map_err(io::Error::other)?;
+        return Ok(()); // refused; close without registering.
     }
 
-    // Minimal post-handshake loop: answer Ping, ignore the rest until attach/catalog land (T022).
-    while let Some(frame) = framed.next().await {
-        match frame.map_err(io::Error::other)? {
-            Frame::Control(ClientMsg::Ping { nonce }) => {
-                framed
-                    .send(Frame::Control(DaemonMsg::Pong { nonce }))
-                    .await
-                    .map_err(io::Error::other)?;
+    // --- Welcome (sent synchronously, so it is unambiguously the first frame the client sees). ---
+    let (catalog, settings) = state.welcome_payload();
+    framed
+        .send(Frame::Control(DaemonMsg::Welcome {
+            daemon_build: daemon_build(),
+            catalog,
+            settings,
+        }))
+        .await
+        .map_err(io::Error::other)?;
+
+    // --- Register, split, and run the reader/writer split. ---
+    let (id, mut rx) = state.register(client_build);
+    let (mut sink, mut incoming) = framed.split();
+
+    // Writer task: drain this client's push channel (broadcasts, attach replies, pongs) to the wire.
+    let writer = tokio::spawn(async move {
+        while let Some(msg) = rx.recv().await {
+            if sink.send(Frame::Control(msg)).await.is_err() {
+                break;
             }
-            Frame::Control(ClientMsg::Goodbye) => break,
+        }
+    });
+
+    let result = route(&state, id, &mut incoming).await;
+
+    // Cleanup: releasing the client drops its sender, which ends the writer task.
+    state.deregister(id);
+    let _ = writer.await;
+    result
+}
+
+/// The per-connection message loop. Every push back to the client goes through the shared state's
+/// per-client channel so other connections can reach this one too.
+async fn route<St>(
+    state: &Arc<DaemonState>,
+    id: crate::state::ClientId,
+    incoming: &mut St,
+) -> io::Result<()>
+where
+    St: futures_util::Stream<
+            Item = Result<Frame<ClientMsg>, micold_core::protocol::codec::CodecError>,
+        > + Unpin,
+{
+    while let Some(frame) = incoming.next().await {
+        let msg = match frame {
+            Ok(Frame::Control(msg)) => msg,
+            Ok(Frame::Grid(_)) => continue, // clients never send grid frames
+            Err(e) => return Err(io::Error::other(e)),
+        };
+
+        match msg {
+            ClientMsg::Ping { nonce } => state.send(id, DaemonMsg::Pong { nonce }),
+            ClientMsg::Goodbye => break,
+            ClientMsg::Attach { project, force } => {
+                match state.attach(id, project.clone(), force) {
+                    Ok(sessions) => state.send(id, DaemonMsg::Attached { project, sessions }),
+                    Err(reason) => state.send(id, DaemonMsg::Refused { reason }),
+                }
+            }
+            ClientMsg::Detach { project } => state.detach(id, &project),
+            ClientMsg::SetViewedSession { project, session } => {
+                state.set_viewed(id, project, session)
+            }
+            ClientMsg::SettingsSet {
+                req,
+                scrollback_lines,
+            } => {
+                let result = match scrollback_lines {
+                    Some(lines) => state.set_scrollback(lines),
+                    None => Ok(()),
+                };
+                match result {
+                    Ok(()) => state.send(
+                        id,
+                        DaemonMsg::OperationOk {
+                            req,
+                            result: micold_core::protocol::messages::OperationResult::Ack,
+                        },
+                    ),
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: micold_core::protocol::messages::ErrorKind::IoFailed,
+                            message: "failed to persist settings".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
+                }
+            }
+            // Session commands, mutating RPCs and scrollback land in Phase 3 / T053.
             _ => {}
         }
     }

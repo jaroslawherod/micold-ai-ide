@@ -12,7 +12,10 @@ use tokio_util::codec::Framed;
 #[tokio::test]
 async fn matching_handshake_gets_welcome_and_pong() {
     let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    let server = tokio::spawn(micold_daemon::server::serve_connection(server_io));
+    let state = std::sync::Arc::new(micold_daemon::state::DaemonState::new(
+        micold_daemon::catalog::Catalog::ephemeral(),
+    ));
+    let server = tokio::spawn(micold_daemon::server::serve_connection(state, server_io));
     let mut client = Framed::new(client_io, ClientCodec::new());
 
     client
@@ -49,7 +52,10 @@ async fn matching_handshake_gets_welcome_and_pong() {
 #[tokio::test]
 async fn mismatched_handshake_is_refused_naming_both_sides() {
     let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    let server = tokio::spawn(micold_daemon::server::serve_connection(server_io));
+    let state = std::sync::Arc::new(micold_daemon::state::DaemonState::new(
+        micold_daemon::catalog::Catalog::ephemeral(),
+    ));
+    let server = tokio::spawn(micold_daemon::server::serve_connection(state, server_io));
     let mut client = Framed::new(client_io, ClientCodec::new());
 
     // A different protocol version must be refused.
