@@ -180,7 +180,7 @@ fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
 }
 
 #[cfg(not(windows))]
-fn baseline_env() -> HashMap<String, String> {
+fn baseline_env(cwd: &Path) -> HashMap<String, String> {
     // Deliberately reuses `attempt_env`'s exact wrapper (sourcing `/dev/null`, a guaranteed-empty
     // no-op) rather than a bare `env -0`: bash tail-call-optimizes a `-c` script whose last
     // command is a single simple external command (execve()-replacing itself, no fork) but
@@ -189,15 +189,24 @@ fn baseline_env() -> HashMap<String, String> {
     // spurious diff on *every* resolution regardless of the actual script's content. Keeping
     // baseline and attempt structurally identical (same fork/exec shape) eliminates this whole
     // class of bash-internal artifact, not just the one variable this was caught by.
-    match attempt_env(Path::new("/dev/null"), Duration::from_secs(10)) {
+    //
+    // `cwd` (BUG-002) MUST be the same directory `attempt_env` is about to run in, not a fixed
+    // neutral one: bash exports `PWD` (and `OLDPWD`) based on the shell's own working directory,
+    // so a baseline computed from a different cwd than the attempt would make `PWD` show up as a
+    // spurious diff on every resolution, exactly like the `SHLVL` artifact above. Since this
+    // baseline sources `/dev/null` (never the real script), running it in `cwd` does not trigger
+    // any directory-dependent hook the real script might contain — only the real `attempt_env`
+    // call actually sources user content there.
+    match attempt_env(Path::new("/dev/null"), cwd, Duration::from_secs(10)) {
         RunOutcome::Exited { stdout, .. } => parse_env_dump(&stdout),
         _ => HashMap::new(),
     }
 }
 
 #[cfg(not(windows))]
-fn attempt_env(path: &Path, timeout: Duration) -> RunOutcome {
+fn attempt_env(path: &Path, cwd: &Path, timeout: Duration) -> RunOutcome {
     let mut cmd = Command::new("bash");
+    cmd.current_dir(cwd);
     // `source "$1"` runs directly in THIS shell (never inside a `$(...)` subshell) so any
     // `export`s it makes land in the environment `env -0` dumps below — an earlier version
     // captured the script's own output via `out=$(source "$1" 2>&1)`, which silently discarded
@@ -230,8 +239,14 @@ fn attempt_env(path: &Path, timeout: Duration) -> RunOutcome {
 }
 
 #[cfg(windows)]
-fn baseline_env() -> HashMap<String, String> {
+fn baseline_env(cwd: &Path) -> HashMap<String, String> {
+    // `cwd` (BUG-002): matches `attempt_env`'s working directory for the same reason the Unix
+    // branch does — even though `[System.Environment]::GetEnvironmentVariables()` (process env
+    // vars) isn't expected to vary with the shell's cwd the way bash's `PWD` does, running both
+    // subprocesses from the same directory keeps this branch structurally parallel and immune to
+    // any such quirk.
     let mut cmd = Command::new("powershell.exe");
+    cmd.current_dir(cwd);
     cmd.arg("-NoProfile").arg("-Command").arg(
         "[System.Environment]::GetEnvironmentVariables().GetEnumerator() | ForEach-Object { \
          [Console]::Out.Write(\"$($_.Key)=$($_.Value)`0\") }",
@@ -243,7 +258,7 @@ fn baseline_env() -> HashMap<String, String> {
 }
 
 #[cfg(windows)]
-fn attempt_env(path: &Path, timeout: Duration) -> RunOutcome {
+fn attempt_env(path: &Path, cwd: &Path, timeout: Duration) -> RunOutcome {
     let script = format!(
         "$out = try {{ . '{}' 2>&1 | Out-String }} catch {{ $_.Exception.Message }}; \
          $status = if ($LASTEXITCODE) {{ $LASTEXITCODE }} else {{ 0 }}; \
@@ -254,23 +269,34 @@ fn attempt_env(path: &Path, timeout: Duration) -> RunOutcome {
         path.display()
     );
     let mut cmd = Command::new("powershell.exe");
+    cmd.current_dir(cwd);
     cmd.arg("-NoProfile").arg("-Command").arg(script);
     run_bounded(cmd, timeout)
 }
 
 /// Resolve `path`'s effect on the environment by actually sourcing it in a real, disposable
 /// shell process bounded by `timeout`, diffed against a clean baseline (contracts/
-/// env-include-resolution.md). Never blocks longer than `timeout` for the sourcing attempt
-/// itself (research R2). Does not decide whether to run at all (see the contract's Non-goals) —
-/// callers only invoke this when the feature is enabled with a non-blank path.
-pub fn resolve(path: &Path, timeout: Duration) -> (Vec<(String, String)>, EnvIncludeOutcome) {
+/// env-include-resolution.md). `cwd` is the sourcing subprocess's working directory — the
+/// session's own project/worktree directory — so directory-dependent `PATH` contributions from a
+/// version manager (mise, asdf, nvm, pyenv, rbenv, etc.) resolve the same way they would in a
+/// real interactive shell opened there (FR-020, BUG-002); the baseline is ALSO run against `cwd`
+/// (see `baseline_env`'s doc comment) — it just never sources `path` itself, so a directory-
+/// dependent hook in the real script still only fires for the attempt, never the baseline. Never
+/// blocks longer than `timeout` for the sourcing attempt itself (research R2). Does not decide
+/// whether to run at all (see the contract's Non-goals) — callers only invoke this when the
+/// feature is enabled with a non-blank path.
+pub fn resolve(
+    path: &Path,
+    cwd: &Path,
+    timeout: Duration,
+) -> (Vec<(String, String)>, EnvIncludeOutcome) {
     if !path.exists() {
         return (Vec::new(), EnvIncludeOutcome::MissingScript);
     }
 
-    let baseline = baseline_env();
+    let baseline = baseline_env(cwd);
 
-    match attempt_env(path, timeout) {
+    match attempt_env(path, cwd, timeout) {
         RunOutcome::Exited {
             code: 0, stdout, ..
         } => {

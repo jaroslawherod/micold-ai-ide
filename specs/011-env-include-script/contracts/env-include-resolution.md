@@ -7,13 +7,14 @@
 | Input | Type | Source |
 |---|---|---|
 | `path` | `&Path` | `Settings::env_include_script_path` (or the live `SettingsDraft`, for a save-triggered refresh) |
+| `cwd` | `&Path` *(added — BUG-002)* | The session's own project/worktree directory (`LaunchSpec.cwd` / `spawn_shell_pty`'s `cwd`) — used as the *attempt* sourcing subprocess's working directory only, so directory-dependent PATH contributions (version-manager hooks) resolve the same way they would in a real interactive shell opened in that directory (FR-020). NOT applied to the baseline subprocess, which stays on a neutral, project-independent directory. |
 | `timeout` | `Duration` | `Settings::env_include_timeout_secs`, clamped (`data-model.md`) |
 | `enabled` | `bool` | `Settings::env_include_enabled` — checked by the caller; `resolve()` itself is only invoked when `true` (an explicit `Disabled` short-circuit is the caller's job, not this function's, since "disabled" isn't a resolution outcome — it's a reason resolution never runs) |
 
 ## Output
 
 ```rust
-fn resolve(path: &Path, timeout: Duration) -> (Vec<(String, String)>, EnvIncludeOutcome)
+fn resolve(path: &Path, cwd: &Path, timeout: Duration) -> (Vec<(String, String)>, EnvIncludeOutcome)
 ```
 
 `Vec<(String, String)>` is empty for every non-`Success` outcome. See `data-model.md` for
@@ -29,12 +30,13 @@ fn resolve(path: &Path, timeout: Duration) -> (Vec<(String, String)>, EnvInclude
    loads no rc files, so it is expected to return near-instantly; if it fails to spawn at all
    (e.g. `bash` missing from `PATH`), degrade to `EnvIncludeOutcome::NonZeroExit` with a diagnostic
    naming the spawn failure, same as any other subprocess-level failure.
-3. **Attempt**: spawn the sourcing wrapper (research R1/R6) against `path`, polling for exit with
-   the `timeout` bound (research R2). On Linux/macOS, the wrapper's shell invocation MUST satisfy
-   any interactive-only guard the script itself checks (FR-019, research R1's BUG-001 note) — e.g.
-   Debian/Ubuntu's stock `~/.bashrc` returns immediately from a non-interactive shell — so the
-   default script path (FR-004) resolves its real exports, not just whatever precedes its own
-   interactive-guard check.
+3. **Attempt**: spawn the sourcing wrapper (research R1/R6) against `path`, with its working
+   directory set to `cwd` (FR-020, research R5's BUG-002 note — added, not present in the original
+   implementation), polling for exit with the `timeout` bound (research R2). On Linux/macOS, the
+   wrapper's shell invocation MUST satisfy any interactive-only guard the script itself checks
+   (FR-019, research R1's BUG-001 note) — e.g. Debian/Ubuntu's stock `~/.bashrc` returns
+   immediately from a non-interactive shell — so the default script path (FR-004) resolves its
+   real exports, not just whatever precedes its own interactive-guard check.
    - Exits within `timeout`, status `0`: parse its stdout env dump, `diff_env(baseline, attempt)`
      (research R3), return `(diff, EnvIncludeOutcome::Success)`.
    - Exits within `timeout`, non-zero status: return `(vec![], EnvIncludeOutcome::NonZeroExit {
@@ -74,3 +76,8 @@ fn resolve(path: &Path, timeout: Duration) -> (Vec<(String, String)>, EnvInclude
     `case $- in *i*) ;; *) return;; esac` followed by an `export` — → `Success`, the exported
     variable present in the returned `Vec` (FR-019). See
     `tests/env_include_resolve.rs::debian_default_bashrc_guard_blocks_export_from_reaching_session`.
+  - *(BUG-002)* A script that exports a variable only when a sentinel file is present in the
+    sourcing shell's cwd (mirroring a version-manager hook keyed off the current directory) →
+    `Success` with the variable captured when `cwd` points at a directory containing the sentinel,
+    and absent when `cwd` points elsewhere (FR-020). See
+    `tests/env_include_resolve.rs` (BUG-002 directory-dependent-PATH test, T032).

@@ -27,6 +27,10 @@ blocks all resolve correctly.
   Windows.
 - Both the AI CLI process and the regular-terminal process for a session see the identical set of
   resolved variables.
+- Resolution runs **per project directory**, not once for the whole app: if your startup file uses
+  a version manager (mise, asdf, nvm, pyenv, rbenv, …) whose `PATH` additions depend on which
+  project you're in, each project's own directory-specific additions are picked up correctly —
+  the same way they would be in a regular terminal opened in that project.
 
 The Settings dialog groups three fields for this feature together, separate from the scrollback
 limit above:
@@ -50,7 +54,9 @@ they may include secrets (e.g. exported API keys).
 A missing, broken, or hanging script never blocks or fails opening a session — the session opens
 normally with whatever environment is otherwise available. The most recent attempt's outcome is
 shown directly in this Settings dialog, below the environment-include fields, whenever it didn't
-succeed:
+succeed — since resolution runs per project directory, this reflects whichever directory was most
+recently (re-)resolved (typically your active project, or the one you just restarted a session in),
+not necessarily every project you have open:
 
 - **Script not found** — the configured path doesn't exist.
 - **Exited with an error** — the script ran but failed; the script's own output is shown verbatim

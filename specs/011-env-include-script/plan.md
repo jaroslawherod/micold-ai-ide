@@ -83,9 +83,12 @@ behavior around it stays bounded and local. `EnvIncludeOutcome` is an enum so an
 combination (e.g. "failed but has no diagnostic text") is unrepresentable at the type level
 instead of guarded by a runtish flag combination.
 
-**Scale/Scope**: One shared resolved-environment snapshot per app run (not per session, per spec
-Key Entities) — this is app-level configuration resolution, not new per-session state, so it does
-not change feature 006's existing "handful of concurrent sessions" scale assumption.
+**Scale/Scope**: ~~One shared resolved-environment snapshot per app run (not per session, per spec
+Key Entities)~~ **Corrected (BUG-002)**: one resolved-environment snapshot per (app run, resolution
+directory) pair, cached for the run's duration — still not per-session state (multiple sessions in
+the same directory share that directory's cached snapshot), so this still does not change feature
+006's existing "handful of concurrent sessions" scale assumption; it only adds one cache dimension
+(directory) to what was previously a single global value. See `bugs/BUG-002.md`.
 
 ## Constitution Check
 
@@ -103,9 +106,16 @@ not change feature 006's existing "handful of concurrent sessions" scale assumpt
   (spec Key Entities), the same way `scrollback_lines` is a single `App` field applied uniformly
   to every newly spawned terminal. No session's data leaks into another session; sessions remain
   independently addressable and unaffected by this feature.
-- [x] **III. Worktree Integration**: Unaffected — the include script resolves environment
+- [x] **III. Worktree Integration**: ~~Unaffected — the include script resolves environment
   *variables*, not `cwd`; every session's worktree/Default-root resolution is untouched.
-  `LaunchSpec.cwd` and `spawn_shell_pty`'s `cwd` parameter are not touched by this feature.
+  `LaunchSpec.cwd` and `spawn_shell_pty`'s `cwd` parameter are not touched by this feature.~~
+  **Corrected (BUG-002)**: `LaunchSpec.cwd`/`spawn_shell_pty`'s `cwd` parameter (the *session's own*
+  working directory) are indeed untouched by this feature, as originally stated — but this
+  reasoning conflated that with a different question it never asked: whether the *resolution
+  engine's own* sourcing subprocess needs the session's directory as an input. It does (FR-020) —
+  version-manager PATH hooks key their contribution off the sourcing shell's cwd, so a
+  directory-agnostic resolution can never reproduce them for more than one project. See
+  `bugs/BUG-002.md`.
 - [x] **IV. Local-First Storage (NON-NEGOTIABLE)**: Only the enabled flag, script path, and
   timeout are persisted, to the existing local JSON settings file. Captured environment values
   and failure diagnostic text (which may contain secrets the script printed) are held only in
@@ -217,4 +227,16 @@ additionally satisfy that guard (e.g. an `-i` flag, or another mechanism that ma
 `i`) while preserving R1/R2's EXIT-trap-based diagnostic capture, timeout, and process-group kill
 behavior unchanged (FR-019). See `bugs/BUG-001.md` and `research.md` R1.
 
+**Design correction (BUG-002)**: R5's "resolve once, cache for the app run" decision has no
+directory input, so `attempt_env`'s sourcing subprocess always runs in the app process's own launch
+directory rather than the session's project/worktree directory. A version-manager hook (mise,
+asdf, nvm, pyenv, rbenv, …) computes its `PATH` contribution from the sourcing shell's cwd, so this
+silently drops that contribution for every project. Fix: add a `cwd: &Path` parameter to
+`resolve`/`attempt_env` (baseline stays neutral, per FR-020), and change the cached snapshot from
+one application-wide instance to one keyed per resolution directory, resolved lazily at
+session-launch time instead of solely at `boot()` (FR-007/FR-020). See `bugs/BUG-002.md` and
+`research.md` R5.
+
 **Bugfix**: 2026-07-21 — BUG-001 Updated from bugfix patch.
+
+**Bugfix**: 2026-07-23 — BUG-002 Updated from bugfix patch.
