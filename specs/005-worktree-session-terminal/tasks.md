@@ -260,6 +260,21 @@ sessions restore and resume.
   `tests/worktree_delete.rs` (mirrors the fixed confirmed-delete flow, same reasoning as
   `tests/session_reconciliation.rs` — `src/main.rs` can't be linked from an integration test),
   asserting the target worktree's session is marked archived and an unrelated worktree's is not.
+- [X] T080 [US3] (bugfix BUG-003, found by broader code review of the whole diff) T079's fix
+  called `mark_archived` (and killed the worktree's sessions) *unconditionally*, before
+  `remove_worktree` was even attempted — so a **failed** delete (a locked worktree, a branch
+  checked out elsewhere, a permission error; exactly what `fr_023_failed_delete_...` already
+  covers) permanently destroyed that worktree's still-valid sessions: the worktree survived and
+  was correctly reported as such (FR-023), but its sessions were gone, with the new durable
+  marker now blocking the accidental reconciliation-based recovery that used to make this
+  non-permanent. Fixed by gating the kill/`mark_archived`/record-drop on `remove_worktree`
+  actually succeeding; on failure, dismiss the confirm dialog the same way
+  `WorktreeDeleteCancelled` already does, leaving the sessions untouched. Regression test:
+  `fr_023_failed_delete_leaves_its_sessions_running_and_unarchived` in `tests/worktree_delete.rs`.
+- (bugfix 002/BUG-001, found by the same review) `JsonFileStore::save`'s catalog/per-project
+  write ordering had a related gap — see `specs/002-project-workspace-management/tasks.md` T054
+  for the fix (this file only tracks 005-owned session/UI work; `store.rs`'s save-ordering
+  guarantee is 002's contract).
 
 **Checkpoint (BUG-003)**: Verified 2026-07-23 — `cargo test --no-default-features --all-targets`
 (57 test binaries incl. new `session_archive.rs` and extended `ai_cli_provider.rs`/

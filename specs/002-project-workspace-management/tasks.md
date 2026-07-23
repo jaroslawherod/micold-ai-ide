@@ -215,6 +215,17 @@ split (BUG-001, 2026-07-21)".
   (`tests/store_roundtrip.rs`, `tests/session_store.rs`, `tests/store_terminal_mode.rs`) passes
   unchanged, since hand-written legacy-shaped fixtures exercise the same migration-fallback path
   as T049 (depends on T051, T052).
+- [X] T054 (bugfix, found by broader code review of the whole diff) `save()` wrote the catalog
+  (which unconditionally strips a project's legacy embedded `sessions`/`worktree_display_names`
+  via `skip_serializing`) *before* attempting that project's own per-project state-file write. A
+  project migrating for the first time — whose only copy of that data was the catalog's own
+  embedded fields — could lose it entirely if its state-file write then failed: not isolated to
+  that project (FR-012a), lost everywhere. Fixed by writing per-project state first, tracking
+  which writes failed, and changing `sessions`/`worktree_display_names` from unconditional
+  `skip_serializing` to `skip_serializing_if`-empty so the catalog keeps a fallback copy only for
+  projects whose write just failed — cleared again once a later save succeeds. Regression test:
+  `migrating_project_whose_state_write_fails_keeps_a_catalog_fallback` in
+  `tests/store_fault_isolation.rs`.
 
 **Checkpoint**: A fault affecting one project's state file never affects the catalog or any other
 project; pre-existing single-file data migrates losslessly. Verified 2026-07-23: `cargo test
