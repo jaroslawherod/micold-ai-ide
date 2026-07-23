@@ -27,6 +27,7 @@ use alacritty_terminal::term::{viewport_to_point, Config, RenderableContent, Ter
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Processor};
 use iced::widget::{button, column, container, row, text, Space};
 use iced::{Alignment, Color, Element, Font, Length};
+use micold_core::protocol::grid::{WireColor, WireStyle};
 use micold_core::provider::{AiCliProvider, ClaudeProvider};
 use micold_core::session::{SessionId, SessionLifecycle, ShellLifecycle, TerminalMode};
 use micold_core::terminal::{claude_args, LaunchSpec, TerminalBackend, TerminalHandle};
@@ -618,6 +619,56 @@ pub fn cell_colors(
     (f, b)
 }
 
+impl TermPalette {
+    /// Resolve a wire colour (from a daemon [`WireStyle`]) to an iced colour — the inverse of the
+    /// daemon framer's `wire_color`. `WireColor::Named(n)` carries the alacritty `NamedColor`
+    /// discriminant verbatim; both processes link the same `alacritty_terminal`, so the fixed
+    /// mapping (0..=15 → the ANSI-16 palette, 16 → Foreground, 17 → Background, anything else → the
+    /// default fg, matching [`TermPalette::color`]'s `_ =>` arm) reproduces the local render exactly.
+    pub fn wire_color(&self, c: WireColor) -> Color {
+        match c {
+            WireColor::Rgb(r, g, b) => Color::from_rgb8(r, g, b),
+            WireColor::Indexed(i) => {
+                if (i as usize) < 16 {
+                    self.ansi16[i as usize]
+                } else {
+                    indexed_256(i)
+                }
+            }
+            WireColor::Named(n) => match n {
+                0..=15 => self.ansi16[n as usize],
+                16 => self.fg, // NamedColor::Foreground
+                17 => self.bg, // NamedColor::Background
+                _ => self.fg,
+            },
+        }
+    }
+}
+
+/// Resolve a daemon-streamed cell's [`WireStyle`] into final draw colours — the wire-grid twin of
+/// [`cell_colors`], sharing the exact DIM/INVERSE/HIDDEN + selection-swap rules so a daemon-rendered
+/// pane looks identical to the local one (FR-013). `selected` marks a cell in the active selection.
+pub fn wire_cell_colors(
+    palette: &TermPalette,
+    style: &WireStyle,
+    selected: bool,
+) -> (Color, Color) {
+    let flags = Flags::from_bits_truncate(style.flags);
+    let mut f = palette.wire_color(style.fg);
+    let mut b = palette.wire_color(style.bg);
+    if flags.intersects(Flags::DIM | Flags::DIM_BOLD) {
+        f.a *= 0.7;
+    }
+    // Both INVERSE and selection swap fg/bg; when both apply they cancel (double swap).
+    if flags.contains(Flags::INVERSE) != selected {
+        std::mem::swap(&mut f, &mut b);
+    }
+    if flags.contains(Flags::HIDDEN) {
+        f = b;
+    }
+    (f, b)
+}
+
 /// The bold/italic font for a cell's flags.
 pub fn cell_font(flags: Flags) -> Font {
     let mut font = Font::MONOSPACE;
@@ -984,6 +1035,92 @@ mod tests {
             b: 30,
         }));
         assert_eq!(c, Color::from_rgb8(10, 20, 30));
+    }
+
+    #[test]
+    fn wire_color_matches_the_local_ansi_mapping() {
+        // A daemon-streamed WireColor must resolve to the exact same iced colour the local
+        // renderer produces for the equivalent AnsiColor — the framer's `wire_color` inverse.
+        let p = TermPalette::from_scheme(ColorScheme::Dark);
+        assert_eq!(
+            p.wire_color(WireColor::Rgb(10, 20, 30)),
+            p.color(AnsiColor::Spec(AnsiRgb {
+                r: 10,
+                g: 20,
+                b: 30
+            }))
+        );
+        for i in 0u8..16 {
+            assert_eq!(
+                p.wire_color(WireColor::Indexed(i)),
+                p.color(AnsiColor::Indexed(i))
+            );
+        }
+        assert_eq!(
+            p.wire_color(WireColor::Indexed(200)),
+            p.color(AnsiColor::Indexed(200))
+        );
+        // Named discriminants: 0..=15 ANSI-16, 16 Foreground, 17 Background.
+        assert_eq!(
+            p.wire_color(WireColor::Named(1)),
+            p.color(AnsiColor::Named(NamedColor::Red))
+        );
+        assert_eq!(
+            p.wire_color(WireColor::Named(16)),
+            p.color(AnsiColor::Named(NamedColor::Foreground))
+        );
+        assert_eq!(
+            p.wire_color(WireColor::Named(17)),
+            p.color(AnsiColor::Named(NamedColor::Background))
+        );
+    }
+
+    #[test]
+    fn wire_cell_colors_matches_local_cell_colors() {
+        let p = TermPalette::from_scheme(ColorScheme::Dark);
+        // Plain cell.
+        let plain = WireStyle {
+            fg: WireColor::Named(1),
+            bg: WireColor::Named(17),
+            flags: 0,
+            underline_color: None,
+        };
+        assert_eq!(
+            wire_cell_colors(&p, &plain, false),
+            cell_colors(
+                &p,
+                AnsiColor::Named(NamedColor::Red),
+                AnsiColor::Named(NamedColor::Background),
+                Flags::empty(),
+                false
+            )
+        );
+        // Selection swaps fg/bg exactly as the local path does.
+        assert_eq!(
+            wire_cell_colors(&p, &plain, true),
+            cell_colors(
+                &p,
+                AnsiColor::Named(NamedColor::Red),
+                AnsiColor::Named(NamedColor::Background),
+                Flags::empty(),
+                true
+            )
+        );
+        // INVERSE flag round-trips through the bits.
+        let inverse = WireStyle {
+            flags: Flags::INVERSE.bits(),
+            ..plain
+        };
+        assert_eq!(
+            wire_cell_colors(&p, &inverse, false),
+            cell_colors(
+                &p,
+                AnsiColor::Named(NamedColor::Red),
+                AnsiColor::Named(NamedColor::Background),
+                Flags::INVERSE,
+                false
+            )
+        );
     }
 
     #[test]
