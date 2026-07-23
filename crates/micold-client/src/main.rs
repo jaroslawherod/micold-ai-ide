@@ -2,9 +2,10 @@
 //!
 //! Adapts the render-free core (`micold_client::app`) to the iced runtime. All state
 //! transitions live in the core and are unit-tested there; this layer renders state, performs
-//! the feature's I/O at the boundary (filesystem scans, git worktree ops via `GitCli`, PTY
-//! spawning via `portable-pty`), and holds the gui-only runtime handles that cannot live in
-//! the pure (Clone/Eq) core `State` — the per-session [`RuntimeTerminal`]s.
+//! the feature's I/O at the boundary (filesystem scans, git worktree ops via `GitCli`), talks to
+//! the session daemon over its connection (`micold_client::daemon`), and holds the gui-only
+//! runtime that cannot live in the pure (Clone/Eq) core `State` — the per-session grid caches,
+//! the input stamper, and the daemon outbox.
 
 use iced::time::every;
 use iced::{Subscription, Task};

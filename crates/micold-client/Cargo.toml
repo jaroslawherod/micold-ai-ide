@@ -22,8 +22,8 @@ path = "src/main.rs"
 micold-core = { workspace = true }
 iced = { workspace = true }
 dark-light = { workspace = true }
-# Terminal stack lives here until T030 migrates PTY/Term ownership into micold-daemon.
-portable-pty = { workspace = true }
+# The client no longer hosts a PTY (sessions live in micold-daemon); it keeps `alacritty_terminal`
+# only for the VT-mode/flag/colour *types* its grid-cache renderer resolves against.
 alacritty_terminal = { workspace = true }
 uuid = { workspace = true }
 directories = { workspace = true }
