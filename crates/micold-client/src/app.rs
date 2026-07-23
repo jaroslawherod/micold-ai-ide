@@ -17,7 +17,9 @@ use micold_core::naming::{
 use micold_core::project::{canonicalize_best_effort, Availability, FolderEntry, RenameError};
 use micold_core::selector::Selector;
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
-use micold_core::theme::{observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference};
+use micold_core::theme::{
+    observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference,
+};
 use micold_core::worktree::{CreateProgressEvent, CreateStage, Worktree, WorktreeStatus};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

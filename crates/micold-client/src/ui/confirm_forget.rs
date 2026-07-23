@@ -3,12 +3,12 @@
 //! its catalog entry and per-project state (name, worktree-name overrides, session records).
 //! Nothing on disk (the folder, its files, or any git worktrees) is deleted; the dialog says so.
 
+use crate::app::Message;
+use crate::tokens::{self, spacing, type_scale};
 use crate::ui::material::Modal;
 use crate::ui::style;
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Length};
-use crate::app::Message;
-use crate::tokens::{self, spacing, type_scale};
 use micold_core::theme::ColorScheme;
 
 /// Stack the confirm-forget dialog for the project shown by `display_name` as a modal over

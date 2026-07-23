@@ -7,6 +7,7 @@
 
 pub mod app;
 pub mod icons;
+pub mod input;
 pub mod keymap;
 pub mod motion;
 pub mod tokens;
