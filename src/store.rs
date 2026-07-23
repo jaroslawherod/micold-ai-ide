@@ -90,16 +90,23 @@ struct StoredProject {
     is_git_repo: bool,
     // Bugfix BUG-001 (2026-07-21): sessions and worktree-name overrides no longer live here —
     // they live in this project's own state file (see `StoredProjectState` /
-    // `JsonFileStore::project_state_path`). These two fields are kept ONLY as a one-time
-    // migration seed: `#[serde(default)]` lets an old (pre-split) `projects.json` — which still
-    // has them embedded — deserialize normally, while `skip_serializing` means a save under the
-    // new scheme never writes them back out, so the catalog naturally slims down to
-    // `path`/`display_name`/`is_git_repo` after one save cycle. No `schema_version` bump
-    // (removing what a save never emits again is compatible with every existing reader that
-    // already tolerates unknown/missing fields).
-    #[serde(default, skip_serializing)]
+    // `JsonFileStore::project_state_path`). `#[serde(default)]` lets an old (pre-split)
+    // `projects.json` — which still has them embedded — deserialize normally. No
+    // `schema_version` bump (an old reader already tolerates unknown/missing fields; a new
+    // reader tolerates these being present or absent).
+    //
+    // On write, `save()` populates these fully in memory (mirroring the pre-split shape) but
+    // clears them back to empty for every project whose own state-file write just succeeded —
+    // `skip_serializing_if` then omits them, so the catalog stays slim in the normal case.
+    // Bugfix (2026-07-23, found by code review): a project whose state-file write just FAILED
+    // keeps its fields populated here as a save-time fallback. Without this, a project migrating
+    // for the first time (its only copy of this data was these very fields) would lose it for
+    // good the moment the catalog rename below completed and the per-project write then failed —
+    // there would be nothing left on disk anywhere. Once its state-file write eventually
+    // succeeds, the next save clears these again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     sessions: Vec<StoredSession>,
-    #[serde(default, skip_serializing)]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     worktree_display_names: BTreeMap<String, String>,
 }
 
@@ -513,10 +520,39 @@ impl ProjectStore for JsonFileStore {
     }
 
     fn save(&self, workspace: &Workspace) -> io::Result<()> {
+        // Each project's own state is written FIRST and independently (FR-012a): a failure
+        // writing one project's file never prevents another project's file (or the catalog
+        // below) from being written. Doing this before the catalog write (rather than after)
+        // matters for a project migrating for the first time — bugfix (2026-07-23, found by
+        // code review): if the catalog were written (and its legacy fields stripped) before a
+        // migrating project's own state-file write is attempted, a failure there would lose that
+        // project's only copy of its data. Tracking which writes failed lets the catalog below
+        // keep a fallback copy for exactly those projects.
+        let mut first_err = None;
+        let mut state_write_failed = vec![false; workspace.projects.len()];
+        for (i, project) in workspace.projects.iter().enumerate() {
+            let state = StoredProjectState::from_workspace(workspace, &project.path);
+            let path = self.project_state_path(&project.path);
+            if let Err(err) = write_project_state(&path, &state) {
+                first_err.get_or_insert(err);
+                state_write_failed[i] = true;
+            }
+        }
+
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let stored = StoredCatalog::from_workspace(workspace);
+        let mut stored = StoredCatalog::from_workspace(workspace);
+        // `from_workspace` populates every project's `sessions`/`worktree_display_names` fully
+        // (mirroring the pre-split shape); clear them back to empty except where this save's own
+        // state-file write just failed, so `skip_serializing_if` keeps the catalog slim in the
+        // normal case while preserving a fallback exactly where one might be needed.
+        for (project, failed) in stored.projects.iter_mut().zip(state_write_failed.iter()) {
+            if !failed {
+                project.sessions.clear();
+                project.worktree_display_names.clear();
+            }
+        }
         let json = serde_json::to_string_pretty(&stored)
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
 
@@ -525,17 +561,6 @@ impl ProjectStore for JsonFileStore {
         std::fs::write(&temp, json)?;
         std::fs::rename(&temp, &self.path)?;
 
-        // Each project's own state, written independently (FR-012a): a failure writing one
-        // project's file never prevents another project's file (or the catalog above) from being
-        // written. The first error encountered is returned, after every project has been tried.
-        let mut first_err = None;
-        for project in &workspace.projects {
-            let state = StoredProjectState::from_workspace(workspace, &project.path);
-            let path = self.project_state_path(&project.path);
-            if let Err(err) = write_project_state(&path, &state) {
-                first_err.get_or_insert(err);
-            }
-        }
         match first_err {
             Some(err) => Err(err),
             None => Ok(()),

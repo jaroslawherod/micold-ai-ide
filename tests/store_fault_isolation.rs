@@ -171,3 +171,62 @@ fn pre_split_embedded_sessions_migrate_to_per_project_file_on_next_save() {
         Some("My Feature")
     );
 }
+
+/// Regression test found by code review: writing the catalog before attempting a migrating
+/// project's own state-file write meant that if that write then failed, the project's only copy
+/// of its session/worktree-name data (previously embedded in the catalog, just stripped by the
+/// write that already completed) was gone from both files — permanent loss, not a fault isolated
+/// to that project. `save()` now writes per-project state first and keeps the catalog's legacy
+/// fields as a fallback for exactly the projects whose write failed.
+#[test]
+fn migrating_project_whose_state_write_fails_keeps_a_catalog_fallback() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    // Pre-split projects.json: "/a"'s only copy of its data is these embedded fields — no
+    // per-project state file exists for it yet.
+    let json = r#"{"schema_version":1,"last_active":"/a","projects":[
+        {"path":"/a","display_name":"a","is_git_repo":true,"sessions":[
+            {"id":"11111111-1111-1111-1111-111111111111","worktree_dir":null,"title":"Old session"}
+        ],"worktree_display_names":{"feat-x":"My Feature"}}
+    ]}"#;
+    std::fs::write(&path, json).unwrap();
+    let store = JsonFileStore::at(path.clone());
+
+    let loaded = store.load();
+    assert_eq!(
+        loaded
+            .workspace
+            .sessions
+            .get(&PathBuf::from("/a"))
+            .unwrap()
+            .len(),
+        1
+    );
+
+    // Sabotage: a plain file where the per-project state directory needs to be, so writing any
+    // project's own state file fails (simulates a disk/permission fault during migration).
+    let state_dir = dir.path().join("projects");
+    std::fs::write(&state_dir, b"not a directory").unwrap();
+
+    store
+        .save(&loaded.workspace)
+        .expect_err("the sabotaged write must fail, not silently drop data");
+
+    let raw_catalog = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        raw_catalog.contains("Old session"),
+        "the catalog must keep a fallback copy when the project's own state-file write failed: \
+         {raw_catalog}"
+    );
+    assert!(raw_catalog.contains("My Feature"));
+
+    // Clear the sabotage and confirm the fallback is dropped once the write can succeed again —
+    // the catalog stays slim in the normal case.
+    std::fs::remove_file(&state_dir).unwrap();
+    store.save(&loaded.workspace).unwrap();
+    let raw_catalog_after = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        !raw_catalog_after.contains("Old session"),
+        "the fallback must clear once the state-file write succeeds: {raw_catalog_after}"
+    );
+}

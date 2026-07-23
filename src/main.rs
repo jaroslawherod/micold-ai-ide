@@ -1192,57 +1192,77 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     .iter()
                     .find(|w| w.dir_name == dir)
                     .cloned();
-                // Terminate this worktree's running sessions first (both processes per
-                // session, feature 010 FR-014), and record the same durable suppression marker
-                // Close/Remove use (bugfix BUG-003, FR-020c): the worktree directory (and thus
-                // its transcripts' `cwd` encoding) can be reused if a worktree with the same
-                // `dir_name` is created again later, and without this marker reconciliation
-                // (FR-020b) would resurrect these sessions from the still-existing `claude`
-                // transcripts on the next project open.
-                let worktree_cwd =
-                    session_cwd_for_location(&repo, &SessionLocation::Worktree(dir.clone()));
-                let provider = ClaudeProvider;
-                let config_dir = provider.config_dir();
-                for id in app.core.sessions_in_worktree(&dir) {
-                    if let Some(mut st) = app.terminals.remove(&id) {
-                        st.kill_all();
-                    }
-                    if let Some(config_dir) = &config_dir {
-                        let _ = provider.mark_archived(config_dir, &worktree_cwd, id.0);
-                    }
-                }
-                if let Some(wt) = wt {
-                    // FR-023: both results were previously discarded with `let _ =`, so a
-                    // locked worktree, a branch checked out elsewhere, or a permission error
-                    // made the row vanish from the sidebar while the branch and directory
-                    // survived on disk. The reconcile below restores a truthful sidebar; these
-                    // report *why* it did not go away.
-                    let name = app.core.worktree_display_name(&dir);
-                    match remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref()) {
-                        // Only remove the directory once git has released the worktree —
-                        // deleting the working files of a still-registered worktree would
-                        // leave a worse mess than the failure being reported.
-                        Ok(()) => {
-                            // `remove_worktree_dir` treats an already-absent directory as
-                            // success — git removed it as part of releasing the worktree, so
-                            // "not found" here is the happy path, not a leftover (FR-023a).
-                            if let Err(err) = remove_worktree_dir(&wt.path) {
+                // Attempt the removal FIRST. Sessions are only killed and durably marked
+                // archived once the worktree is confirmed actually gone (bugfix, found by code
+                // review): doing this unconditionally, before knowing the outcome, meant a
+                // failed delete (a locked worktree, a branch checked out elsewhere, a
+                // permission error — all cases FR-023 explicitly anticipates, where the
+                // worktree survives and is reported, not silently dropped) permanently
+                // destroyed that worktree's still-valid sessions — the archived marker
+                // (bugfix BUG-003) blocks the accidental reconciliation-based recovery that
+                // used to paper over this.
+                let removed = match &wt {
+                    // Nothing registered for this dir_name — there is nothing to remove or to
+                    // preserve either.
+                    None => true,
+                    Some(wt) => {
+                        let name = app.core.worktree_display_name(&dir);
+                        match remove_worktree(&GitCli::new(), &repo, &wt.path, wt.branch.as_deref())
+                        {
+                            // Only remove the directory once git has released the worktree —
+                            // deleting the working files of a still-registered worktree would
+                            // leave a worse mess than the failure being reported.
+                            Ok(()) => {
+                                // `remove_worktree_dir` treats an already-absent directory as
+                                // success — git removed it as part of releasing the worktree, so
+                                // "not found" here is the happy path, not a leftover (FR-023a).
+                                if let Err(err) = remove_worktree_dir(&wt.path) {
+                                    app.core.notify_error(format!(
+                                        "Deleted worktree \"{name}\", but its folder could not \
+                                         be removed: {err}. Left at {}",
+                                        wt.path.display()
+                                    ));
+                                }
+                                true
+                            }
+                            Err(err) => {
                                 app.core.notify_error(format!(
-                                    "Deleted worktree \"{name}\", but its folder could not be \
-                                     removed: {err}. Left at {}",
-                                    wt.path.display()
+                                    "Could not delete worktree \"{name}\": {err}"
                                 ));
+                                false
                             }
                         }
-                        Err(err) => {
-                            app.core.notify_error(format!(
-                                "Could not delete worktree \"{name}\": {err}"
-                            ));
+                    }
+                };
+                if removed {
+                    // Terminate this worktree's running sessions (both processes per session,
+                    // feature 010 FR-014), and record the same durable suppression marker
+                    // Close/Remove use (bugfix BUG-003, FR-020c): the worktree directory (and
+                    // thus its transcripts' `cwd` encoding) can be reused if a worktree with the
+                    // same `dir_name` is created again later, and without this marker
+                    // reconciliation (FR-020b) would resurrect these sessions from the
+                    // still-existing `claude` transcripts on the next project open.
+                    let worktree_cwd =
+                        session_cwd_for_location(&repo, &SessionLocation::Worktree(dir.clone()));
+                    let provider = ClaudeProvider;
+                    let config_dir = provider.config_dir();
+                    for id in app.core.sessions_in_worktree(&dir) {
+                        if let Some(mut st) = app.terminals.remove(&id) {
+                            st.kill_all();
+                        }
+                        if let Some(config_dir) = &config_dir {
+                            let _ = provider.mark_archived(config_dir, &worktree_cwd, id.0);
                         }
                     }
+                    // Drop the session/worktree records in the core.
+                    app.core.update(Message::WorktreeDeleteConfirmed);
+                } else {
+                    // Removal failed: the worktree (and its sessions) survive untouched — just
+                    // dismiss the confirm dialog (mirrors `WorktreeDeleteCancelled`'s cleanup).
+                    app.core.update(Message::WorktreeDeleteCancelled);
                 }
-                // Drop the session/worktree records in the core, then reconcile from git truth.
-                app.core.update(Message::WorktreeDeleteConfirmed);
+                // Reconcile the sidebar from git truth either way (self-heals a failed removal
+                // back into the list).
                 app.core.set_worktrees(discover_worktrees(&repo));
                 persist(&mut app.core);
             } else {
