@@ -83,6 +83,72 @@ fn adopts_an_existing_projects_json_in_place() {
 }
 
 #[test]
+fn archived_sessions_are_excluded_from_the_snapshot() {
+    // Anti-resurrection (main 93a0a08/7dc9c8a): a session marked `archived` in durable state — its
+    // worktree was deleted, or it was removed — must never reappear via the daemon catalog, which is
+    // the single source clients render.
+    let dir = tempfile::tempdir().unwrap();
+    let projects_path = dir.path().join("projects.json");
+    let settings_path = dir.path().join("settings.json");
+    let project_path = PathBuf::from("/repo/alpha");
+
+    let live = Session::restored(
+        SessionId::from_uuid(Uuid::from_u128(0x1)),
+        SessionLocation::Worktree("feat-live".into()),
+        SessionLabel::Named("Live".into()),
+        TerminalMode::AiCli,
+    );
+    let mut archived = Session::restored(
+        SessionId::from_uuid(Uuid::from_u128(0x2)),
+        SessionLocation::Worktree("feat-gone".into()),
+        SessionLabel::Named("Gone".into()),
+        TerminalMode::AiCli,
+    );
+    archived.archive();
+
+    let mut sessions = BTreeMap::new();
+    sessions.insert(project_path.to_path_buf(), vec![live, archived]);
+    let workspace = Workspace {
+        projects: vec![Project::new(
+            project_path.to_path_buf(),
+            true,
+            Availability::Available,
+        )],
+        active: Some(project_path.to_path_buf()),
+        sessions,
+        worktree_names: BTreeMap::new(),
+    };
+    JsonFileStore::at(projects_path.clone())
+        .save(&workspace)
+        .unwrap();
+
+    let catalog = Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(settings_path)),
+    );
+    let snapshot = catalog.snapshot();
+    let project = &snapshot.projects[0];
+
+    // Only the live session surfaces; the archived one is gone.
+    assert_eq!(
+        project.sessions.len(),
+        1,
+        "archived session must be filtered out"
+    );
+    assert_eq!(
+        project.sessions[0].id,
+        SessionId::from_uuid(Uuid::from_u128(0x1))
+    );
+    assert!(
+        project
+            .sessions
+            .iter()
+            .all(|s| s.title != SessionLabel::Named("Gone".into())),
+        "the archived session must not appear"
+    );
+}
+
+#[test]
 fn a_corrupt_catalog_is_preserved_and_recovered_to_empty() {
     // C4: an unparseable file is kept as `.json.bak` and an empty catalog is loaded with a status
     // the daemon can surface, rather than crashing or silently discarding the user's data.

@@ -88,11 +88,22 @@ impl Catalog {
     }
 
     /// The session summaries for one project (empty if the project is unknown).
+    ///
+    /// **Archived sessions are excluded** (010-root-dir-session anti-resurrection fix, main
+    /// `93a0a08`/`7dc9c8a`): a session whose worktree was deleted, or which was removed, is marked
+    /// `archived` in durable state so reconciliation can never resurrect it. The catalog snapshot is
+    /// the single source clients render, so it must honour that filter here — otherwise the daemon
+    /// would surface exactly the closed sessions the fix suppresses.
     pub fn sessions_for(&self, project: &Path) -> Vec<SessionSummary> {
         self.workspace
             .sessions
             .get(project)
-            .map(|list| list.iter().map(session_summary).collect())
+            .map(|list| {
+                list.iter()
+                    .filter(|s| !s.archived)
+                    .map(session_summary)
+                    .collect()
+            })
             .unwrap_or_default()
     }
 

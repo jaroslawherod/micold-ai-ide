@@ -581,6 +581,11 @@ planning, but the spec commits to them so requirements stay testable.
   operation as pending.
 - **Deleting a worktree that contains a live session requires explicit confirmation and stops the
   session first.** It is never silently orphaned.
+- **Removed and deleted-worktree sessions are archived, never resurrected.** The durable model marks
+  such a session `archived` rather than dropping it, so a later catalog reconcile cannot bring it
+  back (adopted from the sibling anti-resurrection fix on `main`, 2026-07-23). The catalog's snapshot
+  — the single source clients render — excludes archived sessions, and mutating handlers archive
+  rather than delete. This keeps the daemon consistent with the in-app behavior it replaces.
 - **Automatic cleanup never runs unobserved.** Pruning is a tidiness concern that only matters when
   someone is looking, so gating it on an attached client costs nothing and removes a whole class of
   silent-data-loss reports.
