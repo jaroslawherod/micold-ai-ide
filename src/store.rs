@@ -431,6 +431,21 @@ impl JsonFileStore {
         self.project_state_dir()
             .join(format!("{}.json", project_id(project_path)))
     }
+
+    /// Delete a project's per-project state file when the project is forgotten (feature 014,
+    /// FR-005). An already-absent file is success — forgetting a project that never had a state
+    /// file (no sessions/overrides) is not an error, and the call is idempotent. Removing this
+    /// file is what makes the discarded session metadata durable: `save` only (re)writes state
+    /// files for projects still in the catalog, so without this the forgotten project's file would
+    /// linger and could be reloaded if the folder were re-opened (FR-012). This file lives in the
+    /// application's own data directory, never inside the project folder (so FR-006 is untouched).
+    pub fn remove_project_state(&self, project_path: &Path) -> io::Result<()> {
+        match std::fs::remove_file(self.project_state_path(project_path)) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err),
+        }
+    }
 }
 
 impl ProjectStore for JsonFileStore {

@@ -82,6 +82,38 @@ impl Workspace {
         Ok(())
     }
 
+    /// Forget a known project: remove its record and every piece of application-stored metadata
+    /// keyed by its path (feature 014, FR-003/FR-005). The path is canonicalized the same way
+    /// `open_or_activate`/`activate`/`rename` do, so any equivalent spelling matches.
+    ///
+    /// Removes the `projects` entry, its `sessions[path]`, and its `worktree_names[path]`. If the
+    /// forgotten project was the active working space, the active pointer is cleared so the
+    /// documented invariant (`active`, when `Some`, references a present `path`) still holds
+    /// (FR-008). A no-op when the path is unknown. Non-destructive: this touches only in-memory
+    /// state — the folder, its files, and any git worktrees on disk are never modified (FR-006);
+    /// deleting the project's *persisted* per-project state file is the store/binary's job.
+    pub fn forget(&mut self, path: &Path) {
+        let path = canonicalize_best_effort(path);
+        self.projects.retain(|p| p.path != path);
+        self.sessions.remove(&path);
+        self.worktree_names.remove(&path);
+        if self.active.as_ref() == Some(&path) {
+            self.active = None;
+        }
+    }
+
+    /// Every session id recorded for `project_path` (canonicalized), across all its locations
+    /// (worktrees and the Default root). Empty when the project is unknown or has no sessions.
+    /// Pure read used by the binary to stop a forgotten project's live processes (feature 014,
+    /// FR-010); parallels [`Self::running_session_count`].
+    pub fn session_ids_of_project(&self, project_path: &Path) -> Vec<SessionId> {
+        let key = canonicalize_best_effort(project_path);
+        self.sessions
+            .get(&key)
+            .map(|list| list.iter().map(|s| s.id).collect())
+            .unwrap_or_default()
+    }
+
     /// The custom display name for a worktree of the active project, if one was set (feature
     /// 008, FR-014). `None` ⇒ the caller derives the name from the directory name.
     pub fn worktree_name(&self, dir_name: &str) -> Option<&str> {

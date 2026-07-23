@@ -2,6 +2,7 @@
 
 mod about;
 mod confirm_delete;
+mod confirm_forget;
 mod confirm_session_remove;
 mod material;
 pub(crate) use material::target_offset_delta;
@@ -325,6 +326,22 @@ pub fn view<'a>(
             ),
             None => base,
         },
+        Overlay::ConfirmForgetProject => match &state.forget_target {
+            Some(path) => {
+                // The display name and running-session count are read from the catalog/sessions
+                // at render time; the count (FR-002a) is exactly the set the binary will stop.
+                let display_name = state
+                    .workspace
+                    .projects
+                    .iter()
+                    .find(|p| &p.path == path)
+                    .map(|p| p.display_name.clone())
+                    .unwrap_or_else(|| micold_ai_ide::project::default_display_name(path));
+                let running = state.workspace.running_session_count(path);
+                confirm_forget::modal(base, &display_name, running, scheme, overlay_progress)
+            }
+            None => base,
+        },
     }
 }
 
@@ -401,6 +418,9 @@ fn dismissing_modal<'a>(
         ClosingOverlay::ConfirmSessionRemove(label) => {
             confirm_session_remove::modal(base, label, scheme, progress)
         }
+        ClosingOverlay::ConfirmForget(display_name, running) => {
+            confirm_forget::modal(base, display_name, *running, scheme, progress)
+        }
     }
 }
 
@@ -456,6 +476,10 @@ pub fn subscription(state: &State) -> Subscription<Message> {
         Overlay::ConfirmSessionRemove => iced::keyboard::on_key_press(|key, _modifiers| {
             use iced::keyboard::{key::Named, Key};
             matches!(key, Key::Named(Named::Escape)).then_some(Message::SessionRemoveCancelled)
+        }),
+        Overlay::ConfirmForgetProject => iced::keyboard::on_key_press(|key, _modifiers| {
+            use iced::keyboard::{key::Named, Key};
+            matches!(key, Key::Named(Named::Escape)).then_some(Message::ProjectForgetCancelled)
         }),
     }
 }

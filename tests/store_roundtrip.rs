@@ -192,6 +192,56 @@ fn pre_feature_010_catalog_with_multiple_sessions_loads_as_all_worktree_located(
     assert_eq!(count, 3, "all three legacy sessions loaded");
 }
 
+// --- Feature 014: forgetting removes the catalog entry AND its per-project state file ---
+
+#[test]
+fn forgotten_project_does_not_reappear_and_survivors_stay_intact() {
+    use micold_ai_ide::session::{Session, SessionLocation};
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/keep", "keep", true));
+    ws.projects.push(project("/drop", "drop", true));
+    ws.active = Some(PathBuf::from("/keep"));
+    ws.sessions.insert(
+        PathBuf::from("/drop"),
+        vec![Session::start_new(SessionLocation::Worktree(
+            "feat-x".to_string(),
+        ))],
+    );
+    store.save(&ws).unwrap();
+    // The dropped project's per-project state file exists after the initial save.
+    assert!(store.project_state_path(Path::new("/drop")).exists());
+
+    // Forget /drop: prune the catalog entry + metadata, then delete its state file.
+    ws.forget(Path::new("/drop"));
+    store.remove_project_state(Path::new("/drop")).unwrap();
+    store.save(&ws).unwrap();
+
+    let out = store.load();
+    assert_eq!(out.workspace.projects.len(), 1);
+    assert_eq!(out.workspace.projects[0].path, PathBuf::from("/keep"));
+    assert_eq!(out.workspace.active, Some(PathBuf::from("/keep")));
+    // FR-005/FR-012: no lingering per-project state, so no old sessions can be resurrected.
+    assert!(!store.project_state_path(Path::new("/drop")).exists());
+    assert!(out.workspace.sessions.get(Path::new("/drop")).is_none());
+}
+
+#[test]
+fn remove_project_state_is_idempotent_and_ok_when_absent() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    // Removing a never-written project's state file is success, not an error (idempotent).
+    store
+        .remove_project_state(Path::new("/never-existed"))
+        .unwrap();
+    store
+        .remove_project_state(Path::new("/never-existed"))
+        .unwrap();
+}
+
 #[test]
 fn save_is_atomic_and_leaves_no_temp_file() {
     let dir = tempdir().unwrap();
