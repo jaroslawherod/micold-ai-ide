@@ -32,7 +32,7 @@ use crate::session::SessionId;
 pub struct LineId(pub i64);
 
 /// A color as alacritty models it — named (16-color + specials), 256-indexed, or true color.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WireColor {
     /// A named ANSI color, by alacritty `NamedColor` discriminant.
     Named(u8),
@@ -43,7 +43,7 @@ pub enum WireColor {
 }
 
 /// One interned style (contracts/messages.md).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WireStyle {
     /// Foreground color.
     pub fg: WireColor,

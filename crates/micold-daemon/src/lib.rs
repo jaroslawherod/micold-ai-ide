@@ -8,6 +8,7 @@
 //! outlive the UI. The shadow-diff framer that streams the interpreted grid to clients lands next.
 
 pub mod catalog;
+pub mod framer;
 pub mod lifecycle;
 pub mod logging;
 pub mod server;
