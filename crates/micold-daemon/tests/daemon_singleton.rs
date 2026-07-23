@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use micold_daemon::endpoint::Endpoint;
+use micold_core::endpoint::Endpoint;
 use micold_daemon::singleton::{self, Acquisition};
 
 fn test_endpoint(dir: &Path) -> Endpoint {

@@ -7,8 +7,8 @@
 //! and grid streaming land in Phases 2b–3.
 
 pub mod catalog;
-pub mod endpoint;
 pub mod lifecycle;
+pub mod logging;
 pub mod server;
 pub mod singleton;
 pub mod state;

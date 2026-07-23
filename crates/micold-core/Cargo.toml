@@ -25,15 +25,20 @@ postcard = { workspace = true }
 # codec so framing can never drift between them.
 tokio-util = { workspace = true }
 bytes = { workspace = true }
+# Endpoint location, detached daemon spawn, and the client-side connect/handshake all live here so
+# BOTH binaries compile against one definition — a client and daemon can never disagree about where
+# the socket is or how the handshake goes. Still no iced and no PTY crate (FR-040).
+tokio = { workspace = true }
+interprocess = { workspace = true }
+futures-util = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-# `kill(2)`/`process_group` for the environment-include script timeout (feature 011, `env_include`).
+# `geteuid`/`setsid` for endpoint ownership verification + detached spawn, and
+# `kill(2)`/`process_group` for the environment-include script timeout (`env_include`).
 libc = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-# Round-trip the codec over an in-memory duplex stream in unit tests.
-tokio = { workspace = true }
 
 [lints]
 workspace = true

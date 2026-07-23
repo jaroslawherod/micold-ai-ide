@@ -22,7 +22,7 @@ use interprocess::local_socket::tokio::prelude::*;
 use interprocess::local_socket::tokio::{Listener, Stream};
 use interprocess::local_socket::{GenericFilePath, ListenerOptions, Name, ToFsName};
 
-use crate::endpoint::Endpoint;
+use micold_core::endpoint::Endpoint;
 
 /// The result of a startup attempt.
 pub enum Acquisition {
