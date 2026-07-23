@@ -1193,10 +1193,22 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     .find(|w| w.dir_name == dir)
                     .cloned();
                 // Terminate this worktree's running sessions first (both processes per
-                // session, feature 010 FR-014).
+                // session, feature 010 FR-014), and record the same durable suppression marker
+                // Close/Remove use (bugfix BUG-003, FR-020c): the worktree directory (and thus
+                // its transcripts' `cwd` encoding) can be reused if a worktree with the same
+                // `dir_name` is created again later, and without this marker reconciliation
+                // (FR-020b) would resurrect these sessions from the still-existing `claude`
+                // transcripts on the next project open.
+                let worktree_cwd =
+                    session_cwd_for_location(&repo, &SessionLocation::Worktree(dir.clone()));
+                let provider = ClaudeProvider;
+                let config_dir = provider.config_dir();
                 for id in app.core.sessions_in_worktree(&dir) {
                     if let Some(mut st) = app.terminals.remove(&id) {
                         st.kill_all();
+                    }
+                    if let Some(config_dir) = &config_dir {
+                        let _ = provider.mark_archived(config_dir, &worktree_cwd, id.0);
                     }
                 }
                 if let Some(wt) = wt {
