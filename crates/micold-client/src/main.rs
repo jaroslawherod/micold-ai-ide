@@ -148,6 +148,13 @@ struct App {
     /// a single "last attempt" status in Settings, independent of the per-directory `vars` cache
     /// used for merging into a session's own spawn call site.
     env_include_last_outcome: EnvIncludeOutcome,
+    /// Handle for sending `ClientMsg`s to the daemon while connected (feature 010). `None` before
+    /// the first connect and after a disconnect. The connection itself lives in the
+    /// [`micold_client::daemon::connection`] subscription; this is only the send side.
+    daemon: Option<micold_client::daemon::Outbox>,
+    /// The last catalog snapshot the daemon sent (welcome or `CatalogChanged`). Not yet rendered —
+    /// the sidebar/session-list retarget onto it lands with the render switch (T042).
+    daemon_catalog: Option<micold_core::protocol::messages::CatalogSnapshot>,
 }
 
 /// The result of a single resolution attempt for one directory (feature 011, data-model.md).
@@ -450,6 +457,8 @@ fn boot() -> (App, Task<Message>) {
             env_include_timeout_secs,
             env_include_cache,
             env_include_last_outcome,
+            daemon: None,
+            daemon_catalog: None,
         },
         Task::none(),
     )
@@ -685,6 +694,47 @@ fn capture_overlay(app: &App) -> Option<ClosingOverlay> {
 
 fn update_inner(app: &mut App, message: Message) -> Task<Message> {
     match message {
+        // ---- Feature 010: daemon connection lifecycle (binary-owned runtime state) ----
+        Message::DaemonConnected {
+            outbox,
+            catalog,
+            settings,
+        } => {
+            app.daemon = Some(outbox);
+            app.daemon_catalog = Some(catalog);
+            // The daemon is the single writer of settings; adopt what it reports.
+            app.scrollback_lines = settings.scrollback_lines;
+            Task::none()
+        }
+        Message::DaemonEvent(event) => {
+            match event {
+                micold_core::protocol::messages::DaemonMsg::CatalogChanged { catalog } => {
+                    app.daemon_catalog = Some(catalog);
+                }
+                micold_core::protocol::messages::DaemonMsg::SettingsChanged { settings } => {
+                    app.scrollback_lines = settings.scrollback_lines;
+                }
+                // Other control messages (operation results, pong, attach/displaced) are consumed
+                // as the corresponding client flows land (T041/T053).
+                _ => {}
+            }
+            Task::none()
+        }
+        Message::DaemonGridFrame(_frame) => {
+            // The per-session grid cache + render swap lands next (T042); until then a frame has no
+            // renderer to feed and is dropped. Wiring it here keeps the actor's stream draining.
+            Task::none()
+        }
+        Message::DaemonDisconnected => {
+            app.daemon = None;
+            Task::none()
+        }
+        Message::DaemonConnectFailed(reason) => {
+            app.core
+                .notify_error(format!("Could not connect to the session daemon: {reason}"));
+            Task::none()
+        }
+
         // Advance every animation toward its target via the shared driver.
         Message::AnimationTick => {
             apply_motion_targets(app);
@@ -1427,6 +1477,8 @@ fn subscription(app: &App) -> Subscription<Message> {
     let mut subs = vec![
         micold_client::ui::subscription(&app.core),
         window_focus_events(),
+        // The daemon connection: one long-lived socket to the session host (feature 010, T041).
+        micold_client::daemon::connection(),
     ];
     // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.
     subs.push(os_theme_poll(os_theme_poll_interval(app.window_focused)));
@@ -2002,6 +2054,8 @@ mod tests {
             env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
             env_include_cache: HashMap::new(),
             env_include_last_outcome: EnvIncludeOutcome::Disabled,
+            daemon: None,
+            daemon_catalog: None,
         };
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
@@ -2030,6 +2084,8 @@ mod tests {
             env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
             env_include_cache: HashMap::new(),
             env_include_last_outcome: EnvIncludeOutcome::Disabled,
+            daemon: None,
+            daemon_catalog: None,
         }
     }
 
@@ -2168,6 +2224,8 @@ mod tests {
             env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
             env_include_cache: HashMap::new(),
             env_include_last_outcome: EnvIncludeOutcome::Disabled,
+            daemon: None,
+            daemon_catalog: None,
         };
         assert_eq!(app.last_grid, None);
 

@@ -6,9 +6,11 @@
 //! and persistence live in [`micold_core`]; the PTY/VT session host lives in the daemon.
 
 pub mod app;
+pub mod daemon;
 pub mod icons;
 pub mod input;
 pub mod keymap;
 pub mod motion;
+pub mod selection;
 pub mod tokens;
 pub mod ui;

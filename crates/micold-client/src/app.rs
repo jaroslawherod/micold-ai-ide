@@ -586,6 +586,28 @@ pub enum Message {
     /// Dismiss the notification at this index. Out-of-range indices are ignored, so a stale
     /// click delivered after the list shrank is harmless.
     NotificationDismissed(usize),
+
+    // ---- Feature 010: daemon connection (client of the daemon-hosted sessions) ----
+    /// The daemon connection is up: the binary stores the [`Outbox`] to drive sessions and adopts
+    /// the welcome catalog/settings. Handled by the binary (the `Outbox` is runtime, not core).
+    DaemonConnected {
+        /// Handle for sending `ClientMsg`s to the daemon.
+        outbox: crate::daemon::Outbox,
+        /// The catalog as of the handshake.
+        catalog: micold_core::protocol::messages::CatalogSnapshot,
+        /// The service-owned settings.
+        settings: micold_core::protocol::messages::DaemonSettings,
+    },
+    /// A control message pushed by the daemon (catalog/settings changes, operation results, …).
+    /// Handled by the binary.
+    DaemonEvent(micold_core::protocol::messages::DaemonMsg),
+    /// A grid frame for the viewed session (full snapshot or delta). Handled by the binary, applied
+    /// into the per-session grid cache.
+    DaemonGridFrame(micold_core::protocol::grid::GridFrame),
+    /// The daemon connection dropped; the binary clears its outbox until it reconnects.
+    DaemonDisconnected,
+    /// Connecting to (or spawning) the daemon failed, with a human-facing reason.
+    DaemonConnectFailed(String),
 }
 
 /// How prominently a [`Notification`] is presented.
@@ -764,6 +786,14 @@ impl State {
     /// Apply a [`Message`], transitioning the state. Pure and side-effect free.
     pub fn update(&mut self, message: Message) {
         match message {
+            // Daemon connection messages are runtime, not pure state — the binary handles them in
+            // `update_inner` and never routes them here. Listed explicitly (not a catch-all) so the
+            // core reducer stays exhaustive over `Message` and a future variant is a compile error.
+            Message::DaemonConnected { .. }
+            | Message::DaemonEvent(_)
+            | Message::DaemonGridFrame(_)
+            | Message::DaemonDisconnected
+            | Message::DaemonConnectFailed(_) => {}
             Message::HelpMenuToggled => {
                 self.help_menu_open = !self.help_menu_open;
                 // The overflow menu, the project switcher, and the sidebar filter panel are
