@@ -24,7 +24,7 @@ mod tree_view;
 pub use animation::{expand, fade, scale, slide};
 pub use filter_panel::FilterTrigger;
 pub use icon_button::IconButton;
-pub use menu::{ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
+pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use progress::StageProgress;
 pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};

@@ -40,6 +40,23 @@ const TOP_OFFSET: f32 = 52.0;
 /// The width of the right-click context-menu panel (narrower than the toolbar dropdown).
 const CONTEXT_MENU_WIDTH: f32 = 160.0;
 
+/// The approximate rendered size of a [`MenuOverlay`] panel holding `items` entries, as
+/// `(width, height)` in pixels — the input to anchor clamping so a cursor-anchored menu cannot
+/// open off-screen (feature 015).
+///
+/// Derived from the same tokens the panel is built from: the panel's own [`spacing::XS`] padding
+/// on both sides, each item's [`spacing::SM`] button padding plus a [`type_scale::BODY`] line,
+/// and [`spacing::XS`] between items. Deliberately rounds the line height **up** — erring large
+/// keeps the panel comfortably inside the window rather than flush against the edge.
+pub fn menu_panel_size(items: usize) -> (u16, u16) {
+    /// Generous line box for a `BODY`-sized label (font size plus leading).
+    const LINE: u16 = type_scale::BODY + 6;
+    let item = LINE + spacing::SM * 2;
+    let gaps = (items.saturating_sub(1)) as u16 * spacing::XS;
+    let height = spacing::XS * 2 + items as u16 * item + gaps;
+    (PANEL_WIDTH as u16, height)
+}
+
 /// The vertical stack of clickable menu entries shared by [`MenuOverlay`] and [`ContextMenu`].
 fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) -> Element<'a, M> {
     let mut list = column![].spacing(spacing::XS).width(Length::Fill);

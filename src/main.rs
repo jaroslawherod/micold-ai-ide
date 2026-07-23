@@ -475,7 +475,15 @@ fn boot() -> (App, Task<Message>) {
             env_include_cache,
             env_include_last_outcome,
         },
-        Task::none(),
+        // Ask for the initial window size up front: `resize_events` only fires on *changes*, so
+        // without this the first context menu before any resize would have nothing to clamp
+        // against (feature 015).
+        iced::window::get_latest()
+            .and_then(iced::window::get_size)
+            .map(|size| Message::WindowResized {
+                width: size.width.max(0.0) as u16,
+                height: size.height.max(0.0) as u16,
+            }),
     )
 }
 
@@ -1447,7 +1455,16 @@ fn theme(app: &App) -> iced::Theme {
 fn subscription(app: &App) -> Subscription<Message> {
     // Event-driven (not a poll): reports actual OS focus changes, so it costs nothing while
     // the window sits idle either focused or not (idle-CPU fix).
-    let mut subs = vec![ui::subscription(&app.core), window_focus_events()];
+    // Resize events are rare, so this costs nothing at idle; it keeps `window_size` current for
+    // context-menu clamping (feature 015).
+    let mut subs = vec![
+        ui::subscription(&app.core),
+        window_focus_events(),
+        iced::window::resize_events().map(|(_id, size)| Message::WindowResized {
+            width: size.width.max(0.0) as u16,
+            height: size.height.max(0.0) as u16,
+        }),
+    ];
     // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.
     subs.push(os_theme_poll(os_theme_poll_interval(app.window_focused)));
     if let Some(interval) = terminal_poll_interval(!app.terminals.is_empty(), app.window_focused) {
@@ -1460,6 +1477,12 @@ fn subscription(app: &App) -> Subscription<Message> {
     // Run the animation clock only while something is actually animating (FR-014).
     if motion_animating(app) {
         subs.push(every(ANIM_TICK).map(|_| Message::AnimationTick));
+    }
+    // Track the pointer ONLY while the project switcher is open (feature 015), so a right-click
+    // on a row can anchor its context menu at the cursor. Scoping it this way keeps the idle
+    // window free of per-mouse-move redraws — the switcher is a brief, deliberate interaction.
+    if app.core.project_switcher_open {
+        subs.push(cursor_move_events());
     }
     Subscription::batch(subs)
 }
@@ -1501,6 +1524,32 @@ fn terminal_poll_interval(has_terminals: bool, window_focused: bool) -> Option<D
 /// Subscribes to raw OS window events and keeps only focus changes, translating them into
 /// [`Message::WindowFocusChanged`]. Every other window event (resize, move, redraw, ...) is
 /// discarded before it ever reaches `update`.
+/// Subscribes to raw pointer events and keeps only cursor moves, translating them into
+/// [`Message::CursorMoved`] (feature 015). Only subscribed while the project switcher is open —
+/// see [`subscription`] — since its sole purpose is anchoring a row's right-click menu.
+fn cursor_move_events() -> Subscription<Message> {
+    iced::event::listen_with(cursor_move_message)
+}
+
+/// The `listen_with` callback backing [`cursor_move_events`]; a free function (rather than a
+/// closure) so it can be unit-tested directly. Negative coordinates (the pointer leaving the
+/// window on some platforms) clamp to 0 rather than wrapping around the `u16` cast.
+fn cursor_move_message(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    match event {
+        iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+            Some(Message::CursorMoved {
+                x: position.x.max(0.0) as u16,
+                y: position.y.max(0.0) as u16,
+            })
+        }
+        _ => None,
+    }
+}
+
 fn window_focus_events() -> Subscription<Message> {
     iced::event::listen_with(window_focus_message)
 }
@@ -1958,6 +2007,36 @@ mod tests {
 
     fn dummy_status() -> iced::event::Status {
         iced::event::Status::Ignored
+    }
+
+    /// Feature 015: cursor moves become `CursorMoved` so a switcher row's right-click can anchor
+    /// its menu at the pointer; every other event is discarded before it reaches `update`.
+    #[test]
+    fn cursor_move_events_map_position_and_ignore_others() {
+        let at = |x: f32, y: f32| {
+            cursor_move_message(
+                iced::Event::Mouse(iced::mouse::Event::CursorMoved {
+                    position: iced::Point::new(x, y),
+                }),
+                dummy_status(),
+                iced::window::Id::unique(),
+            )
+        };
+        assert_eq!(
+            at(412.0, 233.0),
+            Some(Message::CursorMoved { x: 412, y: 233 })
+        );
+        // Off-window negatives clamp to 0 instead of wrapping the u16 cast.
+        assert_eq!(at(-5.0, -1.0), Some(Message::CursorMoved { x: 0, y: 0 }));
+        // Unrelated events are dropped.
+        assert_eq!(
+            cursor_move_message(
+                iced::Event::Mouse(iced::mouse::Event::CursorLeft),
+                dummy_status(),
+                iced::window::Id::unique(),
+            ),
+            None
+        );
     }
 
     #[test]
