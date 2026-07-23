@@ -8,9 +8,10 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use micold_core::input::{InputOutcome, InputReceiver};
 use micold_core::protocol::messages::{
     CatalogSnapshot, DaemonMsg, DaemonSettings, RefusalReason, SessionSummary,
 };
@@ -19,6 +20,7 @@ use tokio::sync::mpsc;
 
 use crate::catalog::Catalog;
 use crate::lifecycle::Lifecycle;
+use crate::supervisor::PtySession;
 
 /// A per-connection client identity (ephemeral; never persisted).
 pub type ClientId = u64;
@@ -35,6 +37,18 @@ struct Inner {
     clients: HashMap<ClientId, ClientHandle>,
     /// At most one attachment per project (data-model P2/T1).
     attachments: HashMap<PathBuf, Attachment>,
+    /// The live PTY-backed sessions the daemon is hosting, keyed by id (data-model §Session). Each
+    /// carries its own [`InputReceiver`] so the append-only input contract (G2) is enforced per
+    /// session, independent of which connection — or how many reconnects — drove it.
+    sessions: HashMap<SessionId, LiveSession>,
+}
+
+/// A running session plus the daemon's view of its input log. The [`PtySession`] is held behind an
+/// `Arc` so a caller can clone the handle and write to the PTY *after* dropping the state lock —
+/// PTY writes must never block the shared lock (see the module invariant).
+struct LiveSession {
+    pty: Arc<PtySession>,
+    input: InputReceiver,
 }
 
 struct ClientHandle {
@@ -57,6 +71,7 @@ impl DaemonState {
                 catalog,
                 clients: HashMap::new(),
                 attachments: HashMap::new(),
+                sessions: HashMap::new(),
             }),
             next_id: AtomicU64::new(1),
             lifecycle: Lifecycle::new(),
@@ -205,6 +220,79 @@ impl DaemonState {
         let inner = self.lock();
         for client in inner.clients.values() {
             let _ = client.tx.send(msg.clone());
+        }
+    }
+
+    /// Adopt a freshly-spawned session into the live registry, starting its input log at serial `0`.
+    /// Returns the shared handle (also the seam the session-lifecycle RPCs will use, T053+).
+    pub fn register_session(&self, session: PtySession) -> Arc<PtySession> {
+        let pty = Arc::new(session);
+        self.lock().sessions.insert(
+            pty.id(),
+            LiveSession {
+                pty: Arc::clone(&pty),
+                input: InputReceiver::new(),
+            },
+        );
+        pty
+    }
+
+    /// Remove a session from the live registry (e.g. after it ends). Returns the handle if present.
+    pub fn remove_session(&self, session: SessionId) -> Option<Arc<PtySession>> {
+        self.lock().sessions.remove(&session).map(|s| s.pty)
+    }
+
+    /// The live handle for a session, if the daemon is hosting it (test/observability).
+    pub fn live_session(&self, session: SessionId) -> Option<Arc<PtySession>> {
+        self.lock()
+            .sessions
+            .get(&session)
+            .map(|s| Arc::clone(&s.pty))
+    }
+
+    /// Drive one input batch into a session's PTY, enforcing the append-only input contract (G2,
+    /// protocol.md §7). The [`InputReceiver`] classifies the serial under the lock; the actual PTY
+    /// write happens *after* the lock is dropped so it can never stall the shared state.
+    ///
+    /// - `Apply` — the expected next serial: the bytes are written to the PTY.
+    /// - `Lost` — a gap (only possible across a reconnect): surfaced loudly, then the arrived bytes
+    ///   are still written, because dropping input that *did* arrive would compound the loss.
+    /// - `Stale` — a duplicate/reordered serial: dropped and never written, so the log is never
+    ///   reordered or coalesced.
+    pub fn session_input(&self, session: SessionId, serial: u64, bytes: &[u8]) {
+        let resolved = {
+            let mut inner = self.lock();
+            inner
+                .sessions
+                .get_mut(&session)
+                .map(|live| (live.input.accept(serial), Arc::clone(&live.pty)))
+        };
+
+        let Some((outcome, pty)) = resolved else {
+            // Input for a session the daemon is not hosting: nothing to write. Loud, not silent —
+            // this means the client's view diverged from the daemon's (a bug or a lost session).
+            tracing::warn!(session = %session.0, "dropping input for an unknown session");
+            return;
+        };
+
+        match outcome {
+            InputOutcome::Apply => {}
+            InputOutcome::Lost { missing } => {
+                tracing::warn!(
+                    session = %session.0,
+                    missing,
+                    serial,
+                    "input loss detected across a reconnect; applying the arrived bytes and resyncing"
+                );
+            }
+            InputOutcome::Stale => {
+                tracing::debug!(session = %session.0, serial, "dropping stale/duplicate input");
+                return;
+            }
+        }
+
+        if let Err(err) = pty.write_input(bytes) {
+            tracing::warn!(session = %session.0, %err, "failed to write input to the PTY");
         }
     }
 

@@ -223,6 +223,11 @@ where
                 }
             }
             ClientMsg::Detach { project } => state.detach(id, &project),
+            ClientMsg::SessionInput {
+                session,
+                serial,
+                bytes,
+            } => state.session_input(session, serial, &bytes),
             ClientMsg::SetViewedSession { project, session } => {
                 state.set_viewed(id, project, session)
             }

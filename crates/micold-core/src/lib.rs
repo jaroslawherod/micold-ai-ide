@@ -16,6 +16,7 @@ pub mod endpoint;
 pub mod env_include;
 pub mod fs_scan;
 pub mod git;
+pub mod input;
 pub mod metadata;
 pub mod naming;
 pub mod project;

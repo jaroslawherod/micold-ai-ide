@@ -59,8 +59,10 @@ pub struct PtySession {
     term: SharedTerm,
     /// The child process. Behind a mutex so liveness checks / kill take `&self`.
     child: Mutex<Box<dyn Child + Send + Sync>>,
-    /// The PTY master — used for resize; `MasterPty` is interior-mutable so no lock is needed.
-    master: Box<dyn MasterPty + Send>,
+    /// The PTY master — used for resize. Behind a `Mutex` only so [`PtySession`] is `Sync` (the
+    /// trait object is `Send` but not `Sync`); this lets the session live in the shared daemon
+    /// registry. `resize` takes `&self` and the lock is never held across an `.await`.
+    master: Mutex<Box<dyn MasterPty + Send>>,
     /// The PTY writer, shared with the [`DaemonListener`] (VT replies use the same writer as user
     /// input, so both hold this).
     writer: SharedWriter,
@@ -192,7 +194,7 @@ impl PtySession {
             id,
             term,
             child: Mutex::new(child),
-            master: pair.master,
+            master: Mutex::new(pair.master),
             writer,
             signals,
             size,
@@ -234,6 +236,8 @@ impl PtySession {
             return Ok(());
         }
         self.master
+            .lock()
+            .map_err(|_| io::Error::other("pty master mutex poisoned"))?
             .resize(PtySize {
                 rows,
                 cols,
