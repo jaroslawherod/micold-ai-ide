@@ -6,6 +6,8 @@
 
 **Status**: Draft
 
+**Bugfix**: 2026-07-21 — BUG-001 Clarified FR-018/Edge Cases to distinguish a transient OS-theme-detection failure from a genuine, sustained "no preference" reading; added FR-021.
+
 **Input**: User description: "Adopt a Material Design layout and visual language across the Micold AI IDE application shell, with a single design system (color roles, typography scale, spacing, shape), light and dark themes that follow the OS by default and are user-overridable, and all existing surfaces restyled without behavior loss."
 
 ## User Scenarios & Testing *(mandatory)*
@@ -99,7 +101,12 @@ system" and confirm it returns to matching the OS.
 
 - What happens when the operating system does not report a theme preference or reporting is
   unavailable? The app falls back to a defined default theme (light) while in "follow system"
-  mode.
+  mode. **This is the *sustained* case — the OS genuinely has no preference to report** (see
+  FR-021 for the *transient* case below).
+- What happens when a single OS theme detection attempt fails or times out (e.g. under CPU load)
+  without the OS preference actually changing? The app holds the last-known system theme for
+  that poll rather than treating the failure as "no preference" — it does not flash to the
+  fallback theme (FR-021). *(Added 2026-07-21 — BUG-001.)*
 - How does the app handle a corrupt or unreadable stored theme preference? It ignores the bad
   value and reverts to "follow system".
 - What happens to the layout at very small window sizes? Content remains usable — surfaces
@@ -152,12 +159,19 @@ system" and confirm it returns to matching the OS.
 - **FR-017**: All previously existing behavior (opening, reopening, renaming projects, the
   About flow, and project selection) MUST remain unchanged; this feature changes presentation
   and theme handling only.
-- **FR-018**: When the OS theme preference is unavailable and the app is following the system,
-  the application MUST fall back to a defined default theme.
+- **FR-018**: When the OS theme preference is **sustained-unavailable** (the OS reports no
+  preference, or no successful detection has ever occurred) and the app is following the system,
+  the application MUST fall back to a defined default theme. *(Clarified 2026-07-21 — BUG-001:
+  see FR-021 for a transient detection failure, which is a distinct case.)*
 - **FR-019**: When the stored theme preference is missing or invalid, the application MUST
   revert to "follow system".
 - **FR-020**: Text MUST remain legible against its surface in both themes, meeting a defined
   minimum contrast level.
+- **FR-021**: While following the system, a **transient** failure of a single OS theme detection
+  attempt (e.g. a detection call timing out under CPU load) MUST NOT be treated as the OS
+  reporting no preference; the application MUST retain the last-known system theme and MUST NOT
+  change the displayed theme until a subsequent detection attempt succeeds. Only a sustained
+  inability to detect a preference invokes the FR-018 fallback. *(Added 2026-07-21 — BUG-001.)*
 
 ### Key Entities *(include if feature involves data)*
 

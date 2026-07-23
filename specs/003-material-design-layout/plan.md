@@ -58,7 +58,10 @@ theme detection on all three).
 **Performance Goals**: Theme switches (user override or OS change) apply within 1 second
 (SC-003) with no flicker; the OS-scheme poll runs off the render path on a sub-second (~500 ms)
 interval — comfortably under the 1 s bound worst-case — and only emits a message when the
-detected scheme actually changes.
+detected scheme actually *changes* (a transient detection error is not a change — it retains the
+last-known scheme; see FR-021). *(Bugfix 2026-07-21 — BUG-001: original text was silent on
+detection-call reliability, letting a `dark_light::detect()` timeout under CPU load masquerade as
+a real OS change.)*
 
 **Constraints**: Fully offline; no `cfg(target_os)` branching in core logic (OS detection is
 isolated in the binary behind the `dark-light` boundary, mirroring the `FolderScanner`
