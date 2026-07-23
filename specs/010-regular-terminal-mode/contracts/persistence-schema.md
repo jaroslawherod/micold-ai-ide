@@ -3,6 +3,12 @@
 Governs FR-011 ("a session's current mode MUST be persisted and restored"). Extends the schema
 documented in `specs/005-worktree-session-terminal/contracts/storage-schema.md`.
 
+**Superseded placement (bugfix 002/BUG-001, 2026-07-21)**: `StoredSession` (and its `mode` field
+below) no longer lives embedded in the shared `projects.json` catalog — it lives in the
+per-project state file from that bugfix's storage split, so a fault in one project's file can't
+wipe every project's sessions and modes at once. The schema delta and round-trip behavior below
+are otherwise unchanged.
+
 ## Schema delta
 
 ```rust

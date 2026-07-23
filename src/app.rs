@@ -75,6 +75,9 @@ pub enum Overlay {
     /// The rename-worktree dialog is shown (feature 008, FR-013/FR-014). The in-progress edit
     /// is held in [`State::worktree_rename_draft`].
     RenameWorktree,
+    /// The confirm-remove dialog for a session is shown (bugfix BUG-003, FR-015c). The target
+    /// session is held in [`State::session_remove_target`].
+    ConfirmSessionRemove,
 }
 
 /// Transient creation status for the add-worktree form (feature 010, research R4). Not
@@ -415,12 +418,26 @@ pub enum Message {
     SessionStarted(Session),
     /// Select a session to display its terminal (FR-015); other sessions keep running.
     SessionSelected(SessionId),
-    /// Close/stop a session (FR-015a). The binary kills the process; this drops the record.
+    /// Close/stop a session (FR-015a, bugfix BUG-003). The binary kills the process and records
+    /// the durable suppression marker; this archives (not deletes) the record.
     SessionCloseRequested(SessionId),
     /// The session's `claude` process reported it is running (FR-010).
     SessionRunning(SessionId),
     /// The session's `claude` title became available/changed (FR-011a).
     SessionTitleUpdated { id: SessionId, title: String },
+
+    // ---- Bugfix BUG-003: session Remove (distinct from Close/archive) ----
+    /// Open (or close, if already open) a session's right-click context menu.
+    SessionMenuToggled(SessionId),
+    /// Dismiss the session context menu (outside click, or after an action is chosen).
+    SessionMenuDismissed,
+    /// Request permanent removal of a session; opens the confirm dialog (FR-015c).
+    SessionRemoveRequested(SessionId),
+    /// Confirm removal. The binary kills the process (if running) and records the durable
+    /// suppression marker, then persists; the reducer drops the record outright.
+    SessionRemoveConfirmed,
+    /// Dismiss the remove confirmation without removing anything.
+    SessionRemoveCancelled,
 
     // ---- Feature 010: switchable regular terminal mode ----
     /// The mode toggle was pressed for the active session (FR-001–FR-004, FR-010).
@@ -647,6 +664,13 @@ pub struct State {
     /// The worktree row the pointer is currently over, by `dir_name` (feature 008). Drives the
     /// hover-revealed row actions (add-session + delete). Transient.
     pub hovered_worktree: Option<String>,
+    /// The session whose right-click context menu is open (bugfix BUG-003). At most one is open
+    /// at a time; `None` means no menu is showing. Mirrors `worktree_menu_open`.
+    pub session_menu_open: Option<SessionId>,
+    /// The session pending permanent removal, shown in the confirm dialog (bugfix BUG-003,
+    /// FR-015c). Present only while [`Overlay::ConfirmSessionRemove`] is shown. Mirrors
+    /// `worktree_delete_target`.
+    pub session_remove_target: Option<SessionId>,
 }
 
 impl State {
@@ -1106,9 +1130,17 @@ impl State {
                 }
             }
             Message::SessionCloseRequested(id) => {
+                // Bugfix BUG-003 (FR-015a): close ARCHIVES the session (kept, hidden from the
+                // sidebar via `active_sessions()`) rather than deleting its record outright, so a
+                // still-existing `claude` transcript doesn't get reconstructed by reconciliation
+                // (FR-020b) on the next project open. The durable, provider-side suppression
+                // marker (FR-020c) is written by the caller at the I/O boundary (`src/main.rs`),
+                // alongside killing the process.
                 if let Some(path) = self.workspace.active.clone() {
                     if let Some(list) = self.workspace.sessions.get_mut(&path) {
-                        list.retain(|s| s.id != id);
+                        if let Some(session) = list.iter_mut().find(|s| s.id == id) {
+                            session.archive();
+                        }
                     }
                 }
                 if self.active_session == Some(id) {
@@ -1116,6 +1148,44 @@ impl State {
                     // BUG-001 / focus-model.md: no session is displayed, so no terminal is focused.
                     self.terminal_focused = false;
                 }
+            }
+            Message::SessionMenuToggled(id) => {
+                // Toggle: same session closes; a different one replaces (only one open) —
+                // mirrors `WorktreeMenuToggled` (bugfix BUG-003).
+                self.session_menu_open = if self.session_menu_open == Some(id) {
+                    None
+                } else {
+                    Some(id)
+                };
+            }
+            Message::SessionMenuDismissed => {
+                self.session_menu_open = None;
+            }
+            Message::SessionRemoveRequested(id) => {
+                self.session_menu_open = None;
+                self.session_remove_target = Some(id);
+                self.open_overlay(Overlay::ConfirmSessionRemove);
+            }
+            Message::SessionRemoveConfirmed => {
+                // Unlike close (archive), remove drops the record outright — the pre-BUG-003
+                // close behavior. The binary has already killed the process and recorded the
+                // durable suppression marker (FR-015c, FR-020c).
+                if let Some(id) = self.session_remove_target.take() {
+                    if let Some(path) = self.workspace.active.clone() {
+                        if let Some(list) = self.workspace.sessions.get_mut(&path) {
+                            list.retain(|s| s.id != id);
+                        }
+                    }
+                    if self.active_session == Some(id) {
+                        self.active_session = None;
+                        self.terminal_focused = false;
+                    }
+                }
+                self.overlay = Overlay::None;
+            }
+            Message::SessionRemoveCancelled => {
+                self.session_remove_target = None;
+                self.overlay = Overlay::None;
             }
             Message::TerminalTick => {}
             Message::SidebarToggled => {
@@ -1303,7 +1373,12 @@ impl State {
             .collect()
     }
 
-    /// Sessions hosted by the active project (FR-011). Empty when no project is active.
+    /// Sessions hosted by the active project (FR-011), **including archived ones** — used by
+    /// callers that need the raw record (e.g. [`Self::sessions_in_worktree`], which only cares
+    /// about location, not visibility). Sidebar-rendering call sites
+    /// ([`Self::sidebar_entries`], [`Self::worktree_tree`]) additionally filter out archived
+    /// sessions themselves (bugfix BUG-003, FR-015a), so a closed session disappears from the
+    /// sidebar. Empty when no project is active.
     pub fn active_sessions(&self) -> &[Session] {
         self.workspace
             .active
@@ -1455,7 +1530,7 @@ impl State {
                 expanded: self.expanded.contains(&worktree.dir_name),
                 sessions: sessions
                     .iter()
-                    .filter(|s| s.location.is_worktree(&worktree.dir_name))
+                    .filter(|s| s.location.is_worktree(&worktree.dir_name) && !s.archived)
                     .cloned()
                     .collect(),
                 worktree: worktree.clone(),
@@ -1487,7 +1562,7 @@ impl State {
         let default_sessions: Vec<Session> = self
             .active_sessions()
             .iter()
-            .filter(|s| s.location == SessionLocation::Default)
+            .filter(|s| s.location == SessionLocation::Default && !s.archived)
             .cloned()
             .collect();
         let mut entries = vec![SidebarEntry::Default(DefaultNode {
@@ -1563,6 +1638,7 @@ pub fn on_escape(state: &State) -> Option<Message> {
         Overlay::Settings => Some(Message::SettingsCancelled),
         Overlay::ConfirmWorktreeDelete => Some(Message::WorktreeDeleteCancelled),
         Overlay::RenameWorktree => Some(Message::WorktreeRenameCancelled),
+        Overlay::ConfirmSessionRemove => Some(Message::SessionRemoveCancelled),
         Overlay::None => None,
     }
 }

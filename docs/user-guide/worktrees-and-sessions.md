@@ -160,7 +160,14 @@ Right-click a worktree in the sidebar to open its context menu:
   non-interfering tasks.
 - **Switch** between sessions by selecting them in the sidebar. Background sessions keep running;
   only the displayed terminal changes.
-- **Close** a session with its close action; this stops its `claude` process and removes it.
+- Right-click a session for **Close** and **Remove**:
+  - **Close** stops its `claude` process and hides it from the sidebar. It does not reappear —
+    including on a later restart, even though the underlying `claude` conversation itself still
+    exists on disk. There is no way to bring a closed session back through the UI.
+  - **Remove** permanently deletes the session's record, after a confirmation step. Unlike Close,
+    there is no possible recovery path back into the sidebar either. Remove is only offered on a
+    still-visible session — a closed session can't be removed separately, since it's already
+    hidden.
 
 Session labels come from `claude` itself (its session title); until a title is available a
 placeholder is shown.

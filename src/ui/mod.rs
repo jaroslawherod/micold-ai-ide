@@ -2,6 +2,7 @@
 
 mod about;
 mod confirm_delete;
+mod confirm_session_remove;
 mod material;
 pub(crate) use material::target_offset_delta;
 mod project_selector;
@@ -20,6 +21,7 @@ use iced::{Element, Font, Length, Subscription};
 use micold_ai_ide::app::{Message, Overlay, State};
 use micold_ai_ide::icons::Icon;
 use micold_ai_ide::motion::Animator;
+use micold_ai_ide::session::SessionId;
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale, Rgb, Roles};
 
@@ -235,6 +237,20 @@ pub fn view<'a>(
         None => base,
     };
 
+    // Float the session right-click context menu over everything (bugfix BUG-003). Only present
+    // while a session's menu is open.
+    let base = match state.session_menu_open {
+        Some(id) => material::MenuOverlay::new(
+            base,
+            session_menu_items(id),
+            Message::SessionMenuDismissed,
+            roles,
+        )
+        .anchor(iced::Point::new(24.0, 96.0))
+        .into(),
+        None => base,
+    };
+
     // The overlay fade progress (0 = hidden, 1 = fully shown). Drives both the enter (a live
     // overlay fading in as this rises 0→1) and the exit (a dismissing snapshot fading out as it
     // falls 1→0). At <= 0.001 the modal renders `base` unchanged.
@@ -288,6 +304,18 @@ pub fn view<'a>(
             Some(draft) => worktree_rename::modal(base, draft, scheme, overlay_progress),
             None => base,
         },
+        Overlay::ConfirmSessionRemove => match state
+            .session_remove_target
+            .and_then(|id| state.workspace.find_session(id))
+        {
+            Some((_, session)) => confirm_session_remove::modal(
+                base,
+                session.label.display(),
+                scheme,
+                overlay_progress,
+            ),
+            None => base,
+        },
     }
 }
 
@@ -309,6 +337,20 @@ fn worktree_menu_items(dir: &str, display_name: &str) -> Vec<material::MenuItem<
             Icon::Unavailable,
             "Delete",
             Message::WorktreeDeleteRequested(dir.to_string()),
+        ),
+    ]
+}
+
+/// The items in a session's right-click context menu (bugfix BUG-003): "Close" archives (kept,
+/// hidden, never resurrected by reconciliation — FR-015a/FR-020c); "Remove" permanently deletes,
+/// behind a confirm dialog (FR-015c).
+fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
+    vec![
+        material::MenuItem::new(Icon::Close, "Close", Message::SessionCloseRequested(id)),
+        material::MenuItem::new(
+            Icon::Unavailable,
+            "Remove",
+            Message::SessionRemoveRequested(id),
         ),
     ]
 }
@@ -344,6 +386,9 @@ fn dismissing_modal<'a>(
         }
         ClosingOverlay::WorktreeRename(draft) => {
             worktree_rename::modal(base, draft, scheme, progress)
+        }
+        ClosingOverlay::ConfirmSessionRemove(label) => {
+            confirm_session_remove::modal(base, label, scheme, progress)
         }
     }
 }
@@ -396,6 +441,10 @@ pub fn subscription(state: &State) -> Subscription<Message> {
         Overlay::RenameWorktree => iced::keyboard::on_key_press(|key, _modifiers| {
             use iced::keyboard::{key::Named, Key};
             matches!(key, Key::Named(Named::Escape)).then_some(Message::WorktreeRenameCancelled)
+        }),
+        Overlay::ConfirmSessionRemove => iced::keyboard::on_key_press(|key, _modifiers| {
+            use iced::keyboard::{key::Named, Key};
+            matches!(key, Key::Named(Named::Escape)).then_some(Message::SessionRemoveCancelled)
         }),
     }
 }

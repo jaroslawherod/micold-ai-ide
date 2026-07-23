@@ -105,3 +105,22 @@ docs/
 ## Complexity Tracking
 
 > No constitution violations. Section intentionally empty.
+
+## Bugfix: per-project storage split (BUG-001, 2026-07-21)
+
+**Storage** (revises the Technical Context line above): the single JSON file remains the
+mechanism, but its contents split in two: a small `projects.json` **catalog** (path, display
+name, git flag, `last_active` — unchanged shape) and one **per-project state file** per known
+project (sessions, worktree display-name overrides, terminal mode — the state features
+005/008/010 had been embedding into the catalog's own `projects[]` entries). A fault reading or
+writing one project's state file degrades only that project to empty, exactly as a corrupt
+catalog degrades to an empty catalog today (FR-012a) — it can no longer take every other
+project's sessions down with it. See `contracts/storage-schema.md` for the file layout and the
+downstream contracts it supersedes (005/008/010-root-dir-session/010-regular-terminal-mode).
+Constitution Check IV is otherwise unaffected: still local-first, still fully offline.
+
+**Verification follow-up (2026-07-23)**: `/speckit.bugfix.verify` found T029 already checked
+complete while claiming a behavior ("surface save failures non-fatally") the code doesn't
+implement — every call site discards the `save` `Result` outright. Added **FR-012b** (a failed
+persist MUST be surfaced to the user, visibly and non-blockingly, not silently discarded) and
+reopened T029 against it; see `contracts/storage-schema.md` "Save-failure surfacing."

@@ -7,6 +7,16 @@ Widens the existing per-project `sessions` array (`projects.json`, via `director
 atomic temp-file + rename) so a persisted session can record "no worktree" without a
 schema version bump.
 
+**Superseded placement (bugfix 002/BUG-001, 2026-07-21)**: the `sessions` array this contract
+widens no longer lives embedded in the shared `projects.json` catalog — it lives in the
+per-project state file from that bugfix's storage split, so a fault in one project's file can't
+wipe every project's sessions. The `worktree_dir: Option<String>` field change and its
+`SessionLocation::Default`/`Worktree(dir)` semantics below are unaffected. Additionally, this
+feature's `SessionLocation::Default` (the project root) is one of the two locations scanned by the
+session-reconciliation fix in `specs/005-worktree-session-terminal/spec.md` FR-020b — when a
+project opens, the root directory's transcript directory is scanned alongside every worktree's, so
+a Default session's conversation is recoverable even if its persisted record is lost.
+
 ## Field change
 
 | Field | Old type | New type | Meaning |

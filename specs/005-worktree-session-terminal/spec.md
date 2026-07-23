@@ -34,6 +34,34 @@
 - Q: The sidebar label never matches the AI CLI's own session name — it stays on the placeholder ("New session") forever. What is expected? → A: The system MUST actively read the provider-assigned session name/title while the session runs and reconcile the sidebar label to it (placeholder → provider name), updating whenever the provider's name changes. This label-sync flow must actually run at runtime, not merely be represented in the model.
 - Q: The requirements and contracts name `claude` directly everywhere. Should the AI CLI be abstracted so other AI CLI providers can be supported later? → A: Yes. Treat the AI CLI as an abstract **AI CLI provider** behind a single seam; all provider-specific details (id ownership, resume mechanism, conversation-transcript location, session-title record format) live behind that abstraction. `claude` (Claude Code) is the default and first provider. Throughout this spec, existing references to `claude` are to be read as "the configured AI CLI provider" (see FR-024), with `claude` as the concrete default; they are not rewritten inline to keep this bugfix minimal.
 
+### Session 2026-07-21 (bugfix 002/BUG-001)
+
+- Q: A store-level fault (or the 002/BUG-001 per-project storage split's own failure mode) can
+  leave a project with no persisted session records even though the AI CLI provider still has real
+  conversation transcripts for it on disk. Should the app do anything beyond isolating the fault to
+  that one project? → A: Yes. On project open, reconcile the session list against the provider's
+  own transcripts for the project's supported session locations — its root directory and every
+  worktree — and reconstruct a session entry for any transcript found with no matching persisted
+  record. This is a supplement to normal restore (FR-020/FR-021/FR-023a), not a replacement.
+
+### Session 2026-07-23 (bugfix BUG-003)
+
+- Q: Closing a session (FR-015a) deletes its record, but FR-020b's reconciliation then
+  reconstructs it from its still-existing `claude` transcript on next project open — silently
+  undoing the close. Should close instead keep the record, and should there be a separate,
+  stronger "permanently forget this" action? → A: Yes to both. Close now archives (kills the
+  process, keeps the record hidden from the sidebar, never shown again) instead of deleting. A
+  new, distinct **Remove** action (confirm-gated) permanently deletes the record. Both MUST
+  durably block reconciliation from ever reconstructing that session id again — durably meaning
+  independent of the app's own store, since a corrupted/lost store is exactly the scenario
+  FR-020b exists to route around, so a flag living only in that same store wouldn't survive the
+  scenario it's meant to guard against.
+- Q: Should archived (closed) sessions be browsable anywhere — an "archived" list, an unarchive
+  action? → A: No. Archiving is an invisible tombstone: the session disappears from the sidebar
+  exactly as close did before, with no browsing UI and no way back. Tombstone records accumulate
+  indefinitely; this is an accepted trade-off, not a defect (they are cheap: an id, a label, and
+  a flag — no conversation content).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Open a project and browse its worktrees (Priority: P1)
@@ -108,6 +136,8 @@ The developer selects a worktree and starts a session on it. The session appears
 - What happens when the AI CLI provider assigns or later changes a session's name after the session is already shown in the sidebar? (Resolved — bugfix BUG-002: the label is actively reconciled with the provider's current session name at runtime — placeholder → provider name, and updated on any subsequent change — so the displayed name never diverges from the provider's.)
 - What happens when the provider has not yet supplied a session name, or the name cannot be read? (Resolved — bugfix BUG-002: the placeholder / last-known label is kept and the read is retried opportunistically; a failed or absent read never fails the session.)
 - How does the system handle a very large number of worktrees or sessions in the sidebar?
+- What happens when a project's persisted session list is missing, empty, or was just reset (e.g. by the 002/BUG-001 storage-fault-isolation fix), but the AI CLI provider still has real conversation transcripts on disk for that project? (Resolved — bugfix 002/BUG-001: opening the project scans the provider's transcript directory for the project's root directory and every worktree, and reconstructs a session entry for any transcript found with no matching persisted record, so a lost or corrupted store does not orphan a real, resumable conversation.)
+- What happens when the user closes or removes a session whose `claude` transcript still exists on disk, and the project is later reopened — does reconciliation (FR-020b) bring it back? (Resolved — bugfix BUG-003: no. Both close and remove record a durable, provider-side marker (FR-020c) that reconciliation checks and skips, independent of the app's own store, so an intentionally closed/removed session never resurfaces even if the app's own persisted record of the closure is itself lost.)
 
 ## Requirements *(mandatory)*
 
@@ -137,7 +167,8 @@ The developer selects a worktree and starts a session on it. The session appears
 - **FR-014**: System MUST allow the user to send interactive input to, and view output from, the `claude` process through the embedded terminal.
 - **FR-015**: System MUST switch the right-side terminal to the corresponding session when the user selects a different session.
 - **FR-015b**: System MUST keep the `claude` process of every non-displayed (background) session running when the user switches sessions; switching MUST only change which terminal is displayed, never suspend or stop other sessions. There is no fixed cap on the number of concurrent running sessions.
-- **FR-015a**: System MUST allow the user to close/stop an active session, terminating its `claude` process and removing the session from the sidebar. (Worktree removal — deleting the git worktree and branch — is out of scope for this feature and deferred to a later feature.)
+- **FR-015a**: ~~System MUST allow the user to close/stop an active session, terminating its `claude` process and removing the session from the sidebar.~~ (Superseded — bugfix BUG-003, 2026-07-23: "removing... from the sidebar" was read as permanent, but nothing distinguished it from FR-020b's reconciliation later reconstructing that same session from its still-existing `claude` transcript — the user's close was silently undone on next project open.) System MUST allow the user to **close** an active session: terminate its `claude` process, keep its persisted record (so FR-020b's transcript-based reconciliation never reconstructs it again — see FR-020c), and hide it from the sidebar. A closed session is not browsable or re-openable through the UI (an "invisible tombstone" — bugfix BUG-003); its record simply stops appearing. (Worktree removal — deleting the git worktree and branch — is out of scope for this feature and deferred to a later feature.)
+- **FR-015c**: System MUST allow the user to **remove** a session — a distinct, permanent-delete action from **close** (FR-015a) — terminating its `claude` process (if running) and deleting its persisted record entirely, behind a confirmation step (bugfix BUG-003; mirrors the existing worktree-delete confirmation, feature 008 FR-018/FR-019). Remove is reachable only from a currently-visible (not-yet-closed) session; there is no UI path to remove an already-closed session, since closed sessions are not shown (FR-015a).
 - **FR-016**: System MUST reflect worktree and session state (active/inactive) in the sidebar.
 - **FR-017**: System MUST report errors from worktree creation or session/terminal startup to the user and MUST NOT leave broken or half-created worktrees or sessions represented in the sidebar.
 - **FR-018**: System MUST discover and display worktrees already present under the active project's `.claude/worktrees/` directory when the project is opened.
@@ -151,7 +182,26 @@ The developer selects a worktree and starts a session on it. The session appears
 - **FR-023**: ~~When the user closes the active project or switches to a different project, System MUST stop all of that project's running session `claude` processes, while preserving the sessions' persisted identity, `claude` session id, and name.~~ (Superseded in part — spec/code alignment 2026-07-20. The **switch** half is reversed by feature 008 FR-001, which requires sessions to keep running across a project switch; that is the whole point of background project switching. The **close** half is untouched by 008 and is restated below.) When the user closes the active project, System MUST stop all of that project's running session `claude` processes, while preserving the sessions' persisted identity, `claude` session id, and name. Switching to a different project MUST NOT stop any session (feature 008 FR-001).
   - **Status**: NOT IMPLEMENTED and currently unreachable — the application exposes no "close project" action, so this requirement has no trigger. `Session::stop_for_project_change` exists in the code with zero call sites. This is a known gap, not drift: the requirement stands and is deliberately left open rather than deleted. Implementing a close-project action MUST implement this stop behaviour with it.
 - **FR-023a**: When a previously-open project is reopened, System MUST restore its persisted sessions in the sidebar (consistent with FR-020/FR-021), resuming a session's `claude` process via `claude --resume <session-id>` when it is reopened. The crash-loop auto-restart of FR-022 applies only to unexpected process exits, not to processes intentionally stopped on project close. (Amended 2026-07-20: previously read "project close/switch"; sessions are no longer stopped on switch per feature 008 FR-001. On switch, sessions keep running and are re-attached rather than resumed — feature 008 FR-003.)
-- **FR-024**: System MUST treat the underlying AI CLI as an abstract **AI CLI provider** rather than hard-coding one tool (bugfix BUG-002). All provider-specific behaviour MUST be defined in a single place and accessed through one seam, including: the executable/launch command, how the app-owned session id is passed, how a session is resumed, where the conversation transcript lives, how "a conversation was recorded" is detected (FR-020a), and how the session name/title is extracted (FR-011a). `claude` (Claude Code) MUST be the default and only provider shipped in this version; adding another provider MUST NOT require changes to the session model, persistence, sidebar, or terminal wiring — only a new provider definition. (Multiple providers and provider selection UI are out of scope for this version; this requirement only mandates the seam, mirroring the configurable-naming approach of FR-006a.)
+- **FR-020b**: When a project is opened, System MUST reconcile its session list against the AI CLI
+  provider's own conversation records for that project's supported session locations — the
+  project's root directory and every worktree under `.claude/worktrees/` (bugfix 002/BUG-001).
+  For each conversation transcript found (named by its session id) with no corresponding persisted
+  session record, System MUST reconstruct a session entry using that session id, the location it
+  was found in, and the provider-supplied title from the transcript if available (falling back to
+  the `Pending` placeholder otherwise). This reconciliation supplements, but never replaces, normal
+  persisted-session restoration (FR-020/FR-021/FR-023a); it exists so a lost, corrupted, or
+  just-emptied session store does not orphan a real, resumable conversation.
+- **FR-020c**: Reconciliation (FR-020b) MUST NOT reconstruct a session that the user closed
+  (FR-015a) or removed (FR-015c) (bugfix BUG-003). This suppression MUST be durable against the
+  app's own persisted store being corrupted, missing, or entirely lost — the same failure class
+  FR-020b itself exists to route around — so it MUST be recorded via the AI CLI provider seam
+  (FR-024) as a marker independent of `projects.json` and any per-project state file (e.g. a
+  small file recorded alongside the session's transcript, in the provider's own storage), not
+  solely as a flag inside the app's own store. The app's own store MAY additionally track a
+  closed session's state (e.g. for fast in-memory sidebar filtering without touching disk), but
+  that MUST NOT be the only record — the provider-side marker is authoritative for whether
+  reconciliation reconstructs a given session id.
+- **FR-024**: System MUST treat the underlying AI CLI as an abstract **AI CLI provider** rather than hard-coding one tool (bugfix BUG-002). All provider-specific behaviour MUST be defined in a single place and accessed through one seam, including: the executable/launch command, how the app-owned session id is passed, how a session is resumed, where the conversation transcript lives, how "a conversation was recorded" is detected (FR-020a), how the session name/title is extracted (FR-011a), and how a closed/removed session is durably marked and checked (FR-020c, bugfix BUG-003). `claude` (Claude Code) MUST be the default and only provider shipped in this version; adding another provider MUST NOT require changes to the session model, persistence, sidebar, or terminal wiring — only a new provider definition. (Multiple providers and provider selection UI are out of scope for this version; this requirement only mandates the seam, mirroring the configurable-naming approach of FR-006a.)
 
 ### Key Entities *(include if feature involves data)*
 
@@ -177,6 +227,8 @@ The developer selects a worktree and starts a session on it. The session appears
 - **SC-007**: The sidebar accurately reflects the active/inactive state of every worktree and session at all times.
 - **SC-008**: After an application restart, 100% of previously persisted sessions reappear in the sidebar, and reopening one resumes its prior `claude` conversation via `claude --resume`. Only sessions with a recorded `claude` conversation are persisted; empty (never-used) sessions do not reappear (bugfix BUG-001).
 - **SC-009**: For 100% of sessions whose AI CLI provider has assigned a session name, the sidebar label matches that provider-supplied name (not the placeholder), and updates to reflect any later change to the provider's name — the displayed name never stays diverged from the provider's session name (bugfix BUG-002).
+- **SC-010**: When a project is opened, 100% of AI CLI provider conversation transcripts found under its root directory or any of its worktrees, with no matching persisted session record, are reconstructed as sessions in the sidebar (bugfix 002/BUG-001).
+- **SC-011**: 100% of sessions closed or removed do not reappear after the project is closed and reopened, even when the app's own persisted store (catalog or per-project state) is deleted entirely between the close/remove and the reopen (bugfix BUG-003).
 
 ## Assumptions
 
@@ -192,9 +244,37 @@ The developer selects a worktree and starts a session on it. The session appears
 - A single project is active at a time in the sidebar; multi-project simultaneous views are out of scope for this feature.
 - Closing/stopping a session is in scope; removing a worktree (deleting its git worktree and branch) is deferred to a later feature and not covered here.
 - Empty sessions (started but with no `claude` conversation recorded) are not persisted; only sessions with a recorded conversation survive a restart (bugfix BUG-001).
+- Reconciling a project's sessions against the AI CLI provider's transcripts (FR-020b) is a
+  best-effort discovery pass at project-open time, not continuous background monitoring; it scans
+  the project's root directory and its currently-discovered worktrees only (bugfix 002/BUG-001).
+- Closed sessions are invisible tombstones with no browsing or unarchive UI (bugfix BUG-003);
+  their records (id, last-known label, closed flag) accumulate indefinitely in the app's own
+  store. This is an accepted trade-off — the records are small and hold no conversation content
+  (that stays with `claude`, under `~/.claude`) — not a scope gap to fill later.
 
 **Bugfix**: 2026-07-16 — BUG-001 Empty sessions are no longer persisted or resumed on restart. FR-020 amended, FR-020a added, FR-021/SC-008 clarified, plus a Clarifications entry and edge case.
 
 **Bugfix**: 2026-07-17 — BUG-002 Session name kept in sync with the AI CLI provider's session name, and `claude` references abstracted behind an AI CLI provider seam. FR-011a amended (active label reconciliation), FR-024 added (AI CLI provider abstraction), SC-009 added, an "AI CLI Provider" key entity added, Session/Embedded Terminal entities reworded provider-neutral, plus a Clarifications entry, two edge cases, and an assumption. Existing inline `claude` references are read as "the configured AI CLI provider" (default `claude`) per FR-024 rather than rewritten, to keep the patch minimal.
 
 **Alignment**: 2026-07-20 — Spec/code alignment audit. FR-023 split: its **switch** half is superseded by feature 008 FR-001 (sessions keep running across a project switch — the point of background switching), while its **close** half is restated and explicitly marked NOT IMPLEMENTED, since the application exposes no close-project action and `Session::stop_for_project_change` has zero call sites. The requirement is deliberately kept open rather than deleted. FR-023a's "project close/switch" narrowed to "project close". No behaviour change from this amendment.
+
+**Bugfix**: 2026-07-21 — 002/BUG-001 A store-level fault could wipe every open project's sessions
+with no way to recover them, because sessions lived embedded in the same shared, whole-file-fate
+`projects.json` the known-projects catalog uses (see `specs/002-project-workspace-management`
+BUG-001 for the storage-split half of this fix). This spec's half of the fix: FR-020b added — on
+project open, reconcile the session list against the AI CLI provider's own transcripts for the
+project's root directory and every worktree, reconstructing any session whose transcript exists
+but whose persisted record does not. New Clarifications entry, edge case, SC-010, and an
+assumption added. `contracts/storage-schema.md` updated accordingly.
+
+**Bugfix**: 2026-07-23 — BUG-003 FR-020b's reconciliation (above) had no way to tell a session the
+user intentionally closed apart from one simply missing from a lost/corrupted store — so closing
+a session was silently undone by reopening the project. FR-015a split: close now archives
+(process killed, record kept, hidden from the sidebar, never browsable again) instead of deleting.
+New FR-015c (Remove: a distinct, confirm-gated permanent delete). New FR-020c: suppression from
+both close and remove MUST be durable against the app's own store being corrupted or lost —
+recorded via the AI CLI provider seam (FR-024), not solely inside the app's own store, since a
+flag living only there wouldn't survive the exact failure class FR-020b exists to route around.
+New Clarifications entries, edge case, SC-011, and an assumption (tombstones are not browsable and
+accumulate indefinitely — accepted trade-off). `contracts/claude-cli.md` and
+`contracts/storage-schema.md` updated accordingly.
