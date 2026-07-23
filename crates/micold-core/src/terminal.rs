@@ -6,8 +6,6 @@
 //! (`src/ui/terminal.rs`); the VT grid is NOT part of this core seam. Contracts:
 //! `terminal-backend-trait.md`, `claude-cli.md`.
 
-use crate::session::SessionId;
-use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -81,43 +79,10 @@ pub trait TerminalBackend {
     fn spawn(&self, spec: LaunchSpec) -> io::Result<Box<dyn TerminalHandle>>;
 }
 
-/// Pure per-session output routing seam (analyze finding C1). Routes `PtyOutput { id, chunk }`
-/// to the correct session's buffer so isolation/no-cross-talk is unit-testable (FR-019,
-/// SC-005) WITHOUT the gui-side VT `Term`.
-#[derive(Debug, Default)]
-pub struct SessionRouter {
-    buffers: HashMap<SessionId, Vec<u8>>,
-}
-
-impl SessionRouter {
-    /// An empty router.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Register a session so it can receive output.
-    pub fn register(&mut self, id: SessionId) {
-        self.buffers.entry(id).or_default();
-    }
-
-    /// Stop tracking a session (on close).
-    pub fn remove(&mut self, id: SessionId) {
-        self.buffers.remove(&id);
-    }
-
-    /// Route an output chunk to its session. Unknown/unregistered ids are dropped (a closed
-    /// session must never leak into another — FR-019).
-    pub fn route(&mut self, id: SessionId, chunk: &[u8]) {
-        if let Some(buf) = self.buffers.get_mut(&id) {
-            buf.extend_from_slice(chunk);
-        }
-    }
-
-    /// The bytes accumulated for a session so far (test/inspection).
-    pub fn buffer(&self, id: SessionId) -> &[u8] {
-        self.buffers.get(&id).map(Vec::as_slice).unwrap_or(&[])
-    }
-}
+// NOTE: the pure `SessionRouter` byte-routing seam was removed with the W3 migration (T030): the
+// daemon now owns a real per-session `alacritty_terminal::Term`, so per-session isolation is a
+// property of separate `Term` instances, covered end-to-end by the daemon's `session_isolation`
+// integration test rather than an in-memory byte-buffer approximation.
 
 // ---------------------------------------------------------------------------------------
 // In-memory fake for tests (public so `tests/` can share it). No real process.

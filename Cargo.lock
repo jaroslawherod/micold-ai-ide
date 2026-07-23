@@ -2424,6 +2424,7 @@ dependencies = [
 name = "micold-daemon"
 version = "0.3.0"
 dependencies = [
+ "alacritty_terminal",
  "bytes",
  "directories",
  "file-rotate",
@@ -2432,6 +2433,7 @@ dependencies = [
  "libc",
  "listenfd",
  "micold-core",
+ "portable-pty",
  "serde_json",
  "tempfile",
  "tokio",

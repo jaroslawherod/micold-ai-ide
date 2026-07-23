@@ -99,18 +99,17 @@ fn configure_detached(_command: &mut Command) {}
 mod tests {
     use super::*;
 
+    // Both cases live in ONE test: they mutate the same process-global env var, so splitting them
+    // lets cargo's parallel runner clobber one from the other. Sequential here, no races.
     #[test]
-    fn the_env_override_wins_when_set() {
-        // SAFETY: single-threaded test.
+    fn daemon_binary_resolution() {
+        // Override set → it wins verbatim.
+        // SAFETY: this test owns the var for its duration; it is the only test that touches it.
         std::env::set_var(DAEMON_BIN_ENV, "/custom/path/to/daemon");
         assert_eq!(daemon_binary(), OsString::from("/custom/path/to/daemon"));
-        std::env::remove_var(DAEMON_BIN_ENV);
-    }
 
-    #[test]
-    fn falls_back_to_a_path_lookup_name() {
+        // Override cleared → a sibling path or the bare name, never empty.
         std::env::remove_var(DAEMON_BIN_ENV);
-        // Without the override we get either a sibling path or the bare name — never empty.
         assert!(!daemon_binary().is_empty());
     }
 }

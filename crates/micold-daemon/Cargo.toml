@@ -15,9 +15,6 @@ path = "src/lib.rs"
 name = "micold-daemon"
 path = "src/main.rs"
 
-# NOTE: the PTY/VT stack (portable-pty, alacritty_terminal 0.26 with the vendored stable-
-# LineId patch — plan Decision 2, tasks T005/T006) lands here when T030 migrates Term
-# ownership out of micold-client.
 [dependencies]
 micold-core = { workspace = true }
 # Transport + runtime (plan W1, tasks T015-T020).
@@ -32,6 +29,12 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 file-rotate = { workspace = true }
 directories = { workspace = true }
+# PTY/VT stack (plan W3, tasks T030/T031): the daemon now owns every `Term` and PTY child so
+# sessions outlive the UI. `alacritty_terminal` interprets VT/ANSI into a grid; `portable-pty`
+# hosts the child process. Stable `LineId` diffing (T006/T032) rides on top via a trait, so the
+# vendored fork (plan Decision 2) stays a swappable fallback for the approximation used today.
+alacritty_terminal = { workspace = true }
+portable-pty = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 # Ownership/mode verification for the `/tmp` endpoint fallback (protocol.md §1, FR-030).
@@ -40,6 +43,9 @@ libc = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 uuid = { workspace = true }
+# Integration tests drive real PTY sessions and read the interpreted grid directly.
+alacritty_terminal = { workspace = true }
+portable-pty = { workspace = true }
 
 [lints]
 workspace = true
