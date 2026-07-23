@@ -7,6 +7,7 @@
 
 pub mod app;
 pub mod daemon;
+pub mod grid;
 pub mod icons;
 pub mod input;
 pub mod keymap;

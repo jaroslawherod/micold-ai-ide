@@ -7,6 +7,7 @@
 //! the daemon owns every session's `Term` and child process ([`supervisor`], [`terminal`]) so they
 //! outlive the UI. The shadow-diff framer that streams the interpreted grid to clients lands next.
 
+pub mod activity;
 pub mod catalog;
 pub mod framer;
 pub mod lifecycle;
