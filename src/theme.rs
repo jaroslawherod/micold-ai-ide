@@ -54,9 +54,9 @@ impl ThemePreference {
 
 /// What the operating system reports, including "no preference / undetectable".
 ///
-/// Mirrors `dark_light::Mode` without depending on that crate; the binary performs the
-/// mapping (`Dark→Dark`, `Light→Light`, `Unspecified→Unspecified`, and any detection
-/// `Err→Unspecified`).
+/// Mirrors `dark_light::Mode` without depending on that crate; the binary performs the mapping
+/// (`Dark→Dark`, `Light→Light`, `Unspecified→Unspecified`). A detection **error** (e.g. a
+/// timeout) is *not* mapped to `Unspecified` — see [`observe_system_scheme`] (FR-021; BUG-001).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SystemScheme {
     /// The OS prefers a light appearance.
@@ -82,4 +82,20 @@ pub fn resolve(pref: ThemePreference, system: SystemScheme) -> ColorScheme {
             SystemScheme::Unspecified => ColorScheme::Light,
         },
     }
+}
+
+/// Fold one OS theme detection attempt into the running `system_scheme` (FR-021; BUG-001).
+///
+/// `detected` is `Ok(scheme)` for a successful read — including a *genuine* `Unspecified`,
+/// which means the OS itself reports no preference — or `Err(())` for a **transient** failure
+/// of the detection call (e.g. `dark_light::detect()` timing out under CPU load, which is
+/// unrelated to the actual OS preference). A transient failure must not overwrite a
+/// previously-known-good reading, so it keeps `last_known` unchanged; only a successful read
+/// updates the scheme. `resolve` alone still applies the FR-018 fallback for a genuine
+/// `Unspecified`.
+pub fn observe_system_scheme(
+    detected: Result<SystemScheme, ()>,
+    last_known: SystemScheme,
+) -> SystemScheme {
+    detected.unwrap_or(last_known)
 }

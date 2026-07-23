@@ -30,6 +30,10 @@ unit-tested.
 3. The reducer updates `state.system_scheme`; the next frame's `.theme()` closure reflects it.
 4. The subscription runs regardless of preference, but a fixed `Light`/`Dark` preference makes
    `resolve` ignore `system_scheme`, so overrides are unaffected by OS changes.
+5. A **transient** `dark_light::detect()` failure (e.g. a timeout under CPU load) is distinct
+   from a successful `Ok(Mode::Default)` reading: it is folded through `theme::observe_system_scheme`,
+   which keeps the last-known `system_scheme` rather than falling through to the FR-018 fallback
+   for that poll cycle (FR-021; BUG-001).
 
 ## User override (FR-007, FR-008, FR-009, SC-004)
 

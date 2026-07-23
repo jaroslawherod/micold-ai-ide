@@ -15,6 +15,8 @@ description: "Task list for Material Design Layout & Theming"
 
 **Cross-platform**: Per Constitution Principle VI, build + tests MUST pass on Linux, macOS, and Windows, **including OS theme detection**. OS detection is confined to the `dark-light` boundary in the binary; no `cfg(target_os)` in core.
 
+**Bugfix**: 2026-07-21 — BUG-001 Reopened T020/T021 (the OS-detection boundary and poll collapsed a transient `dark_light::detect()` `Err` into a genuine "no preference", causing a periodic flash to the light theme under CPU load); added T034/T035 for a testable seam and regression test.
+
 **Organization**: Tasks grouped by user story for independent implementation and testing.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -116,9 +118,11 @@ while running → app switches within ~1s, no restart. Reverse. Every screen leg
 
 - [X] T018 [US2] In `src/theme.rs`, add `enum ThemePreference { FollowSystem, Light, Dark }` (serde-derive, `Default = FollowSystem`), `enum SystemScheme { Light, Dark, Unspecified }`, and `fn resolve(pref, system) -> ColorScheme` (makes T017 pass) (data-model.md; FR-005, FR-007, FR-018).
 - [X] T019 [US2] Extend the core `State` in `src/app.rs`: add `theme_pref: ThemePreference` and `system_scheme: SystemScheme` fields, a `fn color_scheme(&self) -> ColorScheme` helper (calls `theme::resolve`), the `SystemThemeChanged(SystemScheme)` `Message` variant, and its pure reducer arm (sets `system_scheme`; not persisted) (depends on T018; FR-006).
-- [X] T020 [US2] In `src/main.rs`, map `dark_light::Mode → SystemScheme` at the boundary, call `dark_light::detect()` in `boot` to seed `state.system_scheme`, and change the `.theme(...)` closure to `ui::style::theme(state.color_scheme())` (depends on T019; FR-005, SC-002).
-- [X] T021 [US2] In `src/main.rs`, add an OS-scheme polling `Subscription` (`iced::time::every(Duration::from_millis(500))` — sub-second so SC-003's "within 1 second" holds worst-case) that maps `dark_light::detect()` to `SystemScheme` and emits `SystemThemeChanged` **only when the value changes** (no flicker); fold it into the existing `subscription(...)` (depends on T020; FR-006, SC-003).
+- [X] T020 [US2] In `src/main.rs`, map `dark_light::Mode → SystemScheme` at the boundary, call `dark_light::detect()` in `boot` to seed `state.system_scheme`, and change the `.theme(...)` closure to `ui::style::theme(state.color_scheme())` (depends on T019; FR-005, SC-002). **Fixed (BUG-001)**: `detect_system_scheme(last_known: SystemScheme)` now takes the current scheme and folds a `dark_light::detect()` `Err` through `theme::observe_system_scheme` instead of collapsing it to `SystemScheme::Unspecified`; `boot` seeds it with `core.system_scheme` (its struct-default `Unspecified`, unchanged behavior for the very first read) (FR-021).
+- [X] T021 [US2] In `src/main.rs`, add an OS-scheme polling `Subscription` (`iced::time::every(Duration::from_millis(500))` — sub-second so SC-003's "within 1 second" holds worst-case) that maps `dark_light::detect()` to `SystemScheme` and emits `SystemThemeChanged` **only when the value changes** (no flicker); fold it into the existing `subscription(...)` (depends on T020; FR-006, SC-003). **Fixed (BUG-001)**: `os_theme_poll(interval, last_known: SystemScheme)` now closes over the current `app.core.system_scheme` (passed fresh from `subscription(app)` each rebuild, the same pattern already used for `os_theme_poll_interval(app.window_focused)`) so a detection `Err` re-emits the unchanged last-known scheme rather than a phantom `SystemThemeChanged(Unspecified)`; the `WindowFocusChanged(true)` refocus call site is fixed the same way (FR-021).
 - [X] T022 [US2] Document system-following theming in `docs/user-guide/appearance-theming.md` (the "Automatic light/dark" section), including the Linux portal fallback note (Principle VII).
+- [X] T034 [P] [US2] (BUG-001) **Implemented as a pure core function instead of a trait seam** — no fake/mock is needed because the OS-boundary *decision* (what to do given a detection outcome and the last-known scheme) is fully separable from the OS call itself: `theme::observe_system_scheme(detected: Result<SystemScheme, ()>, last_known: SystemScheme) -> SystemScheme` in `src/theme.rs` encodes the FR-021 policy (`detected.unwrap_or(last_known)`) and is directly testable under `cargo test --no-default-features` with synthetic `Ok`/`Err` values — mirroring how `theme::resolve` is already tested without iced, rather than introducing a new trait for a single production call site (depends on T020, T021).
+- [X] T035 [US2] (BUG-001) Added regression tests in `tests/theme.rs`: `transient_detection_failure_keeps_the_last_known_scheme`, `successful_detection_always_updates_the_scheme`, and `a_transient_failure_does_not_flash_to_light_when_the_os_is_dark` (the exact reported symptom — OS Dark, one poll errors, resolved scheme must stay Dark) — covers FR-021 (depends on T034).
 
 **Checkpoint**: App follows the OS live in both fully-designed schemes; US1 layout intact under both.
 
@@ -189,7 +193,7 @@ across restarts, and can return to "Follow system".
 - Setup: T002, T003 in parallel.
 - Foundational: T004, T005, T006 in parallel (T004 is the failing test for T005); T007 after T005/T006; T008 after; T009 after T008.
 - US1: T010–T014 all in parallel (separate `ui/*` files); T015/T016 after.
-- US2: T017 (test) in parallel with nothing blocking; then T018→T019→T020→T021 sequential (T018 is one file, T019–T021 chain through `app.rs`/`main.rs`); T022 in parallel.
+- US2: T017 (test) in parallel with nothing blocking; then T018→T019→T020→T021 sequential (T018 is one file, T019–T021 chain through `app.rs`/`main.rs`); T022 in parallel; T034 after T020/T021 reopen, T035 after T034 (BUG-001).
 - US3: T023 (test) parallelizable; T024 makes it pass; T026 parallel with T024 once T025 lands; T027/T028 after; T029 in parallel.
 
 ---

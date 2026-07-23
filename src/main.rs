@@ -27,7 +27,7 @@ use micold_ai_ide::session::{
 use micold_ai_ide::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_ai_ide::store::{JsonFileStore, ProjectStore};
 use micold_ai_ide::terminal::{LaunchMode, LaunchSpec};
-use micold_ai_ide::theme::SystemScheme;
+use micold_ai_ide::theme::{observe_system_scheme, SystemScheme};
 use micold_ai_ide::worktree::{
     create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir, CreateError,
     Worktree,
@@ -364,7 +364,7 @@ fn boot() -> (App, Task<Message>) {
         &env_include_script_path,
         env_include_timeout_secs,
     );
-    core.system_scheme = detect_system_scheme();
+    core.system_scheme = detect_system_scheme(core.system_scheme);
     // If a project is already active from a previous run, discover its worktrees.
     if let Some(repo) = core.workspace.active.clone() {
         core.set_worktrees(discover_worktrees(&repo));
@@ -1061,7 +1061,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // idea of the scheme to be stale (003 FR-006).
             if focused {
                 app.core
-                    .update(Message::SystemThemeChanged(detect_system_scheme()));
+                    .update(Message::SystemThemeChanged(detect_system_scheme(
+                        app.core.system_scheme,
+                    )));
             }
             Task::none()
         }
@@ -1156,7 +1158,10 @@ fn subscription(app: &App) -> Subscription<Message> {
     // the window sits idle either focused or not (idle-CPU fix).
     let mut subs = vec![ui::subscription(&app.core), window_focus_events()];
     // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.
-    subs.push(os_theme_poll(os_theme_poll_interval(app.window_focused)));
+    subs.push(os_theme_poll(
+        os_theme_poll_interval(app.window_focused),
+        app.core.system_scheme,
+    ));
     if let Some(interval) = terminal_poll_interval(!app.terminals.is_empty(), app.window_focused) {
         subs.push(every(interval).map(|_| Message::TerminalTick));
     }
@@ -1562,14 +1567,18 @@ fn map_system_scheme(mode: dark_light::Mode) -> SystemScheme {
     }
 }
 
-fn detect_system_scheme() -> SystemScheme {
-    dark_light::detect()
-        .map(map_system_scheme)
-        .unwrap_or(SystemScheme::Unspecified)
+/// Query the OS for its current light/dark preference (FR-005). `dark_light::detect()`'s Linux
+/// backend has a hardcoded 25 ms D-Bus timeout and returns `Err` under CPU contention with no
+/// relation to the actual OS preference; `last_known` is what a transient failure falls back to
+/// instead of `SystemScheme::Unspecified` (FR-021; BUG-001 — see `theme::observe_system_scheme`).
+fn detect_system_scheme(last_known: SystemScheme) -> SystemScheme {
+    let detected = dark_light::detect().map(map_system_scheme).map_err(|_| ());
+    observe_system_scheme(detected, last_known)
 }
 
-fn os_theme_poll(interval: Duration) -> Subscription<Message> {
-    every(interval).map(|_instant| Message::SystemThemeChanged(detect_system_scheme()))
+fn os_theme_poll(interval: Duration, last_known: SystemScheme) -> Subscription<Message> {
+    every(interval)
+        .map(move |_instant| Message::SystemThemeChanged(detect_system_scheme(last_known)))
 }
 
 fn start_dir() -> PathBuf {

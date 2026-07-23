@@ -38,19 +38,32 @@ where a specific role (surface, on-surface) must be exact via per-widget style h
 
 ## R3 — OS dark/light detection, cross-platform
 
-**Decision**: Use the `dark-light` crate, version 1.x, calling `dark_light::detect() -> Mode`.
+**Decision**: Use the `dark-light` crate, ~~version 1.x, calling `dark_light::detect() -> Mode`~~
+**version 2.x, calling `dark_light::detect() -> Result<Mode, Error>`** (see Bugfix note below).
 
-**Rationale**: One synchronous, infallible call returns `Mode::{Dark, Light, Default}` and is
+**Rationale**: ~~One synchronous, infallible call returns `Mode::{Dark, Light, Default}`~~ One
+synchronous call returns `Result<Mode, Error>` (`Mode::{Dark, Light, Default}` on success) and is
 implemented for macOS (`AppleInterfaceStyle`), Windows (registry), and Linux/BSD (XDG desktop
-portal over DBus, with GTK/KDE config fallback). This satisfies cross-platform parity (Principle
-VI) behind a single boundary. `Mode::Default` (undetectable — e.g. a headless Linux box with no
-portal) maps to our FollowSystem fallback of Light (FR-018).
+portal over DBus, with GTK/KDE config fallback, bounded by a hardcoded 25 ms timeout on the portal
+round-trip). This satisfies cross-platform parity (Principle VI) behind a single boundary. A
+successful `Mode::Default` (undetectable — e.g. a headless Linux box with no portal) maps to our
+FollowSystem fallback of Light (FR-018). An `Err` (e.g. `Error::Timeout`, most often seen under
+CPU contention when the 25 ms portal round-trip budget is missed) is a **distinct, transient**
+condition and must NOT be collapsed into `Mode::Default`/`Unspecified`: the caller (the poll in
+R4) keeps the last-known `SystemScheme` on `Err` rather than overwriting it, per FR-021.
 
 **Alternatives considered**: Per-OS crates / raw `winit` — winit's `ThemeChanged` exists but iced
 0.13 does not surface it (see R4), and per-OS code would violate the "no `cfg(target_os)` in core"
-constraint. `dark-light` 2.x adds `detect() -> Result` and a `subscribe()` stream but is not the
+constraint. ~~`dark-light` 2.x adds `detect() -> Result` and a `subscribe()` stream but is not the
 pinned version; staying on 1.1.1 avoids an unnecessary churn and the polling approach (R4) works
-regardless.
+regardless.~~ **Superseded**: `Cargo.toml` in fact pins `dark-light = "2.0"`; this analysis was
+written against a 1.1.1 assumption that was never actually adopted. `subscribe()` in 2.x remains
+unused (R4's polling approach stands), but the fallible `detect()` this version actually has must
+be handled per the Rationale above.
+
+**Bugfix**: 2026-07-21 — BUG-001 corrected R3 to describe the actually-pinned `dark-light = "2.0"`
+(fallible `detect() -> Result`) instead of the stale "infallible 1.1.1" premise, and decided that
+a detection `Err` is distinct from a genuine `Mode::Default`/`Unspecified` (see FR-021).
 
 ## R4 — Live OS-theme-change updates
 
@@ -69,6 +82,12 @@ The poll only drives the theme while the preference is FollowSystem; a fixed ove
 **Alternatives considered**: Adopt `dark-light` 2.x `subscribe()` and wrap it via
 `Subscription::run` — cleaner but a version bump for marginal benefit at v1; revisit if polling
 proves insufficient. Reacting to a winit theme event — not exposed by iced 0.13.
+
+**Bugfix**: 2026-07-21 — BUG-001: this design assumed the only source of a changed reading is a
+genuine OS change; it did not anticipate `dark_light::detect()` itself returning a transient
+`Err` under CPU load (see R3). The poll must map `Err` to "no change" (retain the last-known
+`SystemScheme`) rather than dispatching a phantom `SystemThemeChanged`; see FR-021 and tasks
+T020/T021 (reopened).
 
 ## R5 — Where the theme preference is persisted
 
