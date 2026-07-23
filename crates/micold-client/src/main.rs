@@ -20,7 +20,7 @@ use micold_core::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
 use micold_core::protocol::grid::LineId;
 use micold_core::protocol::messages::{
-    CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, WireLifecycle,
+    CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, SessionProcess, WireLifecycle,
 };
 use micold_core::provider::{AiCliProvider, ClaudeProvider};
 use micold_core::selector::{Selector, SelectorStatus};
@@ -992,7 +992,26 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::TerminalModeToggled => {
             app.core.update(Message::TerminalModeToggled);
             if let Some(id) = app.core.active_session {
-                view_and_start(app, id);
+                // Entering Regular with no instance yet: lazily open the session's first one
+                // (feature 011 FR-007), spawning it on the daemon.
+                let needs_first_shell =
+                    app.core.workspace.find_session(id).is_some_and(|(_, s)| {
+                        s.mode == TerminalMode::Regular && s.shells.is_empty()
+                    });
+                if needs_first_shell {
+                    let shell_id = app
+                        .core
+                        .workspace
+                        .find_session_mut(id)
+                        .map(|(_, s)| s.open_shell_instance());
+                    if let (Some(shell_id), Some(d)) = (shell_id, &app.daemon) {
+                        d.send(ClientMsg::SessionOpenShell {
+                            session: id,
+                            instance: shell_id,
+                        });
+                    }
+                }
+                attach_current_process(app, id);
                 persist(&mut app.core);
             }
             Task::none()
@@ -1026,9 +1045,14 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // same-numbered instance of a different session if the active session changed in the
         // same message batch.
         Message::ShellInstanceRestartRequested(id, shell_id) => {
-            // TODO(feature-011 daemon shells): forward the instance restart to the daemon once it
-            // hosts Regular-terminal instances as sessions.
-            let _ = (id, shell_id);
+            if let Some(d) = &app.daemon {
+                d.send(ClientMsg::SessionRestartShell {
+                    session: id,
+                    instance: shell_id,
+                });
+            }
+            app.core
+                .update(Message::ShellInstanceRestartRequested(id, shell_id));
             Task::none()
         }
         // Open an additional Regular Terminal instance for the active session (feature 011,
@@ -1039,15 +1063,22 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // instance, even if one is already running.
         Message::ShellInstanceOpenRequested => {
             if let Some(id) = app.core.active_session {
-                if let Some((cwd, TerminalMode::Regular, _)) =
+                if let Some((_cwd, TerminalMode::Regular, _)) =
                     session_cwd_mode_and_active_shell(&app.core, id)
                 {
-                    let Some((_, session)) = app.core.workspace.find_session_mut(id) else {
-                        return Task::none();
+                    let shell_id = {
+                        let Some((_, session)) = app.core.workspace.find_session_mut(id) else {
+                            return Task::none();
+                        };
+                        session.open_shell_instance()
                     };
-                    let _shell_id = session.open_shell_instance();
-                    // TODO(feature-011 daemon shells): ask the daemon to spawn the instance.
-                    let _ = &cwd;
+                    if let Some(d) = &app.daemon {
+                        d.send(ClientMsg::SessionOpenShell {
+                            session: id,
+                            instance: shell_id,
+                        });
+                    }
+                    attach_current_process(app, id);
                     persist(&mut app.core);
                 }
             }
@@ -1061,11 +1092,26 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // already attached). Addressed by the originating `SessionId` (not
         // `app.core.active_session`) — see `Message::ShellInstanceSelected`'s doc comment.
         Message::ShellInstanceCloseRequested(id, shell_id) => {
-            // TODO(feature-011 daemon shells): forward the instance close to the daemon.
+            if let Some(d) = &app.daemon {
+                d.send(ClientMsg::SessionCloseShell {
+                    session: id,
+                    instance: shell_id,
+                });
+            }
+            // Core close reassigns active_shell / reverts mode to AiCli when the last one closes.
             app.core
                 .update(Message::ShellInstanceCloseRequested(id, shell_id));
-            view_and_start(app, id);
+            // Re-attach whatever process the session now shows (a sibling instance, or the primary).
+            attach_current_process(app, id);
             persist(&mut app.core);
+            Task::none()
+        }
+        // Switch which Regular-terminal instance is shown (feature 011 FR-004): select it in the
+        // core, then attach that process on the daemon so its grid streams.
+        Message::ShellInstanceSelected(id, shell_id) => {
+            app.core
+                .update(Message::ShellInstanceSelected(id, shell_id));
+            attach_current_process(app, id);
             Task::none()
         }
         // Worktree creation completed: apply progress to the form, then dispatch the result
@@ -1581,6 +1627,36 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot) {
         if core.workspace.find_session(id).is_none() {
             core.active_session = None;
         }
+    }
+}
+
+/// Which daemon process the session currently shows (feature 011): its `Primary` (the AI CLI, or a
+/// persisted Regular session's own shell) unless a specific Regular-terminal instance is selected.
+fn session_process(session: &Session) -> SessionProcess {
+    match (session.mode, session.active_shell) {
+        (TerminalMode::Regular, Some(sid)) if !session.shells.is_empty() => {
+            SessionProcess::Shell(sid)
+        }
+        _ => SessionProcess::Primary,
+    }
+}
+
+/// Tell the daemon which of a session's processes to attach (stream + drive), based on its current
+/// mode + active shell, and reset the local view (selection + scroll) for the switch. Called
+/// whenever the attached process changes: mode toggle, instance select/open/close.
+fn attach_current_process(app: &mut App, id: SessionId) {
+    let process = app
+        .core
+        .workspace
+        .find_session(id)
+        .map(|(_, s)| session_process(s));
+    app.selection = None;
+    app.display_offset = 0;
+    if let (Some(process), Some(d)) = (process, &app.daemon) {
+        d.send(ClientMsg::SessionAttachProcess {
+            session: id,
+            process,
+        });
     }
 }
 

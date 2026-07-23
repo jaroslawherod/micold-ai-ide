@@ -70,6 +70,24 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
         ClientMsg::SessionStop { session: sid() },
         ClientMsg::SessionKill { session: sid() },
         ClientMsg::SessionInterrupt { session: sid() },
+        ClientMsg::SessionAttachProcess {
+            session: sid(),
+            process: micold_core::protocol::messages::SessionProcess::Shell(
+                micold_core::session::ShellInstanceId(3),
+            ),
+        },
+        ClientMsg::SessionOpenShell {
+            session: sid(),
+            instance: micold_core::session::ShellInstanceId(3),
+        },
+        ClientMsg::SessionCloseShell {
+            session: sid(),
+            instance: micold_core::session::ShellInstanceId(3),
+        },
+        ClientMsg::SessionRestartShell {
+            session: sid(),
+            instance: micold_core::session::ShellInstanceId(3),
+        },
         ClientMsg::SetViewedSession {
             project: PathBuf::from("/repo"),
             session: Some(sid()),

@@ -20,11 +20,22 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
-use crate::session::{SessionId, SessionLabel};
+use crate::session::{SessionId, SessionLabel, ShellInstanceId};
 
 // ---------------------------------------------------------------------------------------------
 // Client → Daemon
 // ---------------------------------------------------------------------------------------------
+
+/// Which of a session's processes an operation targets (feature 011). A session always has a
+/// `Primary` process (its AI CLI or its mode-selected primary shell); `Shell(id)` names one of the
+/// additional Regular-terminal instances.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SessionProcess {
+    /// The session's primary process.
+    Primary,
+    /// An additional shell instance, by id.
+    Shell(ShellInstanceId),
+}
 
 /// A message from a client to the daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +105,38 @@ pub enum ClientMsg {
     SessionInterrupt {
         /// Target session.
         session: SessionId,
+    },
+
+    // --- Shell instances (feature 011): a session hosts one primary process (AI CLI or shell) plus
+    // any number of additional Regular-terminal shell instances; exactly one is *attached* (viewed +
+    // driven) at a time. Input/grid frames stay `SessionId`-addressed and route to the attached one.
+    /// Choose which of a session's processes is attached (streamed + receives input).
+    SessionAttachProcess {
+        /// Target session.
+        session: SessionId,
+        /// Which process to attach.
+        process: SessionProcess,
+    },
+    /// Open (spawn) an additional shell instance for a session (the client owns the id).
+    SessionOpenShell {
+        /// Target session.
+        session: SessionId,
+        /// The new instance's id (client-allocated; unique within the session).
+        instance: ShellInstanceId,
+    },
+    /// Close (kill) a session's shell instance.
+    SessionCloseShell {
+        /// Target session.
+        session: SessionId,
+        /// The instance to close.
+        instance: ShellInstanceId,
+    },
+    /// Restart (kill + respawn) a session's shell instance.
+    SessionRestartShell {
+        /// Target session.
+        session: SessionId,
+        /// The instance to restart.
+        instance: ShellInstanceId,
     },
 
     // --- View commands ---

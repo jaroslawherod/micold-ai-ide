@@ -12,7 +12,7 @@ use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, SessionProcess};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
@@ -312,16 +312,41 @@ where
             }
             ClientMsg::SetViewedSession { project, session } => {
                 state.set_viewed(id, project, session);
-                // Replace any running stream: abort the old view, start streaming the new one.
-                if let Some(prev) = view_stream.take() {
-                    prev.abort();
+                match session.and_then(|s| state.live_session(s).zip(state.session_framer(s))) {
+                    Some((pty, framer)) => restart_view(state, id, &mut view_stream, pty, framer),
+                    None => {
+                        if let Some(prev) = view_stream.take() {
+                            prev.abort();
+                        }
+                    }
                 }
-                if let (Some(pty), Some(framer), Some(tx)) = (
-                    session.and_then(|s| state.live_session(s)),
-                    session.and_then(|s| state.session_framer(s)),
-                    state.frame_sender(id),
-                ) {
-                    view_stream = Some(tokio::spawn(stream_view(pty, framer, tx)));
+            }
+            // --- Feature 011: shell instances + which process is attached ---
+            ClientMsg::SessionAttachProcess { session, process } => {
+                if let Some((pty, framer)) = state.attach_process(session, process) {
+                    restart_view(state, id, &mut view_stream, pty, framer);
+                }
+            }
+            ClientMsg::SessionOpenShell { session, instance } => {
+                if let Err(err) = state.open_shell(session, instance) {
+                    tracing::warn!(session = %session.0, instance = instance.0, %err, "open shell failed");
+                }
+            }
+            ClientMsg::SessionCloseShell { session, instance } => {
+                if let Some((pty, framer)) = state.close_shell(session, instance) {
+                    restart_view(state, id, &mut view_stream, pty, framer);
+                }
+            }
+            ClientMsg::SessionRestartShell { session, instance } => {
+                let was_attached = state.close_shell(session, instance).is_some();
+                if let Err(err) = state.open_shell(session, instance) {
+                    tracing::warn!(session = %session.0, instance = instance.0, %err, "restart shell failed");
+                } else if was_attached {
+                    if let Some((pty, framer)) =
+                        state.attach_process(session, SessionProcess::Shell(instance))
+                    {
+                        restart_view(state, id, &mut view_stream, pty, framer);
+                    }
                 }
             }
             ClientMsg::SettingsSet {
@@ -365,6 +390,24 @@ where
 /// a single delta (the VT dirty flag collapses many wakeups into one), so a briefly-slow reader
 /// never falls behind unbounded (spec SC — screen state is lossy and convergent, unlike input).
 const FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(16);
+
+/// Abort the current view stream (if any) and start streaming `(pty, framer)` to client `id`. Used
+/// whenever the attached process changes — a new viewed session, a process attach, or a close/restart
+/// that reattaches to the primary.
+fn restart_view(
+    state: &Arc<DaemonState>,
+    id: crate::state::ClientId,
+    current: &mut Option<tokio::task::JoinHandle<()>>,
+    pty: std::sync::Arc<crate::supervisor::PtySession>,
+    framer: std::sync::Arc<std::sync::Mutex<crate::framer::Framer>>,
+) {
+    if let Some(prev) = current.take() {
+        prev.abort();
+    }
+    if let Some(tx) = state.frame_sender(id) {
+        *current = Some(tokio::spawn(stream_view(pty, framer, tx)));
+    }
+}
 
 /// Stream grid frames for one viewed session to one client. Sends a full snapshot first (attach /
 /// reattach semantics, FR-014/FR-017 — the client gets the current screen, not a replay), then

@@ -160,7 +160,7 @@ impl ShellLifecycle {
 /// its owning session, for the lifetime of the running app; never persisted, never compared
 /// across sessions. Doubles as the switcher row's display label (spec Assumptions: instances are
 /// identified by creation order) — there is no separate "display name" field.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ShellInstanceId(pub u32);
 
 /// One of possibly several Regular Terminal instances a session may have open (feature 011,

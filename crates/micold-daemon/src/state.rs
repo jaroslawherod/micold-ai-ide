@@ -15,9 +15,9 @@ use std::time::Instant;
 use micold_core::input::{InputOutcome, InputReceiver};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
-    CatalogSnapshot, DaemonMsg, DaemonSettings, RefusalReason, SessionSummary,
+    CatalogSnapshot, DaemonMsg, DaemonSettings, RefusalReason, SessionProcess, SessionSummary,
 };
-use micold_core::session::{SessionId, TerminalMode};
+use micold_core::session::{SessionId, ShellInstanceId, TerminalMode};
 use micold_core::terminal::{LaunchMode, LaunchSpec};
 use tokio::sync::mpsc;
 
@@ -47,17 +47,34 @@ struct Inner {
     sessions: HashMap<SessionId, LiveSession>,
 }
 
-/// A running session plus the daemon's view of its input log. The [`PtySession`] is held behind an
-/// `Arc` so a caller can clone the handle and write to the PTY *after* dropping the state lock —
-/// PTY writes must never block the shared lock (see the module invariant).
-struct LiveSession {
+/// One live process of a session: its PTY, the daemon's view of its input log, and its framer.
+/// The [`PtySession`] is behind an `Arc` so a caller can clone it and write to the PTY *after*
+/// dropping the state lock — PTY writes must never block the shared lock (module invariant). The
+/// framer is per-process and session-lived so its `scrolled_off` watermark (and every line's
+/// absolute `LineId`) is stable across reattach, and scrollback-by-range resolves against the same
+/// eviction state the stream produced.
+struct Proc {
     pty: Arc<PtySession>,
     input: InputReceiver,
-    /// The session-level [`Framer`], shared by the view-stream task and the scrollback handler.
-    /// Session-level (not per-view) so its `scrolled_off` eviction watermark — and therefore every
-    /// line's absolute `LineId` — is stable across reattach, and scrollback-by-range resolves
-    /// against the same eviction state the stream produced.
     framer: Arc<Mutex<Framer>>,
+}
+
+/// A running session's processes (feature 011): a `Primary` (its AI CLI or mode-selected primary
+/// shell) plus any additional Regular-terminal shell instances, of which exactly one is *attached*
+/// (streamed + driven) at a time. Input and grid frames stay `SessionId`-addressed and route to the
+/// attached process.
+struct LiveSession {
+    procs: HashMap<SessionProcess, Proc>,
+    attached: SessionProcess,
+}
+
+/// Build a fresh [`Proc`] around a spawned PTY: a zeroed input log and a session-lived framer.
+fn new_proc(pty: Arc<PtySession>, id: SessionId) -> Proc {
+    Proc {
+        pty,
+        input: InputReceiver::new(),
+        framer: Arc::new(Mutex::new(Framer::new(id))),
+    }
 }
 
 /// What `start_session` needs to spawn a session, resolved from the catalog under the lock and then
@@ -319,41 +336,137 @@ impl DaemonState {
         Ok(())
     }
 
-    /// Adopt a freshly-spawned session into the live registry, starting its input log at serial `0`.
-    /// Returns the shared handle (also the seam the session-lifecycle RPCs will use, T053+).
+    /// Adopt a freshly-spawned session into the live registry as its `Primary` process (attached by
+    /// default), starting its input log at serial `0`. Returns the shared handle.
     pub fn register_session(&self, session: PtySession) -> Arc<PtySession> {
         let pty = Arc::new(session);
         let id = pty.id();
+        let mut procs = HashMap::new();
+        procs.insert(SessionProcess::Primary, new_proc(Arc::clone(&pty), id));
         self.lock().sessions.insert(
             id,
             LiveSession {
-                pty: Arc::clone(&pty),
-                input: InputReceiver::new(),
-                framer: Arc::new(Mutex::new(Framer::new(id))),
+                procs,
+                attached: SessionProcess::Primary,
             },
         );
         pty
     }
 
-    /// Remove a session from the live registry (e.g. after it ends). Returns the handle if present.
+    /// Remove a session (all its processes) from the live registry. Returns the primary handle.
     pub fn remove_session(&self, session: SessionId) -> Option<Arc<PtySession>> {
-        self.lock().sessions.remove(&session).map(|s| s.pty)
+        self.lock().sessions.remove(&session).and_then(|s| {
+            s.procs
+                .get(&SessionProcess::Primary)
+                .map(|p| Arc::clone(&p.pty))
+        })
     }
 
-    /// The live handle for a session, if the daemon is hosting it (test/observability).
+    /// The *attached* process's PTY handle, if the daemon is hosting the session.
     pub fn live_session(&self, session: SessionId) -> Option<Arc<PtySession>> {
-        self.lock()
-            .sessions
-            .get(&session)
-            .map(|s| Arc::clone(&s.pty))
+        let inner = self.lock();
+        let live = inner.sessions.get(&session)?;
+        live.procs.get(&live.attached).map(|p| Arc::clone(&p.pty))
     }
 
-    /// The session's shared framer (used by the view-stream task and the scrollback handler).
+    /// The *attached* process's framer (used by the view-stream task and the scrollback handler).
     pub fn session_framer(&self, session: SessionId) -> Option<Arc<Mutex<Framer>>> {
-        self.lock()
+        let inner = self.lock();
+        let live = inner.sessions.get(&session)?;
+        live.procs
+            .get(&live.attached)
+            .map(|p| Arc::clone(&p.framer))
+    }
+
+    /// Attach `process` (make it the streamed + driven one). Returns the new attached process's
+    /// `(pty, framer)` so the caller can restart the view stream, or `None` if it isn't live.
+    pub fn attach_process(
+        &self,
+        session: SessionId,
+        process: SessionProcess,
+    ) -> Option<(Arc<PtySession>, Arc<Mutex<Framer>>)> {
+        let mut inner = self.lock();
+        let live = inner.sessions.get_mut(&session)?;
+        if !live.procs.contains_key(&process) {
+            return None;
+        }
+        live.attached = process;
+        let p = live.procs.get(&process)?;
+        Some((Arc::clone(&p.pty), Arc::clone(&p.framer)))
+    }
+
+    /// Open (spawn) a shell instance for a session (feature 011). Idempotent — an already-open
+    /// instance is a no-op. The shell shares the session's id (for its frames) but has its own PTY,
+    /// input log, and framer. cwd/scrollback come from the catalog; the PTY fork happens outside the
+    /// lock.
+    pub fn open_shell(&self, session: SessionId, instance: ShellInstanceId) -> io::Result<()> {
+        let key = SessionProcess::Shell(instance);
+        if self
+            .lock()
             .sessions
             .get(&session)
-            .map(|s| Arc::clone(&s.framer))
+            .is_some_and(|l| l.procs.contains_key(&key))
+        {
+            return Ok(());
+        }
+        let (cwd, scrollback) = {
+            let inner = self.lock();
+            let scrollback = inner.catalog.settings_wire().scrollback_lines;
+            let cwd = inner
+                .catalog
+                .workspace()
+                .sessions
+                .iter()
+                .find_map(|(project, sessions)| {
+                    sessions
+                        .iter()
+                        .find(|s| s.id == session)
+                        .map(|s| s.location.cwd(project))
+                });
+            (cwd, scrollback)
+        };
+        let Some(cwd) = cwd else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no such session in the catalog",
+            ));
+        };
+        let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
+        let pty = Arc::new(PtySession::spawn_shell(
+            session, &cwd, &env, scrollback, None,
+        )?);
+        let mut inner = self.lock();
+        if let Some(live) = inner.sessions.get_mut(&session) {
+            live.procs.insert(key, new_proc(pty, session));
+        }
+        Ok(())
+    }
+
+    /// Close (kill) a session's shell instance. If it was the attached one, attachment falls back to
+    /// `Primary`; the new attached `(pty, framer)` is returned so the caller can restart the stream.
+    /// The killed process is dropped *outside* the state lock (its teardown may block).
+    pub fn close_shell(
+        &self,
+        session: SessionId,
+        instance: ShellInstanceId,
+    ) -> Option<(Arc<PtySession>, Arc<Mutex<Framer>>)> {
+        let key = SessionProcess::Shell(instance);
+        let (_removed, reattach) = {
+            let mut inner = self.lock();
+            let live = inner.sessions.get_mut(&session)?;
+            let removed = live.procs.remove(&key);
+            let reattach = if live.attached == key {
+                live.attached = SessionProcess::Primary;
+                live.procs
+                    .get(&SessionProcess::Primary)
+                    .map(|p| (Arc::clone(&p.pty), Arc::clone(&p.framer)))
+            } else {
+                None
+            };
+            (removed, reattach)
+        };
+        // `_removed` (the killed process) drops here, outside the lock.
+        reattach
     }
 
     /// Drive one input batch into a session's PTY, enforcing the append-only input contract (G2,
@@ -368,10 +481,12 @@ impl DaemonState {
     pub fn session_input(&self, session: SessionId, serial: u64, bytes: &[u8]) {
         let resolved = {
             let mut inner = self.lock();
-            inner
-                .sessions
-                .get_mut(&session)
-                .map(|live| (live.input.accept(serial), Arc::clone(&live.pty)))
+            inner.sessions.get_mut(&session).and_then(|live| {
+                let attached = live.attached;
+                live.procs
+                    .get_mut(&attached)
+                    .map(|p| (p.input.accept(serial), Arc::clone(&p.pty)))
+            })
         };
 
         let Some((outcome, pty)) = resolved else {
