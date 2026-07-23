@@ -2,8 +2,10 @@
 //! FR-007, FR-012, FR-013). Uses a fake `FolderScanner` — no filesystem access.
 
 use micold_ai_ide::fs_scan::FolderScanner;
-use micold_ai_ide::project::{Availability, FolderEntry};
+use micold_ai_ide::project::{canonicalize_best_effort, Availability, FolderEntry};
+use micold_ai_ide::session::{Session, SessionLocation};
 use micold_ai_ide::workspace::Workspace;
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
@@ -153,6 +155,119 @@ fn two_projects_may_share_a_display_name_distinct_by_path() {
     assert_eq!(ws.projects[0].display_name, "proj");
     assert_eq!(ws.projects[1].display_name, "proj");
     assert_ne!(ws.projects[0].path, ws.projects[1].path);
+}
+
+// --- Feature 014: forget a project (removes record + all per-path metadata) ---
+
+/// Seed a project with one session and a worktree-name override so `forget` cleanup is visible.
+fn with_session_and_override(ws: &mut Workspace, path: &str, dir: &str) {
+    let key = canonicalize_best_effort(Path::new(path));
+    ws.sessions.insert(
+        key.clone(),
+        vec![Session::start_new(SessionLocation::Worktree(
+            dir.to_string(),
+        ))],
+    );
+    let mut names = BTreeMap::new();
+    names.insert(dir.to_string(), "Nice name".to_string());
+    ws.worktree_names.insert(key, names);
+}
+
+#[test]
+fn forget_removes_a_non_active_project_leaving_others_and_active_intact() {
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/a"), &plain());
+    ws.open_or_activate(PathBuf::from("/b"), &plain()); // active = /b
+
+    ws.forget(Path::new("/a"));
+
+    assert_eq!(ws.projects.len(), 1);
+    assert_eq!(ws.projects[0].path, PathBuf::from("/b"));
+    assert_eq!(ws.active, Some(PathBuf::from("/b")), "active untouched");
+}
+
+#[test]
+fn forget_the_active_project_clears_active() {
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/a"), &plain());
+    ws.open_or_activate(PathBuf::from("/b"), &plain()); // active = /b
+
+    ws.forget(Path::new("/b"));
+
+    assert!(!ws.projects.iter().any(|p| p.path == *Path::new("/b")));
+    assert_eq!(
+        ws.active, None,
+        "active cleared when the active project is forgotten"
+    );
+}
+
+#[test]
+fn forget_the_only_project_empties_the_list_and_active() {
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/only"), &plain());
+
+    ws.forget(Path::new("/only"));
+
+    assert!(ws.projects.is_empty());
+    assert_eq!(ws.active, None);
+}
+
+#[test]
+fn forget_drops_sessions_and_worktree_name_overrides_for_that_path() {
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/a"), &plain());
+    with_session_and_override(&mut ws, "/a", "feat-x");
+    let key = canonicalize_best_effort(Path::new("/a"));
+    assert!(ws.sessions.contains_key(&key));
+    assert!(ws.worktree_names.contains_key(&key));
+
+    ws.forget(Path::new("/a"));
+
+    assert!(!ws.sessions.contains_key(&key), "session records dropped");
+    assert!(
+        !ws.worktree_names.contains_key(&key),
+        "worktree-name overrides dropped"
+    );
+}
+
+#[test]
+fn forget_unknown_path_is_a_no_op() {
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/a"), &plain()); // active = /a
+    let before = ws.clone();
+
+    ws.forget(Path::new("/does-not-exist"));
+
+    assert_eq!(ws, before, "forgetting an unknown path changes nothing");
+}
+
+#[test]
+fn forget_matches_non_canonical_path_spelling() {
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/a/proj"), &plain());
+
+    // A spelling that lexically normalizes to the stored path still matches.
+    ws.forget(Path::new("/a/./sub/../proj"));
+
+    assert!(ws.projects.is_empty());
+    assert_eq!(ws.active, None);
+}
+
+#[test]
+fn forget_removes_an_unavailable_project_like_an_available_one() {
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/gone"), &plain());
+    ws.open_or_activate(PathBuf::from("/here"), &plain());
+    ws.refresh_availability(&FakeScanner {
+        git: false,
+        available: false,
+    }); // both marked Unavailable
+    assert_eq!(ws.projects[0].availability, Availability::Unavailable);
+
+    ws.forget(Path::new("/gone"));
+
+    assert_eq!(ws.projects.len(), 1);
+    assert_eq!(ws.projects[0].path, PathBuf::from("/here"));
 }
 
 // --- Polish: path canonicalization dedupes equivalent paths (FR-012) ---

@@ -51,6 +51,34 @@ fn find_session_mut_allows_lifecycle_mutation() {
     ));
 }
 
+// Feature 014 (forget project): the binary needs every recorded session id for a project — of
+// any lifecycle — to stop its live processes before forgetting it (FR-010).
+#[test]
+fn session_ids_of_project_returns_all_recorded_ids_regardless_of_lifecycle() {
+    let ws = workspace_with(vec![
+        (
+            "/a",
+            vec![
+                running_session("w1"),
+                idle_session("w2"),
+                failed_session("w3"),
+            ],
+        ),
+        ("/b", vec![running_session("wb")]),
+    ]);
+
+    let ids_a = ws.session_ids_of_project(Path::new("/a"));
+    let expected: Vec<_> = ws.sessions[Path::new("/a")].iter().map(|s| s.id).collect();
+    assert_eq!(ids_a, expected, "all three /a sessions, in order");
+    assert_eq!(ids_a.len(), 3);
+
+    assert_eq!(ws.session_ids_of_project(Path::new("/b")).len(), 1);
+    assert!(
+        ws.session_ids_of_project(Path::new("/unknown")).is_empty(),
+        "unknown project has no session ids"
+    );
+}
+
 #[test]
 fn running_session_count_counts_active_only() {
     let ws = workspace_with(vec![

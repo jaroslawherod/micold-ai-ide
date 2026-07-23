@@ -108,6 +108,9 @@ enum ClosingOverlay {
     ConfirmDelete(String),
     WorktreeRename(WorktreeRenameDraft),
     ConfirmSessionRemove(String),
+    /// Fading-out confirm-forget dialog (feature 014): the project's display name and the
+    /// running-session count captured at close time, so the exit animation matches the live view.
+    ConfirmForget(String, usize),
 }
 
 /// The binary's application state: the pure core plus gui-only runtime handles.
@@ -691,6 +694,18 @@ fn capture_overlay(app: &App) -> Option<ClosingOverlay> {
             .map(|(_, session)| {
                 ClosingOverlay::ConfirmSessionRemove(session.label.display().to_string())
             }),
+        Overlay::ConfirmForgetProject => app.core.forget_target.clone().map(|path| {
+            let display_name = app
+                .core
+                .workspace
+                .projects
+                .iter()
+                .find(|p| p.path == path)
+                .map(|p| p.display_name.clone())
+                .unwrap_or_else(|| micold_ai_ide::project::default_display_name(&path));
+            let running = app.core.workspace.running_session_count(&path);
+            ClosingOverlay::ConfirmForget(display_name, running)
+        }),
     }
 }
 
@@ -771,6 +786,35 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::RenameConfirmed => {
             app.core.update(Message::RenameConfirmed);
             persist(&mut app.core);
+            Task::none()
+        }
+        // Forget a project (feature 014): stop its live session processes so none is orphaned
+        // (FR-010), let the pure reducer drop the record + metadata and clear the active working
+        // space if it was active (FR-003/005/008), persist the pruned catalog (FR-007), then delete
+        // the project's per-project state file so its persisted session records are discarded and
+        // cannot be resurrected on a later re-open (FR-005/FR-012). Nothing inside the project
+        // folder or its worktrees is touched (FR-006).
+        Message::ProjectForgetConfirmed => {
+            if let Some(path) = app.core.forget_target.clone() {
+                // Kill every recorded session's processes. A session has a live PTY in `terminals`
+                // iff it is running, so `terminals.remove` is a no-op for idle/absent ones — the
+                // number actually stopped equals the count shown in the dialog (FR-002a/SC-005a).
+                for id in app.core.workspace.session_ids_of_project(&path) {
+                    if let Some(mut st) = app.terminals.remove(&id) {
+                        st.kill_all();
+                    }
+                }
+                app.core.update(Message::ProjectForgetConfirmed);
+                persist(&mut app.core);
+                if let Some(store) = JsonFileStore::default_location() {
+                    if let Err(err) = store.remove_project_state(&path) {
+                        app.core
+                            .notify_error(format!("Couldn't fully forget the project: {err}"));
+                    }
+                }
+            } else {
+                app.core.update(Message::ProjectForgetConfirmed);
+            }
             Task::none()
         }
         // Worktree rename (feature 008, FR-014/FR-015): apply the display-name override in the

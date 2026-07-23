@@ -78,6 +78,9 @@ pub enum Overlay {
     /// The confirm-remove dialog for a session is shown (bugfix BUG-003, FR-015c). The target
     /// session is held in [`State::session_remove_target`].
     ConfirmSessionRemove,
+    /// The confirm-forget dialog for a project is shown (feature 014, FR-002). The target
+    /// project is held in [`State::forget_target`].
+    ConfirmForgetProject,
 }
 
 /// Transient creation status for the add-worktree form (feature 010, research R4). Not
@@ -324,6 +327,16 @@ pub enum Message {
     RenameConfirmed,
     /// Dismiss the rename dialog without applying (Cancel or Esc).
     RenameCancelled,
+
+    // ---- Feature 014: forget a project ----
+    /// Request to forget the project at this path; opens the confirm dialog (FR-002).
+    ProjectForgetRequested(PathBuf),
+    /// Confirm forgetting. The binary stops the project's live session processes, the reducer
+    /// drops the record + metadata and clears the active working space if it was active, then the
+    /// binary persists and deletes the project's per-project state file (FR-003/005/007/008/010).
+    ProjectForgetConfirmed,
+    /// Dismiss the forget confirmation without removing anything (FR-004).
+    ProjectForgetCancelled,
     /// The user selected a theme preference (Follow system / Light / Dark) (FR-007, FR-008).
     /// The binary persists the updated preference afterward.
     ThemePreferenceChanged(ThemePreference),
@@ -689,6 +702,10 @@ pub struct State {
     /// FR-015c). Present only while [`Overlay::ConfirmSessionRemove`] is shown. Mirrors
     /// `worktree_delete_target`.
     pub session_remove_target: Option<SessionId>,
+    /// The project pending a forget confirmation, by path (feature 014). Present only while
+    /// [`Overlay::ConfirmForgetProject`] is shown. Transient — never persisted. Mirrors
+    /// `worktree_delete_target`.
+    pub forget_target: Option<PathBuf>,
 }
 
 impl State {
@@ -835,6 +852,34 @@ impl State {
             Message::RenameCancelled => {
                 self.overlay = Overlay::None;
                 self.rename_draft = None;
+            }
+            Message::ProjectForgetRequested(path) => {
+                // Open the confirmation; nothing is removed until confirmed (FR-002).
+                self.forget_target = Some(path);
+                self.open_overlay(Overlay::ConfirmForgetProject);
+            }
+            Message::ProjectForgetConfirmed => {
+                // Drop the record + all per-path metadata (FR-003/FR-005). The binary has already
+                // stopped the project's live processes and will persist + delete the per-project
+                // state file after this pure transition.
+                if let Some(path) = self.forget_target.clone() {
+                    // If the forgotten project was the active working space, its active session
+                    // pointer must be cleared too — `forget` clears `workspace.active`, so the
+                    // dangling `active_session` (which only ever referenced the active project)
+                    // would otherwise point at a project that no longer exists (FR-008).
+                    let was_active = self.workspace.active.as_deref()
+                        == Some(canonicalize_best_effort(&path).as_path());
+                    self.workspace.forget(&path);
+                    if was_active {
+                        self.active_session = None;
+                    }
+                }
+                self.forget_target = None;
+                self.overlay = Overlay::None;
+            }
+            Message::ProjectForgetCancelled => {
+                self.forget_target = None;
+                self.overlay = Overlay::None;
             }
             Message::ThemeModeCycled => {
                 // Advance to the next mode; the menu stays open so repeated clicks cycle.
@@ -1666,6 +1711,7 @@ pub fn on_escape(state: &State) -> Option<Message> {
         Overlay::ConfirmWorktreeDelete => Some(Message::WorktreeDeleteCancelled),
         Overlay::RenameWorktree => Some(Message::WorktreeRenameCancelled),
         Overlay::ConfirmSessionRemove => Some(Message::SessionRemoveCancelled),
+        Overlay::ConfirmForgetProject => Some(Message::ProjectForgetCancelled),
         Overlay::None => None,
     }
 }
