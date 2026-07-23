@@ -10,6 +10,7 @@
 //! `specs/005-worktree-session-terminal/contracts/claude-cli.md`.
 
 use crate::terminal::LaunchMode;
+use std::io;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
@@ -34,6 +35,13 @@ pub trait AiCliProvider {
     /// (no I/O), so the encoding is unit-testable.
     fn transcript_path(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> PathBuf;
 
+    /// The directory holding every conversation transcript for sessions run in `cwd` (bugfix
+    /// 002/BUG-001, FR-020b) — the parent directory of [`Self::transcript_path`]'s file, exposed
+    /// separately so a caller can *discover* session ids it has no persisted record for by
+    /// listing this directory's transcript files, rather than only checking one known id at a
+    /// time. Pure path derivation (no I/O).
+    fn transcript_dir(&self, config_dir: &Path, cwd: &Path) -> PathBuf;
+
     /// Extract the latest provider-supplied session title from raw transcript contents
     /// (best-effort, pure). `None` when no non-empty title has been recorded or the contents are
     /// unparseable.
@@ -51,6 +59,54 @@ pub trait AiCliProvider {
         let contents =
             std::fs::read_to_string(self.transcript_path(config_dir, cwd, session_id)).ok()?;
         self.parse_title(&contents)
+    }
+
+    /// Path of the durable close/remove suppression marker for a session running in `cwd`
+    /// (bugfix BUG-003, FR-020c) — a sentinel file beside [`Self::transcript_path`]'s file, in
+    /// the provider's own storage rather than the app's. Pure path derivation (no I/O).
+    fn archived_marker_path(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> PathBuf {
+        self.transcript_dir(config_dir, cwd)
+            .join(format!("{session_id}.archived"))
+    }
+
+    /// Record that the user closed or removed this session (bugfix BUG-003, FR-015a/FR-015c):
+    /// write an empty marker at [`Self::archived_marker_path`]. Best-effort I/O — never fails the
+    /// caller (mirrors the non-fatal-save posture elsewhere in this app); a failure here just
+    /// means this one session may resurface via reconciliation on a future project open.
+    fn mark_archived(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> io::Result<()> {
+        let path = self.archived_marker_path(config_dir, cwd, session_id);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, "")
+    }
+
+    /// Whether the user has closed or removed this session (bugfix BUG-003, FR-020c) — the
+    /// durable check reconciliation (FR-020b) consults, independent of the app's own store.
+    fn is_archived(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> bool {
+        self.archived_marker_path(config_dir, cwd, session_id)
+            .exists()
+    }
+
+    /// Every session id this provider has recorded a conversation for under `cwd` (bugfix
+    /// 002/BUG-001, FR-020b) — discovered by listing [`Self::transcript_dir`]'s transcript
+    /// files and parsing each one's filename as a session id. Best-effort (mirrors
+    /// [`Self::read_title`]): a missing/unreadable directory or an unparseable filename simply
+    /// contributes nothing, never an error, so discovery never fails a project open.
+    fn discover_transcript_session_ids(&self, config_dir: &Path, cwd: &Path) -> Vec<Uuid> {
+        let Ok(entries) = std::fs::read_dir(self.transcript_dir(config_dir, cwd)) else {
+            return Vec::new();
+        };
+        entries
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| {
+                let path = entry.path();
+                if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+                    return None;
+                }
+                path.file_stem()?.to_str()?.parse::<Uuid>().ok()
+            })
+            .collect()
     }
 }
 
@@ -89,17 +145,19 @@ impl AiCliProvider for ClaudeProvider {
     }
 
     fn transcript_path(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> PathBuf {
-        // `<config>/projects/<encoded-cwd>/<session-id>.jsonl`, where `<encoded-cwd>` is the
-        // worktree path with every non-alphanumeric char replaced by `-` (research R6).
+        self.transcript_dir(config_dir, cwd)
+            .join(format!("{session_id}.jsonl"))
+    }
+
+    fn transcript_dir(&self, config_dir: &Path, cwd: &Path) -> PathBuf {
+        // `<config>/projects/<encoded-cwd>/`, where `<encoded-cwd>` is the worktree path with
+        // every non-alphanumeric char replaced by `-` (research R6).
         let encoded: String = cwd
             .to_string_lossy()
             .chars()
             .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
             .collect();
-        config_dir
-            .join("projects")
-            .join(encoded)
-            .join(format!("{session_id}.jsonl"))
+        config_dir.join("projects").join(encoded)
     }
 
     fn parse_title(&self, transcript: &str) -> Option<String> {

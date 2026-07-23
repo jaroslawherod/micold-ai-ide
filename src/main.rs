@@ -32,12 +32,13 @@ use micold_ai_ide::worktree::{
     create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir,
     CreateError, CreateProgressEvent, Worktree,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use ui::terminal::{spawn_pty, spawn_shell_pty, RuntimeTerminal, SessionTerminals};
 use ui::MotionKey;
+use uuid::Uuid;
 
 /// How often the OS light/dark preference is polled while the window has input focus
 /// (research R4).
@@ -106,6 +107,7 @@ enum ClosingOverlay {
     Settings(SettingsDraft),
     ConfirmDelete(String),
     WorktreeRename(WorktreeRenameDraft),
+    ConfirmSessionRemove(String),
 }
 
 /// The binary's application state: the pure core plus gui-only runtime handles.
@@ -368,6 +370,10 @@ fn boot() -> (App, Task<Message>) {
     // If a project is already active from a previous run, discover its worktrees.
     if let Some(repo) = core.workspace.active.clone() {
         core.set_worktrees(discover_worktrees(&repo));
+        // Recover any session whose conversation transcript survived even though its persisted
+        // record did not (bugfix 002/BUG-001, FR-020b) — e.g. a per-project state fault isolated
+        // by that same bugfix's storage split.
+        reconcile_sessions_from_transcripts(&mut core, &repo);
     }
     let mut motion = Animator::new();
     motion.set(MotionKey::Menu, 0.0);
@@ -405,12 +411,16 @@ fn boot() -> (App, Task<Message>) {
 
 /// Persist the catalog. Empty sessions — those `claude` never recorded a conversation for —
 /// are NOT preserved, so a restart never tries to resume a nonexistent session (bug fix; see
-/// spec Clarifications 2026-07-16). A save failure is non-fatal (Principle IV).
-fn persist(core: &State) {
+/// spec Clarifications 2026-07-16). A save failure is non-fatal (Principle IV) but is surfaced
+/// to the user rather than silently discarded (FR-012b, bugfix 002/BUG-001) — the mutation that
+/// triggered this persist stays in memory regardless; only the next restart is at risk.
+fn persist(core: &mut State) {
     if let Some(store) = JsonFileStore::default_location() {
         let mut to_save = core.workspace.clone();
         prune_empty_sessions(&mut to_save);
-        let _ = store.save(&to_save);
+        if let Err(err) = store.save(&to_save) {
+            core.notify_error(format!("Couldn't save your changes: {err}"));
+        }
     }
 }
 
@@ -449,6 +459,70 @@ fn session_has_conversation(
         return true;
     };
     provider.has_recorded_conversation(&config, &cwd, session.id.0)
+}
+
+/// Reconcile `repo`'s session list against the AI CLI provider's own conversation transcripts
+/// for its supported session locations — the project root and every currently-`Valid` worktree
+/// (bugfix 002/BUG-001, FR-020b). A transcript with no matching persisted record is reconstructed
+/// (id from the transcript filename, title read from the transcript if available, else the
+/// `Pending` placeholder); a transcript matching an existing record is left untouched. Must be
+/// called after `State::worktrees` is populated for `repo` (worktree discovery runs first at
+/// every call site). Best-effort throughout (mirrors `session_has_conversation`): an
+/// undeterminable provider config dir, or an unreadable transcript directory, simply yields no
+/// additional sessions rather than an error.
+fn reconcile_sessions_from_transcripts(core: &mut State, repo: &Path) {
+    let provider = ClaudeProvider;
+    let Some(config_dir) = provider.config_dir() else {
+        return;
+    };
+
+    let mut locations = vec![SessionLocation::Default];
+    locations.extend(
+        core.worktrees
+            .iter()
+            .filter(|w| w.status == micold_ai_ide::worktree::WorktreeStatus::Valid)
+            .map(|w| SessionLocation::Worktree(w.dir_name.clone())),
+    );
+
+    let mut seen: HashSet<Uuid> = core
+        .workspace
+        .sessions
+        .get(repo)
+        .map(|list| list.iter().map(|s| s.id.0).collect())
+        .unwrap_or_default();
+
+    let mut reconstructed = Vec::new();
+    for location in locations {
+        let cwd = session_cwd_for_location(repo, &location);
+        for session_id in provider.discover_transcript_session_ids(&config_dir, &cwd) {
+            if !seen.insert(session_id) {
+                continue;
+            }
+            // Bugfix BUG-003 (FR-020c): a closed/removed session's durable marker suppresses
+            // reconciliation regardless of what the app's own (possibly lost) store remembers.
+            if provider.is_archived(&config_dir, &cwd, session_id) {
+                continue;
+            }
+            let label = match provider.read_title(&config_dir, &cwd, session_id) {
+                Some(title) => SessionLabel::Named(title),
+                None => SessionLabel::Pending,
+            };
+            reconstructed.push(Session::restored(
+                SessionId::from_uuid(session_id),
+                location.clone(),
+                label,
+                TerminalMode::AiCli,
+            ));
+        }
+    }
+
+    if !reconstructed.is_empty() {
+        core.workspace
+            .sessions
+            .entry(repo.to_path_buf())
+            .or_default()
+            .extend(reconstructed);
+    }
 }
 
 fn persist_settings(core: &State) {
@@ -543,6 +617,13 @@ fn capture_overlay(app: &App) -> Option<ClosingOverlay> {
             .worktree_rename_draft
             .clone()
             .map(ClosingOverlay::WorktreeRename),
+        Overlay::ConfirmSessionRemove => app
+            .core
+            .session_remove_target
+            .and_then(|id| app.core.workspace.find_session(id))
+            .map(|(_, session)| {
+                ClosingOverlay::ConfirmSessionRemove(session.label.display().to_string())
+            }),
     }
 }
 
@@ -602,8 +683,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 .open_or_activate(path.clone(), &StdFolderScanner::new());
             app.core.restore_after_activation(&path);
             app.core.set_worktrees(discover_worktrees(&path));
+            reconcile_sessions_from_transcripts(&mut app.core, &path);
             app.core.worktree_error = None;
-            persist(&app.core);
+            persist(&mut app.core);
             Task::none()
         }
         Message::KnownProjectReopened(path) => {
@@ -614,20 +696,21 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // background and restore the target project's foreground (feature 008, BS-1/BS-3).
             if app.core.switch_active(&path) {
                 app.core.set_worktrees(discover_worktrees(&path));
-                persist(&app.core);
+                reconcile_sessions_from_transcripts(&mut app.core, &path);
+                persist(&mut app.core);
             }
             Task::none()
         }
         Message::RenameConfirmed => {
             app.core.update(Message::RenameConfirmed);
-            persist(&app.core);
+            persist(&mut app.core);
             Task::none()
         }
         // Worktree rename (feature 008, FR-014/FR-015): apply the display-name override in the
         // core, then persist it so it survives a restart. Never touches the folder or branch.
         Message::WorktreeRenameConfirmed => {
             app.core.update(Message::WorktreeRenameConfirmed);
-            persist(&app.core);
+            persist(&mut app.core);
             Task::none()
         }
         Message::ThemePreferenceChanged(_) | Message::ThemeModeCycled => {
@@ -688,7 +771,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         );
                         app.core.update(Message::SessionStarted(session));
                         app.core.update(Message::SessionRunning(id));
-                        persist(&app.core);
+                        persist(&mut app.core);
                         started = true;
                     }
                     Err(err) => {
@@ -723,13 +806,44 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::done(Message::TerminalFocused)
         }
         // Close a session: kill both its processes (AI CLI and shell, feature 010 FR-014) and
-        // drop the runtime handles (FR-015a).
+        // drop the runtime handles. The pure core archives (not deletes) the record (FR-015a,
+        // bugfix BUG-003); here we additionally record the durable, provider-side suppression
+        // marker (FR-020c) so a still-existing `claude` transcript is never reconstructed by
+        // reconciliation on a later project open.
         Message::SessionCloseRequested(id) => {
             if let Some(mut st) = app.terminals.remove(&id) {
                 st.kill_all();
             }
+            if let Some((project_path, session)) = app.core.workspace.find_session(id) {
+                let provider = ClaudeProvider;
+                if let Some(config_dir) = provider.config_dir() {
+                    let cwd = session_cwd_for_location(project_path, &session.location);
+                    let _ = provider.mark_archived(&config_dir, &cwd, id.0);
+                }
+            }
             app.core.update(Message::SessionCloseRequested(id));
-            persist(&app.core);
+            persist(&mut app.core);
+            Task::none()
+        }
+        // Permanently remove a session (bugfix BUG-003, FR-015c): kill the process (if any),
+        // record the same durable suppression marker as Close (FR-020c) so a still-existing
+        // `claude` transcript is never reconstructed either, then let the pure core drop the
+        // record outright.
+        Message::SessionRemoveConfirmed => {
+            if let Some(id) = app.core.session_remove_target {
+                if let Some(mut st) = app.terminals.remove(&id) {
+                    st.kill_all();
+                }
+                if let Some((project_path, session)) = app.core.workspace.find_session(id) {
+                    let provider = ClaudeProvider;
+                    if let Some(config_dir) = provider.config_dir() {
+                        let cwd = session_cwd_for_location(project_path, &session.location);
+                        let _ = provider.mark_archived(&config_dir, &cwd, id.0);
+                    }
+                }
+            }
+            app.core.update(Message::SessionRemoveConfirmed);
+            persist(&mut app.core);
             Task::none()
         }
         // Switch the active session's terminal between AI CLI and Regular modes (feature 010,
@@ -741,7 +855,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::TerminalModeToggled);
             if let Some(id) = app.core.active_session {
                 ensure_attached_process(app, id, false);
-                persist(&app.core);
+                persist(&mut app.core);
             }
             Task::none()
         }
@@ -791,7 +905,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 // forever if `spawn_shell_pty` fails, since the restart affordance is only
                 // shown for `NotStarted`/`Exited` (convergence T034, FR-010).
                 spawn_and_register_shell_instance(app, id, shell_id, &cwd);
-                persist(&app.core);
+                persist(&mut app.core);
             }
             Task::none()
         }
@@ -811,7 +925,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     };
                     let shell_id = session.open_shell_instance();
                     spawn_and_register_shell_instance(app, id, shell_id, &cwd);
-                    persist(&app.core);
+                    persist(&mut app.core);
                 }
             }
             Task::none()
@@ -830,7 +944,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core
                 .update(Message::ShellInstanceCloseRequested(id, shell_id));
             ensure_attached_process(app, id, false);
-            persist(&app.core);
+            persist(&mut app.core);
             Task::none()
         }
         // Worktree creation completed: apply progress to the form, then dispatch the result
@@ -845,7 +959,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 app.core.update(Message::WorktreeCreateLogAppended(tail));
             }
             app.core.update(Message::WorktreeCreationDone { result });
-            persist(&app.core);
+            persist(&mut app.core);
             Task::none()
         }
         // Tick while a create runs: hand the worker's buffered lines to the form (feature 010
@@ -883,7 +997,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     }
                     // The user interacted, so `claude` now has a conversation — persist it so it
                     // can be resumed after a restart (FR-020; empty sessions still pruned).
-                    persist(&app.core);
+                    persist(&mut app.core);
                 }
             }
             Task::none()
@@ -1139,7 +1253,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 // Drop the session/worktree records in the core, then reconcile from git truth.
                 app.core.update(Message::WorktreeDeleteConfirmed);
                 app.core.set_worktrees(discover_worktrees(&repo));
-                persist(&app.core);
+                persist(&mut app.core);
             } else {
                 app.core.update(Message::WorktreeDeleteConfirmed);
             }

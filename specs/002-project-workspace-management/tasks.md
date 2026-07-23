@@ -111,7 +111,7 @@ compiles them.
 - [X] T026 [US2] Implement `JsonFileStore` in `src/store.rs`: `load` (missing/corrupt → empty via `LoadOutcome`, dangling `last_active` → none), `save` (serialize to a temp file in the same dir, then atomic rename), production path from `directories::ProjectDirs`, plus a `JsonFileStore::at(path)` constructor for tests (research R2/R8; depends on T025).
 - [X] T027 [US2] Implement `Workspace::refresh_availability(&scanner)` and make `activate` reject `Unavailable` projects in `src/workspace.rs` (FR-022, FR-023; depends on T015).
 - [X] T028 [US2] Extend `src/app.rs`: add `Message::KnownProjectReopened(PathBuf)` + its arm; hydrate `State.workspace` from a loaded snapshot on startup; recompute availability after load (edits `src/app.rs`; depends on T018, T026, T027).
-- [X] T029 [US2] In `src/main.rs`, load the workspace via `ProjectStore` at startup and `save` after any mutation that changes the catalog, active pointer, or a display name; surface save failures non-fatally (Principle IV; depends on T026, T028).
+- [X] T029 [US2] In `src/main.rs`, load the workspace via `ProjectStore` at startup and `save` after any mutation that changes the catalog, active pointer, or a display name; surface save failures non-fatally (Principle IV; FR-012b; depends on T026, T028). **Re-fixed (⚠️ was reopened BUG-001, 2026-07-23)**: `persist` now takes `core: &mut State` and calls `core.notify_error(...)` (the existing global-notification surface, `src/app.rs`) on a `save` error instead of `let _ = store.save(...)`; all 13 call sites updated to `persist(&mut app.core)`. `persist_settings` (a separate settings store, out of FR-012b's scope) is unchanged.
 - [X] T030 [US2] Update `src/ui/project_selector.rs` (and `src/ui/mod.rs` empty state): show the known-projects list with a reopen action (no browsing), indicate the last-active, mark `Unavailable` projects and block their reopen with a message (FR-010, FR-011, FR-023; contract C5).
 - [X] T031 [US2] Write the "Reopening projects" and "Unavailable projects" sections of `docs/user-guide/project-selection.md` (Principle VII).
 
@@ -175,6 +175,53 @@ compiles them.
 - [X] T045 Run `cargo fmt --all -- --check`, `cargo clippy --no-default-features --all-targets -- -D warnings`, and `cargo clippy --features gui --all-targets -- -D warnings` clean.
 - [ ] T046 Verify `cargo test --no-default-features --all-targets` and `cargo build --features gui` pass on Linux, macOS, and Windows via CI (Principle VI, SC-010).
 - [ ] T047 Run the `quickstart.md` manual walkthrough (steps 1–12) on each platform and confirm parity.
+
+---
+
+## Phase 8: Bugfix BUG-001 — Per-Project Storage Split
+
+**Purpose**: Isolate storage faults to a single project (FR-012a) by splitting the shared
+`projects.json` catalog from per-project state (sessions, worktree display names, mode), and
+migrate existing embedded data. See `contracts/storage-schema.md` "Bugfix: per-project storage
+split (BUG-001, 2026-07-21)".
+
+- [X] T048 [P] Failing test in `tests/store_fault_isolation.rs`: corrupting/removing one project's
+  per-project state file leaves the catalog and every other project's state file loadable and
+  unaffected (FR-012a). Landed as `corrupt_one_project_state_file_does_not_affect_others` +
+  `removed_project_state_file_degrades_only_that_project` in that new file (a dedicated file
+  reads clearer than folding into `tests/store_roundtrip.rs`).
+- [X] T049 [P] Failing test in `tests/store_fault_isolation.rs`
+  (`pre_split_embedded_sessions_migrate_to_per_project_file_on_next_save`, same file as T048 rather
+  than `tests/store_roundtrip.rs`): a pre-split `projects.json` with a project entry carrying
+  embedded `sessions`/`worktree_display_names` migrates that state into the new per-project state
+  file on next save, and the catalog entry no longer carries it afterward.
+- [X] T050 Define the per-project state file shape (`StoredProjectState`) + `project_id`
+  derivation (a fixed-key `DefaultHasher` digest of the canonical path — deterministic per build;
+  a future std-hasher change only orphans old per-project files, degrading them like any other
+  missing file, never crashing) in `src/store.rs` (contracts/storage-schema.md; depends on T049).
+- [X] T051 Split `JsonFileStore::load`/`save` in `src/store.rs`: load/save the catalog
+  (`projects.json`) and each known project's state file (`<data_dir>/projects/<project-id>.json`)
+  as independent operations — a fault in one path MUST NOT abort or blank the other — to make T048
+  pass (depends on T050). `StoredProject.sessions`/`worktree_display_names` kept
+  `#[serde(default, skip_serializing)]` as the migration-read seam.
+- [X] T052 Implement the one-time migration path (read embedded `sessions`/`worktree_display_names`
+  off a catalog entry if present via `StoredCatalog::into_workspace`'s existing legacy-field
+  handling, write them to the new per-project file on the next `save`, never re-embed them in the
+  catalog going forward) to make T049 pass (depends on T051).
+- [X] T053 Updated `tests/session_store.rs`'s
+  `default_session_persists_as_null_worktree_dir_and_roundtrips` (it inspected the raw catalog
+  file directly; now reads `store.project_state_path(&path)` instead) — the only existing test
+  that relied on the pre-split single-file shape. Every other existing store test
+  (`tests/store_roundtrip.rs`, `tests/session_store.rs`, `tests/store_terminal_mode.rs`) passes
+  unchanged, since hand-written legacy-shaped fixtures exercise the same migration-fallback path
+  as T049 (depends on T051, T052).
+
+**Checkpoint**: A fault affecting one project's state file never affects the catalog or any other
+project; pre-existing single-file data migrates losslessly. Verified 2026-07-23: `cargo test
+--no-default-features --all-targets` (56 test binaries incl. `store_fault_isolation.rs` and
+005's `session_reconciliation.rs`, all green), `cargo clippy --no-default-features --all-targets --
+-D warnings` and `cargo clippy --features gui --all-targets -- -D warnings` both clean, `cargo fmt
+--all -- --check` clean.
 
 ---
 
@@ -284,3 +331,7 @@ After Foundational: one developer takes US1 (unblocks the shared selector/worksp
 - **T047 (open)**: app boot + window creation verified on Linux (no panic); the full
   12-step manual click-through and macOS/Windows parity remain to be run (no headless UI
   driving in this environment). Every step's underlying logic is covered by the unit tests.
+
+**Bugfix**: 2026-07-21 — BUG-001 Added Phase 8 (T048–T053): split the shared `projects.json`
+catalog from per-project state (sessions, worktree names, mode) so a storage fault is isolated to
+one project (FR-012a), plus a lossless migration for pre-split files. See `bugs/BUG-001.md`.

@@ -3,7 +3,7 @@
 use micold_ai_ide::app::{on_escape, Message, Overlay, State, WorktreeFormStatus};
 use micold_ai_ide::naming::ConventionalType;
 use micold_ai_ide::project::{Availability, Project};
-use micold_ai_ide::session::{Session, SessionLocation};
+use micold_ai_ide::session::{Session, SessionLifecycle, SessionLocation};
 use micold_ai_ide::worktree::{CreateProgressEvent, CreateStage, Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -298,8 +298,17 @@ fn session_started_selected_and_closed() {
     assert_eq!(state.active_sessions()[0].label.display(), "Titled");
 
     state.update(Message::SessionCloseRequested(id));
-    assert!(state.active_sessions().is_empty());
     assert!(state.active_session.is_none());
+    // Bugfix BUG-003 (FR-015a): close archives the record (kept, not deleted) so a still-existing
+    // `claude` transcript isn't reconstructed by reconciliation later — it just stops appearing
+    // in the sidebar (`sidebar_entries`/`worktree_tree`, not `active_sessions()` itself).
+    let closed = state
+        .active_sessions()
+        .iter()
+        .find(|s| s.id == id)
+        .expect("closing archives the record rather than deleting it");
+    assert!(closed.archived);
+    assert_eq!(closed.lifecycle, SessionLifecycle::Idle);
 }
 
 // T015 (010-root-dir-session): a Default-located session enters `Workspace.sessions` exactly

@@ -88,6 +88,7 @@ The user renames a project. Renaming changes only the display name stored by the
 - **Re-opening the same folder**: Choosing a folder that is already known activates the existing entry and never creates a duplicate (identity is the filesystem path).
 - **Whitespace-only or empty rename**: Rejected; the existing display name is preserved.
 - **First-ever launch**: With no known projects, the shell shows the empty state inviting the user to open a project.
+- **Storage fault scoped to one project** (bugfix BUG-001): A corrupt or unwritable per-project state file MUST degrade only that project's session/worktree-name state to empty, exactly as a corrupt catalog degrades to an empty catalog today. It MUST NOT wipe the known-projects catalog or any other project's persisted state.
 
 ## Requirements *(mandatory)*
 
@@ -113,6 +114,8 @@ The user renames a project. Renaming changes only the display name stored by the
 - **FR-010**: The persisted list MUST record which project was last active.
 - **FR-011**: On launch, the system MUST let the user reopen a known project directly from the list without browsing the filesystem.
 - **FR-012**: Opening a folder that is already a known project MUST activate the existing entry and MUST NOT create a duplicate; project identity is the filesystem path.
+- **FR-012a**: A storage fault (corruption, a failed or interrupted write, an unreadable file) affecting one project's persisted state MUST NOT cause the loss of any other project's persisted state, nor of the known-projects catalog itself (bugfix BUG-001). Persisted per-project state (sessions, worktree display-name overrides, and any other per-project data introduced by later features) MUST be isolated such that a fault is scoped to at most one project.
+- **FR-012b**: A failed attempt to persist the catalog or a project's state (e.g. a write or rename error) MUST NOT crash the application, but MUST be surfaced to the user in some visible, non-blocking way (e.g. a status message) rather than being silently discarded (bugfix BUG-001). Silently swallowing the failure is insufficient: the user must be able to tell that their most recent change may not have survived a restart.
 
 #### Active working space
 
@@ -179,3 +182,18 @@ The following are explicitly **not** part of this feature:
 - Removing entries from the known-projects list (managing/pruning the list is not addressed here).
 
 **Alignment**: 2026-07-20 — Spec/code alignment audit. FR-003 amended: "any folder, git or not" was directly reversed by feature 005 FR-001a (git repositories only), because every session maps to a git worktree. The code has enforced the git-only gate since feature 005; this spec had not been updated. No behaviour change. Separately, a real defect was found on this path and is tracked for fix, not spec'd away: the refusal message is written to a state field whose only render site is the add-worktree modal, so a non-git folder is refused silently (see feature 005 FR-001a, which requires informing the user).
+
+**Bugfix**: 2026-07-21 — BUG-001 All projects' persisted state (sessions, worktree names, terminal
+mode) was lost with no recovery path whenever the single shared `projects.json` store hit any
+fault, because features 005/008/010 each layered higher-stakes per-project state onto that same
+file under the catalog's original "corrupt → empty" resilience rule (research R8) without
+revisiting its blast radius. FR-012a added (fault isolation between projects); new edge case
+added. See `contracts/storage-schema.md` for the per-project storage split, and
+`specs/005-worktree-session-terminal/spec.md` FR-020b for the companion session-reconciliation
+fix.
+
+**Bugfix**: 2026-07-23 — BUG-001 (verification follow-up) FR-012b added: a failed persist MUST be
+surfaced to the user, not silently discarded. Task **T029** was found checked complete while
+already claiming this exact behavior ("surface save failures non-fatally") without implementing
+it — every call site discards the `Result` outright. T029 reopened in tasks.md rather than left as
+a false completion. See `contracts/storage-schema.md` "Save-failure surfacing."

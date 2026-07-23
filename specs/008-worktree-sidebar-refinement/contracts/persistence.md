@@ -3,6 +3,15 @@
 **Modules**: `src/store.rs` (on-disk), `src/project.rs` + `src/workspace.rs` (pure model),
 `src/main.rs` (`persist` boundary). File: `projects.json` under `ProjectDirs` data dir.
 
+**Superseded (bugfix 002/BUG-001, 2026-07-21)**: `worktree_display_names` no longer lives embedded
+in the shared `projects.json` catalog entry described below — a fault in that one shared file used
+to be able to wipe every project's overrides at once. It now lives in the **per-project state
+file** introduced by that bugfix's storage split, alongside sessions and terminal mode. The field
+shape and pure-model API below (`Project::worktree_names`, `set_worktree_name`,
+`clear_worktree_name`) are unchanged; only which file it is written to and read from differs. See
+`specs/002-project-workspace-management/contracts/storage-schema.md` "Bugfix: per-project storage
+split" for the file layout and migration path.
+
 ## On-disk schema change (additive, no version bump)
 
 `StoredProject` gains:

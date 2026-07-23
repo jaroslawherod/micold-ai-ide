@@ -250,6 +250,13 @@ pub struct Session {
     /// Monotonic counter allocating the next `ShellInstanceId` (feature 011, research R1) —
     /// never decremented or reused, even after every instance is closed.
     pub next_shell_id: u32,
+    /// Whether the user closed this session (bugfix BUG-003, FR-015a). An archived session's
+    /// process has been stopped and its record is kept, but it is never shown in the sidebar
+    /// again (an "invisible tombstone" — no unarchive path). This field is a fast, in-memory
+    /// convenience only: the *durable* record that suppresses reconciliation (FR-020c) is a
+    /// marker in the AI CLI provider's own storage (`AiCliProvider::mark_archived`), which
+    /// survives even if this field's own persisted copy is lost. Set via [`Session::archive`].
+    pub archived: bool,
 }
 
 impl Session {
@@ -265,6 +272,7 @@ impl Session {
             shells: Vec::new(),
             active_shell: None,
             next_shell_id: 1,
+            archived: false,
         }
     }
 
@@ -287,6 +295,7 @@ impl Session {
             shells: Vec::new(),
             active_shell: None,
             next_shell_id: 1,
+            archived: false,
         }
     }
 
@@ -428,5 +437,16 @@ impl Session {
     /// project no longer calls this — switched-away sessions keep running in the background.
     pub fn stop_for_project_change(&mut self) {
         self.lifecycle = SessionLifecycle::Idle;
+    }
+
+    /// The user closed this session (bugfix BUG-003, FR-015a): stop the process (`Idle`, no
+    /// auto-restart, mirrors [`stop_for_project_change`](Self::stop_for_project_change)) and flag
+    /// it `archived` so it is excluded from the sidebar. The record itself is kept — callers must
+    /// NOT remove it from the workspace, and must additionally record the durable, provider-side
+    /// marker (`AiCliProvider::mark_archived`) so reconciliation (FR-020c) never reconstructs it,
+    /// even if this in-memory flag's own persisted copy is later lost.
+    pub fn archive(&mut self) {
+        self.lifecycle = SessionLifecycle::Idle;
+        self.archived = true;
     }
 }
