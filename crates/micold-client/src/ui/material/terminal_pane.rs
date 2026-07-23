@@ -6,10 +6,15 @@
 //! full focus gate land in feature 006 US2/US3; this file covers colour rendering + click focus.
 
 use crate::app::{Message, SelectKind};
+use crate::grid::GridCache;
 use crate::keymap::{self, KeyOutput};
+use crate::selection::Selection;
 use crate::ui::terminal::{
-    cell_colors, cell_font, shows_cursor, CellMetrics, RuntimeTerminal, TermPalette, TERM_FONT_SIZE,
+    cell_font, encode_mouse_report, shows_cursor, wire_cell_colors, CellMetrics, TermPalette,
+    TERM_FONT_SIZE,
 };
+use alacritty_terminal::term::cell::Flags;
+use alacritty_terminal::term::TermMode;
 use iced::advanced::clipboard::Kind as ClipboardKind;
 use iced::advanced::graphics::geometry::Renderer as _;
 use iced::advanced::layout::{self, Layout};
@@ -22,6 +27,7 @@ use iced::{
     alignment, event, keyboard, mouse, Color, Element, Event, Length, Point, Rectangle, Renderer,
     Size, Theme,
 };
+use micold_core::protocol::grid::{LineId, WireColor, WireStyle};
 
 /// Per-widget interaction state (drag + tracked modifiers + click cadence for single/double/
 /// triple selection).
@@ -53,14 +59,6 @@ fn grid_at(pos: Point, bounds: Rectangle, metrics: CellMetrics) -> (u16, u16) {
     let col = ((pos.x - bounds.x) / metrics.width).floor().max(0.0) as u16;
     let line = ((pos.y - bounds.y) / metrics.height).floor().max(0.0) as u16;
     (col, line)
-}
-
-/// The viewport row (0 = top) for a `buffer_line` yielded by `display_iter`, given the current
-/// scrollback `display_offset` and the number of visible `rows`. Buffer lines are 0 at the screen
-/// top and negative up in the scrollback history; `None` when the line is outside the viewport.
-pub(crate) fn viewport_row(buffer_line: i32, display_offset: usize, rows: usize) -> Option<usize> {
-    let row = buffer_line + display_offset as i32;
-    usize::try_from(row).ok().filter(|&r| r < rows)
 }
 
 /// Who consumes a mouse-button press over the pane.
@@ -238,25 +236,108 @@ pub fn target_offset_delta(current: usize, target: usize) -> i32 {
 /// The colour terminal widget for a live session runtime (Principle VIII builder form):
 /// `TerminalPane::new(rt, palette).focused(bool).into()`.
 pub struct TerminalPane<'a> {
-    rt: &'a RuntimeTerminal,
+    grid: &'a GridCache,
+    selection: Option<&'a Selection>,
+    display_offset: usize,
     palette: TermPalette,
     focused: bool,
 }
 
+/// The style used for a cell not covered by the line's runs (a protocol violation that must never
+/// panic the renderer): default fg/bg, no flags.
+const DEFAULT_STYLE: WireStyle = WireStyle {
+    fg: WireColor::Named(16), // Foreground
+    bg: WireColor::Named(17), // Background
+    flags: 0,
+    underline_color: None,
+};
+
 impl<'a> TerminalPane<'a> {
-    /// A terminal pane rendering `rt`'s grid with `palette`. Unfocused by default.
-    pub fn new(rt: &'a RuntimeTerminal, palette: TermPalette) -> Self {
+    /// A terminal pane rendering `grid` (a session's daemon-streamed cache) with `palette`.
+    /// Unfocused, live (no scrollback), and unselected by default.
+    pub fn new(grid: &'a GridCache, palette: TermPalette) -> Self {
         Self {
-            rt,
+            grid,
+            selection: None,
+            display_offset: 0,
             palette,
             focused: false,
         }
+    }
+
+    /// The active text selection to highlight and copy from (client-side, `LineId`-anchored).
+    pub fn selection(mut self, selection: Option<&'a Selection>) -> Self {
+        self.selection = selection;
+        self
+    }
+
+    /// How many lines the view is scrolled up into the scrollback (0 = live bottom).
+    pub fn display_offset(mut self, display_offset: usize) -> Self {
+        self.display_offset = display_offset;
+        self
     }
 
     /// Mark the pane focused (routes keyboard input to it; no border is drawn for this).
     pub fn focused(mut self, focused: bool) -> Self {
         self.focused = focused;
         self
+    }
+
+    // ---- terminal-mode-derived helpers, reconstructed from the cache's `mode()` bits so the
+    // daemon-rendered pane reproduces the local pane's mouse/key behaviour exactly ----
+
+    fn mode(&self) -> TermMode {
+        TermMode::from_bits_truncate(self.grid.mode())
+    }
+
+    fn mouse_mode(&self) -> bool {
+        self.mode().intersects(TermMode::MOUSE_MODE)
+    }
+
+    fn mouse_motion_mode(&self) -> bool {
+        self.mode()
+            .intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION)
+    }
+
+    fn mouse_report_bytes(
+        &self,
+        button: u8,
+        col: u16,
+        line: u16,
+        pressed: bool,
+        mods: keymap::Mods,
+    ) -> Option<Vec<u8>> {
+        encode_mouse_report(self.mode(), button, col, line, pressed, mods)
+    }
+
+    fn key_term_mode(&self) -> keymap::TermMode {
+        let m = self.mode();
+        keymap::TermMode {
+            app_cursor: m.contains(TermMode::APP_CURSOR),
+            alt_screen: m.contains(TermMode::ALT_SCREEN),
+        }
+    }
+
+    /// Visible grid size in cells (cols, rows).
+    fn size(&self) -> (u16, u16) {
+        (self.grid.cols(), self.grid.rows())
+    }
+
+    /// Retained scrollback depth: lines below the viewport top still held in the cache.
+    fn history_size(&self) -> usize {
+        (self.grid.viewport_top().0 - self.grid.oldest_available().0).max(0) as usize
+    }
+
+    /// The absolute `LineId` shown at rendered viewport `row`, accounting for scrollback.
+    fn line_at_row(&self, row: usize) -> LineId {
+        LineId(self.grid.viewport_top().0 - self.display_offset as i64 + row as i64)
+    }
+
+    /// The currently-selected text (for copy), or empty when nothing is selected.
+    fn selectable_content(&self) -> String {
+        self.selection
+            .map(|s| s.text(|id| self.grid.line(id).map(|l| l.text.clone())))
+            .unwrap_or_default()
     }
 }
 
@@ -317,110 +398,111 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             // Pane background.
             frame.fill_rectangle(bounds.position(), bounds.size(), default_bg);
 
-            let content = self.rt.renderable();
-            let cursor_point = content.cursor.point;
-            let show_cursor = shows_cursor(content.mode);
-            // The active text-selection range (if any); each cell inside it is drawn highlighted
-            // with fg/bg swapped (FR-013).
-            let selection = content.selection;
-            // Buffer lines from `display_iter` are 0 at the screen top and negative up in the
-            // scrollback; map them to viewport rows using the current scroll offset (FR-016).
-            let display_offset = content.display_offset;
-            let rows = self.rt.size().1 as usize;
+            let rows = self.grid.rows() as usize;
+            let cursor = self.grid.cursor();
+            let show_cursor = shows_cursor(self.mode()) && cursor.visible;
+            let display_offset = self.display_offset;
 
-            for indexed in content.display_iter {
-                let Some(row) = viewport_row(indexed.point.line.0, display_offset, rows) else {
+            for row in 0..rows {
+                // The absolute line shown at this viewport row (accounting for scrollback). A line
+                // the cache has not (yet) received renders blank.
+                let line_id = self.line_at_row(row);
+                let y = bounds.y + (row as f32) * metrics.height;
+                let Some(cached) = self.grid.line(line_id) else {
                     continue;
                 };
-                let col = indexed.point.column.0 as f32;
-                let x = bounds.x + col * metrics.width;
-                let y = bounds.y + (row as f32) * metrics.height;
 
-                let flags = indexed.cell.flags;
-                let selected = selection.is_some_and(|range| range.contains(indexed.point));
-                let (fg, bg) = cell_colors(
-                    &self.palette,
-                    indexed.cell.fg,
-                    indexed.cell.bg,
-                    flags,
-                    selected,
-                );
-
-                // Per-cell background when it differs from the default.
-                if bg != default_bg {
-                    frame.fill_rectangle(
-                        iced::Point::new(x, y),
-                        Size::new(metrics.width, metrics.height),
-                        bg,
-                    );
+                // Expand the line's RLE style runs into a per-cell lookup.
+                let mut styles: Vec<WireStyle> = Vec::with_capacity(cached.text.len());
+                for (len, style) in &cached.runs {
+                    for _ in 0..*len {
+                        styles.push(*style);
+                    }
                 }
 
-                // Cursor block (drawn behind the glyph).
-                if show_cursor && indexed.point == cursor_point {
-                    frame.fill_rectangle(
-                        iced::Point::new(x, y),
-                        Size::new(metrics.width, metrics.height),
-                        self.palette.foreground(),
-                    );
-                }
+                for (col, ch) in cached.text.chars().enumerate() {
+                    let x = bounds.x + (col as f32) * metrics.width;
+                    let style = styles.get(col).copied().unwrap_or(DEFAULT_STYLE);
+                    let flags = Flags::from_bits_truncate(style.flags);
+                    // The cursor is anchored to an absolute `LineId`, so it draws only when its line
+                    // is within the rendered window (never while scrolled back past it).
+                    let is_cursor =
+                        show_cursor && line_id == cursor.line && col as u16 == cursor.col;
+                    let selected = self
+                        .selection
+                        .is_some_and(|s| s.contains(line_id, col as u16));
+                    let (fg, bg) = wire_cell_colors(&self.palette, &style, selected);
 
-                let ch = indexed.cell.c;
-                if ch != ' ' && ch != '\t' && ch != '\0' {
-                    // Invert the glyph over the cursor block for legibility.
-                    let glyph_fg = if show_cursor && indexed.point == cursor_point {
-                        default_bg
-                    } else {
-                        fg
-                    };
-                    frame.fill_text(Text {
-                        content: ch.to_string(),
-                        position: iced::Point::new(
-                            x + metrics.width / 2.0,
-                            y + metrics.height / 2.0,
-                        ),
-                        color: glyph_fg,
-                        size: iced::Pixels(metrics.size),
-                        font: cell_font(flags),
-                        horizontal_alignment: alignment::Horizontal::Center,
-                        vertical_alignment: alignment::Vertical::Center,
-                        line_height: iced::widget::text::LineHeight::Absolute(iced::Pixels(
-                            metrics.height,
-                        )),
-                        shaping: iced::widget::text::Shaping::Advanced,
-                    });
-                }
+                    // Per-cell background when it differs from the default.
+                    if bg != default_bg {
+                        frame.fill_rectangle(
+                            iced::Point::new(x, y),
+                            Size::new(metrics.width, metrics.height),
+                            bg,
+                        );
+                    }
 
-                // Underline / strikethrough.
-                use alacritty_terminal::term::cell::Flags;
-                if flags.contains(Flags::UNDERLINE) {
-                    let uy = y + metrics.height - 1.0;
-                    frame.stroke(
-                        &Path::line(
-                            iced::Point::new(x, uy),
-                            iced::Point::new(x + metrics.width, uy),
-                        ),
-                        Stroke::default().with_width(1.0).with_color(fg),
-                    );
-                }
-                if flags.contains(Flags::STRIKEOUT) {
-                    let sy = y + metrics.height / 2.0;
-                    frame.stroke(
-                        &Path::line(
-                            iced::Point::new(x, sy),
-                            iced::Point::new(x + metrics.width, sy),
-                        ),
-                        Stroke::default().with_width(1.0).with_color(fg),
-                    );
+                    // Cursor block (drawn behind the glyph).
+                    if is_cursor {
+                        frame.fill_rectangle(
+                            iced::Point::new(x, y),
+                            Size::new(metrics.width, metrics.height),
+                            self.palette.foreground(),
+                        );
+                    }
+
+                    if ch != ' ' && ch != '\t' && ch != '\0' {
+                        // Invert the glyph over the cursor block for legibility.
+                        let glyph_fg = if is_cursor { default_bg } else { fg };
+                        frame.fill_text(Text {
+                            content: ch.to_string(),
+                            position: iced::Point::new(
+                                x + metrics.width / 2.0,
+                                y + metrics.height / 2.0,
+                            ),
+                            color: glyph_fg,
+                            size: iced::Pixels(metrics.size),
+                            font: cell_font(flags),
+                            horizontal_alignment: alignment::Horizontal::Center,
+                            vertical_alignment: alignment::Vertical::Center,
+                            line_height: iced::widget::text::LineHeight::Absolute(iced::Pixels(
+                                metrics.height,
+                            )),
+                            shaping: iced::widget::text::Shaping::Advanced,
+                        });
+                    }
+
+                    // Underline / strikethrough.
+                    if flags.contains(Flags::UNDERLINE) {
+                        let uy = y + metrics.height - 1.0;
+                        frame.stroke(
+                            &Path::line(
+                                iced::Point::new(x, uy),
+                                iced::Point::new(x + metrics.width, uy),
+                            ),
+                            Stroke::default().with_width(1.0).with_color(fg),
+                        );
+                    }
+                    if flags.contains(Flags::STRIKEOUT) {
+                        let sy = y + metrics.height / 2.0;
+                        frame.stroke(
+                            &Path::line(
+                                iced::Point::new(x, sy),
+                                iced::Point::new(x + metrics.width, sy),
+                            ),
+                            Stroke::default().with_width(1.0).with_color(fg),
+                        );
+                    }
                 }
             }
 
             // Scrollback scrollbar: a right-edge track + thumb, shown only while scrolled back into
             // history so it stays out of the way during a live session (FR-016).
-            let screen_lines = self.rt.size().1 as usize;
+            let screen_lines = self.grid.rows() as usize;
             if let Some(sb) = scrollbar_metrics(
                 bounds.height,
                 screen_lines,
-                self.rt.history_size(),
+                self.history_size(),
                 display_offset,
             ) {
                 let fg = self.palette.foreground();
@@ -487,9 +569,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         // ---- Scrollbar: drag the right-edge thumb or click the track to page (FR-016). Handled
         // before selection so a drag on the scrollbar never starts a text selection.
         {
-            let screen_lines = self.rt.size().1 as usize;
-            let history = self.rt.history_size();
-            let offset = self.rt.display_offset();
+            let screen_lines = self.size().1 as usize;
+            let history = self.history_size();
+            let offset = self.display_offset;
             match &event {
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                     if let Some(pos) = cursor.position() {
@@ -552,16 +634,12 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let pos = cursor.position().unwrap_or_default();
                 let (col, line) = grid_at(pos, bounds, metrics);
                 let shift = state.modifiers.shift();
-                if press_routing(self.focused, self.rt.mouse_mode(), shift)
+                if press_routing(self.focused, self.mouse_mode(), shift)
                     == PressRouting::MouseReport
                 {
-                    if let Some(seq) = self.rt.mouse_report_bytes(
-                        0,
-                        col,
-                        line,
-                        true,
-                        to_keymap_mods(state.modifiers),
-                    ) {
+                    if let Some(seq) =
+                        self.mouse_report_bytes(0, col, line, true, to_keymap_mods(state.modifiers))
+                    {
                         shell.publish(Message::TerminalBytes(seq));
                     }
                     // Remember the held button so its release is reported too (FR-013a).
@@ -584,8 +662,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             {
                 let (col, line) = grid_at(*position, bounds, metrics);
                 let button = state.reporting_button.unwrap_or(0);
-                if self.rt.mouse_motion_mode() && state.reported_cell != Some((col, line)) {
-                    if let Some(seq) = self.rt.mouse_report_bytes(
+                if self.mouse_motion_mode() && state.reported_cell != Some((col, line)) {
+                    if let Some(seq) = self.mouse_report_bytes(
                         button + 32,
                         col,
                         line,
@@ -606,7 +684,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 state.reported_cell = None;
                 let pos = cursor.position().unwrap_or_default();
                 let (col, line) = grid_at(pos, bounds, metrics);
-                if let Some(seq) = self.rt.mouse_report_bytes(
+                if let Some(seq) = self.mouse_report_bytes(
                     button,
                     col,
                     line,
@@ -625,7 +703,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.dragging => {
                 state.dragging = false;
                 // Auto-copy the selection to the clipboard on release (FR-013).
-                let selected = self.rt.selectable_content();
+                let selected = self.selectable_content();
                 if !selected.is_empty() {
                     clipboard.write(ClipboardKind::Standard, selected);
                 }
@@ -639,16 +717,12 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 if self.focused && cursor.is_over(bounds) =>
             {
                 let shift = state.modifiers.shift();
-                if self.rt.mouse_mode() && !shift {
+                if self.mouse_mode() && !shift {
                     let (col, line) =
                         grid_at(cursor.position().unwrap_or_default(), bounds, metrics);
-                    if let Some(seq) = self.rt.mouse_report_bytes(
-                        1,
-                        col,
-                        line,
-                        true,
-                        to_keymap_mods(state.modifiers),
-                    ) {
+                    if let Some(seq) =
+                        self.mouse_report_bytes(1, col, line, true, to_keymap_mods(state.modifiers))
+                    {
                         shell.publish(Message::TerminalBytes(seq));
                     }
                     state.reporting_button = Some(1);
@@ -666,17 +740,13 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             {
                 let pos = cursor.position().unwrap_or_default();
                 let shift = state.modifiers.shift();
-                if press_routing(self.focused, self.rt.mouse_mode(), shift)
+                if press_routing(self.focused, self.mouse_mode(), shift)
                     == PressRouting::MouseReport
                 {
                     let (col, line) = grid_at(pos, bounds, metrics);
-                    if let Some(seq) = self.rt.mouse_report_bytes(
-                        2,
-                        col,
-                        line,
-                        true,
-                        to_keymap_mods(state.modifiers),
-                    ) {
+                    if let Some(seq) =
+                        self.mouse_report_bytes(2, col, line, true, to_keymap_mods(state.modifiers))
+                    {
                         shell.publish(Message::TerminalBytes(seq));
                     }
                     state.reporting_button = Some(2);
@@ -694,7 +764,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 // Sub-line deltas from a high-resolution touchpad accumulate rather than being
                 // rounded away, or fine-grained scrolling would never move at all (BUG-002).
                 let lines = wheel_lines(*delta, metrics.height, &mut state.scroll_residual);
-                match wheel_routing(lines, self.focused, self.rt.mouse_mode()) {
+                match wheel_routing(lines, self.focused, self.mouse_mode()) {
                     WheelRouting::MouseReport { button, count } => {
                         let (col, line) = cursor
                             .position()
@@ -702,8 +772,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                             .unwrap_or((0, 0));
                         let km = to_keymap_mods(state.modifiers);
                         for _ in 0..count {
-                            if let Some(seq) =
-                                self.rt.mouse_report_bytes(button, col, line, true, km)
+                            if let Some(seq) = self.mouse_report_bytes(button, col, line, true, km)
                             {
                                 shell.publish(Message::TerminalBytes(seq));
                             }
@@ -740,7 +809,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 mods: to_keymap_mods(modifiers),
                 text: text.map(|t| t.to_string()),
             };
-            return match keymap::encode(&input, self.rt.key_term_mode()) {
+            return match keymap::encode(&input, self.key_term_mode()) {
                 KeyOutput::Bytes(bytes) => {
                     shell.publish(Message::TerminalBytes(bytes));
                     event::Status::Captured
@@ -754,7 +823,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     event::Status::Captured
                 }
                 KeyOutput::Copy => {
-                    clipboard.write(ClipboardKind::Standard, self.rt.selectable_content());
+                    clipboard.write(ClipboardKind::Standard, self.selectable_content());
                     event::Status::Captured
                 }
                 KeyOutput::Paste => {
@@ -1159,32 +1228,6 @@ mod tests {
             height: 100.0,
         };
         assert_eq!(grid_at(Point::new(0.0, 0.0), bounds, metrics), (0, 0));
-    }
-
-    #[test]
-    fn viewport_row_maps_buffer_line_to_screen_row_at_zero_offset() {
-        // With no scrollback offset, buffer lines are viewport rows 1:1.
-        assert_eq!(viewport_row(0, 0, 30), Some(0));
-        assert_eq!(viewport_row(29, 0, 30), Some(29));
-    }
-
-    #[test]
-    fn viewport_row_shifts_scrollback_history_into_the_viewport() {
-        // Scrolled up by 3: the three revealed history lines (-3..=-1) fill the top rows and
-        // every on-screen line slides down by 3 — nothing is dropped from the bottom (FR-016).
-        // This is the reported bug: without the offset, negative history lines were discarded and
-        // the visible text stayed frozen while the bottom rows blanked.
-        assert_eq!(viewport_row(-3, 3, 30), Some(0));
-        assert_eq!(viewport_row(-1, 3, 30), Some(2));
-        assert_eq!(viewport_row(0, 3, 30), Some(3));
-        assert_eq!(viewport_row(26, 3, 30), Some(29));
-    }
-
-    #[test]
-    fn viewport_row_rejects_lines_outside_the_visible_area() {
-        // One line above the top row and one below the bottom row both map to nothing.
-        assert_eq!(viewport_row(-4, 3, 30), None);
-        assert_eq!(viewport_row(27, 3, 30), None);
     }
 
     #[test]

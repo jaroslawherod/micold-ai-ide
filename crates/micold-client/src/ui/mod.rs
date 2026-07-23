@@ -120,9 +120,12 @@ fn notifications<'a>(state: &'a State, r: Roles) -> Element<'a, Message> {
 }
 
 /// `state.overlay` is already `None` — see [`crate::app::ClosingOverlay`]).
+#[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     state: &'a State,
-    terminal: Option<&'a terminal::RuntimeTerminal>,
+    grid: Option<&'a crate::grid::GridCache>,
+    selection: Option<&'a crate::selection::Selection>,
+    display_offset: usize,
     motion: &Animator<MotionKey>,
     dismissing: Option<&'a crate::app::ClosingOverlay>,
     row_fx: &crate::motion::Animator<u64>,
@@ -137,7 +140,7 @@ pub fn view<'a>(
     // sidebar slides in/out and is resizable; the main content fades when it changes.
     let body: Element<'a, Message> = if state.workspace.active_project().is_some() {
         let main_inner: Element<'a, Message> = if state.active_session.is_some() {
-            terminal::pane(state, terminal, scheme)
+            terminal::pane(state, grid, selection, display_offset, scheme)
         } else {
             shell::view(state, scheme)
         };

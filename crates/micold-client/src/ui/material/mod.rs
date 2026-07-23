@@ -30,10 +30,10 @@ pub use progress::StageProgress;
 pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};
 pub use select::Select;
 pub use tag::Tag;
+#[cfg(test)]
+pub(crate) use terminal_pane::scrollbar_metrics;
 pub use terminal_pane::target_offset_delta;
 pub use terminal_pane::TerminalPane;
-#[cfg(test)]
-pub(crate) use terminal_pane::{scrollbar_metrics, viewport_row};
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
 

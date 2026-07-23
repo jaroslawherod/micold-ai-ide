@@ -10,6 +10,7 @@
 
 use crate::app::SelectKind;
 use crate::app::{Message, State};
+use crate::grid::GridCache;
 use crate::icons::Icon;
 use crate::icons::{mode_glyph, mode_tooltip};
 use crate::tokens::{self, spacing, type_scale, Rgb};
@@ -725,11 +726,14 @@ pub fn encode_mouse_report(
     }
 }
 
-/// Render the terminal pane for the active session (FR-012). `terminal` is the active session's
-/// live runtime (colour-rendered); `None` renders an empty state.
+/// Render the terminal pane for the active session (FR-012). `grid` is the active session's
+/// daemon-streamed grid cache (colour-rendered); `None` renders an empty state. `selection` is the
+/// active `LineId`-anchored text selection, and `display_offset` how far the view is scrolled back.
 pub fn pane<'a>(
     state: &'a State,
-    terminal: Option<&'a RuntimeTerminal>,
+    grid: Option<&'a GridCache>,
+    selection: Option<&'a crate::selection::Selection>,
+    display_offset: usize,
     scheme: ColorScheme,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
@@ -748,8 +752,10 @@ pub fn pane<'a>(
 
     // The colour-rendering terminal body fills the whole main area (feature 006). Falls back to
     // an empty state if the runtime is not yet available (e.g. the session is still starting).
-    let body: Element<'a, Message> = match terminal {
-        Some(rt) => TerminalPane::new(rt, TermPalette::from_scheme(scheme))
+    let body: Element<'a, Message> = match grid {
+        Some(grid) => TerminalPane::new(grid, TermPalette::from_scheme(scheme))
+            .selection(selection)
+            .display_offset(display_offset)
             .focused(state.terminal_focused)
             .into(),
         None => container(
@@ -1417,70 +1423,6 @@ mod tests {
         let m = CellMetrics::new(TERM_FONT_SIZE);
         assert_eq!(m.grid_size(0.0, 0.0), (1, 1));
         assert_eq!(m.grid_size(3.0, 3.0), (1, 1));
-    }
-
-    /// End-to-end scroll behaviour against a real `alacritty_terminal` grid (no PTY, no window):
-    /// feed more lines than fit, then scroll up and confirm the viewport slides down to reveal
-    /// earlier lines while every row stays populated. Reproduces the reported bug where the top
-    /// text stayed frozen and the bottom rows blanked (feature 006, FR-016).
-    #[test]
-    fn scrolling_up_reveals_earlier_lines_and_keeps_the_viewport_full() {
-        use crate::ui::material::viewport_row;
-        use alacritty_terminal::grid::Scroll;
-
-        let rows = 5usize;
-        let cols = 20usize;
-        let dims = TermDimensions { rows, cols };
-        let config = Config {
-            scrolling_history: 100,
-            ..Config::default()
-        };
-        let mut term = Term::new(config, &dims, VoidListener);
-        let mut parser: Processor = Processor::new();
-
-        // Print 10 lines (L0..L9), newline-separated with no trailing newline, so the bottom row
-        // holds real text (L9) and the earliest lines spill into the scrollback history.
-        let total = rows + 5;
-        let mut bytes = Vec::new();
-        for i in 0..total {
-            if i > 0 {
-                bytes.extend_from_slice(b"\r\n");
-            }
-            bytes.extend_from_slice(format!("L{i}").as_bytes());
-        }
-        parser.advance(&mut term, &bytes);
-
-        // Snapshot the visible rows, mapping buffer lines to viewport rows exactly as `draw` does.
-        let snapshot = |term: &Term<VoidListener>| -> Vec<String> {
-            let content = term.renderable_content();
-            let offset = content.display_offset;
-            let mut grid = vec![String::new(); rows];
-            for indexed in content.display_iter {
-                if let Some(r) = viewport_row(indexed.point.line.0, offset, rows) {
-                    grid[r].push(indexed.cell.c);
-                }
-            }
-            grid.into_iter().map(|s| s.trim_end().to_string()).collect()
-        };
-
-        let before = snapshot(&term);
-        assert_eq!(before, vec!["L5", "L6", "L7", "L8", "L9"]);
-
-        // Scroll two lines up into the scrollback.
-        term.grid_mut().scroll_display(Scroll::Delta(2));
-        let after = snapshot(&term);
-
-        // Correct behaviour: the whole viewport shifts down by two, revealing L3/L4 at the top,
-        // and no row is left blank. The bug produced ["L5","L6","L7","",""] instead.
-        assert!(
-            after.iter().all(|r| !r.is_empty()),
-            "scrolling blanked viewport rows (reported bug): {after:?}"
-        );
-        assert_eq!(after, vec!["L3", "L4", "L5", "L6", "L7"]);
-        assert_eq!(
-            after[2], before[0],
-            "row 0 should slide down to row 2 after scrolling up two lines"
-        );
     }
 
     /// The scrollbar thumb tracks the real scrollback position: hidden at the live bottom, pinned
