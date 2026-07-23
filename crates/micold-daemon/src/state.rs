@@ -6,6 +6,7 @@
 //! writer tasks own the socket sink. That keeps a slow or stuck client from blocking the state lock.
 
 use std::collections::HashMap;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -16,7 +17,8 @@ use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     CatalogSnapshot, DaemonMsg, DaemonSettings, RefusalReason, SessionSummary,
 };
-use micold_core::session::SessionId;
+use micold_core::session::{SessionId, TerminalMode};
+use micold_core::terminal::{LaunchMode, LaunchSpec};
 use tokio::sync::mpsc;
 
 use crate::catalog::Catalog;
@@ -50,6 +52,14 @@ struct Inner {
 struct LiveSession {
     pty: Arc<PtySession>,
     input: InputReceiver,
+}
+
+/// What `start_session` needs to spawn a session, resolved from the catalog under the lock and then
+/// used to spawn *outside* it.
+struct SpawnPlan {
+    cwd: std::path::PathBuf,
+    mode: TerminalMode,
+    scrollback: usize,
 }
 
 struct ClientHandle {
@@ -231,6 +241,69 @@ impl DaemonState {
         for client in inner.clients.values() {
             let _ = client.tx.send(Frame::Control(msg.clone()));
         }
+    }
+
+    /// Bring a durable session to life: spawn its PTY-backed process and adopt it into the live
+    /// registry (`ClientMsg::SessionStart`). Idempotent — a session that is already live is a no-op,
+    /// so a redundant Start never double-spawns.
+    ///
+    /// The launch plan is read from the catalog (cwd from the session's location, mode = which
+    /// process to attach) and the service-owned scrollback; the PTY open + fork happen **outside**
+    /// the state lock so a slow spawn never blocks other clients. An AI-CLI session resumes its prior
+    /// `claude` session by id; a Regular session spawns the platform shell.
+    ///
+    /// **T053 refinement pending**: the environment is a minimal `TERM` today; the full launch must
+    /// resolve `env_include` in the session's own directory (main `2862bab`).
+    pub fn start_session(&self, id: SessionId) -> io::Result<()> {
+        if self.live_session(id).is_some() {
+            return Ok(()); // already running — Start is idempotent
+        }
+
+        let plan = {
+            let inner = self.lock();
+            let scrollback = inner.catalog.settings_wire().scrollback_lines;
+            inner
+                .catalog
+                .workspace()
+                .sessions
+                .iter()
+                .find_map(|(project, sessions)| {
+                    sessions
+                        .iter()
+                        .find(|s| s.id == id && !s.archived)
+                        .map(|s| SpawnPlan {
+                            cwd: s.location.cwd(project),
+                            mode: s.mode,
+                            scrollback,
+                        })
+                })
+        };
+        let Some(plan) = plan else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no such session in the catalog",
+            ));
+        };
+
+        let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
+        let session = match plan.mode {
+            TerminalMode::AiCli => {
+                let spec = LaunchSpec {
+                    cwd: plan.cwd,
+                    session_id: id.0,
+                    // Start on an existing durable session is a resume, never a fresh id (a brand-new
+                    // session is born via SessionCreate). data-model: Idle|Failed → Starting.
+                    mode: LaunchMode::Resume,
+                    env,
+                };
+                PtySession::spawn_claude(id, &spec, plan.scrollback, None)?
+            }
+            TerminalMode::Regular => {
+                PtySession::spawn_shell(id, &plan.cwd, &env, plan.scrollback, None)?
+            }
+        };
+        self.register_session(session);
+        Ok(())
     }
 
     /// Adopt a freshly-spawned session into the live registry, starting its input log at serial `0`.

@@ -235,6 +235,11 @@ where
                 serial,
                 bytes,
             } => state.session_input(session, serial, &bytes),
+            ClientMsg::SessionStart { session } => {
+                if let Err(err) = state.start_session(session) {
+                    tracing::warn!(session = %session.0, %err, "session start failed");
+                }
+            }
             ClientMsg::SetViewedSession { project, session } => {
                 state.set_viewed(id, project, session);
                 // Replace any running stream: abort the old view, start streaming the new one.

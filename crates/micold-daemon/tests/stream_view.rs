@@ -124,3 +124,118 @@ async fn a_viewing_client_receives_frames_and_can_drive_the_session() {
         let _ = pty.kill();
     }
 }
+
+/// A catalog holding one Regular (shell) session at `project`, so `SessionStart` can spawn it.
+fn catalog_with_shell(
+    project: &std::path::Path,
+    store: &std::path::Path,
+    id: SessionId,
+) -> Catalog {
+    use micold_core::project::{Availability, Project};
+    use micold_core::session::{Session, SessionLabel, SessionLocation, TerminalMode};
+    use micold_core::store::ProjectStore;
+    use micold_core::workspace::Workspace;
+    use std::collections::BTreeMap;
+
+    let session = Session::restored(
+        id,
+        SessionLocation::Default,
+        SessionLabel::Named("Shell".into()),
+        TerminalMode::Regular,
+    );
+    let mut sessions = BTreeMap::new();
+    sessions.insert(project.to_path_buf(), vec![session]);
+    let workspace = Workspace {
+        projects: vec![Project::new(
+            project.to_path_buf(),
+            false,
+            Availability::Available,
+        )],
+        active: Some(project.to_path_buf()),
+        sessions,
+        worktree_names: BTreeMap::new(),
+    };
+    let projects_path = store.join("projects.json");
+    micold_core::store::JsonFileStore::at(projects_path.clone())
+        .save(&workspace)
+        .unwrap();
+    Catalog::load(
+        Box::new(micold_core::store::JsonFileStore::at(projects_path)),
+        Box::new(micold_core::settings::JsonFileSettingsStore::at(
+            store.join("settings.json"),
+        )),
+    )
+}
+
+#[tokio::test]
+async fn a_client_can_start_view_and_drive_a_session_from_cold_over_the_wire() {
+    // The full cold-start loop: nothing is pre-registered. The client asks the daemon to Start a
+    // durable session, then views and drives it — all through serve_connection.
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let sid = SessionId::new();
+    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_shell(
+        project.path(),
+        store.path(),
+        sid,
+    )));
+    let server = tokio::spawn(micold_daemon::server::serve_connection(
+        std::sync::Arc::clone(&state),
+        server_io,
+    ));
+    let mut client = Framed::new(client_io, ClientCodec::new());
+
+    client
+        .send(Frame::Control(ClientMsg::Hello {
+            protocol_version: PROTOCOL_VERSION,
+            schema_hash: SCHEMA_HASH,
+            client_build: "test-client".into(),
+        }))
+        .await
+        .unwrap();
+    match client.next().await.unwrap().unwrap() {
+        Frame::Control(DaemonMsg::Welcome { .. }) => {}
+        other => panic!("expected Welcome, got {other:?}"),
+    }
+
+    // Bring the session to life, then view it — the daemon spawns the shell and streams a snapshot.
+    client
+        .send(Frame::Control(ClientMsg::SessionStart { session: sid }))
+        .await
+        .unwrap();
+    client
+        .send(Frame::Control(ClientMsg::SetViewedSession {
+            project: project.path().to_path_buf(),
+            session: Some(sid),
+        }))
+        .await
+        .unwrap();
+    assert!(
+        wait_for_grid(&mut client, |f| f.full).await,
+        "starting + viewing a session must yield a full snapshot"
+    );
+
+    // Drive the freshly-started shell: the tty echoes typed input back as streamed output.
+    client
+        .send(Frame::Control(ClientMsg::SessionInput {
+            session: sid,
+            serial: 0,
+            bytes: b"wire_marker\n".to_vec(),
+        }))
+        .await
+        .unwrap();
+    assert!(
+        wait_for_grid(&mut client, |f| frame_has_text(f, "wire_marker")).await,
+        "a cold-started session must be drivable end to end"
+    );
+
+    client
+        .send(Frame::Control(ClientMsg::Goodbye))
+        .await
+        .unwrap();
+    let _ = server.await;
+    if let Some(pty) = state.live_session(sid) {
+        let _ = pty.kill();
+    }
+}
