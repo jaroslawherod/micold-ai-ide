@@ -7,7 +7,7 @@
 use micold_ai_ide::app::{on_escape, Message, Overlay, State};
 use micold_ai_ide::project::{Availability, Project};
 use micold_ai_ide::session::{Session, SessionLocation};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// A `State` with the given project paths, all `Available`, the last one active.
 fn state_with_projects(paths: &[&str]) -> State {
@@ -104,7 +104,7 @@ fn forget_confirmed_on_active_project_clears_active_and_active_session() {
         .workspace
         .projects
         .iter()
-        .any(|p| p.path == PathBuf::from("/b")));
+        .any(|p| p.path == *Path::new("/b")));
     assert_eq!(
         state.workspace.active, None,
         "active working space cleared (FR-008)"
@@ -157,7 +157,7 @@ fn forget_confirmed_removes_an_unavailable_project() {
         .workspace
         .projects
         .iter_mut()
-        .find(|p| p.path == PathBuf::from("/gone"))
+        .find(|p| p.path == *Path::new("/gone"))
     {
         p.availability = Availability::Unavailable;
     }
@@ -170,6 +170,6 @@ fn forget_confirmed_removes_an_unavailable_project() {
         .workspace
         .projects
         .iter()
-        .any(|p| p.path == PathBuf::from("/gone")));
+        .any(|p| p.path == *Path::new("/gone")));
     assert_eq!(state.workspace.projects.len(), 1);
 }

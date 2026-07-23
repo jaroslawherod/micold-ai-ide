@@ -225,7 +225,7 @@ fn forgotten_project_does_not_reappear_and_survivors_stay_intact() {
     assert_eq!(out.workspace.active, Some(PathBuf::from("/keep")));
     // FR-005/FR-012: no lingering per-project state, so no old sessions can be resurrected.
     assert!(!store.project_state_path(Path::new("/drop")).exists());
-    assert!(out.workspace.sessions.get(Path::new("/drop")).is_none());
+    assert!(!out.workspace.sessions.contains_key(Path::new("/drop")));
 }
 
 #[test]

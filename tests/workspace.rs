@@ -194,7 +194,7 @@ fn forget_the_active_project_clears_active() {
 
     ws.forget(Path::new("/b"));
 
-    assert!(!ws.projects.iter().any(|p| p.path == PathBuf::from("/b")));
+    assert!(!ws.projects.iter().any(|p| p.path == *Path::new("/b")));
     assert_eq!(
         ws.active, None,
         "active cleared when the active project is forgotten"
