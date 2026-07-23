@@ -432,7 +432,7 @@ fn boot() -> (App, Task<Message>) {
     let env_include_last_outcome = boot_snapshot.outcome.clone();
     let mut env_include_cache = HashMap::new();
     env_include_cache.insert(boot_cwd, boot_snapshot);
-    core.system_scheme = detect_system_scheme(core.system_scheme);
+    core.system_scheme = observe_system_scheme(detect_system_scheme(), core.system_scheme);
     // If a project is already active from a previous run, discover its worktrees.
     if let Some(repo) = core.workspace.active.clone() {
         core.set_worktrees(discover_worktrees(&repo));
@@ -1253,9 +1253,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // idea of the scheme to be stale (003 FR-006).
             if focused {
                 app.core
-                    .update(Message::SystemThemeChanged(detect_system_scheme(
-                        app.core.system_scheme,
-                    )));
+                    .update(Message::SystemThemeChanged(detect_system_scheme()));
             }
             Task::none()
         }
@@ -1407,10 +1405,7 @@ fn subscription(app: &App) -> Subscription<Message> {
     // the window sits idle either focused or not (idle-CPU fix).
     let mut subs = vec![ui::subscription(&app.core), window_focus_events()];
     // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.
-    subs.push(os_theme_poll(
-        os_theme_poll_interval(app.window_focused),
-        app.core.system_scheme,
-    ));
+    subs.push(os_theme_poll(os_theme_poll_interval(app.window_focused)));
     if let Some(interval) = terminal_poll_interval(!app.terminals.is_empty(), app.window_focused) {
         subs.push(every(interval).map(|_| Message::TerminalTick));
     }
@@ -1823,16 +1818,21 @@ fn map_system_scheme(mode: dark_light::Mode) -> SystemScheme {
 
 /// Query the OS for its current light/dark preference (FR-005). `dark_light::detect()`'s Linux
 /// backend has a hardcoded 25 ms D-Bus timeout and returns `Err` under CPU contention with no
-/// relation to the actual OS preference; `last_known` is what a transient failure falls back to
-/// instead of `SystemScheme::Unspecified` (FR-021; BUG-001 — see `theme::observe_system_scheme`).
-fn detect_system_scheme(last_known: SystemScheme) -> SystemScheme {
-    let detected = dark_light::detect().map(map_system_scheme).map_err(|_| ());
-    observe_system_scheme(detected, last_known)
+/// relation to the actual OS preference — the caller falls this back to the last-known scheme
+/// via `theme::observe_system_scheme` rather than `SystemScheme::Unspecified` (FR-021; BUG-001).
+/// Deliberately takes no arguments (bugfix, found by `run` sanity check, 2026-07-23): it used to
+/// take `last_known: SystemScheme` and apply the fallback itself, but that meant
+/// `os_theme_poll`'s `Subscription::map` closure had to *capture* `last_known` to call it — and
+/// iced panics on boot if a subscription's mapping closure captures anything, since a capturing
+/// closure can't have the stable identity iced needs to avoid restarting the underlying timer
+/// every frame. The fallback now happens in the reducer (`Message::SystemThemeChanged`,
+/// `src/app.rs`), which already has the previous scheme in `self.system_scheme`.
+fn detect_system_scheme() -> Result<SystemScheme, ()> {
+    dark_light::detect().map(map_system_scheme).map_err(|_| ())
 }
 
-fn os_theme_poll(interval: Duration, last_known: SystemScheme) -> Subscription<Message> {
-    every(interval)
-        .map(move |_instant| Message::SystemThemeChanged(detect_system_scheme(last_known)))
+fn os_theme_poll(interval: Duration) -> Subscription<Message> {
+    every(interval).map(|_instant| Message::SystemThemeChanged(detect_system_scheme()))
 }
 
 fn start_dir() -> PathBuf {

@@ -17,7 +17,7 @@ use crate::naming::{
 use crate::project::{canonicalize_best_effort, Availability, FolderEntry, RenameError};
 use crate::selector::Selector;
 use crate::session::{Session, SessionId, SessionLocation, ShellInstanceId};
-use crate::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
+use crate::theme::{observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference};
 use crate::worktree::{CreateProgressEvent, CreateStage, Worktree, WorktreeStatus};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -331,8 +331,15 @@ pub enum Message {
     /// menu's mode toggle. The binary persists the updated preference; the menu stays open.
     ThemeModeCycled,
     /// The OS light/dark preference poll observed a (changed) scheme (FR-006). Transient;
-    /// never persisted.
-    SystemThemeChanged(SystemScheme),
+    /// never persisted. Carries the raw detection outcome — `Err(())` for a transient failure
+    /// (e.g. `dark_light::detect()` timing out under CPU load) — rather than an
+    /// already-resolved `SystemScheme`, specifically so the periodic poll's `Subscription::map`
+    /// closure (`os_theme_poll`, `src/main.rs`) does not need to capture the previous scheme:
+    /// iced panics if a subscription's mapping closure captures state, since that breaks the
+    /// stable identity it relies on to avoid restarting the underlying timer every frame. The
+    /// reducer below applies the same last-known fallback (`theme::observe_system_scheme`)
+    /// that used to be baked in at the call site instead.
+    SystemThemeChanged(Result<SystemScheme, ()>),
 
     // ---- Feature 005: worktrees, sessions, embedded terminal ----
     /// Opening a directory as a project was refused because it is not a git repo (FR-001a).
@@ -837,8 +844,8 @@ impl State {
                 // Pure state change; the binary persists it at the I/O boundary (FR-009).
                 self.theme_pref = pref;
             }
-            Message::SystemThemeChanged(scheme) => {
-                self.system_scheme = scheme;
+            Message::SystemThemeChanged(detected) => {
+                self.system_scheme = observe_system_scheme(detected, self.system_scheme);
             }
             Message::ProjectOpenRefused(message) => {
                 // Non-git directory refused (FR-001a); the active project is unchanged.
