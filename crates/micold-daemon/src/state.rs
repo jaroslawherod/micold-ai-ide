@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use micold_core::input::{InputOutcome, InputReceiver};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     CatalogSnapshot, DaemonMsg, DaemonSettings, RefusalReason, SessionSummary,
 };
@@ -52,7 +53,10 @@ struct LiveSession {
 }
 
 struct ClientHandle {
-    tx: mpsc::UnboundedSender<DaemonMsg>,
+    /// The client's outgoing frame channel. Carries **both** control messages (wrapped
+    /// `Frame::Control`) and pushed grid frames (`Frame::Grid`) so the writer task delivers them in
+    /// one ordered stream — a grid delta never overtakes the control message that announced it.
+    tx: mpsc::UnboundedSender<Frame<DaemonMsg>>,
     build: String,
     /// Which session (if any) this client is viewing per project (FR-016).
     viewed: HashMap<PathBuf, Option<SessionId>>,
@@ -95,7 +99,7 @@ impl DaemonState {
 
     /// Register a client, returning its id and the receiver its writer task drains. Increments the
     /// connected-client count (FR-002).
-    pub fn register(&self, build: String) -> (ClientId, mpsc::UnboundedReceiver<DaemonMsg>) {
+    pub fn register(&self, build: String) -> (ClientId, mpsc::UnboundedReceiver<Frame<DaemonMsg>>) {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let (tx, rx) = mpsc::unbounded_channel();
         self.lock().clients.insert(
@@ -124,8 +128,14 @@ impl DaemonState {
     /// Send one message to a specific client (best-effort; a dead channel is ignored).
     pub fn send(&self, id: ClientId, msg: DaemonMsg) {
         if let Some(client) = self.lock().clients.get(&id) {
-            let _ = client.tx.send(msg);
+            let _ = client.tx.send(Frame::Control(msg));
         }
+    }
+
+    /// A clone of a client's outgoing frame sender, for a streaming task to push `Frame::Grid` into
+    /// the same ordered channel the writer drains. `None` if the client has gone.
+    pub fn frame_sender(&self, id: ClientId) -> Option<mpsc::UnboundedSender<Frame<DaemonMsg>>> {
+        self.lock().clients.get(&id).map(|c| c.tx.clone())
     }
 
     /// Attach `id` to `project`. A second attach on a held project is refused with an actionable
@@ -161,10 +171,10 @@ impl DaemonState {
                     .map(|c| c.build.clone())
                     .unwrap_or_default();
                 if let Some(prev) = inner.clients.get(&displaced) {
-                    let _ = prev.tx.send(DaemonMsg::Displaced {
+                    let _ = prev.tx.send(Frame::Control(DaemonMsg::Displaced {
                         project: project.clone(),
                         by,
-                    });
+                    }));
                 }
             }
         }
@@ -219,7 +229,7 @@ impl DaemonState {
     pub fn broadcast(&self, msg: DaemonMsg) {
         let inner = self.lock();
         for client in inner.clients.values() {
-            let _ = client.tx.send(msg.clone());
+            let _ = client.tx.send(Frame::Control(msg.clone()));
         }
     }
 

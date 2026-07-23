@@ -170,10 +170,12 @@ where
     let (id, mut rx) = state.register(client_build);
     let (mut sink, mut incoming) = framed.split();
 
-    // Writer task: drain this client's push channel (broadcasts, attach replies, pongs) to the wire.
+    // Writer task: drain this client's push channel to the wire. The channel already carries fully
+    // formed frames — control messages (broadcasts, attach replies, pongs) and pushed grid frames —
+    // in one ordered stream, so a grid delta never races ahead of the control it followed.
     let writer = tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            if sink.send(Frame::Control(msg)).await.is_err() {
+        while let Some(frame) = rx.recv().await {
+            if sink.send(frame).await.is_err() {
                 break;
             }
         }
@@ -200,6 +202,11 @@ where
             Item = Result<Frame<ClientMsg>, micold_core::protocol::codec::CodecError>,
         > + Unpin,
 {
+    // The grid stream for the session this client is currently viewing (FR-016). At most one runs
+    // at a time; changing the viewed session aborts the old stream and starts the new one, and the
+    // loop exit below stops it. The task pushes `Frame::Grid` into this client's ordered channel.
+    let mut view_stream: Option<tokio::task::JoinHandle<()>> = None;
+
     while let Some(frame) = incoming.next().await {
         let msg = match frame {
             Ok(Frame::Control(msg)) => msg,
@@ -229,7 +236,18 @@ where
                 bytes,
             } => state.session_input(session, serial, &bytes),
             ClientMsg::SetViewedSession { project, session } => {
-                state.set_viewed(id, project, session)
+                state.set_viewed(id, project, session);
+                // Replace any running stream: abort the old view, start streaming the new one.
+                if let Some(prev) = view_stream.take() {
+                    prev.abort();
+                }
+                if let (Some(sid), Some(pty), Some(tx)) = (
+                    session,
+                    session.and_then(|s| state.live_session(s)),
+                    state.frame_sender(id),
+                ) {
+                    view_stream = Some(tokio::spawn(stream_view(sid, pty, tx)));
+                }
             }
             ClientMsg::SettingsSet {
                 req,
@@ -258,9 +276,48 @@ where
                     ),
                 }
             }
-            // Session commands, mutating RPCs and scrollback land in Phase 3 / T053.
+            // Remaining mutating RPCs and scrollback land in T053.
             _ => {}
         }
     }
+    if let Some(stream) = view_stream.take() {
+        stream.abort();
+    }
     Ok(())
+}
+
+/// How often the view stream wakes to check for new output. Between ticks, output is coalesced into
+/// a single delta (the VT dirty flag collapses many wakeups into one), so a briefly-slow reader
+/// never falls behind unbounded (spec SC — screen state is lossy and convergent, unlike input).
+const FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(16);
+
+/// Stream grid frames for one viewed session to one client. Sends a full snapshot first (attach /
+/// reattach semantics, FR-014/FR-017 — the client gets the current screen, not a replay), then
+/// coalesced deltas whenever the VT reports new output. Ends when the client's channel closes
+/// (disconnect) or the task is aborted (view changed / connection ended).
+async fn stream_view(
+    session: micold_core::session::SessionId,
+    pty: std::sync::Arc<crate::supervisor::PtySession>,
+    tx: tokio::sync::mpsc::UnboundedSender<Frame<DaemonMsg>>,
+) {
+    let mut framer = crate::framer::Framer::new(session);
+
+    // Full snapshot on first view — the whole current screen, however long the client was away.
+    let snapshot = framer.frame(pty.term(), true, None);
+    if tx.send(Frame::Grid(snapshot)).is_err() {
+        return; // client already gone
+    }
+
+    let mut ticker = tokio::time::interval(FRAME_INTERVAL);
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        ticker.tick().await;
+        // Only frame when there is new output; a clean tick sends nothing.
+        if pty.signals().take_dirty() {
+            let delta = framer.frame(pty.term(), false, None);
+            if tx.send(Frame::Grid(delta)).is_err() {
+                return;
+            }
+        }
+    }
 }
