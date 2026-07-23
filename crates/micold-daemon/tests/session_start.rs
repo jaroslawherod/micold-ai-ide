@@ -115,3 +115,48 @@ fn starting_an_unknown_session_is_an_error_not_a_panic() {
         .expect_err("an unknown session cannot be started");
     assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
 }
+
+#[test]
+fn create_session_adds_a_daemon_owned_session_to_the_catalog() {
+    use micold_core::project::{Availability, Project};
+    use micold_core::store::ProjectStore;
+    use micold_core::workspace::Workspace;
+
+    let project = std::path::PathBuf::from("/repo/alpha");
+    let store = tempfile::tempdir().unwrap();
+    // Seed a catalog with a project but no sessions.
+    let workspace = Workspace {
+        projects: vec![Project::new(project.clone(), true, Availability::Available)],
+        active: Some(project.clone()),
+        sessions: BTreeMap::new(),
+        worktree_names: BTreeMap::new(),
+    };
+    let projects_path = store.path().join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&workspace)
+        .unwrap();
+    let state = DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    ));
+
+    // The daemon assigns the id and records the session at the project root (empty worktree_dir).
+    let id = state
+        .create_session(&project, "")
+        .expect("create must succeed");
+
+    let snapshot = state.welcome_payload().0;
+    let proj = snapshot
+        .projects
+        .iter()
+        .find(|p| p.path == project)
+        .expect("project in snapshot");
+    assert_eq!(proj.sessions.len(), 1, "the created session appears");
+    assert_eq!(proj.sessions[0].id, id);
+    assert_eq!(
+        proj.sessions[0].worktree_dir, None,
+        "an empty worktree_dir is the Default (root) location"
+    );
+}

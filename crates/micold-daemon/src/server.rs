@@ -240,6 +240,38 @@ where
                     tracing::warn!(session = %session.0, %err, "session start failed");
                 }
             }
+            ClientMsg::SessionCreate {
+                req,
+                project,
+                worktree_dir,
+            } => {
+                use micold_core::protocol::messages::{ErrorKind, OperationResult};
+                match state.create_session(&project, &worktree_dir) {
+                    Ok(session) => {
+                        // Spawn it, tell the requester its id, and push the new catalog to everyone.
+                        if let Err(err) = state.start_session(session) {
+                            tracing::warn!(session = %session.0, %err, "created session failed to start");
+                        }
+                        state.send(
+                            id,
+                            DaemonMsg::OperationOk {
+                                req,
+                                result: OperationResult::SessionCreated { session },
+                            },
+                        );
+                        state.broadcast_catalog();
+                    }
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::IoFailed,
+                            message: "failed to create the session".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
+                }
+            }
             ClientMsg::SetViewedSession { project, session } => {
                 state.set_viewed(id, project, session);
                 // Replace any running stream: abort the old view, start streaming the new one.

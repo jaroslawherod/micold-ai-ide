@@ -20,7 +20,7 @@ use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, DaemonSettings, ProjectSnapshot, SessionSummary,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::session::{Session, SessionLifecycle, SessionLocation};
+use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation};
 use micold_core::settings::{clamp_scrollback, JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -172,6 +172,26 @@ impl Catalog {
             store.save(&self.settings)?;
         }
         Ok(clamped)
+    }
+
+    /// Create a new session in `project` at `worktree_dir` (empty = the project root / `Default`
+    /// location), persist the catalog, and return the daemon-assigned id (FR-009). The daemon owns
+    /// the id and the durable record; the client learns it via `OperationOk`/`CatalogChanged`.
+    pub fn create_session(&mut self, project: &Path, worktree_dir: &str) -> io::Result<SessionId> {
+        let location = if worktree_dir.is_empty() {
+            SessionLocation::Default
+        } else {
+            SessionLocation::Worktree(worktree_dir.to_string())
+        };
+        let session = Session::start_new(location);
+        let id = session.id;
+        self.workspace
+            .sessions
+            .entry(project.to_path_buf())
+            .or_default()
+            .push(session);
+        self.persist()?;
+        Ok(id)
     }
 
     /// Persist the project catalog atomically (temp + rename). A no-op for an ephemeral catalog.

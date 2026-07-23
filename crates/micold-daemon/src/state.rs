@@ -243,6 +243,13 @@ impl DaemonState {
         }
     }
 
+    /// Create a new durable session in `project` at `worktree_dir` (empty = project root), returning
+    /// the daemon-assigned id. Persists the catalog under the lock; the caller then `start_session`s
+    /// it and broadcasts the updated catalog.
+    pub fn create_session(&self, project: &Path, worktree_dir: &str) -> io::Result<SessionId> {
+        self.lock().catalog.create_session(project, worktree_dir)
+    }
+
     /// Bring a durable session to life: spawn its PTY-backed process and adopt it into the live
     /// registry (`ClientMsg::SessionStart`). Idempotent — a session that is already live is a no-op,
     /// so a redundant Start never double-spawns.

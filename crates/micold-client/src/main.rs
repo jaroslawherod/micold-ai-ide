@@ -18,11 +18,14 @@ use micold_core::env_include::{self, EnvIncludeOutcome};
 use micold_core::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
 use micold_core::protocol::grid::LineId;
-use micold_core::protocol::messages::ClientMsg;
+use micold_core::protocol::messages::{
+    CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, WireLifecycle,
+};
 use micold_core::provider::{AiCliProvider, ClaudeProvider};
 use micold_core::selector::{Selector, SelectorStatus};
 use micold_core::session::{
-    Session, SessionId, SessionLabel, SessionLocation, ShellInstanceId, TerminalMode,
+    Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
+    TerminalMode,
 };
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
@@ -152,6 +155,11 @@ struct App {
     /// The last catalog snapshot the daemon sent (welcome or `CatalogChanged`). Not yet rendered —
     /// the sidebar/session-list retarget onto it lands with the render switch (T042).
     daemon_catalog: Option<micold_core::protocol::messages::CatalogSnapshot>,
+    /// Correlation-id counter for the client's mutating RPCs (SessionCreate, …).
+    next_req: u64,
+    /// In-flight `SessionCreate`s: `req` → the location the client asked to create at, so the
+    /// daemon-created session (whose id the daemon assigns) can be selected + viewed on reply.
+    pending_creates: HashMap<u64, SessionLocation>,
 }
 
 /// The result of a single resolution attempt for one directory (feature 011, data-model.md).
@@ -425,6 +433,8 @@ fn boot() -> (App, Task<Message>) {
             env_include_last_outcome,
             daemon: None,
             daemon_catalog: None,
+            next_req: 0,
+            pending_creates: HashMap::new(),
         },
         Task::none(),
     )
@@ -666,8 +676,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             catalog,
             settings,
         } => {
-            // The daemon is the single writer of settings; adopt what it reports.
+            // The daemon is the single writer of settings + sessions; adopt what it reports.
             app.scrollback_lines = settings.scrollback_lines;
+            reconcile_catalog(&mut app.core, &catalog);
             app.daemon_catalog = Some(catalog);
             // Attach to the active project and view its active session so the daemon starts
             // streaming grid frames for it (FR-011/FR-016).
@@ -686,14 +697,32 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::DaemonEvent(event) => {
             match event {
-                micold_core::protocol::messages::DaemonMsg::CatalogChanged { catalog } => {
+                DaemonMsg::CatalogChanged { catalog } => {
+                    reconcile_catalog(&mut app.core, &catalog);
                     app.daemon_catalog = Some(catalog);
                 }
-                micold_core::protocol::messages::DaemonMsg::SettingsChanged { settings } => {
+                DaemonMsg::SettingsChanged { settings } => {
                     app.scrollback_lines = settings.scrollback_lines;
                 }
-                // Other control messages (operation results, pong, attach/displaced) are consumed
-                // as the corresponding client flows land (T041/T053).
+                // A mutating request we correlated resolved. A SessionCreate reply names the
+                // daemon-assigned id (the session already arrived via the CatalogChanged push);
+                // select + view it.
+                DaemonMsg::OperationOk { req, result } => {
+                    if let Some(_location) = app.pending_creates.remove(&req) {
+                        if let OperationResult::SessionCreated { session } = result {
+                            app.core.update(Message::SessionSelected(session));
+                            view_and_start(app, session);
+                            return Task::done(Message::TerminalFocused);
+                        }
+                    }
+                }
+                DaemonMsg::OperationError { req, message, .. }
+                    if app.pending_creates.remove(&req).is_some() =>
+                {
+                    app.core
+                        .notify_error(format!("Could not create the session: {message}"));
+                }
+                // Other control messages (pong, attach/displaced) are consumed as their flows land.
                 _ => {}
             }
             Task::none()
@@ -862,32 +891,26 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // never creates, modifies, or removes a worktree (FR-002) — it simply runs in `repo`
         // itself, so this arm never calls into `micold_core::worktree`.
         Message::SessionStartRequested { location } => {
-            let mut started = false;
+            // Correlated create: the daemon owns the id + catalog. The new session arrives via the
+            // `CatalogChanged` push (reconciled into the core) and is selected + focused when the
+            // `OperationOk { SessionCreated }` reply names its id.
             if let Some(project) = app.core.workspace.active.clone() {
-                let session = Session::start_new(location);
-                let id = session.id;
-                app.core.update(Message::SessionStarted(session));
-                app.core.update(Message::SessionRunning(id));
-                persist(&mut app.core);
-                // Ask the daemon to host the session and stream it. TODO(T053): use the correlated
-                // `SessionCreate` RPC so the daemon owns the id + catalog and this stops being an
-                // optimistic local create.
+                let worktree_dir = match &location {
+                    SessionLocation::Worktree(dir) => dir.clone(),
+                    SessionLocation::Default => String::new(),
+                };
+                let req = app.next_req;
+                app.next_req += 1;
+                app.pending_creates.insert(req, location);
                 if let Some(d) = &app.daemon {
-                    d.send(ClientMsg::SessionStart { session: id });
-                    d.send(ClientMsg::SetViewedSession {
+                    d.send(ClientMsg::SessionCreate {
+                        req,
                         project,
-                        session: Some(id),
+                        worktree_dir,
                     });
                 }
-                app.display_offset = 0;
-                started = true;
             }
-            // BUG-001: auto-focus the newly-started session's terminal (FR-010/FR-010a).
-            if started {
-                Task::done(Message::TerminalFocused)
-            } else {
-                Task::none()
-            }
+            Task::none()
         }
         // Selecting a session reattaches/resumes whichever process its persisted mode selects
         // (FR-005, FR-011) — an Idle AI CLI session resumes via `claude --resume` (FR-023a); a
@@ -1468,6 +1491,66 @@ fn view_and_start(app: &mut App, id: SessionId) {
     }
 }
 
+/// Map a wire lifecycle back to the domain one (inverse of the daemon's `wire_lifecycle`).
+/// `InterruptedResumable` — a session the daemon found durably-running after a restart, never
+/// auto-relaunched — reads as `Idle` on the client (resumable on select).
+fn wire_to_lifecycle(w: &WireLifecycle) -> SessionLifecycle {
+    match w {
+        WireLifecycle::Idle | WireLifecycle::InterruptedResumable => SessionLifecycle::Idle,
+        WireLifecycle::Starting => SessionLifecycle::Starting,
+        WireLifecycle::Running => SessionLifecycle::Running,
+        WireLifecycle::Restarting { attempts } => SessionLifecycle::Restarting {
+            attempts: *attempts,
+        },
+        WireLifecycle::Failed { .. } => SessionLifecycle::Failed,
+    }
+}
+
+/// Reconcile the client's core session state from the daemon's authoritative catalog snapshot
+/// (FR-011). The daemon owns sessions now, so each project's session list is made to mirror the
+/// snapshot: existing sessions have their lifecycle + label updated; sessions the daemon reports
+/// but the client lacks are added; sessions the daemon no longer reports (archived/removed) are
+/// dropped. A dangling `active_session` pointer is cleared.
+fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot) {
+    for project in &snapshot.projects {
+        let list = core
+            .workspace
+            .sessions
+            .entry(project.path.clone())
+            .or_default();
+        let snap_ids: HashSet<SessionId> = project.sessions.iter().map(|s| s.id).collect();
+        for summary in &project.sessions {
+            let lifecycle = wire_to_lifecycle(&summary.lifecycle);
+            if let Some(existing) = list.iter_mut().find(|s| s.id == summary.id) {
+                existing.lifecycle = lifecycle;
+                existing.label = summary.title.clone();
+            } else {
+                let location = summary
+                    .worktree_dir
+                    .clone()
+                    .map(SessionLocation::Worktree)
+                    .unwrap_or(SessionLocation::Default);
+                let mut s = Session::restored(
+                    summary.id,
+                    location,
+                    summary.title.clone(),
+                    TerminalMode::AiCli,
+                );
+                s.lifecycle = lifecycle;
+                list.push(s);
+            }
+        }
+        // Drop sessions the daemon no longer reports (archived/removed on its side).
+        list.retain(|s| snap_ids.contains(&s.id));
+    }
+    // Clear a dangling active-session pointer if its session is gone.
+    if let Some(id) = core.active_session {
+        if core.workspace.find_session(id).is_none() {
+            core.active_session = None;
+        }
+    }
+}
+
 /// The selected text of the displayed session, or empty when nothing is selected.
 fn selected_text(app: &App) -> String {
     let Some(id) = app.core.active_session else {
@@ -1680,7 +1763,82 @@ fn scan(dir: PathBuf) -> Message {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_core::protocol::messages::{ActivitySignal, ProjectSnapshot, SessionSummary};
     use micold_core::worktree::CreateStage;
+
+    fn summary(id: SessionId, title: &str, lifecycle: WireLifecycle) -> SessionSummary {
+        SessionSummary {
+            id,
+            worktree_dir: None,
+            title: SessionLabel::Named(title.into()),
+            lifecycle,
+            activity: ActivitySignal::Unknown,
+        }
+    }
+
+    fn snapshot_with(path: &str, sessions: Vec<SessionSummary>) -> CatalogSnapshot {
+        CatalogSnapshot {
+            schema_version: 1,
+            last_active: Some(PathBuf::from(path)),
+            projects: vec![ProjectSnapshot {
+                path: PathBuf::from(path),
+                display_name: "demo".into(),
+                is_git_repo: true,
+                available: true,
+                worktrees: Vec::new(),
+                sessions,
+            }],
+        }
+    }
+
+    #[test]
+    fn reconcile_adds_updates_and_drops_sessions_from_the_snapshot() {
+        let path = "/repo/demo";
+        let mut core = State::default();
+
+        // First snapshot: one Running session — added to the core.
+        let a = SessionId::new();
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(path, vec![summary(a, "A", WireLifecycle::Running)]),
+        );
+        let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, a);
+        assert_eq!(list[0].lifecycle, SessionLifecycle::Running);
+
+        // Second snapshot: A is now Idle, and a new session B appears — A updated, B added.
+        let b = SessionId::new();
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![
+                    summary(a, "A", WireLifecycle::Idle),
+                    summary(b, "B", WireLifecycle::Running),
+                ],
+            ),
+        );
+        let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(
+            list.iter().find(|s| s.id == a).unwrap().lifecycle,
+            SessionLifecycle::Idle,
+            "existing session's lifecycle is reconciled"
+        );
+
+        // Third snapshot: only B remains (A archived/removed on the daemon) — A is dropped, and a
+        // dangling active pointer to A is cleared.
+        core.active_session = Some(a);
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(path, vec![summary(b, "B", WireLifecycle::Running)]),
+        );
+        let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, b);
+        assert_eq!(core.active_session, None, "dangling active pointer cleared");
+    }
 
     /// A stage-tagged progress event, for constructing `create_progress` buffers directly.
     fn event(stage: CreateStage, line: &str) -> CreateProgressEvent {
@@ -1793,6 +1951,8 @@ mod tests {
             env_include_last_outcome: EnvIncludeOutcome::Disabled,
             daemon: None,
             daemon_catalog: None,
+            next_req: 0,
+            pending_creates: HashMap::new(),
         };
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
@@ -1826,6 +1986,8 @@ mod tests {
             env_include_last_outcome: EnvIncludeOutcome::Disabled,
             daemon: None,
             daemon_catalog: None,
+            next_req: 0,
+            pending_creates: HashMap::new(),
         }
     }
 
@@ -1969,6 +2131,8 @@ mod tests {
             env_include_last_outcome: EnvIncludeOutcome::Disabled,
             daemon: None,
             daemon_catalog: None,
+            next_req: 0,
+            pending_creates: HashMap::new(),
         };
         assert_eq!(app.last_grid, None);
 
