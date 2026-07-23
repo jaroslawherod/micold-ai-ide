@@ -57,6 +57,10 @@ opens the folder browser so you can add a project that isn't in the list yet. Th
 complements the **Known projects** list in the main window and the folder browser — all three
 still work.
 
+**Right-click** any project row for a context menu with **Forget project** — see
+[Forgetting a project](#forgetting-a-project) below. (The **Add project…** row is an action, not
+a project, so it has no context menu.)
+
 Switching projects this way **does not stop your running terminal sessions**. The project you
 leave keeps its sessions running in the background, and returning to it restores them exactly
 as you left them. See
@@ -94,8 +98,14 @@ kept.
 
 ## Forgetting a project
 
-When you no longer want a project in your list, you can **forget** it. In the **Known projects**
-list, click **Forget** next to a project. Micold asks you to confirm first, because forgetting
+When you no longer want a project in your list, you can **forget** it, from either of two places:
+
+- **From the Known projects list** — click **Forget** next to a project.
+- **From the project switcher** — open the switcher in the top bar, **right-click** the
+  project's row, and choose **Forget project**. The menu opens at your pointer, and stays fully
+  on screen even when you right-click near the window's edge.
+
+Both routes do exactly the same thing. Micold asks you to confirm first, because forgetting
 permanently discards what the app remembers about that project — its custom name, any
 worktree-name overrides, and its session records.
 
