@@ -3,8 +3,8 @@
 //! exactly what is removed (the working directory and its sessions, always; the git branch,
 //! conditional on the branch-deletion checkbox below) before the user confirms.
 
-use crate::ui::style;
 use crate::ui::material::Modal;
+use crate::ui::style;
 use iced::widget::{button, checkbox, column, container, row, text};
 use iced::{Element, Length};
 use micold_ai_ide::app::Message;

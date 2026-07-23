@@ -29,8 +29,8 @@ use micold_ai_ide::store::{JsonFileStore, ProjectStore};
 use micold_ai_ide::terminal::{LaunchMode, LaunchSpec};
 use micold_ai_ide::theme::{observe_system_scheme, SystemScheme};
 use micold_ai_ide::worktree::{
-    create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir,
-    CreateError, CreateProgressEvent, Worktree,
+    create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir, CreateError,
+    CreateProgressEvent, Worktree,
 };
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -1659,7 +1659,9 @@ fn create(
 }
 
 /// Take everything buffered by the in-flight create so far, leaving the buffer empty.
-fn drain_create_progress(buffer: &Arc<Mutex<Vec<CreateProgressEvent>>>) -> Vec<CreateProgressEvent> {
+fn drain_create_progress(
+    buffer: &Arc<Mutex<Vec<CreateProgressEvent>>>,
+) -> Vec<CreateProgressEvent> {
     buffer
         .lock()
         .map(|mut buf| std::mem::take(&mut *buf))

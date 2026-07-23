@@ -147,7 +147,11 @@ fn every_create_stage_has_a_distinct_plain_language_label() {
     let labels: Vec<&str> = stages.iter().map(|s| s.label()).collect();
     assert!(labels.iter().all(|l| !l.is_empty()));
     let unique: std::collections::BTreeSet<&str> = labels.iter().copied().collect();
-    assert_eq!(unique.len(), labels.len(), "labels must be distinct: {labels:?}");
+    assert_eq!(
+        unique.len(),
+        labels.len(),
+        "labels must be distinct: {labels:?}"
+    );
 }
 
 #[test]

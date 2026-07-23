@@ -130,7 +130,10 @@ fn create_log_lines_accumulate_and_reset_on_new_attempt() {
             CreateStage::SettingUpSubmodules,
             "$ git submodule update --init --recursive",
         ),
-        event(CreateStage::SettingUpSubmodules, "Cloning into 'vendor/sub'..."),
+        event(
+            CreateStage::SettingUpSubmodules,
+            "Cloning into 'vendor/sub'...",
+        ),
     ]));
     assert_eq!(state.worktree_form.as_ref().unwrap().log.len(), 3);
 

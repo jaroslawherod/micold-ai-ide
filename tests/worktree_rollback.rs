@@ -57,10 +57,8 @@ fn failed_create_rolls_back_leaving_no_orphan_branch_or_worktree() {
     let target = PathBuf::from("/repo/.claude/worktrees/feat-x");
 
     let mut events: Vec<CreateProgressEvent> = Vec::new();
-    let err = create_worktree(&git, &repo, &target, &names, false, &mut |e| {
-        events.push(e)
-    })
-    .unwrap_err();
+    let err =
+        create_worktree(&git, &repo, &target, &names, false, &mut |e| events.push(e)).unwrap_err();
     assert!(matches!(err, CreateError::RolledBack(_)));
 
     // The orphan branch git created before the simulated failure must be cleaned up.
@@ -68,7 +66,9 @@ fn failed_create_rolls_back_leaving_no_orphan_branch_or_worktree() {
     assert!(git.worktrees(&repo).is_empty());
     // The failure and the rollback both surface to the caller (feature 010 follow-up), now
     // stage-tagged (feature 013, US3).
-    assert!(events.iter().any(|e| e.line.contains("worktree add failed")));
+    assert!(events
+        .iter()
+        .any(|e| e.line.contains("worktree add failed")));
     assert!(events.iter().any(|e| e.line.contains("Rolling back")));
     // The failed stage is identifiable (FR-009): the sequence ends at RollingBack, never
     // silently reverting or continuing past it.
@@ -96,10 +96,8 @@ fn failed_submodule_fetch_rolls_back_the_whole_worktree() {
     };
 
     let mut events: Vec<CreateProgressEvent> = Vec::new();
-    let err = create_worktree(&git, &repo, &target, &names, false, &mut |e| {
-        events.push(e)
-    })
-    .unwrap_err();
+    let err =
+        create_worktree(&git, &repo, &target, &names, false, &mut |e| events.push(e)).unwrap_err();
     assert!(matches!(err, CreateError::RolledBack(_)));
 
     // Same full rollback as a worktree-add failure (spec FR-005): no worktree, no branch.
