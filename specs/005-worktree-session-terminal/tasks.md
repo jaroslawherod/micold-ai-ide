@@ -250,12 +250,23 @@ sessions restore and resume.
   of `docs/user-guide/worktrees-and-sessions.md` to describe Close (archive, invisible, not
   resurrected on reopen) vs. Remove (permanent, confirm-gated, only offered on a still-visible
   session) (Principle VII).
+- [X] T079 [US3] (bugfix BUG-003, found by code review) `Message::WorktreeDeleteConfirmed`
+  (`src/main.rs`) killed a deleted worktree's sessions and dropped their records without ever
+  calling `provider.mark_archived(...)` — so a worktree recreated later with the same `dir_name`
+  (same transcript `cwd` encoding) would have its old sessions resurrected by reconciliation
+  (FR-020c gap). Fixed by marking each of the worktree's sessions archived, mirroring
+  Close/Remove, before the git/fs removal. Regression test:
+  `confirmed_delete_marks_the_worktrees_sessions_archived_but_not_others` in
+  `tests/worktree_delete.rs` (mirrors the fixed confirmed-delete flow, same reasoning as
+  `tests/session_reconciliation.rs` — `src/main.rs` can't be linked from an integration test),
+  asserting the target worktree's session is marked archived and an unrelated worktree's is not.
 
 **Checkpoint (BUG-003)**: Verified 2026-07-23 — `cargo test --no-default-features --all-targets`
 (57 test binaries incl. new `session_archive.rs` and extended `ai_cli_provider.rs`/
-`session_reconciliation.rs`, all green); `cargo check`/`clippy --features gui --all-targets -- -D
-warnings` clean on both feature sets; `cargo fmt --all -- --check` clean. One pre-existing test
-(`tests/app_state.rs::session_started_selected_and_closed`) updated for the new archive semantics
+`session_reconciliation.rs`/`worktree_delete.rs`, all green); `cargo check`/`clippy --features gui
+--all-targets -- -D warnings` clean on both feature sets; `cargo fmt --all -- --check` clean. One
+pre-existing test (`tests/app_state.rs::session_started_selected_and_closed`) updated for the new
+archive semantics
 — it asserted `active_sessions().is_empty()` after close, which assumed the old delete-on-close
 behavior; not a false completion of its own task, just an assumption BUG-003 intentionally
 reverses.
@@ -398,3 +409,9 @@ archives (FR-015a); a new Remove action permanently deletes, confirm-gated (FR-0
 a durable, provider-side marker (FR-020c) reconciliation checks — independent of the app's own
 store, so the suppression survives even total loss of `projects.json` and the per-project state
 file (SC-011). See `bugs/BUG-003.md`.
+
+**Bugfix**: 2026-07-23 — BUG-003 follow-up. Automated code review of the above found that
+`WorktreeDeleteConfirmed` had the exact same gap FR-020c was meant to close: it never called
+`mark_archived` for the sessions it killed, so a worktree recreated under the same name later
+could have its old sessions resurrected. Added T079: fix + regression test
+(`tests/worktree_delete.rs`).
