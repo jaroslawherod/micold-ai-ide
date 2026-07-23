@@ -22,6 +22,7 @@ use micold_core::terminal::{LaunchMode, LaunchSpec};
 use tokio::sync::mpsc;
 
 use crate::catalog::Catalog;
+use crate::framer::Framer;
 use crate::lifecycle::Lifecycle;
 use crate::supervisor::PtySession;
 
@@ -52,6 +53,11 @@ struct Inner {
 struct LiveSession {
     pty: Arc<PtySession>,
     input: InputReceiver,
+    /// The session-level [`Framer`], shared by the view-stream task and the scrollback handler.
+    /// Session-level (not per-view) so its `scrolled_off` eviction watermark — and therefore every
+    /// line's absolute `LineId` — is stable across reattach, and scrollback-by-range resolves
+    /// against the same eviction state the stream produced.
+    framer: Arc<Mutex<Framer>>,
 }
 
 /// What `start_session` needs to spawn a session, resolved from the catalog under the lock and then
@@ -317,11 +323,13 @@ impl DaemonState {
     /// Returns the shared handle (also the seam the session-lifecycle RPCs will use, T053+).
     pub fn register_session(&self, session: PtySession) -> Arc<PtySession> {
         let pty = Arc::new(session);
+        let id = pty.id();
         self.lock().sessions.insert(
-            pty.id(),
+            id,
             LiveSession {
                 pty: Arc::clone(&pty),
                 input: InputReceiver::new(),
+                framer: Arc::new(Mutex::new(Framer::new(id))),
             },
         );
         pty
@@ -338,6 +346,14 @@ impl DaemonState {
             .sessions
             .get(&session)
             .map(|s| Arc::clone(&s.pty))
+    }
+
+    /// The session's shared framer (used by the view-stream task and the scrollback handler).
+    pub fn session_framer(&self, session: SessionId) -> Option<Arc<Mutex<Framer>>> {
+        self.lock()
+            .sessions
+            .get(&session)
+            .map(|s| Arc::clone(&s.framer))
     }
 
     /// Drive one input batch into a session's PTY, enforcing the append-only input contract (G2,

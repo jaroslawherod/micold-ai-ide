@@ -240,6 +240,44 @@ where
                     tracing::warn!(session = %session.0, %err, "session start failed");
                 }
             }
+            ClientMsg::ScrollbackRequest {
+                session,
+                req,
+                ranges,
+            } => {
+                // Advisory, never an error (protocol.md §6): serve whatever the session's shared
+                // framer can from its retained history, resolved against a per-response palette.
+                if let (Some(pty), Some(framer)) =
+                    (state.live_session(session), state.session_framer(session))
+                {
+                    let responses: Vec<DaemonMsg> = {
+                        let fr = framer.lock().expect("framer poisoned");
+                        let oldest_available = fr.oldest_available();
+                        let newest = fr.newest(pty.term());
+                        ranges
+                            .into_iter()
+                            .map(|range| {
+                                let count = (range.end.0 - range.start.0).max(0) as usize;
+                                let (lines, styles, hyperlinks, more) =
+                                    fr.scrollback_range(pty.term(), range.start, count);
+                                DaemonMsg::ScrollbackResponse {
+                                    session,
+                                    req,
+                                    oldest_available,
+                                    newest,
+                                    lines,
+                                    styles,
+                                    hyperlinks,
+                                    more,
+                                }
+                            })
+                            .collect()
+                    };
+                    for resp in responses {
+                        state.send(id, resp);
+                    }
+                }
+            }
             ClientMsg::SessionCreate {
                 req,
                 project,
@@ -278,12 +316,12 @@ where
                 if let Some(prev) = view_stream.take() {
                     prev.abort();
                 }
-                if let (Some(sid), Some(pty), Some(tx)) = (
-                    session,
+                if let (Some(pty), Some(framer), Some(tx)) = (
                     session.and_then(|s| state.live_session(s)),
+                    session.and_then(|s| state.session_framer(s)),
                     state.frame_sender(id),
                 ) {
-                    view_stream = Some(tokio::spawn(stream_view(sid, pty, tx)));
+                    view_stream = Some(tokio::spawn(stream_view(pty, framer, tx)));
                 }
             }
             ClientMsg::SettingsSet {
@@ -333,14 +371,15 @@ const FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(16)
 /// coalesced deltas whenever the VT reports new output. Ends when the client's channel closes
 /// (disconnect) or the task is aborted (view changed / connection ended).
 async fn stream_view(
-    session: micold_core::session::SessionId,
     pty: std::sync::Arc<crate::supervisor::PtySession>,
+    framer: std::sync::Arc<std::sync::Mutex<crate::framer::Framer>>,
     tx: tokio::sync::mpsc::UnboundedSender<Frame<DaemonMsg>>,
 ) {
-    let mut framer = crate::framer::Framer::new(session);
-
     // Full snapshot on first view — the whole current screen, however long the client was away.
-    let snapshot = framer.frame(pty.term(), true, None);
+    let snapshot = framer
+        .lock()
+        .expect("framer poisoned")
+        .frame(pty.term(), true, None);
     if tx.send(Frame::Grid(snapshot)).is_err() {
         return; // client already gone
     }
@@ -351,7 +390,10 @@ async fn stream_view(
         ticker.tick().await;
         // Only frame when there is new output; a clean tick sends nothing.
         if pty.signals().take_dirty() {
-            let delta = framer.frame(pty.term(), false, None);
+            let delta = framer
+                .lock()
+                .expect("framer poisoned")
+                .frame(pty.term(), false, None);
             if tx.send(Frame::Grid(delta)).is_err() {
                 return;
             }

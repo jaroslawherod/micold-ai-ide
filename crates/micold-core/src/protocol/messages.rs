@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::protocol::grid::{LineId, WireLine};
+use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::session::{SessionId, SessionLabel};
 
 // ---------------------------------------------------------------------------------------------
@@ -328,6 +328,11 @@ pub enum DaemonMsg {
         newest: LineId,
         /// The returned lines — may be fewer than requested (advisory, not an error).
         lines: Vec<WireLine>,
+        /// The interned style palette the `lines`' `StyleRun`s index into (per-response, like a
+        /// `GridFrame`'s own palette — the client resolves against it and never across responses).
+        styles: Vec<WireStyle>,
+        /// The interned hyperlink URIs the `lines`' `CellExtras` index into (per-response).
+        hyperlinks: Vec<String>,
         /// Whether more chunks follow.
         more: bool,
     },

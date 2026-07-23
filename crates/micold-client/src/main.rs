@@ -704,6 +704,18 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 DaemonMsg::SettingsChanged { settings } => {
                     app.scrollback_lines = settings.scrollback_lines;
                 }
+                // Fetched scrollback: resolve + insert into the session's grid cache (FR-016/017).
+                DaemonMsg::ScrollbackResponse {
+                    session,
+                    lines,
+                    styles,
+                    hyperlinks,
+                    ..
+                } => {
+                    if let Some(grid) = app.grids.get_mut(&session) {
+                        grid.apply_scrollback(&lines, &styles, &hyperlinks);
+                    }
+                }
                 // A mutating request we correlated resolved. A SessionCreate reply names the
                 // daemon-assigned id (the session already arrived via the CatalogChanged push);
                 // select + view it.
@@ -1445,28 +1457,48 @@ fn row_line_id(grid: &GridCache, offset: usize, row: u16) -> LineId {
     LineId(grid.viewport_top().0 - offset as i64 + row as i64)
 }
 
-/// Update the displayed session's scroll offset via `f(current, history)`.
-///
-/// **Scrollback fetch pending**: the daemon streams only the live viewport, so the cache holds no
-/// history yet; `history` is therefore the *cached* depth (0 today). Deep-history scroll lands with
-/// the client `ScrollbackRequest` + daemon serving (T033a wiring) — until then the view stays at the
-/// live bottom rather than scrolling into un-fetched blank lines.
+/// Update the displayed session's scroll offset via `f(current, history)`, then fetch any revealed
+/// scrollback the cache doesn't yet hold from the daemon (`ScrollbackRequest`). `history` is the
+/// daemon's full retained depth (`viewport_top - oldest_available`), so the view can scroll into
+/// history; un-fetched lines render blank until the `ScrollbackResponse` fills them (FR-016/017).
 fn scroll_view(app: &mut App, f: impl FnOnce(usize, usize) -> usize) {
     let Some(id) = app.core.active_session else {
         return;
     };
-    let Some(grid) = app.grids.get(&id) else {
-        return;
+    let (vt, new_off, need_from) = {
+        let Some(grid) = app.grids.get(&id) else {
+            return;
+        };
+        let vt = grid.viewport_top().0;
+        let oldest = grid.oldest_available().0;
+        let history = (vt - oldest).max(0) as usize;
+        let new_off = f(app.display_offset, history);
+        // The visible window's top line; find the lowest un-cached line in [top, viewport_top).
+        let top = (vt - new_off as i64).max(oldest);
+        let rows = grid.rows() as i64;
+        let mut need_from = None;
+        let mut lid = top;
+        while lid < vt && lid < top + rows {
+            if grid.line(LineId(lid)).is_none() {
+                need_from = Some(lid);
+                break;
+            }
+            lid += 1;
+        }
+        (vt, new_off, need_from)
     };
-    // Cached scrollback depth: how far below the viewport top the cache actually holds lines.
-    let mut cached = 0i64;
-    while grid
-        .line(LineId(grid.viewport_top().0 - cached - 1))
-        .is_some()
-    {
-        cached += 1;
+    app.display_offset = new_off;
+    if let Some(from) = need_from {
+        let req = app.next_req;
+        app.next_req += 1;
+        if let Some(d) = &app.daemon {
+            d.send(ClientMsg::ScrollbackRequest {
+                session: id,
+                req,
+                ranges: vec![LineId(from)..LineId(vt)],
+            });
+        }
     }
-    app.display_offset = f(app.display_offset, cached.max(0) as usize);
 }
 
 /// Tell the daemon to stop a session's process and drop the client's local grid cache for it.

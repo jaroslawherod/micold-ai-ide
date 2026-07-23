@@ -193,12 +193,13 @@ impl Framer {
     /// holding all of it (T033a, FR-017). Clamps `from` up to `oldest_available` rather than
     /// erroring, and returns fewer than `count` lines near the live edge (advisory). The bool is
     /// `more`: whether older lines than `from` remain retained.
+    #[allow(clippy::type_complexity)]
     pub fn scrollback_range(
         &self,
         term: &SharedTerm,
         from: LineId,
         count: usize,
-    ) -> (Vec<WireLine>, bool) {
+    ) -> (Vec<WireLine>, Vec<WireStyle>, Vec<String>, bool) {
         let term = term.lock();
         let grid = term.grid();
         let cols = grid.columns() as u16;
@@ -211,7 +212,7 @@ impl Framer {
         let start_id = from.0.max(oldest);
         let start_offset = (start_id - oldest).max(0) as usize;
         if start_offset >= retained {
-            return (Vec::new(), false);
+            return (Vec::new(), Vec::new(), Vec::new(), false);
         }
         let end_offset = (start_offset + count).min(retained);
 
@@ -236,7 +237,20 @@ impl Framer {
         }
         // `more` is true when there is retained content older than the returned range.
         let more = start_offset > 0;
-        (lines, more)
+        (lines, styles, hyperlinks, more)
+    }
+
+    /// The oldest retained line's id (the eviction watermark). Equals `scrolled_off`.
+    pub fn oldest_available(&self) -> LineId {
+        LineId(self.scrolled_off)
+    }
+
+    /// The newest retained line's id, given the session's current term.
+    pub fn newest(&self, term: &SharedTerm) -> LineId {
+        let term = term.lock();
+        let grid = term.grid();
+        let retained = grid.history_size() + grid.screen_lines();
+        LineId(self.scrolled_off + retained as i64 - 1)
     }
 
     /// How many lines left the top of the buffer between `prev` and `curr`. Lines only ever leave

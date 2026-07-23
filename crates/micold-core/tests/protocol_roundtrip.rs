@@ -272,6 +272,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             oldest_available: LineId(-5),
             newest: LineId(100),
             lines: vec![wide_char_line()],
+            styles: vec![],
+            hyperlinks: vec!["https://example.com".into()],
             more: true,
         },
         DaemonMsg::OperationOk {

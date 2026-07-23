@@ -128,12 +128,34 @@ impl GridCache {
         self.oldest_available = frame.oldest_available;
 
         for line in &frame.lines {
-            self.lines.insert(line.id, resolve_line(line, frame));
+            self.lines.insert(
+                line.id,
+                resolve_line(line, &frame.styles, &frame.hyperlinks),
+            );
         }
 
         // Scrollback trim: drop anything below the watermark (data-model I3).
         let watermark = frame.oldest_available.0;
         self.lines.retain(|id, _| id.0 >= watermark);
+    }
+
+    /// Insert fetched scrollback lines (a `ScrollbackResponse`), resolved against that response's
+    /// own per-response palette. History is immutable once scrolled off, so these upsert by
+    /// `LineId` alongside the viewport without disturbing it (no cursor/geometry/seq change). Lines
+    /// below the current trim watermark are ignored.
+    pub fn apply_scrollback(
+        &mut self,
+        lines: &[WireLine],
+        styles: &[WireStyle],
+        hyperlinks: &[String],
+    ) {
+        let watermark = self.oldest_available.0;
+        for line in lines {
+            if line.id.0 >= watermark {
+                self.lines
+                    .insert(line.id, resolve_line(line, styles, hyperlinks));
+            }
+        }
     }
 
     /// Viewport width in cells (last applied frame).
@@ -197,13 +219,12 @@ impl Default for GridCache {
 }
 
 /// Resolve one wire line against its frame's palettes into a frame-independent [`CachedLine`].
-fn resolve_line(line: &WireLine, frame: &GridFrame) -> CachedLine {
+fn resolve_line(line: &WireLine, styles: &[WireStyle], hyperlinks: &[String]) -> CachedLine {
     let runs = line
         .runs
         .iter()
         .map(|run| {
-            let style = frame
-                .styles
+            let style = styles
                 .get(run.style as usize)
                 .copied()
                 .unwrap_or(FALLBACK_STYLE);
@@ -219,7 +240,7 @@ fn resolve_line(line: &WireLine, frame: &GridFrame) -> CachedLine {
             zerowidth: extra.zerowidth.clone(),
             hyperlink: extra
                 .hyperlink
-                .and_then(|i| frame.hyperlinks.get(i as usize).cloned()),
+                .and_then(|i| hyperlinks.get(i as usize).cloned()),
         })
         .collect();
 
@@ -521,5 +542,38 @@ mod tests {
         assert_eq!(screen[0].unwrap().text, "top");
         assert!(screen[1].is_none(), "uncached row is a gap");
         assert_eq!(screen[2].unwrap().text, "bottom");
+    }
+
+    #[test]
+    fn apply_scrollback_resolves_history_against_its_own_palette_and_honours_the_watermark() {
+        let mut cache = GridCache::new();
+        // Viewport 100..102, history retained down to 90.
+        let mut f = frame(1, 0, true, 100, 2);
+        f.oldest_available = LineId(90);
+        f.styles = vec![style(7)];
+        f.lines = vec![line(100, "vis0", 0), line(101, "vis1", 0)];
+        cache.apply(&f);
+        assert!(cache.line(LineId(95)).is_none(), "history not fetched yet");
+
+        // A ScrollbackResponse for 90..=99 carries its OWN palette (index 0 = fg 3, distinct from
+        // the frame's fg 7) — the history must resolve against it, not the frame's.
+        let styles = vec![style(3)];
+        let history: Vec<WireLine> = (90..100).map(|i| line(i, &format!("h{i}"), 0)).collect();
+        cache.apply_scrollback(&history, &styles, &[]);
+
+        let l = cache.line(LineId(95)).expect("history line inserted");
+        assert_eq!(l.text, "h95");
+        assert_eq!(
+            l.runs[0].1,
+            style(3),
+            "resolved against the response palette"
+        );
+
+        // A line below the trim watermark is ignored.
+        cache.apply_scrollback(&[line(80, "old", 0)], &styles, &[]);
+        assert!(
+            cache.line(LineId(80)).is_none(),
+            "a line below oldest_available is dropped"
+        );
     }
 }

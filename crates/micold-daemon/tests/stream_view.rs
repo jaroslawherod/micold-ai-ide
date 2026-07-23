@@ -125,6 +125,133 @@ async fn a_viewing_client_receives_frames_and_can_drive_the_session() {
     }
 }
 
+/// Read frames until a full-snapshot `Grid` frame arrives, returning it (or `None` on timeout).
+async fn read_full_snapshot<C>(client: &mut Framed<tokio::io::DuplexStream, C>) -> Option<GridFrame>
+where
+    C: tokio_util::codec::Decoder<Item = Frame<DaemonMsg>> + Unpin,
+    C::Error: std::fmt::Debug,
+{
+    let overall = tokio::time::Instant::now() + Duration::from_secs(5);
+    while tokio::time::Instant::now() < overall {
+        match tokio::time::timeout(Duration::from_millis(500), client.next()).await {
+            Ok(Some(Ok(Frame::Grid(frame)))) if frame.full => return Some(frame),
+            Ok(Some(Ok(_))) => continue,
+            Ok(Some(Err(e))) => panic!("codec error: {e:?}"),
+            Ok(None) => return None,
+            Err(_) => continue,
+        }
+    }
+    None
+}
+
+#[tokio::test]
+async fn a_client_can_fetch_scrollback_history_over_the_wire() {
+    // A session that emits ~100 lines then idles — far more than the 24-row screen, so most of it
+    // is scrollback the daemon retains but does not stream.
+    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
+    let state = std::sync::Arc::new(DaemonState::new(Catalog::ephemeral()));
+    let sid = SessionId::new();
+    let mut cmd = CommandBuilder::new("sh");
+    cmd.arg("-c");
+    cmd.arg("i=1; while [ $i -le 100 ]; do echo scrollback_line_$i; i=$((i+1)); done; sleep 60");
+    cmd.cwd(std::env::temp_dir());
+    let session = PtySession::spawn(sid, cmd, 10_000, Some((80, 24))).expect("spawn");
+    state.register_session(session);
+
+    let server = tokio::spawn(micold_daemon::server::serve_connection(
+        std::sync::Arc::clone(&state),
+        server_io,
+    ));
+    let mut client = Framed::new(client_io, ClientCodec::new());
+    client
+        .send(Frame::Control(ClientMsg::Hello {
+            protocol_version: PROTOCOL_VERSION,
+            schema_hash: SCHEMA_HASH,
+            client_build: "test-client".into(),
+        }))
+        .await
+        .unwrap();
+    match client.next().await.unwrap().unwrap() {
+        Frame::Control(DaemonMsg::Welcome { .. }) => {}
+        other => panic!("expected Welcome, got {other:?}"),
+    }
+    client
+        .send(Frame::Control(ClientMsg::SetViewedSession {
+            project: std::path::PathBuf::from("/repo/demo"),
+            session: Some(sid),
+        }))
+        .await
+        .unwrap();
+
+    // Wait until the last emitted line reaches the screen — that proves all 100 lines have been
+    // processed into the Term (and thus into history), robust to load-dependent timing.
+    assert!(
+        wait_for_grid(&mut client, |f| frame_has_text(f, "scrollback_line_100")).await,
+        "the session's output must be fully processed"
+    );
+    // Re-view for a fresh full snapshot to learn the watermark.
+    client
+        .send(Frame::Control(ClientMsg::SetViewedSession {
+            project: std::path::PathBuf::from("/repo/demo"),
+            session: Some(sid),
+        }))
+        .await
+        .unwrap();
+    let snap = read_full_snapshot(&mut client)
+        .await
+        .expect("full snapshot");
+    // History exists below the viewport (lines scrolled off the 24-row screen).
+    assert!(
+        snap.viewport_top.0 > snap.oldest_available.0,
+        "there should be retained scrollback below the viewport"
+    );
+
+    // Request the earliest handful of scrollback lines — content NOT in the streamed viewport.
+    use micold_core::protocol::grid::LineId;
+    let from = snap.oldest_available;
+    let to = LineId(snap.oldest_available.0 + 5);
+    client
+        .send(Frame::Control(ClientMsg::ScrollbackRequest {
+            session: sid,
+            req: 1,
+            ranges: vec![from..to],
+        }))
+        .await
+        .unwrap();
+
+    // The response carries historical lines with their own palette.
+    let mut got = None;
+    let overall = tokio::time::Instant::now() + Duration::from_secs(5);
+    while tokio::time::Instant::now() < overall {
+        match tokio::time::timeout(Duration::from_millis(500), client.next()).await {
+            Ok(Some(Ok(Frame::Control(DaemonMsg::ScrollbackResponse { req, lines, .. })))) => {
+                assert_eq!(req, 1);
+                got = Some(lines);
+                break;
+            }
+            Ok(Some(Ok(_))) => continue,
+            Ok(Some(Err(e))) => panic!("codec error: {e:?}"),
+            Ok(None) => break,
+            Err(_) => continue,
+        }
+    }
+    let lines = got.expect("a ScrollbackResponse arrived");
+    assert!(!lines.is_empty(), "the daemon served retained history");
+    assert!(
+        lines.iter().any(|l| l.text.contains("scrollback_line_")),
+        "the served lines are the scrolled-off content"
+    );
+
+    client
+        .send(Frame::Control(ClientMsg::Goodbye))
+        .await
+        .unwrap();
+    let _ = server.await;
+    if let Some(pty) = state.live_session(sid) {
+        let _ = pty.kill();
+    }
+}
+
 /// A catalog holding one Regular (shell) session at `project`, so `SessionStart` can spawn it.
 fn catalog_with_shell(
     project: &std::path::Path,
