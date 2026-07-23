@@ -74,13 +74,19 @@ struct EnvIncludeSnapshot {
 }
 ```
 
-- **Cardinality**: exactly one instance, shared by every session (spec Key Entities — "a single
-  shared snapshot is used by every session"), not keyed per `SessionId`. This is the one
-  deliberate departure from this codebase's usual per-session state shape (`SessionTerminals`,
-  `ShellLifecycle`) — it is app-level configuration, not session state, so it does not implicate
-  Principle II's session-isolation guarantee (research plan.md Constitution Check, Principle II).
-- **Lifecycle**: constructed once in `boot()` (R5); replaced wholesale (not mutated field-by-field)
-  by `refresh_env_include(app)` on the two refresh triggers (R5); dropped when the app exits.
+- **Cardinality**: ~~exactly one instance, shared by every session~~ **Superseded (BUG-002)**: one
+  instance per resolution directory (a `HashMap<PathBuf, EnvIncludeSnapshot>` keyed by the
+  session's project/worktree directory, FR-020), not one single app-wide instance and not keyed
+  per `SessionId` — sessions in the same directory still share that directory's entry. This
+  remains a departure from this codebase's usual per-session state shape (`SessionTerminals`,
+  `ShellLifecycle`) — it is per-directory configuration resolution, not per-session state, so it
+  still does not implicate Principle II's session-isolation guarantee (research plan.md
+  Constitution Check, Principle II). See `bugs/BUG-002.md`.
+- **Lifecycle**: constructed once in `boot()` for the default/no-project directory (R5); a new
+  entry is resolved lazily the first time a session launches against a not-yet-cached directory
+  (BUG-002); an entry is replaced wholesale (not mutated field-by-field) by
+  `refresh_env_include(app)`'s two refresh triggers (R5), scoped to the affected directory/
+  directories; all entries are dropped when the app exits.
 - **Relationship to spawn call sites**: `launch_spec()` (`src/main.rs`, for `claude`) and
   `ensure_attached_process`'s `TerminalMode::Regular` branch (for the shell) both build their
   `env: Vec<(String, String)>` as `snapshot.vars.iter().cloned().chain(once(("TERM".into(),

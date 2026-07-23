@@ -29,8 +29,8 @@ use micold_ai_ide::store::{JsonFileStore, ProjectStore};
 use micold_ai_ide::terminal::{LaunchMode, LaunchSpec};
 use micold_ai_ide::theme::{observe_system_scheme, SystemScheme};
 use micold_ai_ide::worktree::{
-    create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir,
-    CreateError, CreateProgressEvent, Worktree,
+    create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir, CreateError,
+    CreateProgressEvent, Worktree,
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -154,45 +154,106 @@ struct App {
     env_include_enabled: bool,
     env_include_script_path: String,
     env_include_timeout_secs: u64,
-    /// The shared, in-memory-only resolved-environment snapshot (data-model.md). One instance per
-    /// app run, applied uniformly to every session's spawn call site — never persisted (FR-008).
-    env_include: EnvIncludeSnapshot,
+    /// Per-directory cache of resolved environment-include snapshots (data-model.md; BUG-002).
+    /// Keyed by the directory the sourcing subprocess ran in: a version-manager hook (mise, asdf,
+    /// nvm, pyenv, rbenv, …) computes its `PATH` contribution from the sourcing shell's own cwd,
+    /// so one directory-agnostic snapshot can never be correct for more than one project.
+    /// Sessions launched in the same directory share that directory's cached entry; sessions in
+    /// different directories resolve (and cache) independently. Never persisted (FR-008).
+    env_include_cache: HashMap<PathBuf, EnvIncludeSnapshot>,
+    /// The outcome of the most recently *attempted* resolution — at boot, on a Settings save, or
+    /// on a session restart — regardless of which directory it was for (FR-013, BUG-002). A cache
+    /// hit in `env_include_vars_for` does NOT update this, since no new attempt was made. Shown as
+    /// a single "last attempt" status in Settings, independent of the per-directory `vars` cache
+    /// used for merging into a session's own spawn call site.
+    env_include_last_outcome: EnvIncludeOutcome,
 }
 
-/// The result of the most recently resolved (or not-yet-attempted) environment-include snapshot
-/// (feature 011, data-model.md). `vars` is empty for every non-`Success` outcome.
+/// The result of a single resolution attempt for one directory (feature 011, data-model.md).
+/// `vars` is empty for every non-`Success` outcome.
 struct EnvIncludeSnapshot {
     vars: Vec<(String, String)>,
     outcome: EnvIncludeOutcome,
 }
 
-/// Resolve the environment-include snapshot from the given settings values, short-circuiting to
-/// `Disabled` (no subprocess spawned) when the feature is off or the path is blank — mirrors the
-/// spec's Edge Cases and contracts/env-include-resolution.md's Non-goals (the engine itself never
-/// decides whether to run). Shared by `boot()` (T013) and `refresh_env_include` (T020) so both
-/// triggers apply the exact same short-circuit + resolution logic.
-fn resolve_env_include(enabled: bool, script_path: &str, timeout_secs: u64) -> EnvIncludeSnapshot {
+/// Resolve the environment-include snapshot for `cwd` from the given settings values,
+/// short-circuiting to `Disabled` (no subprocess spawned) when the feature is off or the path is
+/// blank — mirrors the spec's Edge Cases and contracts/env-include-resolution.md's Non-goals (the
+/// engine itself never decides whether to run). Shared by every resolution call site so they all
+/// apply the exact same short-circuit + resolution logic.
+fn resolve_env_include(
+    enabled: bool,
+    script_path: &str,
+    timeout_secs: u64,
+    cwd: &Path,
+) -> EnvIncludeSnapshot {
     if !enabled || script_path.trim().is_empty() {
         return EnvIncludeSnapshot {
             vars: Vec::new(),
             outcome: EnvIncludeOutcome::Disabled,
         };
     }
-    let (vars, outcome) =
-        env_include::resolve(Path::new(script_path), Duration::from_secs(timeout_secs));
+    let (vars, outcome) = env_include::resolve(
+        Path::new(script_path),
+        cwd,
+        Duration::from_secs(timeout_secs),
+    );
     EnvIncludeSnapshot { vars, outcome }
 }
 
-/// Force a fresh re-source of the environment-include script from `app`'s current settings,
-/// replacing `app.env_include` wholesale (feature 011, FR-007). Called on a `SettingsSaved` that
-/// touched the enabled/path/timeout fields, and on `TerminalRestartRequested` for any session —
-/// the two refresh triggers the spec's Clarifications name.
-fn refresh_env_include(app: &mut App) {
-    app.env_include = resolve_env_include(
+/// The directory to use whenever a single representative directory is needed synchronously
+/// (boot, a Settings save) rather than a specific session's own directory (BUG-002): the active
+/// session's own directory if there is one (most relevant to what the user is currently looking
+/// at), else the active project's root, else the app process's own current directory.
+fn default_resolution_cwd(core: &State) -> PathBuf {
+    if let Some(id) = core.active_session {
+        if let Some((cwd, _, _)) = session_cwd_mode_and_active_shell(core, id) {
+            return cwd;
+        }
+    }
+    if let Some(repo) = core.workspace.active.clone() {
+        return repo;
+    }
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+/// Return the resolved environment-include variables for `cwd`, resolving (and caching) them if
+/// this is the first launch against that directory (BUG-002) — a version-manager hook's `PATH`
+/// contribution depends on the sourcing shell's own cwd, so resolution is cached per-directory
+/// rather than as one shared value. Deliberately does NOT update `env_include_last_outcome` — an
+/// incidental lazy fill on session launch is not the "most recent attempt" FR-013 means (that's
+/// reserved for the explicit boot/Settings-save/restart triggers, `refresh_env_include`).
+fn env_include_vars_for(app: &mut App, cwd: &Path) -> Vec<(String, String)> {
+    if let Some(snapshot) = app.env_include_cache.get(cwd) {
+        return snapshot.vars.clone();
+    }
+    let snapshot = resolve_env_include(
         app.env_include_enabled,
         &app.env_include_script_path,
         app.env_include_timeout_secs,
+        cwd,
     );
+    let vars = snapshot.vars.clone();
+    app.env_include_cache.insert(cwd.to_path_buf(), snapshot);
+    vars
+}
+
+/// Force a fresh re-source of the environment-include script for `cwd`'s cache entry, updating
+/// `env_include_last_outcome` to this attempt's outcome (feature 011 FR-007, BUG-002). Called on
+/// `TerminalRestartRequested` for the restarted session's own directory (leaving every other
+/// cached directory untouched, since only this one needs a fresh attempt), and from
+/// `Message::SettingsSaved`'s handler after it clears the whole cache (every cached directory is
+/// stale once the enabled/path/timeout settings themselves changed) — the two refresh triggers
+/// the spec's Clarifications name.
+fn refresh_env_include(app: &mut App, cwd: &Path) {
+    let snapshot = resolve_env_include(
+        app.env_include_enabled,
+        &app.env_include_script_path,
+        app.env_include_timeout_secs,
+        cwd,
+    );
+    app.env_include_last_outcome = snapshot.outcome.clone();
+    app.env_include_cache.insert(cwd.to_path_buf(), snapshot);
 }
 
 /// Identity of the main content area, used to trigger a fade when it changes.
@@ -359,11 +420,16 @@ fn boot() -> (App, Task<Message>) {
         env_include_script_path = loaded.env_include_script_path;
         env_include_timeout_secs = loaded.env_include_timeout_secs;
     }
-    let env_include = resolve_env_include(
+    let boot_cwd = default_resolution_cwd(&core);
+    let boot_snapshot = resolve_env_include(
         env_include_enabled,
         &env_include_script_path,
         env_include_timeout_secs,
+        &boot_cwd,
     );
+    let env_include_last_outcome = boot_snapshot.outcome.clone();
+    let mut env_include_cache = HashMap::new();
+    env_include_cache.insert(boot_cwd, boot_snapshot);
     core.system_scheme = detect_system_scheme(core.system_scheme);
     // If a project is already active from a previous run, discover its worktrees.
     if let Some(repo) = core.workspace.active.clone() {
@@ -397,7 +463,8 @@ fn boot() -> (App, Task<Message>) {
             env_include_enabled,
             env_include_script_path,
             env_include_timeout_secs,
-            env_include,
+            env_include_cache,
+            env_include_last_outcome,
         },
         Task::none(),
     )
@@ -673,8 +740,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 let cwd = session_cwd_for_location(&repo, &location);
                 let session = Session::start_new(location);
                 let id = session.id;
+                let resolved_env = env_include_vars_for(app, &cwd);
                 match spawn_pty(
-                    &launch_spec(&cwd, id, LaunchMode::Fresh, &app.env_include.vars),
+                    &launch_spec(&cwd, id, LaunchMode::Fresh, &resolved_env),
                     app.scrollback_lines,
                     app.last_grid,
                 ) {
@@ -756,8 +824,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // `Regular` branch spawn it, the same case `Message::ShellInstanceRestartRequested`
         // handles for a background instance.
         Message::TerminalRestartRequested => {
-            refresh_env_include(app);
             if let Some(id) = app.core.active_session {
+                // Re-source fresh for this session's own directory only (BUG-002) — other
+                // cached directories are untouched, since only this one needs a new attempt.
+                if let Some((cwd, _, _)) = session_cwd_mode_and_active_shell(&app.core, id) {
+                    refresh_env_include(app, &cwd);
+                }
                 ensure_attached_process(app, id, true);
             }
             Task::none()
@@ -1036,7 +1108,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     env_include_timeout_secs,
                 });
             }
-            refresh_env_include(app);
+            // The enabled/path/timeout settings themselves changed, so every previously cached
+            // directory's snapshot is stale (BUG-002) — clear all of them, then eagerly re-source
+            // one representative directory so Settings shows fresh feedback immediately; every
+            // other directory lazily re-resolves the next time a session in it launches.
+            app.env_include_cache.clear();
+            let cwd = default_resolution_cwd(&app.core);
+            refresh_env_include(app, &cwd);
             app.core.update(Message::SettingsSaved); // closes the overlay
             Task::none()
         }
@@ -1106,6 +1184,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         // deleting the working files of a still-registered worktree would
                         // leave a worse mess than the failure being reported.
                         Ok(outcome) => {
+                            // Drop this directory's cached env-include snapshot (BUG-002): a
+                            // worktree recreated for the same branch reuses this exact path
+                            // (dir names are derived from the branch name), and without this the
+                            // stale pre-deletion snapshot would otherwise be served forever.
+                            app.env_include_cache.remove(&wt.path);
                             // `remove_worktree_dir` treats an already-absent directory as
                             // success — git removed it as part of releasing the worktree, so
                             // "not found" here is the happy path, not a leftover (FR-023a).
@@ -1164,7 +1247,7 @@ fn view(app: &App) -> iced::Element<'_, Message> {
         &app.motion,
         app.dismissing.as_ref(),
         &app.row_fx,
-        &app.env_include.outcome,
+        &app.env_include_last_outcome,
     )
 }
 
@@ -1329,8 +1412,9 @@ fn handle_process_exits(app: &mut App) {
             .find_session_mut(id)
             .map(|(_, s)| s.on_unexpected_exit());
         if decision == Some(RestartDecision::Resume) {
+            let resolved_env = env_include_vars_for(app, &cwd);
             if let Ok(rt) = spawn_pty(
-                &launch_spec(&cwd, id, LaunchMode::Resume, &app.env_include.vars),
+                &launch_spec(&cwd, id, LaunchMode::Resume, &resolved_env),
                 app.scrollback_lines,
                 app.last_grid,
             ) {
@@ -1384,7 +1468,8 @@ fn spawn_and_register_shell_instance(
     shell_id: ShellInstanceId,
     cwd: &Path,
 ) {
-    let env = env_include::merge_with_term(&app.env_include.vars);
+    let resolved_env = env_include_vars_for(app, cwd);
+    let env = env_include::merge_with_term(&resolved_env);
     match spawn_shell_pty(cwd, &env, app.scrollback_lines, app.last_grid) {
         Ok(rt) => {
             app.terminals
@@ -1430,8 +1515,9 @@ fn ensure_attached_process(app: &mut App, id: SessionId, explicit_restart: bool)
     }
     match mode {
         TerminalMode::AiCli => {
+            let resolved_env = env_include_vars_for(app, &cwd);
             match spawn_pty(
-                &launch_spec(&cwd, id, LaunchMode::Resume, &app.env_include.vars),
+                &launch_spec(&cwd, id, LaunchMode::Resume, &resolved_env),
                 app.scrollback_lines,
                 app.last_grid,
             ) {
@@ -1545,7 +1631,9 @@ fn create(
 }
 
 /// Take everything buffered by the in-flight create so far, leaving the buffer empty.
-fn drain_create_progress(buffer: &Arc<Mutex<Vec<CreateProgressEvent>>>) -> Vec<CreateProgressEvent> {
+fn drain_create_progress(
+    buffer: &Arc<Mutex<Vec<CreateProgressEvent>>>,
+) -> Vec<CreateProgressEvent> {
     buffer
         .lock()
         .map(|mut buf| std::mem::take(&mut *buf))
@@ -1741,10 +1829,8 @@ mod tests {
             env_include_enabled: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_ENABLED,
             env_include_script_path: String::new(),
             env_include_timeout_secs: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
-            env_include: EnvIncludeSnapshot {
-                vars: Vec::new(),
-                outcome: EnvIncludeOutcome::Disabled,
-            },
+            env_include_cache: HashMap::new(),
+            env_include_last_outcome: EnvIncludeOutcome::Disabled,
         };
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
@@ -1771,10 +1857,8 @@ mod tests {
             env_include_enabled: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_ENABLED,
             env_include_script_path: String::new(),
             env_include_timeout_secs: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
-            env_include: EnvIncludeSnapshot {
-                vars: Vec::new(),
-                outcome: EnvIncludeOutcome::Disabled,
-            },
+            env_include_cache: HashMap::new(),
+            env_include_last_outcome: EnvIncludeOutcome::Disabled,
         }
     }
 
@@ -1911,10 +1995,8 @@ mod tests {
             env_include_enabled: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_ENABLED,
             env_include_script_path: String::new(),
             env_include_timeout_secs: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
-            env_include: EnvIncludeSnapshot {
-                vars: Vec::new(),
-                outcome: EnvIncludeOutcome::Disabled,
-            },
+            env_include_cache: HashMap::new(),
+            env_include_last_outcome: EnvIncludeOutcome::Disabled,
         };
         assert_eq!(app.last_grid, None);
 

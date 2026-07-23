@@ -98,9 +98,15 @@ green.
   R6); attempt via the `out=$(source "$1" 2>&1); status=$?; printf '%s' "$out" >&2; env -0; exit
   $status` wrapper (research R1), spawned with `Command::spawn()` and polled via `try_wait()`
   bounded by `timeout` (research R2), `kill()`+`TimedOut` on expiry; depends on T007, T008; makes
-  T003 pass (contracts/env-include-resolution.md). **Reopened for BUG-001, now re-closed by T031**:
+  T003 pass (contracts/env-include-resolution.md). **Reopened for BUG-001, re-closed by T031**:
   the Unix invocation now also passes `-i` so the sourcing shell satisfies a script's own
   interactive guard (e.g. Debian/Ubuntu's stock `~/.bashrc`) — see T030/T031 and `bugs/BUG-001.md`.
+  **Reopened again for BUG-002, re-closed by T033**: the signature was missing a `cwd: &Path`
+  parameter, so the sourcing subprocess always ran in the app's own launch directory instead of
+  the session's project/worktree directory — both `resolve`/`attempt_env` now take `cwd` and pass
+  it via `cmd.current_dir(cwd)`; `baseline_env` also now takes `cwd` (matching, not neutral —
+  needed to avoid a spurious `PWD` diff, discovered while making T032's test pass) — see
+  `bugs/BUG-002.md`.
 - [X] T010 Implement pure `merge_with_term(vars: &[(String, String)]) -> Vec<(String, String)>` in
   `src/env_include.rs` (same file — sequential): appends the hardcoded `("TERM",
   "xterm-256color")` pair *last*, so it always wins on key collision regardless of whether `vars`
@@ -122,6 +128,11 @@ green.
   `env_include::resolve(path, timeout)` (else `Disabled` with empty `vars`, no subprocess spawned)
   — depends on T009, T011, T012. *(No practical automated test — `boot()`/`App` are binary-only,
   matching feature 010's `main.rs`-glue precedent; validated by quickstart.md.)*
+  **Reopened for BUG-002, re-closed by T034**: `App.env_include`'s single-`EnvIncludeSnapshot`
+  shape is now `env_include_cache: HashMap<PathBuf, EnvIncludeSnapshot>` plus a separate
+  `env_include_last_outcome: EnvIncludeOutcome` (for Settings' FR-013 display, since "most recent
+  attempt" no longer maps onto one field once resolution is per-directory); `boot()` seeds one
+  entry via the new `default_resolution_cwd()` helper — see `bugs/BUG-002.md`.
 
 **Checkpoint**: `cargo test --no-default-features` and `cargo test --features gui` both pass; the
 app builds and runs exactly as before — `App.env_include` is computed at startup but nothing yet
@@ -158,10 +169,16 @@ that session.
   inherited environment (not just adds new ones) — this is what makes a captured value win over
   the app process's own pre-existing environment for that key (FR-010), not merely an assumption.
   If this codebase's `portable-pty` version behaves differently, add an explicit override here.
+  **Reopened for BUG-002, re-closed by T034**: `&app.env_include.vars` was a direct read of the
+  single global snapshot; every `launch_spec` call site now computes `env_include_vars_for(app,
+  &cwd)` first and passes that instead — see `bugs/BUG-002.md`.
 - [X] T015 [US1] In `ensure_attached_process`'s `TerminalMode::Regular` branch (`src/main.rs`),
   replace the hardcoded `let env = vec![("TERM", "xterm-256color".to_string())];` with
   `let env = env_include::merge_with_term(&app.env_include.vars);` — depends on T013; same file as
   T014, so sequential (not `[P]`) despite neither depending on the other's output.
+  **Reopened for BUG-002, re-closed by T034**: same direct-global-read issue as T014, for
+  `spawn_and_register_shell_instance` (the regular-terminal spawn call site) — now also calls
+  `env_include_vars_for(app, cwd)` first — see `bugs/BUG-002.md`.
 - [X] T016 [P] [US1] Add an "Environment include" section to `docs/user-guide/settings.md`
   describing the default auto-include behavior (on by default, default path per platform, that
   both the AI CLI and regular-terminal sessions see the identical resolved set) — Principle VII.
@@ -204,6 +221,10 @@ script ran).
   current enabled/path/timeout, calls `env_include::resolve()` (or sets `Disabled` with empty
   `vars` when off or the path is blank — no subprocess spawned), and replaces `app.env_include`
   wholesale — depends on T013.
+  **Reopened for BUG-002, re-closed by T035**: now takes a `cwd: &Path` and refreshes only that
+  one cache entry (+ `env_include_last_outcome`); `Message::SettingsSaved`'s handler additionally
+  clears every other cached directory first, since the config itself changed — see
+  `bugs/BUG-002.md`.
 - [X] T021 [US2] Extend `Message::SettingsSaved`'s handler in `src/main.rs`: parse and validate
   the timeout text field the same way the existing scrollback value is (reject with `draft.error`
   and keep the overlay open on parse failure or out-of-range value — never silently substitute a
@@ -253,6 +274,9 @@ recoverable via the existing per-session restart control.
   `refresh_env_include(app)` (T020) before the existing `ensure_attached_process(app, id)` call —
   depends on T020 (spec Clarifications: the manual restart control also triggers a fresh
   re-source).
+  **Reopened for BUG-002, re-closed by T035**: now looks up the restarting session's own directory
+  via `session_cwd_mode_and_active_shell` and passes it to `refresh_env_include`, re-resolving only
+  that one cache entry — other cached directories are untouched — see `bugs/BUG-002.md`.
 - [X] T025 [US3] In `src/ui/settings_form.rs::modal`, add a read-only failure-diagnostic block
   rendered only when `app.env_include.outcome` is `MissingScript`/`NonZeroExit`/`TimedOut`: the
   failure category as a short label ("Script not found" / "Exited with an error" / "Timed out")
@@ -367,6 +391,95 @@ re-closed; full suite + clippy + fmt all green.
 
 ---
 
+## Phase 8: Bugfix BUG-002 — `env-include` resolves in the wrong directory, dropping project-scoped PATH tooling
+
+**Goal**: Resolving the include script for a given session uses that session's own project/worktree
+directory as the sourcing subprocess's working directory, so directory-dependent `PATH`
+contributions from a version manager (mise, asdf, nvm, pyenv, rbenv, etc.) are captured for the
+`claude` AI CLI process the same way they already are for a regular-terminal session (FR-020,
+SC-001).
+
+**Independent Test**: Configure a project directory with a version-manager-style config file that
+only contributes to `PATH` when the shell's cwd is inside that directory; open a session in that
+project; confirm the AI CLI process's `PATH` includes that contribution, matching what a
+regular-terminal session opened in the same directory shows.
+
+### Tests for BUG-002 (MANDATORY — Constitution Principle I) ⚠️
+
+> Written FIRST; confirmed to FAIL before implementation.
+
+- [X] T032 [BUG-002] Add failing real-subprocess test to `tests/env_include_resolve.rs`: write a
+  script that exports a variable only when a sentinel file is present in the shell's current
+  working directory (e.g. `if [ -f ./.bug002-marker ]; then export BUG002_VAR=present; fi`) —
+  mirroring how a version-manager hook keys its `PATH` contribution off cwd, without requiring
+  mise/asdf themselves to be installed in CI; call `resolve()` with the sourcing `cwd` pointing at
+  a `tempfile::TempDir` containing the marker file, assert `BUG002_VAR=present` is captured; call
+  it again with a `cwd` pointing at a tempdir without the marker, assert it is absent (FR-020,
+  contracts/env-include-resolution.md). Confirmed failing: `resolve()`/`attempt_env()` do not
+  accept a `cwd` parameter yet, so this does not compile — the RED state for this API-shape change
+  (`bugs/BUG-002.md`). Done: added both a Unix (`unix::directory_dependent_export_is_captured_only_
+  when_cwd_contains_marker`) and a Windows equivalent test.
+
+### Implementation for BUG-002
+
+- [X] T033 [BUG-002] Add a `cwd: &Path` parameter to `env_include::resolve` and `attempt_env`
+  (`src/env_include.rs`), calling `cmd.cwd(cwd)` on the *attempt* subprocess before sourcing;
+  `baseline_env` continues to run from a neutral, project-independent directory and does **not**
+  take the new parameter (FR-020). Update every existing `resolve(&script, timeout)` call site in
+  `tests/env_include_resolve.rs` (none of which exercise directory-dependent behavior) to pass a
+  neutral tempdir `cwd` so the existing suite keeps compiling and passing — depends on T009
+  (reopened above); makes T032 pass and re-closes T009. Update
+  `contracts/env-include-resolution.md`'s Inputs table and Behavior contract accordingly.
+  **Discovered while implementing**: a genuinely neutral (different-from-`cwd`) baseline directory
+  broke `empty_script_succeeds_with_no_vars` — bash exports `PWD` (and `OLDPWD`) from the shell's
+  own cwd, so a baseline run in a different directory than the attempt produces a spurious `PWD`
+  diff on *every* resolution, the same class of bash-internal artifact `baseline_env`'s existing
+  doc comment already warned about for `SHLVL`. Fixed by making `baseline_env` take `cwd` too and
+  run in the *same* directory as the attempt (still sourcing `/dev/null`, so a real script's own
+  directory-dependent hook still only fires in the attempt, never the baseline).
+- [X] T034 [BUG-002] Add a `cwd: &Path` parameter to `resolve_env_include` (`src/main.rs:174`),
+  threading it into its `env_include::resolve` call (T033); change `App.env_include` (T013) from a
+  single `EnvIncludeSnapshot` to a cache keyed by resolution directory (e.g.
+  `HashMap<PathBuf, EnvIncludeSnapshot>`); add a lookup-or-resolve helper that, given a `cwd`,
+  returns the cached snapshot or calls `resolve_env_include(..., cwd)` and caches the result. Update
+  `boot()`'s call (`src/main.rs:362`) to seed the "Default"/no-project-directory cache entry.
+  Replace the direct `&app.env_include.vars` reads at `launch_spec`'s call site (T014,
+  `src/main.rs:677`) and `ensure_attached_process`'s `TerminalMode::Regular` branch (T015) with
+  calls to the lookup-or-resolve helper using the session's own `cwd` — depends on T033; re-closes
+  T013, T014, T015. Done: split `App.env_include` into `env_include_cache:
+  HashMap<PathBuf, EnvIncludeSnapshot>` (the per-directory `vars` cache, read by
+  `env_include_vars_for`) and `env_include_last_outcome: EnvIncludeOutcome` (the single value
+  Settings displays for FR-013 — "most recent attempt" no longer maps onto one cache entry once
+  resolution is per-directory); added `default_resolution_cwd(core)` (active session's directory,
+  else active project's root, else the app's own current directory) for the two places that need
+  one representative directory synchronously (`boot()`, `Message::SettingsSaved`).
+- [X] T035 [BUG-002] Add a `cwd: &Path` parameter to `refresh_env_include` (T020, `src/main.rs:190`),
+  threading it into `resolve_env_include` (T034); update its `Message::SettingsSaved` call site to
+  invalidate every cached directory entry (the configuration itself changed, not just one
+  directory's content) and the `TerminalRestartRequested` handler (T024, `src/main.rs`) to pass the
+  restarted session's own directory and re-resolve only that one cache entry — depends on T034;
+  re-closes T020, T024.
+- [X] T036 [P] [BUG-002] Extend `docs/user-guide/settings.md`'s "Environment include" section with
+  a short note that resolution is per-project-directory (a version manager's project-scoped `PATH`
+  additions are picked up per project), not a single app-wide value — Principle VII.
+
+**Checkpoint**: A project with its own version-manager configuration (e.g. `mise.toml`) has its
+directory-scoped `PATH` additions visible in both the AI CLI process and the regular-terminal
+process for sessions opened in that project, matching SC-001; other projects/directories are
+unaffected by that project's contribution. `mise run test` stays green; T032's regression test
+passes. **Met** — verified: `mise run test` (`cargo test --no-default-features --all-targets`) and
+`cargo test --features gui` both green, 0 failures; `cargo build --features gui` clean; `cargo
+clippy --no-default-features --all-targets -- -D warnings` and `cargo clippy --features gui
+--all-targets -- -D warnings` both clean; `rustfmt --check` clean on every file this bugfix
+touched (`src/main.rs`, `src/env_include.rs`, `tests/env_include_resolve.rs`) — the only remaining
+`cargo fmt --check` diffs are pre-existing drift in files this bugfix never touched.
+
+**Bugfix**: 2026-07-23 — BUG-002 Added Phase 8 (T032–T036). FR-020 added to spec.md; research.md R5
+and contracts/env-include-resolution.md annotated with the per-directory resolution requirement;
+data-model.md's `EnvIncludeSnapshot` cardinality superseded. See `bugs/BUG-002.md`.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -466,5 +579,12 @@ With multiple developers:
 - Phase 7 (BUG-001) depends only on Foundational's T009 already existing — it corrects T009's Unix
   invocation directly; no dependency on US1/US2/US3's `main.rs` wiring, since none of that wiring
   changes shape.
+- Phase 8 (BUG-002) depends on Foundational's T009 (adds the `cwd` parameter) and touches US1's
+  T013/T014/T015 wiring directly (T034 replaces their direct snapshot reads with the per-directory
+  cache lookup) and US2/US3's T020/T024 refresh triggers (T035) — unlike Phase 7, this one does
+  reshape the `main.rs` wiring introduced by US1/US2/US3, since the single-snapshot model those
+  tasks wired against is exactly what BUG-002 supersedes.
 
 **Bugfix**: 2026-07-21 — BUG-001 Updated from bugfix patch.
+
+**Bugfix**: 2026-07-23 — BUG-002 Updated from bugfix patch.
