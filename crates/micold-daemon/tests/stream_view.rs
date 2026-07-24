@@ -125,6 +125,70 @@ async fn a_viewing_client_receives_frames_and_can_drive_the_session() {
     }
 }
 
+#[tokio::test]
+async fn session_resize_reframes_at_the_new_size() {
+    // Regression (code review): the daemon must honour ClientMsg::SessionResize; before the fix it
+    // fell into `_ => {}` and every session stayed at the 100×30 spawn seed.
+    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
+    let state = std::sync::Arc::new(DaemonState::new(Catalog::ephemeral()));
+    let sid = SessionId::new();
+    let mut cmd = CommandBuilder::new("cat");
+    cmd.cwd(std::env::temp_dir());
+    let session = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn");
+    state.register_session(session);
+
+    let server = tokio::spawn(micold_daemon::server::serve_connection(
+        std::sync::Arc::clone(&state),
+        server_io,
+    ));
+    let mut client = Framed::new(client_io, ClientCodec::new());
+    client
+        .send(Frame::Control(ClientMsg::Hello {
+            protocol_version: PROTOCOL_VERSION,
+            schema_hash: SCHEMA_HASH,
+            client_build: "test-client".into(),
+        }))
+        .await
+        .unwrap();
+    match client.next().await.unwrap().unwrap() {
+        Frame::Control(DaemonMsg::Welcome { .. }) => {}
+        other => panic!("expected Welcome, got {other:?}"),
+    }
+    client
+        .send(Frame::Control(ClientMsg::SetViewedSession {
+            project: PathBuf::from("/repo/demo"),
+            session: Some(sid),
+        }))
+        .await
+        .unwrap();
+    assert!(
+        wait_for_grid(&mut client, |f| f.cols == 80).await,
+        "first snapshot is at the 80-col spawn size"
+    );
+
+    client
+        .send(Frame::Control(ClientMsg::SessionResize {
+            session: sid,
+            cols: 120,
+            rows: 40,
+        }))
+        .await
+        .unwrap();
+    assert!(
+        wait_for_grid(&mut client, |f| f.cols == 120 && f.rows == 40).await,
+        "after SessionResize the stream must re-frame at the new size"
+    );
+
+    client
+        .send(Frame::Control(ClientMsg::Goodbye))
+        .await
+        .unwrap();
+    let _ = server.await;
+    if let Some(pty) = state.live_session(sid) {
+        let _ = pty.kill();
+    }
+}
+
 /// Read frames until a full-snapshot `Grid` frame arrives, returning it (or `None` on timeout).
 async fn read_full_snapshot<C>(client: &mut Framed<tokio::io::DuplexStream, C>) -> Option<GridFrame>
 where

@@ -28,32 +28,33 @@ const CLIENT_BUILD: &str = concat!("micold-ai-ide/", env!("CARGO_PKG_VERSION"));
 /// relative to grid frames; a few hundred slots is ample without unbounded growth.
 const CHANNEL_CAPACITY: usize = 256;
 
-/// A cloneable handle the App uses to send [`ClientMsg`]s to the daemon. Fire-and-forget: a full or
-/// closed channel drops the message rather than blocking the UI thread (the daemon reconciles from
-/// authoritative state, so a lost *command* is recoverable — unlike input, which is stamped and
-/// ordered by the [`crate::input::SessionInputStamper`] before it reaches here).
+/// A cloneable handle the App uses to send [`ClientMsg`]s to the daemon. The channel is **unbounded**
+/// so a stamped `SessionInput` is never dropped under backpressure — input is the lossless, ordered
+/// log the whole feature rests on (G2); dropping a frame here would be an unrecoverable gap because
+/// the [`crate::input::SessionInputStamper`] has already consumed its serial. (Control messages are
+/// small and rare, so the unbounded channel cannot grow meaningfully from them.)
 ///
 /// `PartialEq`/`Eq` compare *identity* (a shared `Arc` token) so [`Message`] stays `Eq` — clones of
 /// one handle are equal (they feed the same connection); handles from different connections differ.
 #[derive(Debug, Clone)]
 pub struct Outbox {
-    tx: mpsc::Sender<ClientMsg>,
+    tx: mpsc::UnboundedSender<ClientMsg>,
     /// Identity token: cloned (pointer-shared) with the handle, so `Arc::ptr_eq` distinguishes
     /// connections without needing `Sender` to be `Eq` (it is not).
     id: std::sync::Arc<()>,
 }
 
 impl Outbox {
-    fn new(tx: mpsc::Sender<ClientMsg>) -> Self {
+    fn new(tx: mpsc::UnboundedSender<ClientMsg>) -> Self {
         Self {
             tx,
             id: std::sync::Arc::new(()),
         }
     }
 
-    /// Queue a message to the daemon, dropping it if the channel is closed/full (best-effort).
+    /// Queue a message to the daemon (never blocks the UI thread; a closed channel is ignored).
     pub fn send(&self, msg: ClientMsg) {
-        let _ = self.tx.clone().try_send(msg);
+        let _ = self.tx.unbounded_send(msg);
     }
 }
 
@@ -116,7 +117,7 @@ fn actor() -> impl Stream<Item = Message> {
 
         // Hand the App an Outbox and the welcome state, then pump both directions.
         let (mut sink, incoming) = conn.split();
-        let (tx, rx) = mpsc::channel::<ClientMsg>(CHANNEL_CAPACITY);
+        let (tx, rx) = mpsc::unbounded::<ClientMsg>();
         if output
             .send(Message::DaemonConnected {
                 outbox: Outbox::new(tx),

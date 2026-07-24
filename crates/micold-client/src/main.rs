@@ -742,7 +742,25 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::DaemonGridFrame(frame) => {
             // Feed the frame into the session's grid cache; the pane renders from it (T042).
-            app.grids.entry(frame.session).or_default().apply(&frame);
+            let session = frame.session;
+            let (old_top, new_top, oldest) = {
+                let cache = app.grids.entry(session).or_default();
+                let old = cache.viewport_top().0;
+                cache.apply(&frame);
+                (old, cache.viewport_top().0, cache.oldest_available().0)
+            };
+            // Hold a scrolled-back view in place as new output advances the viewport: without this,
+            // `line_at_row = viewport_top - display_offset + row` would slide the shown lines toward
+            // the live bottom on every output tick (FR-016). Only the displayed session, only while
+            // scrolled up; clamp to the retained history.
+            if app.core.active_session == Some(session)
+                && app.display_offset > 0
+                && new_top > old_top
+            {
+                let advanced = (new_top - old_top) as usize;
+                let history = (new_top - oldest).max(0) as usize;
+                app.display_offset = (app.display_offset + advanced).min(history);
+            }
             Task::none()
         }
         Message::DaemonDisconnected => {
@@ -1146,28 +1164,17 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // buffered.
         Message::TerminalBytes(bytes) => {
             if let Some(id) = app.core.active_session {
-                let running = app
-                    .core
-                    .active_sessions()
-                    .iter()
-                    .find(|s| s.id == id)
-                    .map(|s| match s.mode {
-                        TerminalMode::AiCli => micold_client::app::should_write_to(s.lifecycle),
-                        TerminalMode::Regular => s
-                            .active_shell_lifecycle()
-                            .is_some_and(micold_client::app::should_write_to_shell),
-                    })
-                    .unwrap_or(false);
-                if running {
-                    // Input is stamped with a monotonic per-session serial and sent to the daemon,
-                    // which writes it to the PTY in order (G2). The daemon owns persistence.
-                    let msg = app.stamper.stamp(id, bytes);
-                    if let Some(d) = &app.daemon {
-                        d.send(msg);
-                    }
-                    // Any live keystroke means the view is at the live bottom again.
-                    app.display_offset = 0;
+                // The daemon owns process liveness: it routes input to the session's attached
+                // process and drops it harmlessly if that process isn't running. Gating on a
+                // client-side lifecycle field is wrong now (the client no longer tracks process
+                // state, and the daemon never marks the catalog session Running), so we send
+                // whenever connected. Input is stamped with a monotonic per-session serial (G2).
+                let msg = app.stamper.stamp(id, bytes);
+                if let Some(d) = &app.daemon {
+                    d.send(msg);
                 }
+                // Any live keystroke means the view is at the live bottom again.
+                app.display_offset = 0;
             }
             Task::none()
         }
@@ -1602,7 +1609,12 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot) {
             let lifecycle = wire_to_lifecycle(&summary.lifecycle);
             if let Some(existing) = list.iter_mut().find(|s| s.id == summary.id) {
                 existing.lifecycle = lifecycle;
-                existing.label = summary.title.clone();
+                // Adopt the daemon's title only when it has a real one — the daemon doesn't yet push
+                // OSC-0 titles into the catalog, so its summary can regress to `Pending`; don't let
+                // that clobber a title the client already learned (TODO: daemon title push, T047).
+                if let SessionLabel::Named(_) = summary.title {
+                    existing.label = summary.title.clone();
+                }
             } else {
                 let location = summary
                     .worktree_dir

@@ -80,7 +80,7 @@ fn session_start_spawns_and_registers_a_durable_session() {
     );
 
     state
-        .start_session(id)
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
         .expect("start must spawn the shell session");
 
     let live = state
@@ -93,7 +93,7 @@ fn session_start_spawns_and_registers_a_durable_session() {
 
     // Idempotent: a second Start is a no-op, not a double-spawn.
     state
-        .start_session(id)
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
         .expect("a redundant start is a no-op");
     assert!(state.live_session(id).is_some());
 
@@ -111,7 +111,7 @@ fn starting_an_unknown_session_is_an_error_not_a_panic() {
         )),
     ));
     let err = state
-        .start_session(SessionId::new())
+        .start_session(SessionId::new(), micold_core::terminal::LaunchMode::Resume)
         .expect_err("an unknown session cannot be started");
     assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
 }

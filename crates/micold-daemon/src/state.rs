@@ -47,15 +47,13 @@ struct Inner {
     sessions: HashMap<SessionId, LiveSession>,
 }
 
-/// One live process of a session: its PTY, the daemon's view of its input log, and its framer.
-/// The [`PtySession`] is behind an `Arc` so a caller can clone it and write to the PTY *after*
-/// dropping the state lock — PTY writes must never block the shared lock (module invariant). The
-/// framer is per-process and session-lived so its `scrolled_off` watermark (and every line's
-/// absolute `LineId`) is stable across reattach, and scrollback-by-range resolves against the same
-/// eviction state the stream produced.
+/// One live process of a session: its PTY and its framer. The [`PtySession`] is behind an `Arc` so
+/// a caller can clone it and write to the PTY *after* dropping the state lock — PTY writes must never
+/// block the shared lock (module invariant). The framer is per-process and session-lived so its
+/// `scrolled_off` watermark (and every line's absolute `LineId`) is stable across reattach, and
+/// scrollback-by-range resolves against the same eviction state the stream produced.
 struct Proc {
     pty: Arc<PtySession>,
-    input: InputReceiver,
     framer: Arc<Mutex<Framer>>,
 }
 
@@ -66,13 +64,17 @@ struct Proc {
 struct LiveSession {
     procs: HashMap<SessionProcess, Proc>,
     attached: SessionProcess,
+    /// The input log is **per session, not per process**: the client's `SessionInputStamper` mints
+    /// one monotonic serial stream per `SessionId`, so the receiver must live at this level too —
+    /// otherwise switching the attached process (a fresh per-process receiver) would classify the
+    /// next legitimate serial as a false `Lost` (G2, protocol.md §7).
+    input: InputReceiver,
 }
 
-/// Build a fresh [`Proc`] around a spawned PTY: a zeroed input log and a session-lived framer.
+/// Build a fresh [`Proc`] around a spawned PTY, with a session-lived framer.
 fn new_proc(pty: Arc<PtySession>, id: SessionId) -> Proc {
     Proc {
         pty,
-        input: InputReceiver::new(),
         framer: Arc::new(Mutex::new(Framer::new(id))),
     }
 }
@@ -282,9 +284,13 @@ impl DaemonState {
     /// the state lock so a slow spawn never blocks other clients. An AI-CLI session resumes its prior
     /// `claude` session by id; a Regular session spawns the platform shell.
     ///
+    /// `launch` selects the AI-CLI spawn mode: [`LaunchMode::Fresh`] for a brand-new session
+    /// (`SessionCreate` — `claude --session-id`), [`LaunchMode::Resume`] for bringing an existing
+    /// durable session back (`SessionStart` — `claude --resume`). Ignored for a Regular/shell primary.
+    ///
     /// **T053 refinement pending**: the environment is a minimal `TERM` today; the full launch must
     /// resolve `env_include` in the session's own directory (main `2862bab`).
-    pub fn start_session(&self, id: SessionId) -> io::Result<()> {
+    pub fn start_session(&self, id: SessionId, launch: LaunchMode) -> io::Result<()> {
         if self.live_session(id).is_some() {
             return Ok(()); // already running — Start is idempotent
         }
@@ -321,9 +327,7 @@ impl DaemonState {
                 let spec = LaunchSpec {
                     cwd: plan.cwd,
                     session_id: id.0,
-                    // Start on an existing durable session is a resume, never a fresh id (a brand-new
-                    // session is born via SessionCreate). data-model: Idle|Failed → Starting.
-                    mode: LaunchMode::Resume,
+                    mode: launch,
                     env,
                 };
                 PtySession::spawn_claude(id, &spec, plan.scrollback, None)?
@@ -348,14 +352,19 @@ impl DaemonState {
             LiveSession {
                 procs,
                 attached: SessionProcess::Primary,
+                input: InputReceiver::new(),
             },
         );
         pty
     }
 
     /// Remove a session (all its processes) from the live registry. Returns the primary handle.
+    /// The removed [`LiveSession`] — whose `Proc` drops each kill+reader-join the PTYs — is dropped
+    /// **outside** the state lock so that blocking teardown never stalls other clients (module
+    /// invariant; mirrors `close_shell`).
     pub fn remove_session(&self, session: SessionId) -> Option<Arc<PtySession>> {
-        self.lock().sessions.remove(&session).and_then(|s| {
+        let removed = self.lock().sessions.remove(&session);
+        removed.and_then(|s| {
             s.procs
                 .get(&SessionProcess::Primary)
                 .map(|p| Arc::clone(&p.pty))
@@ -367,6 +376,16 @@ impl DaemonState {
         let inner = self.lock();
         let live = inner.sessions.get(&session)?;
         live.procs.get(&live.attached).map(|p| Arc::clone(&p.pty))
+    }
+
+    /// Every one of a session's process PTY handles (for a resize that must reach all of them, not
+    /// just the attached one). Empty if the session isn't live.
+    pub fn session_ptys(&self, session: SessionId) -> Vec<Arc<PtySession>> {
+        self.lock()
+            .sessions
+            .get(&session)
+            .map(|l| l.procs.values().map(|p| Arc::clone(&p.pty)).collect())
+            .unwrap_or_default()
     }
 
     /// The *attached* process's framer (used by the view-stream task and the scrollback handler).
@@ -482,10 +501,13 @@ impl DaemonState {
         let resolved = {
             let mut inner = self.lock();
             inner.sessions.get_mut(&session).and_then(|live| {
+                // Classify against the *session-level* input log (matches the client's per-session
+                // stamper), then write to whichever process is attached.
+                let outcome = live.input.accept(serial);
                 let attached = live.attached;
                 live.procs
-                    .get_mut(&attached)
-                    .map(|p| (p.input.accept(serial), Arc::clone(&p.pty)))
+                    .get(&attached)
+                    .map(|p| (outcome, Arc::clone(&p.pty)))
             })
         };
 

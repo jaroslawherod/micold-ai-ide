@@ -13,6 +13,7 @@ use futures_util::SinkExt;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, SessionProcess};
+use micold_core::terminal::LaunchMode;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
@@ -236,7 +237,8 @@ where
                 bytes,
             } => state.session_input(session, serial, &bytes),
             ClientMsg::SessionStart { session } => {
-                if let Err(err) = state.start_session(session) {
+                // Bringing an existing durable session back is a resume.
+                if let Err(err) = state.start_session(session, LaunchMode::Resume) {
                     tracing::warn!(session = %session.0, %err, "session start failed");
                 }
             }
@@ -257,7 +259,10 @@ where
                         ranges
                             .into_iter()
                             .map(|range| {
-                                let count = (range.end.0 - range.start.0).max(0) as usize;
+                                // saturating_sub: never let an adversarial reversed/extreme range
+                                // (e.g. start = i64::MIN) overflow the subtraction and panic.
+                                let count =
+                                    range.end.0.saturating_sub(range.start.0).max(0) as usize;
                                 let (lines, styles, hyperlinks, more) =
                                     fr.scrollback_range(pty.term(), range.start, count);
                                 DaemonMsg::ScrollbackResponse {
@@ -286,8 +291,9 @@ where
                 use micold_core::protocol::messages::{ErrorKind, OperationResult};
                 match state.create_session(&project, &worktree_dir) {
                     Ok(session) => {
-                        // Spawn it, tell the requester its id, and push the new catalog to everyone.
-                        if let Err(err) = state.start_session(session) {
+                        // A brand-new session starts fresh (`claude --session-id`), never `--resume`
+                        // against a conversation that does not exist yet.
+                        if let Err(err) = state.start_session(session, LaunchMode::Fresh) {
                             tracing::warn!(session = %session.0, %err, "created session failed to start");
                         }
                         state.send(
@@ -338,14 +344,59 @@ where
                 }
             }
             ClientMsg::SessionRestartShell { session, instance } => {
-                let was_attached = state.close_shell(session, instance).is_some();
-                if let Err(err) = state.open_shell(session, instance) {
-                    tracing::warn!(session = %session.0, instance = instance.0, %err, "restart shell failed");
-                } else if was_attached {
-                    if let Some((pty, framer)) =
-                        state.attach_process(session, SessionProcess::Shell(instance))
-                    {
-                        restart_view(state, id, &mut view_stream, pty, framer);
+                // `close_shell` returns the primary it reattached to iff this instance was attached.
+                let reattached_primary = state.close_shell(session, instance);
+                match state.open_shell(session, instance) {
+                    Ok(()) if reattached_primary.is_some() => {
+                        // It was attached: re-attach the fresh instance so view + input follow it.
+                        if let Some((pty, framer)) =
+                            state.attach_process(session, SessionProcess::Shell(instance))
+                        {
+                            restart_view(state, id, &mut view_stream, pty, framer);
+                        }
+                    }
+                    Ok(()) => {}
+                    Err(err) => {
+                        tracing::warn!(session = %session.0, instance = instance.0, %err, "restart shell failed");
+                        // Respawn failed: fall back to the primary `close_shell` reattached to, so
+                        // the view stream and input routing agree (both on Primary) instead of the
+                        // view showing the dead shell while input goes to Primary.
+                        if let Some((pty, framer)) = reattached_primary {
+                            restart_view(state, id, &mut view_stream, pty, framer);
+                        }
+                    }
+                }
+            }
+            ClientMsg::SessionResize {
+                session,
+                cols,
+                rows,
+            } => {
+                // Resize every one of the session's processes so a later attach-switch shows a
+                // correctly-sized grid, not the 100×30 spawn seed. PTY resize happens outside the
+                // state lock (the handles are cloned Arcs).
+                for pty in state.session_ptys(session) {
+                    if let Err(err) = pty.resize(cols, rows) {
+                        tracing::warn!(session = %session.0, %err, "resize failed");
+                    }
+                    // Force the stream to re-frame at the new size even for a process that doesn't
+                    // redraw on SIGWINCH (the framer treats a size change as structural → full frame).
+                    pty.signals().mark_dirty();
+                }
+            }
+            ClientMsg::SessionKill { session } | ClientMsg::SessionStop { session } => {
+                // Stop the session's processes and drop it from the live registry (kill happens
+                // outside the state lock inside remove_session). TODO(T053): archive the durable
+                // record so reconciliation can't resurrect it, and broadcast the catalog.
+                if let Some(pty) = state.remove_session(session) {
+                    let _ = pty.kill();
+                }
+            }
+            ClientMsg::SessionInterrupt { session } => {
+                // Ctrl-C to the attached process — 0x03 to the PTY, never a real signal (§7).
+                if let Some(pty) = state.live_session(session) {
+                    if let Err(err) = pty.write_input(&[0x03]) {
+                        tracing::warn!(session = %session.0, %err, "interrupt write failed");
                     }
                 }
             }
