@@ -20,7 +20,7 @@ use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId}
 use micold_core::theme::{
     observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference,
 };
-use micold_core::worktree::{CreateProgressEvent, CreateStage, Worktree, WorktreeStatus};
+use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -110,14 +110,6 @@ pub struct WorktreeForm {
     pub error: Option<NamingError>,
     /// Whether a create is in flight (feature 010, data-model.md).
     pub status: WorktreeFormStatus,
-    /// The executed git commands and their live output for the in-flight (or most recently
-    /// failed) create, shown in a small log area so a slow submodule fetch reads as "working"
-    /// rather than "stuck" (feature 010 follow-up). Cleared when a new attempt starts; kept on
-    /// failure so the user can see what happened.
-    pub log: Vec<String>,
-    /// The most recently reported stage of the in-flight (or most recently failed) create
-    /// (feature 013). `None` before the first progress event arrives; reset alongside `log`.
-    pub stage: Option<CreateStage>,
 }
 
 impl WorktreeForm {
@@ -418,28 +410,13 @@ pub enum Message {
     AddWorktreeSubmitted,
     /// Dismiss the form without creating (Cancel or Esc).
     AddWorktreeCancelled,
-    /// The binary is about to run the async create (feature 010, research R4); marks the form
-    /// `Creating` so it shows an in-progress state instead of appearing to hang.
+    /// The binary is about to send the `WorktreeCreate` RPC (feature 010; T055); marks the form
+    /// `Creating` so it shows an in-progress state until the daemon's reply closes or reopens it.
     WorktreeCreateStarted,
-    /// A batch of stage-tagged progress events from the in-flight create — the executed git
-    /// commands and their live output (feature 010 follow-up; stage-tagged as of feature 013).
-    /// Each event's line is appended to the form's log and its stage updates
-    /// [`WorktreeForm::stage`]; a no-op if the form has since closed.
-    WorktreeCreateLogAppended(Vec<CreateProgressEvent>),
-    /// Tick while a create is in flight: the binary drains the lines the worker has produced
-    /// so far and feeds them to [`Message::WorktreeCreateLogAppended`]. Without this the log
-    /// only arrived in one batch at completion, so a multi-minute submodule fetch showed a
-    /// static "Creating worktree…". No pure reducer effect.
-    WorktreeCreateProgressPolled,
-    /// The binary created a worktree successfully (FR-007); add it and close the form.
+    /// The daemon created a worktree successfully (FR-007); add it and close the form.
     WorktreeCreated(Worktree),
-    /// The binary reported a worktree create failure (FR-017); show it, keep the form open.
+    /// The daemon reported a worktree create failure (FR-017); show it, keep the form open.
     WorktreeCreateFailed(String),
-    /// Internal: the create finished; dispatched by the binary after the async task completes.
-    /// Progress no longer rides along — it streams via [`Message::WorktreeCreateLogAppended`]
-    /// while the create runs, and the binary drains the tail before dispatching this.
-    #[doc(hidden)]
-    WorktreeCreationDone { result: Result<Worktree, String> },
     /// Start a new session at the given location — a worktree or, as of feature 010, the
     /// project root ("Default", FR-001) — (FR-010). The binary spawns `claude`.
     SessionStartRequested { location: SessionLocation },
@@ -1111,16 +1088,6 @@ impl State {
             Message::WorktreeCreateStarted => {
                 if let Some(form) = &mut self.worktree_form {
                     form.status = WorktreeFormStatus::Creating;
-                    form.log.clear();
-                    form.stage = None;
-                }
-            }
-            Message::WorktreeCreateLogAppended(events) => {
-                if let Some(form) = &mut self.worktree_form {
-                    if let Some(last) = events.last() {
-                        form.stage = Some(last.stage);
-                    }
-                    form.log.extend(events.into_iter().map(|e| e.line));
                 }
             }
             Message::WorktreeCreated(worktree) => {
@@ -1142,14 +1109,6 @@ impl State {
                 self.worktree_error = Some(message);
                 if let Some(form) = &mut self.worktree_form {
                     form.status = WorktreeFormStatus::Editing;
-                }
-            }
-            Message::WorktreeCreationDone { result } => {
-                // Progress has already been streamed in via `WorktreeCreateLogAppended`,
-                // including the tail the binary drains immediately before dispatching this.
-                match result {
-                    Ok(worktree) => self.update(Message::WorktreeCreated(worktree)),
-                    Err(err) => self.update(Message::WorktreeCreateFailed(err)),
                 }
             }
             Message::SessionStarted(session) => {
@@ -1388,9 +1347,6 @@ impl State {
             | Message::TerminalPasteRequested
             | Message::TextCopyRequested(_)
             | Message::SidebarHandleHovered(_)
-            // The binary drains the in-flight create's shared progress buffer and re-dispatches
-            // the lines as `WorktreeCreateLogAppended`.
-            | Message::WorktreeCreateProgressPolled
             // Focus state is tracked by the binary (gui runtime), not the pure core.
             | Message::WindowFocusChanged(_) => {}
         }

@@ -7,7 +7,7 @@ use crate::app::{Message, WorktreeForm, WorktreeFormStatus};
 use crate::tokens::{self, spacing, type_scale, Roles};
 use crate::ui::material::{Modal, Select, StageProgress};
 use crate::ui::style;
-use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
+use iced::widget::{button, column, container, row, text, text_input, Space};
 use iced::{Element, Length};
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
@@ -69,28 +69,11 @@ pub fn modal<'a>(
         ));
     }
 
-    // In-progress state while the async create (and any submodule fetch) is running (feature
-    // 010, research R4; replaced feature 010's static "Creating worktree…" text with a
-    // continuously visible progress indicator + the current stage's plain-language description,
-    // feature 013 US3, FR-006/FR-007).
+    // In-progress state while the daemon runs the create (T055). Git now runs on the daemon, which
+    // does not stream per-command/submodule progress, so this is a single continuous indicator until
+    // the daemon's reply closes the form (or reopens it with an error).
     if is_creating {
-        let label = form.stage.map(|s| s.label()).unwrap_or("Starting…");
-        fields = fields.push(StageProgress::new(label, r));
-    }
-
-    // Progress log display (feature 010 follow-up) — show a scrollable area with executed commands
-    // and live output from submodule fetches so the user can see what's happening.
-    if !form.log.is_empty() {
-        let mut log_content = column![].spacing(spacing::XS);
-        for line in &form.log {
-            log_content =
-                log_content.push(text(line).size(type_scale::LABEL).style(style::muted(r)));
-        }
-        let log_area = container(scrollable(log_content))
-            .width(Length::Fill)
-            .height(Length::Fixed(150.0))
-            .style(style::dialog(r));
-        fields = fields.push(log_area);
+        fields = fields.push(StageProgress::new("Creating worktree…", r));
     }
 
     let create_button = button(text("Create").size(type_scale::BODY)).style(style::filled(r));

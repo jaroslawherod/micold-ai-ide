@@ -4,16 +4,8 @@ use micold_client::app::{on_escape, Message, Overlay, State, WorktreeFormStatus}
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionLifecycle, SessionLocation};
-use micold_core::worktree::{CreateProgressEvent, CreateStage, Worktree, WorktreeStatus};
+use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
-
-/// A stage-tagged progress event, for constructing `WorktreeCreateLogAppended` batches.
-fn event(stage: CreateStage, line: &str) -> CreateProgressEvent {
-    CreateProgressEvent {
-        stage,
-        line: line.to_string(),
-    }
-}
 
 #[test]
 fn defaults_are_empty() {
@@ -114,104 +106,6 @@ fn field_edits_are_ignored_while_creating() {
     assert_eq!(form.type_, Some(ConventionalType::Feat));
     assert_eq!(form.ticket, "");
     assert_eq!(form.name, "Login");
-}
-
-#[test]
-fn create_log_lines_accumulate_and_reset_on_new_attempt() {
-    let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::WorktreeCreateStarted);
-    state.update(Message::WorktreeCreateLogAppended(vec![event(
-        CreateStage::CreatingWorktree,
-        "$ git worktree add -b feat/x .claude/worktrees/feat-x HEAD",
-    )]));
-    state.update(Message::WorktreeCreateLogAppended(vec![
-        event(
-            CreateStage::SettingUpSubmodules,
-            "$ git submodule update --init --recursive",
-        ),
-        event(
-            CreateStage::SettingUpSubmodules,
-            "Cloning into 'vendor/sub'...",
-        ),
-    ]));
-    assert_eq!(state.worktree_form.as_ref().unwrap().log.len(), 3);
-
-    // A fresh attempt clears the previous attempt's log (feature 010 follow-up).
-    state.update(Message::WorktreeCreateStarted);
-    assert!(state.worktree_form.as_ref().unwrap().log.is_empty());
-}
-
-#[test]
-fn create_failed_keeps_the_log_visible_for_diagnosis() {
-    let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::WorktreeCreateStarted);
-    state.update(Message::WorktreeCreateLogAppended(vec![event(
-        CreateStage::SettingUpSubmodules,
-        "submodule update failed: network error",
-    )]));
-    state.update(Message::WorktreeCreateFailed("boom".to_string()));
-
-    // Unlike on success (form closes entirely), a failure keeps the form open with its log
-    // intact so the user can see what happened before retrying.
-    assert_eq!(
-        state.worktree_form.as_ref().unwrap().log,
-        vec!["submodule update failed: network error".to_string()]
-    );
-}
-
-// --- Feature 013 US3: stage-tagged creation progress ---
-
-#[test]
-fn log_appended_sets_stage_to_the_batch_last_events_stage() {
-    let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::WorktreeCreateStarted);
-    assert_eq!(state.worktree_form.as_ref().unwrap().stage, None);
-
-    state.update(Message::WorktreeCreateLogAppended(vec![event(
-        CreateStage::PreflightCheck,
-        "Checking for naming conflicts…",
-    )]));
-    assert_eq!(
-        state.worktree_form.as_ref().unwrap().stage,
-        Some(CreateStage::PreflightCheck)
-    );
-
-    state.update(Message::WorktreeCreateLogAppended(vec![
-        event(CreateStage::CreatingWorktree, "$ git worktree add …"),
-        event(CreateStage::SettingUpSubmodules, "$ git submodule update …"),
-    ]));
-    assert_eq!(
-        state.worktree_form.as_ref().unwrap().stage,
-        Some(CreateStage::SettingUpSubmodules),
-        "the last event in the batch wins"
-    );
-}
-
-#[test]
-fn stage_resets_on_started_opened_and_cancelled() {
-    let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::WorktreeCreateStarted);
-    state.update(Message::WorktreeCreateLogAppended(vec![event(
-        CreateStage::CreatingWorktree,
-        "$ git worktree add …",
-    )]));
-    assert!(state.worktree_form.as_ref().unwrap().stage.is_some());
-
-    // A fresh attempt clears the previous attempt's stage, same reset point as `log`.
-    state.update(Message::WorktreeCreateStarted);
-    assert_eq!(state.worktree_form.as_ref().unwrap().stage, None);
-
-    state.update(Message::WorktreeCreateLogAppended(vec![event(
-        CreateStage::CreatingWorktree,
-        "$ git worktree add …",
-    )]));
-    state.update(Message::AddWorktreeCancelled);
-    state.update(Message::AddWorktreeOpened);
-    assert_eq!(state.worktree_form.as_ref().unwrap().stage, None);
 }
 
 #[test]
