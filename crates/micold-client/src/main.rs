@@ -85,6 +85,25 @@ fn step(duration: Duration) -> f32 {
 }
 
 /// The binary's application state: the pure core plus gui-only runtime handles.
+/// A mutating RPC the client has sent to the daemon and is awaiting a reply for (T055). Tracked per
+/// correlation `req` so the reply can be matched, a duplicate submission avoided, and — if the
+/// connection drops before the reply arrives — the user can be told the outcome is unknown (FR-031/035).
+#[derive(Debug, Clone)]
+enum PendingOp {
+    /// A `SessionCreate`; on success the daemon-assigned session is selected + viewed. Further
+    /// variants (worktree/project/session-delete) are added as each mutation domain is migrated.
+    CreateSession,
+}
+
+impl PendingOp {
+    /// A short verb phrase for an error / unknown-outcome notification ("create the session …").
+    fn describe(&self) -> String {
+        match self {
+            PendingOp::CreateSession => "create the session".into(),
+        }
+    }
+}
+
 struct App {
     core: State,
     /// Per-session renderable grid caches, fed by daemon `GridFrame`s (never Clone/Eq). The client
@@ -156,11 +175,11 @@ struct App {
     /// The last catalog snapshot the daemon sent (welcome or `CatalogChanged`). Not yet rendered —
     /// the sidebar/session-list retarget onto it lands with the render switch (T042).
     daemon_catalog: Option<micold_core::protocol::messages::CatalogSnapshot>,
-    /// Correlation-id counter for the client's mutating RPCs (SessionCreate, …).
+    /// Correlation-id counter for the client's mutating RPCs (FR-009).
     next_req: u64,
-    /// In-flight `SessionCreate`s: `req` → the location the client asked to create at, so the
-    /// daemon-created session (whose id the daemon assigns) can be selected + viewed on reply.
-    pending_creates: HashMap<u64, SessionLocation>,
+    /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
+    /// submission suppressed, and an in-flight op resolved as *unknown* if the connection drops.
+    pending_ops: HashMap<u64, PendingOp>,
 }
 
 /// The result of a single resolution attempt for one directory (feature 011, data-model.md).
@@ -435,7 +454,7 @@ fn boot() -> (App, Task<Message>) {
             daemon: None,
             daemon_catalog: None,
             next_req: 0,
-            pending_creates: HashMap::new(),
+            pending_ops: HashMap::new(),
         },
         Task::none(),
     )
@@ -717,11 +736,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         grid.apply_scrollback(&lines, &styles, &hyperlinks);
                     }
                 }
-                // A mutating request we correlated resolved. A SessionCreate reply names the
-                // daemon-assigned id (the session already arrived via the CatalogChanged push);
+                // A mutating request we correlated resolved. For most ops the resulting state has
+                // already arrived via the `CatalogChanged` push (reconcile_catalog), so there is
+                // nothing to do; a `SessionCreate` additionally names the daemon-assigned id so we
                 // select + view it.
                 DaemonMsg::OperationOk { req, result } => {
-                    if let Some(_location) = app.pending_creates.remove(&req) {
+                    if let Some(PendingOp::CreateSession) = app.pending_ops.remove(&req) {
                         if let OperationResult::SessionCreated { session } = result {
                             app.core.update(Message::SessionSelected(session));
                             view_and_start(app, session);
@@ -729,11 +749,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         }
                     }
                 }
-                DaemonMsg::OperationError { req, message, .. }
-                    if app.pending_creates.remove(&req).is_some() =>
-                {
-                    app.core
-                        .notify_error(format!("Could not create the session: {message}"));
+                DaemonMsg::OperationError { req, message, .. } => {
+                    if let Some(op) = app.pending_ops.remove(&req) {
+                        app.core
+                            .notify_error(format!("Couldn't {}: {message}", op.describe()));
+                    }
                 }
                 // Other control messages (pong, attach/displaced) are consumed as their flows land.
                 _ => {}
@@ -765,6 +785,18 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::DaemonDisconnected => {
             app.daemon = None;
+            // Any request still in flight will never get a reply on this connection (`req`s are
+            // per-connection). Resolve each to an explicit *unknown* outcome — never a silent
+            // success or failure — and reconcile against authoritative state on reconnect
+            // (FR-031/035). The daemon applied its mutation atomically before replying, so the fresh
+            // welcome catalog is the source of truth for whether it actually took effect.
+            for (_req, op) in app.pending_ops.drain() {
+                app.core.notify_error(format!(
+                    "The session service disconnected before confirming the request to {} — \
+                     it may or may not have taken effect; reconnecting will show the current state.",
+                    op.describe()
+                ));
+            }
             Task::none()
         }
         Message::DaemonConnectFailed(reason) => {
@@ -930,16 +962,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     SessionLocation::Worktree(dir) => dir.clone(),
                     SessionLocation::Default => String::new(),
                 };
-                let req = app.next_req;
-                app.next_req += 1;
-                app.pending_creates.insert(req, location);
-                if let Some(d) = &app.daemon {
-                    d.send(ClientMsg::SessionCreate {
+                send_op(app, PendingOp::CreateSession, |req| {
+                    ClientMsg::SessionCreate {
                         req,
                         project,
                         worktree_dir,
-                    });
-                }
+                    }
+                });
             }
             Task::none()
         }
@@ -1592,6 +1621,23 @@ fn wire_to_lifecycle(w: &WireLifecycle) -> SessionLifecycle {
     }
 }
 
+/// Send a correlated mutating RPC to the daemon: allocate a `req`, record the pending op (so the
+/// reply can be matched and a disconnect can resolve it as unknown), and send the message `build`s.
+/// A no-op that notifies the user when there is no daemon connection (T055).
+fn send_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64) -> ClientMsg) {
+    let Some(daemon) = &app.daemon else {
+        app.core.notify_error(format!(
+            "Not connected to the session service — can't {} right now.",
+            op.describe()
+        ));
+        return;
+    };
+    let req = app.next_req;
+    app.next_req += 1;
+    daemon.send(build(req));
+    app.pending_ops.insert(req, op);
+}
+
 /// Reconcile the client's core session state from the daemon's authoritative catalog snapshot
 /// (FR-011). The daemon owns sessions now, so each project's session list is made to mirror the
 /// snapshot: existing sessions have their lifecycle + label updated; sessions the daemon reports
@@ -2058,7 +2104,7 @@ mod tests {
             daemon: None,
             daemon_catalog: None,
             next_req: 0,
-            pending_creates: HashMap::new(),
+            pending_ops: HashMap::new(),
         };
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
@@ -2093,7 +2139,7 @@ mod tests {
             daemon: None,
             daemon_catalog: None,
             next_req: 0,
-            pending_creates: HashMap::new(),
+            pending_ops: HashMap::new(),
         }
     }
 
@@ -2238,7 +2284,7 @@ mod tests {
             daemon: None,
             daemon_catalog: None,
             next_req: 0,
-            pending_creates: HashMap::new(),
+            pending_ops: HashMap::new(),
         };
         assert_eq!(app.last_grid, None);
 
