@@ -236,8 +236,10 @@ where
                             },
                         );
                         // Discover this project's worktrees from git now that a client is looking at
-                        // it, so the freshly-attached client (and any other) sees them (FR-018, T053).
-                        refresh_worktrees_and_broadcast(state, project).await;
+                        // it, and send the refreshed catalog to *this* client only (FR-018, T053).
+                        // Attach is per-client and exclusive, so a broadcast would be both wrong
+                        // (others aren't in this project) and disruptive to their message stream.
+                        refresh_worktrees_and_send(state, id, project).await;
                     }
                     Err(reason) => {
                         tracing::info!(client = id, project = %project.display(), "attach refused: project busy");
@@ -621,7 +623,70 @@ where
                     ),
                 }
             }
-            // Remaining mutating RPCs (projects, session delete) land in the next T053 slice.
+            // --- US3: project management + session delete through the daemon (T053) ---
+            ClientMsg::ProjectAdd { req, path } => match state.add_project(&path) {
+                Ok(()) => {
+                    refresh_worktrees_and_broadcast(state, path).await;
+                    send_ack(state, id, req);
+                }
+                Err(e) => send_io_error(state, id, req, "failed to add the project", &e),
+            },
+            ClientMsg::ProjectRemove { req, path } => match state.forget_project(&path) {
+                Ok(ptys) => {
+                    for pty in ptys {
+                        let _ = pty.kill();
+                    }
+                    state.broadcast_catalog();
+                    send_ack(state, id, req);
+                }
+                Err(e) => send_io_error(state, id, req, "failed to remove the project", &e),
+            },
+            ClientMsg::ProjectRename {
+                req,
+                path,
+                display_name,
+            } => match validate_rename(&display_name) {
+                Ok(name) => match state.rename_project(&path, &name) {
+                    Ok(()) => {
+                        state.broadcast_catalog();
+                        send_ack(state, id, req);
+                    }
+                    Err(e) => send_io_error(state, id, req, "failed to persist the rename", &e),
+                },
+                Err(e) => state.send(
+                    id,
+                    DaemonMsg::OperationError {
+                        req,
+                        kind: ErrorKind::InvalidInput,
+                        message: rename_error_message(e).into(),
+                        detail: None,
+                    },
+                ),
+            },
+            ClientMsg::SessionDelete { req, session } => match state.delete_session(session) {
+                Ok((owner, pty)) => {
+                    if let Some(pty) = pty {
+                        let _ = pty.kill();
+                    }
+                    match owner {
+                        Some(_) => {
+                            state.broadcast_catalog();
+                            send_ack(state, id, req);
+                        }
+                        None => state.send(
+                            id,
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::NotFound,
+                                message: "unknown session".into(),
+                                detail: None,
+                            },
+                        ),
+                    }
+                }
+                Err(e) => send_io_error(state, id, req, "failed to delete the session", &e),
+            },
+            // Any remaining unhandled control message is ignored.
             _ => {}
         }
     }
@@ -635,10 +700,31 @@ where
 /// push the refreshed catalog to every client, so a worktree mutation propagates to all windows
 /// without further user action (FR-011, T053).
 async fn refresh_worktrees_and_broadcast(state: &Arc<DaemonState>, project: std::path::PathBuf) {
-    let st = Arc::clone(state);
-    let proj = project.clone();
-    let _ = tokio::task::spawn_blocking(move || st.refresh_worktrees(&proj)).await;
+    refresh_worktrees_off_runtime(state, &project).await;
     state.broadcast_catalog();
+}
+
+/// Re-discover a project's worktrees and send the refreshed catalog to a single client — the
+/// per-client attach case, where a broadcast would reach clients not in this project.
+async fn refresh_worktrees_and_send(
+    state: &Arc<DaemonState>,
+    id: crate::state::ClientId,
+    project: std::path::PathBuf,
+) {
+    refresh_worktrees_off_runtime(state, &project).await;
+    state.send(
+        id,
+        DaemonMsg::CatalogChanged {
+            catalog: state.catalog_snapshot(),
+        },
+    );
+}
+
+/// Run the (blocking) git worktree discovery off the async runtime, updating the cache.
+async fn refresh_worktrees_off_runtime(state: &Arc<DaemonState>, project: &std::path::Path) {
+    let st = Arc::clone(state);
+    let proj = project.to_path_buf();
+    let _ = tokio::task::spawn_blocking(move || st.refresh_worktrees(&proj)).await;
 }
 
 /// Reply to a worktree RPC for a path that is not a known git-repo project. A missing project is
@@ -685,6 +771,36 @@ fn describe_create_error(err: CreateError) -> (ErrorKind, String, Option<String>
             Some(stderr),
         ),
     }
+}
+
+/// Reply to a correlated RPC with a bare success (`OperationOk { Ack }`).
+fn send_ack(state: &Arc<DaemonState>, id: crate::state::ClientId, req: u64) {
+    state.send(
+        id,
+        DaemonMsg::OperationOk {
+            req,
+            result: OperationResult::Ack,
+        },
+    );
+}
+
+/// Reply to a correlated RPC with an `IoFailed` error carrying the underlying error as detail.
+fn send_io_error(
+    state: &Arc<DaemonState>,
+    id: crate::state::ClientId,
+    req: u64,
+    message: &str,
+    e: &io::Error,
+) {
+    state.send(
+        id,
+        DaemonMsg::OperationError {
+            req,
+            kind: ErrorKind::IoFailed,
+            message: message.into(),
+            detail: Some(e.to_string()),
+        },
+    );
 }
 
 /// A plain-language message for a rejected display name (`RenameError` has no `Display`).

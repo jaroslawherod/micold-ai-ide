@@ -13,8 +13,9 @@
 //! External-modification detection is out of scope (spec Out of Scope).
 
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use micold_core::fs_scan::FolderScanner;
 use micold_core::project::Availability;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, DaemonSettings, ProjectSnapshot, SessionSummary,
@@ -269,12 +270,54 @@ impl Catalog {
 
     /// Resolve a known project's repo path + whether it is a git repository (T053). `None` if the
     /// path is not a known project. Used by the worktree RPCs to run git in the project's own repo.
-    pub fn project_repo(&self, project: &Path) -> Option<(std::path::PathBuf, bool)> {
+    pub fn project_repo(&self, project: &Path) -> Option<(PathBuf, bool)> {
         self.workspace
             .projects
             .iter()
             .find(|p| p.path == project)
             .map(|p| (p.path.clone(), p.is_git_repo))
+    }
+
+    /// Add (open) a project by path, discovering its git-repo + availability facts via `scanner`,
+    /// persisting (T053, feature 001). Idempotent: an already-known path is re-activated, not
+    /// duplicated (`Workspace::open_or_activate`, FR-012).
+    pub fn add_project(&mut self, path: &Path, scanner: &dyn FolderScanner) -> io::Result<()> {
+        self.workspace.open_or_activate(path.to_path_buf(), scanner);
+        self.persist()
+    }
+
+    /// Forget a known project entirely, returning its session ids (so the caller stops any live
+    /// processes) and persisting (T053, feature 014 FR-003). Unlike a worktree/session *delete*, a
+    /// forgotten project is dropped, not archived — re-adding it is a fresh open, so there is no
+    /// stale record for a reconcile to resurrect. A no-op (empty ids) for an unknown path.
+    pub fn forget_project(&mut self, path: &Path) -> io::Result<Vec<SessionId>> {
+        let ids = self.workspace.session_ids_of_project(path);
+        self.workspace.forget(path);
+        self.persist()?;
+        Ok(ids)
+    }
+
+    /// Rename a project's display name (validated by the caller), persisting (T053). Path lookup is
+    /// canonicalized inside `Workspace::rename`; an unknown path is a silent no-op there.
+    pub fn rename_project(&mut self, path: &Path, name: &str) -> io::Result<()> {
+        // The handler already mapped an invalid name to InvalidInput, so the re-validation inside
+        // `rename` cannot fail here — only persistence can.
+        let _ = self.workspace.rename(path, name);
+        self.persist()
+    }
+
+    /// **Archive** a session by id (durable anti-resurrection marker, `Session::archive`) and
+    /// persist, returning the owning project's path if the session was found (T053, main `7dc9c8a`).
+    /// Idempotent; `None` for an unknown id. The caller stops the live process outside the lock.
+    pub fn archive_session(&mut self, session: SessionId) -> io::Result<Option<PathBuf>> {
+        let owner = self.workspace.find_session_mut(session).map(|(path, s)| {
+            s.archive();
+            path
+        });
+        if owner.is_some() {
+            self.persist()?;
+        }
+        Ok(owner)
     }
 
     /// Persist the project catalog atomically (temp + rename). A no-op for an ephemeral catalog.

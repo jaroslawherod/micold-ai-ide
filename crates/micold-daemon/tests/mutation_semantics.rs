@@ -87,9 +87,8 @@ fn catalog_with_project(project_dir: &Path, store_dir: &Path, sessions: Vec<Sess
 
 type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
 
-/// Handshake a fresh client against `state`, attach `project`, and drain the two `Attached` /
-/// `CatalogChanged` messages the attach produces so later `next()`s see only the RPC reply.
-async fn connect_and_attach(state: &std::sync::Arc<DaemonState>, project: &Path) -> Client {
+/// Handshake a fresh client against `state`, draining the `Welcome`.
+async fn connect(state: &std::sync::Arc<DaemonState>) -> Client {
     let (server_io, client_io) = tokio::io::duplex(256 * 1024);
     tokio::spawn(micold_daemon::server::serve_connection(
         std::sync::Arc::clone(state),
@@ -108,6 +107,13 @@ async fn connect_and_attach(state: &std::sync::Arc<DaemonState>, project: &Path)
         Frame::Control(DaemonMsg::Welcome { .. }) => {}
         other => panic!("expected Welcome, got {other:?}"),
     }
+    client
+}
+
+/// Handshake, then attach `project`, draining the `Attached` + `CatalogChanged` the attach produces
+/// so later `next()`s see only the RPC reply.
+async fn connect_and_attach(state: &std::sync::Arc<DaemonState>, project: &Path) -> Client {
+    let mut client = connect(state).await;
     client
         .send(Frame::Control(ClientMsg::Attach {
             project: project.to_path_buf(),
@@ -434,5 +440,221 @@ async fn worktree_delete_with_stop_sessions_archives_and_removes() {
     assert!(
         !has_session,
         "the deleted worktree's session is archived out"
+    );
+}
+
+/// An empty (no-projects) catalog persisted to `store_dir`, for the ProjectAdd path.
+fn empty_catalog(store_dir: &Path) -> Catalog {
+    let projects_path = store_dir.join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace::empty())
+        .unwrap();
+    Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
+    )
+}
+
+/// Whether the snapshot knows `project` at all.
+fn has_project(snapshot: &CatalogSnapshot, project: &Path) -> bool {
+    snapshot.projects.iter().any(|p| p.path == project)
+}
+
+#[tokio::test]
+async fn project_add_makes_it_discoverable() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let state = std::sync::Arc::new(DaemonState::new(empty_catalog(store.path())));
+    let mut client = connect(&state).await;
+    client
+        .send(Frame::Control(ClientMsg::ProjectAdd {
+            req: 10,
+            path: project.path().to_path_buf(),
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 10, .. })
+    })
+    .await;
+    assert!(matches!(
+        reply,
+        DaemonMsg::OperationOk {
+            result: OperationResult::Ack,
+            ..
+        }
+    ));
+    let (snapshot, _) = state.welcome_payload();
+    assert!(
+        has_project(&snapshot, project.path()),
+        "the added project is in the catalog"
+    );
+}
+
+#[tokio::test]
+async fn project_rename_rejects_blank_name() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect(&state).await;
+    client
+        .send(Frame::Control(ClientMsg::ProjectRename {
+            req: 11,
+            path: project.path().to_path_buf(),
+            display_name: "   ".into(),
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationError { req: 11, .. })
+    })
+    .await;
+    match reply {
+        DaemonMsg::OperationError { kind, .. } => assert_eq!(kind, ErrorKind::InvalidInput),
+        other => panic!("expected InvalidInput, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn session_delete_archives_and_stops() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+
+    let sid = SessionId::from_uuid(Uuid::from_u128(0x5D));
+    let session = Session::restored(
+        sid,
+        SessionLocation::Default,
+        SessionLabel::Named("Shell".into()),
+        TerminalMode::Regular,
+    );
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![session],
+    )));
+    state
+        .start_session(sid, micold_core::terminal::LaunchMode::Resume)
+        .expect("start the shell session");
+    assert!(state.live_session(sid).is_some());
+
+    let mut client = connect_and_attach(&state, project.path()).await;
+    client
+        .send(Frame::Control(ClientMsg::SessionDelete {
+            req: 12,
+            session: sid,
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 12, .. })
+    })
+    .await;
+    assert!(matches!(
+        reply,
+        DaemonMsg::OperationOk {
+            result: OperationResult::Ack,
+            ..
+        }
+    ));
+    assert!(state.live_session(sid).is_none(), "the session was stopped");
+    let (snapshot, _) = state.welcome_payload();
+    let still_listed = snapshot
+        .projects
+        .iter()
+        .find(|p| p.path == project.path())
+        .map(|p| p.sessions.iter().any(|s| s.id == sid))
+        .unwrap_or(false);
+    assert!(
+        !still_listed,
+        "the deleted session is archived out of the snapshot"
+    );
+}
+
+#[tokio::test]
+async fn session_delete_unknown_id_is_not_found() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect(&state).await;
+    client
+        .send(Frame::Control(ClientMsg::SessionDelete {
+            req: 13,
+            session: SessionId::from_uuid(Uuid::from_u128(0xDEAD)),
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationError { req: 13, .. })
+    })
+    .await;
+    match reply {
+        DaemonMsg::OperationError { kind, .. } => assert_eq!(kind, ErrorKind::NotFound),
+        other => panic!("expected NotFound, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn project_remove_forgets_and_stops_sessions() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+
+    let sid = SessionId::from_uuid(Uuid::from_u128(0x5E));
+    let session = Session::restored(
+        sid,
+        SessionLocation::Default,
+        SessionLabel::Named("Shell".into()),
+        TerminalMode::Regular,
+    );
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![session],
+    )));
+    state
+        .start_session(sid, micold_core::terminal::LaunchMode::Resume)
+        .expect("start the shell session");
+
+    let mut client = connect(&state).await;
+    client
+        .send(Frame::Control(ClientMsg::ProjectRemove {
+            req: 14,
+            path: project.path().to_path_buf(),
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 14, .. })
+    })
+    .await;
+    assert!(matches!(
+        reply,
+        DaemonMsg::OperationOk {
+            result: OperationResult::Ack,
+            ..
+        }
+    ));
+    assert!(
+        state.live_session(sid).is_none(),
+        "the project's session was stopped"
+    );
+    let (snapshot, _) = state.welcome_payload();
+    assert!(
+        !has_project(&snapshot, project.path()),
+        "the project was forgotten"
     );
 }

@@ -175,12 +175,18 @@ async fn attach_is_exclusive_and_a_forced_takeover_displaces_the_holder() {
         Frame::Control(DaemonMsg::Attached { project: p, .. }) => assert_eq!(p, project),
         other => panic!("expected Attached after force, got {other:?}"),
     }
-    match a.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Displaced { project: p, by }) => {
-            assert_eq!(p, project);
-            assert_eq!(by, "client-b");
+    // A also has a targeted `CatalogChanged` queued from its own successful attach (the daemon sends
+    // the attaching client the refreshed catalog + worktrees, T053) — skip past it to the Displaced.
+    loop {
+        match a.next().await.unwrap().unwrap() {
+            Frame::Control(DaemonMsg::CatalogChanged { .. }) => continue,
+            Frame::Control(DaemonMsg::Displaced { project: p, by }) => {
+                assert_eq!(p, project);
+                assert_eq!(by, "client-b");
+                break;
+            }
+            other => panic!("expected Displaced on the previous holder, got {other:?}"),
         }
-        other => panic!("expected Displaced on the previous holder, got {other:?}"),
     }
 
     // The displaced client is still connected — displacement never terminates it (FR-024/T4).

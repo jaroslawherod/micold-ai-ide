@@ -302,6 +302,12 @@ impl DaemonState {
         Ok(())
     }
 
+    /// A full catalog snapshot (worktrees overlaid from the discovery cache). The client-facing
+    /// projection of durable state + git-discovered worktrees.
+    pub fn catalog_snapshot(&self) -> CatalogSnapshot {
+        Self::snapshot_locked(&self.lock())
+    }
+
     /// Push a full `CatalogChanged` snapshot to every connected client (FR-011; idempotent).
     pub fn broadcast_catalog(&self) {
         let catalog = Self::snapshot_locked(&self.lock());
@@ -388,6 +394,13 @@ impl DaemonState {
     ) -> io::Result<Vec<Arc<PtySession>>> {
         let mut inner = self.lock();
         let ids = inner.catalog.archive_worktree_sessions(project, dir_name)?;
+        Ok(Self::remove_live_by_ids(&mut inner, ids))
+    }
+
+    /// Remove the given session ids from the live registry, returning each removed primary handle so
+    /// the caller can `kill()` them **outside** the lock (module invariant). Shared by the worktree-,
+    /// project-, and session-delete paths.
+    fn remove_live_by_ids(inner: &mut Inner, ids: Vec<SessionId>) -> Vec<Arc<PtySession>> {
         let mut removed = Vec::new();
         for id in ids {
             if let Some(live) = inner.sessions.remove(&id) {
@@ -396,7 +409,44 @@ impl DaemonState {
                 }
             }
         }
-        Ok(removed)
+        removed
+    }
+
+    /// Add (open) a project by path, discovering its git/availability facts, persisting (T053). The
+    /// caller broadcasts the refreshed catalog.
+    pub fn add_project(&self, path: &Path) -> io::Result<()> {
+        self.lock()
+            .catalog
+            .add_project(path, &micold_core::fs_scan::StdFolderScanner::new())
+    }
+
+    /// Forget a known project, dropping its discovery cache and returning its live primaries so the
+    /// caller can `kill()` them outside the lock (T053, feature 014). A no-op for an unknown path.
+    pub fn forget_project(&self, path: &Path) -> io::Result<Vec<Arc<PtySession>>> {
+        let mut inner = self.lock();
+        let ids = inner.catalog.forget_project(path)?;
+        inner.worktrees.remove(path);
+        Ok(Self::remove_live_by_ids(&mut inner, ids))
+    }
+
+    /// Rename a project's display name (validated by the caller), persisting (T053).
+    pub fn rename_project(&self, path: &Path, name: &str) -> io::Result<()> {
+        self.lock().catalog.rename_project(path, name)
+    }
+
+    /// Delete (archive) a session and stop its live process (T053). Returns the owning project path
+    /// (if the session was known) and the removed primary handle for the caller to `kill()` outside
+    /// the lock. A `None` project means the id was unknown — the handler replies `NotFound`.
+    pub fn delete_session(
+        &self,
+        session: SessionId,
+    ) -> io::Result<(Option<PathBuf>, Option<Arc<PtySession>>)> {
+        let mut inner = self.lock();
+        let owner = inner.catalog.archive_session(session)?;
+        let pty = Self::remove_live_by_ids(&mut inner, vec![session])
+            .into_iter()
+            .next();
+        Ok((owner, pty))
     }
 
     /// Bring a durable session to life: spawn its PTY-backed process and adopt it into the live
