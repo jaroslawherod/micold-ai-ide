@@ -32,8 +32,8 @@ use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::theme::{observe_system_scheme, SystemScheme};
 use micold_core::worktree::{
-    create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir, CreateError,
-    CreateProgressEvent, Worktree,
+    create_worktree, remove_worktree, remove_worktree_dir, CreateError, CreateProgressEvent,
+    Worktree,
 };
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -1762,14 +1762,11 @@ fn session_cwd_mode_and_active_shell(
     Some((cwd, session.mode, session.active_shell))
 }
 
-/// Discover the active project's worktrees from git + the filesystem (FR-018/018a).
+/// Discover the active project's worktrees from git + the filesystem (FR-018/018a). Delegates to the
+/// shared `micold_core::worktree::discover` so the client and daemon can never diverge in how a
+/// worktree is discovered.
 fn discover_worktrees(repo: &Path) -> Vec<Worktree> {
-    let git = GitCli::new();
-    let porcelain = git.worktree_list_porcelain(repo).unwrap_or_default();
-    let records = parse_worktrees(&porcelain);
-    let root = repo.join(".claude/worktrees");
-    let on_disk = list_dir_names(&root);
-    reconcile(&records, &root, &on_disk, &|p| p.exists())
+    micold_core::worktree::discover(&GitCli::new(), repo)
 }
 
 /// Create a branch + worktree, removing the target dir if the git step fails (FR-006/006b).
@@ -1817,18 +1814,6 @@ fn describe_create_error(err: CreateError) -> String {
         CreateError::DuplicateBranch => "A branch with that name already exists.".to_string(),
         CreateError::RolledBack(msg) => format!("Could not create the worktree: {msg}"),
     }
-}
-
-/// Directory names directly under `dir` (empty if it does not exist).
-fn list_dir_names(dir: &Path) -> Vec<String> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    entries
-        .flatten()
-        .filter(|e| e.path().is_dir())
-        .filter_map(|e| e.file_name().into_string().ok())
-        .collect()
 }
 
 fn dir_nonempty(dir: &Path) -> bool {

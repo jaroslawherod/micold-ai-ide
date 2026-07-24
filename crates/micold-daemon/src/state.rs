@@ -12,13 +12,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use micold_core::git::GitCli;
 use micold_core::input::{InputOutcome, InputReceiver};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     CatalogSnapshot, DaemonMsg, DaemonSettings, RefusalReason, SessionProcess, SessionSummary,
+    WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{SessionId, ShellInstanceId, TerminalMode};
 use micold_core::terminal::{LaunchMode, LaunchSpec};
+use micold_core::worktree::{self, Worktree};
 use tokio::sync::mpsc;
 
 use crate::catalog::Catalog;
@@ -45,6 +48,12 @@ struct Inner {
     /// carries its own [`InputReceiver`] so the append-only input contract (G2) is enforced per
     /// session, independent of which connection — or how many reconnects — drove it.
     sessions: HashMap<SessionId, LiveSession>,
+    /// The worktrees discovered live from git + the filesystem, per project (FR-018, T053). Git is
+    /// the single source of truth for worktrees; this is a cache refreshed at well-defined points
+    /// (client attach, and after each worktree mutation) so the catalog snapshot can surface them
+    /// **without** running a git subprocess under the state lock. Absent for a project not yet
+    /// attached/refreshed — the snapshot then shows no worktrees for it until the first refresh.
+    worktrees: HashMap<PathBuf, Vec<Worktree>>,
 }
 
 /// One live process of a session: its PTY and its framer. The [`PtySession`] is behind an `Arc` so
@@ -76,6 +85,17 @@ fn new_proc(pty: Arc<PtySession>, id: SessionId) -> Proc {
     Proc {
         pty,
         framer: Arc::new(Mutex::new(Framer::new(id))),
+    }
+}
+
+/// Project the core [`worktree::WorktreeStatus`] (git-discovery facts) onto the wire enum the client
+/// renders. `Invalid` (an on-disk dir git does not know) maps to `Prunable` — the actionable state
+/// telling the user git would drop it.
+fn wire_worktree_status(status: worktree::WorktreeStatus) -> WorktreeStatus {
+    match status {
+        worktree::WorktreeStatus::Valid => WorktreeStatus::Clean,
+        worktree::WorktreeStatus::Missing => WorktreeStatus::Missing,
+        worktree::WorktreeStatus::Invalid => WorktreeStatus::Prunable,
     }
 }
 
@@ -111,6 +131,7 @@ impl DaemonState {
                 clients: HashMap::new(),
                 attachments: HashMap::new(),
                 sessions: HashMap::new(),
+                worktrees: HashMap::new(),
             }),
             next_id: AtomicU64::new(1),
             lifecycle: Lifecycle::new(),
@@ -129,7 +150,35 @@ impl DaemonState {
     /// The `Welcome` payload for a freshly-handshaked client.
     pub fn welcome_payload(&self) -> (CatalogSnapshot, DaemonSettings) {
         let inner = self.lock();
-        (inner.catalog.snapshot(), inner.catalog.settings_wire())
+        (Self::snapshot_locked(&inner), inner.catalog.settings_wire())
+    }
+
+    /// A full catalog snapshot with each project's worktrees overlaid from the live git+fs discovery
+    /// cache (T053). The catalog is the single writer of *durable* state (projects, sessions, display
+    /// names); worktree existence/branch/status is git truth, cached in [`Inner::worktrees`] and
+    /// merged here so a snapshot never runs a git subprocess under the state lock. Display names still
+    /// come from the durable `worktree_names` overrides.
+    fn snapshot_locked(inner: &Inner) -> CatalogSnapshot {
+        let mut snapshot = inner.catalog.snapshot();
+        let overrides = &inner.catalog.workspace().worktree_names;
+        for project in &mut snapshot.projects {
+            if let Some(discovered) = inner.worktrees.get(&project.path) {
+                let names = overrides.get(&project.path);
+                project.worktrees = discovered
+                    .iter()
+                    .map(|wt| WorktreeSnapshot {
+                        dir_name: wt.dir_name.clone(),
+                        branch: wt.branch.clone(),
+                        display_name: names
+                            .and_then(|m| m.get(&wt.dir_name))
+                            .cloned()
+                            .unwrap_or_else(|| wt.dir_name.clone()),
+                        status: wire_worktree_status(wt.status),
+                    })
+                    .collect();
+            }
+        }
+        snapshot
     }
 
     /// Register a client, returning its id and the receiver its writer task drains. Increments the
@@ -255,7 +304,7 @@ impl DaemonState {
 
     /// Push a full `CatalogChanged` snapshot to every connected client (FR-011; idempotent).
     pub fn broadcast_catalog(&self) {
-        let catalog = self.lock().catalog.snapshot();
+        let catalog = Self::snapshot_locked(&self.lock());
         self.broadcast(DaemonMsg::CatalogChanged { catalog });
     }
 
@@ -273,6 +322,81 @@ impl DaemonState {
     /// it and broadcasts the updated catalog.
     pub fn create_session(&self, project: &Path, worktree_dir: &str) -> io::Result<SessionId> {
         self.lock().catalog.create_session(project, worktree_dir)
+    }
+
+    // --- US3: worktree management through the daemon (T053) ---
+
+    /// A known project's repo path + whether it is a git repository. `None` if unknown.
+    pub fn project_repo(&self, project: &Path) -> Option<(PathBuf, bool)> {
+        self.lock().catalog.project_repo(project)
+    }
+
+    /// Re-discover `project`'s worktrees from git + the filesystem and refresh the cache the catalog
+    /// snapshot reads (T053). **Blocking** — it runs a `git` subprocess — so the caller must invoke it
+    /// off the async runtime (`spawn_blocking`) and, critically, this never holds the state lock across
+    /// the subprocess: it locks once to read the repo path, runs git *unlocked*, then locks again to
+    /// store the result. A non-git or unknown project clears any stale cache entry.
+    pub fn refresh_worktrees(&self, project: &Path) {
+        let repo = self.lock().catalog.project_repo(project);
+        match repo {
+            Some((repo, true)) => {
+                let discovered = worktree::discover(&GitCli::new(), &repo);
+                self.lock()
+                    .worktrees
+                    .insert(project.to_path_buf(), discovered);
+            }
+            _ => {
+                self.lock().worktrees.remove(project);
+            }
+        }
+    }
+
+    /// Set a worktree's display-name override for `project` (validated by the caller), persisting.
+    pub fn set_worktree_display_name(
+        &self,
+        project: &Path,
+        dir_name: &str,
+        name: &str,
+    ) -> io::Result<()> {
+        self.lock()
+            .catalog
+            .set_worktree_display_name(project, dir_name, name)
+    }
+
+    /// The ids of `project`'s `dir_name` worktree sessions that are **currently live** (hosted in the
+    /// registry) — the ones a delete would orphan (W2). A durable-but-not-live session is not counted:
+    /// there is no process to strand, so it never blocks a `stop_sessions:false` delete.
+    pub fn worktree_live_sessions(&self, project: &Path, dir_name: &str) -> Vec<SessionId> {
+        let inner = self.lock();
+        inner
+            .catalog
+            .worktree_session_ids(project, dir_name)
+            .into_iter()
+            .filter(|id| inner.sessions.contains_key(id))
+            .collect()
+    }
+
+    /// Archive (durably) every session of `project`'s `dir_name` worktree and drop each from the live
+    /// registry, returning the removed primaries so the caller can `kill()` them **outside** the lock
+    /// (module invariant; mirrors `remove_session`). Gated: the caller invokes this only after the git
+    /// worktree removal succeeded (main `d88c7a1`) — never before — so a failed delete leaves the
+    /// sessions untouched, not permanently archived.
+    pub fn archive_and_remove_worktree_sessions(
+        &self,
+        project: &Path,
+        dir_name: &str,
+    ) -> io::Result<Vec<Arc<PtySession>>> {
+        let mut inner = self.lock();
+        let ids = inner.catalog.archive_worktree_sessions(project, dir_name)?;
+        let mut removed = Vec::new();
+        for id in ids {
+            if let Some(live) = inner.sessions.remove(&id) {
+                if let Some(primary) = live.procs.get(&SessionProcess::Primary) {
+                    removed.push(Arc::clone(&primary.pty));
+                }
+            }
+        }
+        Ok(removed)
     }
 
     /// Bring a durable session to life: spawn its PTY-backed process and adopt it into the live

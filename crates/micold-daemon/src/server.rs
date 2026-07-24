@@ -10,10 +10,16 @@ use std::sync::Arc;
 
 use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
+use micold_core::git::GitCli;
+use micold_core::naming::DerivedNames;
+use micold_core::project::validate_rename;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg, SessionProcess};
+use micold_core::protocol::messages::{
+    ClientMsg, DaemonMsg, ErrorKind, OperationResult, SessionProcess,
+};
 use micold_core::terminal::LaunchMode;
+use micold_core::worktree::{create_worktree, remove_worktree, remove_worktree_dir, CreateError};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
@@ -222,7 +228,16 @@ where
                 match state.attach(id, project.clone(), force) {
                     Ok(sessions) => {
                         tracing::info!(client = id, project = %project.display(), force, "project attached");
-                        state.send(id, DaemonMsg::Attached { project, sessions })
+                        state.send(
+                            id,
+                            DaemonMsg::Attached {
+                                project: project.clone(),
+                                sessions,
+                            },
+                        );
+                        // Discover this project's worktrees from git now that a client is looking at
+                        // it, so the freshly-attached client (and any other) sees them (FR-018, T053).
+                        refresh_worktrees_and_broadcast(state, project).await;
                     }
                     Err(reason) => {
                         tracing::info!(client = id, project = %project.display(), "attach refused: project busy");
@@ -288,7 +303,6 @@ where
                 project,
                 worktree_dir,
             } => {
-                use micold_core::protocol::messages::{ErrorKind, OperationResult};
                 match state.create_session(&project, &worktree_dir) {
                     Ok(session) => {
                         // A brand-new session starts fresh (`claude --session-id`), never `--resume`
@@ -427,7 +441,187 @@ where
                     ),
                 }
             }
-            // Remaining mutating RPCs and scrollback land in T053.
+            // --- US3: worktree management through the daemon (T053) ---
+            ClientMsg::WorktreeCreate {
+                req,
+                project,
+                branch,
+                dir_name,
+            } => {
+                let Some((repo, true)) = state.project_repo(&project) else {
+                    reject_non_repo(state, id, req, &project);
+                    continue;
+                };
+                let names = DerivedNames {
+                    dir_name: dir_name.clone(),
+                    branch,
+                };
+                // git worktree add can take minutes (a submodule fetch), so it runs off the async
+                // runtime; it never touches the state lock. On any failure the target dir is removed
+                // (the fs half of the rollback) so no leftover directory survives (FR-034, T050).
+                let result = tokio::task::spawn_blocking(move || {
+                    let root = repo.join(".claude/worktrees");
+                    let target = root.join(&names.dir_name);
+                    let _ = std::fs::create_dir_all(&root);
+                    let target_exists = target.exists()
+                        && std::fs::read_dir(&target)
+                            .map(|mut d| d.next().is_some())
+                            .unwrap_or(false);
+                    let r = create_worktree(
+                        &GitCli::new(),
+                        &repo,
+                        &target,
+                        &names,
+                        target_exists,
+                        &mut |_| {},
+                    );
+                    if r.is_err() {
+                        let _ = std::fs::remove_dir_all(&target);
+                    }
+                    r
+                })
+                .await;
+                match result {
+                    Ok(Ok(_worktree)) => {
+                        refresh_worktrees_and_broadcast(state, project).await;
+                        state.send(
+                            id,
+                            DaemonMsg::OperationOk {
+                                req,
+                                result: OperationResult::WorktreeCreated { dir_name },
+                            },
+                        );
+                    }
+                    Ok(Err(e)) => {
+                        let (kind, message, detail) = describe_create_error(e);
+                        state.send(
+                            id,
+                            DaemonMsg::OperationError {
+                                req,
+                                kind,
+                                message,
+                                detail,
+                            },
+                        );
+                    }
+                    Err(join) => state.send(id, task_failed(req, "worktree create", &join)),
+                }
+            }
+            ClientMsg::WorktreeDelete {
+                req,
+                project,
+                dir_name,
+                stop_sessions,
+            } => {
+                let Some((repo, true)) = state.project_repo(&project) else {
+                    reject_non_repo(state, id, req, &project);
+                    continue;
+                };
+                // Never orphan a live process: a delete with a live session and `stop_sessions:false`
+                // fails specifically instead (W2, T052). No mutation has happened yet.
+                let live = state.worktree_live_sessions(&project, &dir_name);
+                if !live.is_empty() && !stop_sessions {
+                    state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::Busy,
+                            message: "worktree has a live session — stop it first or retry with \
+                                      stop_sessions"
+                                .into(),
+                            detail: None,
+                        },
+                    );
+                    continue;
+                }
+                let dir2 = dir_name.clone();
+                let result = tokio::task::spawn_blocking(move || {
+                    let target = repo.join(".claude/worktrees").join(&dir2);
+                    // Keep the branch (`None`): branch deletion is irreversible and the wire carries
+                    // no keep/delete choice, so losing only the worktree dir stays FR-023-recoverable.
+                    remove_worktree(&GitCli::new(), &repo, &target, None)
+                        .and_then(|_outcome| remove_worktree_dir(&target))
+                })
+                .await;
+                match result {
+                    Ok(Ok(())) => {
+                        // Gated on the git delete having succeeded (main `d88c7a1`): only now archive
+                        // the worktree's sessions durably and kill their live procs (outside the lock).
+                        match state.archive_and_remove_worktree_sessions(&project, &dir_name) {
+                            Ok(ptys) => {
+                                for pty in ptys {
+                                    let _ = pty.kill();
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(%e, "archiving deleted worktree's sessions failed")
+                            }
+                        }
+                        refresh_worktrees_and_broadcast(state, project).await;
+                        state.send(
+                            id,
+                            DaemonMsg::OperationOk {
+                                req,
+                                result: OperationResult::Ack,
+                            },
+                        );
+                    }
+                    // Failed delete: sessions are left untouched (not killed, not archived) so an
+                    // FR-023-recoverable failure never becomes permanent loss. git's stderr rides along.
+                    Ok(Err(e)) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::GitFailed,
+                            message: "failed to remove the worktree".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
+                    Err(join) => state.send(id, task_failed(req, "worktree delete", &join)),
+                }
+            }
+            ClientMsg::WorktreeRename {
+                req,
+                project,
+                dir_name,
+                display_name,
+            } => {
+                // A display-name override is durable catalog state — no git involved. Validation
+                // (InvalidInput) and persistence (IoFailed) are separate, individually-mappable steps.
+                match validate_rename(&display_name) {
+                    Ok(name) => match state.set_worktree_display_name(&project, &dir_name, &name) {
+                        Ok(()) => {
+                            state.broadcast_catalog();
+                            state.send(
+                                id,
+                                DaemonMsg::OperationOk {
+                                    req,
+                                    result: OperationResult::Ack,
+                                },
+                            );
+                        }
+                        Err(e) => state.send(
+                            id,
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::IoFailed,
+                                message: "failed to persist the rename".into(),
+                                detail: Some(e.to_string()),
+                            },
+                        ),
+                    },
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::InvalidInput,
+                            message: rename_error_message(e).into(),
+                            detail: None,
+                        },
+                    ),
+                }
+            }
+            // Remaining mutating RPCs (projects, session delete) land in the next T053 slice.
             _ => {}
         }
     }
@@ -435,6 +629,82 @@ where
         stream.abort();
     }
     Ok(())
+}
+
+/// Re-discover a project's worktrees from git (off the async runtime, never under the state lock) and
+/// push the refreshed catalog to every client, so a worktree mutation propagates to all windows
+/// without further user action (FR-011, T053).
+async fn refresh_worktrees_and_broadcast(state: &Arc<DaemonState>, project: std::path::PathBuf) {
+    let st = Arc::clone(state);
+    let proj = project.clone();
+    let _ = tokio::task::spawn_blocking(move || st.refresh_worktrees(&proj)).await;
+    state.broadcast_catalog();
+}
+
+/// Reply to a worktree RPC for a path that is not a known git-repo project. A missing project is
+/// `NotFound`; a known non-git project is `Refused` (worktrees need a repo).
+fn reject_non_repo(
+    state: &Arc<DaemonState>,
+    id: crate::state::ClientId,
+    req: u64,
+    project: &std::path::Path,
+) {
+    let (kind, message) = match state.project_repo(project) {
+        Some((_, false)) => (ErrorKind::Refused, "project is not a git repository"),
+        _ => (ErrorKind::NotFound, "unknown project"),
+    };
+    state.send(
+        id,
+        DaemonMsg::OperationError {
+            req,
+            kind,
+            message: message.into(),
+            detail: None,
+        },
+    );
+}
+
+/// Map a [`CreateError`] to its wire error. A duplicate branch/dir is the specific, actionable
+/// `AlreadyExists` (caught pre-flight, before any git mutation); a git-level failure is `GitFailed`
+/// carrying git's stderr verbatim (T050, FR-034).
+fn describe_create_error(err: CreateError) -> (ErrorKind, String, Option<String>) {
+    match err {
+        CreateError::DuplicateBranch => (
+            ErrorKind::AlreadyExists,
+            "a branch with that name already exists".into(),
+            None,
+        ),
+        CreateError::DuplicateDir => (
+            ErrorKind::AlreadyExists,
+            "a worktree with that name already exists".into(),
+            None,
+        ),
+        CreateError::RolledBack(stderr) => (
+            ErrorKind::GitFailed,
+            "git failed to create the worktree".into(),
+            Some(stderr),
+        ),
+    }
+}
+
+/// A plain-language message for a rejected display name (`RenameError` has no `Display`).
+fn rename_error_message(err: micold_core::project::RenameError) -> &'static str {
+    use micold_core::project::RenameError;
+    match err {
+        RenameError::Empty => "the name cannot be empty",
+        RenameError::Whitespace => "the name cannot be only whitespace",
+    }
+}
+
+/// The error reply for a `spawn_blocking` task that itself failed (panicked / was cancelled) — an
+/// internal fault, distinct from a git failure the task reported normally.
+fn task_failed(req: u64, what: &str, join: &tokio::task::JoinError) -> DaemonMsg {
+    DaemonMsg::OperationError {
+        req,
+        kind: ErrorKind::Internal,
+        message: format!("{what} task failed"),
+        detail: Some(join.to_string()),
+    }
 }
 
 /// How often the view stream wakes to check for new output. Between ticks, output is coalesced into

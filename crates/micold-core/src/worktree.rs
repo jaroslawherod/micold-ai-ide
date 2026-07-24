@@ -3,6 +3,8 @@
 //! Pure over the [`crate::git::Git`] boundary (no direct subprocess/`fs`), so the whole
 //! create-then-rollback flow and the discovery/classification logic are unit-testable with
 //! [`crate::git::FakeGit`] (Constitution Principle I). Contracts: `git-trait.md`, `naming.md`.
+//! The one exception is [`discover`], the I/O convenience that pairs the git query with a directory
+//! listing before delegating to the pure [`reconcile`].
 
 use crate::git::Git;
 use crate::naming::DerivedNames;
@@ -158,6 +160,34 @@ pub fn reconcile(
 
     out.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
     out
+}
+
+/// Discover a project's worktrees from git + the filesystem in one call (FR-018/018a).
+///
+/// The one I/O convenience in this otherwise-pure module: it performs the git query and the
+/// `.claude/worktrees` directory listing, then hands both to the pure [`reconcile`]. Shared by the
+/// client (its sidebar) and the daemon (its catalog snapshot) so the two never drift in *how* a
+/// worktree is discovered. A git failure degrades to "no registrations" — an unavailable repo simply
+/// surfaces its on-disk orphan dirs (as `Invalid`), never a panic.
+pub fn discover(git: &dyn Git, repo: &Path) -> Vec<Worktree> {
+    let porcelain = git.worktree_list_porcelain(repo).unwrap_or_default();
+    let records = parse_worktrees(&porcelain);
+    let root = repo.join(".claude/worktrees");
+    let on_disk = list_dir_names(&root);
+    reconcile(&records, &root, &on_disk, &|p| p.exists())
+}
+
+/// The immediate sub-directory names of `dir` (non-recursive), used to surface on-disk worktree
+/// dirs git does not know about. An unreadable/absent directory yields an empty list.
+fn list_dir_names(dir: &Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect()
 }
 
 /// Why creating a worktree failed (FR-006b, FR-009). Carries `String` messages (not

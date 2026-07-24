@@ -194,6 +194,89 @@ impl Catalog {
         Ok(id)
     }
 
+    /// Set (or overwrite) a worktree's display-name override for `project`, persisting (FR-014,
+    /// T053). Unlike `Workspace::set_worktree_name` (active-project scoped, for the single-project
+    /// client), the daemon hosts many projects at once, so the target project is explicit. `name`
+    /// must already be validated (`micold_core::project::validate_rename`) — the handler maps a
+    /// rejected name to `InvalidInput` before calling this, keeping validation and persistence as
+    /// separate, individually-mappable failures.
+    pub fn set_worktree_display_name(
+        &mut self,
+        project: &Path,
+        dir_name: &str,
+        name: &str,
+    ) -> io::Result<()> {
+        self.workspace
+            .worktree_names
+            .entry(project.to_path_buf())
+            .or_default()
+            .insert(dir_name.to_string(), name.to_string());
+        self.persist()
+    }
+
+    /// Forget a worktree's display-name override for `project`, reverting it to the derived name,
+    /// persisting (T053). Idempotent — absence is not an error. Prunes an emptied project map so the
+    /// on-disk shape matches `Workspace::clear_worktree_name`.
+    pub fn forget_worktree_name(&mut self, project: &Path, dir_name: &str) -> io::Result<()> {
+        if let Some(map) = self.workspace.worktree_names.get_mut(project) {
+            map.remove(dir_name);
+            if map.is_empty() {
+                self.workspace.worktree_names.remove(project);
+            }
+        }
+        self.persist()
+    }
+
+    /// **Archive** (never drop) every non-archived session bound to `project`'s `dir_name` worktree,
+    /// persisting, and return their ids (T053, main-sync `7dc9c8a`). Archiving — rather than
+    /// deleting — is the anti-resurrection invariant: a durable marker so a later reconcile from git
+    /// truth cannot bring a deleted worktree's session back. The caller must invoke this **only after
+    /// the git worktree removal actually succeeds** (main `d88c7a1`); on a failed delete the sessions
+    /// stay untouched so an FR-023-recoverable failure never becomes permanent loss.
+    pub fn archive_worktree_sessions(
+        &mut self,
+        project: &Path,
+        dir_name: &str,
+    ) -> io::Result<Vec<SessionId>> {
+        let mut archived = Vec::new();
+        if let Some(list) = self.workspace.sessions.get_mut(project) {
+            for session in list.iter_mut() {
+                if !session.archived && session.location.is_worktree(dir_name) {
+                    session.archive();
+                    archived.push(session.id);
+                }
+            }
+        }
+        self.persist()?;
+        Ok(archived)
+    }
+
+    /// The ids of every non-archived session bound to `project`'s `dir_name` worktree (T053). Read
+    /// used to decide whether a `WorktreeDelete` would orphan a live process (W2) — the handler
+    /// intersects this with the live registry.
+    pub fn worktree_session_ids(&self, project: &Path, dir_name: &str) -> Vec<SessionId> {
+        self.workspace
+            .sessions
+            .get(project)
+            .map(|list| {
+                list.iter()
+                    .filter(|s| !s.archived && s.location.is_worktree(dir_name))
+                    .map(|s| s.id)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Resolve a known project's repo path + whether it is a git repository (T053). `None` if the
+    /// path is not a known project. Used by the worktree RPCs to run git in the project's own repo.
+    pub fn project_repo(&self, project: &Path) -> Option<(std::path::PathBuf, bool)> {
+        self.workspace
+            .projects
+            .iter()
+            .find(|p| p.path == project)
+            .map(|p| (p.path.clone(), p.is_git_repo))
+    }
+
     /// Persist the project catalog atomically (temp + rename). A no-op for an ephemeral catalog.
     pub fn persist(&self) -> io::Result<()> {
         if let Some(store) = &self.project_store {
