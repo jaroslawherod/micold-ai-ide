@@ -92,6 +92,7 @@ enum PendingOp {
     CreateSession,
     WorktreeDelete(String),
     WorktreeRename(String),
+    ProjectRename,
 }
 
 impl PendingOp {
@@ -101,6 +102,7 @@ impl PendingOp {
             PendingOp::CreateSession => "create the session".into(),
             PendingOp::WorktreeDelete(d) => format!("delete the worktree \"{d}\""),
             PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
+            PendingOp::ProjectRename => "rename the project".into(),
         }
     }
 }
@@ -878,9 +880,31 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        // Project rename (feature 001, FR-017): the daemon is the single writer, so route it through
+        // the `ProjectRename` RPC (T055). The pure-core update applies it in memory (instant feedback
+        // + validation + closes the overlay); the daemon persists it and reconciles other windows.
+        // No local `persist()`.
         Message::RenameConfirmed => {
+            let draft = app
+                .core
+                .rename_draft
+                .as_ref()
+                .map(|d| (d.path.clone(), d.text.trim().to_string()));
             app.core.update(Message::RenameConfirmed);
-            persist(&mut app.core);
+            // Only send if the pure update accepted it (a rejected name leaves the draft in place).
+            if app.core.rename_draft.is_none() {
+                if let Some((path, display_name)) = draft {
+                    if !display_name.is_empty() {
+                        send_op(app, PendingOp::ProjectRename, move |req| {
+                            ClientMsg::ProjectRename {
+                                req,
+                                path,
+                                display_name,
+                            }
+                        });
+                    }
+                }
+            }
             Task::none()
         }
         // Forget a project (feature 014): stop its live session processes so none is orphaned
@@ -1591,6 +1615,20 @@ fn send_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64) -> ClientMsg) {
 /// but the client lacks are added; sessions the daemon no longer reports (archived/removed) are
 /// dropped. A dangling `active_session` pointer is cleared.
 fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktrees: bool) {
+    // Adopt the daemon's display name for any project the client already knows (T055). Update-only:
+    // adding/removing projects from the list is driven by the open/forget RPCs + their pushes, so a
+    // project the client hasn't opened yet is not force-listed here, and one it just opened locally
+    // is not dropped before its ProjectAdd lands.
+    for snap in &snapshot.projects {
+        if let Some(existing) = core
+            .workspace
+            .projects
+            .iter_mut()
+            .find(|p| p.path == snap.path)
+        {
+            existing.display_name = snap.display_name.clone();
+        }
+    }
     for project in &snapshot.projects {
         let list = core
             .workspace
