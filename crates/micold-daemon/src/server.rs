@@ -226,13 +226,17 @@ where
             ClientMsg::Goodbye => break,
             ClientMsg::Attach { project, force } => {
                 match state.attach(id, project.clone(), force) {
-                    Ok(sessions) => {
+                    Ok(_sessions) => {
                         tracing::info!(client = id, project = %project.display(), force, "project attached");
+                        // Prune this project's empty sessions now that it has an attached observer
+                        // (FR-007a, T056) — before building the `Attached` list so a just-pruned
+                        // phantom never flashes in the sidebar.
+                        prune_empty_off_runtime(state, &project).await;
                         state.send(
                             id,
                             DaemonMsg::Attached {
                                 project: project.clone(),
-                                sessions,
+                                sessions: state.sessions_for(&project),
                             },
                         );
                         // Discover this project's worktrees from git now that a client is looking at
@@ -725,6 +729,19 @@ async fn refresh_worktrees_off_runtime(state: &Arc<DaemonState>, project: &std::
     let st = Arc::clone(state);
     let proj = project.to_path_buf();
     let _ = tokio::task::spawn_blocking(move || st.refresh_worktrees(&proj)).await;
+}
+
+/// Run empty-session pruning (which stats the provider's conversation store) off the async runtime.
+async fn prune_empty_off_runtime(state: &Arc<DaemonState>, project: &std::path::Path) {
+    let st = Arc::clone(state);
+    let proj = project.to_path_buf();
+    match tokio::task::spawn_blocking(move || st.prune_empty_sessions(&proj)).await {
+        Ok(Ok(pruned)) if !pruned.is_empty() => {
+            tracing::info!(project = %project.display(), count = pruned.len(), "pruned empty sessions")
+        }
+        Ok(Err(e)) => tracing::warn!(%e, "empty-session prune failed"),
+        _ => {}
+    }
 }
 
 /// Reply to a worktree RPC for a path that is not a known git-repo project. A missing project is

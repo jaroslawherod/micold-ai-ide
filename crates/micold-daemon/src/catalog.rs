@@ -320,6 +320,43 @@ impl Catalog {
         Ok(owner)
     }
 
+    /// The non-archived sessions of `project` as `(id, cwd)` pairs — the candidates for empty-session
+    /// pruning (T056). Already-archived sessions are skipped (never revived or re-counted — the
+    /// anti-resurrection invariant, main `93a0a08`). The caller checks each cwd for a recorded AI-CLI
+    /// conversation off the state lock, then archives the ones with none via `archive_session_ids`.
+    pub fn prunable_session_cwds(&self, project: &Path) -> Vec<(SessionId, PathBuf)> {
+        self.workspace
+            .sessions
+            .get(project)
+            .map(|list| {
+                list.iter()
+                    .filter(|s| !s.archived)
+                    .map(|s| (s.id, s.location.cwd(project)))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// **Archive** (mark, not delete) the given session ids and persist once (T056). Ids not found or
+    /// already archived are skipped. Returns the ids actually newly archived — so a no-op prune never
+    /// triggers a write. Marking (not deleting) composes with the anti-resurrection invariant: the
+    /// tombstone stays, so reconciliation can't bring a pruned session back.
+    pub fn archive_session_ids(&mut self, ids: &[SessionId]) -> io::Result<Vec<SessionId>> {
+        let mut archived = Vec::new();
+        for &id in ids {
+            if let Some((_, session)) = self.workspace.find_session_mut(id) {
+                if !session.archived {
+                    session.archive();
+                    archived.push(id);
+                }
+            }
+        }
+        if !archived.is_empty() {
+            self.persist()?;
+        }
+        Ok(archived)
+    }
+
     /// Persist the project catalog atomically (temp + rename). A no-op for an ephemeral catalog.
     pub fn persist(&self) -> io::Result<()> {
         if let Some(store) = &self.project_store {

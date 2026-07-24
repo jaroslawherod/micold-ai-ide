@@ -658,3 +658,53 @@ async fn project_remove_forgets_and_stops_sessions() {
         "the project was forgotten"
     );
 }
+
+#[tokio::test]
+async fn attach_prunes_empty_sessions_but_keeps_live_ones() {
+    use micold_core::provider::{AiCliProvider, ClaudeProvider};
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+
+    // Two Default (shell) sessions: `live` will be started (excluded from pruning); `empty` stays
+    // idle with no recorded conversation → a prune candidate.
+    let live = SessionId::from_uuid(Uuid::from_u128(0xA11E));
+    let empty = SessionId::from_uuid(Uuid::from_u128(0xE111));
+    let mk = |id| {
+        Session::restored(
+            id,
+            SessionLocation::Default,
+            SessionLabel::Named("S".into()),
+            TerminalMode::Regular,
+        )
+    };
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![mk(live), mk(empty)],
+    )));
+    state
+        .start_session(live, micold_core::terminal::LaunchMode::Resume)
+        .expect("start the live session");
+
+    // Attaching brings an observer → pruning runs (FR-007a).
+    let _client = connect_and_attach(&state, project.path()).await;
+
+    let (snapshot, _) = state.welcome_payload();
+    let listed: Vec<SessionId> = snapshot
+        .projects
+        .iter()
+        .find(|p| p.path == project.path())
+        .map(|p| p.sessions.iter().map(|s| s.id).collect())
+        .unwrap_or_default();
+
+    assert!(listed.contains(&live), "a live session is never pruned");
+    // The empty session is pruned only when the provider config dir is resolvable (it always is on
+    // the CI/dev Linux hosts); guard so the test never flakes if a home dir can't be found.
+    if ClaudeProvider.config_dir().is_some() {
+        assert!(
+            !listed.contains(&empty),
+            "an idle, no-conversation session is pruned once observed"
+        );
+    }
+}

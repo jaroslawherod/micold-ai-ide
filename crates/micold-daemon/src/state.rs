@@ -449,6 +449,52 @@ impl DaemonState {
         Ok((owner, pty))
     }
 
+    /// Prune (archive) empty sessions of `project` — those the AI CLI never recorded a conversation
+    /// for (FR-007a, T056). **Blocking**: it stats the provider's conversation store, so the caller
+    /// runs it off the async runtime. The filesystem checks happen **outside** the state lock (the
+    /// lock is taken only to gather candidates and, at the end, to archive). Live sessions are
+    /// excluded — a just-created session has no conversation yet but must not be pruned. Returns the
+    /// ids archived (empty ⇒ no write happened). The handler calls this only for an attached project,
+    /// so pruning always has an observer.
+    pub fn prune_empty_sessions(&self, project: &Path) -> io::Result<Vec<SessionId>> {
+        // 1. Candidates under the lock: non-archived and not currently live.
+        let candidates: Vec<(SessionId, PathBuf)> = {
+            let inner = self.lock();
+            inner
+                .catalog
+                .prunable_session_cwds(project)
+                .into_iter()
+                .filter(|(id, _)| !inner.sessions.contains_key(id))
+                .collect()
+        };
+        if candidates.is_empty() {
+            return Ok(Vec::new());
+        }
+        // 2. Off-lock: keep only those with NO recorded conversation. An undeterminable provider
+        //    config dir yields no pruning (never drop a session on uncertainty).
+        use micold_core::provider::{AiCliProvider, ClaudeProvider};
+        let provider = ClaudeProvider;
+        let empty: Vec<SessionId> = match provider.config_dir() {
+            Some(config) => candidates
+                .into_iter()
+                .filter(|(id, cwd)| !provider.has_recorded_conversation(&config, cwd, id.0))
+                .map(|(id, _)| id)
+                .collect(),
+            None => Vec::new(),
+        };
+        if empty.is_empty() {
+            return Ok(Vec::new());
+        }
+        // 3. Archive under the lock, persisting once.
+        self.lock().catalog.archive_session_ids(&empty)
+    }
+
+    /// The (non-archived) session summaries for a project, from durable state. Used to build the
+    /// `Attached` reply after any attach-time pruning so it reflects the pruned result.
+    pub fn sessions_for(&self, project: &Path) -> Vec<SessionSummary> {
+        self.lock().catalog.sessions_for(project)
+    }
+
     /// Bring a durable session to life: spawn its PTY-backed process and adopt it into the live
     /// registry (`ClientMsg::SessionStart`). Idempotent — a session that is already live is a no-op,
     /// so a redundant Start never double-spawns.
