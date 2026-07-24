@@ -31,10 +31,7 @@ use micold_core::session::{
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::theme::{observe_system_scheme, SystemScheme};
-use micold_core::worktree::{
-    create_worktree, remove_worktree, remove_worktree_dir, CreateError, CreateProgressEvent,
-    Worktree,
-};
+use micold_core::worktree::{create_worktree, CreateError, CreateProgressEvent, Worktree};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -91,8 +88,10 @@ fn step(duration: Duration) -> f32 {
 #[derive(Debug, Clone)]
 enum PendingOp {
     /// A `SessionCreate`; on success the daemon-assigned session is selected + viewed. Further
-    /// variants (worktree/project/session-delete) are added as each mutation domain is migrated.
+    /// variants (project/session-delete) are added as each mutation domain is migrated.
     CreateSession,
+    WorktreeDelete(String),
+    WorktreeRename(String),
 }
 
 impl PendingOp {
@@ -100,6 +99,8 @@ impl PendingOp {
     fn describe(&self) -> String {
         match self {
             PendingOp::CreateSession => "create the session".into(),
+            PendingOp::WorktreeDelete(d) => format!("delete the worktree \"{d}\""),
+            PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
         }
     }
 }
@@ -698,7 +699,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         } => {
             // The daemon is the single writer of settings + sessions; adopt what it reports.
             app.scrollback_lines = settings.scrollback_lines;
-            reconcile_catalog(&mut app.core, &catalog);
+            reconcile_catalog(&mut app.core, &catalog, false);
             app.daemon_catalog = Some(catalog);
             // Attach to the active project and view its active session so the daemon starts
             // streaming grid frames for it (FR-011/FR-016).
@@ -718,7 +719,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::DaemonEvent(event) => {
             match event {
                 DaemonMsg::CatalogChanged { catalog } => {
-                    reconcile_catalog(&mut app.core, &catalog);
+                    reconcile_catalog(&mut app.core, &catalog, true);
                     app.daemon_catalog = Some(catalog);
                 }
                 DaemonMsg::SettingsChanged { settings } => {
@@ -909,11 +910,36 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        // Worktree rename (feature 008, FR-014/FR-015): apply the display-name override in the
-        // core, then persist it so it survives a restart. Never touches the folder or branch.
+        // Worktree rename (feature 008, FR-014/FR-015): the daemon is the single writer of the
+        // display-name override, so route it through the `WorktreeRename` RPC (T055). The pure-core
+        // update still applies it in memory for instant feedback (validated + closes the overlay);
+        // the daemon persists it and reconciles a second window via `CatalogChanged`. No local
+        // `persist()` — the daemon owns the durable file now.
         Message::WorktreeRenameConfirmed => {
+            let draft = app
+                .core
+                .worktree_rename_draft
+                .as_ref()
+                .map(|d| (d.dir_name.clone(), d.text.trim().to_string()));
+            let project = app.core.workspace.active.clone();
             app.core.update(Message::WorktreeRenameConfirmed);
-            persist(&mut app.core);
+            // Only send if the pure update accepted it (a rejected name leaves the draft in place).
+            if app.core.worktree_rename_draft.is_none() {
+                if let (Some((dir_name, display_name)), Some(project)) = (draft, project) {
+                    if !display_name.is_empty() {
+                        send_op(
+                            app,
+                            PendingOp::WorktreeRename(dir_name.clone()),
+                            move |req| ClientMsg::WorktreeRename {
+                                req,
+                                project,
+                                dir_name,
+                                display_name,
+                            },
+                        );
+                    }
+                }
+            }
             Task::none()
         }
         Message::ThemePreferenceChanged(_) | Message::ThemeModeCycled => {
@@ -1398,115 +1424,36 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Confirmed worktree delete (feature 008, FR-020): terminate the worktree's session
         // processes, remove its git worktree + branch + directory, then drop the records and
         // persist. Ordered per `CleanupStep`; every git step is idempotent (FR-023).
+        // Worktree delete (feature 008/013): route through the daemon, which removes the worktree
+        // (git off its runtime), and — gated on the removal actually succeeding — archives the
+        // worktree's sessions and broadcasts the new catalog (T055). A failed delete surfaces as an
+        // `OperationError` and the worktree reappears on the next reconcile, so the optimistic local
+        // drop below self-heals. `stop_sessions: true` mirrors the old behaviour (it always stopped
+        // the worktree's sessions first).
+        //
+        // NOTE: the daemon keeps the branch (no keep/delete wire flag yet), so the confirm dialog's
+        // "delete branch" choice is currently a no-op — branch deletion needs a wire field (deferred).
         Message::WorktreeDeleteConfirmed => {
             let target = app.core.worktree_delete_target.clone();
-            if let (Some(dir), Some(repo)) = (target, app.core.workspace.active.clone()) {
-                // Facts to remove — captured before the reducer drops them from state.
-                let wt = app
-                    .core
-                    .worktrees
-                    .iter()
-                    .find(|w| w.dir_name == dir)
-                    .cloned();
-                // Attempt the removal FIRST. Sessions are only killed and durably marked
-                // archived once the worktree is confirmed actually gone (bugfix, found by code
-                // review): doing this unconditionally, before knowing the outcome, meant a
-                // failed delete (a locked worktree, a branch checked out elsewhere, a
-                // permission error — all cases FR-023 explicitly anticipates, where the
-                // worktree survives and is reported, not silently dropped) permanently
-                // destroyed that worktree's still-valid sessions — the archived marker
-                // (bugfix BUG-003) blocks the accidental reconciliation-based recovery that
-                // used to paper over this.
-                let removed = match &wt {
-                    // Nothing registered for this dir_name — there is nothing to remove or to
-                    // preserve either.
-                    None => true,
-                    Some(wt) => {
-                        let name = app.core.worktree_display_name(&dir);
-                        // The user's explicit branch-deletion choice (feature 013, FR-011):
-                        // `None` (keep it) skips `branch_delete` entirely inside
-                        // `remove_worktree`.
-                        let branch = if app.core.worktree_delete_keep_branch {
-                            None
-                        } else {
-                            wt.branch.as_deref()
-                        };
-                        match remove_worktree(&GitCli::new(), &repo, &wt.path, branch) {
-                            // Only remove the directory once git has released the worktree —
-                            // deleting the working files of a still-registered worktree would
-                            // leave a worse mess than the failure being reported.
-                            Ok(outcome) => {
-                                // Drop this directory's cached env-include snapshot (BUG-002): a
-                                // worktree recreated for the same branch reuses this exact path
-                                // (dir names are derived from the branch name), and without this
-                                // the stale pre-deletion snapshot would otherwise be served
-                                // forever.
-                                app.env_include_cache.remove(&wt.path);
-                                // `remove_worktree_dir` treats an already-absent directory as
-                                // success — git removed it as part of releasing the worktree, so
-                                // "not found" here is the happy path, not a leftover (FR-023a).
-                                if let Err(err) = remove_worktree_dir(&wt.path) {
-                                    app.core.notify_error(format!(
-                                        "Deleted worktree \"{name}\", but its folder could not \
-                                         be removed: {err}. Left at {}",
-                                        wt.path.display()
-                                    ));
-                                }
-                                // A genuine branch-delete refusal (FR-015) is its own distinct
-                                // notice — the worktree/session removal above already succeeded
-                                // independent of this outcome, so it is not folded into a
-                                // generic delete failure.
-                                if outcome.branch_delete_failed {
-                                    if let Some(branch) = branch {
-                                        app.core.notify_error(format!(
-                                            "Deleted worktree \"{name}\", but its branch \
-                                             \"{branch}\" could not be deleted."
-                                        ));
-                                    }
-                                }
-                                true
-                            }
-                            Err(err) => {
-                                app.core.notify_error(format!(
-                                    "Could not delete worktree \"{name}\": {err}"
-                                ));
-                                false
-                            }
-                        }
+            if let (Some(dir), Some(project)) = (target, app.core.workspace.active.clone()) {
+                // Drop this path's cached env-include snapshot (BUG-002): a worktree recreated for
+                // the same branch reuses the exact path, and a stale snapshot would linger forever.
+                let cwd =
+                    session_cwd_for_location(&project, &SessionLocation::Worktree(dir.clone()));
+                app.env_include_cache.remove(&cwd);
+                let (p, d) = (project, dir.clone());
+                send_op(app, PendingOp::WorktreeDelete(dir), move |req| {
+                    ClientMsg::WorktreeDelete {
+                        req,
+                        project: p,
+                        dir_name: d,
+                        stop_sessions: true,
                     }
-                };
-                if removed {
-                    // Terminate this worktree's running sessions (both processes per session,
-                    // feature 010 FR-014), and record the same durable suppression marker
-                    // Close/Remove use (bugfix BUG-003, FR-020c): the worktree directory (and
-                    // thus its transcripts' `cwd` encoding) can be reused if a worktree with the
-                    // same `dir_name` is created again later, and without this marker
-                    // reconciliation (FR-020b) would resurrect these sessions from the
-                    // still-existing `claude` transcripts on the next project open.
-                    let worktree_cwd =
-                        session_cwd_for_location(&repo, &SessionLocation::Worktree(dir.clone()));
-                    let provider = ClaudeProvider;
-                    let config_dir = provider.config_dir();
-                    for id in app.core.sessions_in_worktree(&dir) {
-                        stop_session(app, id);
-                        if let Some(config_dir) = &config_dir {
-                            let _ = provider.mark_archived(config_dir, &worktree_cwd, id.0);
-                        }
-                    }
-                    // Drop the session/worktree records in the core.
-                    app.core.update(Message::WorktreeDeleteConfirmed);
-                } else {
-                    // Removal failed: the worktree (and its sessions) survive untouched — just
-                    // dismiss the confirm dialog (mirrors `WorktreeDeleteCancelled`'s cleanup).
-                    app.core.update(Message::WorktreeDeleteCancelled);
-                }
-                // Reconcile the sidebar from git truth either way (self-heals a failed removal
-                // back into the list).
-                app.core.set_worktrees(discover_worktrees(&repo));
-                persist(&mut app.core);
-            } else {
-                app.core.update(Message::WorktreeDeleteConfirmed);
+                });
             }
+            // Optimistically drop the records + dismiss the dialog; the daemon's `CatalogChanged`
+            // reconciles the truth (re-adding the worktree on a failed delete).
+            app.core.update(Message::WorktreeDeleteConfirmed);
             Task::none()
         }
         other => {
@@ -1643,7 +1590,7 @@ fn send_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64) -> ClientMsg) {
 /// snapshot: existing sessions have their lifecycle + label updated; sessions the daemon reports
 /// but the client lacks are added; sessions the daemon no longer reports (archived/removed) are
 /// dropped. A dangling `active_session` pointer is cleared.
-fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot) {
+fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktrees: bool) {
     for project in &snapshot.projects {
         let list = core
             .workspace
@@ -1680,11 +1627,61 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot) {
         // Drop sessions the daemon no longer reports (archived/removed on its side).
         list.retain(|s| snap_ids.contains(&s.id));
     }
+    // Mirror the active project's worktrees from the daemon's git discovery into the render state
+    // (the sidebar reads `core.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
+    // the initial welcome: the welcome's worktree cache is empty until the post-attach refresh, so
+    // syncing it would briefly blank the list boot-time local discovery had populated (T055).
+    if sync_worktrees {
+        if let Some(active) = core.workspace.active.clone() {
+            if let Some(project) = snapshot.projects.iter().find(|p| p.path == active) {
+                let root = active.join(".claude/worktrees");
+                core.set_worktrees(
+                    project
+                        .worktrees
+                        .iter()
+                        .map(|w| micold_core::worktree::Worktree {
+                            dir_name: w.dir_name.clone(),
+                            path: root.join(&w.dir_name),
+                            branch: w.branch.clone(),
+                            status: wire_to_worktree_status(w.status),
+                        })
+                        .collect(),
+                );
+                // Mirror display-name overrides from the catalog (a second window sees a rename).
+                let names: std::collections::BTreeMap<String, String> = project
+                    .worktrees
+                    .iter()
+                    .filter(|w| w.display_name != w.dir_name)
+                    .map(|w| (w.dir_name.clone(), w.display_name.clone()))
+                    .collect();
+                if names.is_empty() {
+                    core.workspace.worktree_names.remove(&active);
+                } else {
+                    core.workspace.worktree_names.insert(active, names);
+                }
+            }
+        }
+    }
     // Clear a dangling active-session pointer if its session is gone.
     if let Some(id) = core.active_session {
         if core.workspace.find_session(id).is_none() {
             core.active_session = None;
         }
+    }
+}
+
+/// Project the wire [`WorktreeStatus`] back onto the client's core status enum (T055). The inverse of
+/// the daemon's mapping; `Locked`/`Prunable` both collapse to `Invalid` (the client renders both as
+/// an unusable/removable worktree).
+fn wire_to_worktree_status(
+    status: micold_core::protocol::messages::WorktreeStatus,
+) -> micold_core::worktree::WorktreeStatus {
+    use micold_core::protocol::messages::WorktreeStatus as Wire;
+    use micold_core::worktree::WorktreeStatus as Core;
+    match status {
+        Wire::Clean => Core::Valid,
+        Wire::Missing => Core::Missing,
+        Wire::Locked | Wire::Prunable => Core::Invalid,
     }
 }
 
@@ -1953,6 +1950,7 @@ mod tests {
         reconcile_catalog(
             &mut core,
             &snapshot_with(path, vec![summary(a, "A", WireLifecycle::Running)]),
+            false,
         );
         let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
         assert_eq!(list.len(), 1);
@@ -1970,6 +1968,7 @@ mod tests {
                     summary(b, "B", WireLifecycle::Running),
                 ],
             ),
+            false,
         );
         let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
         assert_eq!(list.len(), 2);
@@ -1985,6 +1984,7 @@ mod tests {
         reconcile_catalog(
             &mut core,
             &snapshot_with(path, vec![summary(b, "B", WireLifecycle::Running)]),
+            false,
         );
         let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
         assert_eq!(list.len(), 1);
