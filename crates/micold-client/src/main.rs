@@ -36,7 +36,6 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use uuid::Uuid;
 
 /// How often the OS light/dark preference is polled while the window has input focus
 /// (research R4).
@@ -90,8 +89,11 @@ enum PendingOp {
     /// A `SessionCreate`; on success the daemon-assigned session is selected + viewed. Further
     /// variants (project/session-delete) are added as each mutation domain is migrated.
     CreateSession,
+    DeleteSession,
     WorktreeDelete(String),
     WorktreeRename(String),
+    ProjectAdd,
+    ProjectRemove,
     ProjectRename,
 }
 
@@ -100,8 +102,11 @@ impl PendingOp {
     fn describe(&self) -> String {
         match self {
             PendingOp::CreateSession => "create the session".into(),
+            PendingOp::DeleteSession => "delete the session".into(),
             PendingOp::WorktreeDelete(d) => format!("delete the worktree \"{d}\""),
             PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
+            PendingOp::ProjectAdd => "add the project".into(),
+            PendingOp::ProjectRemove => "remove the project".into(),
             PendingOp::ProjectRename => "rename the project".into(),
         }
     }
@@ -413,13 +418,11 @@ fn boot() -> (App, Task<Message>) {
     let mut env_include_cache = HashMap::new();
     env_include_cache.insert(boot_cwd, boot_snapshot);
     core.system_scheme = observe_system_scheme(detect_system_scheme(), core.system_scheme);
-    // If a project is already active from a previous run, discover its worktrees.
+    // If a project is already active from a previous run, discover its worktrees for the initial
+    // render. Session recovery from transcripts is now the daemon's responsibility (it owns
+    // sessions); the client adopts them from the welcome catalog on connect (T055).
     if let Some(repo) = core.workspace.active.clone() {
         core.set_worktrees(discover_worktrees(&repo));
-        // Recover any session whose conversation transcript survived even though its persisted
-        // record did not (bugfix 002/BUG-001, FR-020b) — e.g. a per-project state fault isolated
-        // by that same bugfix's storage split.
-        reconcile_sessions_from_transcripts(&mut core, &repo);
     }
     let mut motion = Animator::new();
     motion.set(MotionKey::Menu, 0.0);
@@ -510,70 +513,6 @@ fn session_has_conversation(project_path: &Path, session: &micold_core::session:
         return true;
     };
     provider.has_recorded_conversation(&config, &cwd, session.id.0)
-}
-
-/// Reconcile `repo`'s session list against the AI CLI provider's own conversation transcripts
-/// for its supported session locations — the project root and every currently-`Valid` worktree
-/// (bugfix 002/BUG-001, FR-020b). A transcript with no matching persisted record is reconstructed
-/// (id from the transcript filename, title read from the transcript if available, else the
-/// `Pending` placeholder); a transcript matching an existing record is left untouched. Must be
-/// called after `State::worktrees` is populated for `repo` (worktree discovery runs first at
-/// every call site). Best-effort throughout (mirrors `session_has_conversation`): an
-/// undeterminable provider config dir, or an unreadable transcript directory, simply yields no
-/// additional sessions rather than an error.
-fn reconcile_sessions_from_transcripts(core: &mut State, repo: &Path) {
-    let provider = ClaudeProvider;
-    let Some(config_dir) = provider.config_dir() else {
-        return;
-    };
-
-    let mut locations = vec![SessionLocation::Default];
-    locations.extend(
-        core.worktrees
-            .iter()
-            .filter(|w| w.status == micold_core::worktree::WorktreeStatus::Valid)
-            .map(|w| SessionLocation::Worktree(w.dir_name.clone())),
-    );
-
-    let mut seen: HashSet<Uuid> = core
-        .workspace
-        .sessions
-        .get(repo)
-        .map(|list| list.iter().map(|s| s.id.0).collect())
-        .unwrap_or_default();
-
-    let mut reconstructed = Vec::new();
-    for location in locations {
-        let cwd = session_cwd_for_location(repo, &location);
-        for session_id in provider.discover_transcript_session_ids(&config_dir, &cwd) {
-            if !seen.insert(session_id) {
-                continue;
-            }
-            // Bugfix BUG-003 (FR-020c): a closed/removed session's durable marker suppresses
-            // reconciliation regardless of what the app's own (possibly lost) store remembers.
-            if provider.is_archived(&config_dir, &cwd, session_id) {
-                continue;
-            }
-            let label = match provider.read_title(&config_dir, &cwd, session_id) {
-                Some(title) => SessionLabel::Named(title),
-                None => SessionLabel::Pending,
-            };
-            reconstructed.push(Session::restored(
-                SessionId::from_uuid(session_id),
-                location.clone(),
-                label,
-                TerminalMode::AiCli,
-            ));
-        }
-    }
-
-    if !reconstructed.is_empty() {
-        core.workspace
-            .sessions
-            .entry(repo.to_path_buf())
-            .or_default()
-            .extend(reconstructed);
-    }
 }
 
 fn persist_settings(core: &State) {
@@ -855,16 +794,28 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             // Switch without tearing down the outgoing project's sessions (feature 008, BS-1).
             // `open_or_activate` moves `active` to the new project, so capture the outgoing
-            // foreground FIRST (I1), then finish the switch bookkeeping for the new project.
+            // foreground FIRST (I1), then finish the switch bookkeeping for the new project. The
+            // in-memory `open_or_activate` gives instant UI; local git discovery seeds the worktree
+            // list until the daemon's post-attach refresh reconciles it (T055).
+            let previous = app.core.workspace.active.clone();
             app.core.record_foreground();
             app.core
                 .workspace
                 .open_or_activate(path.clone(), &StdFolderScanner::new());
             app.core.restore_after_activation(&path);
             app.core.set_worktrees(discover_worktrees(&path));
-            reconcile_sessions_from_transcripts(&mut app.core, &path);
             app.core.worktree_error = None;
-            persist(&mut app.core);
+            // The daemon is the single writer: tell it to learn this project (persist + discover),
+            // and switch this client's attachment to it. No local `persist()`, no local
+            // transcript-reconcile — sessions come from the daemon catalog via reconcile_catalog.
+            let add_path = path.clone();
+            send_op(app, PendingOp::ProjectAdd, move |req| {
+                ClientMsg::ProjectAdd {
+                    req,
+                    path: add_path,
+                }
+            });
+            switch_daemon_attachment(app, previous, &path);
             Task::none()
         }
         Message::KnownProjectReopened(path) => {
@@ -873,10 +824,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 .refresh_availability(&StdFolderScanner::new());
             // Non-destructive switch: keep the outgoing project's sessions running in the
             // background and restore the target project's foreground (feature 008, BS-1/BS-3).
+            let previous = app.core.workspace.active.clone();
             if app.core.switch_active(&path) {
                 app.core.set_worktrees(discover_worktrees(&path));
-                reconcile_sessions_from_transcripts(&mut app.core, &path);
-                persist(&mut app.core);
+                // Already a known project (no ProjectAdd); just move the daemon attachment.
+                switch_daemon_attachment(app, previous, &path);
             }
             Task::none()
         }
@@ -907,31 +859,31 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        // Forget a project (feature 014): stop its live session processes so none is orphaned
-        // (FR-010), let the pure reducer drop the record + metadata and clear the active working
-        // space if it was active (FR-003/005/008), persist the pruned catalog (FR-007), then delete
-        // the project's per-project state file so its persisted session records are discarded and
-        // cannot be resurrected on a later re-open (FR-005/FR-012). Nothing inside the project
-        // folder or its worktrees is touched (FR-006).
+        // Forget a project (feature 014): route through the daemon's `ProjectRemove`, which stops the
+        // project's sessions, drops its records, and deletes its per-project state file (FR-005/010),
+        // then broadcasts the pruned catalog (T055). The pure reducer drops the record + clears the
+        // active pointer in memory for instant feedback; nothing inside the project folder is touched.
         Message::ProjectForgetConfirmed => {
             if let Some(path) = app.core.forget_target.clone() {
-                // Kill every recorded session's processes. A session has a live PTY in `terminals`
-                // iff it is running, so `terminals.remove` is a no-op for idle/absent ones — the
-                // number actually stopped equals the count shown in the dialog (FR-002a/SC-005a).
-                for id in app.core.workspace.session_ids_of_project(&path) {
-                    stop_session(app, id);
-                }
-                app.core.update(Message::ProjectForgetConfirmed);
-                persist(&mut app.core);
-                if let Some(store) = JsonFileStore::default_location() {
-                    if let Err(err) = store.remove_project_state(&path) {
-                        app.core
-                            .notify_error(format!("Couldn't fully forget the project: {err}"));
+                app.grids.retain(|id, _| {
+                    !app.core
+                        .workspace
+                        .session_ids_of_project(&path)
+                        .contains(id)
+                });
+                let remove_path = path.clone();
+                send_op(app, PendingOp::ProjectRemove, move |req| {
+                    ClientMsg::ProjectRemove {
+                        req,
+                        path: remove_path,
                     }
+                });
+                // Release this client's attachment on the project it is forgetting.
+                if let Some(d) = &app.daemon {
+                    d.send(ClientMsg::Detach { project: path });
                 }
-            } else {
-                app.core.update(Message::ProjectForgetConfirmed);
             }
+            app.core.update(Message::ProjectForgetConfirmed);
             Task::none()
         }
         // Worktree rename (feature 008, FR-014/FR-015): the daemon is the single writer of the
@@ -1049,36 +1001,28 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // bugfix BUG-003); here we additionally record the durable, provider-side suppression
         // marker (FR-020c) so a still-existing `claude` transcript is never reconstructed by
         // reconciliation on a later project open.
+        // Close (archive) a session: route through the daemon's `SessionDelete`, which archives it
+        // durably (anti-resurrection marker) and stops its process (T055). The pure-core update
+        // archives the record in memory for instant feedback; the daemon reconciles other windows.
         Message::SessionCloseRequested(id) => {
-            stop_session(app, id);
-            if let Some((project_path, session)) = app.core.workspace.find_session(id) {
-                let provider = ClaudeProvider;
-                if let Some(config_dir) = provider.config_dir() {
-                    let cwd = session_cwd_for_location(project_path, &session.location);
-                    let _ = provider.mark_archived(&config_dir, &cwd, id.0);
-                }
-            }
+            app.grids.remove(&id);
+            send_op(app, PendingOp::DeleteSession, move |req| {
+                ClientMsg::SessionDelete { req, session: id }
+            });
             app.core.update(Message::SessionCloseRequested(id));
-            persist(&mut app.core);
             Task::none()
         }
-        // Permanently remove a session (bugfix BUG-003, FR-015c): kill the process (if any),
-        // record the same durable suppression marker as Close (FR-020c) so a still-existing
-        // `claude` transcript is never reconstructed either, then let the pure core drop the
-        // record outright.
+        // Permanently remove a session (bugfix BUG-003, FR-015c): the same daemon `SessionDelete` —
+        // the daemon has no hard-delete, so a remove is an archive with a durable tombstone, which
+        // also suppresses any future reconciliation (FR-020c). The pure core drops the record.
         Message::SessionRemoveConfirmed => {
             if let Some(id) = app.core.session_remove_target {
-                stop_session(app, id);
-                if let Some((project_path, session)) = app.core.workspace.find_session(id) {
-                    let provider = ClaudeProvider;
-                    if let Some(config_dir) = provider.config_dir() {
-                        let cwd = session_cwd_for_location(project_path, &session.location);
-                        let _ = provider.mark_archived(&config_dir, &cwd, id.0);
-                    }
-                }
+                app.grids.remove(&id);
+                send_op(app, PendingOp::DeleteSession, move |req| {
+                    ClientMsg::SessionDelete { req, session: id }
+                });
             }
             app.core.update(Message::SessionRemoveConfirmed);
-            persist(&mut app.core);
             Task::none()
         }
         // Switch the active session's terminal between AI CLI and Regular modes (feature 010,
@@ -1555,14 +1499,6 @@ fn scroll_view(app: &mut App, f: impl FnOnce(usize, usize) -> usize) {
     }
 }
 
-/// Tell the daemon to stop a session's process and drop the client's local grid cache for it.
-fn stop_session(app: &mut App, id: SessionId) {
-    app.grids.remove(&id);
-    if let Some(d) = &app.daemon {
-        d.send(ClientMsg::SessionKill { session: id });
-    }
-}
-
 /// View a session on the daemon — start/resume it and stream its grid — resetting the local
 /// selection and scroll for the newly-displayed session.
 fn view_and_start(app: &mut App, id: SessionId) {
@@ -1609,16 +1545,41 @@ fn send_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64) -> ClientMsg) {
     app.pending_ops.insert(req, op);
 }
 
+/// Move this client's daemon attachment from `old` to `new` on a project switch: release the old
+/// (so another window can take it), attach the new, and set the viewed session — so the daemon
+/// streams grid frames and discovers worktrees for the project now in focus (T055). A no-op when
+/// disconnected; the initial attach on connect is handled by `DaemonConnected`.
+fn switch_daemon_attachment(app: &App, old: Option<PathBuf>, new: &Path) {
+    let Some(daemon) = &app.daemon else {
+        return;
+    };
+    if let Some(old) = old {
+        if old != new {
+            daemon.send(ClientMsg::Detach { project: old });
+        }
+    }
+    daemon.send(ClientMsg::Attach {
+        project: new.to_path_buf(),
+        force: false,
+    });
+    daemon.send(ClientMsg::SetViewedSession {
+        project: new.to_path_buf(),
+        session: app.core.active_session,
+    });
+}
+
 /// Reconcile the client's core session state from the daemon's authoritative catalog snapshot
 /// (FR-011). The daemon owns sessions now, so each project's session list is made to mirror the
 /// snapshot: existing sessions have their lifecycle + label updated; sessions the daemon reports
 /// but the client lacks are added; sessions the daemon no longer reports (archived/removed) are
 /// dropped. A dangling `active_session` pointer is cleared.
 fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktrees: bool) {
-    // Adopt the daemon's display name for any project the client already knows (T055). Update-only:
-    // adding/removing projects from the list is driven by the open/forget RPCs + their pushes, so a
-    // project the client hasn't opened yet is not force-listed here, and one it just opened locally
-    // is not dropped before its ProjectAdd lands.
+    // Mirror the daemon's project list into the client (T055). Add projects the daemon reports that
+    // the client lacks (e.g. opened in another window), and adopt the daemon's display name for known
+    // ones. Deliberately NOT a full mirror: projects are not *removed* here — a `CatalogChanged` that
+    // predates this client's own in-flight `ProjectAdd` must not drop the project it just opened, and
+    // an ephemeral (non-persisting) daemon reporting an empty catalog must not wipe the list. Forget
+    // drops the record locally (optimistically) and durably on the daemon.
     for snap in &snapshot.projects {
         if let Some(existing) = core
             .workspace
@@ -1627,6 +1588,19 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
             .find(|p| p.path == snap.path)
         {
             existing.display_name = snap.display_name.clone();
+        } else {
+            let availability = if snap.available {
+                micold_core::project::Availability::Available
+            } else {
+                micold_core::project::Availability::Unavailable
+            };
+            let mut project = micold_core::project::Project::new(
+                snap.path.clone(),
+                snap.is_git_repo,
+                availability,
+            );
+            project.display_name = snap.display_name.clone();
+            core.workspace.projects.push(project);
         }
     }
     for project in &snapshot.projects {

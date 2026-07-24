@@ -294,6 +294,14 @@ impl Catalog {
         let ids = self.workspace.session_ids_of_project(path);
         self.workspace.forget(path);
         self.persist()?;
+        // Delete the project's per-project state file so its session records are durably discarded
+        // and cannot be reloaded if the folder is re-opened (feature 014, FR-005/FR-012). A no-op for
+        // the ephemeral catalog. Non-fatal: the catalog itself is already updated.
+        if let Some(store) = &self.project_store {
+            if let Err(err) = store.remove_project_state(path) {
+                tracing::warn!(project = %path.display(), %err, "failed to remove per-project state");
+            }
+        }
         Ok(ids)
     }
 

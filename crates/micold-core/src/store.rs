@@ -67,6 +67,14 @@ pub trait ProjectStore {
     /// Persist the catalog. Writes atomically (temp file + rename) so a crash mid-save
     /// cannot truncate the list (research R8).
     fn save(&self, workspace: &Workspace) -> io::Result<()>;
+
+    /// Delete a project's per-project persisted state when the project is forgotten (feature 014,
+    /// FR-005). The default is a no-op — for stores that don't split state per project, or that
+    /// don't persist at all — so only the file-backed store needs to implement it. Idempotent: an
+    /// already-absent file is success.
+    fn remove_project_state(&self, _project_path: &Path) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 /// The on-disk shape of the catalog. Unknown fields are ignored on read (serde default),
@@ -456,6 +464,11 @@ impl JsonFileStore {
 }
 
 impl ProjectStore for JsonFileStore {
+    /// Delegate to the inherent method (fully-qualified so it never re-enters this trait method).
+    fn remove_project_state(&self, project_path: &Path) -> io::Result<()> {
+        JsonFileStore::remove_project_state(self, project_path)
+    }
+
     fn load(&self) -> LoadOutcome {
         let (status, stored) = match std::fs::read_to_string(&self.path) {
             Ok(contents) => match serde_json::from_str::<StoredCatalog>(&contents) {
