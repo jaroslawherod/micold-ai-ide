@@ -198,7 +198,7 @@ stderr preserved, and a second window observing the change (quickstart S8).
 ### Tests FIRST (Principle I) ⚠️
 
 - [X] T050 [P] [US3] Test in `crates/micold-daemon/tests/mutation_semantics.rs`: worktree-create failures (branch exists, path collision, read-only parent) return a specific `GitFailed` error with git's stderr verbatim, no catalog entry, no leftover directory (FR-034; Edge cases).
-- [ ] T051 [P] [US3] Test in `crates/micold-daemon/tests/mutation_atomicity.rs`: a `req` lost to disconnect resolves client-side to explicit **unknown**, never success/failure, and settles by reading authoritative state on reconnect (FR-031/035).
+- [X] T051 [P] [US3] Test in `crates/micold-daemon/tests/mutation_atomicity.rs`: a `req` lost to disconnect resolves client-side to explicit **unknown**, never success/failure, and settles by reading authoritative state on reconnect (FR-031/035).
 - [X] T052 [P] [US3] Test: `WorktreeDelete` on a worktree with a live session and `stop_sessions:false` fails specifically rather than orphaning the process (W2; Edge: delete worktree with live session).
 
 ### Implementation
@@ -207,7 +207,7 @@ stderr preserved, and a second window observing the change (quickstart S8).
 - [X] T054 [US3] Fix the current dropped-error violation: worktree deletion errors must surface (was discarded at `src/main.rs:783-784`) (FR-032, Principle III).
 - [X] T055 [US3] Implement client-side pending/disabled control state per in-flight `req` (no duplicate submission) and the unknown-outcome resolution on reconnect in `crates/micold-client/`.
 - [X] T056 [US3] Implement empty-session pruning that runs **only** for a project with an attached client (FR-007a) in `crates/micold-daemon/src/catalog.rs`. **Main-sync**: pruning must treat already-`archived` sessions as gone (never revive or re-count them) and mark, not delete, so it composes with the anti-resurrection invariant (main `93a0a08`).
-- [ ] T057 [US3] User-guide doc: project/worktree operations now run through the daemon, in `docs/daemon.md` (Principle VII).
+- [X] T057 [US3] User-guide doc: project/worktree operations now run through the daemon, in `docs/daemon.md` (Principle VII).
 
 **Checkpoint**: All P1 stories complete — full MVP with everyday operations intact.
 

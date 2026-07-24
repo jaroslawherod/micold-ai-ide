@@ -49,6 +49,35 @@ keeps reopening a busy session fast regardless of how long it ran unattended.
 - The daemon persists the *catalog* (your projects, worktrees, and session identities) to disk, so
   those reappear after a reboot — but a session's live process and its on-screen scrollback do not.
 
+## Project and worktree operations run through the daemon (User Story 3)
+
+Adding or renaming a project, creating, renaming, or deleting a worktree, and creating or deleting a
+session are all performed by the **daemon**, not the window. The daemon is the single writer of your
+saved catalog (`projects.json`), which removes a whole class of problems that two processes writing
+the same file at once could cause. In practice this changes three things you can see:
+
+- **Failures are specific and actionable.** When a git operation can't complete — a branch name that
+  already exists, a worktree directory that collides, a worktree you asked to delete that still has a
+  running session — the app tells you exactly what went wrong, with git's own message included where
+  relevant, and leaves everything untouched. A failed worktree delete, for example, never strands a
+  running session or half-removes a directory; the worktree simply stays as it was.
+
+- **Changes propagate to every window.** Because the daemon owns the catalog and pushes updates, a
+  second window open on the same projects sees a new worktree, a rename, or a removed session appear
+  on its own — you don't refresh anything.
+
+- **An interrupted request never leaves you guessing.** Each operation is sent to the daemon and
+  applied atomically before it replies. If the connection drops after you submit but before the reply
+  arrives, the app tells you the outcome is **unknown** rather than pretending it succeeded or
+  failed — and when it reconnects, it reads the daemon's authoritative state so the window settles on
+  what actually happened.
+
+A couple of current limitations worth knowing:
+
+- Deleting a worktree keeps its git **branch** (only the worktree directory is removed), so a delete
+  is always recoverable.
+- The scrollback limit in Settings is applied by the daemon; other Settings are still saved locally.
+
 ## Surviving logout
 
 On Linux, whether the daemon outlives your closing the app depends on how it was started; making it
@@ -56,5 +85,5 @@ survive a full logout is covered under User Story 7 and documented there when it
 
 ---
 
-*This document grows with the feature: attach/detach and the activity badges (User Story 2) and
-project/worktree operations through the daemon (User Story 3) are appended as those land.*
+*This document grows with the feature: attach/detach and the activity badges (User Story 2) are
+appended as those land.*
