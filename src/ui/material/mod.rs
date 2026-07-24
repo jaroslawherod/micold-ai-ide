@@ -18,6 +18,7 @@ mod project_switcher;
 mod select;
 mod tag;
 mod terminal_pane;
+mod toggle_chip;
 mod toolbar;
 mod tree_view;
 
@@ -34,6 +35,7 @@ pub(crate) use terminal_pane::target_offset_delta;
 pub use terminal_pane::TerminalPane;
 #[cfg(test)]
 pub(crate) use terminal_pane::{scrollbar_metrics, viewport_row};
+pub use toggle_chip::ToggleChip;
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
 

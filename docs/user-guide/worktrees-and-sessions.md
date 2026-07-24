@@ -61,6 +61,36 @@ clicking outside it, pressing `Esc`, or tapping the filter button again — any 
 stays applied either way. Whenever a filter is active, the filter button itself stays tinted
 so you can tell filtering is on even with the panel closed.
 
+### Agent worktrees
+
+Some AI coding tools create their own throwaway worktrees inside your project — one per
+background sub-task — using the same `.claude/worktrees/` folder the app manages. They have
+machine-generated names such as `agent-a885b42dc521fbda1`, you didn't create them, and they
+usually disappear on their own.
+
+**The app hides them.** They don't appear in the sidebar, they aren't counted, and they never
+show up as somewhere you can start a session. Your own worktrees are untouched, including any
+whose name happens to begin with "agent" — only the machine-generated pattern (the `agent-`
+prefix followed by a long run of hexadecimal characters) is treated as reserved.
+
+Hiding is display-only. The app never deletes, prunes, renames, or otherwise modifies an agent
+worktree or its branch — that lifecycle belongs to the tool that created it, not to the app. If
+you want to see them, `git worktree list` in a terminal still shows everything.
+
+**To see them in the app**, open the filter panel and tap **Show agent worktrees**. They join the
+list, each marked with a muted `agent` chip so you can always tell them apart from your own work.
+Tag filters apply to them exactly as they do to everything else.
+
+Two things to know about that switch:
+
+- It **resets itself** — every time you restart the app, and every time you switch projects. It
+  applies only to the project you turned it on for, so you never land somewhere new with
+  unexplained extra rows.
+- Revealed rows are **fully live**: you can start a session in one, rename it, or delete it, with
+  the same confirmation as any other worktree. There is no extra safety net, so take care —
+  deleting a worktree an agent is still using will disrupt whatever it was doing, exactly as it
+  would from a terminal.
+
 ### Resizing and hiding the sidebar
 
 - **Resize**: drag the thin handle on the sidebar's right edge to make it wider or narrower.
