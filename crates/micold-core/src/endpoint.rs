@@ -40,7 +40,10 @@ mod imp {
     use std::fs;
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
-    /// The current effective uid.
+    /// The current effective uid. Only the non-macOS paths (Linux/other-Unix `resolve` and
+    /// `verify_owned_0700`) consult it; macOS keys the endpoint on `$HOME`, so gate it off there to
+    /// avoid a dead-code warning.
+    #[cfg(not(target_os = "macos"))]
     fn euid() -> u32 {
         // SAFETY: `geteuid` is always safe — it takes no arguments and cannot fail.
         unsafe { libc::geteuid() }
@@ -179,14 +182,37 @@ mod imp {
 mod tests {
     use super::*;
 
+    #[cfg(windows)]
+    #[test]
+    fn resolve_creates_a_usable_endpoint_pair() {
+        // Windows endpoint resolution is a deliberate stub until the Windows CI gate (T083/W5): it
+        // must fail loudly as `Unsupported` rather than bind a half-configured pipe. Asserting the
+        // stub contract keeps CI honest without pretending Windows is done.
+        let err = resolve().expect_err("windows resolve is a planned stub (T083/W5)");
+        assert_eq!(err.kind(), std::io::ErrorKind::Unsupported);
+    }
+
+    #[cfg(unix)]
     #[test]
     fn resolve_creates_a_usable_endpoint_pair() {
         // Force the /tmp-style fallback into a temp XDG dir so the test is hermetic on Linux.
+        // (macOS ignores XDG and resolves under $HOME/.micold/run; setting it is harmless there.)
         let tmp = tempfile::tempdir().unwrap();
         // SAFETY: single-threaded test; we set then resolve immediately.
         std::env::set_var("XDG_RUNTIME_DIR", tmp.path());
         let ep = resolve().expect("resolve endpoint");
-        assert!(ep.socket_path.ends_with("daemon.sock"));
+        // The socket file name is shortened on macOS to fit the 103-byte `sun_path` budget
+        // (`d.sock`); every other Unix uses `daemon.sock`. Assert the platform's own name.
+        let expected = if cfg!(target_os = "macos") {
+            "d.sock"
+        } else {
+            "daemon.sock"
+        };
+        assert!(
+            ep.socket_path.ends_with(expected),
+            "socket path {:?} should end with {expected}",
+            ep.socket_path
+        );
         assert_ne!(ep.socket_path, ep.lock_path);
         assert!(ep.socket_path.parent().unwrap().is_dir());
         std::env::remove_var("XDG_RUNTIME_DIR");
