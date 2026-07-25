@@ -52,6 +52,23 @@ claude --resume <uuid>                       # specific session, non-interactive
 - Until present → `SessionLabel::Pending` (placeholder). Re-read opportunistically (title grows
   with the conversation). A failed/absent read NEVER fails the session — label stays `Pending`.
 
+## Durable close/remove suppression marker (bugfix BUG-003, 2026-07-23)
+
+- Path: `~/.claude/projects/<encoded-cwd>/<uuid>.archived` — an empty sentinel file, sibling to
+  the session's `<uuid>.jsonl` transcript, same `<encoded-cwd>` scheme as the transcript path
+  (respect `CLAUDE_CONFIG_DIR`).
+- Written (best-effort, never fails the caller) when the user **closes** or **removes** a session
+  (FR-015a/FR-015c). Never read or written by `claude` itself — this is an app-owned artifact
+  that happens to live alongside `claude`'s own data so it survives independently of the app's
+  own store (`projects.json`, the per-project state file).
+- Checked by reconciliation (FR-020b/FR-020c): an orphan transcript with a matching `.archived`
+  marker is never reconstructed as a session, regardless of what the app's own persisted store
+  currently contains (including containing nothing at all).
+- The `.jsonl` extension filter `discover_transcript_session_ids` (T065) already applies means a
+  `.archived` file is never misread as a transcript / session id source.
+- Not versioned by `schema_version` — it isn't part of `projects.json` at all; it's provider-side
+  storage, addressed purely by session id, with no shape to evolve beyond "present or absent."
+
 ## Cwd invariant
 
 `claude` uses its process cwd as project context; there is no `--project-dir` flag. The backend

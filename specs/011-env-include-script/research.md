@@ -183,6 +183,17 @@ launch instead of caching — explicitly rejected by the spec (FR-007) for the s
 rc-sourcing cost (and the associated timeout risk) on every launch instead of at most twice per
 run.
 
+**Bugfix note (BUG-002)**: This decision's single application-wide snapshot has no directory
+input, so `attempt_env`'s sourcing subprocess always runs in the app process's own launch
+directory — never the session's project/worktree directory. A version-manager hook (mise, asdf,
+nvm, pyenv, rbenv, …) computes its `PATH` contribution from the sourcing shell's own cwd, so this
+silently drops that contribution for every project (FR-020). Corrected: the cache becomes keyed
+per (script path, resolution directory) pair rather than one global instance, resolved lazily at
+session-launch time; the "resolve on every launch instead of caching" rejection above still holds
+in spirit — only the *first* launch against a given, not-yet-cached directory pays the sourcing
+cost, not every launch. `boot()`'s original resolve-once call remains, now serving as the
+pre-warmed cache entry for the "Default"/no-project-directory case. See `bugs/BUG-002.md`.
+
 ## R6 — Windows: `powershell.exe` (built-in 5.1), profile default, NUL-delimited dump for parser reuse
 
 **Decision**: On Windows, source via `powershell.exe` (Windows PowerShell 5.1, which ships on

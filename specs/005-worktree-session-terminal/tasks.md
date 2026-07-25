@@ -158,6 +158,133 @@ sessions restore and resume.
 - [x] T062 [US3] (bugfix BUG-001) Exclude **empty sessions** (no recorded `claude` conversation) from persistence: filter on save and prune on load, using a `claude`-transcript existence check (`<claude>/projects/<encoded-cwd>/<session-id>.jsonl`), so a restart never resumes a nonexistent conversation (FR-020/FR-020a). In `src/main.rs` (persist/boot); covered by the manual restart check.
 - [X] T063 [US3] (bugfix BUG-002) Introduce the **AI CLI provider** abstraction (FR-024). Tests-first in `tests/ai_cli_provider.rs` for a provider seam consolidating: launch command, session-id flag, resume mechanism, conversation-transcript path + encoding, recorded-conversation detection, and session-title extraction. Defined an `AiCliProvider` trait + concrete `ClaudeProvider` in `src/provider.rs`; routed the `claude` specifics through it — `src/main.rs` `session_has_conversation` (via `config_dir` + `has_recorded_conversation`, removed the ad-hoc `claude_config_dir`), `src/terminal.rs` `claude_args` (delegates to `launch_args`), and `src/ui/terminal.rs` command name (`ClaudeProvider.command()`). No behaviour change for the `claude` default; persisted schema unchanged.
 - [X] T064 [US3] (bugfix BUG-002, completes T054) Implemented **session-title sync** at the I/O boundary in `src/main.rs` (`sync_session_titles`, called on `Message::TerminalTick`). Headless test-first in `tests/session_title_sync.rs` proves the label goes `Pending → Named` when the provider supplies a title and re-syncs when it changes, plus a no-op when no title exists. For each active session it reads the provider title via the T063 seam (`AiCliProvider::read_title`; for `claude`, the latest `ai-title` record in the transcript JSONL) and emits `Message::SessionTitleUpdated { id, title }` when it differs from the current label. A failed/absent read is a no-op and never fails the session (FR-011a, SC-009).
+- [X] T065 [P] [US3] (bugfix 002/BUG-001) Failing tests in `tests/session_reconciliation.rs`
+  (mirroring `reconcile_sessions_from_transcripts` from public API, since `src/main.rs` cannot be
+  linked from an integration test — same pattern as `tests/session_title_sync.rs`'s `sync_once`):
+  orphan transcripts under a project's root-dir and worktree transcript directories reconstruct a
+  `Session` per orphan (id from filename, correct location, title via `read_title` if available
+  else `Pending`); a transcript matching an already-persisted id is not duplicated; no transcripts
+  leaves sessions untouched. Backing them: extended the `AiCliProvider` trait (`src/provider.rs`,
+  T063's seam) with `transcript_dir` (pure path derivation, factored out of `transcript_path`) and
+  a default-provided `discover_transcript_session_ids` (lists `transcript_dir`'s `*.jsonl` files,
+  parses each filename as a session id; best-effort — an unreadable directory yields an empty
+  list, never an error).
+- [X] T066 [US3] (bugfix 002/BUG-001) Implemented the reconciliation scan
+  (`reconcile_sessions_from_transcripts`) at the I/O boundary in `src/main.rs`: for a project's
+  root directory and every currently-`Valid` worktree, calls `discover_transcript_session_ids`
+  (T065) and inserts a reconstructed `Session::restored(...)` (title via `read_title`, else
+  `Pending`) for any id not already in the persisted session list. Wired at all three project-open
+  sites — `boot()` (restoring the last-active project), `Message::FolderChosen`, and
+  `Message::KnownProjectReopened` — right after `set_worktrees`, before `persist` (FR-020b,
+  SC-010; depends on T063; and, cross-feature, on
+  `specs/002-project-workspace-management/tasks.md` T051 — the per-project store split — NOT this
+  file's own T051 "Close/stop session," a different, unrelated, already-completed task, both of
+  which landed in this same change).
+
+- [ ] T067 [P] [US3] (bugfix BUG-003) Failing tests in `tests/session_archive.rs` (new):
+  `Session::archive()` sets `lifecycle = Idle` and `archived = true`; a session's
+  `archived: true` excludes it from whatever helper the sidebar builds its rows from
+  (`State::active_sessions()`), so it disappears from both the Default node and worktree nodes.
+  Landed as `tests/session_archive.rs`: `archive_stops_the_process_and_keeps_the_record` +
+  `archived_sessions_are_hidden_from_the_sidebar` (via `State::sidebar_entries()`, closer to what
+  the UI actually renders than `active_sessions()` directly — see T074's note).
+- [X] T068 [P] [US3] (bugfix BUG-003) Failing tests in `tests/ai_cli_provider.rs` (extend):
+  `AiCliProvider::mark_archived` writes a marker file beside the transcript;
+  `is_archived` reflects the marker's presence/absence; `discover_transcript_session_ids`
+  (T065) is unaffected by the marker's different file extension (no false-positive orphan).
+- [X] T069 [P] [US3] (bugfix BUG-003) Failing test in `tests/session_reconciliation.rs` (extend):
+  reconciliation skips an orphan transcript that has a matching marker file, **even when the
+  mirrored function is given an empty `Workspace`** (simulating total loss of the app's own
+  store) — the durability guarantee behind SC-011: suppression must not depend on the app's own
+  persisted record surviving.
+- [X] T070 [US3] (bugfix BUG-003) Implement `Session.archived: bool` + `Session::archive()` in
+  `src/session.rs` (defaults `false` in both `start_new` and `restored`); `StoredSession.archived`
+  (`#[serde(default)]`, no schema bump) + round-trip via `from_session`/`into_session` in
+  `src/store.rs`, to make T067 pass.
+- [X] T071 [US3] (bugfix BUG-003) Implement `AiCliProvider::archived_marker_path`/`mark_archived`/
+  `is_archived` in `src/provider.rs` (default-provided, mirrors `has_recorded_conversation`'s
+  file-existence-check shape; `mark_archived` is best-effort I/O, never fails the caller), to make
+  T068 pass (FR-020c, FR-024).
+- [X] T072 [US3] (bugfix BUG-003) Wire `reconcile_sessions_from_transcripts` (`src/main.rs`) to
+  skip any orphan transcript id for which `provider.is_archived(...)` is true, before
+  reconstructing it, to make T069 pass (FR-020c; depends on T071).
+- [X] T073 [US3] (bugfix BUG-003) Repurpose `Message::SessionCloseRequested`'s pure-core handler
+  (`src/app.rs`) from `list.retain(...)` (delete) to finding the session and calling `.archive()`
+  (FR-015a). `src/main.rs`'s existing kill-then-persist wrapper additionally calls
+  `provider.mark_archived(...)` (best-effort) before persisting (depends on T070, T071).
+- [X] T074 [US3] (bugfix BUG-003) Filter archived sessions out of the sidebar (FR-015a; depends on
+  T070). **Deviates from plan**: filtering landed in `sidebar_entries`'s Default-node collection
+  and `worktree_tree`'s per-worktree collection (`src/app.rs`) rather than inside
+  `active_sessions()` itself — that method's callers include `sessions_in_worktree` (needs every
+  record, archived or not, for worktree-delete cleanup) and changing its return type to
+  accommodate a filter would have forced an allocation (`Vec<&Session>`) that broke
+  `worktree_tree`'s existing `.cloned()` chain. Filtering at the two actual render sites is
+  simpler and has the same effect: both sidebar locations hide archived sessions.
+- [X] T075 [US3] (bugfix BUG-003) Add the session right-click context menu, mirroring the
+  worktree row's `WorktreeMenuToggled`/`worktree_menu_open` pattern: `session_menu_open:
+  Option<SessionId>`, `Message::SessionMenuToggled`/`SessionMenuDismissed` (`src/app.rs`),
+  `.on_right_press(Message::SessionMenuToggled(session.id))` on `session_tree_item`
+  (`src/ui/sidebar.rs`), and a `session_menu_items` view function (mirrors `worktree_menu_items`
+  in `src/ui/mod.rs`) offering "Close" (`SessionCloseRequested`) and "Remove"
+  (`SessionRemoveRequested`). **Not parallel with T076** (despite no other file overlap): the
+  "Remove" menu item references `Message::SessionRemoveRequested`, which T076 defines — depends
+  on T076.
+- [X] T076 [US3] (bugfix BUG-003) Add the Remove confirm flow (mirrors
+  `WorktreeDeleteRequested`/`Confirmed`/`Cancelled` + `Overlay::ConfirmWorktreeDelete`):
+  `Overlay::ConfirmSessionRemove`, `session_remove_target: Option<SessionId>`,
+  `Message::SessionRemoveRequested`/`SessionRemoveConfirmed`/`SessionRemoveCancelled` in
+  `src/app.rs` — `SessionRemoveConfirmed`'s pure handler deletes the record outright (the
+  pre-BUG-003 close behavior) and clears `active_session` if it was the target. `src/main.rs`
+  gets one explicit arm for `SessionRemoveConfirmed` (kill the terminal if running, call
+  `provider.mark_archived(...)`, then `app.core.update(...)`, then persist); every other new
+  message here is pure and falls through the existing `other => app.core.update(other)`
+  passthrough, same as the worktree menu today (FR-015c; depends on T071, T074). Also wired:
+  `Overlay`'s live-render match, its `dismissing_modal` snapshot path, `ClosingOverlay` (all three
+  in `src/ui/mod.rs`/`src/main.rs`), and the Escape-key mapping (both the pure `on_escape` in
+  `src/app.rs` and the gui `Subscription`-based one in `src/ui/mod.rs` — this codebase has both).
+- [X] T077 [US3] (bugfix BUG-003) New `src/ui/confirm_session_remove.rs` modal (mirrors
+  `confirm_delete.rs`), wired into `src/ui/mod.rs`'s overlay match and the Escape-key mapping
+  (mirrors `Overlay::ConfirmWorktreeDelete => Some(Message::WorktreeDeleteCancelled)`) (depends on
+  T076 for `Message::SessionRemoveConfirmed`/`Cancelled` — not actually parallel, same as T075).
+- [X] T078 [US3] (bugfix BUG-003) Updated the "Starting, switching, and closing sessions" section
+  of `docs/user-guide/worktrees-and-sessions.md` to describe Close (archive, invisible, not
+  resurrected on reopen) vs. Remove (permanent, confirm-gated, only offered on a still-visible
+  session) (Principle VII).
+- [X] T079 [US3] (bugfix BUG-003, found by code review) `Message::WorktreeDeleteConfirmed`
+  (`src/main.rs`) killed a deleted worktree's sessions and dropped their records without ever
+  calling `provider.mark_archived(...)` — so a worktree recreated later with the same `dir_name`
+  (same transcript `cwd` encoding) would have its old sessions resurrected by reconciliation
+  (FR-020c gap). Fixed by marking each of the worktree's sessions archived, mirroring
+  Close/Remove, before the git/fs removal. Regression test:
+  `confirmed_delete_marks_the_worktrees_sessions_archived_but_not_others` in
+  `tests/worktree_delete.rs` (mirrors the fixed confirmed-delete flow, same reasoning as
+  `tests/session_reconciliation.rs` — `src/main.rs` can't be linked from an integration test),
+  asserting the target worktree's session is marked archived and an unrelated worktree's is not.
+- [X] T080 [US3] (bugfix BUG-003, found by broader code review of the whole diff) T079's fix
+  called `mark_archived` (and killed the worktree's sessions) *unconditionally*, before
+  `remove_worktree` was even attempted — so a **failed** delete (a locked worktree, a branch
+  checked out elsewhere, a permission error; exactly what `fr_023_failed_delete_...` already
+  covers) permanently destroyed that worktree's still-valid sessions: the worktree survived and
+  was correctly reported as such (FR-023), but its sessions were gone, with the new durable
+  marker now blocking the accidental reconciliation-based recovery that used to make this
+  non-permanent. Fixed by gating the kill/`mark_archived`/record-drop on `remove_worktree`
+  actually succeeding; on failure, dismiss the confirm dialog the same way
+  `WorktreeDeleteCancelled` already does, leaving the sessions untouched. Regression test:
+  `fr_023_failed_delete_leaves_its_sessions_running_and_unarchived` in `tests/worktree_delete.rs`.
+- (bugfix 002/BUG-001, found by the same review) `JsonFileStore::save`'s catalog/per-project
+  write ordering had a related gap — see `specs/002-project-workspace-management/tasks.md` T054
+  for the fix (this file only tracks 005-owned session/UI work; `store.rs`'s save-ordering
+  guarantee is 002's contract).
+
+**Checkpoint (BUG-003)**: Verified 2026-07-23 — `cargo test --no-default-features --all-targets`
+(57 test binaries incl. new `session_archive.rs` and extended `ai_cli_provider.rs`/
+`session_reconciliation.rs`/`worktree_delete.rs`, all green); `cargo check`/`clippy --features gui
+--all-targets -- -D warnings` clean on both feature sets; `cargo fmt --all -- --check` clean. One
+pre-existing test (`tests/app_state.rs::session_started_selected_and_closed`) updated for the new
+archive semantics
+— it asserted `active_sessions().is_empty()` after close, which assumed the old delete-on-close
+behavior; not a false completion of its own task, just an assumption BUG-003 intentionally
+reverses.
 
 **Checkpoint**: Concurrent `claude` sessions run in worktrees, persist, resume, and recover from crashes.
 
@@ -283,3 +410,23 @@ docs. Verification evidence:
 **Bugfix**: 2026-07-16 — BUG-001 Added T062 (empty sessions excluded from persistence). See `bugs/BUG-001.md`. Also resolved implementation drift on T047 (terminal now interprets ANSI/VT via `alacritty_terminal` instead of showing raw escapes).
 
 **Bugfix**: 2026-07-17 — BUG-002 Session name kept in sync with the AI CLI provider's session name, and `claude` references abstracted behind an AI CLI provider seam. Added + **completed** T063 (AI CLI provider abstraction `src/provider.rs`, FR-024) and T064 (session-title-sync reader in `src/main.rs`, completes the never-implemented T054). New headless tests: `tests/ai_cli_provider.rs` (10) + `tests/session_title_sync.rs` (2), all green; full suite + GUI build + clippy clean. See `bugs/BUG-002.md`.
+
+**Bugfix**: 2026-07-21 — 002/BUG-001 Added T065/T066: on project open, reconcile the session list
+against the AI CLI provider's transcripts for the project's root directory and every worktree,
+reconstructing any session whose transcript exists but whose persisted record does not (FR-020b,
+SC-010). Companion to the per-project storage split in
+`specs/002-project-workspace-management` (its own BUG-001, Phase 8, T048–T053). See
+`specs/002-project-workspace-management/bugs/BUG-001.md`.
+
+**Bugfix**: 2026-07-23 — BUG-003 Added T067–T078: closing a session was silently undone by
+T065/T066's reconciliation, since close deleted the record and the transcript survives. Close now
+archives (FR-015a); a new Remove action permanently deletes, confirm-gated (FR-015c); both record
+a durable, provider-side marker (FR-020c) reconciliation checks — independent of the app's own
+store, so the suppression survives even total loss of `projects.json` and the per-project state
+file (SC-011). See `bugs/BUG-003.md`.
+
+**Bugfix**: 2026-07-23 — BUG-003 follow-up. Automated code review of the above found that
+`WorktreeDeleteConfirmed` had the exact same gap FR-020c was meant to close: it never called
+`mark_archived` for the sessions it killed, so a worktree recreated under the same name later
+could have its old sessions resurrected. Added T079: fix + regression test
+(`tests/worktree_delete.rs`).

@@ -137,3 +137,45 @@ fn read_title_is_none_when_transcript_missing() {
     assert_eq!(ClaudeProvider.read_title(config.path(), cwd, id), None);
     assert!(!ClaudeProvider.has_recorded_conversation(config.path(), cwd, id));
 }
+
+// --- Bugfix BUG-003: durable close/remove suppression marker (T068) ---
+
+#[test]
+fn mark_archived_then_is_archived_reflects_it() {
+    let id = fixed_id();
+    let config = tempfile::tempdir().unwrap();
+    let cwd = Path::new("/home/u/proj/.claude/worktrees/feat-x");
+
+    assert!(
+        !ClaudeProvider.is_archived(config.path(), cwd, id),
+        "no marker written yet"
+    );
+
+    ClaudeProvider
+        .mark_archived(config.path(), cwd, id)
+        .unwrap();
+
+    assert!(
+        ClaudeProvider.is_archived(config.path(), cwd, id),
+        "marker written by mark_archived must be reflected by is_archived"
+    );
+}
+
+#[test]
+fn archived_marker_is_never_discovered_as_a_transcript() {
+    let id = fixed_id();
+    let config = tempfile::tempdir().unwrap();
+    let cwd = Path::new("/home/u/proj/.claude/worktrees/feat-x");
+
+    // Only a marker exists for this id — no `.jsonl` transcript was ever written.
+    ClaudeProvider
+        .mark_archived(config.path(), cwd, id)
+        .unwrap();
+
+    assert!(
+        ClaudeProvider
+            .discover_transcript_session_ids(config.path(), cwd)
+            .is_empty(),
+        "a `.archived` marker must never be misread as a `.jsonl` transcript"
+    );
+}

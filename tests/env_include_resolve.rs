@@ -25,7 +25,7 @@ mod unix {
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "script.sh", "export QUICKSTART_MARKER=hello\n");
 
-        let (vars, outcome) = resolve(&script, Duration::from_secs(5));
+        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(5));
 
         assert_eq!(outcome, EnvIncludeOutcome::Success);
         assert!(vars.contains(&("QUICKSTART_MARKER".to_string(), "hello".to_string())));
@@ -36,7 +36,7 @@ mod unix {
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("does-not-exist.sh");
 
-        let (vars, outcome) = resolve(&script, Duration::from_secs(5));
+        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(5));
 
         assert_eq!(outcome, EnvIncludeOutcome::MissingScript);
         assert!(vars.is_empty());
@@ -47,7 +47,7 @@ mod unix {
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "script.sh", "echo 'something went wrong'\nexit 1\n");
 
-        let (vars, outcome) = resolve(&script, Duration::from_secs(5));
+        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(5));
 
         assert!(vars.is_empty());
         match outcome {
@@ -65,7 +65,7 @@ mod unix {
         let script = write_script(&dir, "script.sh", "sleep 999\n");
 
         let start = std::time::Instant::now();
-        let (vars, outcome) = resolve(&script, Duration::from_millis(300));
+        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_millis(300));
         let elapsed = start.elapsed();
 
         assert!(vars.is_empty());
@@ -81,7 +81,7 @@ mod unix {
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "script.sh", "");
 
-        let (vars, outcome) = resolve(&script, Duration::from_secs(5));
+        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(5));
 
         assert_eq!(outcome, EnvIncludeOutcome::Success);
         assert!(vars.is_empty());
@@ -116,13 +116,57 @@ mod unix {
             "case $- in\n    *i*) ;;\n      *) return;;\nesac\nexport QUICKSTART_MARKER=hello\n",
         );
 
-        let (vars, outcome) = resolve(&script, Duration::from_secs(5));
+        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(5));
 
         assert_eq!(outcome, EnvIncludeOutcome::Success);
         assert!(
             vars.contains(&("QUICKSTART_MARKER".to_string(), "hello".to_string())),
             "expected QUICKSTART_MARKER to be captured from the default-shaped ~/.bashrc, but \
              the non-interactive guard blocked it; captured vars: {vars:?}"
+        );
+    }
+
+    /// BUG-002 (specs/011-env-include-script/bugs/BUG-002.md): reproduces the report that
+    /// directory-dependent `PATH`/env contributions (the shape a version-manager hook like
+    /// `mise activate bash` produces — it inspects the sourcing shell's *own* cwd for a
+    /// `mise.toml`/`.tool-versions`) are only captured when the sourcing subprocess's working
+    /// directory is the session's project directory, not wherever the script file itself happens
+    /// to live.
+    ///
+    /// The script here lives in one tempdir (`script_dir`) but checks for a sentinel file in its
+    /// *own current working directory* — a stand-in for a project's `mise.toml` — which is a
+    /// second, independent tempdir supplied as `resolve()`'s `cwd` argument.
+    #[test]
+    fn directory_dependent_export_is_captured_only_when_cwd_contains_marker() {
+        let script_dir = tempfile::tempdir().unwrap();
+        let script = write_script(
+            &script_dir,
+            "script.sh",
+            "if [ -f ./.bug002-marker ]; then export BUG002_VAR=present; fi\n",
+        );
+
+        let project_with_marker = tempfile::tempdir().unwrap();
+        std::fs::File::create(project_with_marker.path().join(".bug002-marker")).unwrap();
+        let (vars, outcome) = resolve(&script, project_with_marker.path(), Duration::from_secs(5));
+        assert_eq!(outcome, EnvIncludeOutcome::Success);
+        assert!(
+            vars.contains(&("BUG002_VAR".to_string(), "present".to_string())),
+            "expected BUG002_VAR to be captured when the sourcing cwd contains the marker file \
+             (mirrors a version-manager hook keyed off cwd, e.g. mise.toml); captured vars: \
+             {vars:?}"
+        );
+
+        let project_without_marker = tempfile::tempdir().unwrap();
+        let (vars, outcome) = resolve(
+            &script,
+            project_without_marker.path(),
+            Duration::from_secs(5),
+        );
+        assert_eq!(outcome, EnvIncludeOutcome::Success);
+        assert!(
+            !vars.contains(&("BUG002_VAR".to_string(), "present".to_string())),
+            "expected BUG002_VAR to be absent when the sourcing cwd does not contain the marker; \
+             captured vars: {vars:?}"
         );
     }
 }
@@ -136,7 +180,7 @@ mod windows {
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "profile.ps1", "$env:QUICKSTART_MARKER = 'hello'\n");
 
-        let (vars, outcome) = resolve(&script, Duration::from_secs(10));
+        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(10));
 
         assert_eq!(outcome, EnvIncludeOutcome::Success);
         assert!(vars.contains(&("QUICKSTART_MARKER".to_string(), "hello".to_string())));
@@ -147,7 +191,7 @@ mod windows {
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("does-not-exist.ps1");
 
-        let (vars, outcome) = resolve(&script, Duration::from_secs(10));
+        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(10));
 
         assert_eq!(outcome, EnvIncludeOutcome::MissingScript);
         assert!(vars.is_empty());
@@ -162,7 +206,7 @@ mod windows {
             "Write-Output 'something went wrong'\nexit 1\n",
         );
 
-        let (vars, outcome) = resolve(&script, Duration::from_secs(10));
+        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(10));
 
         assert!(vars.is_empty());
         match outcome {
@@ -180,7 +224,7 @@ mod windows {
         let script = write_script(&dir, "profile.ps1", "Start-Sleep -Seconds 999\n");
 
         let start = std::time::Instant::now();
-        let (vars, outcome) = resolve(&script, Duration::from_millis(500));
+        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_millis(500));
         let elapsed = start.elapsed();
 
         assert!(vars.is_empty());
@@ -196,9 +240,44 @@ mod windows {
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "profile.ps1", "");
 
-        let (vars, outcome) = resolve(&script, Duration::from_secs(10));
+        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(10));
 
         assert_eq!(outcome, EnvIncludeOutcome::Success);
         assert!(vars.is_empty());
+    }
+
+    /// BUG-002 (specs/011-env-include-script/bugs/BUG-002.md): Windows equivalent of the Unix
+    /// directory-dependent-PATH regression test — see that module's doc comment.
+    #[test]
+    fn directory_dependent_export_is_captured_only_when_cwd_contains_marker() {
+        let script_dir = tempfile::tempdir().unwrap();
+        let script = write_script(
+            &script_dir,
+            "profile.ps1",
+            "if (Test-Path .\\.bug002-marker) { $env:BUG002_VAR = 'present' }\n",
+        );
+
+        let project_with_marker = tempfile::tempdir().unwrap();
+        std::fs::File::create(project_with_marker.path().join(".bug002-marker")).unwrap();
+        let (vars, outcome) = resolve(&script, project_with_marker.path(), Duration::from_secs(10));
+        assert_eq!(outcome, EnvIncludeOutcome::Success);
+        assert!(
+            vars.contains(&("BUG002_VAR".to_string(), "present".to_string())),
+            "expected BUG002_VAR to be captured when the sourcing cwd contains the marker file; \
+             captured vars: {vars:?}"
+        );
+
+        let project_without_marker = tempfile::tempdir().unwrap();
+        let (vars, outcome) = resolve(
+            &script,
+            project_without_marker.path(),
+            Duration::from_secs(10),
+        );
+        assert_eq!(outcome, EnvIncludeOutcome::Success);
+        assert!(
+            !vars.contains(&("BUG002_VAR".to_string(), "present".to_string())),
+            "expected BUG002_VAR to be absent when the sourcing cwd does not contain the marker; \
+             captured vars: {vars:?}"
+        );
     }
 }

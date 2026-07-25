@@ -32,12 +32,13 @@ use micold_ai_ide::worktree::{
     create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir, CreateError,
     CreateProgressEvent, Worktree,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use ui::terminal::{spawn_pty, spawn_shell_pty, RuntimeTerminal, SessionTerminals};
 use ui::MotionKey;
+use uuid::Uuid;
 
 /// How often the OS light/dark preference is polled while the window has input focus
 /// (research R4).
@@ -106,6 +107,10 @@ enum ClosingOverlay {
     Settings(SettingsDraft),
     ConfirmDelete(String),
     WorktreeRename(WorktreeRenameDraft),
+    ConfirmSessionRemove(String),
+    /// Fading-out confirm-forget dialog (feature 014): the project's display name and the
+    /// running-session count captured at close time, so the exit animation matches the live view.
+    ConfirmForget(String, usize),
 }
 
 /// The binary's application state: the pure core plus gui-only runtime handles.
@@ -154,45 +159,106 @@ struct App {
     env_include_enabled: bool,
     env_include_script_path: String,
     env_include_timeout_secs: u64,
-    /// The shared, in-memory-only resolved-environment snapshot (data-model.md). One instance per
-    /// app run, applied uniformly to every session's spawn call site — never persisted (FR-008).
-    env_include: EnvIncludeSnapshot,
+    /// Per-directory cache of resolved environment-include snapshots (data-model.md; BUG-002).
+    /// Keyed by the directory the sourcing subprocess ran in: a version-manager hook (mise, asdf,
+    /// nvm, pyenv, rbenv, …) computes its `PATH` contribution from the sourcing shell's own cwd,
+    /// so one directory-agnostic snapshot can never be correct for more than one project.
+    /// Sessions launched in the same directory share that directory's cached entry; sessions in
+    /// different directories resolve (and cache) independently. Never persisted (FR-008).
+    env_include_cache: HashMap<PathBuf, EnvIncludeSnapshot>,
+    /// The outcome of the most recently *attempted* resolution — at boot, on a Settings save, or
+    /// on a session restart — regardless of which directory it was for (FR-013, BUG-002). A cache
+    /// hit in `env_include_vars_for` does NOT update this, since no new attempt was made. Shown as
+    /// a single "last attempt" status in Settings, independent of the per-directory `vars` cache
+    /// used for merging into a session's own spawn call site.
+    env_include_last_outcome: EnvIncludeOutcome,
 }
 
-/// The result of the most recently resolved (or not-yet-attempted) environment-include snapshot
-/// (feature 011, data-model.md). `vars` is empty for every non-`Success` outcome.
+/// The result of a single resolution attempt for one directory (feature 011, data-model.md).
+/// `vars` is empty for every non-`Success` outcome.
 struct EnvIncludeSnapshot {
     vars: Vec<(String, String)>,
     outcome: EnvIncludeOutcome,
 }
 
-/// Resolve the environment-include snapshot from the given settings values, short-circuiting to
-/// `Disabled` (no subprocess spawned) when the feature is off or the path is blank — mirrors the
-/// spec's Edge Cases and contracts/env-include-resolution.md's Non-goals (the engine itself never
-/// decides whether to run). Shared by `boot()` (T013) and `refresh_env_include` (T020) so both
-/// triggers apply the exact same short-circuit + resolution logic.
-fn resolve_env_include(enabled: bool, script_path: &str, timeout_secs: u64) -> EnvIncludeSnapshot {
+/// Resolve the environment-include snapshot for `cwd` from the given settings values,
+/// short-circuiting to `Disabled` (no subprocess spawned) when the feature is off or the path is
+/// blank — mirrors the spec's Edge Cases and contracts/env-include-resolution.md's Non-goals (the
+/// engine itself never decides whether to run). Shared by every resolution call site so they all
+/// apply the exact same short-circuit + resolution logic.
+fn resolve_env_include(
+    enabled: bool,
+    script_path: &str,
+    timeout_secs: u64,
+    cwd: &Path,
+) -> EnvIncludeSnapshot {
     if !enabled || script_path.trim().is_empty() {
         return EnvIncludeSnapshot {
             vars: Vec::new(),
             outcome: EnvIncludeOutcome::Disabled,
         };
     }
-    let (vars, outcome) =
-        env_include::resolve(Path::new(script_path), Duration::from_secs(timeout_secs));
+    let (vars, outcome) = env_include::resolve(
+        Path::new(script_path),
+        cwd,
+        Duration::from_secs(timeout_secs),
+    );
     EnvIncludeSnapshot { vars, outcome }
 }
 
-/// Force a fresh re-source of the environment-include script from `app`'s current settings,
-/// replacing `app.env_include` wholesale (feature 011, FR-007). Called on a `SettingsSaved` that
-/// touched the enabled/path/timeout fields, and on `TerminalRestartRequested` for any session —
-/// the two refresh triggers the spec's Clarifications name.
-fn refresh_env_include(app: &mut App) {
-    app.env_include = resolve_env_include(
+/// The directory to use whenever a single representative directory is needed synchronously
+/// (boot, a Settings save) rather than a specific session's own directory (BUG-002): the active
+/// session's own directory if there is one (most relevant to what the user is currently looking
+/// at), else the active project's root, else the app process's own current directory.
+fn default_resolution_cwd(core: &State) -> PathBuf {
+    if let Some(id) = core.active_session {
+        if let Some((cwd, _, _)) = session_cwd_mode_and_active_shell(core, id) {
+            return cwd;
+        }
+    }
+    if let Some(repo) = core.workspace.active.clone() {
+        return repo;
+    }
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+/// Return the resolved environment-include variables for `cwd`, resolving (and caching) them if
+/// this is the first launch against that directory (BUG-002) — a version-manager hook's `PATH`
+/// contribution depends on the sourcing shell's own cwd, so resolution is cached per-directory
+/// rather than as one shared value. Deliberately does NOT update `env_include_last_outcome` — an
+/// incidental lazy fill on session launch is not the "most recent attempt" FR-013 means (that's
+/// reserved for the explicit boot/Settings-save/restart triggers, `refresh_env_include`).
+fn env_include_vars_for(app: &mut App, cwd: &Path) -> Vec<(String, String)> {
+    if let Some(snapshot) = app.env_include_cache.get(cwd) {
+        return snapshot.vars.clone();
+    }
+    let snapshot = resolve_env_include(
         app.env_include_enabled,
         &app.env_include_script_path,
         app.env_include_timeout_secs,
+        cwd,
     );
+    let vars = snapshot.vars.clone();
+    app.env_include_cache.insert(cwd.to_path_buf(), snapshot);
+    vars
+}
+
+/// Force a fresh re-source of the environment-include script for `cwd`'s cache entry, updating
+/// `env_include_last_outcome` to this attempt's outcome (feature 011 FR-007, BUG-002). Called on
+/// `TerminalRestartRequested` for the restarted session's own directory (leaving every other
+/// cached directory untouched, since only this one needs a fresh attempt), and from
+/// `Message::SettingsSaved`'s handler after it clears the whole cache (every cached directory is
+/// stale once the enabled/path/timeout settings themselves changed) — the two refresh triggers
+/// the spec's Clarifications name.
+fn refresh_env_include(app: &mut App, cwd: &Path) {
+    let snapshot = resolve_env_include(
+        app.env_include_enabled,
+        &app.env_include_script_path,
+        app.env_include_timeout_secs,
+        cwd,
+    );
+    app.env_include_last_outcome = snapshot.outcome.clone();
+    app.env_include_cache.insert(cwd.to_path_buf(), snapshot);
 }
 
 /// Identity of the main content area, used to trigger a fade when it changes.
@@ -359,15 +425,24 @@ fn boot() -> (App, Task<Message>) {
         env_include_script_path = loaded.env_include_script_path;
         env_include_timeout_secs = loaded.env_include_timeout_secs;
     }
-    let env_include = resolve_env_include(
+    let boot_cwd = default_resolution_cwd(&core);
+    let boot_snapshot = resolve_env_include(
         env_include_enabled,
         &env_include_script_path,
         env_include_timeout_secs,
+        &boot_cwd,
     );
-    core.system_scheme = detect_system_scheme(core.system_scheme);
+    let env_include_last_outcome = boot_snapshot.outcome.clone();
+    let mut env_include_cache = HashMap::new();
+    env_include_cache.insert(boot_cwd, boot_snapshot);
+    core.system_scheme = observe_system_scheme(detect_system_scheme(), core.system_scheme);
     // If a project is already active from a previous run, discover its worktrees.
     if let Some(repo) = core.workspace.active.clone() {
         core.set_worktrees(discover_worktrees(&repo));
+        // Recover any session whose conversation transcript survived even though its persisted
+        // record did not (bugfix 002/BUG-001, FR-020b) — e.g. a per-project state fault isolated
+        // by that same bugfix's storage split.
+        reconcile_sessions_from_transcripts(&mut core, &repo);
     }
     let mut motion = Animator::new();
     motion.set(MotionKey::Menu, 0.0);
@@ -397,20 +472,33 @@ fn boot() -> (App, Task<Message>) {
             env_include_enabled,
             env_include_script_path,
             env_include_timeout_secs,
-            env_include,
+            env_include_cache,
+            env_include_last_outcome,
         },
-        Task::none(),
+        // Ask for the initial window size up front: `resize_events` only fires on *changes*, so
+        // without this the first context menu before any resize would have nothing to clamp
+        // against (feature 015).
+        iced::window::get_latest()
+            .and_then(iced::window::get_size)
+            .map(|size| Message::WindowResized {
+                width: size.width.max(0.0) as u16,
+                height: size.height.max(0.0) as u16,
+            }),
     )
 }
 
 /// Persist the catalog. Empty sessions — those `claude` never recorded a conversation for —
 /// are NOT preserved, so a restart never tries to resume a nonexistent session (bug fix; see
-/// spec Clarifications 2026-07-16). A save failure is non-fatal (Principle IV).
-fn persist(core: &State) {
+/// spec Clarifications 2026-07-16). A save failure is non-fatal (Principle IV) but is surfaced
+/// to the user rather than silently discarded (FR-012b, bugfix 002/BUG-001) — the mutation that
+/// triggered this persist stays in memory regardless; only the next restart is at risk.
+fn persist(core: &mut State) {
     if let Some(store) = JsonFileStore::default_location() {
         let mut to_save = core.workspace.clone();
         prune_empty_sessions(&mut to_save);
-        let _ = store.save(&to_save);
+        if let Err(err) = store.save(&to_save) {
+            core.notify_error(format!("Couldn't save your changes: {err}"));
+        }
     }
 }
 
@@ -449,6 +537,70 @@ fn session_has_conversation(
         return true;
     };
     provider.has_recorded_conversation(&config, &cwd, session.id.0)
+}
+
+/// Reconcile `repo`'s session list against the AI CLI provider's own conversation transcripts
+/// for its supported session locations — the project root and every currently-`Valid` worktree
+/// (bugfix 002/BUG-001, FR-020b). A transcript with no matching persisted record is reconstructed
+/// (id from the transcript filename, title read from the transcript if available, else the
+/// `Pending` placeholder); a transcript matching an existing record is left untouched. Must be
+/// called after `State::worktrees` is populated for `repo` (worktree discovery runs first at
+/// every call site). Best-effort throughout (mirrors `session_has_conversation`): an
+/// undeterminable provider config dir, or an unreadable transcript directory, simply yields no
+/// additional sessions rather than an error.
+fn reconcile_sessions_from_transcripts(core: &mut State, repo: &Path) {
+    let provider = ClaudeProvider;
+    let Some(config_dir) = provider.config_dir() else {
+        return;
+    };
+
+    let mut locations = vec![SessionLocation::Default];
+    locations.extend(
+        core.worktrees
+            .iter()
+            .filter(|w| w.status == micold_ai_ide::worktree::WorktreeStatus::Valid)
+            .map(|w| SessionLocation::Worktree(w.dir_name.clone())),
+    );
+
+    let mut seen: HashSet<Uuid> = core
+        .workspace
+        .sessions
+        .get(repo)
+        .map(|list| list.iter().map(|s| s.id.0).collect())
+        .unwrap_or_default();
+
+    let mut reconstructed = Vec::new();
+    for location in locations {
+        let cwd = session_cwd_for_location(repo, &location);
+        for session_id in provider.discover_transcript_session_ids(&config_dir, &cwd) {
+            if !seen.insert(session_id) {
+                continue;
+            }
+            // Bugfix BUG-003 (FR-020c): a closed/removed session's durable marker suppresses
+            // reconciliation regardless of what the app's own (possibly lost) store remembers.
+            if provider.is_archived(&config_dir, &cwd, session_id) {
+                continue;
+            }
+            let label = match provider.read_title(&config_dir, &cwd, session_id) {
+                Some(title) => SessionLabel::Named(title),
+                None => SessionLabel::Pending,
+            };
+            reconstructed.push(Session::restored(
+                SessionId::from_uuid(session_id),
+                location.clone(),
+                label,
+                TerminalMode::AiCli,
+            ));
+        }
+    }
+
+    if !reconstructed.is_empty() {
+        core.workspace
+            .sessions
+            .entry(repo.to_path_buf())
+            .or_default()
+            .extend(reconstructed);
+    }
 }
 
 fn persist_settings(core: &State) {
@@ -543,6 +695,25 @@ fn capture_overlay(app: &App) -> Option<ClosingOverlay> {
             .worktree_rename_draft
             .clone()
             .map(ClosingOverlay::WorktreeRename),
+        Overlay::ConfirmSessionRemove => app
+            .core
+            .session_remove_target
+            .and_then(|id| app.core.workspace.find_session(id))
+            .map(|(_, session)| {
+                ClosingOverlay::ConfirmSessionRemove(session.label.display().to_string())
+            }),
+        Overlay::ConfirmForgetProject => app.core.forget_target.clone().map(|path| {
+            let display_name = app
+                .core
+                .workspace
+                .projects
+                .iter()
+                .find(|p| p.path == path)
+                .map(|p| p.display_name.clone())
+                .unwrap_or_else(|| micold_ai_ide::project::default_display_name(&path));
+            let running = app.core.workspace.running_session_count(&path);
+            ClosingOverlay::ConfirmForget(display_name, running)
+        }),
     }
 }
 
@@ -602,8 +773,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 .open_or_activate(path.clone(), &StdFolderScanner::new());
             app.core.restore_after_activation(&path);
             app.core.set_worktrees(discover_worktrees(&path));
+            reconcile_sessions_from_transcripts(&mut app.core, &path);
             app.core.worktree_error = None;
-            persist(&app.core);
+            persist(&mut app.core);
             Task::none()
         }
         Message::KnownProjectReopened(path) => {
@@ -614,20 +786,50 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // background and restore the target project's foreground (feature 008, BS-1/BS-3).
             if app.core.switch_active(&path) {
                 app.core.set_worktrees(discover_worktrees(&path));
-                persist(&app.core);
+                reconcile_sessions_from_transcripts(&mut app.core, &path);
+                persist(&mut app.core);
             }
             Task::none()
         }
         Message::RenameConfirmed => {
             app.core.update(Message::RenameConfirmed);
-            persist(&app.core);
+            persist(&mut app.core);
+            Task::none()
+        }
+        // Forget a project (feature 014): stop its live session processes so none is orphaned
+        // (FR-010), let the pure reducer drop the record + metadata and clear the active working
+        // space if it was active (FR-003/005/008), persist the pruned catalog (FR-007), then delete
+        // the project's per-project state file so its persisted session records are discarded and
+        // cannot be resurrected on a later re-open (FR-005/FR-012). Nothing inside the project
+        // folder or its worktrees is touched (FR-006).
+        Message::ProjectForgetConfirmed => {
+            if let Some(path) = app.core.forget_target.clone() {
+                // Kill every recorded session's processes. A session has a live PTY in `terminals`
+                // iff it is running, so `terminals.remove` is a no-op for idle/absent ones — the
+                // number actually stopped equals the count shown in the dialog (FR-002a/SC-005a).
+                for id in app.core.workspace.session_ids_of_project(&path) {
+                    if let Some(mut st) = app.terminals.remove(&id) {
+                        st.kill_all();
+                    }
+                }
+                app.core.update(Message::ProjectForgetConfirmed);
+                persist(&mut app.core);
+                if let Some(store) = JsonFileStore::default_location() {
+                    if let Err(err) = store.remove_project_state(&path) {
+                        app.core
+                            .notify_error(format!("Couldn't fully forget the project: {err}"));
+                    }
+                }
+            } else {
+                app.core.update(Message::ProjectForgetConfirmed);
+            }
             Task::none()
         }
         // Worktree rename (feature 008, FR-014/FR-015): apply the display-name override in the
         // core, then persist it so it survives a restart. Never touches the folder or branch.
         Message::WorktreeRenameConfirmed => {
             app.core.update(Message::WorktreeRenameConfirmed);
-            persist(&app.core);
+            persist(&mut app.core);
             Task::none()
         }
         Message::ThemePreferenceChanged(_) | Message::ThemeModeCycled => {
@@ -673,8 +875,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 let cwd = session_cwd_for_location(&repo, &location);
                 let session = Session::start_new(location);
                 let id = session.id;
+                let resolved_env = env_include_vars_for(app, &cwd);
                 match spawn_pty(
-                    &launch_spec(&cwd, id, LaunchMode::Fresh, &app.env_include.vars),
+                    &launch_spec(&cwd, id, LaunchMode::Fresh, &resolved_env),
                     app.scrollback_lines,
                     app.last_grid,
                 ) {
@@ -688,7 +891,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         );
                         app.core.update(Message::SessionStarted(session));
                         app.core.update(Message::SessionRunning(id));
-                        persist(&app.core);
+                        persist(&mut app.core);
                         started = true;
                     }
                     Err(err) => {
@@ -723,13 +926,44 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::done(Message::TerminalFocused)
         }
         // Close a session: kill both its processes (AI CLI and shell, feature 010 FR-014) and
-        // drop the runtime handles (FR-015a).
+        // drop the runtime handles. The pure core archives (not deletes) the record (FR-015a,
+        // bugfix BUG-003); here we additionally record the durable, provider-side suppression
+        // marker (FR-020c) so a still-existing `claude` transcript is never reconstructed by
+        // reconciliation on a later project open.
         Message::SessionCloseRequested(id) => {
             if let Some(mut st) = app.terminals.remove(&id) {
                 st.kill_all();
             }
+            if let Some((project_path, session)) = app.core.workspace.find_session(id) {
+                let provider = ClaudeProvider;
+                if let Some(config_dir) = provider.config_dir() {
+                    let cwd = session_cwd_for_location(project_path, &session.location);
+                    let _ = provider.mark_archived(&config_dir, &cwd, id.0);
+                }
+            }
             app.core.update(Message::SessionCloseRequested(id));
-            persist(&app.core);
+            persist(&mut app.core);
+            Task::none()
+        }
+        // Permanently remove a session (bugfix BUG-003, FR-015c): kill the process (if any),
+        // record the same durable suppression marker as Close (FR-020c) so a still-existing
+        // `claude` transcript is never reconstructed either, then let the pure core drop the
+        // record outright.
+        Message::SessionRemoveConfirmed => {
+            if let Some(id) = app.core.session_remove_target {
+                if let Some(mut st) = app.terminals.remove(&id) {
+                    st.kill_all();
+                }
+                if let Some((project_path, session)) = app.core.workspace.find_session(id) {
+                    let provider = ClaudeProvider;
+                    if let Some(config_dir) = provider.config_dir() {
+                        let cwd = session_cwd_for_location(project_path, &session.location);
+                        let _ = provider.mark_archived(&config_dir, &cwd, id.0);
+                    }
+                }
+            }
+            app.core.update(Message::SessionRemoveConfirmed);
+            persist(&mut app.core);
             Task::none()
         }
         // Switch the active session's terminal between AI CLI and Regular modes (feature 010,
@@ -741,7 +975,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::TerminalModeToggled);
             if let Some(id) = app.core.active_session {
                 ensure_attached_process(app, id, false);
-                persist(&app.core);
+                persist(&mut app.core);
             }
             Task::none()
         }
@@ -756,8 +990,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // `Regular` branch spawn it, the same case `Message::ShellInstanceRestartRequested`
         // handles for a background instance.
         Message::TerminalRestartRequested => {
-            refresh_env_include(app);
             if let Some(id) = app.core.active_session {
+                // Re-source fresh for this session's own directory only (BUG-002) — other
+                // cached directories are untouched, since only this one needs a new attempt.
+                if let Some((cwd, _, _)) = session_cwd_mode_and_active_shell(&app.core, id) {
+                    refresh_env_include(app, &cwd);
+                }
                 ensure_attached_process(app, id, true);
             }
             Task::none()
@@ -791,7 +1029,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 // forever if `spawn_shell_pty` fails, since the restart affordance is only
                 // shown for `NotStarted`/`Exited` (convergence T034, FR-010).
                 spawn_and_register_shell_instance(app, id, shell_id, &cwd);
-                persist(&app.core);
+                persist(&mut app.core);
             }
             Task::none()
         }
@@ -811,7 +1049,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     };
                     let shell_id = session.open_shell_instance();
                     spawn_and_register_shell_instance(app, id, shell_id, &cwd);
-                    persist(&app.core);
+                    persist(&mut app.core);
                 }
             }
             Task::none()
@@ -830,7 +1068,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core
                 .update(Message::ShellInstanceCloseRequested(id, shell_id));
             ensure_attached_process(app, id, false);
-            persist(&app.core);
+            persist(&mut app.core);
             Task::none()
         }
         // Worktree creation completed: apply progress to the form, then dispatch the result
@@ -845,7 +1083,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 app.core.update(Message::WorktreeCreateLogAppended(tail));
             }
             app.core.update(Message::WorktreeCreationDone { result });
-            persist(&app.core);
+            persist(&mut app.core);
             Task::none()
         }
         // Tick while a create runs: hand the worker's buffered lines to the form (feature 010
@@ -883,7 +1121,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     }
                     // The user interacted, so `claude` now has a conversation — persist it so it
                     // can be resumed after a restart (FR-020; empty sessions still pruned).
-                    persist(&app.core);
+                    persist(&mut app.core);
                 }
             }
             Task::none()
@@ -1036,7 +1274,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     env_include_timeout_secs,
                 });
             }
-            refresh_env_include(app);
+            // The enabled/path/timeout settings themselves changed, so every previously cached
+            // directory's snapshot is stale (BUG-002) — clear all of them, then eagerly re-source
+            // one representative directory so Settings shows fresh feedback immediately; every
+            // other directory lazily re-resolves the next time a session in it launches.
+            app.env_include_cache.clear();
+            let cwd = default_resolution_cwd(&app.core);
+            refresh_env_include(app, &cwd);
             app.core.update(Message::SettingsSaved); // closes the overlay
             Task::none()
         }
@@ -1061,20 +1305,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // idea of the scheme to be stale (003 FR-006).
             if focused {
                 app.core
-                    .update(Message::SystemThemeChanged(detect_system_scheme(
-                        app.core.system_scheme,
-                    )));
+                    .update(Message::SystemThemeChanged(detect_system_scheme()));
             }
-            Task::none()
-        }
-        // The OS theme poll timer fired. Detection is gui-runtime I/O, so it happens here rather
-        // than in the pure core; a transient failure falls back to the last known scheme
-        // (FR-021 / BUG-001).
-        Message::OsThemePolled => {
-            app.core
-                .update(Message::SystemThemeChanged(detect_system_scheme(
-                    app.core.system_scheme,
-                )));
             Task::none()
         }
         // Confirmed worktree delete (feature 008, FR-020): terminate the worktree's session
@@ -1090,66 +1322,104 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     .iter()
                     .find(|w| w.dir_name == dir)
                     .cloned();
-                // Terminate this worktree's running sessions first (both processes per
-                // session, feature 010 FR-014).
-                for id in app.core.sessions_in_worktree(&dir) {
-                    if let Some(mut st) = app.terminals.remove(&id) {
-                        st.kill_all();
-                    }
-                }
-                if let Some(wt) = wt {
-                    // FR-023: both results were previously discarded with `let _ =`, so a
-                    // locked worktree, a branch checked out elsewhere, or a permission error
-                    // made the row vanish from the sidebar while the branch and directory
-                    // survived on disk. The reconcile below restores a truthful sidebar; these
-                    // report *why* it did not go away.
-                    let name = app.core.worktree_display_name(&dir);
-                    // The user's explicit branch-deletion choice (feature 013, FR-011): `None`
-                    // (keep it) skips `branch_delete` entirely inside `remove_worktree`.
-                    let branch = if app.core.worktree_delete_keep_branch {
-                        None
-                    } else {
-                        wt.branch.as_deref()
-                    };
-                    match remove_worktree(&GitCli::new(), &repo, &wt.path, branch) {
-                        // Only remove the directory once git has released the worktree —
-                        // deleting the working files of a still-registered worktree would
-                        // leave a worse mess than the failure being reported.
-                        Ok(outcome) => {
-                            // `remove_worktree_dir` treats an already-absent directory as
-                            // success — git removed it as part of releasing the worktree, so
-                            // "not found" here is the happy path, not a leftover (FR-023a).
-                            if let Err(err) = remove_worktree_dir(&wt.path) {
-                                app.core.notify_error(format!(
-                                    "Deleted worktree \"{name}\", but its folder could not be \
-                                     removed: {err}. Left at {}",
-                                    wt.path.display()
-                                ));
-                            }
-                            // A genuine branch-delete refusal (FR-015) is its own distinct
-                            // notice — the worktree/session removal above already succeeded
-                            // independent of this outcome, so it is not folded into a generic
-                            // delete failure.
-                            if outcome.branch_delete_failed {
-                                if let Some(branch) = branch {
+                // Attempt the removal FIRST. Sessions are only killed and durably marked
+                // archived once the worktree is confirmed actually gone (bugfix, found by code
+                // review): doing this unconditionally, before knowing the outcome, meant a
+                // failed delete (a locked worktree, a branch checked out elsewhere, a
+                // permission error — all cases FR-023 explicitly anticipates, where the
+                // worktree survives and is reported, not silently dropped) permanently
+                // destroyed that worktree's still-valid sessions — the archived marker
+                // (bugfix BUG-003) blocks the accidental reconciliation-based recovery that
+                // used to paper over this.
+                let removed = match &wt {
+                    // Nothing registered for this dir_name — there is nothing to remove or to
+                    // preserve either.
+                    None => true,
+                    Some(wt) => {
+                        let name = app.core.worktree_display_name(&dir);
+                        // The user's explicit branch-deletion choice (feature 013, FR-011):
+                        // `None` (keep it) skips `branch_delete` entirely inside
+                        // `remove_worktree`.
+                        let branch = if app.core.worktree_delete_keep_branch {
+                            None
+                        } else {
+                            wt.branch.as_deref()
+                        };
+                        match remove_worktree(&GitCli::new(), &repo, &wt.path, branch) {
+                            // Only remove the directory once git has released the worktree —
+                            // deleting the working files of a still-registered worktree would
+                            // leave a worse mess than the failure being reported.
+                            Ok(outcome) => {
+                                // Drop this directory's cached env-include snapshot (BUG-002): a
+                                // worktree recreated for the same branch reuses this exact path
+                                // (dir names are derived from the branch name), and without this
+                                // the stale pre-deletion snapshot would otherwise be served
+                                // forever.
+                                app.env_include_cache.remove(&wt.path);
+                                // `remove_worktree_dir` treats an already-absent directory as
+                                // success — git removed it as part of releasing the worktree, so
+                                // "not found" here is the happy path, not a leftover (FR-023a).
+                                if let Err(err) = remove_worktree_dir(&wt.path) {
                                     app.core.notify_error(format!(
-                                        "Deleted worktree \"{name}\", but its branch \
-                                         \"{branch}\" could not be deleted."
+                                        "Deleted worktree \"{name}\", but its folder could not \
+                                         be removed: {err}. Left at {}",
+                                        wt.path.display()
                                     ));
                                 }
+                                // A genuine branch-delete refusal (FR-015) is its own distinct
+                                // notice — the worktree/session removal above already succeeded
+                                // independent of this outcome, so it is not folded into a
+                                // generic delete failure.
+                                if outcome.branch_delete_failed {
+                                    if let Some(branch) = branch {
+                                        app.core.notify_error(format!(
+                                            "Deleted worktree \"{name}\", but its branch \
+                                             \"{branch}\" could not be deleted."
+                                        ));
+                                    }
+                                }
+                                true
+                            }
+                            Err(err) => {
+                                app.core.notify_error(format!(
+                                    "Could not delete worktree \"{name}\": {err}"
+                                ));
+                                false
                             }
                         }
-                        Err(err) => {
-                            app.core.notify_error(format!(
-                                "Could not delete worktree \"{name}\": {err}"
-                            ));
+                    }
+                };
+                if removed {
+                    // Terminate this worktree's running sessions (both processes per session,
+                    // feature 010 FR-014), and record the same durable suppression marker
+                    // Close/Remove use (bugfix BUG-003, FR-020c): the worktree directory (and
+                    // thus its transcripts' `cwd` encoding) can be reused if a worktree with the
+                    // same `dir_name` is created again later, and without this marker
+                    // reconciliation (FR-020b) would resurrect these sessions from the
+                    // still-existing `claude` transcripts on the next project open.
+                    let worktree_cwd =
+                        session_cwd_for_location(&repo, &SessionLocation::Worktree(dir.clone()));
+                    let provider = ClaudeProvider;
+                    let config_dir = provider.config_dir();
+                    for id in app.core.sessions_in_worktree(&dir) {
+                        if let Some(mut st) = app.terminals.remove(&id) {
+                            st.kill_all();
+                        }
+                        if let Some(config_dir) = &config_dir {
+                            let _ = provider.mark_archived(config_dir, &worktree_cwd, id.0);
                         }
                     }
+                    // Drop the session/worktree records in the core.
+                    app.core.update(Message::WorktreeDeleteConfirmed);
+                } else {
+                    // Removal failed: the worktree (and its sessions) survive untouched — just
+                    // dismiss the confirm dialog (mirrors `WorktreeDeleteCancelled`'s cleanup).
+                    app.core.update(Message::WorktreeDeleteCancelled);
                 }
-                // Drop the session/worktree records in the core, then reconcile from git truth.
-                app.core.update(Message::WorktreeDeleteConfirmed);
+                // Reconcile the sidebar from git truth either way (self-heals a failed removal
+                // back into the list).
                 app.core.set_worktrees(discover_worktrees(&repo));
-                persist(&app.core);
+                persist(&mut app.core);
             } else {
                 app.core.update(Message::WorktreeDeleteConfirmed);
             }
@@ -1174,7 +1444,7 @@ fn view(app: &App) -> iced::Element<'_, Message> {
         &app.motion,
         app.dismissing.as_ref(),
         &app.row_fx,
-        &app.env_include.outcome,
+        &app.env_include_last_outcome,
     )
 }
 
@@ -1185,7 +1455,16 @@ fn theme(app: &App) -> iced::Theme {
 fn subscription(app: &App) -> Subscription<Message> {
     // Event-driven (not a poll): reports actual OS focus changes, so it costs nothing while
     // the window sits idle either focused or not (idle-CPU fix).
-    let mut subs = vec![ui::subscription(&app.core), window_focus_events()];
+    // Resize events are rare, so this costs nothing at idle; it keeps `window_size` current for
+    // context-menu clamping (feature 015).
+    let mut subs = vec![
+        ui::subscription(&app.core),
+        window_focus_events(),
+        iced::window::resize_events().map(|(_id, size)| Message::WindowResized {
+            width: size.width.max(0.0) as u16,
+            height: size.height.max(0.0) as u16,
+        }),
+    ];
     // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.
     subs.push(os_theme_poll(os_theme_poll_interval(app.window_focused)));
     if let Some(interval) = terminal_poll_interval(!app.terminals.is_empty(), app.window_focused) {
@@ -1198,6 +1477,12 @@ fn subscription(app: &App) -> Subscription<Message> {
     // Run the animation clock only while something is actually animating (FR-014).
     if motion_animating(app) {
         subs.push(every(ANIM_TICK).map(|_| Message::AnimationTick));
+    }
+    // Track the pointer ONLY while the project switcher is open (feature 015), so a right-click
+    // on a row can anchor its context menu at the cursor. Scoping it this way keeps the idle
+    // window free of per-mouse-move redraws — the switcher is a brief, deliberate interaction.
+    if app.core.project_switcher_open {
+        subs.push(cursor_move_events());
     }
     Subscription::batch(subs)
 }
@@ -1239,6 +1524,32 @@ fn terminal_poll_interval(has_terminals: bool, window_focused: bool) -> Option<D
 /// Subscribes to raw OS window events and keeps only focus changes, translating them into
 /// [`Message::WindowFocusChanged`]. Every other window event (resize, move, redraw, ...) is
 /// discarded before it ever reaches `update`.
+/// Subscribes to raw pointer events and keeps only cursor moves, translating them into
+/// [`Message::CursorMoved`] (feature 015). Only subscribed while the project switcher is open —
+/// see [`subscription`] — since its sole purpose is anchoring a row's right-click menu.
+fn cursor_move_events() -> Subscription<Message> {
+    iced::event::listen_with(cursor_move_message)
+}
+
+/// The `listen_with` callback backing [`cursor_move_events`]; a free function (rather than a
+/// closure) so it can be unit-tested directly. Negative coordinates (the pointer leaving the
+/// window on some platforms) clamp to 0 rather than wrapping around the `u16` cast.
+fn cursor_move_message(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    match event {
+        iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+            Some(Message::CursorMoved {
+                x: position.x.max(0.0) as u16,
+                y: position.y.max(0.0) as u16,
+            })
+        }
+        _ => None,
+    }
+}
+
 fn window_focus_events() -> Subscription<Message> {
     iced::event::listen_with(window_focus_message)
 }
@@ -1336,8 +1647,9 @@ fn handle_process_exits(app: &mut App) {
             .find_session_mut(id)
             .map(|(_, s)| s.on_unexpected_exit());
         if decision == Some(RestartDecision::Resume) {
+            let resolved_env = env_include_vars_for(app, &cwd);
             if let Ok(rt) = spawn_pty(
-                &launch_spec(&cwd, id, LaunchMode::Resume, &app.env_include.vars),
+                &launch_spec(&cwd, id, LaunchMode::Resume, &resolved_env),
                 app.scrollback_lines,
                 app.last_grid,
             ) {
@@ -1391,7 +1703,8 @@ fn spawn_and_register_shell_instance(
     shell_id: ShellInstanceId,
     cwd: &Path,
 ) {
-    let env = env_include::merge_with_term(&app.env_include.vars);
+    let resolved_env = env_include_vars_for(app, cwd);
+    let env = env_include::merge_with_term(&resolved_env);
     match spawn_shell_pty(cwd, &env, app.scrollback_lines, app.last_grid) {
         Ok(rt) => {
             app.terminals
@@ -1437,8 +1750,9 @@ fn ensure_attached_process(app: &mut App, id: SessionId, explicit_restart: bool)
     }
     match mode {
         TerminalMode::AiCli => {
+            let resolved_env = env_include_vars_for(app, &cwd);
             match spawn_pty(
-                &launch_spec(&cwd, id, LaunchMode::Resume, &app.env_include.vars),
+                &launch_spec(&cwd, id, LaunchMode::Resume, &resolved_env),
                 app.scrollback_lines,
                 app.last_grid,
             ) {
@@ -1597,19 +1911,21 @@ fn map_system_scheme(mode: dark_light::Mode) -> SystemScheme {
 
 /// Query the OS for its current light/dark preference (FR-005). `dark_light::detect()`'s Linux
 /// backend has a hardcoded 25 ms D-Bus timeout and returns `Err` under CPU contention with no
-/// relation to the actual OS preference; `last_known` is what a transient failure falls back to
-/// instead of `SystemScheme::Unspecified` (FR-021; BUG-001 — see `theme::observe_system_scheme`).
-fn detect_system_scheme(last_known: SystemScheme) -> SystemScheme {
-    let detected = dark_light::detect().map(map_system_scheme).map_err(|_| ());
-    observe_system_scheme(detected, last_known)
+/// relation to the actual OS preference — the caller falls this back to the last-known scheme
+/// via `theme::observe_system_scheme` rather than `SystemScheme::Unspecified` (FR-021; BUG-001).
+/// Deliberately takes no arguments (bugfix, found by `run` sanity check, 2026-07-23): it used to
+/// take `last_known: SystemScheme` and apply the fallback itself, but that meant
+/// `os_theme_poll`'s `Subscription::map` closure had to *capture* `last_known` to call it — and
+/// iced panics on boot if a subscription's mapping closure captures anything, since a capturing
+/// closure can't have the stable identity iced needs to avoid restarting the underlying timer
+/// every frame. The fallback now happens in the reducer (`Message::SystemThemeChanged`,
+/// `src/app.rs`), which already has the previous scheme in `self.system_scheme`.
+fn detect_system_scheme() -> Result<SystemScheme, ()> {
+    dark_light::detect().map(map_system_scheme).map_err(|_| ())
 }
 
-/// The OS theme poll (FR-006). Emits the unit [`Message::OsThemePolled`] so the `Subscription::map`
-/// closure stays non-capturing — iced 0.13 asserts it is zero-sized and panics otherwise. The
-/// actual `dark_light` detection (which needs the last-known scheme as a fallback) runs in the
-/// reducer, where `app.core.system_scheme` is in hand.
 fn os_theme_poll(interval: Duration) -> Subscription<Message> {
-    every(interval).map(|_instant| Message::OsThemePolled)
+    every(interval).map(|_instant| Message::SystemThemeChanged(detect_system_scheme()))
 }
 
 fn start_dir() -> PathBuf {
@@ -1702,6 +2018,36 @@ mod tests {
         iced::event::Status::Ignored
     }
 
+    /// Feature 015: cursor moves become `CursorMoved` so a switcher row's right-click can anchor
+    /// its menu at the pointer; every other event is discarded before it reaches `update`.
+    #[test]
+    fn cursor_move_events_map_position_and_ignore_others() {
+        let at = |x: f32, y: f32| {
+            cursor_move_message(
+                iced::Event::Mouse(iced::mouse::Event::CursorMoved {
+                    position: iced::Point::new(x, y),
+                }),
+                dummy_status(),
+                iced::window::Id::unique(),
+            )
+        };
+        assert_eq!(
+            at(412.0, 233.0),
+            Some(Message::CursorMoved { x: 412, y: 233 })
+        );
+        // Off-window negatives clamp to 0 instead of wrapping the u16 cast.
+        assert_eq!(at(-5.0, -1.0), Some(Message::CursorMoved { x: 0, y: 0 }));
+        // Unrelated events are dropped.
+        assert_eq!(
+            cursor_move_message(
+                iced::Event::Mouse(iced::mouse::Event::CursorLeft),
+                dummy_status(),
+                iced::window::Id::unique(),
+            ),
+            None
+        );
+    }
+
     #[test]
     fn window_focus_message_maps_focused_and_unfocused() {
         assert_eq!(
@@ -1762,10 +2108,8 @@ mod tests {
             env_include_enabled: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_ENABLED,
             env_include_script_path: String::new(),
             env_include_timeout_secs: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
-            env_include: EnvIncludeSnapshot {
-                vars: Vec::new(),
-                outcome: EnvIncludeOutcome::Disabled,
-            },
+            env_include_cache: HashMap::new(),
+            env_include_last_outcome: EnvIncludeOutcome::Disabled,
         };
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
@@ -1792,10 +2136,8 @@ mod tests {
             env_include_enabled: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_ENABLED,
             env_include_script_path: String::new(),
             env_include_timeout_secs: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
-            env_include: EnvIncludeSnapshot {
-                vars: Vec::new(),
-                outcome: EnvIncludeOutcome::Disabled,
-            },
+            env_include_cache: HashMap::new(),
+            env_include_last_outcome: EnvIncludeOutcome::Disabled,
         }
     }
 
@@ -1932,10 +2274,8 @@ mod tests {
             env_include_enabled: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_ENABLED,
             env_include_script_path: String::new(),
             env_include_timeout_secs: micold_ai_ide::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
-            env_include: EnvIncludeSnapshot {
-                vars: Vec::new(),
-                outcome: EnvIncludeOutcome::Disabled,
-            },
+            env_include_cache: HashMap::new(),
+            env_include_last_outcome: EnvIncludeOutcome::Disabled,
         };
         assert_eq!(app.last_grid, None);
 

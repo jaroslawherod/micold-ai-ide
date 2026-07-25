@@ -2,6 +2,8 @@
 
 mod about;
 mod confirm_delete;
+mod confirm_forget;
+mod confirm_session_remove;
 mod material;
 pub(crate) use material::target_offset_delta;
 mod project_selector;
@@ -20,6 +22,7 @@ use iced::{Element, Font, Length, Subscription};
 use micold_ai_ide::app::{Message, Overlay, State};
 use micold_ai_ide::icons::Icon;
 use micold_ai_ide::motion::Animator;
+use micold_ai_ide::session::SessionId;
 use micold_ai_ide::theme::ColorScheme;
 use micold_ai_ide::tokens::{self, spacing, type_scale, Rgb, Roles};
 
@@ -208,7 +211,10 @@ pub fn view<'a>(
             is_active: e.is_active,
             running_count: e.running_count,
             available: e.available,
-            on_select: Message::KnownProjectReopened(e.path),
+            on_select: Message::KnownProjectReopened(e.path.clone()),
+            // Right-click a project row to reach its "Forget project" menu (feature 015). The
+            // trailing "Add project…" row is added by the component itself and carries none.
+            on_context: Some(Message::ProjectMenuToggled(e.path)),
         })
         .collect();
     let base = material::ProjectSwitcherOverlay::new(
@@ -221,6 +227,33 @@ pub fn view<'a>(
     .open(state.project_switcher_open)
     .into();
 
+    // Float the right-clicked project's context menu at the cursor (feature 015), like a normal
+    // desktop context menu: the panel's top-left corner sits at the click point. The anchor is
+    // clamped at render time (not when the menu opened) so a window resize while it is showing
+    // can never leave the panel hanging off the edge. The switcher stays open behind it.
+    let base = match &state.project_menu_open {
+        Some(menu) => {
+            let (x, y) = micold_ai_ide::app::clamp_menu_anchor(
+                menu.anchor,
+                material::menu_panel_size(1),
+                state.window_size,
+            );
+            material::MenuOverlay::new(
+                base,
+                vec![material::MenuItem::new(
+                    Icon::Delete,
+                    "Forget project",
+                    Message::ProjectForgetRequested(menu.path.clone()),
+                )],
+                Message::ProjectMenuDismissed,
+                roles,
+            )
+            .anchor(iced::Point::new(x as f32, y as f32))
+            .into()
+        }
+        None => base,
+    };
+
     // Float the worktree right-click context menu over everything, anchored near the sidebar
     // (feature 008, FR-013). Only present while a worktree's menu is open.
     let base = match &state.worktree_menu_open {
@@ -228,6 +261,20 @@ pub fn view<'a>(
             base,
             worktree_menu_items(dir, &state.worktree_display_name(dir)),
             Message::WorktreeMenuDismissed,
+            roles,
+        )
+        .anchor(iced::Point::new(24.0, 96.0))
+        .into(),
+        None => base,
+    };
+
+    // Float the session right-click context menu over everything (bugfix BUG-003). Only present
+    // while a session's menu is open.
+    let base = match state.session_menu_open {
+        Some(id) => material::MenuOverlay::new(
+            base,
+            session_menu_items(id),
+            Message::SessionMenuDismissed,
             roles,
         )
         .anchor(iced::Point::new(24.0, 96.0))
@@ -297,6 +344,34 @@ pub fn view<'a>(
             Some(draft) => worktree_rename::modal(base, draft, scheme, overlay_progress),
             None => base,
         },
+        Overlay::ConfirmSessionRemove => match state
+            .session_remove_target
+            .and_then(|id| state.workspace.find_session(id))
+        {
+            Some((_, session)) => confirm_session_remove::modal(
+                base,
+                session.label.display(),
+                scheme,
+                overlay_progress,
+            ),
+            None => base,
+        },
+        Overlay::ConfirmForgetProject => match &state.forget_target {
+            Some(path) => {
+                // The display name and running-session count are read from the catalog/sessions
+                // at render time; the count (FR-002a) is exactly the set the binary will stop.
+                let display_name = state
+                    .workspace
+                    .projects
+                    .iter()
+                    .find(|p| &p.path == path)
+                    .map(|p| p.display_name.clone())
+                    .unwrap_or_else(|| micold_ai_ide::project::default_display_name(path));
+                let running = state.workspace.running_session_count(path);
+                confirm_forget::modal(base, &display_name, running, scheme, overlay_progress)
+            }
+            None => base,
+        },
     }
 }
 
@@ -318,6 +393,20 @@ fn worktree_menu_items(dir: &str, display_name: &str) -> Vec<material::MenuItem<
             Icon::Unavailable,
             "Delete",
             Message::WorktreeDeleteRequested(dir.to_string()),
+        ),
+    ]
+}
+
+/// The items in a session's right-click context menu (bugfix BUG-003): "Close" archives (kept,
+/// hidden, never resurrected by reconciliation — FR-015a/FR-020c); "Remove" permanently deletes,
+/// behind a confirm dialog (FR-015c).
+fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
+    vec![
+        material::MenuItem::new(Icon::Close, "Close", Message::SessionCloseRequested(id)),
+        material::MenuItem::new(
+            Icon::Unavailable,
+            "Remove",
+            Message::SessionRemoveRequested(id),
         ),
     ]
 }
@@ -355,6 +444,12 @@ fn dismissing_modal<'a>(
         }
         ClosingOverlay::WorktreeRename(draft) => {
             worktree_rename::modal(base, draft, scheme, progress)
+        }
+        ClosingOverlay::ConfirmSessionRemove(label) => {
+            confirm_session_remove::modal(base, label, scheme, progress)
+        }
+        ClosingOverlay::ConfirmForget(display_name, running) => {
+            confirm_forget::modal(base, display_name, *running, scheme, progress)
         }
     }
 }
@@ -407,6 +502,14 @@ pub fn subscription(state: &State) -> Subscription<Message> {
         Overlay::RenameWorktree => iced::keyboard::on_key_press(|key, _modifiers| {
             use iced::keyboard::{key::Named, Key};
             matches!(key, Key::Named(Named::Escape)).then_some(Message::WorktreeRenameCancelled)
+        }),
+        Overlay::ConfirmSessionRemove => iced::keyboard::on_key_press(|key, _modifiers| {
+            use iced::keyboard::{key::Named, Key};
+            matches!(key, Key::Named(Named::Escape)).then_some(Message::SessionRemoveCancelled)
+        }),
+        Overlay::ConfirmForgetProject => iced::keyboard::on_key_press(|key, _modifiers| {
+            use iced::keyboard::{key::Named, Key};
+            matches!(key, Key::Named(Named::Escape)).then_some(Message::ProjectForgetCancelled)
         }),
     }
 }

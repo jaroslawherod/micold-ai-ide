@@ -120,6 +120,19 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             .on_press(Message::RenameStarted(project.path.clone()))
             .style(style::outlined(r));
 
+            // Forget removes the project (and its remembered metadata) from the list. Enabled for
+            // every entry — including Unavailable ones, for which it is the primary way to clear a
+            // stale entry (feature 014, FR-001/FR-011). The trash icon is error-tinted to signal
+            // the destructive-to-metadata action; the confirmation dialog is the real safeguard.
+            let forget = button(labeled(
+                Icon::Delete,
+                error_tint,
+                type_scale::BODY,
+                "Forget",
+            ))
+            .on_press(Message::ProjectForgetRequested(project.path.clone()))
+            .style(style::outlined(r));
+
             let mut entry = row![].spacing(spacing::SM).align_y(Alignment::Center);
             if is_active {
                 entry = entry.push(icon(Icon::ActiveMarker, type_scale::BODY, badge_tint));
@@ -145,7 +158,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                 );
             }
 
-            let entry = entry.push(reopen).push(rename);
+            let entry = entry.push(reopen).push(rename).push(forget);
             list = list.push(
                 container(entry)
                     .padding(spacing::MD)

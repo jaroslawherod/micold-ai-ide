@@ -133,3 +133,33 @@ docs/user-guide/
 *No constitution violations — no entries.*
 
 **Bugfix**: 2026-07-17 — BUG-002 Updated from bugfix patch. Added the AI CLI provider abstraction and the session-title-sync design to Technical Context; annotated Storage as provider-neutral (schema unchanged). No constitution impact — the provider seam is a new I/O trait consistent with the existing `Git`/`TerminalBackend`/`FolderScanner` boundary pattern (Principle I/V), and the title read is a best-effort I/O boundary kept out of the pure core.
+
+**Bugfix**: 2026-07-21 — 002/BUG-001 Updated from bugfix patch. A store-level fault could wipe
+every open project's sessions with no way to recover them, because sessions lived embedded in the
+shared, whole-file-fate `projects.json` the known-projects catalog also uses (see
+`specs/002-project-workspace-management` BUG-001 for the storage-split half of the fix). Storage
+line above is superseded in placement only: sessions now live in the per-project state file from
+that split, not embedded in the catalog's `projects[]` entries — no change to the session data
+shape itself. Added FR-020b's design to Technical Context: on project open, reconcile the session
+list against the AI CLI provider's own transcripts for the project's root directory and every
+worktree (reusing the existing provider seam from BUG-002, `AiCliProvider`/`src/provider.rs`), so
+a lost or corrupted session store does not orphan a real, resumable conversation. No constitution
+impact — reconciliation is an additive read at the same I/O boundary as `session_has_conversation`,
+not a new trait or a change to the pure core.
+
+**Bugfix**: 2026-07-23 — BUG-003 Updated from bugfix patch. FR-020b's reconciliation (above) had
+no way to distinguish an intentionally-closed session from one merely missing due to store loss,
+so closing a session was silently undone on the next project open. Design: session close/remove
+suppression is recorded as a **marker file next to the transcript** in the AI CLI provider's own
+directory (`~/.claude/projects/<encoded-cwd>/<session-id>.archived`, via new `AiCliProvider`
+methods `mark_archived`/`is_archived`/`archived_marker_path` — same seam and directory `read_title`
+and `has_recorded_conversation` already use, added alongside them in `src/provider.rs`), not solely
+a flag in the app's own store. Rationale: FR-020b's entire premise is that the app's own store
+(`projects.json` + per-project state file) can be corrupted or lost, so anything meant to survive
+that scenario cannot depend on the same store — it has to live in storage reconciliation already
+treats as the independent source of truth (the provider's transcript directory). The app's own
+`Session.archived` field (new, `src/session.rs`) is kept too, purely as a fast in-memory filter for
+sidebar rendering when the store is intact; it is not authoritative. No constitution impact — this
+extends the existing `AiCliProvider` trait (bugfix BUG-002) with two more best-effort methods,
+mirroring `has_recorded_conversation`'s existing file-existence-check shape; no new trait, no
+change to the pure core's testability (Principle I).

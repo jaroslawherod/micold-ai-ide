@@ -17,7 +17,7 @@ use crate::naming::{
 use crate::project::{canonicalize_best_effort, Availability, FolderEntry, RenameError};
 use crate::selector::Selector;
 use crate::session::{Session, SessionId, SessionLocation, ShellInstanceId};
-use crate::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
+use crate::theme::{observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference};
 use crate::worktree::{CreateProgressEvent, CreateStage, Worktree, WorktreeStatus};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -75,6 +75,12 @@ pub enum Overlay {
     /// The rename-worktree dialog is shown (feature 008, FR-013/FR-014). The in-progress edit
     /// is held in [`State::worktree_rename_draft`].
     RenameWorktree,
+    /// The confirm-remove dialog for a session is shown (bugfix BUG-003, FR-015c). The target
+    /// session is held in [`State::session_remove_target`].
+    ConfirmSessionRemove,
+    /// The confirm-forget dialog for a project is shown (feature 014, FR-002). The target
+    /// project is held in [`State::forget_target`].
+    ConfirmForgetProject,
 }
 
 /// Transient creation status for the add-worktree form (feature 010, research R4). Not
@@ -125,6 +131,34 @@ impl WorktreeForm {
             name: self.name.clone(),
         })
     }
+}
+
+/// An open project right-click context menu (feature 015): which project it acts on, and where
+/// to draw it. The anchor is the pointer position at the moment of the right-click, in window
+/// pixels, so the menu opens under the cursor like a normal desktop context menu.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectMenu {
+    /// The project the menu acts on.
+    pub path: PathBuf,
+    /// The menu panel's top-left corner, in window pixels (the click point).
+    pub anchor: (u16, u16),
+}
+
+/// Clamp a context-menu anchor so the whole panel stays inside the window (feature 015).
+///
+/// `menu` and `window` are `(width, height)` in pixels. The panel is drawn from its top-left
+/// corner, so an anchor near the right/bottom edge would otherwise push it off-screen; this
+/// slides it back just far enough to fit. A window smaller than the menu, or a window size not
+/// known yet (either dimension `0`), leaves the anchor untouched — clamping against a bogus
+/// size would be worse than not clamping at all.
+pub fn clamp_menu_anchor(anchor: (u16, u16), menu: (u16, u16), window: (u16, u16)) -> (u16, u16) {
+    if window.0 == 0 || window.1 == 0 {
+        return anchor;
+    }
+    (
+        anchor.0.min(window.0.saturating_sub(menu.0)),
+        anchor.1.min(window.1.saturating_sub(menu.1)),
+    )
 }
 
 /// One row in the top-bar project switcher (feature 008), computed purely from the workspace
@@ -321,6 +355,29 @@ pub enum Message {
     RenameConfirmed,
     /// Dismiss the rename dialog without applying (Cancel or Esc).
     RenameCancelled,
+
+    // ---- Feature 014: forget a project ----
+    /// Request to forget the project at this path; opens the confirm dialog (FR-002).
+    ProjectForgetRequested(PathBuf),
+    /// Confirm forgetting. The binary stops the project's live session processes, the reducer
+    /// drops the record + metadata and clears the active working space if it was active, then the
+    /// binary persists and deletes the project's per-project state file (FR-003/005/007/008/010).
+    ProjectForgetConfirmed,
+    /// Dismiss the forget confirmation without removing anything (FR-004).
+    ProjectForgetCancelled,
+
+    // ---- Feature 015: forget from the switcher's right-click menu ----
+    /// The pointer moved to this window-pixel position. Emitted by the binary only while the
+    /// project switcher is open, so a right-click can anchor its menu at the cursor.
+    CursorMoved { x: u16, y: u16 },
+    /// The window was resized (or reported its initial size). Feeds context-menu clamping.
+    WindowResized { width: u16, height: u16 },
+    /// Open (or close, if already open) a project's switcher right-click context menu, by path.
+    /// Anchored at the last known [`State::cursor`]. The switcher panel stays open behind it;
+    /// the other popovers are mutually exclusive.
+    ProjectMenuToggled(PathBuf),
+    /// Dismiss the project context menu (outside click, or after an action is chosen).
+    ProjectMenuDismissed,
     /// The user selected a theme preference (Follow system / Light / Dark) (FR-007, FR-008).
     /// The binary persists the updated preference afterward.
     ThemePreferenceChanged(ThemePreference),
@@ -328,13 +385,15 @@ pub enum Message {
     /// menu's mode toggle. The binary persists the updated preference; the menu stays open.
     ThemeModeCycled,
     /// The OS light/dark preference poll observed a (changed) scheme (FR-006). Transient;
-    /// never persisted.
-    SystemThemeChanged(SystemScheme),
-    /// The OS theme poll timer fired (FR-006). Detection (`dark_light`) is gui-runtime I/O, so
-    /// the binary reads the current scheme and re-dispatches [`Message::SystemThemeChanged`]; the
-    /// pure core treats this as a no-op. Carries no payload so the iced `Subscription::map`
-    /// closure stays non-capturing. Transient; never persisted.
-    OsThemePolled,
+    /// never persisted. Carries the raw detection outcome — `Err(())` for a transient failure
+    /// (e.g. `dark_light::detect()` timing out under CPU load) — rather than an
+    /// already-resolved `SystemScheme`, specifically so the periodic poll's `Subscription::map`
+    /// closure (`os_theme_poll`, `src/main.rs`) does not need to capture the previous scheme:
+    /// iced panics if a subscription's mapping closure captures state, since that breaks the
+    /// stable identity it relies on to avoid restarting the underlying timer every frame. The
+    /// reducer below applies the same last-known fallback (`theme::observe_system_scheme`)
+    /// that used to be baked in at the call site instead.
+    SystemThemeChanged(Result<SystemScheme, ()>),
 
     // ---- Feature 005: worktrees, sessions, embedded terminal ----
     /// Opening a directory as a project was refused because it is not a git repo (FR-001a).
@@ -430,12 +489,26 @@ pub enum Message {
     SessionStarted(Session),
     /// Select a session to display its terminal (FR-015); other sessions keep running.
     SessionSelected(SessionId),
-    /// Close/stop a session (FR-015a). The binary kills the process; this drops the record.
+    /// Close/stop a session (FR-015a, bugfix BUG-003). The binary kills the process and records
+    /// the durable suppression marker; this archives (not deletes) the record.
     SessionCloseRequested(SessionId),
     /// The session's `claude` process reported it is running (FR-010).
     SessionRunning(SessionId),
     /// The session's `claude` title became available/changed (FR-011a).
     SessionTitleUpdated { id: SessionId, title: String },
+
+    // ---- Bugfix BUG-003: session Remove (distinct from Close/archive) ----
+    /// Open (or close, if already open) a session's right-click context menu.
+    SessionMenuToggled(SessionId),
+    /// Dismiss the session context menu (outside click, or after an action is chosen).
+    SessionMenuDismissed,
+    /// Request permanent removal of a session; opens the confirm dialog (FR-015c).
+    SessionRemoveRequested(SessionId),
+    /// Confirm removal. The binary kills the process (if running) and records the durable
+    /// suppression marker, then persists; the reducer drops the record outright.
+    SessionRemoveConfirmed,
+    /// Dismiss the remove confirmation without removing anything.
+    SessionRemoveCancelled,
 
     // ---- Feature 010: switchable regular terminal mode ----
     /// The mode toggle was pressed for the active session (FR-001–FR-004, FR-010).
@@ -643,6 +716,17 @@ pub struct State {
     /// Whether the top-bar project switcher panel is open. Mutually exclusive with
     /// `help_menu_open`.
     pub project_switcher_open: bool,
+    /// The open project right-click context menu (feature 015), with the project it acts on and
+    /// the cursor anchor to draw it at. At most one is open. Mutually exclusive with the other
+    /// popovers, but the switcher panel itself stays open behind it. Transient — not persisted.
+    pub project_menu_open: Option<ProjectMenu>,
+    /// Last known pointer position in window pixels (feature 015). Tracked only while the
+    /// project switcher is open — see the binary's cursor subscription — purely so a right-click
+    /// can anchor its context menu at the cursor. Transient — not persisted.
+    pub cursor: (u16, u16),
+    /// Last known window size in pixels (feature 015), used to clamp a context menu so it cannot
+    /// open off-screen. `(0, 0)` means "not reported yet", which disables clamping. Transient.
+    pub window_size: (u16, u16),
     /// The worktree whose right-click context menu is open, by `dir_name` (feature 008). At
     /// most one is open at a time; `None` means no menu is showing.
     pub worktree_menu_open: Option<String>,
@@ -674,6 +758,17 @@ pub struct State {
     /// The worktree row the pointer is currently over, by `dir_name` (feature 008). Drives the
     /// hover-revealed row actions (add-session + delete). Transient.
     pub hovered_worktree: Option<String>,
+    /// The session whose right-click context menu is open (bugfix BUG-003). At most one is open
+    /// at a time; `None` means no menu is showing. Mirrors `worktree_menu_open`.
+    pub session_menu_open: Option<SessionId>,
+    /// The session pending permanent removal, shown in the confirm dialog (bugfix BUG-003,
+    /// FR-015c). Present only while [`Overlay::ConfirmSessionRemove`] is shown. Mirrors
+    /// `worktree_delete_target`.
+    pub session_remove_target: Option<SessionId>,
+    /// The project pending a forget confirmation, by path (feature 014). Present only while
+    /// [`Overlay::ConfirmForgetProject`] is shown. Transient — never persisted. Mirrors
+    /// `worktree_delete_target`.
+    pub forget_target: Option<PathBuf>,
 }
 
 impl State {
@@ -725,6 +820,7 @@ impl State {
         self.help_menu_open = false;
         self.project_switcher_open = false;
         self.sidebar_filter_open = false;
+        self.project_menu_open = None;
     }
 
     /// Apply a [`Message`], transitioning the state. Pure and side-effect free.
@@ -736,11 +832,15 @@ impl State {
                 // mutually exclusive (feature 009).
                 self.project_switcher_open = false;
                 self.sidebar_filter_open = false;
+                // Mutually exclusive with the project context menu (feature 015).
+                self.project_menu_open = None;
             }
             Message::ProjectSwitcherToggled => {
                 self.project_switcher_open = !self.project_switcher_open;
                 self.help_menu_open = false;
                 self.sidebar_filter_open = false;
+                // Mutually exclusive with the project context menu (feature 015).
+                self.project_menu_open = None;
             }
             Message::AboutOpened => {
                 // Idempotent: opening while already open keeps a single instance (FR-015).
@@ -821,6 +921,60 @@ impl State {
                 self.overlay = Overlay::None;
                 self.rename_draft = None;
             }
+            Message::CursorMoved { x, y } => {
+                self.cursor = (x, y);
+            }
+            Message::WindowResized { width, height } => {
+                self.window_size = (width, height);
+            }
+            Message::ProjectMenuToggled(path) => {
+                // Toggle: the same project closes; a different one replaces (only one open),
+                // re-anchored at wherever the pointer now is. The switcher panel stays open
+                // behind the menu (so the right-clicked row remains visible), but the other
+                // popovers are mutually exclusive with it.
+                self.project_menu_open = match &self.project_menu_open {
+                    Some(open) if open.path == path => None,
+                    _ => Some(ProjectMenu {
+                        path,
+                        anchor: self.cursor,
+                    }),
+                };
+                self.help_menu_open = false;
+                self.sidebar_filter_open = false;
+                self.worktree_menu_open = None;
+            }
+            Message::ProjectMenuDismissed => {
+                self.project_menu_open = None;
+            }
+            Message::ProjectForgetRequested(path) => {
+                // Open the confirmation; nothing is removed until confirmed (FR-002).
+                self.project_menu_open = None;
+                self.forget_target = Some(path);
+                self.open_overlay(Overlay::ConfirmForgetProject);
+            }
+            Message::ProjectForgetConfirmed => {
+                // Drop the record + all per-path metadata (FR-003/FR-005). The binary has already
+                // stopped the project's live processes and will persist + delete the per-project
+                // state file after this pure transition.
+                if let Some(path) = self.forget_target.clone() {
+                    // If the forgotten project was the active working space, its active session
+                    // pointer must be cleared too — `forget` clears `workspace.active`, so the
+                    // dangling `active_session` (which only ever referenced the active project)
+                    // would otherwise point at a project that no longer exists (FR-008).
+                    let was_active = self.workspace.active.as_deref()
+                        == Some(canonicalize_best_effort(&path).as_path());
+                    self.workspace.forget(&path);
+                    if was_active {
+                        self.active_session = None;
+                    }
+                }
+                self.forget_target = None;
+                self.overlay = Overlay::None;
+            }
+            Message::ProjectForgetCancelled => {
+                self.forget_target = None;
+                self.overlay = Overlay::None;
+            }
             Message::ThemeModeCycled => {
                 // Advance to the next mode; the menu stays open so repeated clicks cycle.
                 self.theme_pref = self.theme_pref.next();
@@ -829,8 +983,8 @@ impl State {
                 // Pure state change; the binary persists it at the I/O boundary (FR-009).
                 self.theme_pref = pref;
             }
-            Message::SystemThemeChanged(scheme) => {
-                self.system_scheme = scheme;
+            Message::SystemThemeChanged(detected) => {
+                self.system_scheme = observe_system_scheme(detected, self.system_scheme);
             }
             Message::ProjectOpenRefused(message) => {
                 // Non-git directory refused (FR-001a); the active project is unchanged.
@@ -859,6 +1013,8 @@ impl State {
                 } else {
                     Some(dir)
                 };
+                // Mutually exclusive with the project context menu (feature 015).
+                self.project_menu_open = None;
             }
             Message::WorktreeMenuDismissed => {
                 self.worktree_menu_open = None;
@@ -958,6 +1114,8 @@ impl State {
                 // Mutually exclusive with the other two lightweight popovers (feature 009).
                 self.help_menu_open = false;
                 self.project_switcher_open = false;
+                // Mutually exclusive with the project context menu (feature 015).
+                self.project_menu_open = None;
             }
             Message::ShowAgentWorktreesToggled => {
                 // Sole mutation (FR-010d): the tag filters, expansion state, and overlays are all
@@ -1148,9 +1306,17 @@ impl State {
                 }
             }
             Message::SessionCloseRequested(id) => {
+                // Bugfix BUG-003 (FR-015a): close ARCHIVES the session (kept, hidden from the
+                // sidebar via `active_sessions()`) rather than deleting its record outright, so a
+                // still-existing `claude` transcript doesn't get reconstructed by reconciliation
+                // (FR-020b) on the next project open. The durable, provider-side suppression
+                // marker (FR-020c) is written by the caller at the I/O boundary (`src/main.rs`),
+                // alongside killing the process.
                 if let Some(path) = self.workspace.active.clone() {
                     if let Some(list) = self.workspace.sessions.get_mut(&path) {
-                        list.retain(|s| s.id != id);
+                        if let Some(session) = list.iter_mut().find(|s| s.id == id) {
+                            session.archive();
+                        }
                     }
                 }
                 if self.active_session == Some(id) {
@@ -1158,6 +1324,44 @@ impl State {
                     // BUG-001 / focus-model.md: no session is displayed, so no terminal is focused.
                     self.terminal_focused = false;
                 }
+            }
+            Message::SessionMenuToggled(id) => {
+                // Toggle: same session closes; a different one replaces (only one open) —
+                // mirrors `WorktreeMenuToggled` (bugfix BUG-003).
+                self.session_menu_open = if self.session_menu_open == Some(id) {
+                    None
+                } else {
+                    Some(id)
+                };
+            }
+            Message::SessionMenuDismissed => {
+                self.session_menu_open = None;
+            }
+            Message::SessionRemoveRequested(id) => {
+                self.session_menu_open = None;
+                self.session_remove_target = Some(id);
+                self.open_overlay(Overlay::ConfirmSessionRemove);
+            }
+            Message::SessionRemoveConfirmed => {
+                // Unlike close (archive), remove drops the record outright — the pre-BUG-003
+                // close behavior. The binary has already killed the process and recorded the
+                // durable suppression marker (FR-015c, FR-020c).
+                if let Some(id) = self.session_remove_target.take() {
+                    if let Some(path) = self.workspace.active.clone() {
+                        if let Some(list) = self.workspace.sessions.get_mut(&path) {
+                            list.retain(|s| s.id != id);
+                        }
+                    }
+                    if self.active_session == Some(id) {
+                        self.active_session = None;
+                        self.terminal_focused = false;
+                    }
+                }
+                self.overlay = Overlay::None;
+            }
+            Message::SessionRemoveCancelled => {
+                self.session_remove_target = None;
+                self.overlay = Overlay::None;
             }
             Message::TerminalTick => {}
             Message::SidebarToggled => {
@@ -1260,9 +1464,7 @@ impl State {
             // the lines as `WorktreeCreateLogAppended`.
             | Message::WorktreeCreateProgressPolled
             // Focus state is tracked by the binary (gui runtime), not the pure core.
-            | Message::WindowFocusChanged(_)
-            // OS theme detection is gui-runtime I/O; the binary handles the poll tick.
-            | Message::OsThemePolled => {}
+            | Message::WindowFocusChanged(_) => {}
         }
     }
 
@@ -1347,7 +1549,12 @@ impl State {
             .collect()
     }
 
-    /// Sessions hosted by the active project (FR-011). Empty when no project is active.
+    /// Sessions hosted by the active project (FR-011), **including archived ones** — used by
+    /// callers that need the raw record (e.g. [`Self::sessions_in_worktree`], which only cares
+    /// about location, not visibility). Sidebar-rendering call sites
+    /// ([`Self::sidebar_entries`], [`Self::worktree_tree`]) additionally filter out archived
+    /// sessions themselves (bugfix BUG-003, FR-015a), so a closed session disappears from the
+    /// sidebar. Empty when no project is active.
     pub fn active_sessions(&self) -> &[Session] {
         self.workspace
             .active
@@ -1541,7 +1748,7 @@ impl State {
                 expanded: self.expanded.contains(&worktree.dir_name),
                 sessions: sessions
                     .iter()
-                    .filter(|s| s.location.is_worktree(&worktree.dir_name))
+                    .filter(|s| s.location.is_worktree(&worktree.dir_name) && !s.archived)
                     .cloned()
                     .collect(),
                 worktree: worktree.clone(),
@@ -1573,7 +1780,7 @@ impl State {
         let default_sessions: Vec<Session> = self
             .active_sessions()
             .iter()
-            .filter(|s| s.location == SessionLocation::Default)
+            .filter(|s| s.location == SessionLocation::Default && !s.archived)
             .cloned()
             .collect();
         let mut entries = vec![SidebarEntry::Default(DefaultNode {
@@ -1658,6 +1865,8 @@ pub fn on_escape(state: &State) -> Option<Message> {
         Overlay::Settings => Some(Message::SettingsCancelled),
         Overlay::ConfirmWorktreeDelete => Some(Message::WorktreeDeleteCancelled),
         Overlay::RenameWorktree => Some(Message::WorktreeRenameCancelled),
+        Overlay::ConfirmSessionRemove => Some(Message::SessionRemoveCancelled),
+        Overlay::ConfirmForgetProject => Some(Message::ProjectForgetCancelled),
         Overlay::None => None,
     }
 }

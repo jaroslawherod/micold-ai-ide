@@ -146,7 +146,8 @@ fn default_session_persists_as_null_worktree_dir_and_roundtrips() {
     };
 
     store.save(&ws).unwrap();
-    let raw = std::fs::read_to_string(dir.path().join("projects.json")).unwrap();
+    // Bugfix 002/BUG-001: session data lives in the project's own state file, not the catalog.
+    let raw = std::fs::read_to_string(store.project_state_path(&path)).unwrap();
     assert!(
         raw.contains("\"worktree_dir\": null") || raw.contains("\"worktree_dir\":null"),
         "expected a null worktree_dir for a Default session, got: {raw}"

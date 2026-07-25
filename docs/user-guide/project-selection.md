@@ -57,6 +57,10 @@ opens the folder browser so you can add a project that isn't in the list yet. Th
 complements the **Known projects** list in the main window and the folder browser — all three
 still work.
 
+**Right-click** any project row for a context menu with **Forget project** — see
+[Forgetting a project](#forgetting-a-project) below. (The **Add project…** row is an action, not
+a project, so it has no context menu.)
+
 Switching projects this way **does not stop your running terminal sessions**. The project you
 leave keeps its sessions running in the background, and returning to it restores them exactly
 as you left them. See
@@ -91,3 +95,46 @@ touches the folder on disk. The new name is saved and persists across restarts. 
 have to be unique: two projects can share the same display name and remain distinct by their
 folder path. A name that is empty or only whitespace is rejected, and the previous name is
 kept.
+
+## Forgetting a project
+
+When you no longer want a project in your list, you can **forget** it, from either of two places:
+
+- **From the Known projects list** — click **Forget** next to a project.
+- **From the project switcher** — open the switcher in the top bar, **right-click** the
+  project's row, and choose **Forget project**. The menu opens at your pointer, and stays fully
+  on screen even when you right-click near the window's edge.
+
+Both routes do exactly the same thing. Micold asks you to confirm first, because forgetting
+permanently discards what the app remembers about that project — its custom name, any
+worktree-name overrides, and its session records.
+
+**Forgetting never deletes anything on disk.** The folder, its files, and any git worktrees are
+left completely untouched — only Micold's own remembered entry is removed. (Deleting a worktree is
+a separate, explicitly destructive action; see
+[Worktrees & Sessions](worktrees-and-sessions.md).)
+
+On the confirmation dialog:
+
+- Click **Forget** to remove the project. It disappears from the list immediately, and the removal
+  is saved right away — so the project does not come back the next time you launch Micold.
+- Click **Cancel** (or press **Esc**) to keep the project; nothing changes.
+
+A few details worth knowing:
+
+- **Running sessions are stopped.** If the project has terminal sessions running (including in the
+  background), forgetting stops them so nothing keeps running for a project Micold no longer
+  tracks. When there are running sessions, the confirmation tells you how many will be stopped.
+  Their worktree folders and files are **not** deleted — only the running processes end.
+- **Forgetting the active project** clears your active working space: afterward no project is
+  active until you open or reopen one. If it was your only project, you return to the first-run
+  **empty state**.
+- **Unavailable projects can be forgotten too.** Forget is the way to clear out a stale entry whose
+  folder is gone from disk — unlike **Open**, the **Forget** button stays enabled for
+  **(unavailable)** projects.
+- **Re-opening a forgotten folder starts fresh.** If you later open the same folder again, it comes
+  back as a brand-new entry with the default (folder) name — the custom name and other remembered
+  details from before are gone. (Any `claude` conversations still present in the folder's worktrees
+  on disk may be rediscovered, exactly as they would be for any folder you open that already
+  contains conversations — that is the folder's current contents, not Micold remembering the
+  forgotten entry.)

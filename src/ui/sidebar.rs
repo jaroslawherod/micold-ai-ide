@@ -499,6 +499,7 @@ fn session_tree_item(
         .with_icon(Icon::ActiveMarker)
         .selected(selected)
         .on_press(Message::SessionSelected(session.id))
+        .on_right_press(Message::SessionMenuToggled(session.id))
         .trailing(
             Icon::Close,
             Message::SessionCloseRequested(session.id),

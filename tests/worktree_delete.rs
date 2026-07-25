@@ -8,6 +8,7 @@
 use micold_ai_ide::app::{Message, NoticeLevel, State};
 use micold_ai_ide::git::{FakeGit, Git, GitCli};
 use micold_ai_ide::project::{Availability, Project};
+use micold_ai_ide::provider::{AiCliProvider, ClaudeProvider};
 use micold_ai_ide::session::{Session, SessionLocation};
 use micold_ai_ide::terminal::{FakeHandle, TerminalHandle};
 use micold_ai_ide::worktree::{remove_worktree, remove_worktree_dir, Worktree, WorktreeStatus};
@@ -83,6 +84,71 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
     );
 }
 
+/// Regression test for the worktree-delete archive-marker fix (found by code review of the
+/// state-lost bugfix, bugfix BUG-003/FR-020c): deleting a worktree used to kill its sessions and
+/// drop their records without recording the durable suppression marker Close/Remove write, so a
+/// worktree recreated later with the same `dir_name` (hence the same transcript `cwd` encoding)
+/// would have its old sessions resurrected by reconciliation from their still-existing `claude`
+/// transcripts. Mirrors the fixed binary's confirmed-delete flow (`src/main.rs`
+/// `Message::WorktreeDeleteConfirmed`), which cannot be linked from an integration test — same
+/// reasoning as `tests/session_reconciliation.rs`.
+#[test]
+fn confirmed_delete_marks_the_worktrees_sessions_archived_but_not_others() {
+    let repo = PathBuf::from("/repo");
+    let target = repo.join(".claude/worktrees/feat-abc-123-x");
+    let branch = "feat/abc-123-x";
+
+    let git = FakeGit::new().with_repo(repo.clone());
+    git.worktree_add_new_branch(&repo, branch, &target).unwrap();
+
+    let mut state = State::default();
+    state.workspace.projects.push(Project {
+        path: repo.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(repo.clone());
+    state.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
+    let target_session =
+        Session::start_new(SessionLocation::Worktree("feat-abc-123-x".to_string()));
+    let other_session = Session::start_new(SessionLocation::Worktree("other".to_string()));
+    let (target_id, other_id) = (target_session.id, other_session.id);
+    state.update(Message::SessionStarted(target_session));
+    state.update(Message::SessionStarted(other_session));
+
+    let mut handles: HashMap<_, FakeHandle> = HashMap::new();
+    handles.insert(target_id, FakeHandle::default());
+    handles.insert(other_id, FakeHandle::default());
+
+    let config = tempfile::tempdir().unwrap();
+    let provider = ClaudeProvider;
+    let worktree_cwd = SessionLocation::Worktree("feat-abc-123-x".to_string()).cwd(&repo);
+
+    // Mirror the fixed binary's confirmed-delete flow: kill each of the worktree's sessions,
+    // then durably mark them archived.
+    for id in state.sessions_in_worktree("feat-abc-123-x") {
+        if let Some(handle) = handles.get_mut(&id) {
+            handle.kill().unwrap();
+        }
+        provider
+            .mark_archived(config.path(), &worktree_cwd, id.0)
+            .unwrap();
+    }
+    remove_worktree(&git, &repo, &target, Some(branch)).unwrap();
+
+    assert!(
+        provider.is_archived(config.path(), &worktree_cwd, target_id.0),
+        "the deleted worktree's session must be durably marked archived, so a worktree \
+         recreated later with the same name can't have it resurrected by reconciliation"
+    );
+    let other_cwd = SessionLocation::Worktree("other".to_string()).cwd(&repo);
+    assert!(
+        !provider.is_archived(config.path(), &other_cwd, other_id.0),
+        "an unrelated worktree's session must not be marked archived"
+    );
+}
+
 /// FR-023: a delete that fails must tell the user, and must not leave the sidebar claiming the
 /// worktree is gone.
 ///
@@ -116,6 +182,68 @@ fn fr_023_failed_delete_is_reported_and_the_worktree_survives() {
     // Git still owns the worktree and its branch — nothing was silently half-removed.
     assert_eq!(git.worktrees(&repo).len(), 1, "registration survives");
     assert!(git.branches(&repo).contains(&branch.to_string()));
+}
+
+/// Regression test for a second gap in the same flow, found by code review of the archive-marker
+/// fix (bugfix BUG-003 follow-up): killing a worktree's sessions and durably marking them
+/// archived used to happen *unconditionally*, before `remove_worktree` was even attempted. On a
+/// failed delete (the exact `fr_023_...` scenario above), the worktree survived and was reported
+/// as still there, but its sessions were gone forever — the archived marker now blocks the
+/// accidental resurrection-via-reconciliation that used to make that loss non-permanent.
+///
+/// Mirrors the fixed flow: only kill + mark_archived a worktree's sessions once removal is
+/// confirmed to have succeeded; on failure, leave them alone entirely.
+#[test]
+fn fr_023_failed_delete_leaves_its_sessions_running_and_unarchived() {
+    let repo = PathBuf::from("/repo");
+    let target = repo.join(".claude/worktrees/feat-locked");
+    let branch = "feat/locked";
+
+    let git = FakeGit::new().with_repo(repo.clone()).failing_next_remove();
+    git.worktree_add_new_branch(&repo, branch, &target).unwrap();
+
+    let mut state = State::default();
+    state.workspace.projects.push(Project {
+        path: repo.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(repo.clone());
+    state.worktrees = vec![wt("feat-locked", &repo)];
+    let session = Session::start_new(SessionLocation::Worktree("feat-locked".to_string()));
+    let session_id = session.id;
+    state.update(Message::SessionStarted(session));
+
+    let mut handles: HashMap<_, FakeHandle> = HashMap::new();
+    handles.insert(session_id, FakeHandle::default());
+
+    let config = tempfile::tempdir().unwrap();
+    let provider = ClaudeProvider;
+    let worktree_cwd = SessionLocation::Worktree("feat-locked".to_string()).cwd(&repo);
+
+    // Mirror the fixed binary's flow: attempt removal FIRST; only kill + mark_archived +
+    // drop the record on success. `failing_next_remove` guarantees this call errors, so none
+    // of that follow-up runs — exactly the bug this test guards against ever regressing.
+    remove_worktree(&git, &repo, &target, Some(branch))
+        .expect_err("the primed failure must actually fail");
+
+    assert!(
+        !*handles[&session_id].killed.lock().unwrap(),
+        "a session in a worktree whose removal failed must not be killed"
+    );
+    assert!(
+        !provider.is_archived(config.path(), &worktree_cwd, session_id.0),
+        "a session in a worktree whose removal failed must not be durably archived"
+    );
+    assert!(
+        state
+            .workspace
+            .sessions
+            .get(&repo)
+            .is_some_and(|list| list.iter().any(|s| s.id == session_id)),
+        "the session record must survive a failed delete"
+    );
 }
 
 #[test]
