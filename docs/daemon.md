@@ -100,11 +100,12 @@ never changes how a session's exit is handled.
 - **Teardown reaps the whole process tree.** Closing or deleting a session terminates not just its
   top-level process but any helpers it spawned, so nothing is orphaned in the background.
 
-One limitation worth knowing (L5): the crash-loop counter has **no time window**. It counts
-*consecutive* restarts, not restarts-per-minute, and there is not yet an automatic "it has been
-healthy for a while, reset the count" — so a session that restarts and then runs fine still reads as
-`Restarting` until it is explicitly brought back to a running state (e.g. on the next attach). A
-counter reset on sustained health is a planned refinement.
+**A recovered session heals.** A restart that *survives* — the new process is still running on the
+next supervision check, rather than crashing again immediately — returns the session to a normal
+running state and **resets the crash-loop counter**. So repeated crashes only add up while they are
+happening back-to-back; an occasional crash that recovers cleanly never creeps toward the give-up
+limit over the session's lifetime. Only a genuine tight loop (crash, restart, crash again before it
+could survive a check) exhausts the budget and settles `Failed`.
 
 ## Surviving logout
 

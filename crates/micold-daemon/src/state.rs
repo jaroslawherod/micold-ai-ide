@@ -610,20 +610,24 @@ impl DaemonState {
         {
             let mut inner = self.lock();
             scrollback = inner.catalog.settings_wire().scrollback_lines;
-            let exited: Vec<(SessionId, ExitOutcome)> = inner
-                .sessions
-                .iter()
-                .filter_map(|(id, live)| {
-                    let proc = live.procs.get(&SessionProcess::Primary)?;
-                    if proc.pty.is_alive() {
-                        None
-                    } else {
-                        // A reaped-but-unclassifiable exit is treated as a crash so supervision
-                        // still runs rather than the session lingering as a dead-but-alive entry.
-                        Some((*id, proc.pty.exit_outcome().unwrap_or(ExitOutcome::Crashed)))
-                    }
-                })
-                .collect();
+            // Partition live primaries into those that have exited and those still alive. The alive
+            // set is captured *before* this tick's respawns, so a process respawned this tick is not
+            // in it — that is what lets a genuine survivor (alive since the previous tick) reset while
+            // a crash-looping respawn keeps advancing toward `Failed`.
+            let mut exited: Vec<(SessionId, ExitOutcome)> = Vec::new();
+            let mut alive: Vec<SessionId> = Vec::new();
+            for (id, live) in &inner.sessions {
+                let Some(proc) = live.procs.get(&SessionProcess::Primary) else {
+                    continue;
+                };
+                if proc.pty.is_alive() {
+                    alive.push(*id);
+                } else {
+                    // A reaped-but-unclassifiable exit is treated as a crash so supervision still
+                    // runs rather than the session lingering as a dead-but-alive entry.
+                    exited.push((*id, proc.pty.exit_outcome().unwrap_or(ExitOutcome::Crashed)));
+                }
+            }
             for (id, outcome) in exited {
                 match inner.catalog.supervise_session_exit(id, outcome) {
                     Some((project, SupervisionAction::Restart, cwd, mode)) => {
@@ -637,6 +641,14 @@ impl DaemonState {
                     // Session already gone from the catalog (closed concurrently) — just reap the
                     // orphaned live entry, no catalog change to broadcast.
                     None => to_drop.push(id),
+                }
+            }
+            // Survivors: a session still alive while marked `Restarting` has stayed up since its
+            // respawn (at least one tick ago) — it is healthy now, so reset it to `Running`, which
+            // clears the crash-loop counter (closes the L5 gap).
+            for id in alive {
+                if let Some(project) = inner.catalog.mark_running_if_restarting(id) {
+                    changed.push(project);
                 }
             }
         }

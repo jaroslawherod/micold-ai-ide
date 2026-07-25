@@ -383,6 +383,21 @@ impl Catalog {
         Some((project, action, cwd, mode))
     }
 
+    /// Mark a session `Running` **iff** it is currently `Restarting` — a respawned process that has
+    /// stayed up since the last supervision observation is now healthy, which resets the crash-loop
+    /// counter (closes the L5 gap: crashes far apart no longer accumulate toward `Failed`). Returns
+    /// the owning project when it transitioned, for a `CatalogChanged` broadcast. A no-op for every
+    /// other lifecycle, so it never resurrects `Idle`/`Failed` or re-announces a steady `Running`.
+    pub fn mark_running_if_restarting(&mut self, id: SessionId) -> Option<PathBuf> {
+        let (project, session) = self.workspace.find_session_mut(id)?;
+        if matches!(session.lifecycle, SessionLifecycle::Restarting { .. }) {
+            session.mark_running();
+            Some(project)
+        } else {
+            None
+        }
+    }
+
     /// Persist the project catalog atomically (temp + rename). A no-op for an ephemeral catalog.
     pub fn persist(&self) -> io::Result<()> {
         if let Some(store) = &self.project_store {

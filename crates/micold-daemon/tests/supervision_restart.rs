@@ -141,3 +141,32 @@ fn an_unattended_crash_triggers_a_restart() {
         "a crashed session is respawned (a fresh live process exists)"
     );
 }
+
+#[test]
+fn a_restart_that_survives_resets_to_running() {
+    // Closes the L5 gap: a respawned process that stays up must return to Running (clearing the
+    // crash-loop counter), not read as Restarting forever.
+    let project = tempfile::tempdir().unwrap();
+    let settings = tempfile::tempdir().unwrap();
+    let (state, id) =
+        state_with_regular_session(project.path(), &settings.path().join("settings.json"));
+
+    // Crash once → the next tick respawns the platform shell, which stays alive on its PTY.
+    let handle = state.register_session(PtySession::spawn(id, sh("exit 1"), 100, None).unwrap());
+    wait_dead(&handle);
+    state.supervise_exited_sessions();
+    assert_eq!(
+        lifecycle(&state, project.path(), id),
+        Some(WireLifecycle::Restarting { attempts: 1 }),
+        "the tick that respawns does not itself reset — the survivor is only proven next tick"
+    );
+    assert!(state.live_session(id).is_some_and(|p| p.is_alive()));
+
+    // A later tick sees the respawn still alive → resets it to Running (crash-loop counter cleared).
+    state.supervise_exited_sessions();
+    assert_eq!(
+        lifecycle(&state, project.path(), id),
+        Some(WireLifecycle::Running),
+        "a restart that survives a supervision tick is healthy again"
+    );
+}
