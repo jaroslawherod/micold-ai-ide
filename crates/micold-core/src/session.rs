@@ -420,6 +420,14 @@ impl Session {
         self.lifecycle = SessionLifecycle::Idle;
     }
 
+    /// The process exited **cleanly** on its own (status 0 — the user quit `claude`, ran `exit`):
+    /// → `Idle`, no auto-restart (FR-004 scenario 3). Distinct from [`Self::on_unexpected_exit`],
+    /// which governs crashes with the retry budget. Resets any in-flight crash-loop counter, since
+    /// a clean exit is not a failure.
+    pub fn record_clean_exit(&mut self) {
+        self.lifecycle = SessionLifecycle::Idle;
+    }
+
     /// The user closed this session (bugfix BUG-003, FR-015a): stop the process (`Idle`, no
     /// auto-restart, mirrors [`stop_for_project_change`](Self::stop_for_project_change)) and flag
     /// it `archived` so it is excluded from the sidebar. The record itself is kept — callers must

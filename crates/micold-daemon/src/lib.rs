@@ -15,6 +15,7 @@ pub mod logging;
 pub mod server;
 pub mod singleton;
 pub mod state;
+pub mod supervision;
 pub mod supervisor;
 pub mod terminal;
 
