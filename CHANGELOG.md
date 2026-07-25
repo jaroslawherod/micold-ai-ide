@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.4.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.3.0...micold-ai-ide-v0.4.0) (2026-07-25)
+
+
+### Features
+
+* add optional environment-include script for sessions ([9110e1e](https://github.com/jaroslawherod/micold-ai-ide/commit/9110e1e479ecc9149ff73b3ad1b9e44216689644))
+* **project:** forget a project and remove it from the list ([45f4279](https://github.com/jaroslawherod/micold-ai-ide/commit/45f4279ba5fa6c181da9c8bc905a504435f0d90e))
+* **project:** let the user forget a project and remove it from the list ([50ea068](https://github.com/jaroslawherod/micold-ai-ide/commit/50ea0689e5b1785774dbc7ef5dcead13f5f60882))
+* **switcher:** forget a project from its right-click context menu ([5541a75](https://github.com/jaroslawherod/micold-ai-ide/commit/5541a758138a23b646b1d1fdbb105ae4cc1e9e5a))
+* **terminal:** allow multiple Regular Terminal instances per session ([07988ec](https://github.com/jaroslawherod/micold-ai-ide/commit/07988ec1c764b10b09cb617a03b469912967d31c))
+* **terminal:** redesign the instance switcher as tabs and fix session-id addressing ([2836151](https://github.com/jaroslawherod/micold-ai-ide/commit/2836151cfdbbb99a3cca988ab4cf7ad566fae0d2))
+* **worktree:** hide agent-created worktrees from the sidebar ([9aad123](https://github.com/jaroslawherod/micold-ai-ide/commit/9aad1237c80ab15f645b13b5e8bc2d2ac391053c))
+* **worktree:** hide agent-created worktrees from the sidebar ([8ddf591](https://github.com/jaroslawherod/micold-ai-ide/commit/8ddf591e496f0efb2dea57ec0eca4fbedd1002ce))
+* **worktree:** Material select, branch-delete choice, and staged creation progress ([c3ebc6e](https://github.com/jaroslawherod/micold-ai-ide/commit/c3ebc6e6c5ae4fd74e3eb58f2d3e2b893d2374e6))
+
+
+### Bug Fixes
+
+* **env-include:** resolve the shell environment in the session's own directory ([2862bab](https://github.com/jaroslawherod/micold-ai-ide/commit/2862babb57628c891d5807142bbe2bad115e0b91))
+* **env-include:** satisfy interactive-guard scripts when sourcing on Unix ([6150be3](https://github.com/jaroslawherod/micold-ai-ide/commit/6150be361bd3888a6d363fbe3657723ffd69440e))
+* include env_include fields in test_app() helper ([91f88da](https://github.com/jaroslawherod/micold-ai-ide/commit/91f88da816f479da3d662b22cf17a5e3a4419400))
+* **state:** close two data-loss gaps found by broader review of the diff ([d88c7a1](https://github.com/jaroslawherod/micold-ai-ide/commit/d88c7a1881c7c948c165530e723ddcc19d2ccbec))
+* **state:** isolate storage faults per-project and stop reconciliation from resurrecting closed sessions ([93a0a08](https://github.com/jaroslawherod/micold-ai-ide/commit/93a0a08b17ebfec31fd283c3c43ef81eed9f3add))
+* stop the app crashing on launch (theme subscription captured state) ([600c7d8](https://github.com/jaroslawherod/micold-ai-ide/commit/600c7d8dc11bab48acb742ba808be1bfeacadd07))
+* **terminal:** accumulate sub-line wheel deltas so touchpads scroll ([0ce19ec](https://github.com/jaroslawherod/micold-ai-ide/commit/0ce19ecd81fc8907b10380365dac33b66e2070e8))
+* **terminal:** stop ensure_attached_process from auto-respawning an exited instance ([3d6b564](https://github.com/jaroslawherod/micold-ai-ide/commit/3d6b56406b6adacd8c3bed48229eaefaadbf705f))
+* **theme:** stop OS theme poll from panicking on startup ([6774993](https://github.com/jaroslawherod/micold-ai-ide/commit/67749937e176d514d5ffe9d9bb66b014e8559c1c))
+* **theme:** stop transient dark_light::detect() timeouts from flashing the light theme ([650e701](https://github.com/jaroslawherod/micold-ai-ide/commit/650e701f668d7520b1d0f420e59bf1a0bebd1084))
+* **ui:** use a close icon for the session close action ([05c8fe9](https://github.com/jaroslawherod/micold-ai-ide/commit/05c8fe9b4bc3e590a98564751902a7e9be7bfe07))
+* **worktree:** compare worktree paths symlink-safely when removal fails ([c58da0a](https://github.com/jaroslawherod/micold-ai-ide/commit/c58da0aad7e0e59834e5940a1eef0563b2d8dfa8))
+* **worktree:** mark deleted worktree's sessions archived so they can't resurrect ([7dc9c8a](https://github.com/jaroslawherod/micold-ai-ide/commit/7dc9c8a68b111230a4810a075840bfaf4d9cbfad))
+* **worktree:** stop reporting a folder error on every successful delete ([86a4263](https://github.com/jaroslawherod/micold-ai-ide/commit/86a4263f38af22191993d58928d4767a2e0fc6f7))
+* **worktree:** stop reporting a folder error on every successful delete ([7ed8e26](https://github.com/jaroslawherod/micold-ai-ide/commit/7ed8e26bc64d2c0ff1491c5f3ff57773e70b7996))
+
 ## [0.3.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.2.0...micold-ai-ide-v0.3.0) (2026-07-20)
 
 
