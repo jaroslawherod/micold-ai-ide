@@ -26,6 +26,7 @@ use micold_core::session::SessionId;
 use micold_core::terminal::{claude_args, default_shell_command, LaunchSpec};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 
+use crate::supervision::ExitOutcome;
 use crate::terminal::{DaemonListener, SharedTerm, SharedWriter, VtSignals};
 
 /// The grid size a session starts with before any client reports its real pane dimensions
@@ -72,6 +73,11 @@ pub struct PtySession {
     size: Arc<Mutex<WindowSize>>,
     /// Set true when the reader thread sees EOF on the PTY (the child's output ended).
     reader_done: Arc<AtomicBool>,
+    /// The child's exit outcome once reaped — `Some(success)` after [`Self::is_alive`] or
+    /// [`Self::exit_outcome`] observes the child gone, `None` while it is still running. Cached
+    /// because `try_wait` only yields the status once; the supervisor reads it after the child dies
+    /// to classify a clean exit vs a crash (US4, FR-005).
+    exit: Arc<Mutex<Option<bool>>>,
     /// The reader thread handle, joined on drop.
     reader: Option<JoinHandle<()>>,
 }
@@ -199,6 +205,7 @@ impl PtySession {
             signals,
             size,
             reader_done,
+            exit: Arc::new(Mutex::new(None)),
             reader: Some(reader),
         })
     }
@@ -261,11 +268,47 @@ impl PtySession {
 
     /// Whether the child is still running, via a non-blocking `try_wait` reap. Authoritative for
     /// liveness (the reader-thread EOF flag is only a hint — a child can close stdout yet linger).
+    /// On observing the child gone, caches its exit success bit for [`Self::exit_outcome`].
     pub fn is_alive(&self) -> bool {
         match self.child.lock() {
-            Ok(mut child) => matches!(child.try_wait(), Ok(None)),
+            Ok(mut child) => match child.try_wait() {
+                Ok(Some(status)) => {
+                    self.cache_exit(status.success());
+                    false
+                }
+                Ok(None) => true,
+                // A reap error means we can no longer track the child; treat it as gone (a crash,
+                // so supervision can react) rather than pretend it is alive forever.
+                Err(_) => {
+                    self.cache_exit(false);
+                    false
+                }
+            },
             Err(_) => false,
         }
+    }
+
+    /// Record the child's exit success bit the first time it is observed (idempotent — later reaps
+    /// never overwrite the first-seen outcome).
+    fn cache_exit(&self, success: bool) {
+        if let Ok(mut e) = self.exit.lock() {
+            e.get_or_insert(success);
+        }
+    }
+
+    /// The child's exit outcome once it has exited, or `None` while it is still running. Reaps via
+    /// [`Self::is_alive`] if not yet observed, so a caller can poll this directly. Drives the
+    /// restart supervision policy (US4, FR-005): a clean exit stops the session, a crash restarts.
+    pub fn exit_outcome(&self) -> Option<ExitOutcome> {
+        if self.exit.lock().ok().and_then(|e| *e).is_none() {
+            // Not yet observed — attempt a reap now.
+            let _ = self.is_alive();
+        }
+        self.exit
+            .lock()
+            .ok()
+            .and_then(|e| *e)
+            .map(ExitOutcome::from_success)
     }
 
     /// Whether the PTY reader has seen EOF (the child's output stream ended). A hint for the framer;
@@ -316,5 +359,60 @@ impl Dimensions for TermSizeShim {
     }
     fn columns(&self) -> usize {
         self.cols
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    /// A `sh -c "<script>"` command builder for a real, short-lived child.
+    fn sh(script: &str) -> CommandBuilder {
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg(script);
+        cmd
+    }
+
+    /// Poll `exit_outcome` until the child is reaped (bounded), returning the classification.
+    fn wait_for_exit(session: &PtySession) -> ExitOutcome {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(outcome) = session.exit_outcome() {
+                return outcome;
+            }
+            assert!(Instant::now() < deadline, "child did not exit in time");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[test]
+    fn a_zero_exit_is_classified_clean() {
+        let s = PtySession::spawn(SessionId::new(), sh("exit 0"), 100, None).unwrap();
+        assert_eq!(wait_for_exit(&s), ExitOutcome::Clean);
+    }
+
+    #[test]
+    fn a_nonzero_exit_is_classified_crashed() {
+        let s = PtySession::spawn(SessionId::new(), sh("exit 3"), 100, None).unwrap();
+        assert_eq!(wait_for_exit(&s), ExitOutcome::Crashed);
+    }
+
+    #[test]
+    fn a_live_child_has_no_exit_outcome_yet() {
+        let s = PtySession::spawn(SessionId::new(), sh("sleep 5"), 100, None).unwrap();
+        assert!(s.is_alive());
+        assert_eq!(s.exit_outcome(), None);
+        let _ = s.kill();
+    }
+
+    #[test]
+    fn the_first_seen_outcome_is_cached_and_stable() {
+        let s = PtySession::spawn(SessionId::new(), sh("exit 0"), 100, None).unwrap();
+        let first = wait_for_exit(&s);
+        // Repeated reads never flip the outcome (try_wait only yields the status once).
+        assert_eq!(s.exit_outcome(), Some(first));
+        assert_eq!(s.exit_outcome(), Some(ExitOutcome::Clean));
     }
 }
