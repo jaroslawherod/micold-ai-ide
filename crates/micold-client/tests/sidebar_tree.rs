@@ -381,6 +381,239 @@ fn default_sessions_are_attached_to_the_default_entry_only() {
         .all(|s| s.location == SessionLocation::Default));
 }
 
+// --- Feature 014 US1: agent-owned worktrees are hidden ---
+
+/// An agent-owned worktree as Claude Code creates it: `agent-<hex>` bound to
+/// `worktree-agent-<hex>` (feature 014, FR-005).
+fn agent_worktree(hex: &str, status: WorktreeStatus) -> Worktree {
+    let dir = format!("agent-{hex}");
+    Worktree {
+        dir_name: dir.clone(),
+        path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
+        branch: Some(format!("worktree-agent-{hex}")),
+        status,
+    }
+}
+
+fn state_with(worktrees: Vec<Worktree>) -> State {
+    let mut state = State::default();
+    let path = PathBuf::from("/repo");
+    state.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(path);
+    state.worktrees = worktrees;
+    state
+}
+
+const AGENT_HEXES: [&str; 3] = [
+    "a885b42dc521fbda1",
+    "abf6a58b16c3c9e6f",
+    "ae474105b29fbeb68",
+];
+
+fn mixed_state() -> State {
+    state_with(vec![
+        worktree("feat-a", WorktreeStatus::Valid),
+        worktree("feat-b", WorktreeStatus::Valid),
+        worktree("fix-c", WorktreeStatus::Valid),
+        agent_worktree(AGENT_HEXES[0], WorktreeStatus::Valid),
+        agent_worktree(AGENT_HEXES[1], WorktreeStatus::Valid),
+        agent_worktree(AGENT_HEXES[2], WorktreeStatus::Valid),
+    ])
+}
+
+#[test]
+fn tree_lists_only_user_worktrees_by_default() {
+    // US1 acceptance #1: 3 user + 3 agent worktrees ⇒ exactly the 3 user rows.
+    let tree = mixed_state().worktree_tree();
+    assert_eq!(dirs(&tree), vec!["feat-a", "feat-b", "fix-c"]);
+}
+
+#[test]
+fn agent_only_project_yields_no_worktree_nodes() {
+    // US1 acceptance #2: the sidebar must fall through to its empty state, not list machine names.
+    let state = state_with(
+        AGENT_HEXES
+            .iter()
+            .map(|h| agent_worktree(h, WorktreeStatus::Valid))
+            .collect(),
+    );
+    assert!(state.worktree_tree().is_empty());
+    // Only the Default entry survives — no worktree entries at all.
+    let entries = state.sidebar_entries();
+    assert_eq!(entries.len(), 1);
+    assert!(matches!(entries[0], SidebarEntry::Default(_)));
+}
+
+#[test]
+fn hidden_worktrees_are_not_reachable_as_action_targets() {
+    // FR-004: rows are the only entry point to start-session, rename, and delete, so proving no
+    // agent worktree reaches `sidebar_entries()` is what pins that requirement.
+    let state = mixed_state();
+    let listed: Vec<String> = state
+        .sidebar_entries()
+        .iter()
+        .filter_map(|e| match e {
+            SidebarEntry::Worktree(n) => Some(n.worktree.dir_name.clone()),
+            SidebarEntry::Default(_) => None,
+        })
+        .collect();
+    assert!(
+        listed.iter().all(|d| !d.starts_with("agent-")),
+        "no agent worktree may be offered as an action target while hidden, got {listed:?}"
+    );
+}
+
+// --- Feature 014 US4: revealing agent worktrees ---
+
+#[test]
+fn revealing_adds_agent_rows_in_unchanged_order() {
+    // US4 acceptance #1: the user's own rows are unaffected and unmoved; the agent rows join them.
+    let mut state = mixed_state();
+    state.update(Message::ShowAgentWorktreesToggled);
+    let listed = dirs(&state.worktree_tree());
+    assert_eq!(listed.len(), 6);
+    // Revealing must not reorder: the tree preserves `State::worktrees` order (which `reconcile()`
+    // has already sorted by dir_name in production), so with the toggle on it equals that list
+    // exactly.
+    let all: Vec<String> = state.worktrees.iter().map(|w| w.dir_name.clone()).collect();
+    assert_eq!(listed, all);
+    for hex in AGENT_HEXES {
+        assert!(listed.contains(&format!("agent-{hex}")));
+    }
+}
+
+#[test]
+fn revealed_rows_carry_the_agent_badge() {
+    // FR-010b: every revealed row is badged, unconditionally — not depending on its health, name,
+    // or session count — so it can never be mistaken for the user's own work.
+    let mut state = mixed_state();
+    state.update(Message::ShowAgentWorktreesToggled);
+    let tree = state.worktree_tree();
+    for hex in AGENT_HEXES {
+        let n = node(&tree, &format!("agent-{hex}"));
+        assert!(
+            n.tags.contains(&Tag::Agent),
+            "revealed agent row must carry Tag::Agent, got {:?}",
+            n.tags
+        );
+    }
+    // The user's own worktrees are never badged.
+    assert!(!node(&tree, "feat-a").tags.contains(&Tag::Agent));
+}
+
+#[test]
+fn tag_filters_apply_to_revealed_rows_the_same_way() {
+    // FR-010d: revealed entries flow through the same `matches_filters()` call as everyone else.
+    // An agent worktree carries no conventional type, so `Untyped` matches it and `feat` does not.
+    let mut state = mixed_state();
+    state.update(Message::ShowAgentWorktreesToggled);
+
+    state.update(Message::SidebarFilterToggled(TagFilter::Type(
+        ConventionalType::Feat,
+    )));
+    assert_eq!(
+        dirs(&state.filtered_worktree_tree()),
+        vec!["feat-a", "feat-b"]
+    );
+
+    state.update(Message::SidebarFilterToggled(TagFilter::Type(
+        ConventionalType::Feat,
+    ))); // clear it
+    state.update(Message::SidebarFilterToggled(TagFilter::Untyped));
+    let untyped = dirs(&state.filtered_worktree_tree());
+    for hex in AGENT_HEXES {
+        assert!(untyped.contains(&format!("agent-{hex}")));
+    }
+}
+
+// --- Feature 014 US3: unhealthy agent worktrees are hidden too ---
+
+#[test]
+fn unhealthy_agent_worktrees_are_hidden_rather_than_shown_as_broken() {
+    // FR-007 / US3 acceptance #3: an orphan directory git no longer registers (Invalid) and a
+    // registration whose directory is gone (Missing) are still agent worktrees. Surfacing them as
+    // broken entries would be worse than the original problem — a scary row for something the
+    // user never created.
+    let state = state_with(vec![
+        worktree("feat-a", WorktreeStatus::Valid),
+        agent_worktree(AGENT_HEXES[0], WorktreeStatus::Missing),
+        agent_worktree(AGENT_HEXES[1], WorktreeStatus::Invalid),
+    ]);
+    assert_eq!(dirs(&state.worktree_tree()), vec!["feat-a"]);
+    // A user's own broken worktree still surfaces — hiding is about ownership, not health.
+    let user_broken = state_with(vec![worktree("feat-gone", WorktreeStatus::Missing)]);
+    assert_eq!(dirs(&user_broken.worktree_tree()), vec!["feat-gone"]);
+}
+
+#[test]
+fn a_session_in_a_hidden_worktree_renders_nowhere_but_is_not_pruned() {
+    // FR-011 / research R8: no dedicated handling. The session is joined to its worktree in
+    // `worktree_tree()`, so hiding the worktree hides the session with it — exactly what already
+    // happens when a worktree is deleted outside the app. The record itself survives untouched.
+    let mut state = state_with(vec![
+        worktree("feat-a", WorktreeStatus::Valid),
+        agent_worktree(AGENT_HEXES[0], WorktreeStatus::Valid),
+    ]);
+    let agent_dir = format!("agent-{}", AGENT_HEXES[0]);
+    let path = state.workspace.active.clone().unwrap();
+    state.workspace.sessions.insert(
+        path,
+        vec![Session::start_new(SessionLocation::Worktree(
+            agent_dir.clone(),
+        ))],
+    );
+
+    // Rendered nowhere: no row carries it.
+    assert_eq!(dirs(&state.worktree_tree()), vec!["feat-a"]);
+    assert!(state.worktree_tree().iter().all(|n| n.sessions.is_empty()));
+
+    // Not pruned, and still resolvable by dir_name — visibility is irrelevant to which sessions
+    // must be terminated before a worktree is removed.
+    assert_eq!(state.active_sessions().len(), 1);
+    assert_eq!(state.sessions_in_worktree(&agent_dir).len(), 1);
+}
+
+// --- Feature 014 US2: user worktrees are never hidden by mistake ---
+
+#[test]
+fn user_worktrees_sharing_the_reserved_prefix_stay_listed() {
+    // SC-002 / FR-006: a naming corpus that deliberately brushes up against the reserved
+    // convention. Every one of these is the user's own work and must survive.
+    let corpus = [
+        "agent-foo",                        // ordinary word after the prefix
+        "agent-face",                       // hex, but far too short
+        "agent-deadbeefdeadbeef-parser",    // long enough, tail is not hex
+        "agent-deadbeefdeadbee",            // 15 hex digits — one below the bound
+        "feat-1234-agent-runner",           // reserved word in the middle
+        "worktree-agent-a885b42dc521fbda1", // branch prefix in the directory position
+    ];
+    let state = state_with(
+        corpus
+            .iter()
+            .map(|d| worktree(d, WorktreeStatus::Valid))
+            .collect(),
+    );
+    let listed = dirs(&state.worktree_tree());
+    for name in corpus {
+        assert!(
+            listed.iter().any(|d| d == name),
+            "{name} is a user worktree and must stay visible, got {listed:?}"
+        );
+    }
+}
+
+#[test]
+fn hiding_does_not_disturb_the_underlying_worktree_list() {
+    // FR-008: hiding is presentation-only — `State::worktrees` still holds everything discovered.
+    let state = mixed_state();
+    assert_eq!(state.worktrees.len(), 6);
+}
+
 #[test]
 fn filter_recomputes_after_rename(/* FR-028 / C1 */) {
     let mut state = filtered_state();

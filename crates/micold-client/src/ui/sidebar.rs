@@ -3,13 +3,13 @@
 
 use crate::app::{Message, State, TagFilter};
 use crate::icons::Icon;
-use crate::tokens::{self, shape, sidebar, spacing, type_scale, Rgb, Roles};
+use crate::tokens::{self, sidebar, spacing, type_scale, Rgb, Roles};
 use crate::ui::material::{
-    expand, menu_panel, FilterTrigger, IconButton, Tooltip, TreeItem, TreeView,
+    expand, menu_panel, FilterTrigger, IconButton, ToggleChip, Tooltip, TreeItem, TreeView,
 };
 use crate::ui::style;
 use iced::widget::{button, column, container, mouse_area, row, scrollable, text, Space};
-use iced::{Alignment, Background, Border, Color, Element, Length};
+use iced::{Alignment, Element, Length};
 use micold_core::naming::Tag;
 use micold_core::session::{SessionLifecycle, SessionLocation};
 use micold_core::worktree::WorktreeStatus;
@@ -79,11 +79,14 @@ pub fn view<'a>(
     // plus a chip `Element` tree) while fully collapsed — the common steady state — since it
     // would only be thrown away as invisible; `expand()` itself already renders a bare
     // zero-height node with no content to lay out or hit-test in that case.
+    //
+    // Feature 014 (FR-010c): the reveal chip is the accordion's FIRST element and is rendered
+    // unconditionally — deliberately not inside `filter_bar()`, which returns early with "No tags
+    // to filter yet." exactly when a project's only worktrees are agent-owned, i.e. when the
+    // control matters most.
     let filter_accordion: Element<'_, Message> = if filter_progress > 0.001 {
-        expand(
-            menu_panel(filter_bar(state, r), Length::Shrink, r, false),
-            filter_progress,
-        )
+        let body = column![reveal_chip(state, r), filter_bar(state, r)].spacing(spacing::XS);
+        expand(menu_panel(body, Length::Shrink, r, false), filter_progress)
     } else {
         Space::with_height(Length::Fixed(0.0)).into()
     };
@@ -99,7 +102,10 @@ pub fn view<'a>(
     // "no worktree entries matched" without a second filter pass.
     let entries = state.sidebar_entries();
     let no_worktree_entries = entries.len() <= 1;
-    let hint: Option<Element<'_, Message>> = if state.worktrees.is_empty() {
+    // Feature 014 (FR-003): asks for VISIBLE worktrees, not all discovered ones. A project whose
+    // only worktrees are agent-owned has none visible, so it takes the "none yet" branch — the
+    // "no match / clear filters" branch would offer to clear a filter that was never applied.
+    let hint: Option<Element<'_, Message>> = if !state.has_visible_worktrees() {
         Some(
             text("No worktrees yet. Add one to get started.")
                 .size(type_scale::LABEL)
@@ -241,39 +247,39 @@ fn filter_label(filter: TagFilter) -> String {
 /// A toggle chip for one tag filter (feature 008, FR-024): filled in its tag color when active,
 /// outlined when inactive. Pressing it toggles the filter.
 fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Message> {
+    // Feature 014: the pill styling that used to live here is now the shared `ToggleChip`
+    // primitive, so this and the reveal chip below stay identical by construction rather than by
+    // two copies drifting apart (Principle VIII Component-reuse gate).
     let (fill, on) = match filter {
         TagFilter::Type(t) => r.type_tag(t),
         TagFilter::HasIssue => r.issue_tag(),
         TagFilter::Untyped => (r.surface_variant, r.on_surface_variant),
     };
-    let (fill, on) = (style::color(fill), style::color(on));
-    let muted = style::color(r.on_surface_variant);
-    let outline = style::color(r.outline);
-    button(text(filter_label(filter)).size(sidebar::TAG))
-        .padding(iced::Padding {
-            top: 1.0,
-            bottom: 1.0,
-            left: spacing::SM as f32,
-            right: spacing::SM as f32,
-        })
-        .on_press(Message::SidebarFilterToggled(filter))
-        .style(
-            move |_theme: &iced::Theme, _status| iced::widget::button::Style {
-                background: Some(Background::Color(if active {
-                    fill
-                } else {
-                    Color::TRANSPARENT
-                })),
-                text_color: if active { on } else { muted },
-                border: Border {
-                    color: if active { fill } else { outline },
-                    width: if active { 0.0 } else { 1.0 },
-                    radius: (shape::FULL as f32).into(),
-                },
-                ..Default::default()
-            },
-        )
-        .into()
+    ToggleChip::new(
+        filter_label(filter),
+        Message::SidebarFilterToggled(filter),
+        r,
+    )
+    .active(active)
+    .accent(fill, on)
+    .into()
+}
+
+/// The "Show agent worktrees" reveal chip (feature 014, FR-010).
+///
+/// Rendered by [`view`] ABOVE `filter_bar()` and outside its early return, so it stays reachable
+/// in a project whose only worktrees are agent-owned — the case where a user most needs it, and
+/// exactly the case where `filter_bar()` bails out with "No tags to filter yet." (FR-010c).
+///
+/// Uses the neutral default accent: this is not a tag, so it borrows no tag color.
+fn reveal_chip(state: &State, r: Roles) -> Element<'static, Message> {
+    ToggleChip::new(
+        "Show agent worktrees",
+        Message::ShowAgentWorktreesToggled,
+        r,
+    )
+    .active(state.show_agent_worktrees)
+    .into()
 }
 
 /// The filter chip bar, shown inside the sidebar's filter accordion (feature 009) rather than
@@ -326,6 +332,9 @@ fn tag_chip(tag: &Tag, r: Roles) -> (String, Rgb) {
             };
             (label.to_string(), r.error)
         }
+        // Feature 014 (FR-010b): a neutral accent, not `error` — an agent worktree is
+        // informational, not a fault condition.
+        Tag::Agent => ("agent".to_string(), r.on_surface_variant),
     }
 }
 

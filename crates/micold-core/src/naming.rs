@@ -226,6 +226,13 @@ pub enum Tag {
     /// On-disk health, injected at render time for non-`Valid` worktrees (FR-011). Never
     /// produced by [`parse_tags`].
     Status(WorktreeStatus),
+    /// The worktree belongs to an AI assistant rather than the user (feature 014, FR-010b), so a
+    /// revealed row can never be mistaken for the user's own work.
+    ///
+    /// Label only, and deliberately WITHOUT a [`crate::app::TagFilter`] counterpart — it marks a
+    /// row, it is not something to filter by. Like [`Tag::Status`] it is injected at render time
+    /// (it needs the branch, which [`parse_tags`] never sees), never produced by [`parse_tags`].
+    Agent,
 }
 
 /// True when `seg` looks like a Jira project key component: starts with a letter, then

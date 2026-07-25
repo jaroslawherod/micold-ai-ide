@@ -46,6 +46,36 @@ fn classify_valid_missing() {
     assert_eq!(classify(&prunable, true), WorktreeStatus::Missing);
 }
 
+// Feature 014 (T012, US2 acceptance #4): the location half of FR-005 is enforced here, not in
+// the classifier. A worktree outside the project's `.claude/worktrees/` root is excluded by
+// `reconcile()` on its path alone, so its name never reaches `Worktree::owner()` — the hiding
+// rule introduces no new behavior for out-of-scope worktrees.
+#[test]
+fn reconcile_still_excludes_out_of_root_worktrees_whatever_their_name() {
+    const OUT_OF_ROOT: &str = "\
+worktree /elsewhere/agent-a885b42dc521fbda1
+HEAD abc123
+branch refs/heads/worktree-agent-a885b42dc521fbda1
+
+worktree /repo/.claude/worktrees/feat-login
+HEAD def456
+branch refs/heads/feat/login
+";
+    let records = parse_worktrees(OUT_OF_ROOT);
+    assert_eq!(records.len(), 2, "both records parse");
+
+    let root = Path::new("/repo/.claude/worktrees");
+    let on_disk = vec!["feat-login".to_string()];
+    let worktrees = reconcile(&records, root, &on_disk, &|_| true);
+
+    assert_eq!(
+        worktrees.len(),
+        1,
+        "only the worktree under the project's root is ours"
+    );
+    assert_eq!(worktrees[0].dir_name, "feat-login");
+}
+
 #[test]
 fn reconcile_classifies_registered_and_orphan_dirs() {
     let records = parse_worktrees(PORCELAIN);

@@ -31,6 +31,10 @@ pub struct ProjectRow<M> {
     pub available: bool,
     /// Message emitted when an available row is selected (switch to this project).
     pub on_select: M,
+    /// Message emitted when the row is right-clicked, opening its context menu (feature 015).
+    /// `None` for rows that are not projects, which therefore expose no context menu. The
+    /// trailing "Add project…" affordance is added by the overlay itself and never carries one.
+    pub on_context: Option<M>,
 }
 
 /// The switcher trigger: an icon + active-project label button placed in the toolbar (FR-004).
@@ -153,7 +157,13 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Element<'a, M> {
             if pr.available {
                 entry = entry.on_press(pr.on_select);
             }
-            list = list.push(entry);
+            // Right-click opens the row's context menu (feature 015). Offered even for
+            // unavailable projects — those are precisely the ones a user wants to forget.
+            let row: Element<'_, M> = match pr.on_context {
+                Some(msg) => mouse_area(entry).on_right_press(msg).into(),
+                None => entry.into(),
+            };
+            list = list.push(row);
         }
 
         // Trailing "Add project…" row opens the existing folder browser (FR-009).

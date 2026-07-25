@@ -214,7 +214,10 @@ pub fn view<'a>(
             is_active: e.is_active,
             running_count: e.running_count,
             available: e.available,
-            on_select: Message::KnownProjectReopened(e.path),
+            on_select: Message::KnownProjectReopened(e.path.clone()),
+            // Right-click a project row to reach its "Forget project" menu (feature 015). The
+            // trailing "Add project…" row is added by the component itself and carries none.
+            on_context: Some(Message::ProjectMenuToggled(e.path)),
         })
         .collect();
     let base = material::ProjectSwitcherOverlay::new(
@@ -226,6 +229,33 @@ pub fn view<'a>(
     )
     .open(state.project_switcher_open)
     .into();
+
+    // Float the right-clicked project's context menu at the cursor (feature 015), like a normal
+    // desktop context menu: the panel's top-left corner sits at the click point. The anchor is
+    // clamped at render time (not when the menu opened) so a window resize while it is showing
+    // can never leave the panel hanging off the edge. The switcher stays open behind it.
+    let base = match &state.project_menu_open {
+        Some(menu) => {
+            let (x, y) = crate::app::clamp_menu_anchor(
+                menu.anchor,
+                material::menu_panel_size(1),
+                state.window_size,
+            );
+            material::MenuOverlay::new(
+                base,
+                vec![material::MenuItem::new(
+                    Icon::Delete,
+                    "Forget project",
+                    Message::ProjectForgetRequested(menu.path.clone()),
+                )],
+                Message::ProjectMenuDismissed,
+                roles,
+            )
+            .anchor(iced::Point::new(x as f32, y as f32))
+            .into()
+        }
+        None => base,
+    };
 
     // Float the worktree right-click context menu over everything, anchored near the sidebar
     // (feature 008, FR-013). Only present while a worktree's menu is open.

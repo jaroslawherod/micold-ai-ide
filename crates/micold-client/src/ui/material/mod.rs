@@ -18,13 +18,14 @@ mod project_switcher;
 mod select;
 mod tag;
 mod terminal_pane;
+mod toggle_chip;
 mod toolbar;
 mod tree_view;
 
 pub use animation::{expand, fade, scale, slide};
 pub use filter_panel::FilterTrigger;
 pub use icon_button::IconButton;
-pub use menu::{ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
+pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use progress::StageProgress;
 pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};
@@ -34,6 +35,7 @@ pub use tag::Tag;
 pub(crate) use terminal_pane::scrollbar_metrics;
 pub use terminal_pane::target_offset_delta;
 pub use terminal_pane::TerminalPane;
+pub use toggle_chip::ToggleChip;
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
 

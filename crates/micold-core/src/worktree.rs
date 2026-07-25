@@ -23,6 +23,42 @@ pub enum WorktreeStatus {
     Invalid,
 }
 
+/// Directory-name prefix reserved for an AI assistant's own worktrees (feature 014, FR-005).
+const AGENT_DIR_PREFIX: &str = "agent-";
+/// Branch-name prefix reserved for an AI assistant's own worktrees (feature 014, FR-005).
+const AGENT_BRANCH_PREFIX: &str = "worktree-agent-";
+/// Shortest machine-generated identifier accepted after a reserved prefix (feature 014, FR-005).
+///
+/// The real generator emits 17 hex characters; a floor of 16 tolerates it changing width while
+/// staying long enough that FR-006's false positives are not merely unlikely but essentially
+/// impossible — an ordinary word can only reach it by being 16+ characters drawn solely from
+/// `[0-9a-fA-F]`.
+const AGENT_ID_MIN_LEN: usize = 16;
+
+/// Whether `s` is a machine-generated agent identifier: long enough, and hex all the way through
+/// (feature 014, FR-005/FR-006).
+///
+/// Requiring the *whole* string to be hex — not merely a hex prefix — is what keeps a real branch
+/// like `agent-deadbeefdeadbeef-parser` visible: it is long enough, but the `-parser` tail is not
+/// hex, so it is the user's own work.
+fn is_agent_id(s: &str) -> bool {
+    s.len() >= AGENT_ID_MIN_LEN && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Who created a worktree (feature 014, FR-001): the user, or an AI assistant for its own
+/// background sub-task. An enum rather than a `bool` (Principle V) so a future third owner is an
+/// added variant instead of a boolean-blindness refactor of every call site.
+///
+/// Derived from names only — never stored on [`Worktree`], never persisted — so it cannot drift
+/// out of sync with the names it is derived from (FR-009, contracts/agent-worktree-classification.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorktreeOwner {
+    /// Created by the user, through the app or by hand. Always listed.
+    User,
+    /// Created by an AI assistant for a sub-task. Hidden unless the reveal control is on (FR-002).
+    Agent,
+}
+
 /// An isolated worktree under `.claude/worktrees/`, bound to a dedicated branch (FR-006).
 ///
 /// Sessions are associated by `dir_name` at the application layer (they are persisted
@@ -43,6 +79,41 @@ impl Worktree {
     /// Whether a new session may be started on this worktree (FR-018a).
     pub fn can_start_session(&self) -> bool {
         self.status == WorktreeStatus::Valid
+    }
+
+    /// Classify this worktree from its names alone (feature 014, FR-005).
+    ///
+    /// PRECONDITION: `self` came from [`reconcile`], which already guarantees the worktree lives
+    /// directly under the project's `.claude/worktrees/` root — the *location* half of FR-005.
+    /// This method decides only the *naming* half, so do not call it on a `Worktree` obtained by
+    /// any other route (contracts/agent-worktree-classification.md).
+    ///
+    /// Pure, total, health-blind, and stateless: no I/O, defined for `branch: None` and every
+    /// [`WorktreeStatus`], and nothing is cached (FR-007, FR-009).
+    pub fn owner(&self) -> WorktreeOwner {
+        // Either identifier suffices (OR, not AND): the directory survives when git no longer
+        // registers the worktree, the branch survives when the directory was renamed, and a
+        // detached worktree has no branch at all — all three must still classify (FR-007).
+        let dir_match = self
+            .dir_name
+            .strip_prefix(AGENT_DIR_PREFIX)
+            .is_some_and(is_agent_id);
+        let branch_match = self
+            .branch
+            .as_deref()
+            .and_then(|b| b.strip_prefix(AGENT_BRANCH_PREFIX))
+            .is_some_and(is_agent_id);
+        if dir_match || branch_match {
+            WorktreeOwner::Agent
+        } else {
+            WorktreeOwner::User
+        }
+    }
+
+    /// `true` iff [`Self::owner`] is [`WorktreeOwner::Agent`] — the predicate the sidebar's
+    /// visible-set filtering reads (FR-002).
+    pub fn is_agent_owned(&self) -> bool {
+        matches!(self.owner(), WorktreeOwner::Agent)
     }
 }
 
