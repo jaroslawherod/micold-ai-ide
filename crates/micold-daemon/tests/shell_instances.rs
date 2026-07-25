@@ -1,0 +1,130 @@
+//! Feature 011 (daemon shell instances) — a session hosts a `Primary` process plus additional shell
+//! instances; exactly one is *attached* (streamed + driven) at a time, and `SessionId`-addressed
+//! input routes to the attached one (data-model §Session, contracts/shell-instance-lifecycle.md).
+
+#![cfg(unix)]
+
+use std::collections::BTreeMap;
+use std::time::{Duration, Instant};
+
+use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::index::{Column, Line};
+use micold_core::project::{Availability, Project};
+use micold_core::protocol::messages::SessionProcess;
+use micold_core::session::{
+    Session, SessionId, SessionLabel, SessionLocation, ShellInstanceId, TerminalMode,
+};
+use micold_core::settings::JsonFileSettingsStore;
+use micold_core::store::{JsonFileStore, ProjectStore};
+use micold_core::workspace::Workspace;
+use micold_daemon::catalog::Catalog;
+use micold_daemon::state::DaemonState;
+use micold_daemon::supervisor::PtySession;
+use portable_pty::CommandBuilder;
+
+fn visible_text(session: &PtySession) -> String {
+    let term = session.term().lock();
+    let grid = term.grid();
+    let (cols, rows) = (grid.columns(), grid.screen_lines());
+    let mut out = String::new();
+    for line in 0..rows {
+        for col in 0..cols {
+            out.push(grid[Line(line as i32)][Column(col)].c);
+        }
+        out.push('\n');
+    }
+    out
+}
+
+fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if cond() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    cond()
+}
+
+/// A catalog holding one session at the project root (a real dir so a spawned shell can `cwd`).
+fn catalog_with_session(
+    project: &std::path::Path,
+    store: &std::path::Path,
+    id: SessionId,
+) -> Catalog {
+    let session = Session::restored(
+        id,
+        SessionLocation::Default,
+        SessionLabel::Named("S".into()),
+        TerminalMode::AiCli,
+    );
+    let mut sessions = BTreeMap::new();
+    sessions.insert(project.to_path_buf(), vec![session]);
+    let workspace = Workspace {
+        projects: vec![Project::new(
+            project.to_path_buf(),
+            false,
+            Availability::Available,
+        )],
+        active: Some(project.to_path_buf()),
+        sessions,
+        worktree_names: BTreeMap::new(),
+    };
+    let projects_path = store.join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&workspace)
+        .unwrap();
+    Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(store.join("settings.json"))),
+    )
+}
+
+#[test]
+fn a_shell_instance_can_be_opened_attached_and_driven_independently_of_the_primary() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let sid = SessionId::new();
+    let state = DaemonState::new(catalog_with_session(project.path(), store.path(), sid));
+
+    // Primary process: a `cat` (echoes input) so we can tell processes apart by content.
+    let mut cmd = CommandBuilder::new("cat");
+    cmd.cwd(std::env::temp_dir());
+    let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
+    let primary = state.register_session(primary);
+
+    // Open a shell instance; the Primary stays attached until we switch.
+    let inst = ShellInstanceId(0);
+    state.open_shell(sid, inst).expect("open shell instance");
+
+    // Attach the shell instance.
+    let (shell, _) = state
+        .attach_process(sid, SessionProcess::Shell(inst))
+        .expect("attach the shell instance");
+
+    // Input (SessionId-addressed) routes to the ATTACHED process — the shell echoes it (cooked-mode
+    // line discipline). The Primary `cat` must never see it: proof the two processes are distinct.
+    state.session_input(sid, 0, b"feature011_marker\n");
+    assert!(
+        wait_until(Duration::from_secs(5), || visible_text(&shell)
+            .contains("feature011_marker")),
+        "input must drive the attached shell instance"
+    );
+    assert!(
+        !visible_text(&primary).contains("feature011_marker"),
+        "the un-attached primary must not receive the input"
+    );
+
+    // Closing the attached instance falls attachment back to the Primary.
+    let reattach = state.close_shell(sid, inst);
+    assert!(
+        reattach.is_some(),
+        "closing the attached instance reattaches primary"
+    );
+
+    // Test-owned processes: stop them.
+    if let Some(p) = state.remove_session(sid) {
+        let _ = p.kill();
+    }
+}

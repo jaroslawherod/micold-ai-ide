@@ -1,0 +1,655 @@
+//! The full client ↔ daemon message surface (contracts/messages.md).
+//!
+//! Two categories, distinguished by the envelope `kind` byte and by these two enums:
+//!
+//! - [`ClientMsg`] — client → daemon. Commands are fire-and-forget; requests are correlated by
+//!   `req: u64` and resolve to exactly one outcome (FR-020, FR-031).
+//! - [`DaemonMsg`] — daemon → client. State projection is pushed unsolicited; operation results are
+//!   correlated back by `req`.
+//!
+//! Grid frames ([`crate::protocol::grid::GridFrame`]) travel on the same stream under `kind = 1` and
+//! are intentionally **not** a `DaemonMsg` variant — they are lossy/convergent where control messages
+//! are ordered/lossless (messages.md §Ordering guarantees).
+//!
+//! Both binaries compile against this one definition; the `SCHEMA_HASH` guard (protocol.md §4) makes
+//! any wire-visible edit here refuse a mismatched peer.
+
+use std::ops::Range;
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+
+use crate::protocol::grid::{LineId, WireLine, WireStyle};
+use crate::session::{SessionId, SessionLabel, ShellInstanceId};
+
+// ---------------------------------------------------------------------------------------------
+// Client → Daemon
+// ---------------------------------------------------------------------------------------------
+
+/// Which of a session's processes an operation targets (feature 011). A session always has a
+/// `Primary` process (its AI CLI or its mode-selected primary shell); `Shell(id)` names one of the
+/// additional Regular-terminal instances.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SessionProcess {
+    /// The session's primary process.
+    Primary,
+    /// An additional shell instance, by id.
+    Shell(ShellInstanceId),
+}
+
+/// A message from a client to the daemon.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ClientMsg {
+    // --- Connection ---
+    /// Handshake. Both `protocol_version` **and** `schema_hash` must match (Decision 4).
+    Hello {
+        /// The client's compiled [`crate::protocol::version::PROTOCOL_VERSION`].
+        protocol_version: u32,
+        /// The client's compiled [`crate::protocol::version::SCHEMA_HASH`].
+        schema_hash: [u8; 32],
+        /// Human-facing build string for diagnostics.
+        client_build: String,
+    },
+    /// Attach to a project. `force = true` is a confirmed takeover, only sent after explicit user
+    /// confirmation (FR-023).
+    Attach {
+        /// Project identity path.
+        project: PathBuf,
+        /// Whether to displace the current holder.
+        force: bool,
+    },
+    /// Release a project attachment.
+    Detach {
+        /// Project identity path.
+        project: PathBuf,
+    },
+    /// Clean disconnect. Does **not** stop sessions.
+    Goodbye,
+
+    // --- Session commands (fire-and-forget) ---
+    /// Append input bytes to a session's PTY. `serial` is monotonic per session and exists to
+    /// detect loss, never to enable coalescing — input is an append-only log (G2).
+    SessionInput {
+        /// Target session.
+        session: SessionId,
+        /// Monotonic per-session serial.
+        serial: u64,
+        /// The raw VT bytes (the client already translated keys, FR-019).
+        bytes: Vec<u8>,
+    },
+    /// Resize a session's PTY / grid.
+    SessionResize {
+        /// Target session.
+        session: SessionId,
+        /// New column count.
+        cols: u16,
+        /// New row count.
+        rows: u16,
+    },
+    /// Start (or resume) a session: `Idle | Failed | InterruptedResumable` → `Starting`.
+    SessionStart {
+        /// Target session.
+        session: SessionId,
+    },
+    /// Graceful stop → `Idle`, no restart.
+    SessionStop {
+        /// Target session.
+        session: SessionId,
+    },
+    /// Force-kill via the escalation ladder.
+    SessionKill {
+        /// Target session.
+        session: SessionId,
+    },
+    /// Write `0x03` to the PTY master (never a real signal — protocol.md §7).
+    SessionInterrupt {
+        /// Target session.
+        session: SessionId,
+    },
+
+    // --- Shell instances (feature 011): a session hosts one primary process (AI CLI or shell) plus
+    // any number of additional Regular-terminal shell instances; exactly one is *attached* (viewed +
+    // driven) at a time. Input/grid frames stay `SessionId`-addressed and route to the attached one.
+    /// Choose which of a session's processes is attached (streamed + receives input).
+    SessionAttachProcess {
+        /// Target session.
+        session: SessionId,
+        /// Which process to attach.
+        process: SessionProcess,
+    },
+    /// Open (spawn) an additional shell instance for a session (the client owns the id).
+    SessionOpenShell {
+        /// Target session.
+        session: SessionId,
+        /// The new instance's id (client-allocated; unique within the session).
+        instance: ShellInstanceId,
+    },
+    /// Close (kill) a session's shell instance.
+    SessionCloseShell {
+        /// Target session.
+        session: SessionId,
+        /// The instance to close.
+        instance: ShellInstanceId,
+    },
+    /// Restart (kill + respawn) a session's shell instance.
+    SessionRestartShell {
+        /// Target session.
+        session: SessionId,
+        /// The instance to restart.
+        instance: ShellInstanceId,
+    },
+
+    // --- View commands ---
+    /// Choose which session receives full grid streaming; `None` means none is viewed (FR-016).
+    SetViewedSession {
+        /// Project identity path.
+        project: PathBuf,
+        /// The viewed session, or `None`.
+        session: Option<SessionId>,
+    },
+    /// Request scrollback by `LineId` range. Advisory, never an error (protocol.md §6).
+    ScrollbackRequest {
+        /// Target session.
+        session: SessionId,
+        /// Correlation id.
+        req: u64,
+        /// The requested line-id ranges.
+        ranges: Vec<Range<LineId>>,
+    },
+
+    // --- Mutating requests (correlated) ---
+    /// Add a project to the catalog.
+    ProjectAdd {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        path: PathBuf,
+    },
+    /// Remove a project from the catalog.
+    ProjectRemove {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        path: PathBuf,
+    },
+    /// Rename a project's display name.
+    ProjectRename {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        path: PathBuf,
+        /// New display name.
+        display_name: String,
+    },
+    /// Create a worktree under a project.
+    WorktreeCreate {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// Branch to create/check out.
+        branch: String,
+        /// Worktree directory name.
+        dir_name: String,
+    },
+    /// Delete a worktree. `stop_sessions` MUST be true if sessions are live, else it fails (W2).
+    WorktreeDelete {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// Worktree directory name.
+        dir_name: String,
+        /// Whether to stop live sessions first.
+        stop_sessions: bool,
+    },
+    /// Rename a worktree's display name.
+    WorktreeRename {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// Worktree directory name.
+        dir_name: String,
+        /// New display name.
+        display_name: String,
+    },
+    /// Create a session bound to a worktree.
+    SessionCreate {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// Worktree directory name.
+        worktree_dir: String,
+    },
+    /// Delete a session record.
+    SessionDelete {
+        /// Correlation id.
+        req: u64,
+        /// Target session.
+        session: SessionId,
+    },
+    /// Set the service-owned scrollback limit (FR-012a).
+    SettingsSet {
+        /// Correlation id.
+        req: u64,
+        /// New scrollback line cap, or `None` to leave unchanged.
+        scrollback_lines: Option<usize>,
+    },
+
+    // --- Diagnostics ---
+    /// Ask where the daemon writes its log.
+    LogLocationRequest {
+        /// Correlation id.
+        req: u64,
+    },
+    /// Ask for the most recent daemon error entries.
+    RecentErrorsRequest {
+        /// Correlation id.
+        req: u64,
+        /// Maximum number of entries.
+        limit: u32,
+    },
+    /// Reload the runtime `EnvFilter` directives (FR-043).
+    SetLogLevel {
+        /// Correlation id.
+        req: u64,
+        /// The new `tracing` directives.
+        directives: String,
+    },
+
+    // --- Keepalive ---
+    /// Liveness probe (protocol.md §5 Liveness). Answered with [`DaemonMsg::Pong`].
+    Ping {
+        /// Opaque echo value.
+        nonce: u64,
+    },
+}
+
+// ---------------------------------------------------------------------------------------------
+// Daemon → Client
+// ---------------------------------------------------------------------------------------------
+
+/// A message from the daemon to a client.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DaemonMsg {
+    // --- Connection ---
+    /// Handshake accepted.
+    Welcome {
+        /// Human-facing daemon build string.
+        daemon_build: String,
+        /// Full catalog snapshot.
+        catalog: CatalogSnapshot,
+        /// Current service settings.
+        settings: DaemonSettings,
+    },
+    /// Handshake or attach refused.
+    Refused {
+        /// Why.
+        reason: RefusalReason,
+    },
+    /// Attach accepted; the current session set for the project.
+    Attached {
+        /// Project identity path.
+        project: PathBuf,
+        /// Its sessions.
+        sessions: Vec<SessionSummary>,
+    },
+    /// This client lost a project to a takeover. MUST NOT terminate the client (FR-024).
+    Displaced {
+        /// Project identity path.
+        project: PathBuf,
+        /// Who took over (build/identity string).
+        by: String,
+    },
+    /// Keepalive reply.
+    Pong {
+        /// Echo of the [`ClientMsg::Ping`] nonce.
+        nonce: u64,
+    },
+
+    // --- State projection (pushed, unsolicited) ---
+    /// Full catalog snapshot — idempotent, self-healing (messages.md §Ordering 4).
+    CatalogChanged {
+        /// The new snapshot.
+        catalog: CatalogSnapshot,
+    },
+    /// A single session's summary changed.
+    SessionChanged {
+        /// Which session.
+        session: SessionId,
+        /// Its new summary.
+        summary: SessionSummary,
+    },
+    /// Service settings changed.
+    SettingsChanged {
+        /// The new settings.
+        settings: DaemonSettings,
+    },
+
+    // --- Terminal-originated notifications ---
+    /// OSC title change.
+    SessionTitleChanged {
+        /// Which session.
+        session: SessionId,
+        /// New title, or `None` to clear.
+        title: Option<String>,
+    },
+    /// Terminal bell.
+    SessionBell {
+        /// Which session.
+        session: SessionId,
+    },
+    /// The session's process exited.
+    SessionExited {
+        /// Which session.
+        session: SessionId,
+        /// How it exited.
+        status: ExitStatus,
+        /// Whether the daemon is auto-restarting it.
+        restarting: bool,
+    },
+    /// The terminal requested a clipboard write.
+    ClipboardStore {
+        /// Which session.
+        session: SessionId,
+        /// The content to store.
+        content: String,
+    },
+
+    // --- Scrollback ---
+    /// A chunked scrollback response (protocol.md §6).
+    ScrollbackResponse {
+        /// Which session.
+        session: SessionId,
+        /// Correlation id echoed from the request.
+        req: u64,
+        /// Oldest retained line.
+        oldest_available: LineId,
+        /// Newest retained line.
+        newest: LineId,
+        /// The returned lines — may be fewer than requested (advisory, not an error).
+        lines: Vec<WireLine>,
+        /// The interned style palette the `lines`' `StyleRun`s index into (per-response, like a
+        /// `GridFrame`'s own palette — the client resolves against it and never across responses).
+        styles: Vec<WireStyle>,
+        /// The interned hyperlink URIs the `lines`' `CellExtras` index into (per-response).
+        hyperlinks: Vec<String>,
+        /// Whether more chunks follow.
+        more: bool,
+    },
+
+    // --- Operation results ---
+    /// A mutating request succeeded.
+    OperationOk {
+        /// Correlation id.
+        req: u64,
+        /// The result payload.
+        result: OperationResult,
+    },
+    /// A mutating request failed specifically and actionably (FR-031/034).
+    OperationError {
+        /// Correlation id.
+        req: u64,
+        /// Category.
+        kind: ErrorKind,
+        /// Human-facing summary.
+        message: String,
+        /// The underlying diagnostic, preserved verbatim (e.g. git's stderr).
+        detail: Option<String>,
+    },
+
+    // --- Diagnostics ---
+    /// Where the daemon logs.
+    LogLocation {
+        /// Correlation id.
+        req: u64,
+        /// The log file path, if it logs to a file.
+        path: Option<PathBuf>,
+        /// The active sink.
+        sink: LogSink,
+    },
+    /// Recent daemon error entries.
+    RecentErrors {
+        /// Correlation id.
+        req: u64,
+        /// The entries.
+        entries: Vec<LogEntry>,
+    },
+}
+
+// ---------------------------------------------------------------------------------------------
+// Supporting types
+// ---------------------------------------------------------------------------------------------
+
+/// Why a handshake or attach was refused (contracts/messages.md).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RefusalReason {
+    /// Version or schema-hash mismatch. Names **both** sides so the client can render an actionable
+    /// diagnostic and offer a restart (FR-021/022).
+    VersionMismatch {
+        /// Client protocol version.
+        client: u32,
+        /// Daemon protocol version.
+        daemon: u32,
+        /// Client schema hash.
+        client_hash: [u8; 32],
+        /// Daemon schema hash.
+        daemon_hash: [u8; 32],
+        /// Daemon build string.
+        daemon_build: String,
+    },
+    /// The project already has an attached client.
+    ProjectBusy {
+        /// Project identity path.
+        project: PathBuf,
+        /// The current holder's identity.
+        holder: String,
+        /// How long it has been held.
+        since_secs: u64,
+    },
+    /// A generic refusal with a specific reason.
+    NotPermitted {
+        /// The detail.
+        detail: String,
+    },
+}
+
+/// The projected summary of a single session, sent for **every** session so the client can render
+/// the activity indicator in the session list (FR-016d).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionSummary {
+    /// Stable identity.
+    pub id: SessionId,
+    /// Hosting worktree directory name, or `None` for a session hosted directly by the project
+    /// root (the "Default" location, feature 010-root-dir-session — mirrors the durable
+    /// `StoredSession.worktree_dir: Option<String>`).
+    pub worktree_dir: Option<String>,
+    /// Sidebar label.
+    pub title: SessionLabel,
+    /// Lifecycle state (the wire form — includes `InterruptedResumable` and `Failed{..}`).
+    pub lifecycle: WireLifecycle,
+    /// Derived activity signal.
+    pub activity: ActivitySignal,
+}
+
+/// The wire form of a session's lifecycle (data-model §SessionLifecycle state machine).
+///
+/// Distinct from [`crate::session::SessionLifecycle`] because the wire must express two states the
+/// in-process domain enum does not yet carry — `InterruptedResumable` (FR-006a) and a `Failed`
+/// variant with a persisted reason + attempt count (S3). T073 wires the domain↔wire mapping.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WireLifecycle {
+    /// Identity exists, no process.
+    Idle,
+    /// Spawn requested, process not yet confirmed up.
+    Starting,
+    /// Process alive.
+    Running,
+    /// Unexpected exit; a retry is in progress.
+    Restarting {
+        /// Consecutive failed (re)starts so far.
+        attempts: u8,
+    },
+    /// Retries exhausted or spawn failed — persisted, manually restartable (S3).
+    Failed {
+        /// Why it gave up.
+        reason: String,
+        /// How many attempts were made.
+        attempts: u8,
+    },
+    /// The daemon restarted and found a durable record of a running session. Never auto-relaunched
+    /// (FR-006a/b).
+    InterruptedResumable,
+}
+
+/// Derived activity signal (data-model §ActivitySignal). `Unknown` MUST NEVER be rendered as
+/// `AwaitingInput` (A1).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ActivitySignal {
+    /// No signal yet, or hooks unconfigured. Ambient, never a notification.
+    Unknown,
+    /// Actively working. Ambient.
+    Working,
+    /// Blocked awaiting the user. Notification-grade.
+    AwaitingInput,
+    /// The session ended.
+    Ended {
+        /// Why it ended.
+        reason: String,
+    },
+}
+
+/// A full catalog snapshot (data-model §Catalog). Idempotent by construction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct CatalogSnapshot {
+    /// Persistence schema version.
+    pub schema_version: u32,
+    /// The last-active project, if any.
+    pub last_active: Option<PathBuf>,
+    /// The projects.
+    pub projects: Vec<ProjectSnapshot>,
+}
+
+/// A project within a [`CatalogSnapshot`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectSnapshot {
+    /// Identity path (lexically canonicalised).
+    pub path: PathBuf,
+    /// Display name.
+    pub display_name: String,
+    /// Whether the path is a git repository.
+    pub is_git_repo: bool,
+    /// Whether the project is currently reachable on disk (derived, never persisted).
+    pub available: bool,
+    /// Its worktrees.
+    pub worktrees: Vec<WorktreeSnapshot>,
+    /// Its sessions.
+    pub sessions: Vec<SessionSummary>,
+}
+
+/// A worktree within a [`ProjectSnapshot`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorktreeSnapshot {
+    /// The identity a session binds to.
+    pub dir_name: String,
+    /// Its branch, if known.
+    pub branch: Option<String>,
+    /// Its display name.
+    pub display_name: String,
+    /// Its status.
+    pub status: WorktreeStatus,
+}
+
+/// Worktree status (data-model §Worktree).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorktreeStatus {
+    /// Present and healthy.
+    Clean,
+    /// The directory is gone.
+    Missing,
+    /// Git-locked.
+    Locked,
+    /// Prunable per git.
+    Prunable,
+}
+
+/// The service-owned settings mirrored to clients (FR-012a).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DaemonSettings {
+    /// The scrollback retention limit, in lines.
+    pub scrollback_lines: usize,
+}
+
+/// The result payload of a successful mutating request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OperationResult {
+    /// No payload — the operation simply succeeded.
+    Ack,
+    /// A session was created.
+    SessionCreated {
+        /// The new session's identity.
+        session: SessionId,
+    },
+    /// A worktree was created.
+    WorktreeCreated {
+        /// The new worktree's directory name.
+        dir_name: String,
+    },
+}
+
+/// The category of a failed mutating request (contracts/messages.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ErrorKind {
+    /// The target does not exist.
+    NotFound,
+    /// The target already exists.
+    AlreadyExists,
+    /// The request was malformed.
+    InvalidInput,
+    /// The target is busy (e.g. a live session blocks a delete).
+    Busy,
+    /// A git invocation failed; `detail` carries git's stderr **verbatim** (FR-034).
+    GitFailed,
+    /// A filesystem operation failed.
+    IoFailed,
+    /// The operation was refused by policy.
+    Refused,
+    /// An unexpected internal error.
+    Internal,
+}
+
+/// Where the daemon writes its log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LogSink {
+    /// Standard error.
+    Stderr,
+    /// systemd journal.
+    Journald,
+    /// A rotating file.
+    File,
+}
+
+/// A single log entry surfaced to the diagnostics UI. MUST NOT contain terminal content or user
+/// input (FR-047) — it references sessions by identity and state only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LogEntry {
+    /// Wall-clock seconds since the Unix epoch.
+    pub timestamp_secs: u64,
+    /// Level (`ERROR`, `WARN`, …).
+    pub level: String,
+    /// The `tracing` target.
+    pub target: String,
+    /// The (redacted) message.
+    pub message: String,
+}
+
+/// How a process exited (a serializable stand-in for `std::process::ExitStatus`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExitStatus {
+    /// The exit code, if it exited normally.
+    pub code: Option<i32>,
+    /// The terminating signal, if it was killed by one (Unix).
+    pub signal: Option<i32>,
+}
