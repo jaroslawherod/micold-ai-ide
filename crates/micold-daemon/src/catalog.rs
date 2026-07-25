@@ -21,7 +21,9 @@ use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, DaemonSettings, ProjectSnapshot, SessionSummary,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation};
+use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation, TerminalMode};
+
+use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
 use micold_core::settings::{clamp_scrollback, JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -363,6 +365,22 @@ impl Catalog {
             self.persist()?;
         }
         Ok(archived)
+    }
+
+    /// Apply the restart supervision policy to a session whose child exited (US4, FR-005), mutating
+    /// its lifecycle in place. Returns the owning project, the action the daemon must carry out, and
+    /// the session's `cwd`/`mode` (so the caller can respawn on `Restart` without a second lookup).
+    /// `None` if the session is no longer in the catalog (already removed) — nothing to supervise.
+    pub fn supervise_session_exit(
+        &mut self,
+        id: SessionId,
+        outcome: ExitOutcome,
+    ) -> Option<(PathBuf, SupervisionAction, PathBuf, TerminalMode)> {
+        let (project, session) = self.workspace.find_session_mut(id)?;
+        let cwd = session.location.cwd(&project);
+        let mode = session.mode;
+        let action = supervise_exit(session, outcome);
+        Some((project, action, cwd, mode))
     }
 
     /// Persist the project catalog atomically (temp + rename). A no-op for an ephemeral catalog.

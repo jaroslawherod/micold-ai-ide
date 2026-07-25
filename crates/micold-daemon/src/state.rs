@@ -27,6 +27,7 @@ use tokio::sync::mpsc;
 use crate::catalog::Catalog;
 use crate::framer::Framer;
 use crate::lifecycle::Lifecycle;
+use crate::supervision::{ExitOutcome, SupervisionAction};
 use crate::supervisor::PtySession;
 
 /// A per-connection client identity (ephemeral; never persisted).
@@ -589,6 +590,124 @@ impl DaemonState {
                 .get(&SessionProcess::Primary)
                 .map(|p| Arc::clone(&p.pty))
         })
+    }
+
+    /// Supervise every live session whose primary process has exited (US4, FR-005): apply the
+    /// crash-loop policy to the catalog, respawn on `Restart`, and drop the live process on
+    /// `Stop`/`GiveUp`. Runs on a timer regardless of whether any client is attached — the identity
+    /// between attended and unattended handling is the whole point of this user story.
+    ///
+    /// Locking discipline (module invariant): the policy is applied and respawn plans gathered under
+    /// the lock; the blocking PTY spawn and the old-process teardown happen **off** the lock. Returns
+    /// the distinct projects whose catalog lifecycle changed, so the caller broadcasts one
+    /// `CatalogChanged` per affected project.
+    pub fn supervise_exited_sessions(&self) -> Vec<PathBuf> {
+        // Phase 1 — under the lock: classify exits, apply the policy, gather the follow-up work.
+        let scrollback;
+        let mut changed: Vec<PathBuf> = Vec::new();
+        let mut to_drop: Vec<SessionId> = Vec::new();
+        let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode)> = Vec::new();
+        {
+            let mut inner = self.lock();
+            scrollback = inner.catalog.settings_wire().scrollback_lines;
+            let exited: Vec<(SessionId, ExitOutcome)> = inner
+                .sessions
+                .iter()
+                .filter_map(|(id, live)| {
+                    let proc = live.procs.get(&SessionProcess::Primary)?;
+                    if proc.pty.is_alive() {
+                        None
+                    } else {
+                        // A reaped-but-unclassifiable exit is treated as a crash so supervision
+                        // still runs rather than the session lingering as a dead-but-alive entry.
+                        Some((*id, proc.pty.exit_outcome().unwrap_or(ExitOutcome::Crashed)))
+                    }
+                })
+                .collect();
+            for (id, outcome) in exited {
+                match inner.catalog.supervise_session_exit(id, outcome) {
+                    Some((project, SupervisionAction::Restart, cwd, mode)) => {
+                        changed.push(project);
+                        to_respawn.push((id, cwd, mode));
+                    }
+                    Some((project, _stop_or_give_up, _, _)) => {
+                        changed.push(project);
+                        to_drop.push(id);
+                    }
+                    // Session already gone from the catalog (closed concurrently) — just reap the
+                    // orphaned live entry, no catalog change to broadcast.
+                    None => to_drop.push(id),
+                }
+            }
+        }
+        // Phase 2 — off the lock: tear down stopped/failed processes (blocking kill+join in Drop).
+        for id in to_drop {
+            self.remove_session(id);
+        }
+        // Phase 3 — off the lock: respawn restart-eligible sessions.
+        for (id, cwd, mode) in to_respawn {
+            self.respawn_primary(id, cwd, mode, scrollback);
+        }
+        changed.sort();
+        changed.dedup();
+        changed
+    }
+
+    /// Respawn a session's primary process after a crash and swap it into the live registry, marking
+    /// the session `Running` (resets the crash-loop counter). On a spawn *failure* (rare — the binary
+    /// is gone), count it as another crash so the retry budget still advances toward `Failed` instead
+    /// of leaving a dead entry that looks alive.
+    fn respawn_primary(&self, id: SessionId, cwd: PathBuf, mode: TerminalMode, scrollback: usize) {
+        let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
+        let spawned = match mode {
+            TerminalMode::AiCli => {
+                let spec = LaunchSpec {
+                    cwd,
+                    session_id: id.0,
+                    mode: LaunchMode::Resume,
+                    env,
+                };
+                PtySession::spawn_claude(id, &spec, scrollback, None)
+            }
+            TerminalMode::Regular => PtySession::spawn_shell(id, &cwd, &env, scrollback, None),
+        };
+        match spawned {
+            Ok(session) => {
+                // Swap in the fresh process; the old (dead) one is dropped off the lock. The session
+                // stays `Restarting { attempts }` (set by the policy) — it is NOT reset to `Running`
+                // here, so a process that crashes again right after respawn keeps advancing the
+                // crash-loop counter toward `Failed`. The counter has no time window (L5 caveat):
+                // only an explicit healthy signal (a future attach/first-output path) resets it.
+                let _old = self.swap_primary(id, session);
+            }
+            Err(_) => {
+                // Couldn't even respawn — count it as a further crash so the budget still advances,
+                // and drop the dead entry so it does not masquerade as alive.
+                let _ = self
+                    .lock()
+                    .catalog
+                    .supervise_session_exit(id, ExitOutcome::Crashed);
+                self.remove_session(id);
+            }
+        }
+    }
+
+    /// Replace a session's `Primary` process with `session`, returning the displaced [`Proc`] so the
+    /// caller drops it **off** the lock. If the session vanished meanwhile (closed concurrently), the
+    /// freshly-spawned process is torn down off the lock instead of leaking.
+    fn swap_primary(&self, id: SessionId, session: PtySession) -> Option<Proc> {
+        let pty = Arc::new(session);
+        let mut inner = self.lock();
+        let Some(live) = inner.sessions.get_mut(&id) else {
+            drop(inner);
+            // `pty` drops here, now that the lock is released: its Drop kills + joins off-lock.
+            return None;
+        };
+        let old = live
+            .procs
+            .insert(SessionProcess::Primary, new_proc(pty, id));
+        drop(inner);
+        old
     }
 
     /// The *attached* process's PTY handle, if the daemon is hosting the session.

@@ -50,6 +50,10 @@ pub async fn run() -> io::Result<()> {
     tracing::info!(load_status = ?catalog.load_status(), "catalog adopted");
     let state = Arc::new(DaemonState::new(catalog));
 
+    // Restart supervision runs on its own timer, independent of any client connection: a session
+    // that crashes with no window open is restarted anyway (US4, FR-005).
+    spawn_supervisor(Arc::clone(&state));
+
     // systemd socket activation (Linux, opportunistic — MUST NOT be required; protocol.md §2).
     #[cfg(target_os = "linux")]
     if let Some(listener) = systemd_listener()? {
@@ -71,6 +75,31 @@ pub async fn run() -> io::Result<()> {
             serve_interprocess(state, bound).await
         }
     }
+}
+
+/// How often the restart supervisor polls live sessions for exits. Fast enough that a crash-restart
+/// feels immediate, cheap enough to be negligible at idle with a handful of sessions (US4).
+const SUPERVISION_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Spawn the restart-supervision loop (US4, FR-005). Ticks on [`SUPERVISION_INTERVAL`], drives the
+/// crash-loop policy for any session whose child exited, and broadcasts `CatalogChanged` when a
+/// lifecycle moved. The supervision itself is blocking (PTY spawn / process teardown), so it runs on
+/// a blocking thread, never on the async runtime (module invariant).
+fn spawn_supervisor(state: Arc<DaemonState>) {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(SUPERVISION_INTERVAL);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            ticker.tick().await;
+            let worker = Arc::clone(&state);
+            let changed = tokio::task::spawn_blocking(move || worker.supervise_exited_sessions())
+                .await
+                .unwrap_or_default();
+            if !changed.is_empty() {
+                state.broadcast_catalog();
+            }
+        }
+    });
 }
 
 /// Adopt an `LISTEN_FDS`-provided Unix socket, if this process is the intended recipient.
