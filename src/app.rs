@@ -438,6 +438,9 @@ pub enum Message {
     /// Toggle the sidebar's tag-filter panel open/closed (feature 009). Mutually exclusive
     /// with `help_menu_open` and `project_switcher_open`.
     SidebarFilterMenuToggled,
+    /// Toggle whether agent-owned worktrees are included in the sidebar list (feature 014,
+    /// FR-010). Sole mutation: `show_agent_worktrees`. Never touches the tag filters (FR-010d).
+    ShowAgentWorktreesToggled,
     /// The pointer entered a worktree row (feature 008), by `dir_name`; reveals its row actions.
     WorktreeHovered(String),
     /// The pointer left a worktree row (feature 008), by `dir_name`; hides its row actions.
@@ -744,6 +747,14 @@ pub struct State {
     /// exclusive with `help_menu_open`/`project_switcher_open`. Transient — not persisted;
     /// closing it never alters `sidebar_filters` (FR-007/FR-008).
     pub sidebar_filter_open: bool,
+    /// Whether agent-owned worktrees are included in the sidebar list (feature 014, FR-010).
+    /// `false` = hidden, the safe default.
+    ///
+    /// Transient AND project-scoped: never persisted, so every app start begins hidden (FR-010a),
+    /// and reset in [`Self::restore_after_activation`] so a project switch begins hidden too
+    /// (FR-010e). Deliberately unlike `sidebar_filters`, which survives a switch — view state
+    /// switched on for one project must not silently render in another.
+    pub show_agent_worktrees: bool,
     /// The worktree row the pointer is currently over, by `dir_name` (feature 008). Drives the
     /// hover-revealed row actions (add-session + delete). Transient.
     pub hovered_worktree: Option<String>,
@@ -1105,6 +1116,12 @@ impl State {
                 self.project_switcher_open = false;
                 // Mutually exclusive with the project context menu (feature 015).
                 self.project_menu_open = None;
+            }
+            Message::ShowAgentWorktreesToggled => {
+                // Sole mutation (FR-010d): the tag filters, expansion state, and overlays are all
+                // left exactly as they were. Nothing is re-discovered either — this is a pure view
+                // recomputation, so no git call and no `Task` (FR-008).
+                self.show_agent_worktrees = !self.show_agent_worktrees;
             }
             Message::WorktreeHovered(dir) => {
                 self.hovered_worktree = Some(dir);
@@ -1590,6 +1607,12 @@ impl State {
         // worktree `dir_name` in `set_worktrees`) — reset it explicitly so a Default entry
         // expanded in one project doesn't render pre-expanded in another (feature 010).
         self.default_expanded = false;
+        // Feature 014 (FR-010e): same reasoning as `default_expanded` directly above — view state
+        // switched on for one project must not render in another. Deliberately unlike
+        // `sidebar_filters`, which survives a switch: the filter accordion is collapsed by
+        // default, so a sticky reveal would show unexplained agent rows with its cause out of
+        // sight. Nothing is remembered per project, so switching back does not restore it.
+        self.show_agent_worktrees = false;
         self.arm_notice(&key); // STEP 4
     }
 
@@ -1674,15 +1697,51 @@ impl State {
         if worktree.status != WorktreeStatus::Valid {
             tags.push(Tag::Status(worktree.status));
         }
+        // Feature 014 (FR-010b). Injected here rather than in `parse_tags`, which only sees the
+        // directory name and so cannot consult the branch. Only ever *seen* when the reveal
+        // control is on, since a hidden worktree produces no row at all.
+        if worktree.is_agent_owned() {
+            tags.push(Tag::Agent);
+        }
         tags
+    }
+
+    /// The worktrees currently shown to the user (feature 014, FR-002/FR-003): all of them while
+    /// the reveal control is on, only user-owned ones while it is off.
+    ///
+    /// The single source every worktree surface reads from — [`Self::worktree_tree`],
+    /// [`Self::available_tag_filters`], and the sidebar's empty-state hint — so hiding, counting,
+    /// and filtering agree by construction instead of via three separate filters that can drift
+    /// (contracts/agent-worktree-classification.md).
+    ///
+    /// Note what does NOT read this: `set_worktrees`'s pruning and [`Self::sessions_in_worktree`]
+    /// reason about *existence*, not visibility. A hidden worktree still exists, and its rename
+    /// override must survive.
+    pub fn visible_worktrees(&self) -> impl Iterator<Item = &Worktree> {
+        let show_all = self.show_agent_worktrees;
+        self.worktrees
+            .iter()
+            .filter(move |w| show_all || !w.is_agent_owned())
+    }
+
+    /// Whether any worktree is currently visible (feature 014, FR-003). Drives the sidebar's
+    /// choice between "No worktrees yet" and "No worktrees match the filter": a project whose only
+    /// worktrees are agent-owned has none *visible*, so it must get the former — offering a
+    /// "Clear filters" action when no filter is active would be nonsense (research R7).
+    ///
+    /// Lives here rather than in the `gui`-only sidebar so the decision is testable
+    /// (Principle I).
+    pub fn has_visible_worktrees(&self) -> bool {
+        self.visible_worktrees().next().is_some()
     }
 
     /// Build the sidebar tree: worktrees (top level) each joined with their sessions and
     /// expansion state (FR-002, FR-003). Sessions are matched to worktrees by `dir_name`.
+    /// Sourced from [`Self::visible_worktrees`], so agent-owned worktrees produce no row while
+    /// hidden (feature 014, FR-002).
     pub fn worktree_tree(&self) -> Vec<WorktreeNode> {
         let sessions = self.active_sessions();
-        self.worktrees
-            .iter()
+        self.visible_worktrees()
             .map(|worktree| WorktreeNode {
                 display_name: self.worktree_display_name(&worktree.dir_name),
                 tags: Self::worktree_tags(worktree),
@@ -1740,11 +1799,15 @@ impl State {
     /// The distinct tag filters offered for the current worktrees (feature 008, FR-024): a
     /// `Type` per conventional type present, `HasIssue` if any worktree embeds an issue key,
     /// and `Untyped` if any worktree lacks a type. Order: types first, then HasIssue, Untyped.
+    ///
+    /// Sourced from [`Self::visible_worktrees`] (feature 014, FR-003): a hidden agent worktree
+    /// must not conjure a chip — its machine name has no conventional type, so it would otherwise
+    /// offer an `Untyped` filter matching nothing the user can see (research R7).
     pub fn available_tag_filters(&self) -> Vec<TagFilter> {
         let mut types = BTreeSet::new();
         let mut has_issue = false;
         let mut has_untyped = false;
-        for worktree in &self.worktrees {
+        for worktree in self.visible_worktrees() {
             let tags = Self::worktree_tags(worktree);
             let mut typed = false;
             for tag in &tags {
@@ -1755,6 +1818,11 @@ impl State {
                     }
                     Tag::Issue(_) => has_issue = true,
                     Tag::Status(_) => {}
+                    // Feature 014: label only, never a filter (research R5). Note what the empty
+                    // arm implies: carrying no `Type`, a REVEALED agent worktree still counts as
+                    // untyped and so can be matched by an `Untyped` chip — correct, and required
+                    // by FR-010d (filters apply to revealed rows exactly as to user-created ones).
+                    Tag::Agent => {}
                 }
             }
             if !typed {

@@ -2005,6 +2005,15 @@ mod tests {
         assert!(os_theme_poll_interval(false) <= Duration::from_secs(1));
     }
 
+    /// Regression: iced 0.13's `Subscription::map` asserts the closure is zero-sized and panics
+    /// at construction otherwise. Threading `last_known` through the closure captured it and
+    /// crashed the app on startup; the poll now emits a unit message, so building it must not
+    /// panic.
+    #[test]
+    fn os_theme_poll_builds_with_a_non_capturing_closure() {
+        let _ = os_theme_poll(OS_THEME_POLL);
+    }
+
     fn dummy_status() -> iced::event::Status {
         iced::event::Status::Ignored
     }
