@@ -287,9 +287,19 @@ fn hash_row(row: &alacritty_terminal::grid::Row<Cell>, cols: u16) -> u64 {
     h.finish()
 }
 
-/// A compact, hashable key for a cell's style (fg, bg, flags) — enough to detect visible changes.
-fn style_key(cell: &Cell) -> (u64, u64, u16) {
-    (color_key(cell.fg), color_key(cell.bg), cell.flags.bits())
+/// A compact, hashable key for a cell's style (fg, bg, flags, underline color) — enough to detect
+/// every visible change the wire style carries. The underline colour must be included: it is part of
+/// [`WireStyle`], so omitting it here would let an underline-colour-only change slip past the
+/// shadow-diff and leave the client rendering a stale colour. `0` is a safe "no override" sentinel
+/// because [`color_key`] never returns `0` (every variant sets a high tag byte).
+fn style_key(cell: &Cell) -> (u64, u64, u16, u64) {
+    let underline = cell.underline_color().map(color_key).unwrap_or(0);
+    (
+        color_key(cell.fg),
+        color_key(cell.bg),
+        cell.flags.bits(),
+        underline,
+    )
 }
 
 fn color_key(c: AnsiColor) -> u64 {
