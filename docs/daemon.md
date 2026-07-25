@@ -78,6 +78,34 @@ A couple of current limitations worth knowing:
   is always recoverable.
 - The scrollback limit in Settings is applied by the daemon; other Settings are still saved locally.
 
+## Sessions are supervised even with no window open (User Story 4)
+
+Because a session's process lives in the daemon, the daemon can watch over it whether or not a window
+is attached — and it does. The behaviour is **identical** attended and unattended: closing the window
+never changes how a session's exit is handled.
+
+- **A crash restarts automatically.** If a session's process exits unexpectedly (a nonzero exit or a
+  signal — a crash, an out-of-memory kill), the daemon relaunches it. For a `claude` session that
+  means resuming the same conversation, so a crash mid-task is recovered on its own.
+
+- **A normal exit just stops it.** If the process ends cleanly — you quit `claude`, or a shell
+  `exit` — the session is left **stopped**, not restarted. Reopening it starts it again on demand.
+
+- **A crash *loop* gives up, loudly.** If a session keeps crashing, the daemon retries a bounded
+  number of times (three consecutive restarts) and then settles it in a **Failed** state instead of
+  restarting forever. Failed is durable: it shows up in the session list the next time a window
+  attaches — with the attempt count — and you can restart it manually once you've addressed the
+  cause. This is the same limit whether or not a window was open while it was crashing.
+
+- **Teardown reaps the whole process tree.** Closing or deleting a session terminates not just its
+  top-level process but any helpers it spawned, so nothing is orphaned in the background.
+
+One limitation worth knowing (L5): the crash-loop counter has **no time window**. It counts
+*consecutive* restarts, not restarts-per-minute, and there is not yet an automatic "it has been
+healthy for a while, reset the count" — so a session that restarts and then runs fine still reads as
+`Restarting` until it is explicitly brought back to a running state (e.g. on the next attach). A
+counter reset on sustained health is a planned refinement.
+
 ## Surviving logout
 
 On Linux, whether the daemon outlives your closing the app depends on how it was started; making it

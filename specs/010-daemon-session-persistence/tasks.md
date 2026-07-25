@@ -223,15 +223,15 @@ limit → give-up state on next attach (quickstart S4).
 
 ### Tests FIRST (Principle I) ⚠️
 
-- [ ] T058 [P] [US4] Test in `crates/micold-daemon/tests/supervision_restart.rs`: an unattended process exit triggers restart with the same retry policy as when attached (FR-005); normal `exit` marks stopped, no restart (FR-004 scenario 3).
-- [ ] T059 [P] [US4] Test: after `MAX_RESTART_ATTEMPTS` the session settles `Failed { reason, attempts }`, persisted, and is surfaced on the next attach (FR-005).
+- [X] T058 [P] [US4] Test in `crates/micold-daemon/tests/supervision_restart.rs`: an unattended process exit triggers restart with the same retry policy as when attached (FR-005); normal `exit` marks stopped, no restart (FR-004 scenario 3).
+- [X] T059 [P] [US4] Test: after `MAX_RESTART_ATTEMPTS` the session settles `Failed { reason, attempts }`, persisted, and is surfaced on the next attach (FR-005).
 
 ### Implementation
 
-- [ ] T060 [US4] Implement the restart FSM (retry counter, `MAX_RESTART_ATTEMPTS`, give-up → durable `Failed { reason, attempts }`) in `crates/micold-daemon/src/supervisor.rs`, identical whether or not a client is attached.
-- [ ] T061 [US4] Implement per-OS process-tree teardown behind the supervision abstraction — `killpg` on Unix, job object on Windows — in `crates/micold-daemon/src/platform/{unix,windows}.rs` (FR-036); teardown not gated on reader EOF (ConPTY).
-- [ ] T062 [US4] Surface the `Failed` state (reason + attempt count) in the session list via `SessionSummary` (FR-016a `Ended`).
-- [ ] T063 [P] [US4] Document the retry policy and the L5 caveat (counter has no time window) in `docs/daemon.md`.
+- [X] T060 [US4] Implement the restart FSM (retry counter, `MAX_RESTART_ATTEMPTS`, give-up → durable `Failed { reason, attempts }`) in `crates/micold-daemon/src/supervisor.rs`, identical whether or not a client is attached.
+- [X] T061 [US4] Implement per-OS process-tree teardown behind the supervision abstraction — `killpg` on Unix, job object on Windows — in `crates/micold-daemon/src/platform/{unix,windows}.rs` (FR-036); teardown not gated on reader EOF (ConPTY).
+- [X] T062 [US4] Surface the `Failed` state (reason + attempt count) in the session list via `SessionSummary` (FR-016a `Ended`).
+- [X] T063 [P] [US4] Document the retry policy and the L5 caveat (counter has no time window) in `docs/daemon.md`.
 
 **Checkpoint**: Attended and unattended failure handling are provably identical.
 

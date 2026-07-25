@@ -322,8 +322,13 @@ impl PtySession {
         self.child.lock().ok().and_then(|c| c.process_id())
     }
 
-    /// Terminate and reap the child (FR-015a / session close).
+    /// Terminate and reap the child (FR-015a / session close). Signals the child's whole process
+    /// **group** first so grandchildren the session forked don't orphan (FR-036, T061), then reaps
+    /// the direct child.
     pub fn kill(&self) -> io::Result<()> {
+        if let Some(pid) = self.pid() {
+            crate::platform::terminate_process_tree(pid);
+        }
         if let Ok(mut child) = self.child.lock() {
             child.kill()?;
             let _ = child.wait();
@@ -414,5 +419,48 @@ mod tests {
         // Repeated reads never flip the outcome (try_wait only yields the status once).
         assert_eq!(s.exit_outcome(), Some(first));
         assert_eq!(s.exit_outcome(), Some(ExitOutcome::Clean));
+    }
+
+    /// FR-036 / T061: tearing down a session reaps its whole process group, not just the direct
+    /// child — a backgrounded grandchild must not orphan.
+    #[test]
+    fn kill_reaps_the_whole_process_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join("grandchild.pid");
+        // sh backgrounds a `sleep` (a grandchild in the same process group), records its pid, then
+        // waits. Killing the group must take the grandchild with it.
+        let script = format!("sleep 300 & echo $! > {} ; wait", pidfile.display());
+        let session = PtySession::spawn(SessionId::new(), sh(&script), 100, None).unwrap();
+
+        // Read the grandchild pid once the shell has recorded it.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let grandchild: i32 = loop {
+            if let Ok(text) = std::fs::read_to_string(&pidfile) {
+                if let Ok(pid) = text.trim().parse::<i32>() {
+                    break pid;
+                }
+            }
+            assert!(Instant::now() < deadline, "grandchild pid never recorded");
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        // SAFETY: `kill(pid, 0)` sends no signal; it only probes whether the process exists.
+        assert_eq!(
+            unsafe { libc::kill(grandchild, 0) },
+            0,
+            "grandchild should be alive before teardown"
+        );
+
+        session.kill().unwrap();
+
+        // The grandchild is gone once the group teardown reaches it (bounded — reparenting +
+        // reaping is not instantaneous).
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while unsafe { libc::kill(grandchild, 0) } == 0 {
+            assert!(
+                Instant::now() < deadline,
+                "grandchild survived the process-group teardown"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 }

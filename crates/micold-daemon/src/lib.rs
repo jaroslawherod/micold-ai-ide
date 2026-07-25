@@ -12,6 +12,7 @@ pub mod catalog;
 pub mod framer;
 pub mod lifecycle;
 pub mod logging;
+pub mod platform;
 pub mod server;
 pub mod singleton;
 pub mod state;
