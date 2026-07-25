@@ -330,6 +330,11 @@ pub enum Message {
     /// The OS light/dark preference poll observed a (changed) scheme (FR-006). Transient;
     /// never persisted.
     SystemThemeChanged(SystemScheme),
+    /// The OS theme poll timer fired (FR-006). Detection (`dark_light`) is gui-runtime I/O, so
+    /// the binary reads the current scheme and re-dispatches [`Message::SystemThemeChanged`]; the
+    /// pure core treats this as a no-op. Carries no payload so the iced `Subscription::map`
+    /// closure stays non-capturing. Transient; never persisted.
+    OsThemePolled,
 
     // ---- Feature 005: worktrees, sessions, embedded terminal ----
     /// Opening a directory as a project was refused because it is not a git repo (FR-001a).
@@ -1255,7 +1260,9 @@ impl State {
             // the lines as `WorktreeCreateLogAppended`.
             | Message::WorktreeCreateProgressPolled
             // Focus state is tracked by the binary (gui runtime), not the pure core.
-            | Message::WindowFocusChanged(_) => {}
+            | Message::WindowFocusChanged(_)
+            // OS theme detection is gui-runtime I/O; the binary handles the poll tick.
+            | Message::OsThemePolled => {}
         }
     }
 

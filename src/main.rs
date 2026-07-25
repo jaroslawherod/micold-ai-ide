@@ -1067,6 +1067,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        // The OS theme poll timer fired. Detection is gui-runtime I/O, so it happens here rather
+        // than in the pure core; a transient failure falls back to the last known scheme
+        // (FR-021 / BUG-001).
+        Message::OsThemePolled => {
+            app.core
+                .update(Message::SystemThemeChanged(detect_system_scheme(
+                    app.core.system_scheme,
+                )));
+            Task::none()
+        }
         // Confirmed worktree delete (feature 008, FR-020): terminate the worktree's session
         // processes, remove its git worktree + branch + directory, then drop the records and
         // persist. Ordered per `CleanupStep`; every git step is idempotent (FR-023).
@@ -1177,10 +1187,7 @@ fn subscription(app: &App) -> Subscription<Message> {
     // the window sits idle either focused or not (idle-CPU fix).
     let mut subs = vec![ui::subscription(&app.core), window_focus_events()];
     // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.
-    subs.push(os_theme_poll(
-        os_theme_poll_interval(app.window_focused),
-        app.core.system_scheme,
-    ));
+    subs.push(os_theme_poll(os_theme_poll_interval(app.window_focused)));
     if let Some(interval) = terminal_poll_interval(!app.terminals.is_empty(), app.window_focused) {
         subs.push(every(interval).map(|_| Message::TerminalTick));
     }
@@ -1597,9 +1604,12 @@ fn detect_system_scheme(last_known: SystemScheme) -> SystemScheme {
     observe_system_scheme(detected, last_known)
 }
 
-fn os_theme_poll(interval: Duration, last_known: SystemScheme) -> Subscription<Message> {
-    every(interval)
-        .map(move |_instant| Message::SystemThemeChanged(detect_system_scheme(last_known)))
+/// The OS theme poll (FR-006). Emits the unit [`Message::OsThemePolled`] so the `Subscription::map`
+/// closure stays non-capturing — iced 0.13 asserts it is zero-sized and panics otherwise. The
+/// actual `dark_light` detection (which needs the last-known scheme as a fallback) runs in the
+/// reducer, where `app.core.system_scheme` is in hand.
+fn os_theme_poll(interval: Duration) -> Subscription<Message> {
+    every(interval).map(|_instant| Message::OsThemePolled)
 }
 
 fn start_dir() -> PathBuf {
@@ -1677,6 +1687,15 @@ mod tests {
     fn sc_003_both_theme_poll_cadences_stay_within_one_second() {
         assert!(os_theme_poll_interval(true) <= Duration::from_secs(1));
         assert!(os_theme_poll_interval(false) <= Duration::from_secs(1));
+    }
+
+    /// Regression: iced 0.13's `Subscription::map` asserts the closure is zero-sized and panics
+    /// at construction otherwise. Threading `last_known` through the closure captured it and
+    /// crashed the app on startup; the poll now emits a unit message, so building it must not
+    /// panic.
+    #[test]
+    fn os_theme_poll_builds_with_a_non_capturing_closure() {
+        let _ = os_theme_poll(OS_THEME_POLL);
     }
 
     fn dummy_status() -> iced::event::Status {
