@@ -269,7 +269,7 @@ mod tests {
         }
     }
 
-    fn style(fg: u8) -> WireStyle {
+    fn style(fg: u16) -> WireStyle {
         WireStyle {
             fg: WireColor::Named(fg),
             bg: WireColor::Named(0),

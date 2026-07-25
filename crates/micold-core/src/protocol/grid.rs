@@ -34,8 +34,11 @@ pub struct LineId(pub i64);
 /// A color as alacritty models it — named (16-color + specials), 256-indexed, or true color.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WireColor {
-    /// A named ANSI color, by alacritty `NamedColor` discriminant.
-    Named(u8),
+    /// A named ANSI color, by alacritty `NamedColor` discriminant. The discriminant is carried
+    /// verbatim, so it must be wide enough for the specials: `Foreground` is 256 and `Background`
+    /// is 257 (the ANSI-16 names are 0..=15). A `u8` here silently truncated 256→0 and 257→1,
+    /// painting every default cell black-on-red — hence `u16`.
+    Named(u16),
     /// A 256-color palette index.
     Indexed(u8),
     /// 24-bit true color.

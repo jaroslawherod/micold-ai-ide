@@ -304,7 +304,10 @@ fn color_key(c: AnsiColor) -> u64 {
 
 fn wire_color(c: AnsiColor) -> WireColor {
     match c {
-        AnsiColor::Named(n) => WireColor::Named(n as u8),
+        // The discriminant rides the wire verbatim; the client decodes it against the same
+        // `NamedColor` enum. `as u16` (not `u8`) because the specials go up to 268 — truncating
+        // `Background` (257) to a `u8` yielded 1 = ANSI red, painting every default cell red.
+        AnsiColor::Named(n) => WireColor::Named(n as u16),
         AnsiColor::Indexed(i) => WireColor::Indexed(i),
         AnsiColor::Spec(rgb) => WireColor::Rgb(rgb.r, rgb.g, rgb.b),
     }
@@ -442,5 +445,43 @@ fn wire_cursor_shape(shape: CursorShape) -> WireCursorShape {
         CursorShape::Beam => WireCursorShape::Beam,
         CursorShape::HollowBlock => WireCursorShape::HollowBlock,
         CursorShape::Hidden => WireCursorShape::Hidden,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alacritty_terminal::vte::ansi::NamedColor;
+
+    // Regression: the specials (`Foreground` = 256, `Background` = 257) must ride the wire as their
+    // real discriminant, not a `u8`-truncated one. Truncation turned every default-background cell
+    // into `Named(1)` = ANSI red, so the whole terminal rendered black-on-red (the client decodes
+    // `Named(n)` against this same enum).
+    #[test]
+    fn named_specials_are_not_truncated() {
+        assert_eq!(
+            wire_color(AnsiColor::Named(NamedColor::Background)),
+            WireColor::Named(NamedColor::Background as u16),
+        );
+        assert_eq!(
+            wire_color(AnsiColor::Named(NamedColor::Foreground)),
+            WireColor::Named(NamedColor::Foreground as u16),
+        );
+        // The value that was corrupted: Background must NOT collapse onto ANSI red (index 1).
+        assert_ne!(
+            wire_color(AnsiColor::Named(NamedColor::Background)),
+            WireColor::Named(NamedColor::Red as u16),
+        );
+    }
+
+    // The ANSI-16 names (0..=15) fit a `u8` and must be unchanged by the widening.
+    #[test]
+    fn ansi16_names_round_trip() {
+        for named in [NamedColor::Black, NamedColor::Red, NamedColor::BrightWhite] {
+            assert_eq!(
+                wire_color(AnsiColor::Named(named)),
+                WireColor::Named(named as u16),
+            );
+        }
     }
 }

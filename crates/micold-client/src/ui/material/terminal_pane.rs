@@ -15,6 +15,7 @@ use crate::ui::terminal::{
 };
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
+use alacritty_terminal::vte::ansi::NamedColor;
 use iced::advanced::clipboard::Kind as ClipboardKind;
 use iced::advanced::graphics::geometry::Renderer as _;
 use iced::advanced::layout::{self, Layout};
@@ -246,8 +247,8 @@ pub struct TerminalPane<'a> {
 /// The style used for a cell not covered by the line's runs (a protocol violation that must never
 /// panic the renderer): default fg/bg, no flags.
 const DEFAULT_STYLE: WireStyle = WireStyle {
-    fg: WireColor::Named(16), // Foreground
-    bg: WireColor::Named(17), // Background
+    fg: WireColor::Named(NamedColor::Foreground as u16),
+    bg: WireColor::Named(NamedColor::Background as u16),
     flags: 0,
     underline_color: None,
 };

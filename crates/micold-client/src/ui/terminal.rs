@@ -207,9 +207,12 @@ pub fn cell_colors(
 impl TermPalette {
     /// Resolve a wire colour (from a daemon [`WireStyle`]) to an iced colour — the inverse of the
     /// daemon framer's `wire_color`. `WireColor::Named(n)` carries the alacritty `NamedColor`
-    /// discriminant verbatim; both processes link the same `alacritty_terminal`, so the fixed
-    /// mapping (0..=15 → the ANSI-16 palette, 16 → Foreground, 17 → Background, anything else → the
-    /// default fg, matching [`TermPalette::color`]'s `_ =>` arm) reproduces the local render exactly.
+    /// discriminant verbatim; both processes link the same `alacritty_terminal`, so decoding against
+    /// that enum's real discriminants (0..=15 → the ANSI-16 palette, `Foreground` (256) → the theme
+    /// fg, `Background` (257) → the theme bg, every other special → the default fg, matching
+    /// [`TermPalette::color`]'s `_ =>` arm) reproduces the local render exactly. Comparing against
+    /// `NamedColor::Foreground as u16` rather than hard-coded numbers keeps this from drifting the
+    /// way the old `16`/`17` guesses did (the specials are 256/257, not 16/17).
     pub fn wire_color(&self, c: WireColor) -> Color {
         match c {
             WireColor::Rgb(r, g, b) => Color::from_rgb8(r, g, b),
@@ -220,12 +223,10 @@ impl TermPalette {
                     indexed_256(i)
                 }
             }
-            WireColor::Named(n) => match n {
-                0..=15 => self.ansi16[n as usize],
-                16 => self.fg, // NamedColor::Foreground
-                17 => self.bg, // NamedColor::Background
-                _ => self.fg,
-            },
+            WireColor::Named(n) if n < 16 => self.ansi16[n as usize],
+            WireColor::Named(n) if n == NamedColor::Foreground as u16 => self.fg,
+            WireColor::Named(n) if n == NamedColor::Background as u16 => self.bg,
+            WireColor::Named(_) => self.fg,
         }
     }
 }
@@ -650,19 +651,42 @@ mod tests {
             p.wire_color(WireColor::Indexed(200)),
             p.color(AnsiColor::Indexed(200))
         );
-        // Named discriminants: 0..=15 ANSI-16, 16 Foreground, 17 Background.
+        // Named discriminants ride the wire verbatim: 0..=15 ANSI-16, then the specials at their
+        // real alacritty values (Foreground = 256, Background = 257) — NOT 16/17.
         assert_eq!(
-            p.wire_color(WireColor::Named(1)),
+            p.wire_color(WireColor::Named(NamedColor::Red as u16)),
             p.color(AnsiColor::Named(NamedColor::Red))
         );
         assert_eq!(
-            p.wire_color(WireColor::Named(16)),
+            p.wire_color(WireColor::Named(NamedColor::Foreground as u16)),
             p.color(AnsiColor::Named(NamedColor::Foreground))
         );
         assert_eq!(
-            p.wire_color(WireColor::Named(17)),
+            p.wire_color(WireColor::Named(NamedColor::Background as u16)),
             p.color(AnsiColor::Named(NamedColor::Background))
         );
+    }
+
+    // Regression (all-terminals-red): the daemon frames a default-background cell as
+    // `NamedColor::Background as u16` (= 257). Decoding it must yield the theme background, never
+    // ANSI red — the bug was a `u8` wire that truncated 257 → 1 = red, so every empty cell was red.
+    #[test]
+    fn default_background_decodes_to_theme_bg_not_red() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let p = TermPalette::from_scheme(scheme);
+            assert_eq!(
+                p.wire_color(WireColor::Named(NamedColor::Background as u16)),
+                p.background(),
+            );
+            assert_eq!(
+                p.wire_color(WireColor::Named(NamedColor::Foreground as u16)),
+                p.foreground(),
+            );
+            assert_ne!(
+                p.wire_color(WireColor::Named(NamedColor::Background as u16)),
+                p.ansi16[1], // ANSI red — what the truncated wire used to select
+            );
+        }
     }
 
     #[test]
@@ -670,8 +694,8 @@ mod tests {
         let p = TermPalette::from_scheme(ColorScheme::Dark);
         // Plain cell.
         let plain = WireStyle {
-            fg: WireColor::Named(1),
-            bg: WireColor::Named(17),
+            fg: WireColor::Named(NamedColor::Red as u16),
+            bg: WireColor::Named(NamedColor::Background as u16),
             flags: 0,
             underline_color: None,
         };
