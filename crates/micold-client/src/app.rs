@@ -629,6 +629,9 @@ pub enum Message {
     DaemonDisconnected,
     /// Connecting to (or spawning) the daemon failed, with a human-facing reason.
     DaemonConnectFailed(String),
+    /// The user asked to take the active project back after being displaced (US5, FR-024): re-attach
+    /// with `force`. Handled by the binary (attachment is runtime).
+    ConnectionTakeoverRequested,
 }
 
 /// How prominently a [`Notification`] is presented.
@@ -834,7 +837,8 @@ impl State {
             | Message::DaemonEvent(_)
             | Message::DaemonGridFrame(_)
             | Message::DaemonDisconnected
-            | Message::DaemonConnectFailed(_) => {}
+            | Message::DaemonConnectFailed(_)
+            | Message::ConnectionTakeoverRequested => {}
             Message::HelpMenuToggled => {
                 self.help_menu_open = !self.help_menu_open;
                 // The overflow menu, the project switcher, and the sidebar filter panel are

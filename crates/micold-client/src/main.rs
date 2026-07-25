@@ -175,6 +175,15 @@ struct App {
     /// The last catalog snapshot the daemon sent (welcome or `CatalogChanged`). Not yet rendered —
     /// the sidebar/session-list retarget onto it lands with the render switch (T042).
     daemon_catalog: Option<micold_core::protocol::messages::CatalogSnapshot>,
+    /// Projects this window has been displaced from by another window's takeover (US5, FR-024),
+    /// keyed by project path → the taking-over window's identity. A displaced project is read-only
+    /// here (input suppressed, a banner shown) until the user takes it back or reconnects. Cleared
+    /// on a fresh connect. Empty in the common single-window case.
+    displaced: HashMap<PathBuf, String>,
+    /// Whether the daemon connection is currently down (between a `DaemonDisconnected` and the next
+    /// `DaemonConnected`). Drives the stale-content banner (FR-027). `daemon.is_none()` also implies
+    /// this, but the flag is explicit for clarity at the render site.
+    disconnected: bool,
     /// Correlation-id counter for the client's mutating RPCs (FR-009).
     next_req: u64,
     /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
@@ -450,6 +459,8 @@ fn boot() -> (App, Task<Message>) {
             env_include_last_outcome,
             daemon: None,
             daemon_catalog: None,
+            displaced: HashMap::new(),
+            disconnected: false,
             next_req: 0,
             pending_ops: HashMap::new(),
         },
@@ -637,6 +648,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             catalog,
             settings,
         } => {
+            // A fresh connection resyncs from authoritative state (FR-028): clear the transient
+            // disconnected/displaced flags. If a project is still held by another window, the
+            // re-attach below is refused and the displaced state is re-established from that reply.
+            app.disconnected = false;
+            app.displaced.clear();
             // The daemon is the single writer of settings + sessions; adopt what it reports.
             app.scrollback_lines = settings.scrollback_lines;
             reconcile_catalog(&mut app.core, &catalog, false);
@@ -720,7 +736,24 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         None => {}
                     }
                 }
-                // Other control messages (pong, attach/displaced) are consumed as their flows land.
+                // Another window took over a project we held (US5, FR-024). Mark it read-only here —
+                // input is suppressed and a "take over" banner is shown — but never terminate.
+                DaemonMsg::Displaced { project, by } => {
+                    app.displaced.insert(project, by);
+                }
+                // A (re)attach was refused. `ProjectBusy` means another window holds it: surface the
+                // same take-over banner as a live displacement, naming the current holder.
+                DaemonMsg::Refused {
+                    reason:
+                        micold_core::protocol::messages::RefusalReason::ProjectBusy {
+                            project,
+                            holder,
+                            ..
+                        },
+                } => {
+                    app.displaced.insert(project, holder);
+                }
+                // Other control messages (Pong, Attached) are consumed as their flows land.
                 _ => {}
             }
             Task::none()
@@ -750,6 +783,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::DaemonDisconnected => {
             app.daemon = None;
+            // Content on screen is now stale; the banner says so (FR-027). The subscription is
+            // already auto-reconnecting with backoff.
+            app.disconnected = true;
             // Any request still in flight will never get a reply on this connection (`req`s are
             // per-connection). Resolve each to an explicit *unknown* outcome — never a silent
             // success or failure — and reconcile against authoritative state on reconnect
@@ -765,8 +801,27 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::DaemonConnectFailed(reason) => {
+            app.disconnected = true;
             app.core
                 .notify_error(format!("Could not connect to the session daemon: {reason}"));
+            Task::none()
+        }
+        // The user chose to take the active project back after being displaced (FR-024): re-attach
+        // with force, which displaces the current holder, and re-view its active session.
+        Message::ConnectionTakeoverRequested => {
+            if let (Some(project), Some(d)) =
+                (app.core.workspace.active.clone(), app.daemon.clone())
+            {
+                app.displaced.remove(&project);
+                d.send(ClientMsg::Attach {
+                    project: project.clone(),
+                    force: true,
+                });
+                d.send(ClientMsg::SetViewedSession {
+                    project,
+                    session: app.core.active_session,
+                });
+            }
             Task::none()
         }
 
@@ -1191,6 +1246,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // the write-gate to the shell): input to a non-running process is discarded, not
         // buffered.
         Message::TerminalBytes(bytes) => {
+            // A window displaced from the active project is read-only: it MUST send zero further
+            // input (FR-024). Bail before stamping so no serial is consumed (a consumed-but-unsent
+            // serial would be an unrecoverable gap in the input log, G2).
+            if active_project_displaced(app) {
+                return Task::none();
+            }
             if let Some(id) = app.core.active_session {
                 // The daemon owns process liveness: it routes input to the session's attached
                 // process and drops it harmlessly if that process isn't running. Gating on a
@@ -1448,7 +1509,35 @@ fn view(app: &App) -> iced::Element<'_, Message> {
         app.dismissing.as_ref(),
         &app.row_fx,
         &app.env_include_last_outcome,
+        &connection_status(app),
     )
+}
+
+/// Whether this window has been displaced from the active project (US5, FR-024) — the read-only
+/// condition that suppresses input.
+fn active_project_displaced(app: &App) -> bool {
+    app.core
+        .workspace
+        .active
+        .as_ref()
+        .is_some_and(|p| app.displaced.contains_key(p))
+}
+
+/// The connection state of the *active* project, for the status banner (US5, FR-024/027). A takeover
+/// (this window was displaced, or a re-attach was refused as busy) wins over a plain disconnect,
+/// since it names the holder and offers a concrete "take over" action.
+fn connection_status(app: &App) -> micold_client::ui::ConnectionStatus {
+    use micold_client::ui::ConnectionStatus;
+    if let Some(project) = app.core.workspace.active.as_ref() {
+        if let Some(by) = app.displaced.get(project) {
+            return ConnectionStatus::Displaced { by: by.clone() };
+        }
+    }
+    if app.disconnected {
+        ConnectionStatus::Disconnected
+    } else {
+        ConnectionStatus::Connected
+    }
 }
 
 fn theme(app: &App) -> iced::Theme {
@@ -2123,6 +2212,8 @@ mod tests {
             env_include_last_outcome: EnvIncludeOutcome::Disabled,
             daemon: None,
             daemon_catalog: None,
+            displaced: HashMap::new(),
+            disconnected: false,
             next_req: 0,
             pending_ops: HashMap::new(),
         };
@@ -2163,6 +2254,8 @@ mod tests {
             env_include_last_outcome: EnvIncludeOutcome::Disabled,
             daemon: None,
             daemon_catalog: None,
+            displaced: HashMap::new(),
+            disconnected: false,
             next_req: 0,
             pending_ops: HashMap::new(),
         };

@@ -107,6 +107,48 @@ happening back-to-back; an occasional crash that recovers cleanly never creeps t
 limit over the session's lifetime. Only a genuine tight loop (crash, restart, crash again before it
 could survive a check) exhausts the budget and settles `Failed`.
 
+## One window per project, with deliberate takeover (User Story 5)
+
+Because the sessions live in the daemon, more than one app window can talk to it at once. To keep two
+windows from fighting over the same terminal, a project may be **attached** to only one window at a
+time. This is per-project, not global: you can have several windows open, each on a different project,
+all fully live and never interfering with one another.
+
+- **A second window on the same project is refused — with an offer, not a wall.** If you open a
+  window on a project another window already holds, attachment is refused with a message naming the
+  current holder and how long it has held it, and offering to **take over**. Nothing happens to the
+  other window until you confirm.
+
+- **Takeover is deliberate and non-destructive.** When you confirm, the new window becomes the holder
+  and the previous one is **displaced**: it shows a banner saying another window took over, stops
+  sending input, and goes read-only for that project — but it does **not** close, and its other
+  projects are untouched. A "Take over" button on that banner claims the project back the same way,
+  displacing whoever holds it now.
+
+- **A holder that goes away frees the project automatically.** If the window holding a project simply
+  closes — or crashes — the project becomes attachable again with no ceremony and no service restart.
+  The next window to ask for it just gets it.
+
+### Detecting a dead connection
+
+An ordinary close sends a clean disconnect, so the daemon frees the project at once. A **half-open**
+connection is trickier: if a window's machine loses power or its network drops, no disconnect ever
+arrives and the socket would otherwise sit there forever, with the window still showing the last
+screen as though it were live. To prevent that, the window sends a lightweight keepalive probe every
+few seconds and expects a prompt reply; if the service goes silent past a short deadline, the window
+declares itself **disconnected within ten seconds**, stops presenting the stale screen as live, and
+shows a banner. It then reconnects on its own in the background, and on reconnect re-reads the
+service's authoritative state rather than replaying whatever it missed — so the window always settles
+on what is actually true, never on a guess.
+
+### Trying it with a second window
+
+To see the exclusivity behaviour, launch a second app instance pointed at the same project while the
+first is open: the second is refused with the takeover offer. Confirm the takeover and watch the first
+window drop to its read-only "taken over" banner while the second becomes live. Close the second, and
+the first can take the project back from its banner. Two instances on two *different* projects, by
+contrast, both stay fully live.
+
 ## Surviving logout
 
 On Linux, whether the daemon outlives your closing the app depends on how it was started; making it

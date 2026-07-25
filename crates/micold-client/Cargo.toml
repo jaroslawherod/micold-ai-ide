@@ -29,6 +29,9 @@ uuid = { workspace = true }
 directories = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# Timer for the connection keepalive (US5, FR-026). The client already runs on tokio via iced's
+# tokio executor; this makes the dependency explicit rather than transitive.
+tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

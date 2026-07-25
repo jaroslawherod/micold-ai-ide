@@ -11,11 +11,13 @@
 //! - [`version`] — [`version::PROTOCOL_VERSION`] and the generated [`version::SCHEMA_HASH`].
 //! - [`handshake`] — strict exact-match handshake evaluation.
 //! - [`hashing`] — the dependency-free hash shared by `build.rs` and the guard test.
+//! - [`keepalive`] — the client-side half-open-connection liveness deadline (FR-026).
 
 pub mod codec;
 pub mod envelope;
 pub mod grid;
 pub mod handshake;
 pub mod hashing;
+pub mod keepalive;
 pub mod messages;
 pub mod version;
