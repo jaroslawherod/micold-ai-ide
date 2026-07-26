@@ -7,6 +7,18 @@ name: release
 #     builds a .deb natively on amd64 and arm64 runners and attaches them to the draft (drafts
 #     are mutable, so this works even with immutable releases enabled); the `publish` job then
 #     flips the draft to published, freezing it immutably with the assets attached.
+#
+# Why `release-please-config.json` uses `release-type: simple` and not `rust` (JSON takes no
+# comments, so the reasoning lives here): the `rust` strategy assumes the manifest at the package
+# path is a *package* manifest. Ours is a virtual workspace root — it has `[workspace]` but no
+# `[package]` — and its members inherit `version.workspace = true`. That strategy therefore fails
+# twice: it writes `package.version` into every member (there is no literal `version` to replace)
+# and then into the virtual root (no `[package]` at all). `simple` makes no Cargo assumptions and
+# only touches CHANGELOG.md (its `version.txt` update is skipped because the file does not exist),
+# so the two `extra-files` entries do the version bump explicitly: `[workspace.package] version`
+# is the single source of truth, and the three local crates' entries in Cargo.lock follow it.
+# `component` is pinned because the tag prefix used to be derived from the root crate's name,
+# which the workspace split removed — without it, tags would drift from `micold-ai-ide-vX.Y.Z`.
 
 on:
   push:
