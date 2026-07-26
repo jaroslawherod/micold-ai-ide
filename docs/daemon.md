@@ -184,10 +184,44 @@ would make an agent take action you never asked for. Instead each such session i
 This is the safety guarantee behind the whole restart story: **a service restart can never cause an
 agent to do anything without you asking.**
 
-## Surviving logout
+## Surviving logout (User Story 7)
 
-On Linux, whether the daemon outlives your closing the app depends on how it was started; making it
-survive a full logout is covered under User Story 7 and documented there when it lands.
+Closing the window always leaves your sessions running (that is the whole point of the daemon). But a
+full **logout** is different: by default the system tears down everything you were running when your
+login session ends, the daemon included. Making sessions survive a logout is:
+
+- **Supported on Linux**, via one explicit, user-enabled setting (below). It is **never turned on for
+  you** — not by installation, not silently.
+- **Not supported on macOS or Windows.** There is no unprivileged equivalent, so the app does not
+  pretend to offer one. On those platforms sessions survive closing the window but not logging out.
+
+### Enabling it (Linux)
+
+The app does it for you: open the overflow menu and choose **"Keep sessions after logout."** That
+runs, in your own session, the two steps that matter:
+
+1. `loginctl enable-linger` — lets your user manager (and anything it runs) keep going after you log
+   out.
+2. `systemctl --user enable --now micold-daemon.socket` — moves the session service under that
+   lingering user manager, so it is no longer tied to your login session.
+
+If you prefer to do it by hand, run those two commands yourself, in that order.
+
+> **Order matters — it is not retroactive.** Enabling linger does **not** rescue a service that is
+> *already* running inside your login session; that process stays put and still dies at logout. You
+> must enable linger **first**, then (re)start the service under the user manager. The menu action
+> does exactly this — it enables linger, stops the session-bound service, and restarts it under the
+> lingering manager — which is why using it is simpler than hand-rolling the commands.
+
+If enabling linger is refused (some hardened systems restrict it via policy), the app tells you rather
+than silently pretending it worked; ask your administrator to enable lingering for your account.
+
+### How it is packaged
+
+The systemd **user** units ship with the app (in `/usr/lib/systemd/user/`) but are **inert until you
+enable them** — installation touches no per-user manager. The service is the same single binary
+whether the user manager socket-activates it or a window spawns it directly, so nothing behaves
+differently based on how it started.
 
 ---
 

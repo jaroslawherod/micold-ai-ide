@@ -870,6 +870,35 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 },
             )
         }
+        // Make sessions survive logout (US7, FR-038; Linux only). Runs off-thread — it spawns
+        // `loginctl`/`systemctl` — and reports the outcome as a toast. Never enabled by install.
+        Message::LogoutSurvivalRequested => Task::perform(
+            async {
+                tokio::task::spawn_blocking(|| {
+                    let endpoint = micold_core::endpoint::resolve().map_err(|e| {
+                        micold_core::logout_survival::SurvivalOutcome::Failed(e.to_string())
+                    })?;
+                    Ok(micold_core::logout_survival::enable(&endpoint))
+                })
+                .await
+                .unwrap_or_else(|e| {
+                    Err(micold_core::logout_survival::SurvivalOutcome::Failed(
+                        e.to_string(),
+                    ))
+                })
+            },
+            |r: Result<
+                micold_core::logout_survival::SurvivalOutcome,
+                micold_core::logout_survival::SurvivalOutcome,
+            >| {
+                let outcome = r.unwrap_or_else(|e| e);
+                Message::LogoutSurvivalOutcome(outcome.user_message())
+            },
+        ),
+        Message::LogoutSurvivalOutcome(message) => {
+            app.core.notify_info(message);
+            Task::none()
+        }
 
         // Advance every animation toward its target via the shared driver.
         Message::AnimationTick => {

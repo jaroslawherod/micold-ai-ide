@@ -297,11 +297,11 @@ docs state per-platform support (quickstart S14).
 
 ### Implementation — plan W6 (packaging)
 
-- [ ] T076 [P] [US7] Ship systemd **user** units (`packaging/micold-daemon.socket`, `.service`) — shipped but NOT enabled at install; the client enables in-session.
-- [ ] T077 [US7] Implement the in-session enable path (client offers to enable the user service / linger; never automated by install) in `crates/micold-client/src/daemon_conn.rs`.
-- [ ] T078 [P] [US7] User-guide doc: `loginctl enable-linger` instructions with the "enable linger THEN start the daemon — not retroactive" ordering warning; explicit statement that logout survival is Linux-only (FR-038, Principle VI exception).
+- [X] T076 [P] [US7] Ship systemd **user** units (`packaging/micold-daemon.socket`, `.service`) — shipped but NOT enabled at install; the client enables in-session. **Done**: both units created (`Type=simple` + `listenfd` fd adoption — the daemon has no sd_notify; `Accept=no`; `Restart=on-failure` so a future clean idle-exit re-activates). Deb assets now ship the `micold-daemon` binary + both units to `/usr/lib/systemd/user/`.
+- [X] T077 [US7] Implement the in-session enable path (client offers to enable the user service / linger; never automated by install). **Done**: `micold_core::logout_survival::enable(endpoint)` (Linux-gated) runs the load-bearing sequence — `loginctl enable-linger` → stop the session-scoped daemon → `systemctl --user enable --now micold-daemon.socket` — detecting failure (never assuming), and returns a `SurvivalOutcome` with a user message. Surfaced as a Linux-only "Keep sessions after logout" overflow-menu item → `Message::LogoutSurvivalRequested`, run off-thread, result shown as a toast. (Client connection module is `daemon.rs`, not the tasks.md-hypothesised `daemon_conn.rs`.)
+- [X] T078 [P] [US7] User-guide doc: `loginctl enable-linger` instructions with the "enable linger THEN start the daemon — not retroactive" ordering warning; explicit statement that logout survival is Linux-only (FR-038, Principle VI exception). **Done**: "Surviving logout (User Story 7)" section in `docs/daemon.md` — the ordering/retroactivity warning, the Linux-only statement + explicit macOS/Windows unsupported note, and the packaging note.
 
-**Checkpoint**: All user stories functional.
+**Checkpoint**: All user stories functional. ✅ US1–US7 complete.
 
 ---
 

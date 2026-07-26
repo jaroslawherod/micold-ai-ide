@@ -648,6 +648,11 @@ pub enum Message {
     ConnectionRestartServiceRequested,
     /// A completed side-effecting task that carries nothing to apply (e.g. the daemon-stop task).
     NoOp,
+    /// The user asked to make sessions survive logout (US7, FR-038; Linux only). Handled by the
+    /// binary, which runs the enable flow off-thread. Never triggered by install — a deliberate choice.
+    LogoutSurvivalRequested,
+    /// The logout-survival enable flow finished; carries a ready-to-show message (info or error).
+    LogoutSurvivalOutcome(String),
 }
 
 /// How prominently a [`Notification`] is presented.
@@ -857,7 +862,9 @@ impl State {
             | Message::ConnectionTakeoverRequested
             | Message::DaemonVersionMismatch { .. }
             | Message::ConnectionRestartServiceRequested
-            | Message::NoOp => {}
+            | Message::NoOp
+            | Message::LogoutSurvivalRequested
+            | Message::LogoutSurvivalOutcome(_) => {}
             Message::HelpMenuToggled => {
                 self.help_menu_open = !self.help_menu_open;
                 // The overflow menu, the project switcher, and the sidebar filter panel are

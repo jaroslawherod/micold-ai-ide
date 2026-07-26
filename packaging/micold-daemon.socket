@@ -1,0 +1,20 @@
+# systemd *user* unit — installed to /usr/lib/systemd/user/, NOT enabled at install.
+# The GUI client enables + starts it in the user's own session on request (US7, FR-038); postinst
+# runs as root with no user session and cannot reach a per-user manager (research R5.1).
+#
+# Socket activation is opportunistic, never load-bearing: the daemon also self-spawns and binds this
+# same path directly when no manager is involved (Flatpak/AppImage/local dev), so it works
+# identically either way (FR-037, research R5.4).
+[Unit]
+Description=Micold session daemon socket
+
+[Socket]
+# %t = $XDG_RUNTIME_DIR for a user unit — exactly the Linux endpoint the daemon resolves.
+ListenStream=%t/micold/daemon.sock
+SocketMode=0600
+DirectoryMode=0700
+# One long-lived, stateful daemon serves every connection — never a process per connection.
+Accept=no
+
+[Install]
+WantedBy=sockets.target
