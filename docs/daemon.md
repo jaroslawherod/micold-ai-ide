@@ -184,6 +184,21 @@ would make an agent take action you never asked for. Instead each such session i
 This is the safety guarantee behind the whole restart story: **a service restart can never cause an
 agent to do anything without you asking.**
 
+## Finding the logs and recent errors
+
+When something misbehaves, the overflow menu's **"Session service diagnostics"** asks the service two
+things and shows the answers:
+
+- **Where it logs.** Depending on how it was started, the service logs to the systemd journal, to your
+  terminal, or to a size-capped rotating file under your user data directory — the diagnostic tells
+  you which, and the file path when it's a file.
+- **Its recent errors.** A short list of the most recent warnings and errors the service recorded, so
+  you can see what went wrong without hunting through a log file.
+
+Logs never contain terminal output or anything you typed — sessions are referenced by identity and
+state only, so credentials and code in a session are never written to a log. Total log size is
+hard-capped, so the log can't grow without bound even if the service runs for weeks.
+
 ## Surviving logout (User Story 7)
 
 Closing the window always leaves your sessions running (that is the whole point of the daemon). But a
