@@ -168,8 +168,11 @@ If the project uses git submodules, they're fetched automatically as part of cre
 worktree — including submodules nested inside other submodules — so the new worktree is ready to
 use immediately, with no extra `git submodule` commands to run yourself. Projects without
 submodules are unaffected. While a worktree is being created, the form shows a progress bar
-alongside a short description of what's currently happening (for example "Checking for naming
-conflicts," "Creating branch and worktree," or "Setting up submodules") — the description only
+alongside a short description of what's currently happening. That description names the step for
+what you actually chose — "Checking out existing branch" when you reused one, "Replacing branch and
+creating worktree" when you overwrote one, "Creating tracking branch and worktree" when you
+continued from a remote, and "Creating branch and worktree" for an ordinary new branch — followed by
+"Setting up submodules" where they apply — the description only
 ever names a step that's actually part of this creation, so a repository without submodules never
 shows a submodule-related step. This can take a little longer than usual for a repository with
 submodules to fetch, so seeing the description change (rather than a single static message) is

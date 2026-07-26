@@ -99,12 +99,13 @@ pub fn modal<'a>(
     // does not stream per-command/submodule progress, so this is a single continuous indicator until
     // the daemon's reply closes the form (or reopens it with an error).
     //
-    // Feature 016 FR-024 wanted this to name the step for the mode in flight ("Checking out
-    // existing branch" rather than "Creating branch"). That is not reachable from here any more:
-    // there is no stage stream to read. `CreateStage::label(mode)` still exists in the core for
-    // whenever progress is re-plumbed through the daemon. UNRESOLVED — see spec FR-024.
+    // Feature 016 FR-024: name the step for the mode in flight — "Checking out existing branch"
+    // rather than "Creating branch" — from the stage the daemon reports. Falls back to the
+    // generic wording until the first stage lands, which is a real window: the RPC has been sent
+    // but the daemon has not started git yet.
     if is_creating {
-        fields = fields.push(StageProgress::new("Creating worktree…", r));
+        let label = form.stage_label().unwrap_or("Creating worktree…");
+        fields = fields.push(StageProgress::new(label, r));
     }
 
     // While a decision is pending, the prompt's own actions replace Create/Cancel — there is

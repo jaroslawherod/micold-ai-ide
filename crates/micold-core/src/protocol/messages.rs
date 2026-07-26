@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::session::{SessionId, SessionLabel, ShellInstanceId};
-use crate::worktree::{BranchCandidate, BranchSituation, CreateMode};
+use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
 // ---------------------------------------------------------------------------------------------
 // Client → Daemon
@@ -341,6 +341,19 @@ pub enum DaemonMsg {
     CatalogChanged {
         /// The new snapshot.
         catalog: CatalogSnapshot,
+    },
+    /// A long-running operation reached a new stage (feature 016, FR-024).
+    ///
+    /// Pushed between the request and its `OperationOk`/`OperationError`, so the client can name
+    /// the step actually being performed instead of a generic "working…". Lossy by nature: a
+    /// client that misses one simply shows the next stage, and the terminal reply is what closes
+    /// the operation. Only the *stage* travels — the wording is the client's, derived from the
+    /// stage and the mode it asked for.
+    OperationProgress {
+        /// Correlation id of the in-flight request.
+        req: u64,
+        /// The stage that operation just entered.
+        stage: CreateStage,
     },
     /// A single session's summary changed.
     SessionChanged {

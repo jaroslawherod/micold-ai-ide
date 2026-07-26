@@ -22,7 +22,7 @@ use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, Te
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
-use micold_core::worktree::CreateMode;
+use micold_core::worktree::{CreateMode, CreateStage};
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
@@ -908,4 +908,61 @@ async fn branch_list_returns_candidates_with_block_reasons() {
         }
         other => panic!("expected a BranchList result, got {other:?}"),
     }
+}
+
+/// FR-024 — the daemon streams the stage as the create advances, so the client can name the step
+/// being performed. The *wording* is the client's; what must arrive here is the stage itself, in
+/// order, before the terminal reply.
+#[tokio::test]
+async fn worktree_create_streams_its_stages_before_the_terminal_reply() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+    create_branch(project.path(), "feature/staged");
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeCreate {
+            req: 1,
+            project: project.path().to_path_buf(),
+            branch: "feature/staged".into(),
+            dir_name: "staged".into(),
+            mode: CreateMode::ReuseLocal,
+        }))
+        .await
+        .unwrap();
+
+    // Collect the progress pushes that precede the terminal reply.
+    let mut stages = Vec::new();
+    loop {
+        let msg = expect_control(&mut client, |m| {
+            matches!(
+                m,
+                DaemonMsg::OperationProgress { req: 1, .. } | DaemonMsg::OperationOk { req: 1, .. }
+            )
+        })
+        .await;
+        match msg {
+            DaemonMsg::OperationProgress { stage, .. } => stages.push(stage),
+            DaemonMsg::OperationOk { .. } => break,
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    assert_eq!(
+        stages,
+        vec![CreateStage::PreflightCheck, CreateStage::CreatingWorktree],
+        "the stages a successful create passes through, each reported once"
+    );
+    // And the client can word them for the mode it asked for — the point of FR-024.
+    assert_eq!(
+        stages[1].label(&CreateMode::ReuseLocal),
+        "Checking out existing branch"
+    );
 }

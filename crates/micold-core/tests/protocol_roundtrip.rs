@@ -17,7 +17,7 @@ use micold_core::protocol::messages::{
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{SessionId, SessionLabel};
-use micold_core::worktree::CreateMode;
+use micold_core::worktree::{CreateMode, CreateStage};
 use uuid::Uuid;
 
 fn sid() -> SessionId {
@@ -285,6 +285,10 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             by: "other-client".into(),
         },
         DaemonMsg::Pong { nonce: 5 },
+        DaemonMsg::OperationProgress {
+            req: 7,
+            stage: CreateStage::CreatingWorktree,
+        },
         DaemonMsg::CatalogChanged {
             catalog: sample_catalog(),
         },

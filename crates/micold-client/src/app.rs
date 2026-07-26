@@ -21,7 +21,7 @@ use micold_core::theme::{
     observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference,
 };
 use micold_core::worktree::{
-    BranchCandidate, BranchSituation, CreateMode, Worktree, WorktreeStatus,
+    BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree, WorktreeStatus,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -164,6 +164,12 @@ pub struct WorktreeForm {
     pub selected_branch: Option<BranchCandidate>,
     /// The conflict prompt's state (feature 016, FR-001/FR-005).
     pub resolution: ResolutionState,
+    /// The mode the in-flight create is running under. Set when the create is sent, and read
+    /// only to word [`Self::stage`] — a reuse must not say "Creating branch" (FR-024).
+    pub mode: CreateMode,
+    /// The stage the daemon last reported for the in-flight create (feature 016, FR-024).
+    /// `None` until the first `OperationProgress` arrives; reset when a new attempt starts.
+    pub stage: Option<CreateStage>,
 }
 
 impl WorktreeForm {
@@ -198,6 +204,12 @@ impl WorktreeForm {
                 })
             }
         }
+    }
+
+    /// Plain-language description of what the create is currently doing (FR-024), or `None`
+    /// before the first stage lands.
+    pub fn stage_label(&self) -> Option<&'static str> {
+        self.stage.map(|s| s.label(&self.mode))
     }
 
     /// Whether the form can be submitted right now.
@@ -600,7 +612,11 @@ pub enum Message {
     AddWorktreeResolutionCancelled,
     /// The binary is about to send the `WorktreeCreate` RPC (feature 010; T055); marks the form
     /// `Creating` so it shows an in-progress state until the daemon's reply closes or reopens it.
-    WorktreeCreateStarted,
+    /// Carries the mode so the stage display can be worded for it (feature 016, FR-024).
+    WorktreeCreateStarted(CreateMode),
+    /// The daemon reported that the in-flight create entered a new stage (feature 016, FR-024).
+    /// Ignored once the form has closed.
+    WorktreeCreateStageChanged(CreateStage),
     /// The daemon created a worktree successfully (FR-007); add it and close the form.
     WorktreeCreated(Worktree),
     /// The daemon reported a worktree create failure (FR-017); show it, keep the form open.
@@ -1418,9 +1434,17 @@ impl State {
                     };
                 }
             }
-            Message::WorktreeCreateStarted => {
+            Message::WorktreeCreateStarted(mode) => {
                 if let Some(form) = &mut self.worktree_form {
                     form.status = WorktreeFormStatus::Creating;
+                    form.mode = mode;
+                    // A new attempt never inherits the previous one's stage.
+                    form.stage = None;
+                }
+            }
+            Message::WorktreeCreateStageChanged(stage) => {
+                if let Some(form) = &mut self.worktree_form {
+                    form.stage = Some(stage);
                 }
             }
             Message::WorktreeCreated(worktree) => {
