@@ -492,6 +492,9 @@ fn session_tree_item(
     let tint = match session.lifecycle {
         SessionLifecycle::Failed => r.error,
         SessionLifecycle::Idle => r.on_surface_variant,
+        // Interrupted-but-resumable reads as needing attention, distinct from a plain idle stop
+        // (FR-006a: "visibly different from both running and a deliberately stopped session").
+        SessionLifecycle::InterruptedResumable => r.primary,
         _ => r.on_surface,
     };
     let selected = active_session == Some(session.id);

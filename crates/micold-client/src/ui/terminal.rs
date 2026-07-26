@@ -511,6 +511,7 @@ fn session_status(state: &State, id: SessionId) -> &'static str {
             SessionLifecycle::Restarting { .. } => "restarting…",
             SessionLifecycle::Failed => "failed",
             SessionLifecycle::Idle => "idle",
+            SessionLifecycle::InterruptedResumable => "interrupted",
         },
         TerminalMode::Regular => match session.active_shell_lifecycle() {
             Some(ShellLifecycle::Running) => "running",
@@ -530,7 +531,9 @@ fn attached_process_restartable(state: &State, id: SessionId) -> bool {
     match session.mode {
         TerminalMode::AiCli => matches!(
             session.lifecycle,
-            SessionLifecycle::Idle | SessionLifecycle::Failed
+            SessionLifecycle::Idle
+                | SessionLifecycle::Failed
+                | SessionLifecycle::InterruptedResumable
         ),
         TerminalMode::Regular => matches!(
             session.active_shell_lifecycle(),

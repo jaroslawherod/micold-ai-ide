@@ -50,6 +50,24 @@ pub async fn run() -> io::Result<()> {
     tracing::info!(load_status = ?catalog.load_status(), "catalog adopted");
     let state = Arc::new(DaemonState::new(catalog));
 
+    // FR-006a/b: sessions that were running when the service last stopped come back as
+    // `InterruptedResumable` — never auto-relaunched, resumable by one explicit user action. This is
+    // the ONLY lifecycle daemon startup may produce (data-model L4). Blocking (stats the provider
+    // store), so it runs off the async runtime; it completes before the accept loop starts.
+    {
+        let startup = Arc::clone(&state);
+        let marked =
+            tokio::task::spawn_blocking(move || startup.present_interrupted_resumable_at_startup())
+                .await
+                .unwrap_or(0);
+        if marked > 0 {
+            tracing::info!(
+                count = marked,
+                "presented interrupted-resumable sessions after restart"
+            );
+        }
+    }
+
     // Restart supervision runs on its own timer, independent of any client connection: a session
     // that crashes with no window open is restarted anyway (US4, FR-005).
     spawn_supervisor(Arc::clone(&state));
@@ -72,6 +90,13 @@ pub async fn run() -> io::Result<()> {
         }
         Acquisition::Bound(bound) => {
             tracing::info!(endpoint = %bound.socket_path().display(), "listening");
+            // Record our pid in the lock file so a version-mismatched client can stop us for its
+            // "restart service" action (FR-022): a mismatched client can't handshake, so a control
+            // message can't reach us — a recorded pid is the version-agnostic stop handle. Writing
+            // through a separate fd does not disturb the daemon's held `flock` (advisory, per-OFD).
+            if let Err(e) = std::fs::write(&endpoint.lock_path, std::process::id().to_string()) {
+                tracing::warn!(error = %e, "could not record daemon pid in the lock file");
+            }
             serve_interprocess(state, bound).await
         }
     }

@@ -146,6 +146,28 @@ async fn connect_and_pump(
     };
     let (conn, welcome) = match connected {
         Connected::Ready(conn, welcome) => (conn, welcome),
+        // A contract mismatch is its own recoverable state (US6, FR-021/022): surface both versions
+        // so the app can show the "restart service" action, not a generic connect error.
+        Connected::Refused(micold_core::protocol::messages::RefusalReason::VersionMismatch {
+            client,
+            daemon,
+            daemon_build,
+            ..
+        }) => {
+            let sent = output
+                .send(Message::DaemonVersionMismatch {
+                    client,
+                    daemon,
+                    daemon_build,
+                })
+                .await
+                .is_ok();
+            return if sent {
+                PumpEnd::Disconnected
+            } else {
+                PumpEnd::AppGone
+            };
+        }
         Connected::Refused(reason) => {
             return report_connect_failure(
                 output,

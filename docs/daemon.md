@@ -149,6 +149,41 @@ window drop to its read-only "taken over" banner while the second becomes live. 
 the first can take the project back from its banner. Two instances on two *different* projects, by
 contrast, both stay fully live.
 
+## A version mismatch fails loudly, and recovers (User Story 6)
+
+The window and the service talk over a versioned contract. When you rebuild and relaunch the app but
+an **older service is still running** from before the rebuild, the two no longer agree on the
+contract — and rather than misbehave subtly, the window refuses to connect and tells you exactly what
+happened.
+
+- **The diagnostic names both sides.** The banner says the running service speaks one contract
+  version while this app speaks another, and includes the service's build string — enough to see at a
+  glance that a stale service is the problem.
+
+- **One click fixes it.** The banner offers **Restart service**. Choosing it stops the old service
+  and lets the app start a fresh one that matches, then reconnects — no command to type, no manual
+  process hunting. Because a mismatched window can't even complete the handshake, the app stops the
+  old service directly rather than asking it politely.
+
+- **Your sessions survive the restart; live processes do not.** Restarting the service stops the
+  processes it was hosting, and the banner says so plainly. But the sessions themselves are durable:
+  after the restart they come back in the **interrupted-resumable** state below, ready to continue.
+
+### Interrupted-resumable sessions after any service restart
+
+Whenever the service starts and finds sessions that were running when it last stopped — whether from
+the version-mismatch restart above, a crash, or a reboot — it does **not** relaunch them. Doing so
+would make an agent take action you never asked for. Instead each such session is shown in a distinct
+**interrupted-resumable** state:
+
+- It is visibly different from a *running* session and from one you *deliberately stopped* — you can
+  tell at a glance which sessions were mid-flight when the service went down.
+- Nothing restarts on its own. A single explicit action (opening the session) resumes it, continuing
+  the prior conversation exactly where it left off.
+
+This is the safety guarantee behind the whole restart story: **a service restart can never cause an
+agent to do anything without you asking.**
+
 ## Surviving logout
 
 On Linux, whether the daemon outlives your closing the app depends on how it was started; making it

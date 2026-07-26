@@ -398,6 +398,39 @@ impl Catalog {
         }
     }
 
+    /// Present interrupted-but-resumable sessions after a service restart (FR-006a/b).
+    ///
+    /// Every durable session loads `Idle`. This walks the non-archived AI-CLI sessions and, for each
+    /// one `is_resumable` reports a recorded conversation for, flips `Idle → InterruptedResumable` —
+    /// the "was running when the service last stopped, resumable, never auto-relaunched" state. A
+    /// session with no conversation (created but never started) stays `Idle`, which is what makes the
+    /// two visibly distinct (FR-006a). `is_resumable` is injected so the daemon can back it with the
+    /// real provider while tests drive it deterministically. Lifecycle is not persisted (S3), so this
+    /// mutates in memory only — no write. Regular (shell) sessions have no conversation to resume and
+    /// are skipped. Returns the count marked (diagnostics).
+    pub fn present_interrupted_resumable(
+        &mut self,
+        is_resumable: impl Fn(SessionId, &Path, TerminalMode) -> bool,
+    ) -> usize {
+        let mut marked = 0;
+        for (project, sessions) in self.workspace.sessions.iter_mut() {
+            for session in sessions.iter_mut() {
+                if session.archived
+                    || session.mode != TerminalMode::AiCli
+                    || !matches!(session.lifecycle, SessionLifecycle::Idle)
+                {
+                    continue;
+                }
+                let cwd = session.location.cwd(project);
+                if is_resumable(session.id, &cwd, session.mode) {
+                    session.mark_interrupted_resumable();
+                    marked += 1;
+                }
+            }
+        }
+        marked
+    }
+
     /// Persist the project catalog atomically (temp + rename). A no-op for an ephemeral catalog.
     pub fn persist(&self) -> io::Result<()> {
         if let Some(store) = &self.project_store {
@@ -427,9 +460,8 @@ fn session_summary(session: &Session) -> SessionSummary {
     }
 }
 
-/// Map the in-process lifecycle to its wire form. The wire adds `InterruptedResumable` and a
-/// `Failed { reason, attempts }` variant the in-process enum does not yet carry (T073 reconciles
-/// the two); a plain `Failed` maps with an empty reason here.
+/// Map the in-process lifecycle to its wire form. The wire `Failed { reason, attempts }` carries a
+/// reason the in-process enum does not yet track; a plain `Failed` maps with an empty reason here.
 fn wire_lifecycle(lifecycle: SessionLifecycle) -> WireLifecycle {
     match lifecycle {
         SessionLifecycle::Idle => WireLifecycle::Idle,
@@ -440,5 +472,6 @@ fn wire_lifecycle(lifecycle: SessionLifecycle) -> WireLifecycle {
             reason: String::new(),
             attempts: micold_core::session::MAX_RESTART_ATTEMPTS,
         },
+        SessionLifecycle::InterruptedResumable => WireLifecycle::InterruptedResumable,
     }
 }

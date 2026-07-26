@@ -184,6 +184,10 @@ struct App {
     /// `DaemonConnected`). Drives the stale-content banner (FR-027). `daemon.is_none()` also implies
     /// this, but the flag is explicit for clarity at the render site.
     disconnected: bool,
+    /// A pending contract-version mismatch (US6, FR-021/022): `(client_version, daemon_version,
+    /// daemon_build)`. `Some` while the running daemon's contract differs from ours — drives the
+    /// version-mismatch banner and its "restart service" action. Cleared on a successful connect.
+    version_mismatch: Option<(u32, u32, String)>,
     /// Correlation-id counter for the client's mutating RPCs (FR-009).
     next_req: u64,
     /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
@@ -461,6 +465,7 @@ fn boot() -> (App, Task<Message>) {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            version_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         },
@@ -653,6 +658,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // re-attach below is refused and the displaced state is re-established from that reply.
             app.disconnected = false;
             app.displaced.clear();
+            app.version_mismatch = None;
             // The daemon is the single writer of settings + sessions; adopt what it reports.
             app.scrollback_lines = settings.scrollback_lines;
             reconcile_catalog(&mut app.core, &catalog, false);
@@ -823,6 +829,46 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 });
             }
             Task::none()
+        }
+        // The daemon refused us on a contract mismatch (US6, FR-021): record it so the banner can
+        // name both versions and offer the restart action. The connection subscription keeps
+        // retrying in the background; each retry re-sets this identically until the user acts.
+        Message::DaemonVersionMismatch {
+            client,
+            daemon,
+            daemon_build,
+        } => {
+            app.version_mismatch = Some((client, daemon, daemon_build));
+            Task::none()
+        }
+        // "Restart service" (FR-022): stop the mismatched daemon by its recorded pid. A mismatched
+        // client can't send it a control message, so termination is the version-agnostic stop. Once
+        // it exits, the auto-reconnect loop finds nothing listening and spawns a matching daemon;
+        // previously-live sessions then reload as interrupted-resumable (FR-006a). Live processes are
+        // lost — we say so — but the durable sessions survive.
+        Message::ConnectionRestartServiceRequested => {
+            app.version_mismatch = None;
+            app.core.notify_info(
+                "Restarting the session service — running processes are stopped, but your \
+                 sessions are preserved and can be resumed.",
+            );
+            Task::perform(
+                async {
+                    tokio::task::spawn_blocking(|| {
+                        let endpoint = micold_core::endpoint::resolve()?;
+                        micold_core::spawn::stop_running_daemon(&endpoint)
+                    })
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .map_err(|e: std::io::Error| e.to_string())
+                },
+                |r: Result<bool, String>| match r {
+                    Ok(_) => Message::NoOp,
+                    Err(e) => Message::DaemonConnectFailed(format!(
+                        "could not stop the mismatched service: {e}"
+                    )),
+                },
+            )
         }
 
         // Advance every animation toward its target via the shared driver.
@@ -1523,11 +1569,18 @@ fn active_project_displaced(app: &App) -> bool {
         .is_some_and(|p| app.displaced.contains_key(p))
 }
 
-/// The connection state of the *active* project, for the status banner (US5, FR-024/027). A takeover
-/// (this window was displaced, or a re-attach was refused as busy) wins over a plain disconnect,
-/// since it names the holder and offers a concrete "take over" action.
+/// The connection state for the status banner (US5/US6). Precedence: a contract mismatch (US6) wins
+/// — it blocks every connection and has the most specific action — then a per-project takeover (US5),
+/// then a plain disconnect. Each names the situation and offers a concrete action.
 fn connection_status(app: &App) -> micold_client::ui::ConnectionStatus {
     use micold_client::ui::ConnectionStatus;
+    if let Some((client, daemon, daemon_build)) = &app.version_mismatch {
+        return ConnectionStatus::VersionMismatch {
+            client: *client,
+            daemon: *daemon,
+            daemon_build: daemon_build.clone(),
+        };
+    }
     if let Some(project) = app.core.workspace.active.as_ref() {
         if let Some(by) = app.displaced.get(project) {
             return ConnectionStatus::Displaced { by: by.clone() };
@@ -1609,10 +1662,12 @@ fn view_and_start(app: &mut App, id: SessionId) {
 
 /// Map a wire lifecycle back to the domain one (inverse of the daemon's `wire_lifecycle`).
 /// `InterruptedResumable` — a session the daemon found durably-running after a restart, never
-/// auto-relaunched — reads as `Idle` on the client (resumable on select).
+/// auto-relaunched — is carried through as its own state so the sidebar/status can present it
+/// distinctly and its select action resumes it (FR-006a).
 fn wire_to_lifecycle(w: &WireLifecycle) -> SessionLifecycle {
     match w {
-        WireLifecycle::Idle | WireLifecycle::InterruptedResumable => SessionLifecycle::Idle,
+        WireLifecycle::Idle => SessionLifecycle::Idle,
+        WireLifecycle::InterruptedResumable => SessionLifecycle::InterruptedResumable,
         WireLifecycle::Starting => SessionLifecycle::Starting,
         WireLifecycle::Running => SessionLifecycle::Running,
         WireLifecycle::Restarting { attempts } => SessionLifecycle::Restarting {
@@ -2214,6 +2269,7 @@ mod tests {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            version_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         };
@@ -2256,6 +2312,7 @@ mod tests {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            version_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         };

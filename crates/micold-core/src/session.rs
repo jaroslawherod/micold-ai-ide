@@ -74,6 +74,11 @@ pub enum SessionLifecycle {
     Restarting { attempts: u8 },
     /// Auto-restart gave up after repeated quick failures (FR-022a); user may retry manually.
     Failed,
+    /// The service restarted (reboot, crash, or a deliberate contract-mismatch restart) and found a
+    /// durable record of a session that had a recorded conversation. Presented distinctly from both
+    /// `Running` and a deliberately stopped (`Idle`) session, and **never auto-relaunched** — only a
+    /// single explicit `start` resumes it (FR-006a/b, data-model L4).
+    InterruptedResumable,
 }
 
 /// The maximum consecutive auto-restarts before giving up (FR-022a crash-loop guard).
@@ -376,13 +381,26 @@ impl Session {
         )
     }
 
-    /// Begin (or resume) running: `Idle`/`Failed` → `Starting` (FR-010, FR-023a).
+    /// Begin (or resume) running: `Idle`/`Failed`/`InterruptedResumable` → `Starting` (FR-010,
+    /// FR-023a). For an `InterruptedResumable` session this is the single explicit action that
+    /// resumes the prior conversation (FR-006a) — startup never does it automatically (FR-006b).
     pub fn start(&mut self) {
         if matches!(
             self.lifecycle,
-            SessionLifecycle::Idle | SessionLifecycle::Failed
+            SessionLifecycle::Idle
+                | SessionLifecycle::Failed
+                | SessionLifecycle::InterruptedResumable
         ) {
             self.lifecycle = SessionLifecycle::Starting;
+        }
+    }
+
+    /// Present a durable session as interrupted-but-resumable after a service restart (FR-006a): a
+    /// no-op unless it is currently `Idle` (the state every session loads in), so this never
+    /// overrides a persisted `Failed`, a live process, or an already-marked session.
+    pub fn mark_interrupted_resumable(&mut self) {
+        if matches!(self.lifecycle, SessionLifecycle::Idle) {
+            self.lifecycle = SessionLifecycle::InterruptedResumable;
         }
     }
 

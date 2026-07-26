@@ -87,6 +87,16 @@ pub enum ConnectionStatus {
         /// The taking-over window's identity string.
         by: String,
     },
+    /// The running service speaks a different contract version (US6, FR-021/022). Names both versions
+    /// and offers a one-click restart of the service.
+    VersionMismatch {
+        /// This client's protocol version.
+        client: u32,
+        /// The running daemon's protocol version.
+        daemon: u32,
+        /// The running daemon's build string.
+        daemon_build: String,
+    },
 }
 
 /// The persistent connection-status strip, shown between the toolbar and the notification stack.
@@ -105,6 +115,23 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
             roles,
         )
         .action("Take over", Message::ConnectionTakeoverRequested),
+        ConnectionStatus::VersionMismatch {
+            client,
+            daemon,
+            daemon_build,
+        } => material::ConnectionBanner::new(
+            "The session service is a different version",
+            format!(
+                "This app speaks contract v{client}; the running service ({daemon_build}) speaks \
+                 v{daemon}. Restart the service to match — running processes stop, but your \
+                 sessions are preserved and resumable."
+            ),
+            roles,
+        )
+        .action(
+            "Restart service",
+            Message::ConnectionRestartServiceRequested,
+        ),
     };
     container(banner)
         .padding([spacing::SM, spacing::MD])

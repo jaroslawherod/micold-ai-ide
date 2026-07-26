@@ -490,6 +490,25 @@ impl DaemonState {
         self.lock().catalog.archive_session_ids(&empty)
     }
 
+    /// FR-006a/b: at service startup, present every session with a recorded AI-CLI conversation as
+    /// `InterruptedResumable` (never auto-relaunched — only an explicit `SessionStart` resumes it).
+    /// **Blocking** (it stats the provider's conversation store), so the caller runs it off the async
+    /// runtime. Runs exactly once, before the accept loop starts, so there is no other client to
+    /// contend for the lock — the provider stat happening under the lock is safe here for that reason
+    /// (unlike the steady-state paths, which must never block under the lock). Returns the count.
+    pub fn present_interrupted_resumable_at_startup(&self) -> usize {
+        use micold_core::provider::{AiCliProvider, ClaudeProvider};
+        let provider = ClaudeProvider;
+        let Some(config) = provider.config_dir() else {
+            return 0;
+        };
+        self.lock()
+            .catalog
+            .present_interrupted_resumable(|id, cwd, _mode| {
+                provider.has_recorded_conversation(&config, cwd, id.0)
+            })
+    }
+
     /// The (non-archived) session summaries for a project, from durable state. Used to build the
     /// `Attached` reply after any attach-time pruning so it reflects the pruned result.
     pub fn sessions_for(&self, project: &Path) -> Vec<SessionSummary> {

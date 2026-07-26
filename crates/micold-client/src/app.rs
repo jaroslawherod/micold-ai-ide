@@ -632,6 +632,22 @@ pub enum Message {
     /// The user asked to take the active project back after being displaced (US5, FR-024): re-attach
     /// with `force`. Handled by the binary (attachment is runtime).
     ConnectionTakeoverRequested,
+    /// The daemon refused the handshake on a contract mismatch (US6, FR-021): carries both protocol
+    /// versions and the daemon build so the client can render an actionable diagnostic. Handled by
+    /// the binary.
+    DaemonVersionMismatch {
+        /// This client's protocol version.
+        client: u32,
+        /// The running daemon's protocol version.
+        daemon: u32,
+        /// The running daemon's human-facing build string.
+        daemon_build: String,
+    },
+    /// The user chose "restart service" after a version mismatch (US6, FR-022): stop the mismatched
+    /// daemon so the auto-reconnect spawns a matching one. Handled by the binary.
+    ConnectionRestartServiceRequested,
+    /// A completed side-effecting task that carries nothing to apply (e.g. the daemon-stop task).
+    NoOp,
 }
 
 /// How prominently a [`Notification`] is presented.
@@ -838,7 +854,10 @@ impl State {
             | Message::DaemonGridFrame(_)
             | Message::DaemonDisconnected
             | Message::DaemonConnectFailed(_)
-            | Message::ConnectionTakeoverRequested => {}
+            | Message::ConnectionTakeoverRequested
+            | Message::DaemonVersionMismatch { .. }
+            | Message::ConnectionRestartServiceRequested
+            | Message::NoOp => {}
             Message::HelpMenuToggled => {
                 self.help_menu_open = !self.help_menu_open;
                 // The overflow menu, the project switcher, and the sidebar filter panel are
