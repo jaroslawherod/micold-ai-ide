@@ -42,6 +42,11 @@ pub struct DaemonState {
     /// The diagnostics handle (log location, runtime level reload, recent-errors ring), set once at
     /// startup by `server::run`. Absent for tests and the ephemeral catalog, which don't init logging.
     diagnostics: std::sync::OnceLock<crate::logging::Logging>,
+    /// The loopback hook receiver (US2, T045/T046), set once at startup by `server::run`. Absent for
+    /// tests and when binding fails — activity then degrades to `Unknown` (H1), never to a wrong
+    /// signal. When present, `start_session` writes each AI-CLI session a `--settings` file pointing
+    /// `claude`'s lifecycle hooks at it.
+    hooks: std::sync::OnceLock<crate::hooks::HookReceiver>,
 }
 
 struct Inner {
@@ -149,6 +154,7 @@ impl DaemonState {
             next_id: AtomicU64::new(1),
             lifecycle: Lifecycle::new(),
             diagnostics: std::sync::OnceLock::new(),
+            hooks: std::sync::OnceLock::new(),
         }
     }
 
@@ -170,6 +176,27 @@ impl DaemonState {
     /// The diagnostics handle, if logging was initialised (absent in tests / ephemeral catalog).
     pub fn diagnostics(&self) -> Option<&crate::logging::Logging> {
         self.diagnostics.get()
+    }
+
+    /// Record the loopback hook receiver at startup so AI-CLI spawns can be pointed at it (US2,
+    /// T045/T046). A no-op if already set.
+    pub fn set_hooks(&self, receiver: crate::hooks::HookReceiver) {
+        let _ = self.hooks.set(receiver);
+    }
+
+    /// Prepare a session's activity-hook `--settings` file, if the hook receiver is running. Returns
+    /// `None` when hooks are unavailable (tests, or a bind failure) or when writing the file fails —
+    /// the caller then spawns without hooks and activity stays `Unknown` (H1), never wrong. Blocking
+    /// (a small file write); the AI-CLI spawn path is already off the async runtime.
+    fn hook_settings_file(&self, id: SessionId) -> Option<PathBuf> {
+        let receiver = self.hooks.get()?;
+        match receiver.prepare_settings(id) {
+            Ok(path) => Some(path),
+            Err(e) => {
+                tracing::warn!(session = %id.0, error = %e, "could not write hook settings; activity will be Unknown");
+                None
+            }
+        }
     }
 
     /// The `Welcome` payload for a freshly-handshaked client.
@@ -612,7 +639,8 @@ impl DaemonState {
                     mode: launch,
                     env,
                 };
-                PtySession::spawn_claude(id, &spec, plan.scrollback, None)?
+                let settings = self.hook_settings_file(id);
+                PtySession::spawn_claude(id, &spec, plan.scrollback, None, settings.as_deref())?
             }
             TerminalMode::Regular => {
                 PtySession::spawn_shell(id, &plan.cwd, &env, plan.scrollback, None)?
@@ -798,7 +826,8 @@ impl DaemonState {
                     mode: LaunchMode::Resume,
                     env,
                 };
-                PtySession::spawn_claude(id, &spec, scrollback, None)
+                let settings = self.hook_settings_file(id);
+                PtySession::spawn_claude(id, &spec, scrollback, None, settings.as_deref())
             }
             TerminalMode::Regular => PtySession::spawn_shell(id, &cwd, &env, scrollback, None),
         };

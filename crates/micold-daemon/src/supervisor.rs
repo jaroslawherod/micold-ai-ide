@@ -90,6 +90,7 @@ impl PtySession {
         spec: &LaunchSpec,
         scrollback_lines: usize,
         initial_size: Option<(u16, u16)>,
+        settings_file: Option<&std::path::Path>,
     ) -> io::Result<Self> {
         let mut cmd = CommandBuilder::new(ClaudeProvider.command());
         cmd.cwd(&spec.cwd);
@@ -98,6 +99,12 @@ impl PtySession {
         }
         for arg in claude_args(spec) {
             cmd.arg(arg);
+        }
+        // A per-session `--settings` file wires the activity hooks without touching user config
+        // (contracts/hooks.md §Configuration, T046). Absent when the hook receiver did not start.
+        if let Some(path) = settings_file {
+            cmd.arg("--settings");
+            cmd.arg(path);
         }
         Self::spawn(id, cmd, scrollback_lines, initial_size)
     }

@@ -10,6 +10,7 @@
 pub mod activity;
 pub mod catalog;
 pub mod framer;
+pub mod hooks;
 pub mod lifecycle;
 pub mod logging;
 pub mod platform;

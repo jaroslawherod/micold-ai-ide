@@ -24,6 +24,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
 use crate::catalog::Catalog;
+use crate::hooks;
 use crate::logging;
 use crate::singleton::{self, Acquisition};
 use crate::state::DaemonState;
@@ -74,6 +75,21 @@ pub async fn run() -> io::Result<()> {
     // Restart supervision runs on its own timer, independent of any client connection: a session
     // that crashes with no window open is restarted anyway (US4, FR-005).
     spawn_supervisor(Arc::clone(&state));
+
+    // The loopback activity-hook receiver (US2, T045/T046): bind an ephemeral 127.0.0.1 port and
+    // record it on the shared state so AI-CLI spawns point `claude`'s lifecycle hooks at it. A bind
+    // failure is non-fatal — activity degrades to `Unknown` (H1), never to a wrong signal.
+    match hooks::HookReceiver::bind(hooks::default_settings_dir()).await {
+        Ok((receiver, listener)) => {
+            let tokens = receiver.tokens();
+            state.set_hooks(receiver);
+            tokio::spawn(hooks::serve(listener, tokens, Arc::clone(&state)));
+            tracing::info!("activity-hook receiver listening on loopback");
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "could not bind the activity-hook receiver; activity will be Unknown");
+        }
+    }
 
     // systemd socket activation (Linux, opportunistic — MUST NOT be required; protocol.md §2).
     #[cfg(target_os = "linux")]
