@@ -1,0 +1,51 @@
+[package]
+name = "micold-daemon"
+description = "User-space session host for Micold AI IDE (feature 010): owns PTY/VT sessions that outlive the UI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "micold_daemon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "micold-daemon"
+path = "src/main.rs"
+
+[dependencies]
+micold-core = { workspace = true }
+# Transport + runtime (plan W1, tasks T015-T020).
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+interprocess = { workspace = true }
+bytes = { workspace = true }
+listenfd = { workspace = true }
+serde_json = { workspace = true }
+futures-util = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+file-rotate = { workspace = true }
+directories = { workspace = true }
+# PTY/VT stack (plan W3, tasks T030/T031): the daemon now owns every `Term` and PTY child so
+# sessions outlive the UI. `alacritty_terminal` interprets VT/ANSI into a grid; `portable-pty`
+# hosts the child process. Stable `LineId` diffing (T006/T032) rides on top via a trait, so the
+# vendored fork (plan Decision 2) stays a swappable fallback for the approximation used today.
+alacritty_terminal = { workspace = true }
+portable-pty = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+# Ownership/mode verification for the `/tmp` endpoint fallback (protocol.md §1, FR-030).
+libc = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+uuid = { workspace = true }
+# Integration tests drive real PTY sessions and read the interpreted grid directly.
+alacritty_terminal = { workspace = true }
+portable-pty = { workspace = true }
+
+[lints]
+workspace = true

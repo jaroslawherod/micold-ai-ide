@@ -6,6 +6,14 @@
 
 **Note**: This template is filled in by the `/speckit-plan` command; its definition describes the execution workflow.
 
+> **Post-merge note (2026-07-26).** `main` gained two changes that this plan predates: the repo
+> became a Cargo workspace (`crates/micold-core`, `crates/micold-client`, `crates/micold-daemon`),
+> and feature 010 moved worktree creation into the daemon, retiring the client's live progress
+> stream. The two-phase design below survived intact — but pre-flight and branch listing are now
+> **RPCs**, not in-process calls, so `BranchSituation` / `BranchCandidate` / `CreateMode` became
+> wire types. See `contracts/branch-rpc.md` for the added protocol surface, and FR-024 in the spec
+> for the one requirement the migration blocked.
+
 ## Summary
 
 Today `create_worktree` treats an existing branch as a dead end: its pre-flight returns

@@ -3,22 +3,30 @@ rust = "stable"
 uv = "latest"
 
 [tasks.run]
-description = "Run the GUI application"
-run = "cargo run --features gui"
+description = "Run the GUI client (feature 010: spawns/attaches the session daemon)"
+run = "cargo run -p micold-client"
+
+[tasks.daemon]
+description = "Run the session daemon directly (normally auto-spawned by the client)"
+run = "cargo run -p micold-daemon"
 
 [tasks.test]
-description = "Test the render-free logic core (no GUI), matching CI"
-run = "cargo test --no-default-features --all-targets"
+description = "Test the whole workspace (core + client + daemon), matching CI"
+run = "cargo test --workspace"
+
+[tasks.test-core]
+description = "Test the render-free core only (fast, no GUI / no iced)"
+run = "cargo test -p micold-core --all-targets"
 
 [tasks.build]
 description = "Build the release GUI binary"
-run = "cargo build --release --features gui"
+run = "cargo build --release -p micold-client"
 
 [tasks.deb]
 description = "Build the Debian .deb package for the host arch (installs cargo-deb if missing)"
 run = """
 command -v cargo-deb >/dev/null 2>&1 || cargo install cargo-deb --locked
-cargo deb
+cargo deb -p micold-client
 echo 'Built:'
 ls -1 target/debian/*.deb
 """
