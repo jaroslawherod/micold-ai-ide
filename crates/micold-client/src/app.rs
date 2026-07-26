@@ -11,8 +11,8 @@
 //! handled entirely in `src/main.rs`.
 
 use micold_core::naming::{
-    derive, display_name, parse_tags, ConventionalType, DerivedNames, NamingError, Tag,
-    WorktreeNaming,
+    derive, dir_name_from_branch, display_name, parse_tags, ConventionalType, DerivedNames,
+    NamingError, Tag, WorktreeNaming,
 };
 use micold_core::project::{canonicalize_best_effort, Availability, FolderEntry, RenameError};
 use micold_core::selector::Selector;
@@ -20,7 +20,9 @@ use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId}
 use micold_core::theme::{
     observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference,
 };
-use micold_core::worktree::{Worktree, WorktreeStatus};
+use micold_core::worktree::{
+    BranchCandidate, BranchSituation, CreateMode, Worktree, WorktreeStatus,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -97,6 +99,49 @@ pub enum WorktreeFormStatus {
     Creating,
 }
 
+/// Which half of the add-worktree form is active (feature 016, FR-010).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum BranchSource {
+    /// Type + ticket + name inputs — a brand-new branch. Today's form.
+    #[default]
+    New,
+    /// Pick from the branches that already exist (User Story 2).
+    Existing,
+}
+
+/// The conflict-resolution sub-state of the add-worktree form (feature 016, contract
+/// `branch-conflict.md` §3).
+///
+/// Lives INSIDE the form rather than as its own [`Overlay`] variant: `Overlay` holds one modal at
+/// a time, so routing the prompt through it would tear down the form — and with it the inputs
+/// FR-007 requires to survive a cancel (research R9).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ResolutionState {
+    /// No prompt showing.
+    #[default]
+    Idle,
+    /// Pre-flight found something; the user is choosing what to do (FR-002).
+    Choosing { situation: BranchSituation },
+    /// Overwrite was chosen; the destructive confirmation is showing (FR-005).
+    ConfirmingOverwrite { situation: BranchSituation },
+}
+
+impl ResolutionState {
+    /// The situation being resolved, if any.
+    pub fn situation(&self) -> Option<&BranchSituation> {
+        match self {
+            ResolutionState::Idle => None,
+            ResolutionState::Choosing { situation }
+            | ResolutionState::ConfirmingOverwrite { situation } => Some(situation),
+        }
+    }
+
+    /// Whether a prompt is currently awaiting the user.
+    pub fn is_prompting(&self) -> bool {
+        !matches!(self, ResolutionState::Idle)
+    }
+}
+
 /// In-progress add-worktree form state, present only while the form overlay is open (FR-005).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorktreeForm {
@@ -110,20 +155,99 @@ pub struct WorktreeForm {
     pub error: Option<NamingError>,
     /// Whether a create is in flight (feature 010, data-model.md).
     pub status: WorktreeFormStatus,
+    /// Which half of the form is active (feature 016, FR-010).
+    pub source: BranchSource,
+    /// Branches that already exist, listed when `source` becomes `Existing` (FR-011). Empty
+    /// until then — the listing is not run on every keystroke.
+    pub candidates: Vec<BranchCandidate>,
+    /// The picked existing branch, if any (FR-014).
+    pub selected_branch: Option<BranchCandidate>,
+    /// The conflict prompt's state (feature 016, FR-001/FR-005).
+    pub resolution: ResolutionState,
 }
 
 impl WorktreeForm {
     /// The live derived directory/branch preview, or the validation error (FR-008a).
+    ///
+    /// Under [`BranchSource::Existing`] the names come from the selected branch instead of the
+    /// type/ticket/name inputs (feature 016, FR-014), so the user sees the directory that will
+    /// be created before committing to it.
     pub fn preview(&self) -> Result<DerivedNames, NamingError> {
-        derive(&WorktreeNaming {
-            type_: self.type_,
-            ticket: if self.ticket.trim().is_empty() {
-                None
-            } else {
-                Some(self.ticket.clone())
-            },
-            name: self.name.clone(),
-        })
+        match self.source {
+            BranchSource::New => derive(&WorktreeNaming {
+                type_: self.type_,
+                ticket: if self.ticket.trim().is_empty() {
+                    None
+                } else {
+                    Some(self.ticket.clone())
+                },
+                name: self.name.clone(),
+            }),
+            BranchSource::Existing => {
+                let candidate = self
+                    .selected_branch
+                    .as_ref()
+                    .ok_or(NamingError::EmptyNameAfterSlug)?;
+                let dir_name = dir_name_from_branch(&candidate.name);
+                if dir_name.is_empty() {
+                    return Err(NamingError::EmptyNameAfterSlug);
+                }
+                Ok(DerivedNames {
+                    dir_name,
+                    branch: candidate.name.clone(),
+                })
+            }
+        }
+    }
+
+    /// Whether the form can be submitted right now.
+    ///
+    /// A blocked candidate is deliberately still *selectable* (research R8 — `pick_list` has no
+    /// per-item disabling, and forking a list widget is what the Component-reuse gate rejects),
+    /// so the refusal happens here, at the point of action (FR-012).
+    pub fn can_submit(&self) -> bool {
+        if self.status != WorktreeFormStatus::Editing || self.resolution.is_prompting() {
+            return false;
+        }
+        if let Some(candidate) = &self.selected_branch {
+            if self.source == BranchSource::Existing && !candidate.is_available() {
+                return false;
+            }
+        }
+        self.preview().is_ok()
+    }
+
+    /// The mode implied by picking a candidate outright, when no prompt is needed
+    /// (contract `branch-picker.md` §5).
+    ///
+    /// Picking a branch IS the intent to use it — but never the intent to destroy it, so this
+    /// can never yield [`CreateMode::Overwrite`].
+    /// `preferred_remote` is the remote the user already named by picking a specific row in the
+    /// branch list. When the name exists on several remotes and no preference is given, this
+    /// returns `None` so the prompt opens and the user chooses — the app must never pick a
+    /// remote on the user's behalf (spec Edge Cases).
+    pub fn mode_for(
+        situation: &BranchSituation,
+        preferred_remote: Option<&str>,
+    ) -> Option<CreateMode> {
+        match situation {
+            BranchSituation::Free => Some(CreateMode::NewBranch),
+            BranchSituation::LocalAvailable { .. } => Some(CreateMode::ReuseLocal),
+            BranchSituation::RemoteOnly { remotes, .. } => {
+                let remote = match preferred_remote {
+                    // Honour the picked row, but only if that remote really carries the ref.
+                    Some(preferred) if remotes.iter().any(|r| r == preferred) => preferred,
+                    // Unambiguous: exactly one remote has it.
+                    None if remotes.len() == 1 => remotes[0].as_str(),
+                    // Ambiguous, or a preference that no longer holds — ask.
+                    _ => return None,
+                };
+                Some(CreateMode::TrackRemote {
+                    remote: remote.to_string(),
+                })
+            }
+            BranchSituation::Blocked { .. } | BranchSituation::DirectoryTaken { .. } => None,
+        }
     }
 }
 
@@ -454,6 +578,26 @@ pub enum Message {
     AddWorktreeSubmitted,
     /// Dismiss the form without creating (Cancel or Esc).
     AddWorktreeCancelled,
+    /// Switch between the new-branch and existing-branch halves of the form (feature 016,
+    /// FR-010). Switching back to `New` clears any selection (FR-015).
+    AddWorktreeSourceChanged(BranchSource),
+    /// The binary listed the repository's branches for the picker (feature 016, FR-011).
+    AddWorktreeBranchesListed(Vec<BranchCandidate>),
+    /// An existing branch was picked from the list (feature 016, FR-014). A blocked candidate is
+    /// still selectable — submission is what refuses (FR-012).
+    AddWorktreeBranchSelected(BranchCandidate),
+    /// Pre-flight found something the user must decide about; raise the prompt (feature 016,
+    /// FR-001). Never dispatched for [`BranchSituation::Free`].
+    AddWorktreeConflictDetected(BranchSituation),
+    /// The user answered the prompt (feature 016, FR-002). The binary performs the create with
+    /// the chosen mode. `Overwrite` can only arrive via [`Message::AddWorktreeOverwriteConfirmed`].
+    AddWorktreeResolutionChosen(CreateMode),
+    /// The user chose Overwrite; show the destructive confirmation first (feature 016, FR-005).
+    AddWorktreeOverwriteRequested,
+    /// The destructive confirmation was accepted (feature 016, FR-005).
+    AddWorktreeOverwriteConfirmed,
+    /// Back out of the prompt (or its confirmation) without acting (feature 016, FR-007).
+    AddWorktreeResolutionCancelled,
     /// The binary is about to send the `WorktreeCreate` RPC (feature 010; T055); marks the form
     /// `Creating` so it shows an in-progress state until the daemon's reply closes or reopens it.
     WorktreeCreateStarted,
@@ -1188,6 +1332,91 @@ impl State {
             Message::AddWorktreeCancelled => {
                 self.overlay = Overlay::None;
                 self.worktree_form = None;
+            }
+            // ----- feature 016: existing-branch source + conflict resolution -----
+            Message::AddWorktreeSourceChanged(source) => {
+                if let Some(form) = &mut self.worktree_form {
+                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
+                    {
+                        form.source = source;
+                        form.error = None;
+                        // Leaving the picker drops its selection so no stale branch can be
+                        // submitted from the new-branch inputs (FR-015).
+                        if source == BranchSource::New {
+                            form.selected_branch = None;
+                        }
+                    }
+                }
+            }
+            Message::AddWorktreeBranchesListed(candidates) => {
+                if let Some(form) = &mut self.worktree_form {
+                    form.candidates = candidates;
+                }
+            }
+            Message::AddWorktreeBranchSelected(candidate) => {
+                if let Some(form) = &mut self.worktree_form {
+                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
+                    {
+                        form.selected_branch = Some(candidate);
+                        form.error = None;
+                    }
+                }
+            }
+            Message::AddWorktreeConflictDetected(situation) => {
+                if let Some(form) = &mut self.worktree_form {
+                    // Invariant 4: a prompt and an in-flight create cannot coexist.
+                    if form.status == WorktreeFormStatus::Editing {
+                        form.resolution = ResolutionState::Choosing { situation };
+                    }
+                }
+            }
+            Message::AddWorktreeOverwriteRequested => {
+                if let Some(form) = &mut self.worktree_form {
+                    // Only ever from `Choosing`, and only for a situation that HAS a local branch
+                    // to overwrite — invariant 1 (FR-005).
+                    if let ResolutionState::Choosing { situation } = &form.resolution {
+                        if matches!(situation, BranchSituation::LocalAvailable { .. }) {
+                            form.resolution = ResolutionState::ConfirmingOverwrite {
+                                situation: situation.clone(),
+                            };
+                        }
+                    }
+                }
+            }
+            Message::AddWorktreeOverwriteConfirmed => {
+                // The ONLY route to `CreateMode::Overwrite`. The binary picks the resolution up
+                // and runs the create; here we just clear the prompt and record the mode.
+                if let Some(form) = &mut self.worktree_form {
+                    if matches!(form.resolution, ResolutionState::ConfirmingOverwrite { .. }) {
+                        form.resolution = ResolutionState::Idle;
+                    }
+                }
+            }
+            Message::AddWorktreeResolutionChosen(mode) => {
+                if let Some(form) = &mut self.worktree_form {
+                    // Overwrite must go through the confirmation, never straight from the choice
+                    // (invariant 1) — reject it here rather than trusting call sites.
+                    let allowed = !matches!(mode, CreateMode::Overwrite)
+                        && matches!(form.resolution, ResolutionState::Choosing { .. });
+                    if allowed {
+                        form.resolution = ResolutionState::Idle;
+                    }
+                }
+            }
+            Message::AddWorktreeResolutionCancelled => {
+                if let Some(form) = &mut self.worktree_form {
+                    form.resolution = match &form.resolution {
+                        // Backing out of the confirmation returns to the choice, not to the form
+                        // (invariant 3, US2 AS3).
+                        ResolutionState::ConfirmingOverwrite { situation } => {
+                            ResolutionState::Choosing {
+                                situation: situation.clone(),
+                            }
+                        }
+                        // Cancelling the choice leaves every input exactly as it was (FR-007).
+                        _ => ResolutionState::Idle,
+                    };
+                }
             }
             Message::WorktreeCreateStarted => {
                 if let Some(form) = &mut self.worktree_form {

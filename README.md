@@ -9,7 +9,8 @@ fully functional offline (Constitution Principle IV).
 ## Features
 
 - Open a git project and manage its worktrees (one branch per line of work) from a Material
-  Design sidebar.
+  Design sidebar — on a new branch, or on one that already exists locally or on a remote, so work
+  started outside the app can be picked up inside it.
 - Run multiple concurrent `claude` sessions, each in its own worktree or directly in the
   project root ("Default"), in an embedded terminal.
 - A real terminal emulator: full ANSI color + text styling, live keyboard and mouse input,

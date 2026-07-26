@@ -21,6 +21,7 @@ use micold_core::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
+use micold_core::worktree::CreateMode;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
@@ -121,6 +122,7 @@ async fn a_mutation_whose_reply_is_lost_is_visible_to_the_next_connection() {
             project: project.path().to_path_buf(),
             branch: "feature/lost".into(),
             dir_name: "lost".into(),
+            mode: CreateMode::NewBranch,
         }))
         .await
         .unwrap();

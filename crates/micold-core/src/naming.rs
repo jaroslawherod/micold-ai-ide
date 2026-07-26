@@ -214,6 +214,27 @@ pub fn derive(input: &WorktreeNaming) -> Result<DerivedNames, NamingError> {
     Ok(DerivedNames { dir_name, branch })
 }
 
+/// Derive the worktree directory name for an EXISTING branch (feature 016, FR-014).
+///
+/// The inverse of [`derive`]'s branch→directory mapping: `feat/abc-123-login` →
+/// `feat-abc-123-login`. A worktree created from a *selected* branch therefore lands in the same
+/// directory it would have had if the user had typed the inputs, so the sidebar's existing
+/// [`parse_tags`] / [`display_name`] derivation keeps working with no special case.
+///
+/// Routing each segment through [`slugify`] inherits its guarantees: `[a-z0-9-]` only, collapsed
+/// separators, and the Windows reserved-device-name guard (Constitution Principle VI).
+///
+/// Returns `""` when nothing usable remains (e.g. an all-punctuation branch name); callers treat
+/// empty as "cannot derive a directory" and reject the candidate rather than creating `.../`.
+pub fn dir_name_from_branch(branch: &str) -> String {
+    branch
+        .split('/')
+        .map(slugify)
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
 /// A typed, structured label shown beneath a worktree's name in the sidebar and used for
 /// filtering (FR-001..005). Derived from the existing directory name — never persisted — so
 /// the branch/directory naming convention is untouched (FR-007).

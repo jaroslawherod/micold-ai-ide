@@ -19,7 +19,10 @@ use micold_core::protocol::messages::{
     ClientMsg, DaemonMsg, ErrorKind, OperationResult, SessionProcess,
 };
 use micold_core::terminal::LaunchMode;
-use micold_core::worktree::{create_worktree, remove_worktree, remove_worktree_dir, CreateError};
+use micold_core::worktree::{
+    branch_candidates, create_worktree, preflight, remove_worktree, remove_worktree_dir,
+    BlockReason, CreateError,
+};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
@@ -453,6 +456,7 @@ where
                 project,
                 branch,
                 dir_name,
+                mode,
             } => {
                 let Some((repo, true)) = state.project_repo(&project) else {
                     reject_non_repo(state, id, req, &project);
@@ -479,6 +483,7 @@ where
                         &target,
                         &names,
                         target_exists,
+                        &mode,
                         &mut |_| {},
                     );
                     if r.is_err() {
@@ -511,6 +516,94 @@ where
                         );
                     }
                     Err(join) => state.send(id, task_failed(req, "worktree create", &join)),
+                }
+            }
+            // --- feature 016: read-only branch queries for the create form ---
+            //
+            // Both run on the blocking pool: they shell out to git (`worktree list --porcelain`,
+            // `for-each-ref`) and must not stall the async runtime. Neither mutates anything, and
+            // neither contacts a remote (FR-020).
+            ClientMsg::BranchPreflight {
+                req,
+                project,
+                branch,
+                dir_name,
+            } => {
+                let Some((repo, true)) = state.project_repo(&project) else {
+                    reject_non_repo(state, id, req, &project);
+                    continue;
+                };
+                let situation = tokio::task::spawn_blocking(move || {
+                    let target = repo.join(".claude/worktrees").join(&dir_name);
+                    let target_exists = target.exists()
+                        && std::fs::read_dir(&target)
+                            .map(|mut d| d.next().is_some())
+                            .unwrap_or(false);
+                    preflight(&GitCli::new(), &repo, &target, &branch, target_exists)
+                })
+                .await;
+                match situation {
+                    Ok(Ok(situation)) => state.send(
+                        id,
+                        DaemonMsg::OperationOk {
+                            req,
+                            result: OperationResult::BranchPreflight { situation },
+                        },
+                    ),
+                    Ok(Err(e)) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::GitFailed,
+                            message: "could not check the branch".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::Internal,
+                            message: "could not check the branch".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
+                }
+            }
+            ClientMsg::BranchList { req, project } => {
+                let Some((repo, true)) = state.project_repo(&project) else {
+                    reject_non_repo(state, id, req, &project);
+                    continue;
+                };
+                let listed =
+                    tokio::task::spawn_blocking(move || branch_candidates(&GitCli::new(), &repo))
+                        .await;
+                match listed {
+                    Ok(Ok(candidates)) => state.send(
+                        id,
+                        DaemonMsg::OperationOk {
+                            req,
+                            result: OperationResult::BranchList { candidates },
+                        },
+                    ),
+                    Ok(Err(e)) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::GitFailed,
+                            message: "could not list branches".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::Internal,
+                            message: "could not list branches".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
                 }
             }
             ClientMsg::WorktreeDelete {
@@ -772,9 +865,27 @@ fn reject_non_repo(
 /// carrying git's stderr verbatim (T050, FR-034).
 fn describe_create_error(err: CreateError) -> (ErrorKind, String, Option<String>) {
     match err {
-        CreateError::DuplicateBranch => (
-            ErrorKind::AlreadyExists,
-            "a branch with that name already exists".into(),
+        // Feature 016 (FR-021): name the holder rather than reporting a bare failure.
+        CreateError::BranchInUse { branch, reason } => (
+            ErrorKind::Busy,
+            match reason {
+                BlockReason::CheckedOutInProjectRoot => {
+                    format!("the branch '{branch}' is checked out in the project itself")
+                }
+                BlockReason::CheckedOutAt { path } => {
+                    let holder = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| path.display().to_string());
+                    format!("the branch '{branch}' is already checked out in '{holder}'")
+                }
+            },
+            None,
+        ),
+        // Feature 016 (FR-009): the branch changed between the user's answer and the act.
+        CreateError::SituationChanged => (
+            ErrorKind::Refused,
+            "the branch changed while you were deciding, so nothing was done".into(),
             None,
         ),
         CreateError::DuplicateDir => (

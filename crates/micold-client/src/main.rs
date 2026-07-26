@@ -9,7 +9,10 @@
 
 use iced::time::every;
 use iced::{Subscription, Task};
-use micold_client::app::{ClosingOverlay, Message, Overlay, SelectKind, State, WorktreeFormStatus};
+use micold_client::app::{
+    BranchSource, ClosingOverlay, Message, Overlay, SelectKind, State, WorktreeForm,
+    WorktreeFormStatus,
+};
 use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
 use micold_client::motion::Animator;
@@ -32,6 +35,7 @@ use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::theme::{observe_system_scheme, SystemScheme};
 use micold_core::worktree::Worktree;
+use micold_core::worktree::{BranchOrigin, CreateMode};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -87,6 +91,16 @@ enum PendingOp {
     DeleteSession,
     WorktreeCreate(String),
     WorktreeDelete(String),
+    /// A read-only `BranchPreflight` (feature 016). Carries what the reply needs to continue:
+    /// the derived names, whether the branch came from the picker, and the remote the user named
+    /// by picking that row — so nothing is recomputed when the answer lands.
+    BranchPreflight {
+        names: micold_core::naming::DerivedNames,
+        picked: bool,
+        preferred_remote: Option<String>,
+    },
+    /// A read-only `BranchList` for the existing-branch picker (feature 016).
+    BranchList,
     WorktreeRename(String),
     ProjectAdd,
     ProjectRemove,
@@ -100,6 +114,8 @@ impl PendingOp {
             PendingOp::CreateSession => "create the session".into(),
             PendingOp::DeleteSession => "delete the session".into(),
             PendingOp::WorktreeCreate(d) => format!("create the worktree \"{d}\""),
+            PendingOp::BranchPreflight { .. } => "check the branch".into(),
+            PendingOp::BranchList => "list the branches".into(),
             PendingOp::WorktreeDelete(d) => format!("delete the worktree \"{d}\""),
             PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
             PendingOp::ProjectAdd => "add the project".into(),
@@ -705,6 +721,55 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                             ));
                         }
                     }
+                    // Feature 016: the pre-flight answer decides what happens next. A free name
+                    // creates straight away (FR-025 — no extra prompt); anything else either
+                    // resolves itself (the user already named the branch by picking it) or opens
+                    // the reuse/overwrite prompt.
+                    Some(PendingOp::BranchPreflight {
+                        names,
+                        picked,
+                        preferred_remote,
+                    }) => {
+                        if let OperationResult::BranchPreflight { situation } = result {
+                            if let Some(project) = app.core.workspace.active.clone() {
+                                match &situation {
+                                    micold_core::worktree::BranchSituation::Free => {
+                                        send_worktree_create(
+                                            app,
+                                            project,
+                                            names,
+                                            CreateMode::NewBranch,
+                                        );
+                                    }
+                                    // Picking a branch IS the intent to use it, so an available
+                                    // candidate needs no prompt (contract branch-picker.md §5). It can
+                                    // never mean overwrite.
+                                    _ if picked => {
+                                        match WorktreeForm::mode_for(
+                                            &situation,
+                                            preferred_remote.as_deref(),
+                                        ) {
+                                            Some(mode) => {
+                                                send_worktree_create(app, project, names, mode)
+                                            }
+                                            None => app.core.update(
+                                                Message::AddWorktreeConflictDetected(situation),
+                                            ),
+                                        }
+                                    }
+                                    _ => app
+                                        .core
+                                        .update(Message::AddWorktreeConflictDetected(situation)),
+                                }
+                            }
+                        }
+                    }
+                    Some(PendingOp::BranchList) => {
+                        if let OperationResult::BranchList { candidates } = result {
+                            app.core
+                                .update(Message::AddWorktreeBranchesListed(candidates));
+                        }
+                    }
                     _ => {}
                 },
                 DaemonMsg::OperationError { req, message, .. } => {
@@ -713,6 +778,18 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         // toast — mirroring the old local-create failure path.
                         Some(PendingOp::WorktreeCreate(_)) => {
                             app.core.update(Message::WorktreeCreateFailed(message));
+                        }
+                        // Feature 016: both branch queries back the open form, so their failures
+                        // belong on its own error line. A notification would be raised into the
+                        // surface the modal's scrim covers — invisible — and for the listing the
+                        // empty picker would then wrongly claim the repository has no branches.
+                        Some(PendingOp::BranchPreflight { .. }) => {
+                            app.core.worktree_error =
+                                Some(format!("Could not check the branch: {message}"));
+                        }
+                        Some(PendingOp::BranchList) => {
+                            app.core.worktree_error =
+                                Some(format!("Could not list branches: {message}"));
                         }
                         Some(op) => app
                             .core
@@ -950,13 +1027,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // off the update() thread so a slow fetch doesn't freeze the UI (feature 010,
         // research R4). AddWorktreeSubmitted/WorktreeCreated/WorktreeCreateFailed keep their
         // existing meaning; WorktreeCreateStarted is dispatched first so the form can show it.
+        // Submitting classifies the target branch first (feature 016, FR-001). A free name
+        // creates immediately, exactly as before; anything else becomes a decision for the user
+        // rather than the dead-end "a branch with that name already exists" error.
         Message::AddWorktreeSubmitted => {
             app.core.update(Message::AddWorktreeSubmitted);
             let Some(form) = app.core.worktree_form.clone() else {
                 return Task::none();
             };
-            if form.status != WorktreeFormStatus::Editing {
-                return Task::none(); // a create is already in flight — no double-submit.
+            if form.status != WorktreeFormStatus::Editing || form.resolution.is_prompting() {
+                return Task::none(); // create in flight, or a prompt is already open.
             }
             let Ok(names) = form.preview() else {
                 return Task::none(); // validation error already recorded by the reducer
@@ -964,22 +1044,57 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             let Some(project) = app.core.workspace.active.clone() else {
                 return Task::none();
             };
-            // Route through the daemon: it runs `git worktree add` off its runtime and broadcasts the
-            // new catalog (reconciled here). The form shows "creating" until the OperationOk closes it
-            // (or an OperationError reopens it with the error). Git runs on the daemon, so there is no
-            // live command/submodule progress to stream anymore (T055).
-            app.core.update(Message::WorktreeCreateStarted);
-            let (branch, dir_name) = (names.branch, names.dir_name);
+            // Feature 016: classify the name before creating anything. Git lives on the daemon
+            // now, so pre-flight is an RPC — the reply decides whether this becomes a create or a
+            // prompt. `PendingOp` carries what the answer needs so nothing is recomputed.
+            let picked = form.source == BranchSource::Existing;
+            // The remote the user named by picking that specific row, so a branch that exists on
+            // several remotes tracks the one they chose (spec Edge Cases).
+            let preferred_remote = form.selected_branch.as_ref().and_then(|c| match &c.origin {
+                BranchOrigin::Remote { remote } => Some(remote.clone()),
+                BranchOrigin::Local => None,
+            });
+            let (branch, dir_name) = (names.branch.clone(), names.dir_name.clone());
             send_op(
                 app,
-                PendingOp::WorktreeCreate(dir_name.clone()),
-                move |req| ClientMsg::WorktreeCreate {
+                PendingOp::BranchPreflight {
+                    names,
+                    picked,
+                    preferred_remote,
+                },
+                move |req| ClientMsg::BranchPreflight {
                     req,
                     project,
                     branch,
                     dir_name,
                 },
             );
+            Task::none()
+        }
+        // The user answered the prompt: create under the mode they chose. Overwrite cannot arrive
+        // here — it only ever comes through the confirmation below (FR-005).
+        Message::AddWorktreeResolutionChosen(mode) => {
+            app.core
+                .update(Message::AddWorktreeResolutionChosen(mode.clone()));
+            start_resolved_create(app, mode)
+        }
+        Message::AddWorktreeOverwriteConfirmed => {
+            app.core.update(Message::AddWorktreeOverwriteConfirmed);
+            start_resolved_create(app, CreateMode::Overwrite)
+        }
+        // Switching to the existing-branch picker lists what the repository already has
+        // (feature 016, FR-011). The daemon reads local ref storage only — nothing is fetched.
+        Message::AddWorktreeSourceChanged(source) => {
+            app.core.update(Message::AddWorktreeSourceChanged(source));
+            if source != BranchSource::Existing {
+                return Task::none();
+            }
+            let Some(project) = app.core.workspace.active.clone() else {
+                return Task::none();
+            };
+            send_op(app, PendingOp::BranchList, move |req| {
+                ClientMsg::BranchList { req, project }
+            });
             Task::none()
         }
         // Start a new session at a location — a worktree or the project root ("Default",
@@ -1854,6 +1969,54 @@ fn session_cwd_mode_and_active_shell(
 /// worktree is discovered.
 fn discover_worktrees(repo: &Path) -> Vec<Worktree> {
     micold_core::worktree::discover(&GitCli::new(), repo)
+}
+
+/// Send the create for a resolved mode, re-deriving the names from the form (feature 016).
+///
+/// Shared by both resolution answers so `Overwrite` and the non-destructive modes take exactly one
+/// path to the daemon. The daemon re-verifies the mode against a fresh pre-flight before touching
+/// anything (FR-009), so a branch that changed while the prompt was open fails cleanly rather than
+/// acting on a stale answer.
+fn start_resolved_create(app: &mut App, mode: CreateMode) -> Task<Message> {
+    let Some(form) = app.core.worktree_form.clone() else {
+        return Task::none();
+    };
+    // Same double-submit guard `AddWorktreeSubmitted` applies: the answer buttons stop being
+    // rendered once the prompt resolves, but two clicks can queue two messages before the next
+    // render, and the reducer's second pass is a no-op — only this check stops the second one
+    // from launching a concurrent create of the same worktree.
+    if form.status != WorktreeFormStatus::Editing {
+        return Task::none();
+    }
+    let Ok(names) = form.preview() else {
+        return Task::none();
+    };
+    let Some(project) = app.core.workspace.active.clone() else {
+        return Task::none();
+    };
+    send_worktree_create(app, project, names, mode);
+    Task::none()
+}
+
+/// Hand a fully-resolved create to the daemon and put the form into its in-progress state.
+fn send_worktree_create(
+    app: &mut App,
+    project: PathBuf,
+    names: micold_core::naming::DerivedNames,
+    mode: CreateMode,
+) {
+    app.core.update(Message::WorktreeCreateStarted);
+    let (branch, dir_name) = (names.branch, names.dir_name);
+    let op_dir = dir_name.clone();
+    send_op(app, PendingOp::WorktreeCreate(op_dir), move |req| {
+        ClientMsg::WorktreeCreate {
+            req,
+            project,
+            branch,
+            dir_name,
+            mode,
+        }
+    });
 }
 
 fn map_system_scheme(mode: dark_light::Mode) -> SystemScheme {

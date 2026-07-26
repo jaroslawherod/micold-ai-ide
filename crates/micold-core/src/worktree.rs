@@ -8,6 +8,8 @@
 
 use crate::git::Git;
 use crate::naming::DerivedNames;
+use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -233,6 +235,318 @@ pub fn reconcile(
     out
 }
 
+// ---------------------------------------------------------------------------------------
+// Feature 016 — existing-branch situations, candidates, and creation modes.
+// Contracts: `contracts/branch-conflict.md`, `contracts/branch-picker.md`.
+// ---------------------------------------------------------------------------------------
+
+/// Where a candidate branch lives (feature 016, FR-011).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum BranchOrigin {
+    /// `refs/heads/<name>` exists.
+    Local,
+    /// Only `refs/remotes/<remote>/<name>` exists.
+    Remote { remote: String },
+}
+
+/// Why a branch cannot back a new worktree (feature 016, FR-021).
+///
+/// Two variants rather than one path-carrying variant so the UI can phrase the project-root case
+/// in the user's language instead of showing them the repository path as if it were a worktree.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BlockReason {
+    /// Checked out in another worktree, at this path.
+    CheckedOutAt { path: PathBuf },
+    /// Checked out as the repository's own current branch.
+    CheckedOutInProjectRoot,
+}
+
+/// One row of the existing-branch picker (feature 016, FR-010–FR-012).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BranchCandidate {
+    /// Short branch name, with no `refs/…` prefix (may itself contain `/`).
+    pub name: String,
+    /// Local, or the named remote it came from.
+    pub origin: BranchOrigin,
+    /// `Some` when the branch is visible but not creatable (FR-012).
+    pub blocked_by: Option<BlockReason>,
+}
+
+impl BranchCandidate {
+    /// Whether this candidate can back a new worktree.
+    pub fn is_available(&self) -> bool {
+        self.blocked_by.is_none()
+    }
+}
+
+impl fmt::Display for BranchCandidate {
+    /// The picker row label (contract `branch-picker.md` §2). `Select` requires `ToString`, so
+    /// this IS the rendered row — keeping it here means no widget change is needed.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.name)?;
+        if let BranchOrigin::Remote { remote } = &self.origin {
+            write!(f, " · {remote}")?;
+        }
+        match &self.blocked_by {
+            Some(BlockReason::CheckedOutInProjectRoot) => {
+                f.write_str(" · in use by the project checkout")
+            }
+            Some(BlockReason::CheckedOutAt { path }) => {
+                let holder = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                write!(f, " · in use by {holder}")
+            }
+            None => Ok(()),
+        }
+    }
+}
+
+/// What pre-flight found for one derived or selected branch name (feature 016).
+///
+/// The ONLY producer of a [`CreateMode`]: "reuse a branch that is checked out elsewhere" and
+/// "overwrite a remote branch" are unrepresentable rather than merely unreachable
+/// (Constitution Principle V).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BranchSituation {
+    /// The name is unused — create exactly as before, with no prompt (FR-025).
+    Free,
+    /// A local branch of this name exists and is not checked out: reuse or overwrite (FR-002).
+    LocalAvailable { branch: String },
+    /// The name exists only on a remote: continue from it, or start fresh (FR-016/FR-018).
+    /// `remotes` lists EVERY remote carrying the name, sorted — not just one. When a name exists
+    /// on several remotes the user picks which to continue from; the app must never choose
+    /// silently (spec Edge Cases).
+    RemoteOnly {
+        branch: String,
+        remotes: Vec<String>,
+    },
+    /// The branch is checked out somewhere — explain only, no branch action (FR-021).
+    Blocked { branch: String, reason: BlockReason },
+    /// The target directory is taken — explain only; outranks every branch case (FR-022).
+    DirectoryTaken { dir: PathBuf },
+}
+
+/// The user's resolved decision, handed back into [`create_worktree`] (feature 016).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum CreateMode {
+    /// Create a fresh branch at HEAD — today's behavior, and the default.
+    #[default]
+    NewBranch,
+    /// Check out an existing local branch, leaving its history untouched (FR-004).
+    ReuseLocal,
+    /// Discard the existing branch and recreate it at HEAD (FR-006). Destructive.
+    Overwrite,
+    /// Start a local branch at `<remote>/<branch>` and track it (FR-017).
+    TrackRemote { remote: String },
+}
+
+impl CreateMode {
+    /// Whether this mode brings the branch into existence — and therefore whether rollback owns
+    /// it (feature 016, FR-008).
+    ///
+    /// This single predicate is what stops a failed *reuse* from deleting the user's
+    /// pre-existing commits. See [`rollback_plan`].
+    pub fn creates_branch(&self) -> bool {
+        !matches!(self, CreateMode::ReuseLocal)
+    }
+
+    /// Whether `situation`, as re-observed at the moment of action, still supports this mode
+    /// (feature 016, FR-009; contract `branch-conflict.md` §4).
+    pub fn is_compatible_with(&self, situation: &BranchSituation) -> bool {
+        match (self, situation) {
+            (CreateMode::NewBranch, BranchSituation::Free) => true,
+            // The deliberate "start fresh at HEAD" answer to a remote-only name (FR-018).
+            (CreateMode::NewBranch, BranchSituation::RemoteOnly { .. }) => true,
+            (CreateMode::ReuseLocal, BranchSituation::LocalAvailable { .. }) => true,
+            (CreateMode::Overwrite, BranchSituation::LocalAvailable { .. }) => true,
+            // Any remote that actually carries the ref is a valid answer — which one is the
+            // user's explicit choice, not ours.
+            (CreateMode::TrackRemote { remote }, BranchSituation::RemoteOnly { remotes, .. }) => {
+                remotes.contains(remote)
+            }
+            _ => false,
+        }
+    }
+}
+
+/// Parse `git for-each-ref --format=%(refname) refs/heads refs/remotes` output (FR-011).
+///
+/// Pure. Drops `refs/remotes/<remote>/HEAD` (a symbolic alias, not a branch) and any line that
+/// is neither a head nor a remote. A name present both locally and on a remote collapses to the
+/// LOCAL candidate — reuse and overwrite act on the local branch (FR-019).
+pub fn parse_branch_refs(refs: &str) -> Vec<BranchCandidate> {
+    let mut local: Vec<String> = Vec::new();
+    let mut remote: Vec<(String, String)> = Vec::new();
+
+    for line in refs.lines() {
+        let line = line.trim();
+        if let Some(name) = line.strip_prefix("refs/heads/") {
+            if !name.is_empty() {
+                local.push(name.to_string());
+            }
+        } else if let Some(rest) = line.strip_prefix("refs/remotes/") {
+            // The remote is the FIRST path component; everything after it is the branch name,
+            // which may itself contain `/`.
+            let Some((remote_name, branch)) = rest.split_once('/') else {
+                continue;
+            };
+            if remote_name.is_empty() || branch.is_empty() || branch == "HEAD" {
+                continue;
+            }
+            remote.push((remote_name.to_string(), branch.to_string()));
+        }
+    }
+
+    let mut out: Vec<BranchCandidate> = local
+        .iter()
+        .map(|name| BranchCandidate {
+            name: name.clone(),
+            origin: BranchOrigin::Local,
+            blocked_by: None,
+        })
+        .collect();
+
+    for (remote_name, branch) in remote {
+        if local.contains(&branch) {
+            continue; // FR-019: the local branch wins.
+        }
+        out.push(BranchCandidate {
+            name: branch,
+            origin: BranchOrigin::Remote {
+                remote: remote_name,
+            },
+            blocked_by: None,
+        });
+    }
+
+    sort_candidates(&mut out);
+    out
+}
+
+/// Order candidates for stable rendering and assertions (contract `branch-picker.md` §2):
+/// available before blocked, local before remote, then by remote name, then by branch name.
+fn sort_candidates(candidates: &mut [BranchCandidate]) {
+    candidates.sort_by(|a, b| {
+        a.is_available()
+            .cmp(&b.is_available())
+            .reverse()
+            .then_with(|| a.origin.cmp(&b.origin))
+            .then_with(|| a.name.cmp(&b.name))
+    });
+}
+
+/// Which branch, if any, each registered worktree is holding, paired with why that blocks.
+///
+/// Reads the RAW porcelain records rather than [`reconcile`]: `reconcile` keeps only worktrees
+/// under `.claude/worktrees/`, which discards the repository's own main checkout — the very
+/// record FR-021's project-root case needs (research R1).
+fn checked_out_branches(records: &[WorktreeRecord], repo: &Path) -> Vec<(String, BlockReason)> {
+    records
+        .iter()
+        .filter_map(|rec| {
+            let branch = rec.branch.clone()?;
+            let reason = if rec.path == repo {
+                BlockReason::CheckedOutInProjectRoot
+            } else {
+                BlockReason::CheckedOutAt {
+                    path: rec.path.clone(),
+                }
+            };
+            Some((branch, reason))
+        })
+        .collect()
+}
+
+/// Classify what stands between the user and a new worktree on `branch` (feature 016, FR-001).
+///
+/// Pure over the [`Git`] boundary and **never mutates**. Called twice per creation: once to
+/// raise the prompt, and again inside [`create_worktree`] to re-verify the answer against
+/// reality before acting (FR-009).
+///
+/// Precedence — first match wins (contract `branch-conflict.md` §1):
+/// directory clash → checked out → local branch → remote-only branch → free.
+pub fn preflight(
+    git: &dyn Git,
+    repo: &Path,
+    target_path: &Path,
+    branch: &str,
+    target_exists: bool,
+) -> io::Result<BranchSituation> {
+    let porcelain = git.worktree_list_porcelain(repo)?;
+    let records = parse_worktrees(&porcelain);
+
+    // 1. Directory first: no branch choice could resolve it (FR-022).
+    if target_exists || records.iter().any(|r| r.path == target_path) {
+        return Ok(BranchSituation::DirectoryTaken {
+            dir: target_path.to_path_buf(),
+        });
+    }
+
+    // 2. Checked out somewhere: neither reusable nor overwritable (FR-021).
+    if let Some((_, reason)) = checked_out_branches(&records, repo)
+        .into_iter()
+        .find(|(b, _)| b == branch)
+    {
+        return Ok(BranchSituation::Blocked {
+            branch: branch.to_string(),
+            reason,
+        });
+    }
+
+    // 3. An ordinary local branch — the case this feature exists for.
+    if git.branch_exists(repo, branch)? {
+        return Ok(BranchSituation::LocalAvailable {
+            branch: branch.to_string(),
+        });
+    }
+
+    // 4. Remote-only. Ask for the ref listing only now — a free name costs no extra git call.
+    let refs = git.list_branch_refs(repo)?;
+    let mut remotes: Vec<String> = parse_branch_refs(&refs)
+        .into_iter()
+        .filter_map(|c| match c {
+            BranchCandidate {
+                name,
+                origin: BranchOrigin::Remote { remote },
+                ..
+            } if name == branch => Some(remote),
+            _ => None,
+        })
+        .collect();
+    remotes.sort();
+    if !remotes.is_empty() {
+        return Ok(BranchSituation::RemoteOnly {
+            branch: branch.to_string(),
+            remotes,
+        });
+    }
+
+    Ok(BranchSituation::Free)
+}
+
+/// Every branch in the repository, annotated with why it cannot be used where that applies
+/// (feature 016, FR-010–FR-012).
+///
+/// One ref listing plus the worktree records already needed elsewhere — no second git call per
+/// candidate.
+pub fn branch_candidates(git: &dyn Git, repo: &Path) -> io::Result<Vec<BranchCandidate>> {
+    let refs = git.list_branch_refs(repo)?;
+    let porcelain = git.worktree_list_porcelain(repo)?;
+    let held = checked_out_branches(&parse_worktrees(&porcelain), repo);
+
+    let mut candidates = parse_branch_refs(&refs);
+    for candidate in &mut candidates {
+        candidate.blocked_by = held
+            .iter()
+            .find(|(b, _)| *b == candidate.name)
+            .map(|(_, reason)| reason.clone());
+    }
+    sort_candidates(&mut candidates);
+    Ok(candidates)
+}
+
 /// Discover a project's worktrees from git + the filesystem in one call (FR-018/018a).
 ///
 /// The one I/O convenience in this otherwise-pure module: it performs the git query and the
@@ -267,8 +581,12 @@ fn list_dir_names(dir: &Path) -> Vec<String> {
 pub enum CreateError {
     /// A worktree with the derived directory name already exists (FR-009).
     DuplicateDir,
-    /// A branch with the derived name already exists (FR-009).
-    DuplicateBranch,
+    /// The branch is checked out elsewhere and cannot back another worktree (feature 016,
+    /// FR-021). Carries enough to name the holder rather than just failing.
+    BranchInUse { branch: String, reason: BlockReason },
+    /// The branch's situation changed between the user's answer and the act, so the operation
+    /// was abandoned before touching anything (feature 016, FR-009).
+    SituationChanged,
     /// Creation failed and was rolled back cleanly (FR-006b); carries the git error text.
     RolledBack(String),
 }
@@ -288,16 +606,22 @@ pub enum CleanupStep {
     RemoveDir,
 }
 
-/// The ordered rollback plan for a failed create (FR-006b). Order matters: the worktree
-/// registration is removed before the branch is deleted (git refuses to delete a checked-out
-/// branch).
-pub fn rollback_plan() -> [CleanupStep; 4] {
-    [
-        CleanupStep::WorktreeRemove,
-        CleanupStep::WorktreePrune,
-        CleanupStep::BranchDelete,
-        CleanupStep::RemoveDir,
-    ]
+/// The ordered rollback plan for a failed create (FR-006b), for `mode` (feature 016, FR-008).
+///
+/// Order matters: the worktree registration is removed before the branch is deleted (git refuses
+/// to delete a checked-out branch).
+///
+/// [`CleanupStep::BranchDelete`] is omitted when the mode did not create the branch — i.e. for
+/// [`CreateMode::ReuseLocal`]. Without that, recovering from a failure the user did not cause
+/// would destroy the pre-existing commits they were trying to continue (SC-003). Overwrite and
+/// remote-tracking DO delete: the branch present at failure is the one this attempt put there.
+pub fn rollback_plan(mode: &CreateMode) -> Vec<CleanupStep> {
+    let mut plan = vec![CleanupStep::WorktreeRemove, CleanupStep::WorktreePrune];
+    if mode.creates_branch() {
+        plan.push(CleanupStep::BranchDelete);
+    }
+    plan.push(CleanupStep::RemoveDir);
+    plan
 }
 
 /// The result of [`remove_worktree`] (feature 013, FR-011–FR-015). Returned only on `Ok` — the
@@ -371,10 +695,19 @@ pub enum CreateStage {
 
 impl CreateStage {
     /// Plain-language description of the current stage, for the progress display (FR-007).
-    pub fn label(&self) -> &'static str {
+    ///
+    /// The stage SET is closed and mode-independent; only the worktree-creating stage's wording
+    /// varies, so the user is told which of the four things is actually happening (feature 016,
+    /// FR-024).
+    pub fn label(&self, mode: &CreateMode) -> &'static str {
         match self {
             Self::PreflightCheck => "Checking for naming conflicts",
-            Self::CreatingWorktree => "Creating branch and worktree",
+            Self::CreatingWorktree => match mode {
+                CreateMode::NewBranch => "Creating branch and worktree",
+                CreateMode::ReuseLocal => "Checking out existing branch",
+                CreateMode::Overwrite => "Replacing branch and creating worktree",
+                CreateMode::TrackRemote { .. } => "Creating tracking branch and worktree",
+            },
             Self::SettingUpSubmodules => "Setting up submodules",
             Self::RollingBack => "Rolling back",
         }
@@ -408,36 +741,45 @@ pub fn create_worktree(
     target_path: &Path,
     names: &DerivedNames,
     target_exists: bool,
+    mode: &CreateMode,
     on_progress: &mut dyn FnMut(CreateProgressEvent),
 ) -> Result<Worktree, CreateError> {
-    // Pre-flight (fail fast, no mutation).
+    // Pre-flight (fail fast, no mutation). Re-run here rather than trusting whatever the caller
+    // observed before prompting: the user's answer is separated from the act by think-time, in
+    // which another terminal can create, delete, or check out the branch (feature 016, FR-009).
     on_progress(CreateProgressEvent {
         stage: CreateStage::PreflightCheck,
         line: "Checking for naming conflicts…".to_string(),
     });
-    if git
-        .branch_exists(repo, &names.branch)
-        .map_err(|e| CreateError::RolledBack(e.to_string()))?
-    {
-        return Err(CreateError::DuplicateBranch);
-    }
-    let porcelain = git
-        .worktree_list_porcelain(repo)
+    let situation = preflight(git, repo, target_path, &names.branch, target_exists)
         .map_err(|e| CreateError::RolledBack(e.to_string()))?;
-    let registered = parse_worktrees(&porcelain);
-    if registered.iter().any(|r| r.path == target_path) || target_exists {
-        return Err(CreateError::DuplicateDir);
+    match &situation {
+        BranchSituation::DirectoryTaken { .. } => return Err(CreateError::DuplicateDir),
+        BranchSituation::Blocked { branch, reason } => {
+            return Err(CreateError::BranchInUse {
+                branch: branch.clone(),
+                reason: reason.clone(),
+            })
+        }
+        _ if !mode.is_compatible_with(&situation) => return Err(CreateError::SituationChanged),
+        _ => {}
     }
 
     on_progress(CreateProgressEvent {
         stage: CreateStage::CreatingWorktree,
-        line: format!(
-            "$ git worktree add -b {} {} HEAD",
-            names.branch,
-            target_path.display()
-        ),
+        line: create_command_line(mode, &names.branch, target_path),
     });
-    if let Err(e) = git.worktree_add_new_branch(repo, &names.branch, target_path) {
+    let added = match mode {
+        CreateMode::NewBranch => git.worktree_add_new_branch(repo, &names.branch, target_path),
+        CreateMode::ReuseLocal => {
+            git.worktree_add_existing_branch(repo, &names.branch, target_path)
+        }
+        CreateMode::Overwrite => git.worktree_add_reset_branch(repo, &names.branch, target_path),
+        CreateMode::TrackRemote { remote } => {
+            git.worktree_add_tracking_branch(repo, &names.branch, remote, target_path)
+        }
+    };
+    if let Err(e) = added {
         on_progress(CreateProgressEvent {
             stage: CreateStage::CreatingWorktree,
             line: format!("worktree add failed: {e}"),
@@ -446,7 +788,7 @@ pub fn create_worktree(
             stage: CreateStage::RollingBack,
             line: "Rolling back…".to_string(),
         });
-        run_rollback(git, repo, target_path, &names.branch);
+        run_rollback(git, repo, target_path, &names.branch, mode);
         return Err(CreateError::RolledBack(e.to_string()));
     }
 
@@ -473,7 +815,7 @@ pub fn create_worktree(
                 stage: CreateStage::RollingBack,
                 line: "Rolling back…".to_string(),
             });
-            run_rollback(git, repo, target_path, &names.branch);
+            run_rollback(git, repo, target_path, &names.branch, mode);
             return Err(CreateError::RolledBack(e.to_string()));
         }
     }
@@ -486,9 +828,26 @@ pub fn create_worktree(
     })
 }
 
+/// The git command a mode will run, echoed into the progress log (feature 016, FR-024).
+fn create_command_line(mode: &CreateMode, branch: &str, target_path: &Path) -> String {
+    let path = target_path.display();
+    match mode {
+        CreateMode::NewBranch => format!("$ git worktree add -b {branch} {path} HEAD"),
+        CreateMode::ReuseLocal => format!("$ git worktree add {path} {branch}"),
+        CreateMode::Overwrite => format!("$ git worktree add -B {branch} {path} HEAD"),
+        CreateMode::TrackRemote { remote } => {
+            format!("$ git worktree add --track -b {branch} {path} {remote}/{branch}")
+        }
+    }
+}
+
 /// Run the git steps of the rollback plan in order (RemoveDir is the caller's — [`CleanupStep::RemoveDir`]).
-fn run_rollback(git: &dyn Git, repo: &Path, target_path: &Path, branch: &str) {
-    for step in rollback_plan() {
+///
+/// The plan is a function of `mode`, so a failed reuse never reaches [`CleanupStep::BranchDelete`]
+/// at all (feature 016, FR-008) — the guard lives in [`rollback_plan`], not in a special case
+/// here.
+fn run_rollback(git: &dyn Git, repo: &Path, target_path: &Path, branch: &str, mode: &CreateMode) {
+    for step in rollback_plan(mode) {
         match step {
             CleanupStep::WorktreeRemove => {
                 let _ = git.worktree_remove(repo, target_path, true);
