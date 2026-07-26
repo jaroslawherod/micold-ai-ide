@@ -19,11 +19,12 @@ use micold_core::protocol::messages::{
     CatalogSnapshot, DaemonMsg, DaemonSettings, RefusalReason, SessionProcess, SessionSummary,
     WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::session::{SessionId, ShellInstanceId, TerminalMode};
+use micold_core::session::{SessionId, SessionLabel, ShellInstanceId, TerminalMode};
 use micold_core::terminal::{LaunchMode, LaunchSpec};
 use micold_core::worktree::{self, Worktree};
 use tokio::sync::mpsc;
 
+use crate::activity::{Activity, ActivityEvent};
 use crate::catalog::Catalog;
 use crate::framer::Framer;
 use crate::lifecycle::Lifecycle;
@@ -82,6 +83,14 @@ struct LiveSession {
     /// otherwise switching the attached process (a fresh per-process receiver) would classify the
     /// next legitimate serial as a false `Lost` (G2, protocol.md §7).
     input: InputReceiver,
+    /// The derived activity FSM (US2, T046). Per session (not per process) and **not persisted** —
+    /// it resets to `Unknown` on daemon restart (H3/A4). Fed by claude-CLI lifecycle hooks (the
+    /// loopback receiver) and by braille-spinner title evidence (`SpinnerObserved`, Working-only).
+    activity: Activity,
+    /// The most recent OSC-0 title observed on the attached process (glyph-stripped), used to
+    /// project a live session title and to debounce title-change pushes (T047). Not persisted;
+    /// re-emitted by `claude` on resume.
+    last_title: Option<String>,
 }
 
 /// Build a fresh [`Proc`] around a spawned PTY, with a session-lived framer.
@@ -178,6 +187,7 @@ impl DaemonState {
         let mut snapshot = inner.catalog.snapshot();
         let overrides = &inner.catalog.workspace().worktree_names;
         for project in &mut snapshot.projects {
+            Self::overlay_live_summaries(inner, &mut project.sessions);
             if let Some(discovered) = inner.worktrees.get(&project.path) {
                 let names = overrides.get(&project.path);
                 project.worktrees = discovered
@@ -195,6 +205,21 @@ impl DaemonState {
             }
         }
         snapshot
+    }
+
+    /// Overlay each summary's runtime-only fields — `activity` and the live OSC-0 title — from the
+    /// live registry (US2, T046/T047). Durable state (the catalog) never carries activity (H3/A4) and
+    /// the persisted `label` lags the terminal title, so both are projected here at snapshot time. A
+    /// session with no live entry keeps the catalog's values (activity `Unknown`, the persisted label).
+    fn overlay_live_summaries(inner: &Inner, summaries: &mut [SessionSummary]) {
+        for summary in summaries {
+            if let Some(live) = inner.sessions.get(&summary.id) {
+                summary.activity = live.activity.signal().clone();
+                if let Some(title) = &live.last_title {
+                    summary.title = SessionLabel::Named(title.clone());
+                }
+            }
+        }
     }
 
     /// Register a client, returning its id and the receiver its writer task drains. Increments the
@@ -286,7 +311,9 @@ impl DaemonState {
                 since: Instant::now(),
             },
         );
-        Ok(inner.catalog.sessions_for(&project))
+        let mut sessions = inner.catalog.sessions_for(&project);
+        Self::overlay_live_summaries(&inner, &mut sessions);
+        Ok(sessions)
     }
 
     /// Release `id`'s attachment on `project` (if it holds it).
@@ -610,6 +637,8 @@ impl DaemonState {
                 procs,
                 attached: SessionProcess::Primary,
                 input: InputReceiver::new(),
+                activity: Activity::new(),
+                last_title: None,
             },
         );
         pty
@@ -707,6 +736,51 @@ impl DaemonState {
         }
         changed.sort();
         changed.dedup();
+        changed
+    }
+
+    /// Apply an activity [`ActivityEvent`] to a live session's FSM (US2, T046). Returns `true` if the
+    /// derived signal changed, so the caller can push a `CatalogChanged` reflecting the new badge.
+    /// A no-op (returns `false`) for an unknown/not-live session — a hook for a session the daemon is
+    /// not hosting reports nothing, matching invariant H1 (never invent state).
+    pub fn note_activity(&self, session: SessionId, event: ActivityEvent) -> bool {
+        let mut inner = self.lock();
+        let Some(live) = inner.sessions.get_mut(&session) else {
+            return false;
+        };
+        let before = live.activity.signal().clone();
+        live.activity.apply(event);
+        live.activity.signal() != &before
+    }
+
+    /// Drain each live session's out-of-band terminal signals into runtime state (US2, T046/T047):
+    /// the latest OSC-0 title (debounced against `last_title`) and the braille-spinner edge (fed to
+    /// the FSM as Working-only evidence, H1a). Returns `true` if any session's projected summary
+    /// changed, so the supervisor tick pushes one `CatalogChanged`. Cheap and lock-only — it reads
+    /// atomics/`Mutex<Option<String>>` already populated by the reader thread, never blocking I/O.
+    pub fn drain_signals(&self) -> bool {
+        let mut changed = false;
+        let mut inner = self.lock();
+        for live in inner.sessions.values_mut() {
+            let Some(proc) = live.procs.get(&live.attached) else {
+                continue;
+            };
+            let signals = proc.pty.signals();
+            // A spinner glyph seen since the last drain is positive `Working` evidence.
+            if signals.take_spinner() {
+                let before = live.activity.signal().clone();
+                live.activity.apply(ActivityEvent::SpinnerObserved);
+                if live.activity.signal() != &before {
+                    changed = true;
+                }
+            }
+            // The live title, debounced: only a real change is a push.
+            let title = signals.title();
+            if title != live.last_title {
+                live.last_title = title;
+                changed = true;
+            }
+        }
         changed
     }
 

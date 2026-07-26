@@ -129,7 +129,10 @@ fn spawn_supervisor(state: Arc<DaemonState>) {
             let changed = tokio::task::spawn_blocking(move || worker.supervise_exited_sessions())
                 .await
                 .unwrap_or_default();
-            if !changed.is_empty() {
+            // Drain out-of-band terminal signals (title + spinner-derived activity, US2 T046/T047)
+            // on the same cadence. It is lock-only (no blocking I/O), so it runs on the async task.
+            let signals_changed = state.drain_signals();
+            if !changed.is_empty() || signals_changed {
                 state.broadcast_catalog();
             }
         }
