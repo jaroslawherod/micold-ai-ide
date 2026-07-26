@@ -742,6 +742,29 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         None => {}
                     }
                 }
+                // Diagnostics replies (Phase 10, FR-046): surface as notices.
+                DaemonMsg::LogLocation { path, sink, .. } => {
+                    let where_ = match path {
+                        Some(p) => format!("a file at {}", p.display()),
+                        None => format!("{sink:?}"),
+                    };
+                    app.core
+                        .notify_info(format!("The session service logs to {where_}."));
+                }
+                DaemonMsg::RecentErrors { entries, .. } => {
+                    if entries.is_empty() {
+                        app.core
+                            .notify_info("The session service reports no recent errors.");
+                    } else {
+                        let latest = entries.last().unwrap();
+                        app.core.notify_error(format!(
+                            "The session service reported {} recent issue(s); most recent: [{}] {}",
+                            entries.len(),
+                            latest.level,
+                            latest.message
+                        ));
+                    }
+                }
                 // Another window took over a project we held (US5, FR-024). Mark it read-only here —
                 // input is suppressed and a "take over" banner is shown — but never terminate.
                 DaemonMsg::Displaced { project, by } => {
@@ -897,6 +920,24 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         ),
         Message::LogoutSurvivalOutcome(message) => {
             app.core.notify_info(message);
+            Task::none()
+        }
+        // Ask the daemon where it logs and for its recent errors (Phase 10, FR-046). The replies
+        // arrive as `LogLocation`/`RecentErrors` events, shown as notices. Uncorrelated: only the
+        // latest answer matters, so no pending-op bookkeeping is needed.
+        Message::DiagnosticsRequested => {
+            if let Some(d) = &app.daemon {
+                let req = app.next_req;
+                app.next_req += 2;
+                d.send(ClientMsg::LogLocationRequest { req });
+                d.send(ClientMsg::RecentErrorsRequest {
+                    req: req + 1,
+                    limit: 20,
+                });
+            } else {
+                app.core
+                    .notify_error("Not connected to the session service — no diagnostics to show.");
+            }
             Task::none()
         }
 

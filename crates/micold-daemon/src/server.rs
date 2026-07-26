@@ -16,7 +16,7 @@ use micold_core::project::validate_rename;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{
-    ClientMsg, DaemonMsg, ErrorKind, OperationResult, SessionProcess,
+    ClientMsg, DaemonMsg, ErrorKind, LogSink, OperationResult, SessionProcess,
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{create_worktree, remove_worktree, remove_worktree_dir, CreateError};
@@ -49,6 +49,9 @@ pub async fn run() -> io::Result<()> {
     // A recovered (corrupt) catalog is surfaced, not swallowed (data-model C4).
     tracing::info!(load_status = ?catalog.load_status(), "catalog adopted");
     let state = Arc::new(DaemonState::new(catalog));
+    // Hand the diagnostics handle to the shared state so the `LogLocation`/`RecentErrors`/
+    // `SetLogLevel` RPCs can serve it (FR-043–046).
+    state.set_diagnostics(logging);
 
     // FR-006a/b: sessions that were running when the service last stopped come back as
     // `InterruptedResumable` — never auto-relaunched, resumable by one explicit user action. This is
@@ -79,8 +82,14 @@ pub async fn run() -> io::Result<()> {
         return serve_unix(state, listener).await;
     }
 
-    let endpoint = endpoint::resolve()?;
-    match singleton::acquire(&endpoint).await? {
+    let endpoint = endpoint::resolve().inspect_err(|e| {
+        tracing::error!(error = %e, "could not resolve the endpoint to bind");
+    })?;
+    let acquisition = singleton::acquire(&endpoint).await.inspect_err(|e| {
+        // Endpoint bind failure, logged with its reason before it propagates (FR-045).
+        tracing::error!(endpoint = %endpoint.socket_path.display(), error = %e, "failed to bind the endpoint");
+    })?;
+    match acquisition {
         Acquisition::AlreadyRunning => {
             tracing::info!(
                 endpoint = %endpoint.socket_path.display(),
@@ -305,7 +314,52 @@ where
                     }
                 }
             }
-            ClientMsg::Detach { project } => state.detach(id, &project),
+            ClientMsg::Detach { project } => {
+                tracing::info!(client = id, project = %project.display(), "project detached");
+                state.detach(id, &project);
+            }
+            // --- Diagnostics (US6/Phase 10, FR-043–046) ---
+            ClientMsg::LogLocationRequest { req } => {
+                let (path, sink) = state
+                    .diagnostics()
+                    .map(|d| (d.path.clone(), d.sink))
+                    .unwrap_or((None, LogSink::Stderr));
+                state.send(id, DaemonMsg::LogLocation { req, path, sink });
+            }
+            ClientMsg::RecentErrorsRequest { req, limit } => {
+                let entries = state
+                    .diagnostics()
+                    .map(|d| d.recent_errors(limit as usize))
+                    .unwrap_or_default();
+                state.send(id, DaemonMsg::RecentErrors { req, entries });
+            }
+            ClientMsg::SetLogLevel { req, directives } => match state.diagnostics() {
+                Some(d) => match d.set_directives(&directives) {
+                    Ok(()) => {
+                        // The directives are operator-supplied config, never terminal content (FR-047).
+                        tracing::info!(%directives, "log level changed");
+                        send_ack(state, id, req);
+                    }
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::InvalidInput,
+                            message: "invalid log directives".into(),
+                            detail: Some(e),
+                        },
+                    ),
+                },
+                None => state.send(
+                    id,
+                    DaemonMsg::OperationError {
+                        req,
+                        kind: ErrorKind::Internal,
+                        message: "diagnostics are not available".into(),
+                        detail: None,
+                    },
+                ),
+            },
             ClientMsg::SessionInput {
                 session,
                 serial,

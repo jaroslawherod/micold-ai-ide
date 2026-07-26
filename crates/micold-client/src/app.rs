@@ -648,6 +648,9 @@ pub enum Message {
     ConnectionRestartServiceRequested,
     /// A completed side-effecting task that carries nothing to apply (e.g. the daemon-stop task).
     NoOp,
+    /// The user asked to see where the session service logs and its recent errors (Phase 10, FR-046).
+    /// Handled by the binary: it requests both from the daemon and shows the answers as notices.
+    DiagnosticsRequested,
     /// The user asked to make sessions survive logout (US7, FR-038; Linux only). Handled by the
     /// binary, which runs the enable flow off-thread. Never triggered by install — a deliberate choice.
     LogoutSurvivalRequested,
@@ -863,6 +866,7 @@ impl State {
             | Message::DaemonVersionMismatch { .. }
             | Message::ConnectionRestartServiceRequested
             | Message::NoOp
+            | Message::DiagnosticsRequested
             | Message::LogoutSurvivalRequested
             | Message::LogoutSurvivalOutcome(_) => {}
             Message::HelpMenuToggled => {

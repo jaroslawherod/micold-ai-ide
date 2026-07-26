@@ -38,6 +38,9 @@ pub struct DaemonState {
     inner: Mutex<Inner>,
     next_id: AtomicU64,
     lifecycle: Lifecycle,
+    /// The diagnostics handle (log location, runtime level reload, recent-errors ring), set once at
+    /// startup by `server::run`. Absent for tests and the ephemeral catalog, which don't init logging.
+    diagnostics: std::sync::OnceLock<crate::logging::Logging>,
 }
 
 struct Inner {
@@ -136,6 +139,7 @@ impl DaemonState {
             }),
             next_id: AtomicU64::new(1),
             lifecycle: Lifecycle::new(),
+            diagnostics: std::sync::OnceLock::new(),
         }
     }
 
@@ -146,6 +150,17 @@ impl DaemonState {
     /// The lifecycle counters (FR-002).
     pub fn lifecycle(&self) -> &Lifecycle {
         &self.lifecycle
+    }
+
+    /// Record the diagnostics handle at startup so the `LogLocation`/`RecentErrors`/`SetLogLevel`
+    /// RPCs can serve it (FR-043–046). A no-op if already set.
+    pub fn set_diagnostics(&self, logging: crate::logging::Logging) {
+        let _ = self.diagnostics.set(logging);
+    }
+
+    /// The diagnostics handle, if logging was initialised (absent in tests / ephemeral catalog).
+    pub fn diagnostics(&self) -> Option<&crate::logging::Logging> {
+        self.diagnostics.get()
     }
 
     /// The `Welcome` payload for a freshly-handshaked client.
@@ -576,6 +591,8 @@ impl DaemonState {
                 PtySession::spawn_shell(id, &plan.cwd, &env, plan.scrollback, None)?
             }
         };
+        // Session-start event with the launch reason (FR-045). No terminal content — id + mode only.
+        tracing::info!(session = %id.0, mode = ?plan.mode, ?launch, "session started");
         self.register_session(session);
         Ok(())
     }
@@ -650,10 +667,18 @@ impl DaemonState {
             for (id, outcome) in exited {
                 match inner.catalog.supervise_session_exit(id, outcome) {
                     Some((project, SupervisionAction::Restart, cwd, mode)) => {
+                        // Session exit + restart-attempt event, with the reason (FR-045).
+                        tracing::warn!(session = %id.0, reason = "unexpected exit", "session crashed; restarting");
                         changed.push(project);
                         to_respawn.push((id, cwd, mode));
                     }
-                    Some((project, _stop_or_give_up, _, _)) => {
+                    Some((project, SupervisionAction::GiveUp, _, _)) => {
+                        tracing::error!(session = %id.0, reason = "crash loop", "session gave up after repeated crashes (Failed)");
+                        changed.push(project);
+                        to_drop.push(id);
+                    }
+                    Some((project, SupervisionAction::Stop, _, _)) => {
+                        tracing::info!(session = %id.0, reason = "clean exit", "session stopped");
                         changed.push(project);
                         to_drop.push(id);
                     }
@@ -667,6 +692,7 @@ impl DaemonState {
             // clears the crash-loop counter (closes the L5 gap).
             for id in alive {
                 if let Some(project) = inner.catalog.mark_running_if_restarting(id) {
+                    tracing::info!(session = %id.0, reason = "restart survived", "session recovered; running");
                     changed.push(project);
                 }
             }

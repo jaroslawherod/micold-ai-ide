@@ -31,6 +31,11 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
             Message::ThemeModeCycled,
         ),
         MenuItem::new(Icon::Settings, "Settings", Message::SettingsOpened),
+        MenuItem::new(
+            Icon::Help,
+            "Session service diagnostics",
+            Message::DiagnosticsRequested,
+        ),
     ];
     // Surviving a full logout is a Linux-only, explicitly user-enabled action (US7, FR-038) — never
     // enabled silently, so it lives behind a deliberate menu choice, and only where it can work.
