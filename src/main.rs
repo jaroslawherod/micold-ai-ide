@@ -11,8 +11,8 @@ mod ui;
 use iced::time::every;
 use iced::{Subscription, Task};
 use micold_ai_ide::app::{
-    Message, Overlay, RenameDraft, SettingsDraft, State, WorktreeForm, WorktreeFormStatus,
-    WorktreeRenameDraft,
+    BranchSource, Message, Overlay, RenameDraft, SettingsDraft, State, WorktreeForm,
+    WorktreeFormStatus, WorktreeRenameDraft,
 };
 use micold_ai_ide::env_include::{self, EnvIncludeOutcome};
 use micold_ai_ide::fs_scan::{FolderScanner, StdFolderScanner};
@@ -29,7 +29,8 @@ use micold_ai_ide::store::{JsonFileStore, ProjectStore};
 use micold_ai_ide::terminal::{LaunchMode, LaunchSpec};
 use micold_ai_ide::theme::{observe_system_scheme, SystemScheme};
 use micold_ai_ide::worktree::{
-    create_worktree, parse_worktrees, reconcile, remove_worktree, remove_worktree_dir, CreateError,
+    branch_candidates, create_worktree, parse_worktrees, preflight, reconcile, remove_worktree,
+    remove_worktree_dir, BlockReason, BranchSituation, CreateError, CreateMode,
     CreateProgressEvent, Worktree,
 };
 use std::collections::{HashMap, HashSet};
@@ -841,13 +842,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // off the update() thread so a slow fetch doesn't freeze the UI (feature 010,
         // research R4). AddWorktreeSubmitted/WorktreeCreated/WorktreeCreateFailed keep their
         // existing meaning; WorktreeCreateStarted is dispatched first so the form can show it.
+        // Submitting classifies the target branch first (feature 016, FR-001). A free name
+        // creates immediately, exactly as before; anything else becomes a decision for the user
+        // rather than the dead-end "a branch with that name already exists" error.
         Message::AddWorktreeSubmitted => {
             app.core.update(Message::AddWorktreeSubmitted);
             let Some(form) = app.core.worktree_form.clone() else {
                 return Task::none();
             };
-            if form.status != WorktreeFormStatus::Editing {
-                return Task::none(); // a create is already in flight — no double-submit.
+            if form.status != WorktreeFormStatus::Editing || form.resolution.is_prompting() {
+                return Task::none(); // create in flight, or a prompt is already open.
             }
             let Ok(names) = form.preview() else {
                 return Task::none(); // validation error already recorded by the reducer
@@ -855,15 +859,80 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             let Some(repo) = app.core.workspace.active.clone() else {
                 return Task::none();
             };
-            app.core.update(Message::WorktreeCreateStarted);
-            // Starting a create clears the form's log, so drop anything a previous attempt left
-            // buffered — otherwise its tail would be drained into the new attempt's log.
-            let progress = Arc::clone(&app.create_progress);
-            drain_create_progress(&progress);
-            Task::perform(
-                async move { create(&repo, &names, &progress).map_err(describe_create_error) },
-                |result| Message::WorktreeCreationDone { result },
-            )
+
+            let situation = match preflight_for(&repo, &names) {
+                Ok(situation) => situation,
+                // Can't classify (git missing, not a repo): report rather than guessing that the
+                // name is free and creating something unexpected. Reported on the form's own
+                // error line, NOT as a notification: the notification surface lives inside
+                // `base`, which this modal wraps behind its scrim, so a banner raised while the
+                // form is open would be dimmed out of view and the click would look ignored.
+                Err(err) => {
+                    app.core.worktree_error = Some(format!("Could not check the branch: {err}"));
+                    return Task::none();
+                }
+            };
+
+            // Picking a branch from the list IS the intent to use it, so no prompt is needed for
+            // an available candidate (contract branch-picker.md §5). It can never mean overwrite.
+            let picked = form.source == BranchSource::Existing;
+            let preferred_remote = form.selected_branch.as_ref().and_then(|c| match &c.origin {
+                micold_ai_ide::worktree::BranchOrigin::Remote { remote } => Some(remote.clone()),
+                micold_ai_ide::worktree::BranchOrigin::Local => None,
+            });
+            match &situation {
+                BranchSituation::Free => start_create(app, repo, names, CreateMode::NewBranch),
+                // Pass the remote the user named by picking that specific row, so a name that
+                // exists on several remotes tracks the one they chose (spec Edge Cases).
+                _ if picked => {
+                    match WorktreeForm::mode_for(&situation, preferred_remote.as_deref()) {
+                        Some(mode) => start_create(app, repo, names, mode),
+                        None => {
+                            app.core
+                                .update(Message::AddWorktreeConflictDetected(situation));
+                            Task::none()
+                        }
+                    }
+                }
+                _ => {
+                    app.core
+                        .update(Message::AddWorktreeConflictDetected(situation));
+                    Task::none()
+                }
+            }
+        }
+        // The user answered the prompt: run the create under the mode they chose. Overwrite
+        // cannot arrive here — it only ever comes through the confirmation below (FR-005).
+        Message::AddWorktreeResolutionChosen(mode) => {
+            app.core
+                .update(Message::AddWorktreeResolutionChosen(mode.clone()));
+            start_resolved_create(app, mode)
+        }
+        Message::AddWorktreeOverwriteConfirmed => {
+            app.core.update(Message::AddWorktreeOverwriteConfirmed);
+            start_resolved_create(app, CreateMode::Overwrite)
+        }
+        // Switching to the existing-branch picker lists what the repository already has
+        // (feature 016, FR-011). Local ref storage only — nothing is fetched (FR-020).
+        Message::AddWorktreeSourceChanged(source) => {
+            app.core.update(Message::AddWorktreeSourceChanged(source));
+            if source != BranchSource::Existing {
+                return Task::none();
+            }
+            let Some(repo) = app.core.workspace.active.clone() else {
+                return Task::none();
+            };
+            match branch_candidates(&GitCli::new(), &repo) {
+                Ok(candidates) => app
+                    .core
+                    .update(Message::AddWorktreeBranchesListed(candidates)),
+                // Same scrim problem as above — and staying silent here is worse still, because
+                // the empty picker then claims "this repository has no other branches".
+                Err(err) => {
+                    app.core.worktree_error = Some(format!("Could not list branches: {err}"))
+                }
+            }
+            Task::none()
         }
         // Start a new session at a location — a worktree or the project root ("Default",
         // feature 010): spawn `claude` and stream it (FR-010/012/013). A `Default` location
@@ -1836,6 +1905,71 @@ fn discover_worktrees(repo: &Path) -> Vec<Worktree> {
     reconcile(&records, &root, &on_disk, &|p| p.exists())
 }
 
+/// Classify what stands between the user and a new worktree for `names` (feature 016, FR-001).
+///
+/// Runs on the update thread: both underlying commands (`worktree list --porcelain`,
+/// `for-each-ref`) are local and fast, unlike the create itself — which can spend minutes in a
+/// submodule fetch and therefore stays on a worker thread.
+fn preflight_for(
+    repo: &Path,
+    names: &micold_ai_ide::naming::DerivedNames,
+) -> std::io::Result<BranchSituation> {
+    let target = repo.join(".claude/worktrees").join(&names.dir_name);
+    let target_exists = target.exists() && dir_nonempty(&target);
+    preflight(&GitCli::new(), repo, &target, &names.branch, target_exists)
+}
+
+/// Kick off the background create for a resolved mode, re-deriving the names from the form.
+///
+/// Shared by both resolution answers so `Overwrite` and the non-destructive modes take exactly
+/// one code path into [`create`].
+fn start_resolved_create(app: &mut App, mode: CreateMode) -> Task<Message> {
+    let Some(form) = app.core.worktree_form.clone() else {
+        return Task::none();
+    };
+    // Same double-submit guard `AddWorktreeSubmitted` applies: the answer buttons stop being
+    // rendered once the prompt resolves, but two clicks can queue two messages before the next
+    // render, and the reducer's second pass is a no-op — only this check stops the second one
+    // from launching a concurrent create of the same worktree.
+    if form.status != WorktreeFormStatus::Editing {
+        return Task::none();
+    }
+    let Ok(names) = form.preview() else {
+        return Task::none();
+    };
+    let Some(repo) = app.core.workspace.active.clone() else {
+        return Task::none();
+    };
+    start_create(app, repo, names, mode)
+}
+
+/// Run the create off the update thread so a slow submodule fetch doesn't freeze the UI
+/// (feature 010, research R4).
+fn start_create(
+    app: &mut App,
+    repo: PathBuf,
+    names: micold_ai_ide::naming::DerivedNames,
+    mode: CreateMode,
+) -> Task<Message> {
+    // Record the mode the create actually runs under BEFORE it starts, so the progress display
+    // names the right step (FR-024). The resolution messages set it only for the prompted
+    // paths — a pick straight from the branch list, and a plain create after an earlier
+    // attempt, would otherwise keep the previous attempt's label (e.g. still announcing
+    // "Replacing branch and creating worktree" for a harmless new branch).
+    if let Some(form) = &mut app.core.worktree_form {
+        form.mode = mode.clone();
+    }
+    app.core.update(Message::WorktreeCreateStarted);
+    // Starting a create clears the form's log, so drop anything a previous attempt left
+    // buffered — otherwise its tail would be drained into the new attempt's log.
+    let progress = Arc::clone(&app.create_progress);
+    drain_create_progress(&progress);
+    Task::perform(
+        async move { create(&repo, &names, &mode, &progress).map_err(describe_create_error) },
+        |result| Message::WorktreeCreationDone { result },
+    )
+}
+
 /// Create a branch + worktree, removing the target dir if the git step fails (FR-006/006b).
 ///
 /// Progress lines are pushed into `progress` **as they are produced** rather than returned at
@@ -1845,6 +1979,7 @@ fn discover_worktrees(repo: &Path) -> Vec<Worktree> {
 fn create(
     repo: &Path,
     names: &micold_ai_ide::naming::DerivedNames,
+    mode: &CreateMode,
     progress: &Arc<Mutex<Vec<CreateProgressEvent>>>,
 ) -> Result<Worktree, CreateError> {
     let git = GitCli::new();
@@ -1852,12 +1987,20 @@ fn create(
     let target = root.join(&names.dir_name);
     let _ = std::fs::create_dir_all(&root);
     let target_exists = target.exists() && dir_nonempty(&target);
-    let result = create_worktree(&git, repo, &target, names, target_exists, &mut |event| {
-        // A poisoned lock must not abort the create; the log is diagnostic, not load-bearing.
-        if let Ok(mut buf) = progress.lock() {
-            buf.push(event);
-        }
-    });
+    let result = create_worktree(
+        &git,
+        repo,
+        &target,
+        names,
+        target_exists,
+        mode,
+        &mut |event| {
+            // A poisoned lock must not abort the create; the log is diagnostic, not load-bearing.
+            if let Ok(mut buf) = progress.lock() {
+                buf.push(event);
+            }
+        },
+    );
     if result.is_err() {
         // CleanupStep::RemoveDir (the fs half of the rollback plan).
         let _ = std::fs::remove_dir_all(&target);
@@ -1878,8 +2021,34 @@ fn drain_create_progress(
 fn describe_create_error(err: CreateError) -> String {
     match err {
         CreateError::DuplicateDir => "A worktree with that name already exists.".to_string(),
-        CreateError::DuplicateBranch => "A branch with that name already exists.".to_string(),
+        // Feature 016, FR-021/SC-006: name the holder, so the user knows where to go instead of
+        // being told only that it failed.
+        CreateError::BranchInUse { branch, reason } => {
+            let held = describe_block(&branch, &reason);
+            format!("{held} Open that location to continue there, or choose a different name.")
+        }
+        // FR-009: the world moved between the prompt and the act; nothing was changed.
+        CreateError::SituationChanged => {
+            "The branch changed while you were deciding, so nothing was done. Try again."
+                .to_string()
+        }
         CreateError::RolledBack(msg) => format!("Could not create the worktree: {msg}"),
+    }
+}
+
+/// Plain-language sentence for a branch that cannot back a new worktree (feature 016, FR-021).
+fn describe_block(branch: &str, reason: &BlockReason) -> String {
+    match reason {
+        BlockReason::CheckedOutInProjectRoot => {
+            format!("The branch '{branch}' is currently checked out in the project itself.")
+        }
+        BlockReason::CheckedOutAt { path } => {
+            let holder = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.display().to_string());
+            format!("The branch '{branch}' is already checked out in the worktree '{holder}'.")
+        }
     }
 }
 

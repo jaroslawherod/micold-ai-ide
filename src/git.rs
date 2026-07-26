@@ -27,6 +27,47 @@ pub trait Git {
     /// (`git worktree add -b <branch> <path> HEAD`) (FR-006).
     fn worktree_add_new_branch(&self, repo: &Path, branch: &str, path: &Path) -> io::Result<()>;
 
+    /// Every local and remote-tracking branch ref, one full refname per line, for
+    /// [`crate::worktree::parse_branch_refs`] (feature 016, FR-011).
+    ///
+    /// Reads local ref storage only — this MUST NOT contact a remote (FR-020, Constitution
+    /// Principle IV). Contract: `contracts/git-trait-branches.md`.
+    fn list_branch_refs(&self, repo: &Path) -> io::Result<String>;
+
+    /// Check an EXISTING local `branch` out into a new worktree at `path`
+    /// (`git worktree add <path> <branch>`) (feature 016, FR-004).
+    ///
+    /// Must not create, move, reset, or delete the branch: its tip is identical before and
+    /// after, on success and on failure alike.
+    fn worktree_add_existing_branch(
+        &self,
+        repo: &Path,
+        branch: &str,
+        path: &Path,
+    ) -> io::Result<()>;
+
+    /// Create-or-reset `branch` to HEAD and check it out at `path`
+    /// (`git worktree add -B <branch> <path> HEAD`) (feature 016, FR-006).
+    ///
+    /// **Destructive**: discards whatever `branch` pointed at. Only ever called after the
+    /// explicit confirmation FR-005 requires.
+    fn worktree_add_reset_branch(&self, repo: &Path, branch: &str, path: &Path) -> io::Result<()>;
+
+    /// Create local `branch` at `<remote>/<branch>`, set it to track that ref, and check it out
+    /// at `path` (`git worktree add --track -b <branch> <path> <remote>/<branch>`) (feature 016,
+    /// FR-017).
+    ///
+    /// The remote is named explicitly — never inferred via git's DWIM/`--guess-remote` — so a
+    /// name present on several remotes has no ambiguity to resolve (research R4). Reads the
+    /// remote-tracking ref already on disk; does not contact the remote (FR-020).
+    fn worktree_add_tracking_branch(
+        &self,
+        repo: &Path,
+        branch: &str,
+        remote: &str,
+        path: &Path,
+    ) -> io::Result<()>;
+
     /// Remove a worktree registration (and its working dir when `force`) (FR-006b).
     fn worktree_remove(&self, repo: &Path, path: &Path, force: bool) -> io::Result<()>;
 
@@ -131,6 +172,64 @@ impl Git for GitCli {
     fn worktree_add_new_branch(&self, repo: &Path, branch: &str, path: &Path) -> io::Result<()> {
         let path = path.to_string_lossy();
         run_git(repo, &["worktree", "add", "-b", branch, &path, "HEAD"]).map(|_| ())
+    }
+
+    fn list_branch_refs(&self, repo: &Path) -> io::Result<String> {
+        // `for-each-ref` rather than `branch -a`: stable machine-readable output, no `*` marker
+        // and no `HEAD ->` decoration to strip (research R6). Local ref storage only — no
+        // network (FR-020).
+        run_git(
+            repo,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/heads",
+                "refs/remotes",
+            ],
+        )
+    }
+
+    fn worktree_add_existing_branch(
+        &self,
+        repo: &Path,
+        branch: &str,
+        path: &Path,
+    ) -> io::Result<()> {
+        let path = path.to_string_lossy();
+        // Positional branch, no `-b`: git checks the existing branch out and refuses if it is
+        // already checked out elsewhere — the backstop behind pre-flight (research R2).
+        run_git(repo, &["worktree", "add", &path, branch]).map(|_| ())
+    }
+
+    fn worktree_add_reset_branch(&self, repo: &Path, branch: &str, path: &Path) -> io::Result<()> {
+        let path = path.to_string_lossy();
+        // `-B` = create-or-reset then check out, in one command, so there is never a window in
+        // which the old branch is gone and no worktree exists yet (research R3).
+        run_git(repo, &["worktree", "add", "-B", branch, &path, "HEAD"]).map(|_| ())
+    }
+
+    fn worktree_add_tracking_branch(
+        &self,
+        repo: &Path,
+        branch: &str,
+        remote: &str,
+        path: &Path,
+    ) -> io::Result<()> {
+        let path = path.to_string_lossy();
+        let start_point = format!("{remote}/{branch}");
+        run_git(
+            repo,
+            &[
+                "worktree",
+                "add",
+                "--track",
+                "-b",
+                branch,
+                &path,
+                &start_point,
+            ],
+        )
+        .map(|_| ())
     }
 
     fn worktree_remove(&self, repo: &Path, path: &Path, force: bool) -> io::Result<()> {
@@ -282,8 +381,16 @@ pub struct FakeGit {
 struct FakeState {
     repos: BTreeSet<PathBuf>,
     branches: BTreeMap<PathBuf, BTreeSet<String>>,
+    /// repo -> remote-tracking branches, stored as `<remote>/<branch>` (feature 016).
+    remote_branches: BTreeMap<PathBuf, BTreeSet<String>>,
+    /// repo -> local branch -> its upstream, as `<remote>/<branch>` (feature 016).
+    upstreams: BTreeMap<PathBuf, BTreeMap<String, String>>,
     /// repo -> list of (worktree path, branch).
     worktrees: BTreeMap<PathBuf, Vec<(PathBuf, String)>>,
+    /// Branches passed to `worktree_add_existing_branch`, in call order (feature 016 assertions).
+    add_existing_calls: BTreeMap<PathBuf, Vec<String>>,
+    /// Branches passed to `worktree_add_reset_branch`, in call order (feature 016 assertions).
+    add_reset_calls: BTreeMap<PathBuf, Vec<String>>,
     /// When true, the next `worktree_add_new_branch` fails (after creating the branch, to
     /// mimic a checkout failure) so rollback ordering can be asserted.
     fail_next_add: bool,
@@ -328,6 +435,77 @@ impl FakeGit {
             .or_default()
             .insert(branch.to_string());
         self
+    }
+
+    /// Pre-existing remote-tracking branch, as if a previous `git fetch` had brought it down
+    /// (feature 016). Stored as `refs/remotes/<remote>/<branch>`.
+    pub fn with_remote_branch(self, repo: impl Into<PathBuf>, remote: &str, branch: &str) -> Self {
+        self.inner
+            .borrow_mut()
+            .remote_branches
+            .entry(repo.into())
+            .or_default()
+            .insert(format!("{remote}/{branch}"));
+        self
+    }
+
+    /// Pre-register a worktree bound to `branch` at `path` without going through a create
+    /// (feature 016). Needed to stage the "branch already checked out" cases — including the
+    /// project's own checkout, registered by passing the repo root as `path`.
+    pub fn with_worktree(
+        self,
+        repo: impl Into<PathBuf>,
+        path: impl Into<PathBuf>,
+        branch: &str,
+    ) -> Self {
+        self.inner
+            .borrow_mut()
+            .worktrees
+            .entry(repo.into())
+            .or_default()
+            .push((path.into(), branch.to_string()));
+        self
+    }
+
+    /// Snapshot the remote-tracking branches known for a repo, as `<remote>/<branch>` (test
+    /// assertions, feature 016 — used to prove no code path ever writes a remote ref).
+    pub fn remote_branches(&self, repo: &Path) -> Vec<String> {
+        self.inner
+            .borrow()
+            .remote_branches
+            .get(repo)
+            .map(|s| s.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// The upstream recorded for a local branch, as `<remote>/<branch>` (feature 016).
+    pub fn upstream(&self, repo: &Path, branch: &str) -> Option<String> {
+        self.inner
+            .borrow()
+            .upstreams
+            .get(repo)
+            .and_then(|m| m.get(branch))
+            .cloned()
+    }
+
+    /// Branches passed to `worktree_add_existing_branch`, in call order (feature 016).
+    pub fn add_existing_calls(&self, repo: &Path) -> Vec<String> {
+        self.inner
+            .borrow()
+            .add_existing_calls
+            .get(repo)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Branches passed to `worktree_add_reset_branch`, in call order (feature 016).
+    pub fn add_reset_calls(&self, repo: &Path) -> Vec<String> {
+        self.inner
+            .borrow()
+            .add_reset_calls
+            .get(repo)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Prime the next `worktree_add_new_branch` to fail (rollback tests).
@@ -449,6 +627,135 @@ impl Git for FakeGit {
         Ok(())
     }
 
+    fn list_branch_refs(&self, repo: &Path) -> io::Result<String> {
+        let state = self.inner.borrow();
+        let mut out = String::new();
+        if let Some(branches) = state.branches.get(repo) {
+            for b in branches {
+                out.push_str(&format!("refs/heads/{b}\n"));
+            }
+        }
+        if let Some(remotes) = state.remote_branches.get(repo) {
+            // Emit the symbolic alias real git emits, so the parser's filtering is exercised
+            // rather than assumed.
+            let names: BTreeSet<&str> =
+                remotes.iter().filter_map(|r| r.split('/').next()).collect();
+            for remote in names {
+                out.push_str(&format!("refs/remotes/{remote}/HEAD\n"));
+            }
+            for r in remotes {
+                out.push_str(&format!("refs/remotes/{r}\n"));
+            }
+        }
+        Ok(out)
+    }
+
+    fn worktree_add_existing_branch(
+        &self,
+        repo: &Path,
+        branch: &str,
+        path: &Path,
+    ) -> io::Result<()> {
+        let mut state = self.inner.borrow_mut();
+        state
+            .add_existing_calls
+            .entry(repo.to_path_buf())
+            .or_default()
+            .push(branch.to_string());
+        // Mirror git's refusals: the branch must exist and must not be checked out elsewhere.
+        if !state.branches.get(repo).is_some_and(|b| b.contains(branch)) {
+            return Err(io::Error::other(format!("invalid reference: {branch}")));
+        }
+        if state
+            .worktrees
+            .get(repo)
+            .is_some_and(|list| list.iter().any(|(_, b)| b == branch))
+        {
+            return Err(io::Error::other(format!(
+                "'{branch}' is already checked out"
+            )));
+        }
+        if state.fail_next_add {
+            state.fail_next_add = false;
+            // Deliberately leaves the branch untouched — reuse never creates it, so a failure
+            // here has nothing of its own to clean up (FR-008).
+            return Err(io::Error::other("simulated worktree add failure"));
+        }
+        state
+            .worktrees
+            .entry(repo.to_path_buf())
+            .or_default()
+            .push((path.to_path_buf(), branch.to_string()));
+        Ok(())
+    }
+
+    fn worktree_add_reset_branch(&self, repo: &Path, branch: &str, path: &Path) -> io::Result<()> {
+        let mut state = self.inner.borrow_mut();
+        state
+            .add_reset_calls
+            .entry(repo.to_path_buf())
+            .or_default()
+            .push(branch.to_string());
+        // Mimic `-B`: the branch is created/reset first, so a later checkout failure leaves it
+        // in place — exactly what rollback must then clean up.
+        state
+            .branches
+            .entry(repo.to_path_buf())
+            .or_default()
+            .insert(branch.to_string());
+        if state.fail_next_add {
+            state.fail_next_add = false;
+            return Err(io::Error::other("simulated worktree add failure"));
+        }
+        state
+            .worktrees
+            .entry(repo.to_path_buf())
+            .or_default()
+            .push((path.to_path_buf(), branch.to_string()));
+        Ok(())
+    }
+
+    fn worktree_add_tracking_branch(
+        &self,
+        repo: &Path,
+        branch: &str,
+        remote: &str,
+        path: &Path,
+    ) -> io::Result<()> {
+        let mut state = self.inner.borrow_mut();
+        let start_point = format!("{remote}/{branch}");
+        if !state
+            .remote_branches
+            .get(repo)
+            .is_some_and(|r| r.contains(&start_point))
+        {
+            return Err(io::Error::other(format!(
+                "invalid reference: {start_point}"
+            )));
+        }
+        state
+            .branches
+            .entry(repo.to_path_buf())
+            .or_default()
+            .insert(branch.to_string());
+        state
+            .upstreams
+            .entry(repo.to_path_buf())
+            .or_default()
+            .insert(branch.to_string(), start_point);
+        if state.fail_next_add {
+            state.fail_next_add = false;
+            // Local branch created, checkout failed — rollback deletes it (it is ours).
+            return Err(io::Error::other("simulated worktree add failure"));
+        }
+        state
+            .worktrees
+            .entry(repo.to_path_buf())
+            .or_default()
+            .push((path.to_path_buf(), branch.to_string()));
+        Ok(())
+    }
+
     fn worktree_remove(&self, repo: &Path, path: &Path, _force: bool) -> io::Result<()> {
         {
             let mut state = self.inner.borrow_mut();
@@ -479,6 +786,11 @@ impl Git for FakeGit {
         }
         if let Some(b) = state.branches.get_mut(repo) {
             b.remove(branch);
+        }
+        // A deleted branch takes its upstream config with it; the remote-tracking ref itself is
+        // untouched (feature 016).
+        if let Some(u) = state.upstreams.get_mut(repo) {
+            u.remove(branch);
         }
         Ok(())
     }

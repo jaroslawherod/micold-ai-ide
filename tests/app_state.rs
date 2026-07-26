@@ -721,3 +721,390 @@ fn env_include_field_changes_leave_other_draft_fields_untouched() {
     assert_eq!(draft.env_include_script_path, "/custom/script.sh");
     assert_eq!(draft.env_include_timeout, "30");
 }
+
+// =======================================================================================
+// Feature 016 — the existing-branch source and the conflict-resolution state machine
+// (contract `branch-conflict.md` §3, `branch-picker.md` §5).
+// =======================================================================================
+
+use micold_ai_ide::app::{BranchSource, ResolutionState, WorktreeForm};
+use micold_ai_ide::worktree::{
+    BlockReason, BranchCandidate, BranchOrigin, BranchSituation, CreateMode,
+};
+
+fn local_conflict() -> BranchSituation {
+    BranchSituation::LocalAvailable {
+        branch: "feat/login".to_string(),
+    }
+}
+
+fn remote_conflict() -> BranchSituation {
+    BranchSituation::RemoteOnly {
+        branch: "feat/login".to_string(),
+        remotes: vec!["origin".to_string()],
+    }
+}
+
+/// The same branch name on two remotes — the ambiguous case the app must not resolve itself.
+fn multi_remote_conflict() -> BranchSituation {
+    BranchSituation::RemoteOnly {
+        branch: "feat/login".to_string(),
+        remotes: vec!["origin".to_string(), "upstream".to_string()],
+    }
+}
+
+/// A form with valid new-branch inputs, ready to submit.
+fn form_state() -> State {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
+    state.update(Message::AddWorktreeNameChanged("login".to_string()));
+    state
+}
+
+fn form(state: &State) -> &WorktreeForm {
+    state.worktree_form.as_ref().unwrap()
+}
+
+// --- the state machine ----------------------------------------------------------------
+
+#[test]
+fn a_detected_conflict_opens_the_choice_prompt() {
+    let mut state = form_state();
+    assert_eq!(form(&state).resolution, ResolutionState::Idle);
+
+    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+
+    assert_eq!(
+        form(&state).resolution,
+        ResolutionState::Choosing {
+            situation: local_conflict()
+        }
+    );
+    assert!(form(&state).resolution.is_prompting());
+}
+
+#[test]
+fn cancelling_the_choice_restores_idle_and_preserves_every_input() {
+    let mut state = form_state();
+    state.update(Message::AddWorktreeTicketChanged("ABC-123".to_string()));
+    let before = form(&state).clone();
+
+    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::AddWorktreeResolutionCancelled);
+
+    let after = form(&state);
+    assert_eq!(after.resolution, ResolutionState::Idle);
+    // FR-007: the user lands back on the form exactly as they left it.
+    assert_eq!(after.type_, before.type_);
+    assert_eq!(after.ticket, before.ticket);
+    assert_eq!(after.name, before.name);
+    assert_eq!(after.source, before.source);
+    assert_eq!(after.selected_branch, before.selected_branch);
+    // And the form is still open — cancelling the prompt is not cancelling the form.
+    assert_eq!(state.overlay, Overlay::AddWorktree);
+}
+
+#[test]
+fn overwrite_requires_passing_through_the_confirmation() {
+    let mut state = form_state();
+    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+
+    // Invariant 1: the destructive mode cannot be chosen straight from the prompt.
+    state.update(Message::AddWorktreeResolutionChosen(CreateMode::Overwrite));
+    assert_eq!(
+        form(&state).resolution,
+        ResolutionState::Choosing {
+            situation: local_conflict()
+        },
+        "Overwrite must not resolve directly from the choice"
+    );
+    assert_eq!(form(&state).mode, CreateMode::NewBranch);
+
+    state.update(Message::AddWorktreeOverwriteRequested);
+    assert_eq!(
+        form(&state).resolution,
+        ResolutionState::ConfirmingOverwrite {
+            situation: local_conflict()
+        }
+    );
+
+    state.update(Message::AddWorktreeOverwriteConfirmed);
+    assert_eq!(form(&state).resolution, ResolutionState::Idle);
+    assert_eq!(form(&state).mode, CreateMode::Overwrite);
+}
+
+#[test]
+fn backing_out_of_the_confirmation_returns_to_the_choice_not_the_form() {
+    // Invariant 3 (US2 AS3): reuse and cancel must still be available afterwards.
+    let mut state = form_state();
+    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::AddWorktreeOverwriteRequested);
+
+    state.update(Message::AddWorktreeResolutionCancelled);
+
+    assert_eq!(
+        form(&state).resolution,
+        ResolutionState::Choosing {
+            situation: local_conflict()
+        }
+    );
+    assert_eq!(form(&state).mode, CreateMode::NewBranch);
+}
+
+#[test]
+fn overwrite_cannot_be_requested_for_a_remote_only_branch() {
+    // There is no local branch to destroy, so the confirmation must never open.
+    let mut state = form_state();
+    state.update(Message::AddWorktreeConflictDetected(remote_conflict()));
+    state.update(Message::AddWorktreeOverwriteRequested);
+
+    assert_eq!(
+        form(&state).resolution,
+        ResolutionState::Choosing {
+            situation: remote_conflict()
+        }
+    );
+}
+
+#[test]
+fn choosing_reuse_or_track_resolves_the_prompt_with_that_mode() {
+    let mut state = form_state();
+    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::AddWorktreeResolutionChosen(CreateMode::ReuseLocal));
+    assert_eq!(form(&state).resolution, ResolutionState::Idle);
+    assert_eq!(form(&state).mode, CreateMode::ReuseLocal);
+
+    let mut state = form_state();
+    state.update(Message::AddWorktreeConflictDetected(remote_conflict()));
+    let track = CreateMode::TrackRemote {
+        remote: "origin".to_string(),
+    };
+    state.update(Message::AddWorktreeResolutionChosen(track.clone()));
+    assert_eq!(form(&state).mode, track);
+}
+
+/// FR-018 — "start fresh" over a remote-only name is an ordinary new branch.
+#[test]
+fn starting_fresh_over_a_remote_branch_resolves_to_a_new_branch() {
+    let mut state = form_state();
+    state.update(Message::AddWorktreeConflictDetected(remote_conflict()));
+    state.update(Message::AddWorktreeResolutionChosen(CreateMode::NewBranch));
+    assert_eq!(form(&state).resolution, ResolutionState::Idle);
+    assert_eq!(form(&state).mode, CreateMode::NewBranch);
+}
+
+/// Invariant 4: a prompt and an in-flight create cannot coexist.
+#[test]
+fn a_conflict_is_never_raised_while_a_create_is_in_flight() {
+    let mut state = form_state();
+    state.update(Message::WorktreeCreateStarted);
+    assert_eq!(form(&state).status, WorktreeFormStatus::Creating);
+
+    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+
+    assert_eq!(form(&state).resolution, ResolutionState::Idle);
+}
+
+#[test]
+fn edits_are_ignored_while_a_prompt_is_open() {
+    let mut state = form_state();
+    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+
+    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+    state.update(Message::AddWorktreeBranchSelected(candidate("feat/other")));
+
+    assert_eq!(form(&state).source, BranchSource::New);
+    assert_eq!(form(&state).selected_branch, None);
+}
+
+// --- US5: blocked situations offer no resolution --------------------------------------
+
+#[test]
+fn a_blocked_situation_offers_no_actionable_mode_and_dismisses_to_idle() {
+    for situation in [
+        BranchSituation::Blocked {
+            branch: "main".to_string(),
+            reason: BlockReason::CheckedOutInProjectRoot,
+        },
+        BranchSituation::DirectoryTaken {
+            dir: PathBuf::from("/repo/.claude/worktrees/feat-login"),
+        },
+    ] {
+        // No mode exists for these — reuse/overwrite are unrepresentable, not merely hidden.
+        assert_eq!(WorktreeForm::mode_for(&situation, None), None);
+
+        let mut state = form_state();
+        let before = form(&state).clone();
+        state.update(Message::AddWorktreeConflictDetected(situation));
+        state.update(Message::AddWorktreeResolutionCancelled);
+
+        assert_eq!(form(&state).resolution, ResolutionState::Idle);
+        assert_eq!(form(&state).name, before.name);
+    }
+}
+
+#[test]
+fn mode_for_maps_actionable_situations_and_never_yields_overwrite() {
+    assert_eq!(
+        WorktreeForm::mode_for(&BranchSituation::Free, None),
+        Some(CreateMode::NewBranch)
+    );
+    assert_eq!(
+        WorktreeForm::mode_for(&local_conflict(), None),
+        Some(CreateMode::ReuseLocal)
+    );
+    assert_eq!(
+        WorktreeForm::mode_for(&remote_conflict(), None),
+        Some(CreateMode::TrackRemote {
+            remote: "origin".to_string()
+        })
+    );
+    // Picking a branch is never consent to destroy it (contract branch-picker.md §5).
+    for situation in [
+        BranchSituation::Free,
+        local_conflict(),
+        remote_conflict(),
+        BranchSituation::Blocked {
+            branch: "x".to_string(),
+            reason: BlockReason::CheckedOutInProjectRoot,
+        },
+    ] {
+        assert_ne!(
+            WorktreeForm::mode_for(&situation, None),
+            Some(CreateMode::Overwrite)
+        );
+    }
+}
+
+// --- US2: the existing-branch source --------------------------------------------------
+
+fn candidate(name: &str) -> BranchCandidate {
+    BranchCandidate {
+        name: name.to_string(),
+        origin: BranchOrigin::Local,
+        blocked_by: None,
+    }
+}
+
+fn blocked_candidate(name: &str) -> BranchCandidate {
+    BranchCandidate {
+        name: name.to_string(),
+        origin: BranchOrigin::Local,
+        blocked_by: Some(BlockReason::CheckedOutInProjectRoot),
+    }
+}
+
+#[test]
+fn switching_to_the_existing_source_and_back_clears_the_selection() {
+    let mut state = form_state();
+    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+    state.update(Message::AddWorktreeBranchSelected(candidate("feat/other")));
+    assert_eq!(form(&state).source, BranchSource::Existing);
+    assert!(form(&state).selected_branch.is_some());
+
+    state.update(Message::AddWorktreeSourceChanged(BranchSource::New));
+
+    // FR-015: no residual state, and the new-branch inputs are untouched.
+    assert_eq!(form(&state).selected_branch, None);
+    assert_eq!(form(&state).type_, Some(ConventionalType::Feat));
+    assert_eq!(form(&state).name, "login");
+}
+
+#[test]
+fn the_preview_follows_the_active_source() {
+    let mut state = form_state();
+    assert_eq!(form(&state).preview().unwrap().branch, "feat/login");
+
+    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+    // Nothing picked yet — no preview to show.
+    assert!(form(&state).preview().is_err());
+
+    state.update(Message::AddWorktreeBranchSelected(candidate(
+        "release/v1.2",
+    )));
+    let derived = form(&state).preview().unwrap();
+    // FR-014: the directory is derived from the branch, using the same naming rules.
+    assert_eq!(derived.branch, "release/v1.2");
+    assert_eq!(derived.dir_name, "release-v1-2");
+}
+
+#[test]
+fn a_blocked_candidate_cannot_be_submitted_but_an_available_one_can() {
+    let mut state = form_state();
+    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+
+    state.update(Message::AddWorktreeBranchSelected(blocked_candidate(
+        "main",
+    )));
+    assert!(
+        !form(&state).can_submit(),
+        "a branch that is checked out elsewhere must not be creatable (FR-012)"
+    );
+
+    state.update(Message::AddWorktreeBranchSelected(candidate("feat/free")));
+    assert!(form(&state).can_submit());
+}
+
+#[test]
+fn the_listed_candidates_are_stored_for_the_picker() {
+    let mut state = form_state();
+    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+    state.update(Message::AddWorktreeBranchesListed(vec![
+        candidate("feat/a"),
+        blocked_candidate("main"),
+    ]));
+    assert_eq!(form(&state).candidates.len(), 2);
+}
+
+#[test]
+fn submission_is_blocked_while_a_prompt_is_open_or_a_create_is_running() {
+    let mut state = form_state();
+    assert!(form(&state).can_submit());
+
+    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    assert!(!form(&state).can_submit());
+
+    state.update(Message::AddWorktreeResolutionCancelled);
+    assert!(form(&state).can_submit());
+
+    state.update(Message::WorktreeCreateStarted);
+    assert!(!form(&state).can_submit());
+}
+
+/// Spec Edge Cases — with the name on two remotes, the app must not resolve the choice itself.
+#[test]
+fn an_ambiguous_remote_requires_the_user_to_pick() {
+    // No preference: ambiguous, so no mode — the prompt opens instead.
+    assert_eq!(WorktreeForm::mode_for(&multi_remote_conflict(), None), None);
+
+    // The row the user picked names the remote, and that is what gets tracked.
+    assert_eq!(
+        WorktreeForm::mode_for(&multi_remote_conflict(), Some("upstream")),
+        Some(CreateMode::TrackRemote {
+            remote: "upstream".to_string()
+        })
+    );
+    assert_eq!(
+        WorktreeForm::mode_for(&multi_remote_conflict(), Some("origin")),
+        Some(CreateMode::TrackRemote {
+            remote: "origin".to_string()
+        })
+    );
+
+    // A preference for a remote that doesn't carry the branch is not silently substituted.
+    assert_eq!(
+        WorktreeForm::mode_for(&multi_remote_conflict(), Some("fork")),
+        None
+    );
+}
+
+#[test]
+fn a_single_remote_needs_no_preference() {
+    assert_eq!(
+        WorktreeForm::mode_for(&remote_conflict(), None),
+        Some(CreateMode::TrackRemote {
+            remote: "origin".to_string()
+        })
+    );
+}
