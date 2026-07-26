@@ -223,6 +223,9 @@ pub struct Session {
     pub label: SessionLabel,
     /// Runtime state of the AI CLI process (transient — not persisted).
     pub lifecycle: SessionLifecycle,
+    /// Derived activity signal from the daemon (feature 010 US2, FR-016d) — transient, never
+    /// persisted, resets to `Unknown` on daemon restart (H3). Drives the sidebar activity badge.
+    pub activity: crate::protocol::messages::ActivitySignal,
     /// Which process is attached to the visible pane (feature 010). Persisted (FR-011).
     pub mode: TerminalMode,
     /// Every currently-open Regular Terminal instance, in creation ("open") order (feature 011;
@@ -254,6 +257,7 @@ impl Session {
             location,
             label: SessionLabel::Pending,
             lifecycle: SessionLifecycle::Starting,
+            activity: crate::protocol::messages::ActivitySignal::Unknown,
             mode: TerminalMode::AiCli,
             shells: Vec::new(),
             active_shell: None,
@@ -277,6 +281,7 @@ impl Session {
             location,
             label,
             lifecycle: SessionLifecycle::Idle,
+            activity: crate::protocol::messages::ActivitySignal::Unknown,
             mode,
             shells: Vec::new(),
             active_shell: None,

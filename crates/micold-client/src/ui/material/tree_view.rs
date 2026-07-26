@@ -47,6 +47,9 @@ pub struct TreeItem<'a, M> {
     /// A hover tooltip describing the row's own location (feature 010, FR-010) — distinct from
     /// `trailing_tooltip`, which describes only the trailing action button.
     pub row_tooltip: Option<String>,
+    /// A small pre-built badge shown between the leading icon and the label (feature 010 US2 —
+    /// the per-session activity dot). Carries its own lifetime `'a`.
+    pub badge: Option<Element<'a, M>>,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
@@ -71,8 +74,15 @@ impl<'a, M> TreeItem<'a, M> {
             on_unhover: None,
             trailing_custom: None,
             row_tooltip: None,
+            badge: None,
             _marker: std::marker::PhantomData,
         }
+    }
+
+    /// Set a small badge shown between the leading icon and the label (e.g. the activity dot).
+    pub fn badge(mut self, element: impl Into<Element<'a, M>>) -> Self {
+        self.badge = Some(element.into());
+        self
     }
 
     /// A hover tooltip describing this row's own location (feature 010, FR-010) — shown for
@@ -208,6 +218,11 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
 
             if let Some(glyph) = item.icon {
                 line = line.push(icon(glyph, label_size, item.tint));
+            }
+
+            // The per-session activity dot sits between the icon and the name (feature 010 US2).
+            if let Some(badge) = item.badge {
+                line = line.push(badge);
             }
 
             line = line.push(

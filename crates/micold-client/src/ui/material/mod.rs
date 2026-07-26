@@ -8,6 +8,7 @@
 //!
 //! [`Roles`]: crate::tokens::Roles
 
+mod activity_badge;
 mod animation;
 mod connection_banner;
 mod filter_panel;
@@ -23,6 +24,7 @@ mod toggle_chip;
 mod toolbar;
 mod tree_view;
 
+pub use activity_badge::ActivityBadge;
 pub use animation::{expand, fade, scale, slide};
 pub use connection_banner::ConnectionBanner;
 pub use filter_panel::FilterTrigger;

@@ -1833,9 +1833,10 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
             let lifecycle = wire_to_lifecycle(&summary.lifecycle);
             if let Some(existing) = list.iter_mut().find(|s| s.id == summary.id) {
                 existing.lifecycle = lifecycle;
-                // Adopt the daemon's title only when it has a real one — the daemon doesn't yet push
-                // OSC-0 titles into the catalog, so its summary can regress to `Pending`; don't let
-                // that clobber a title the client already learned (TODO: daemon title push, T047).
+                existing.activity = summary.activity.clone();
+                // Adopt the daemon's title only when it has a real one. The daemon now overlays the
+                // live OSC-0 title onto the summary (T047), but a summary can still be `Pending`
+                // before the first title arrives; don't let that clobber a title already learned.
                 if let SessionLabel::Named(_) = summary.title {
                     existing.label = summary.title.clone();
                 }
@@ -1852,6 +1853,7 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
                     TerminalMode::AiCli,
                 );
                 s.lifecycle = lifecycle;
+                s.activity = summary.activity.clone();
                 list.push(s);
             }
         }

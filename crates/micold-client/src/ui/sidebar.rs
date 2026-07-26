@@ -5,7 +5,8 @@ use crate::app::{Message, State, TagFilter};
 use crate::icons::Icon;
 use crate::tokens::{self, sidebar, spacing, type_scale, Rgb, Roles};
 use crate::ui::material::{
-    expand, menu_panel, FilterTrigger, IconButton, ToggleChip, Tooltip, TreeItem, TreeView,
+    expand, menu_panel, ActivityBadge, FilterTrigger, IconButton, ToggleChip, Tooltip, TreeItem,
+    TreeView,
 };
 use crate::ui::style;
 use iced::widget::{button, column, container, mouse_area, row, scrollable, text, Space};
@@ -500,6 +501,9 @@ fn session_tree_item(
     let selected = active_session == Some(session.id);
     TreeItem::new(1, session.label.display().to_string(), tint)
         .with_icon(Icon::ActiveMarker)
+        // The derived activity dot beside the name (feature 010 US2, FR-016d): Working/AwaitingInput
+        // show a filled dot, Ended a hollow one, Unknown nothing (ambient — H2).
+        .badge(ActivityBadge::<Message>::new(session.activity.clone(), r))
         .selected(selected)
         .on_press(Message::SessionSelected(session.id))
         .on_right_press(Message::SessionMenuToggled(session.id))

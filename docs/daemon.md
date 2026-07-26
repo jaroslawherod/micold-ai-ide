@@ -49,6 +49,55 @@ keeps reopening a busy session fast regardless of how long it ran unattended.
 - The daemon persists the *catalog* (your projects, worktrees, and session identities) to disk, so
   those reappear after a reboot — but a session's live process and its on-screen scrollback do not.
 
+## Attaching, driving, and the activity badges (User Story 2)
+
+Opening a project **attaches** the window to it: the window starts drawing that project's sessions
+and sending your keystrokes to them. Closing the window, or switching away, **detaches** — the
+sessions keep running in the daemon (that is User Story 1); detaching only stops the *drawing*.
+Because the terminal lives in the daemon, scrolling, selecting text, and resizing the pane are all
+handled inside the window against the grid it already has — they cost no round trip to the daemon and
+stay responsive even while a session is producing output quickly.
+
+### The activity dot
+
+Every session in the sidebar carries a small **activity dot** next to its name, so you can tell at a
+glance what each one is doing without opening it:
+
+| Dot | Meaning |
+|---|---|
+| **Filled, accent** | **Working** — the agent is actively doing something. |
+| **Filled, attention** | **Awaiting input** — the agent's turn ended and it is likely waiting for you. |
+| _(no dot)_ | **Unknown** — the daemon has no signal yet (see below). This is deliberate, not a bug. |
+| **Hollow** | **Ended** — the session's process has finished. |
+
+The important, and unusual, one is **Unknown shows nothing**. The daemon derives activity from
+`claude`'s own lifecycle hooks — the authoritative "I started a turn / I finished a turn" signals —
+not from guessing based on how quiet the terminal is (which was measured and does not work: a session
+can sit silent for half a minute mid-task). So if those hooks aren't reaching the daemon — you ran a
+bare CLI, or hooks are misconfigured — the daemon reports **Unknown** rather than inventing an
+"idle" or "needs you" cue it can't stand behind. **A blank dot means "I don't know", never "nothing
+is happening."**
+
+"Awaiting input" is a *strong hint*, not a guarantee: a turn can end and then continue on its own
+(auto-continuation, or a hook that resumes it), so treat the attention dot as "probably your turn,"
+not a hard stop.
+
+### How the daemon knows (and what it never sees)
+
+The daemon points each `claude` session at a small **loopback-only** listener — bound to
+`127.0.0.1` on a random port, reachable only from your own machine — and `claude` posts a one-line
+notice to it at each turn boundary. Each session gets its own unguessable token; a request without it
+is refused. The listener does exactly one thing — report a session's activity — and can touch nothing
+else: not your projects, not session input, not the catalog. It is wired up through a per-session
+settings file the daemon writes, so **your own `claude` configuration is never modified**. The
+notices are never written to a log (they can carry file paths and prompt metadata).
+
+The session **title** shown in the sidebar comes from the same terminal stream: `claude` continuously
+sets the terminal title to the session's generated name, and the daemon reads it directly and pushes
+it to every window — replacing an older approach that repeatedly re-scanned a transcript file. A
+leading status glyph (the little spinner) is stripped before display; the title text itself is
+treated as untrusted and length-bounded.
+
 ## Project and worktree operations run through the daemon (User Story 3)
 
 Adding or renaming a project, creating, renaming, or deleting a worktree, and creating or deleting a
@@ -240,5 +289,4 @@ differently based on how it started.
 
 ---
 
-*This document grows with the feature: attach/detach and the activity badges (User Story 2) are
-appended as those land.*
+*This document covers the daemon feature end to end (User Stories 1–7).*
