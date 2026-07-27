@@ -54,7 +54,7 @@ portable-pty = "0.9"
 alacritty_terminal = "0.25"
 # --- shared dev deps ---
 tempfile = "3.27.0"
-ttf-parser = "0.21"
+ttf-parser = "0.25.1"
 # Internal crate, referenced by path so client & daemon share the one core.
 micold-core = { path = "crates/micold-core" }
 

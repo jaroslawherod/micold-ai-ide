@@ -2397,7 +2397,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
- "ttf-parser 0.21.1",
+ "ttf-parser 0.25.1",
  "uuid",
 ]
 
