@@ -11,8 +11,10 @@
 > and feature 010 moved worktree creation into the daemon, retiring the client's live progress
 > stream. The two-phase design below survived intact — but pre-flight and branch listing are now
 > **RPCs**, not in-process calls, so `BranchSituation` / `BranchCandidate` / `CreateMode` became
-> wire types. See `contracts/branch-rpc.md` for the added protocol surface, and FR-024 in the spec
-> for the one requirement the migration blocked.
+> wire types. See `contracts/branch-rpc.md` for the added protocol surface. FR-024 (progress naming
+> the step) was briefly blocked by the retired client-side progress stream and is now met by a
+> `DaemonMsg::OperationProgress` push carrying the typed stage — the daemon reports the fact, the
+> client owns the wording.
 
 ## Summary
 

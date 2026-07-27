@@ -680,7 +680,7 @@ pub fn remove_worktree_dir(path: &Path) -> io::Result<()> {
 /// The named stage a worktree creation is (or was, on failure) currently in (feature 013,
 /// FR-006/FR-007/FR-009). A closed enum (Principle V) so the progress display can never show a
 /// stage that isn't a real, reachable step.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CreateStage {
     /// Duplicate-branch / duplicate-directory pre-flight checks (no mutation yet).
     PreflightCheck,

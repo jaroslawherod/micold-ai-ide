@@ -10,8 +10,8 @@
 use iced::time::every;
 use iced::{Subscription, Task};
 use micold_client::app::{
-    BranchSource, ClosingOverlay, Message, Overlay, SelectKind, State, WorktreeForm,
-    WorktreeFormStatus,
+    BranchSource, ClosingOverlay, Message, Overlay, ResolutionState, SelectKind, State,
+    WorktreeForm, WorktreeFormStatus,
 };
 use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
@@ -92,15 +92,20 @@ enum PendingOp {
     WorktreeCreate(String),
     WorktreeDelete(String),
     /// A read-only `BranchPreflight` (feature 016). Carries what the reply needs to continue:
-    /// the derived names, whether the branch came from the picker, and the remote the user named
-    /// by picking that row — so nothing is recomputed when the answer lands.
+    /// the project it was asked about, the derived names, whether the branch came from the
+    /// picker, and the remote the user named by picking that row — so nothing is recomputed when
+    /// the answer lands. `project` is what makes a reply that outlived its form (cancelled, or
+    /// the user switched project) detectable instead of acted upon.
     BranchPreflight {
+        project: PathBuf,
         names: micold_core::naming::DerivedNames,
         picked: bool,
         preferred_remote: Option<String>,
     },
     /// A read-only `BranchList` for the existing-branch picker (feature 016).
-    BranchList,
+    BranchList {
+        project: PathBuf,
+    },
     WorktreeRename(String),
     ProjectAdd,
     ProjectRemove,
@@ -115,7 +120,7 @@ impl PendingOp {
             PendingOp::DeleteSession => "delete the session".into(),
             PendingOp::WorktreeCreate(d) => format!("create the worktree \"{d}\""),
             PendingOp::BranchPreflight { .. } => "check the branch".into(),
-            PendingOp::BranchList => "list the branches".into(),
+            PendingOp::BranchList { .. } => "list the branches".into(),
             PendingOp::WorktreeDelete(d) => format!("delete the worktree \"{d}\""),
             PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
             PendingOp::ProjectAdd => "add the project".into(),
@@ -725,13 +730,30 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     // creates straight away (FR-025 — no extra prompt); anything else either
                     // resolves itself (the user already named the branch by picking it) or opens
                     // the reuse/overwrite prompt.
+                    //
+                    // The answer is only acted on while the form that asked for it is still open,
+                    // still editing, and still pointed at the same project: cancelling the form
+                    // (or switching project) while the RPC is in flight must not go on to create
+                    // a worktree the user backed out of.
                     Some(PendingOp::BranchPreflight {
+                        project: asked_for,
                         names,
                         picked,
                         preferred_remote,
                     }) => {
                         if let OperationResult::BranchPreflight { situation } = result {
-                            if let Some(project) = app.core.workspace.active.clone() {
+                            let form_open = app
+                                .core
+                                .worktree_form
+                                .as_ref()
+                                .is_some_and(|f| f.status == WorktreeFormStatus::Editing);
+                            if let Some(project) = app
+                                .core
+                                .workspace
+                                .active
+                                .clone()
+                                .filter(|p| form_open && *p == asked_for)
+                            {
                                 match &situation {
                                     micold_core::worktree::BranchSituation::Free => {
                                         send_worktree_create(
@@ -764,14 +786,28 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                             }
                         }
                     }
-                    Some(PendingOp::BranchList) => {
+                    // Same staleness guard: a listing for a project that is no longer the active
+                    // one must not populate the picker of a form opened on a different repo.
+                    Some(PendingOp::BranchList { project: asked_for }) => {
                         if let OperationResult::BranchList { candidates } = result {
-                            app.core
-                                .update(Message::AddWorktreeBranchesListed(candidates));
+                            if app.core.workspace.active.as_deref() == Some(asked_for.as_path()) {
+                                app.core
+                                    .update(Message::AddWorktreeBranchesListed(candidates));
+                            }
                         }
                     }
                     _ => {}
                 },
+                // FR-024: a stage push names the step in flight. Peeked, not removed — the
+                // operation is still running and its terminal reply still needs the pending op.
+                DaemonMsg::OperationProgress { req, stage } => {
+                    if matches!(
+                        app.pending_ops.get(&req),
+                        Some(PendingOp::WorktreeCreate(_))
+                    ) {
+                        app.core.update(Message::WorktreeCreateStageChanged(stage));
+                    }
+                }
                 DaemonMsg::OperationError { req, message, .. } => {
                     match app.pending_ops.remove(&req) {
                         // A failed worktree create shows in the form (keeps it open to retry), not a
@@ -787,7 +823,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                             app.core.worktree_error =
                                 Some(format!("Could not check the branch: {message}"));
                         }
-                        Some(PendingOp::BranchList) => {
+                        Some(PendingOp::BranchList { .. }) => {
                             app.core.worktree_error =
                                 Some(format!("Could not list branches: {message}"));
                         }
@@ -1038,6 +1074,17 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             if form.status != WorktreeFormStatus::Editing || form.resolution.is_prompting() {
                 return Task::none(); // create in flight, or a prompt is already open.
             }
+            // The form stays `Editing` while the pre-flight RPC is in flight (there is nothing to
+            // show yet and the answer may be a prompt, not a create), so `status` alone does not
+            // stop a second submit. Without this a double-click sends two pre-flights, both come
+            // back `Free`, and two `WorktreeCreate`s race for the same directory.
+            if app
+                .pending_ops
+                .values()
+                .any(|op| matches!(op, PendingOp::BranchPreflight { .. }))
+            {
+                return Task::none();
+            }
             let Ok(names) = form.preview() else {
                 return Task::none(); // validation error already recorded by the reducer
             };
@@ -1055,9 +1102,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 BranchOrigin::Local => None,
             });
             let (branch, dir_name) = (names.branch.clone(), names.dir_name.clone());
+            let asked_for = project.clone();
             send_op(
                 app,
                 PendingOp::BranchPreflight {
+                    project: asked_for,
                     names,
                     picked,
                     preferred_remote,
@@ -1073,13 +1122,31 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // The user answered the prompt: create under the mode they chose. Overwrite cannot arrive
         // here — it only ever comes through the confirmation below (FR-005).
+        //
+        // Both arms check the state the reducer requires BEFORE letting it clear the prompt: the
+        // reducer refuses transitions it considers illegal, and acting anyway would run the
+        // create the reducer just declined to acknowledge — an `Overwrite` that never passed the
+        // destructive confirmation, in the worst case.
         Message::AddWorktreeResolutionChosen(mode) => {
+            let answering = app.core.worktree_form.as_ref().is_some_and(|f| {
+                matches!(f.resolution, ResolutionState::Choosing { .. })
+                    && !matches!(mode, CreateMode::Overwrite)
+            });
             app.core
                 .update(Message::AddWorktreeResolutionChosen(mode.clone()));
+            if !answering {
+                return Task::none();
+            }
             start_resolved_create(app, mode)
         }
         Message::AddWorktreeOverwriteConfirmed => {
+            let confirmed = app.core.worktree_form.as_ref().is_some_and(|f| {
+                matches!(f.resolution, ResolutionState::ConfirmingOverwrite { .. })
+            });
             app.core.update(Message::AddWorktreeOverwriteConfirmed);
+            if !confirmed {
+                return Task::none();
+            }
             start_resolved_create(app, CreateMode::Overwrite)
         }
         // Switching to the existing-branch picker lists what the repository already has
@@ -1092,9 +1159,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             let Some(project) = app.core.workspace.active.clone() else {
                 return Task::none();
             };
-            send_op(app, PendingOp::BranchList, move |req| {
-                ClientMsg::BranchList { req, project }
-            });
+            let asked_for = project.clone();
+            send_op(
+                app,
+                PendingOp::BranchList { project: asked_for },
+                move |req| ClientMsg::BranchList { req, project },
+            );
             Task::none()
         }
         // Start a new session at a location — a worktree or the project root ("Default",
@@ -2005,18 +2075,22 @@ fn send_worktree_create(
     names: micold_core::naming::DerivedNames,
     mode: CreateMode,
 ) {
-    app.core.update(Message::WorktreeCreateStarted);
+    app.core
+        .update(Message::WorktreeCreateStarted(mode.clone()));
     let (branch, dir_name) = (names.branch, names.dir_name);
-    let op_dir = dir_name.clone();
-    send_op(app, PendingOp::WorktreeCreate(op_dir), move |req| {
-        ClientMsg::WorktreeCreate {
+    // The mode is not duplicated here: `WorktreeCreateStarted` above already put it on the form,
+    // which is where the stage label reads it from (FR-024).
+    send_op(
+        app,
+        PendingOp::WorktreeCreate(dir_name.clone()),
+        move |req| ClientMsg::WorktreeCreate {
             req,
             project,
             branch,
             dir_name,
             mode,
-        }
-    });
+        },
+    );
 }
 
 fn map_system_scheme(mode: dark_light::Mode) -> SystemScheme {

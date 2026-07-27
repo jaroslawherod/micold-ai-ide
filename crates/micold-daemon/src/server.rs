@@ -21,7 +21,7 @@ use micold_core::protocol::messages::{
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     branch_candidates, create_worktree, preflight, remove_worktree, remove_worktree_dir,
-    BlockReason, CreateError,
+    BlockReason, CreateError, CreateProgressEvent, CreateStage,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
@@ -467,8 +467,18 @@ where
                     branch,
                 };
                 // git worktree add can take minutes (a submodule fetch), so it runs off the async
-                // runtime; it never touches the state lock. On any failure the target dir is removed
-                // (the fs half of the rollback) so no leftover directory survives (FR-034, T050).
+                // runtime; it never touches the state lock. When a create is rolled back the target
+                // dir is removed (the fs half of the rollback) so no leftover directory survives
+                // (FR-034, T050) — but ONLY then: the pre-flight refusals below reject before
+                // anything is created, and the directory they name is the user's, not ours.
+                // Feature 016 FR-024: stream the stage as the create advances, so the form can
+                // name the step being performed ("Checking out existing branch" rather than
+                // "Creating branch"). The client owns the wording; only the stage travels.
+                //
+                // Pushed through the client's own ordered frame channel — a clone of the sender
+                // moves into the blocking task, so the git work never touches the state lock and
+                // never blocks the runtime. A departed client simply drops the sends.
+                let progress_tx = state.frame_sender(id);
                 let result = tokio::task::spawn_blocking(move || {
                     let root = repo.join(".claude/worktrees");
                     let target = root.join(&names.dir_name);
@@ -477,6 +487,20 @@ where
                         && std::fs::read_dir(&target)
                             .map(|mut d| d.next().is_some())
                             .unwrap_or(false);
+                    // A stage emits several lines; only transitions are worth a frame.
+                    let mut last_stage: Option<CreateStage> = None;
+                    let mut on_progress = |event: CreateProgressEvent| {
+                        if last_stage == Some(event.stage) {
+                            return;
+                        }
+                        last_stage = Some(event.stage);
+                        if let Some(tx) = &progress_tx {
+                            let _ = tx.send(Frame::Control(DaemonMsg::OperationProgress {
+                                req,
+                                stage: event.stage,
+                            }));
+                        }
+                    };
                     let r = create_worktree(
                         &GitCli::new(),
                         &repo,
@@ -484,9 +508,12 @@ where
                         &names,
                         target_exists,
                         &mode,
-                        &mut |_| {},
+                        &mut on_progress,
                     );
-                    if r.is_err() {
+                    // `RolledBack` is the only outcome in which this attempt created anything at
+                    // `target`. `DuplicateDir` in particular means the directory was already
+                    // there — removing it would destroy the user's files (feature 016).
+                    if matches!(r, Err(CreateError::RolledBack(_))) {
                         let _ = std::fs::remove_dir_all(&target);
                     }
                     r

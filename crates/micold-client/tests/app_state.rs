@@ -4,7 +4,7 @@ use micold_client::app::{on_escape, Message, Overlay, State, TagFilter, Worktree
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionLifecycle, SessionLocation};
-use micold_core::worktree::{Worktree, WorktreeStatus};
+use micold_core::worktree::{CreateStage, Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
 #[test]
@@ -79,7 +79,7 @@ fn created_worktree_is_added_and_form_closed() {
 fn create_started_marks_form_creating() {
     let mut state = State::default();
     state.update(Message::AddWorktreeOpened);
-    state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
     assert_eq!(
         state.worktree_form.as_ref().unwrap().status,
         WorktreeFormStatus::Creating
@@ -92,7 +92,7 @@ fn field_edits_are_ignored_while_creating() {
     state.update(Message::AddWorktreeOpened);
     state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
     state.update(Message::AddWorktreeNameChanged("Login".to_string()));
-    state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
 
     // The whole form is inactive while a create is in flight (feature 010 follow-up), not
     // just the submit button — edits during this window must be no-ops.
@@ -112,7 +112,7 @@ fn field_edits_are_ignored_while_creating() {
 fn create_failed_keeps_form_open_and_resets_status_to_editing() {
     let mut state = State::default();
     state.update(Message::AddWorktreeOpened);
-    state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
     state.update(Message::WorktreeCreateFailed("boom".to_string()));
     assert_eq!(state.worktree_error.as_deref(), Some("boom"));
     assert!(state.worktree_form.is_some(), "form stays open for retry");
@@ -128,7 +128,7 @@ fn resubmitting_while_creating_is_a_no_op() {
     state.update(Message::AddWorktreeOpened);
     state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
     state.update(Message::AddWorktreeNameChanged("Login".to_string()));
-    state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
     // Corrupt the form to prove the guard skips validation entirely while Creating —
     // an unguarded AddWorktreeSubmitted would call preview() and record an error here.
     state.update(Message::AddWorktreeNameChanged(String::new()));
@@ -157,7 +157,7 @@ fn type_selection_is_ignored_while_creating() {
     state.update(Message::AddWorktreeOpened);
     state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
     state.update(Message::AddWorktreeNameChanged("Login".to_string()));
-    state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
 
     state.update(Message::AddWorktreeTypeSelected(ConventionalType::Fix));
     assert_eq!(
@@ -788,7 +788,7 @@ fn starting_fresh_over_a_remote_branch_resolves_to_a_new_branch() {
 #[test]
 fn a_conflict_is_never_raised_while_a_create_is_in_flight() {
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
     assert_eq!(form(&state).status, WorktreeFormStatus::Creating);
 
     state.update(Message::AddWorktreeConflictDetected(local_conflict()));
@@ -958,7 +958,7 @@ fn submission_is_blocked_while_a_prompt_is_open_or_a_create_is_running() {
     state.update(Message::AddWorktreeResolutionCancelled);
     assert!(form(&state).can_submit());
 
-    state.update(Message::WorktreeCreateStarted);
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
     assert!(!form(&state).can_submit());
 }
 
@@ -996,5 +996,96 @@ fn a_single_remote_needs_no_preference() {
         Some(CreateMode::TrackRemote {
             remote: "origin".to_string()
         })
+    );
+}
+
+// --- FR-024: the progress display names the step actually being performed ----------------
+
+#[test]
+fn the_stage_label_is_worded_for_the_mode_in_flight() {
+    // The whole point of FR-024: a reuse must not claim to be creating a branch.
+    let mut state = form_state();
+    state.update(Message::WorktreeCreateStarted(CreateMode::ReuseLocal));
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::CreatingWorktree,
+    ));
+    assert_eq!(
+        form(&state).stage_label(),
+        Some("Checking out existing branch")
+    );
+
+    let mut state = form_state();
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::CreatingWorktree,
+    ));
+    assert_eq!(
+        form(&state).stage_label(),
+        Some("Creating branch and worktree")
+    );
+
+    let mut state = form_state();
+    state.update(Message::WorktreeCreateStarted(CreateMode::Overwrite));
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::CreatingWorktree,
+    ));
+    assert_eq!(
+        form(&state).stage_label(),
+        Some("Replacing branch and creating worktree")
+    );
+
+    let mut state = form_state();
+    state.update(Message::WorktreeCreateStarted(CreateMode::TrackRemote {
+        remote: "origin".to_string(),
+    }));
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::CreatingWorktree,
+    ));
+    assert_eq!(
+        form(&state).stage_label(),
+        Some("Creating tracking branch and worktree")
+    );
+}
+
+#[test]
+fn stages_that_do_not_vary_by_mode_read_the_same_everywhere() {
+    for mode in [CreateMode::NewBranch, CreateMode::ReuseLocal] {
+        let mut state = form_state();
+        state.update(Message::WorktreeCreateStarted(mode));
+        state.update(Message::WorktreeCreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+        ));
+        assert_eq!(form(&state).stage_label(), Some("Setting up submodules"));
+    }
+}
+
+#[test]
+fn there_is_no_stage_until_the_daemon_reports_one() {
+    // The window between sending the RPC and git starting is real; the view falls back to the
+    // generic wording rather than inventing a step.
+    let mut state = form_state();
+    state.update(Message::WorktreeCreateStarted(CreateMode::ReuseLocal));
+    assert_eq!(form(&state).stage_label(), None);
+}
+
+#[test]
+fn a_new_attempt_never_inherits_the_previous_attempts_stage() {
+    let mut state = form_state();
+    state.update(Message::WorktreeCreateStarted(CreateMode::Overwrite));
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::CreatingWorktree,
+    ));
+    // The create fails and the user retries with a plain new branch.
+    state.update(Message::WorktreeCreateFailed("boom".to_string()));
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+
+    assert_eq!(form(&state).stage_label(), None);
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::CreatingWorktree,
+    ));
+    assert_eq!(
+        form(&state).stage_label(),
+        Some("Creating branch and worktree"),
+        "a retry must not keep the previous attempt's wording"
     );
 }
