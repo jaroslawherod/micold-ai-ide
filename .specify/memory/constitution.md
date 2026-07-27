@@ -1,6 +1,34 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.4.0 → 1.4.1
+Bump rationale: PATCH — a retrofit/convergence sweep (found via /speckit-converge on feature
+  004-material-icons) confirmed Principle I's GUI/process-spawn wiring exception still described
+  the codebase's *original* architecture (a single crate with a `gui` Cargo feature gating a
+  render-free `lib` core vs. a `gui`-only binary). The workspace has since split into three crates
+  (`micold-core`, `micold-client`, `micold-daemon`, introduced by feature 010-daemon-session-
+  persistence); `micold-client` has no `gui` feature and unconditionally depends on `iced`, and it
+  is where the render-free reducer (`app.rs`) and other pure modules now live alongside the actual
+  rendering code. Tests still run headlessly without a display in practice — the exception's
+  underlying rule (thin glue with no decision logic of its own MAY use quickstart.md validation)
+  is unchanged — only the description of which crates/features provide the boundary was stale.
+  Wording-only clarification, no principle added, removed, or materially expanded: PATCH.
+
+Modified in 1.4.1:
+  - Principle I — corrected the GUI/process-spawn wiring exception's description of the
+    codebase's crate/feature split to match the current core/client/daemon workspace, replacing
+    the stale single-crate "`gui`-feature binary" / "render-free `lib` core vs. `gui`-only binary"
+    framing. The exception's actual rule is unchanged.
+  - Templates: no edit required — none of the templates name the `gui` feature or crate layout
+    directly.
+  Follow-up (non-artifact): the same stale "`gui` feature" / "cargo test --no-default-features"
+    language recurs across several early features' plan.md/tasks.md/CLAUDE.md (e.g. feature 004's
+    FR-008, CLAUDE.md's description of `mise run test`). Not corrected here — out of scope for a
+    single constitution patch; left for those artifacts' own convergence passes or a dedicated
+    documentation sweep, per user decision during this retrofit session (not per-feature
+    duplication).
+
+Prior report (1.3.0 → 1.4.0):
 Version change: 1.3.0 → 1.4.0
 Bump rationale: MINOR bump — Principle I (Test-First Development) gains one narrowly-scoped,
   explicitly-named exception: thin GUI/process-spawn wiring in the `gui`-feature binary
@@ -155,14 +183,16 @@ implementation that satisfies it.
   written; implementation proceeds only until the test passes (Green); refactoring
   follows under a green suite.
 - No feature is considered "done" until its tests exist, are meaningful, and pass.
-- **Exception — GUI/process-spawn wiring.** Thin glue code in the `gui`-feature binary
-  (`src/main.rs`, `src/ui/`) that only invokes already-unit-tested pure/core logic — with no
-  decision logic, branching, or business rule of its own — MAY be validated by a recorded
-  `quickstart.md` manual procedure instead of an automated test, because this codebase's
-  binary/library split (the render-free `lib` core vs. the `gui`-only binary) makes such glue
+- **Exception — GUI/process-spawn wiring.** Thin glue code in `micold-client`'s binary and
+  rendering layer (`src/main.rs`, `src/ui/`) that only invokes already-unit-tested pure/core
+  logic — with no decision logic, branching, or business rule of its own — MAY be validated by a
+  recorded `quickstart.md` manual procedure instead of an automated test, because this codebase's
+  crate split (the iced-free `micold-core` crate, plus `micold-client`'s own render-free reducer
+  modules such as `app.rs`, versus its `src/main.rs`/`src/ui/` rendering glue) makes such glue
   structurally unreachable from `tests/`. This exception does NOT cover any code with decision
-  logic, branching, or a business rule of its own — that MUST still land in the tested core first,
-  and MUST still follow Red-Green-Refactor there.
+  logic, branching, or a business rule of its own — that MUST still land in tested pure/core logic
+  first (`micold-core`, or a render-free module of the crate that needs it), and MUST still follow
+  Red-Green-Refactor there.
 
 Rationale: Tests written after the fact codify existing behavior rather than intended
 behavior. Writing and reviewing the failing test first forces the specification of
@@ -359,4 +389,4 @@ convention, or habit conflicts with it, this constitution prevails.
   principles. Complexity that violates a principle MUST be either removed or explicitly
   justified and recorded.
 
-**Version**: 1.4.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-20
+**Version**: 1.4.1 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-27
