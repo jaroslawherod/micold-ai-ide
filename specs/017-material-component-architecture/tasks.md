@@ -257,7 +257,7 @@ US1 alone delivers the feature's central value: appearance is decided in one pla
 Appended by `/speckit-converge`. Every item traces to an artifact that says something the code does
 not, or to a property the code currently has by luck rather than by enforcement.
 
-- [ ] T054 Assert that the frame request lives only behind the motion primitive's `animating()` guard, so quiescence is enforced rather than merely true today per SC-008, FR-025 (partial)
+- [X] T054 Assert that the frame request lives only behind the motion primitive's `animating()` guard, so quiescence is enforced rather than merely true today per SC-008, FR-025 (partial)
 
   > `quickstart.md` §B6's second checkbox — press every interactive element, then idle, and confirm
   > no animation state is held — is unticked, and T052 says plainly that it was not done. What
@@ -268,7 +268,7 @@ not, or to a property the code currently has by luck rather than by enforcement.
   > `request_redraw()` directly would pass the boundary, builder and opacity gates untouched. A
   > source scan in the shape of those gates converts today's accident into tomorrow's invariant.
 
-- [ ] T055 Correct `contracts/component-api.md` §3 so it describes the overlay arrangement that was built, not the one that was planned per FR-027 (contradicts)
+- [X] T055 Correct `contracts/component-api.md` §3 so it describes the overlay arrangement that was built, not the one that was planned per FR-027 (contradicts)
 
   > §3 asserts "All floating surfaces are built on a single overlay primitive" and lists the select
   > dropdown among the non-modal surfaces following unified dismissal. Neither is true:
@@ -285,7 +285,7 @@ not, or to a property the code currently has by luck rather than by enforcement.
   > primitive owns window-level surfaces, and widget-attached dropdowns delegate to the stack's own
   > single shared overlay.
 
-- [ ] T056 Hold the widget-attached-overlay exception at exactly one, enforced rather than described per FR-008, SC-003 (partial)
+- [X] T056 Hold the widget-attached-overlay exception at exactly one, enforced rather than described per FR-008, SC-003 (partial)
 
   > SC-003 claims "exactly one overlay implementation exists, down from five". After T055 the
   > contract will say what is true — one primitive plus one sanctioned delegation — but nothing
@@ -298,7 +298,7 @@ not, or to a property the code currently has by luck rather than by enforcement.
   > list of exactly one entry, held the same way, means the second one has to be argued for in a
   > diff rather than noticed years later.
 
-- [ ] T057 Record the sidebar-name ellipsis in `behavior-delta.md`, and the component that delivered it per FR-024, T015 (contradicts)
+- [X] T057 Record the sidebar-name ellipsis in `behavior-delta.md`, and the component that delivered it per FR-024, T015 (contradicts)
 
   > `behavior-delta.md` is introduced as "the complete list of what this feature changes that a user
   > can notice" and currently lists four changes. A fifth shipped on this branch: an over-long
@@ -316,3 +316,37 @@ not, or to a property the code currently has by luck rather than by enforcement.
   > `Ellipsized` is gated automatically by the builder-API and opacity tests because both scan the
   > component directory rather than an enumerated list — which is why unplanned work still landed
   > inside the boundary.
+
+### Phase 8 outcome
+
+**Done: T054, T055, T056, T057.** Two of the four turned out differently from the task text, and
+both corrections are recorded here rather than absorbed silently.
+
+**T056 said "exactly one" exception. There are two.** `pick_list` in `material/select.rs` was the
+one the converge pass found; scanning for the general case turned up `tooltip` in
+`material/mod.rs`, which delegates to the rendering stack's overlay system for the same reason and
+was never counted. The gate is written against reality — a closed list of two, failing in both
+directions like the opacity ratchet. The mis-scoped task is itself the argument for the gate: an
+exception nobody was counting is exactly what accretes into five implementations.
+
+**T055 uncovered an unmet requirement, not just a stale document.** The contract claimed the select
+dropdown followed unified dismissal — outside click, Escape, scroll beneath. Reading iced's
+`pick_list` shows it dismisses on *any left press*, has **no Escape handler at all**, and does not
+close when content scrolls beneath it. So FR-009 ("every non-modal floating surface MUST dismiss on
+outside click, on Escape, and when the content beneath it scrolls") is met for one of three
+triggers on that surface.
+
+That is a real shortfall, recorded in `contracts/component-api.md` §3 as a *Known shortfall* rather
+than closed quietly. Fixing it means intercepting Escape and scroll in a wrapper around
+`pick_list` — real work, and a user-visible behaviour change, so it is not something a
+documentation task should do on its own initiative. **It needs a decision: accept the deviation, or
+open follow-up work.**
+
+Not recorded in `behavior-delta.md`, deliberately: that document lists what this feature *changed*,
+and the select dropdown behaves exactly as it did before. The shortfall is against the requirement,
+not against the previous build.
+
+**Verification.** 11 new tests, all passing, and each gate was sabotaged to confirm it fails:
+a stray `shell.request_redraw()` in a component turns T054 red; an unsanctioned `tooltip(` turns
+T056 red; striking a live entry off the sanctioned list turns its staleness half red. A gate that
+cannot fail is decoration.

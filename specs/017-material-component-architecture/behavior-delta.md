@@ -9,8 +9,13 @@ answer.
 
 **This document is the complete list.** Anything not on it is a defect, not a change.
 
-The executable version is `crates/micold-client/tests/overlay_dismissal_delta.rs` — every row below
-has a test, including the rows that assert nothing moved.
+Rows 1–4 follow from that consolidation. **Row 5 does not**: it is a pre-existing defect this
+feature's branch happened to fix, listed because the list promises completeness, not because
+FR-024 sanctions it.
+
+The executable version is `crates/micold-client/tests/overlay_dismissal_delta.rs` — every dismissal
+row below has a test there, including the rows that assert nothing moved. Row 5's tests live with
+the component that fixed it, in `crates/micold-client/src/ui/material/ellipsized.rs`.
 
 ---
 
@@ -101,6 +106,39 @@ project switcher appear and disappear without a transition, so they never had th
 
 **This is a fix, not a preserved behaviour**, and it is listed here because it is user-noticeable:
 double-clicking the overflow-menu button used to be able to leave the menu open.
+
+---
+
+### 5. An over-long sidebar name now ends in an ellipsis
+
+A session or worktree name too long for its row used to run past the end of the row and collide
+with the close button, drawing over it. It now stops short and ends in `…`.
+
+**Surfaces affected**: every row in the sidebar tree — sessions, worktrees and the project header.
+
+**This one is different from the four above**, and the difference is worth stating rather than
+smoothing over.
+
+The other four follow from consolidating the overlays: this feature caused them, and FR-024
+sanctions them. This one is a **pre-existing defect that this feature's branch happened to fix**.
+The cause dates to 2026-07-16: the label asked for `Wrapping::None`, which stops text wrapping but
+does not clip it — the rendering stack draws a paragraph past its layout node quite happily. The
+feature's only edits to `tree_view.rs` before the fix were import lines.
+
+So it is not a refactor regression. It is on this list anyway, because the list promises to be
+complete and a user comparing the two builds sees a difference. "Nothing visible changed except
+these things" is the single claim this feature asks a reviewer to trust, and a claim with a silent
+exception is worth less than no claim.
+
+**How it was fixed**: `material/ellipsized.rs`, a component that measures the text at layout time
+and binary-searches the longest prefix that fits, rather than hard-clipping. A hard clip would cut
+a glyph in half and give the user no signal that a name had been shortened.
+
+`Ellipsized` is a component no requirement, plan entry or task called for — unplanned work that
+landed mid-feature. It is nonetheless inside the boundary and covered by the gates, because
+`material_builder_api` and `component_api_opacity` both scan the component directory rather than an
+enumerated list. That is the difference between a boundary and a checklist: a checklist would have
+missed it.
 
 ---
 
