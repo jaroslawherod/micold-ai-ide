@@ -110,7 +110,7 @@ enum PendingOp {
     ProjectAdd,
     ProjectRemove,
     ProjectRename,
-    /// A `SettingsSet` (FR-012a/FR-012b, BUG-003/T097): the service echoes the persisted result
+    /// A `SettingsSet` (FR-012a/FR-012b, BUG-003/T099): the service echoes the persisted result
     /// back as `SettingsChanged` to every connected client (including this one), which is what
     /// actually applies it — this variant exists only so a failure reaches the user and a
     /// disconnect-before-reply resolves to "unknown" like every other mutating RPC (T055).
@@ -215,6 +215,14 @@ struct App {
     /// daemon_build)`. `Some` while the running daemon's contract differs from ours — drives the
     /// version-mismatch banner and its "restart service" action. Cleared on a successful connect.
     version_mismatch: Option<(u32, u32, String)>,
+    /// A pending same-contract build mismatch (US6, FR-022a, BUG-002): `(client_build,
+    /// daemon_build)`. `Some` while the running daemon's package version differs from ours despite a
+    /// matching wire contract — drives the build-mismatch banner and its "restart service" action.
+    /// Cleared on a successful connect. Mutually exclusive with `version_mismatch` in practice (the
+    /// handshake reports at most one refusal reason per attempt), but kept as its own field rather
+    /// than folded into one enum so each clears independently of the other's precedence in
+    /// `connection_status`.
+    build_mismatch: Option<(String, String)>,
     /// Correlation-id counter for the client's mutating RPCs (FR-009).
     next_req: u64,
     /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
@@ -493,6 +501,7 @@ fn boot() -> (App, Task<Message>) {
             displaced: HashMap::new(),
             disconnected: false,
             version_mismatch: None,
+            build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         },
@@ -686,6 +695,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.disconnected = false;
             app.displaced.clear();
             app.version_mismatch = None;
+            app.build_mismatch = None;
             // The daemon is the single writer of settings + sessions; adopt what it reports
             // (FR-012a/FR-012b) — including environment-include, which this client's own
             // boot-time local read may predate (e.g. another window changed it while this one was
@@ -723,7 +733,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 // A settings mutation reached the service — this client's own `SettingsSet` echoed
                 // back, or another window's (FR-011). Sync every service-owned field and re-source
                 // env-include, exactly like the local-save path below does for its own change
-                // (T097): the enabled/path/timeout settings may have changed, so every previously
+                // (T099): the enabled/path/timeout settings may have changed, so every previously
                 // cached directory's snapshot is stale.
                 DaemonMsg::SettingsChanged { settings } => {
                     app.scrollback_lines = settings.scrollback_lines;
@@ -1003,13 +1013,23 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.version_mismatch = Some((client, daemon, daemon_build));
             Task::none()
         }
-        // "Restart service" (FR-022): stop the mismatched daemon by its recorded pid. A mismatched
-        // client can't send it a control message, so termination is the version-agnostic stop. Once
-        // it exits, the auto-reconnect loop finds nothing listening and spawns a matching daemon;
-        // previously-live sessions then reload as interrupted-resumable (FR-006a). Live processes are
-        // lost — we say so — but the durable sessions survive.
+        // Same contract, different package version (US6, FR-022a, BUG-002): record it so the banner
+        // can name both builds and offer the restart action, distinct from a contract mismatch.
+        Message::DaemonBuildMismatch {
+            client_build,
+            daemon_build,
+        } => {
+            app.build_mismatch = Some((client_build, daemon_build));
+            Task::none()
+        }
+        // "Restart service" (FR-022/022a): stop the mismatched daemon by its recorded pid. A
+        // mismatched client can't send it a control message, so termination is the version-agnostic
+        // stop. Once it exits, the auto-reconnect loop finds nothing listening and spawns a matching
+        // daemon; previously-live sessions then reload as interrupted-resumable (FR-006a). Live
+        // processes are lost — we say so — but the durable sessions survive.
         Message::ConnectionRestartServiceRequested => {
             app.version_mismatch = None;
+            app.build_mismatch = None;
             app.core.notify_info(
                 "Restarting the session service — running processes are stopped, but your \
                  sessions are preserved and can be resumed.",
@@ -1758,7 +1778,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // Also ask a connected daemon to apply the service-owned fields (scrollback,
             // FR-012a; environment-include, FR-012b) so the change takes effect immediately for
             // every session the daemon spawns — not just after its next restart re-reads the file
-            // this save just wrote (T097). Silently skipped while disconnected: unlike every other
+            // this save just wrote (T099). Silently skipped while disconnected: unlike every other
             // `send_op` caller, saving settings already has a fully-functional local-only path (the
             // write above), so there's no "can't do this at all without a daemon" error to raise —
             // the next daemon boot picks up the file regardless.
@@ -1870,14 +1890,21 @@ fn active_project_displaced(app: &App) -> bool {
 }
 
 /// The connection state for the status banner (US5/US6). Precedence: a contract mismatch (US6) wins
-/// — it blocks every connection and has the most specific action — then a per-project takeover (US5),
-/// then a plain disconnect. Each names the situation and offers a concrete action.
+/// — it blocks every connection and has the most specific action — then a same-contract build
+/// mismatch (US6, FR-022a), then a per-project takeover (US5), then a plain disconnect. Each names
+/// the situation and offers a concrete action.
 fn connection_status(app: &App) -> micold_client::ui::ConnectionStatus {
     use micold_client::ui::ConnectionStatus;
     if let Some((client, daemon, daemon_build)) = &app.version_mismatch {
         return ConnectionStatus::VersionMismatch {
             client: *client,
             daemon: *daemon,
+            daemon_build: daemon_build.clone(),
+        };
+    }
+    if let Some((client_build, daemon_build)) = &app.build_mismatch {
+        return ConnectionStatus::BuildMismatch {
+            client_build: client_build.clone(),
             daemon_build: daemon_build.clone(),
         };
     }
@@ -2625,6 +2652,7 @@ mod tests {
             displaced: HashMap::new(),
             disconnected: false,
             version_mismatch: None,
+            build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         };
@@ -2668,6 +2696,7 @@ mod tests {
             displaced: HashMap::new(),
             disconnected: false,
             version_mismatch: None,
+            build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         };
@@ -2694,7 +2723,7 @@ mod tests {
 
     /// Builds an `App` with every field at a neutral default, so each test only spells out the
     /// fields it actually varies (mirrors the literal-construction pattern the other tests in this
-    /// module already use, factored out because T097's tests need several variants of it).
+    /// module already use, factored out because T099's tests need several variants of it).
     fn base_app() -> App {
         App {
             core: State::default(),
@@ -2721,12 +2750,13 @@ mod tests {
             displaced: HashMap::new(),
             disconnected: false,
             version_mismatch: None,
+            build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         }
     }
 
-    /// T097 (BUG-003 follow-up, FR-012a/FR-012b): saving Settings while connected to a daemon must
+    /// T099 (BUG-003 follow-up, FR-012a/FR-012b): saving Settings while connected to a daemon must
     /// ask it to apply the service-owned fields too — not just write `settings.json` locally — so
     /// the change takes effect for that daemon's already-running sessions immediately, rather than
     /// only after its next restart.
@@ -2792,7 +2822,7 @@ mod tests {
         assert!(app.pending_ops.is_empty(), "nothing was queued to send");
     }
 
-    /// T097: a fresh connect (or reconnect) must adopt the daemon's authoritative env-include
+    /// T099: a fresh connect (or reconnect) must adopt the daemon's authoritative env-include
     /// settings too, not just scrollback — the daemon is the single source of truth for both
     /// (FR-012a/FR-012b), and this client's own boot-time local read may already be stale relative
     /// to it (e.g. another window changed a setting first).
@@ -2824,7 +2854,7 @@ mod tests {
         assert_eq!(app.env_include_timeout_secs, 30);
     }
 
-    /// T097: a `SettingsChanged` push (this client's own `SettingsSet` echoed back, or another
+    /// T099: a `SettingsChanged` push (this client's own `SettingsSet` echoed back, or another
     /// window's) must sync every service-owned field, not just scrollback — the whole point of
     /// sending `SettingsSet` at all is that the change takes effect without a restart.
     #[test]
@@ -2850,5 +2880,80 @@ mod tests {
         assert!(!app.env_include_enabled);
         assert_eq!(app.env_include_script_path, "/tmp/after.sh");
         assert_eq!(app.env_include_timeout_secs, 45);
+    }
+
+    #[test]
+    fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
+        // `connection_status` is decision/branching logic (Constitution I) picking which of five
+        // mutually-possible states wins — pins the precedence directly rather than relying on it
+        // only being exercised incidentally elsewhere (convergence finding F1, BUG-002).
+        use micold_client::ui::ConnectionStatus;
+
+        let mut app = App {
+            core: State::default(),
+            grids: HashMap::new(),
+            stamper: SessionInputStamper::new(),
+            selection: None,
+            display_offset: 0,
+            scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
+            motion: Animator::new(),
+            main_key: main_content_key(&State::default()),
+            handle_hovered: false,
+            dismissing: None,
+            row_fx: Animator::new(),
+            prev_hovered: None,
+            window_focused: true,
+            last_grid: None,
+            env_include_enabled: micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED,
+            env_include_script_path: String::new(),
+            env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
+            env_include_cache: HashMap::new(),
+            env_include_last_outcome: EnvIncludeOutcome::Disabled,
+            daemon: None,
+            daemon_catalog: None,
+            displaced: HashMap::new(),
+            disconnected: false,
+            version_mismatch: None,
+            build_mismatch: None,
+            next_req: 0,
+            pending_ops: HashMap::new(),
+        };
+
+        assert_eq!(connection_status(&app), ConnectionStatus::Connected);
+
+        app.disconnected = true;
+        assert_eq!(connection_status(&app), ConnectionStatus::Disconnected);
+
+        let project = PathBuf::from("/repo/demo");
+        app.core.workspace.active = Some(project.clone());
+        app.displaced.insert(project.clone(), "other-window".into());
+        assert_eq!(
+            connection_status(&app),
+            ConnectionStatus::Displaced {
+                by: "other-window".into()
+            },
+            "a takeover must win over a plain disconnect"
+        );
+
+        app.build_mismatch = Some(("client-1".into(), "daemon-0".into()));
+        assert_eq!(
+            connection_status(&app),
+            ConnectionStatus::BuildMismatch {
+                client_build: "client-1".into(),
+                daemon_build: "daemon-0".into(),
+            },
+            "a same-contract build mismatch must win over a takeover"
+        );
+
+        app.version_mismatch = Some((2, 1, "daemon-0".into()));
+        assert_eq!(
+            connection_status(&app),
+            ConnectionStatus::VersionMismatch {
+                client: 2,
+                daemon: 1,
+                daemon_build: "daemon-0".into(),
+            },
+            "a wire-contract mismatch must win over a same-contract build mismatch"
+        );
     }
 }

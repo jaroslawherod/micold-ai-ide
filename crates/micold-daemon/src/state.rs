@@ -440,7 +440,7 @@ impl DaemonState {
     }
 
     /// Set any of the three environment-include settings and push `SettingsChanged` to every
-    /// client (FR-012b, FR-011). Invalidates every cached per-directory resolution (T095/BUG-003):
+    /// client (FR-012b, FR-011). Invalidates every cached per-directory resolution (T097/BUG-003):
     /// each cached directory's snapshot was resolved under the now-stale configuration.
     pub fn set_env_include(
         &self,

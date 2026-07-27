@@ -9,7 +9,7 @@ use std::sync::Arc;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, ErrorKind, LogEntry, LogSink};
-use micold_core::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 use micold_daemon::catalog::Catalog;
 use micold_daemon::logging::Logging;
 use micold_daemon::state::DaemonState;
@@ -29,6 +29,7 @@ async fn connect(state: &Arc<DaemonState>) -> Client {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test".into(),
+            client_package_version: PACKAGE_VERSION.into(),
         }))
         .await
         .unwrap();

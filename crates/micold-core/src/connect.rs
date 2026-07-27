@@ -21,7 +21,7 @@ use crate::protocol::codec::{ClientCodec, Frame};
 use crate::protocol::messages::{
     CatalogSnapshot, ClientMsg, DaemonMsg, DaemonSettings, RefusalReason,
 };
-use crate::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
+use crate::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 
 /// A handshaked connection to the daemon.
 pub type DaemonConnection = Framed<Stream, ClientCodec>;
@@ -84,6 +84,7 @@ pub async fn handshake(stream: Stream, client_build: &str) -> io::Result<Connect
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: client_build.to_string(),
+            client_package_version: PACKAGE_VERSION.to_string(),
         }))
         .await
         .map_err(io::Error::other)?;

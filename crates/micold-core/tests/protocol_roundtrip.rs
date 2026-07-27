@@ -48,6 +48,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             protocol_version: 1,
             schema_hash: [7u8; 32],
             client_build: "client-abc".into(),
+            client_package_version: "0.4.0".into(),
         },
         ClientMsg::Attach {
             project: PathBuf::from("/repo"),
