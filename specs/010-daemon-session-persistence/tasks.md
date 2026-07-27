@@ -420,3 +420,31 @@ T045's existing unit test; `cargo test --workspace` (98 groups) green.
 - Two brief premises were falsified in planning and are baked into the tasks above: the
   `SessionRouter`/`TerminalBackend` seam carries no production traffic (deleted in T030), and the test
   count is 259 not 63 (T007/T079). `bincode` is dead — grid frames use `postcard` (T010, T015).
+
+## Phase 12: Convergence
+
+- [X] T088 This feature's own distinctive requirements were verified directly and hold: FR-016a/b
+  (the `activity.rs` FSM is purely hook-driven — grepped for zero `Instant`/`elapsed`/timing
+  logic anywhere near it, confirming no quiescence inference survived the FR-016b rewrite),
+  FR-031/FR-035 (`Message::DaemonDisconnected` resolves every in-flight `pending_op` to an
+  explicit "unknown outcome" notification, never silent success/failure, per the reconnect-reads-
+  authoritative-state contract), and FR-007a (`prune_empty_off_runtime` is called only from the
+  `Attach` handler, never a background timer, so pruning never runs unattended).
+- **Not new findings, but tracked back here for a single point of reference**: this retrofit
+  sweep found and fixed four separate cases where this feature's migration of session/worktree
+  lifecycle logic from the client into the daemon silently dropped wiring that a pre-existing
+  feature's own spec required, each verified red→green with a regression test:
+  - `specs/005-worktree-session-terminal/tasks.md` T081 — the FR-020c durable archive marker
+    (`AiCliProvider::mark_archived`) was never called from the daemon's `archive_session`/
+    `archive_worktree_sessions`/`archive_session_ids`.
+  - `specs/006-real-terminal-emulator/tasks.md` T058/T059 — `app::route_key`/`KeyRouting`
+    (FR-009's focus gate) and `app::should_write_to` (FR-012a's write gate) both became
+    orphaned pure functions once the daemon took over process liveness.
+  - `specs/008-background-project-switching/tasks.md` T035 — `State::note_background_restart`
+    (FR-011) was never called from `reconcile_catalog`, so the daemon-driven snapshot
+    reconciliation never detected a background session transitioning into `Restarting`.
+  - `specs/013-create-worktree-refinement/tasks.md` T030 — `ClientMsg::WorktreeDelete` shipped
+    with no wire field for the keep/delete-branch choice (FR-011/FR-012/FR-014), so the daemon
+    hardcoded "always keep the branch" regardless of the confirm dialog's checkbox.
+  No further instances were found in this feature's own scope. Recorded here in case it's useful
+  context for reviewing future migrations of similar scope.
