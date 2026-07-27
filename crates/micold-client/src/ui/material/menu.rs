@@ -1,16 +1,23 @@
 //! `Menu` — a reusable overflow/dropdown menu primitive (Constitution Principle VIII).
 //!
-//! Split into a [`menu_trigger`] (an icon button that lives in the toolbar) and a
-//! [`menu_overlay`] that floats the item panel **above** the rest of the window as a true
-//! overlay (Angular-Material `mat-menu` style) — so opening it never reflows the toolbar.
-//! Reused for the toolbar's overflow menu; any future dropdown should reuse it.
+//! Split into a [`MenuTrigger`] (an icon button that lives in the toolbar) and a [`MenuOverlay`]
+//! that floats the item panel **above** the rest of the window (Angular-Material `mat-menu` style)
+//! — so opening it never reflows the toolbar. Reused for the toolbar's overflow menu; any future
+//! dropdown should reuse it.
+//!
+//! Floating is not this module's job. It builds the panel and says where the panel wants to sit;
+//! [`cdk::overlay`](crate::ui::cdk::overlay) does the placing, the input blocking, the dismissal
+//! and the z-order (FR-008). What is left here is appearance: the panel's width, its padding, and
+//! how far below the app bar it hangs.
 
 use crate::icons::Icon;
-use micold_core::tokens::{spacing, type_scale, Roles};
+use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::{menu_panel, IconButton};
 use crate::ui::{icon, style};
-use iced::widget::{button, column, container, mouse_area, row, text, Space};
+use iced::widget::{button, column, row, text};
 use iced::{Alignment, Element, Length};
+use micold_core::overlay::Layer;
+use micold_core::tokens::{spacing, type_scale, Roles};
 
 /// One entry in a menu. Generic over the message type for reuse.
 pub struct MenuItem<M> {
@@ -104,40 +111,34 @@ impl<'a, M: Clone + 'a> From<MenuTrigger<M>> for Element<'a, M> {
     }
 }
 
-/// Floats the menu panel over `base`, anchored top-right below the toolbar, with a fade driven
-/// by `progress` (0 = hidden, 1 = fully shown). An invisible full-window backdrop beneath the
-/// panel emits `on_dismiss` on an outside click, so the menu closes without reflowing any
-/// layout. At `progress` ≤ 0 the overlay is absent and `base` is returned as-is. Builder form
-/// (Principle VIII): `MenuOverlay::new(base, items, on_dismiss, roles).progress(p).into()`.
+/// The menu panel, anchored top-right below the toolbar by default, with a fade driven by
+/// `progress` (0 = hidden, 1 = fully shown). Builder form (Principle VIII):
+/// `MenuOverlay::new(items, on_dismiss, roles).progress(p).into()`, yielding `Option<Surface>` —
+/// `None` once the fade has finished, so a closed menu leaves no trace.
 pub struct MenuOverlay<'a, M> {
-    base: Element<'a, M>,
     items: Vec<MenuItem<M>>,
     on_dismiss: M,
     roles: Roles,
     progress: f32,
     anchor: Option<iced::Point>,
+    lifetime: std::marker::PhantomData<&'a ()>,
 }
 
 impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
-    /// A menu panel over `base` with `items`, dismissing via `on_dismiss`, themed by `roles`.
-    /// Fully shown by default; set [`Self::progress`] to fade.
-    pub fn new(
-        base: impl Into<Element<'a, M>>,
-        items: Vec<MenuItem<M>>,
-        on_dismiss: M,
-        roles: Roles,
-    ) -> Self {
+    /// A menu panel with `items`, dismissing via `on_dismiss`, themed by `roles`. Fully shown by
+    /// default; set [`Self::progress`] to fade.
+    pub fn new(items: Vec<MenuItem<M>>, on_dismiss: M, roles: Roles) -> Self {
         Self {
-            base: base.into(),
             items,
             on_dismiss,
             roles,
             progress: 1.0,
             anchor: None,
+            lifetime: std::marker::PhantomData,
         }
     }
 
-    /// Fade progress (0 = hidden → returns `base` as-is; 1 = fully shown).
+    /// Fade progress (0 = hidden → yields no surface; 1 = fully shown).
     pub fn progress(mut self, progress: f32) -> Self {
         self.progress = progress;
         self
@@ -146,139 +147,98 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
     /// Anchor the panel at a top-left offset (window coordinates) instead of the default
     /// toolbar-relative top-right position (feature 008 context menu). The panel's top-left
     /// corner is placed at `point`.
+    ///
+    /// A cursor-anchored menu is a context menu, so this also moves it into the context-menu band
+    /// — right-clicking a row inside an open popover must not put the row's menu behind it.
     pub fn anchor(mut self, point: iced::Point) -> Self {
         self.anchor = Some(point);
         self
     }
 }
 
-impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Element<'a, M> {
+impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Option<Surface<'a, M>> {
     fn from(m: MenuOverlay<'a, M>) -> Self {
         let MenuOverlay {
-            base,
             items,
             on_dismiss,
             roles: r,
             progress,
             anchor,
+            ..
         } = m;
         if progress <= 0.001 {
-            return base;
+            return None;
         }
 
-        // Fade the panel box itself (scrim of its own surface color), then anchor it top-right.
-        let panel_box = super::fade(
+        // Fade the panel box itself (scrim of its own surface colour). Where it lands is the
+        // overlay's business; how wide and how padded it is, is this module's.
+        let panel = super::fade(
             menu_panel(item_column(items, r), Length::Fixed(PANEL_WIDTH), r, true),
             progress,
             style::color(r.surface),
         );
-        let panel = match anchor {
-            // Context-menu anchor: place the panel's top-left corner at `point`.
-            Some(point) => container(panel_box)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Left)
-                .align_y(iced::alignment::Vertical::Top)
-                .padding(iced::Padding {
-                    top: point.y,
-                    right: 0.0,
-                    bottom: 0.0,
-                    left: point.x,
-                }),
-            // Default: anchored top-right below the toolbar.
-            None => container(panel_box)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Right)
-                .align_y(iced::alignment::Vertical::Top)
-                .padding(iced::Padding {
+
+        let (layer, anchor) = match anchor {
+            Some(point) => (Layer::ContextMenu, Anchor::Point(point)),
+            None => (
+                Layer::Popover,
+                Anchor::TopEnd {
                     top: TOP_OFFSET,
-                    right: spacing::SM,
-                    bottom: 0.0,
-                    left: 0.0,
-                }),
+                    end: spacing::SM,
+                },
+            ),
         };
-
-        // Invisible backdrop that dismisses the menu on any outside click.
-        let backdrop = mouse_area(
-            container(Space::new().width(Length::Fill).height(Length::Fill))
-                .width(Length::Fill)
-                .height(Length::Fill),
-        )
-        .on_press(on_dismiss);
-
-        iced::widget::stack![base, backdrop, panel].into()
+        Some(Surface::new(layer, panel, anchor).on_dismiss(on_dismiss))
     }
 }
 
-/// A right-click context menu: floats a small item panel anchored at a pane-local pixel point
-/// over `base`, with an invisible full-area backdrop that emits `on_dismiss` on an outside click.
-/// Unlike [`MenuOverlay`] (anchored top-right below the toolbar), the panel follows the cursor.
-/// Builder form (Principle VIII): `ContextMenu::new(base, items, (x, y), on_dismiss, roles).into()`.
+/// A right-click context menu: a small item panel anchored at a pane-local pixel point. Unlike
+/// [`MenuOverlay`]'s default (top-right below the toolbar) the panel follows the cursor, and it is
+/// narrower. Builder form (Principle VIII):
+/// `ContextMenu::new(items, (x, y), on_dismiss, roles).into()`.
 pub struct ContextMenu<'a, M> {
-    base: Element<'a, M>,
     items: Vec<MenuItem<M>>,
     origin: (u16, u16),
     on_dismiss: M,
     roles: Roles,
+    lifetime: std::marker::PhantomData<&'a ()>,
 }
 
 impl<'a, M: Clone + 'a> ContextMenu<'a, M> {
-    /// A context menu over `base` with `items`, anchored at pane-local pixel point `origin`,
-    /// dismissing via `on_dismiss`, themed by `roles`.
-    pub fn new(
-        base: impl Into<Element<'a, M>>,
-        items: Vec<MenuItem<M>>,
-        origin: (u16, u16),
-        on_dismiss: M,
-        roles: Roles,
-    ) -> Self {
+    /// A context menu with `items`, anchored at pane-local pixel point `origin`, dismissing via
+    /// `on_dismiss`, themed by `roles`.
+    pub fn new(items: Vec<MenuItem<M>>, origin: (u16, u16), on_dismiss: M, roles: Roles) -> Self {
         Self {
-            base: base.into(),
             items,
             origin,
             on_dismiss,
             roles,
+            lifetime: std::marker::PhantomData,
         }
     }
 }
 
-impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Element<'a, M> {
+impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Surface<'a, M> {
     fn from(m: ContextMenu<'a, M>) -> Self {
         let ContextMenu {
-            base,
             items,
             origin,
             on_dismiss,
             roles: r,
+            ..
         } = m;
 
-        // Anchor the panel's top-left at the click point via top/left padding on a fill container.
-        let panel = container(menu_panel(
+        let panel = menu_panel(
             item_column(items, r),
             Length::Fixed(CONTEXT_MENU_WIDTH),
             r,
             true,
-        ))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(iced::alignment::Horizontal::Left)
-        .align_y(iced::alignment::Vertical::Top)
-        .padding(iced::Padding {
-            top: origin.1 as f32,
-            left: origin.0 as f32,
-            right: 0.0,
-            bottom: 0.0,
-        });
-
-        // Invisible backdrop that dismisses the menu on any outside click.
-        let backdrop = mouse_area(
-            container(Space::new().width(Length::Fill).height(Length::Fill))
-                .width(Length::Fill)
-                .height(Length::Fill),
+        );
+        Surface::new(
+            Layer::ContextMenu,
+            panel,
+            Anchor::Point(iced::Point::new(origin.0 as f32, origin.1 as f32)),
         )
-        .on_press(on_dismiss);
-
-        iced::widget::stack![base, backdrop, panel].into()
+        .on_dismiss(on_dismiss)
     }
 }

@@ -9,6 +9,7 @@
 
 use crate::app::{BranchSource, Message, ResolutionState, WorktreeForm, WorktreeFormStatus};
 use micold_core::tokens::{self, spacing, type_scale, Roles};
+use crate::ui::cdk::overlay::Surface;
 use crate::ui::material::{Modal, Select, StageProgress, ToggleChip};
 use crate::ui::style;
 use iced::widget::{button, column, container, row, text, text_input, Space};
@@ -17,15 +18,14 @@ use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::worktree::{BlockReason, BranchOrigin, BranchSituation, CreateMode};
 
-/// Stack the add-worktree form as a modal overlay on top of `base`, at transition `progress`
+/// The add-worktree form as a modal surface, at transition `progress`
 /// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
 pub fn modal<'a>(
-    base: Element<'a, Message>,
     form: &'a WorktreeForm,
     error: Option<&'a str>,
     scheme: ColorScheme,
     progress: f32,
-) -> Element<'a, Message> {
+) -> Option<Surface<'a, Message>> {
     let r = tokens::roles(scheme);
     let is_creating = form.status == WorktreeFormStatus::Creating;
 
@@ -120,7 +120,7 @@ pub fn modal<'a>(
         .width(Length::Fixed(520.0))
         .style(style::dialog(r));
 
-    Modal::new(base, dialog, r).progress(progress).into()
+    Modal::new(dialog, r).progress(progress).into()
 }
 
 /// Red body text, for validation and block explanations.

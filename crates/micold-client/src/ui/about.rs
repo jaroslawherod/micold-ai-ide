@@ -2,24 +2,21 @@
 
 use crate::app::Message;
 use micold_core::tokens::{self, spacing, type_scale};
+use crate::ui::cdk::overlay::Surface;
 use crate::ui::material::Modal;
 use crate::ui::style;
 use iced::widget::{button, column, container, text};
-use iced::Element;
 use micold_core::metadata::AppMetadata;
 use micold_core::theme::ColorScheme;
 
-/// Stack the About dialog as a modal overlay on top of `base`, at transition `progress`
+/// The About dialog as a modal surface, at transition `progress`
 /// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
 ///
 /// The overlay captures all input while shown, so the content beneath is non-interactive
-/// (FR-013). Dismissal is via the Close button (FR-010) or Esc (FR-011) — clicking the dimmed
-/// backdrop does not dismiss.
-pub fn modal(
-    base: Element<'_, Message>,
-    scheme: ColorScheme,
-    progress: f32,
-) -> Element<'_, Message> {
+/// (FR-013). Dismissal is via the Close button (FR-010), Esc (FR-011), or a click on the dimmed
+/// scrim — the last of these is new in feature 017, which unified dismissal across every floating
+/// surface (FR-009, FR-024).
+pub fn modal<'a>(scheme: ColorScheme, progress: f32) -> Option<Surface<'a, Message>> {
     let r = tokens::roles(scheme);
     let meta = AppMetadata::from_env();
 
@@ -42,5 +39,5 @@ pub fn modal(
     .padding(spacing::LG)
     .style(style::dialog(r));
 
-    Modal::new(base, dialog, r).progress(progress).into()
+    Modal::new(dialog, r).progress(progress).into()
 }

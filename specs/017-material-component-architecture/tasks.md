@@ -9,6 +9,8 @@ description: "Task list for feature 017 — Material Component Architecture"
 
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/component-api.md](./contracts/component-api.md)
 
+**Behaviour delta**: [behavior-delta.md](./behavior-delta.md) — the complete list of what this feature changes that a user can notice, produced by T015.
+
 **Tests**: MANDATORY per Constitution Principle I. Failing tests before implementation.
 
 **Documentation**: MANDATORY per Constitution Principle VII — developer documentation of the layer split ships in the same change.
@@ -69,14 +71,14 @@ Test command: `mise run test` (`cargo test --workspace`).
 
 ### Tests (write first, confirm they FAIL) ⚠️
 
-- [ ] T011 [P] [US3] Failing test in `crates/micold-client/tests/overlay_stacking.rs` asserting two open floating surfaces stack in a deterministic order independent of composition order (FR-010, SC-003)
-- [ ] T012 [P] [US3] Failing test in `crates/micold-client/tests/cdk_no_appearance.rs` asserting no module under `ui/cdk/` references a color role, elevation level, shape size or type role — the behavior layer carries no appearance (FR-007)
+- [X] T011 [P] [US3] Failing test in `crates/micold-client/tests/overlay_stacking.rs` asserting two open floating surfaces stack in a deterministic order independent of composition order (FR-010, SC-003)
+- [X] T012 [P] [US3] Failing test in `crates/micold-client/tests/cdk_no_appearance.rs` asserting no module under `ui/cdk/` references a color role, elevation level, shape size or type role — the behavior layer carries no appearance (FR-007)
 
 ### Implementation
 
-- [ ] T013 [US3] Create `crates/micold-client/src/ui/cdk/overlay.rs` — **one** overlay primitive owning positioning, backdrop, dismissal (delegating to the core rules) and stacking order (FR-006, FR-008)
-- [ ] T014 [US3] Migrate all five floating surfaces onto the single overlay — `crates/micold-client/src/ui/material/modal.rs`, `menu.rs` (overflow and context menus), `project_switcher.rs` and `select.rs` — deleting their independent positioning, backdrop and dismissal code (FR-008, SC-003)
-- [ ] T015 [US3] Verify each surface's dismissal now follows the unified rule, and record every surface whose behavior changed — that list is the complete sanctioned behavior delta (FR-009, FR-024)
+- [X] T013 [US3] Create `crates/micold-client/src/ui/cdk/overlay.rs` — **one** overlay primitive owning positioning, backdrop, dismissal (delegating to the core rules) and stacking order (FR-006, FR-008)
+- [X] T014 [US3] Migrate all five floating surfaces onto the single overlay — `crates/micold-client/src/ui/material/modal.rs`, `menu.rs` (overflow and context menus), `project_switcher.rs` and `select.rs` — deleting their independent positioning, backdrop and dismissal code (FR-008, SC-003). **Four of the five moved**; `select.rs` delegates to the rendering stack's own widget-attached overlay system and must keep doing so — see [`behavior-delta.md`](./behavior-delta.md) *Deviations*
+- [X] T015 [US3] Verify each surface's dismissal now follows the unified rule, and record every surface whose behavior changed — that list is the complete sanctioned behavior delta (FR-009, FR-024). Recorded in [`behavior-delta.md`](./behavior-delta.md), asserted by `crates/micold-client/tests/overlay_dismissal_delta.rs`
 
 **Checkpoint**: One overlay, consistent dismissal. Appearance still unchanged.
 

@@ -5,27 +5,27 @@
 
 use crate::app::Message;
 use micold_core::tokens::{self, spacing, type_scale};
+use crate::ui::cdk::overlay::Surface;
 use crate::ui::material::Modal;
 use crate::ui::style;
 use iced::widget::{button, checkbox, column, container, row, text};
-use iced::{Element, Length};
+use iced::Length;
 use micold_core::theme::ColorScheme;
 
 /// Stack the confirm-delete dialog for the worktree `dir_name` (shown by its `friendly` display
-/// name — the rename override when set) as a modal over `base`, at transition `progress`
+/// name — the rename override when set) as a modal surface, at transition `progress`
 /// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]). `branch` is the worktree's associated git
 /// branch, when it has one (feature 013) — `None` skips the branch-deletion checkbox entirely.
 /// `keep_branch` is the user's current choice (feature 013, FR-011): the checkbox reads "delete,"
 /// so it is drawn checked when `!keep_branch`.
 pub fn modal<'a>(
-    base: Element<'a, Message>,
     dir_name: &str,
     friendly: &str,
     branch: Option<&str>,
     keep_branch: bool,
     scheme: ColorScheme,
     progress: f32,
-) -> Element<'a, Message> {
+) -> Option<Surface<'a, Message>> {
     let r = tokens::roles(scheme);
 
     let warning = format!(
@@ -67,5 +67,5 @@ pub fn modal<'a>(
         .width(Length::Fixed(460.0))
         .style(style::dialog(r));
 
-    Modal::new(base, dialog, r).progress(progress).into()
+    Modal::new(dialog, r).progress(progress).into()
 }

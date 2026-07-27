@@ -561,6 +561,11 @@ pub enum Message {
     /// Toggle whether agent-owned worktrees are included in the sidebar list (feature 014,
     /// FR-010). Sole mutation: `show_agent_worktrees`. Never touches the tag filters (FR-010d).
     ShowAgentWorktreesToggled,
+    /// Content scrolled underneath an open floating surface (feature 017, FR-009). The third of
+    /// the three dismissal triggers, and the one no widget used to report — see
+    /// [`micold_core::overlay::Trigger::ScrollBeneath`]. Emitted unconditionally by the scrollable
+    /// that moved; deciding whether anything closes is the reducer's job, via the shared rule.
+    ScrolledBeneathOverlay,
     /// The pointer entered a worktree row (feature 008), by `dir_name`; reveals its row actions.
     WorktreeHovered(String),
     /// The pointer left a worktree row (feature 008), by `dir_name`; hides its row actions.
@@ -1312,6 +1317,20 @@ impl State {
             }
             Message::SidebarFiltersCleared => {
                 self.sidebar_filters.clear();
+            }
+            Message::ScrolledBeneathOverlay => {
+                // Ask the shared rule, rather than deciding here: a non-modal surface is transient
+                // and the ground moving under it means the user has moved on, while a dialog is
+                // anchored to nothing and must survive it (feature 017, FR-009, FR-017).
+                use micold_core::overlay::{dismisses, Surface as OverlaySurface, Trigger};
+                if dismisses(OverlaySurface::NonModal, Trigger::ScrollBeneath) {
+                    self.help_menu_open = false;
+                    self.project_switcher_open = false;
+                    self.sidebar_filter_open = false;
+                    self.project_menu_open = None;
+                    self.worktree_menu_open = None;
+                    self.session_menu_open = None;
+                }
             }
             Message::SidebarFilterMenuToggled => {
                 self.sidebar_filter_open = !self.sidebar_filter_open;

@@ -4,20 +4,20 @@
 
 use crate::app::Message;
 use micold_core::tokens::{self, spacing, type_scale};
+use crate::ui::cdk::overlay::Surface;
 use crate::ui::material::Modal;
 use crate::ui::style;
 use iced::widget::{button, column, container, row, text};
-use iced::{Element, Length};
+use iced::Length;
 use micold_core::theme::ColorScheme;
 
-/// Stack the confirm-remove dialog for a session (shown by its sidebar `label`) as a modal over
-/// `base`, at transition `progress` (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
+/// The confirm-remove dialog for a session (shown by its sidebar `label`) as a modal surface,
+/// at transition `progress` (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
 pub fn modal<'a>(
-    base: Element<'a, Message>,
     label: &str,
     scheme: ColorScheme,
     progress: f32,
-) -> Element<'a, Message> {
+) -> Option<Surface<'a, Message>> {
     let r = tokens::roles(scheme);
 
     let warning = "This permanently deletes the session. Unlike Close, it cannot be recovered — \
@@ -46,5 +46,5 @@ pub fn modal<'a>(
         .width(Length::Fixed(460.0))
         .style(style::dialog(r));
 
-    Modal::new(base, dialog, r).progress(progress).into()
+    Modal::new(dialog, r).progress(progress).into()
 }

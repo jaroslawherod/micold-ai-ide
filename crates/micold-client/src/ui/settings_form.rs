@@ -3,10 +3,11 @@
 
 use crate::app::{Message, SettingsDraft};
 use micold_core::tokens::{self, spacing, type_scale};
+use crate::ui::cdk::overlay::Surface;
 use crate::ui::material::Modal;
 use crate::ui::style;
 use iced::widget::{button, checkbox, column, container, row, text, text_input};
-use iced::{Element, Length};
+use iced::Length;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 
@@ -23,17 +24,16 @@ fn failure_label_and_diagnostic(outcome: &EnvIncludeOutcome) -> Option<(&'static
     }
 }
 
-/// Stack the Settings dialog as a modal overlay on top of `base`, at transition `progress`
+/// The Settings dialog as a modal surface, at transition `progress`
 /// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]). `env_include_outcome` is the most recent
 /// environment-include resolution attempt's result, rendered as a read-only failure note when
 /// it didn't succeed (feature 011, FR-012/FR-013).
 pub fn modal<'a>(
-    base: Element<'a, Message>,
     draft: &'a SettingsDraft,
     scheme: ColorScheme,
     progress: f32,
     env_include_outcome: &'a EnvIncludeOutcome,
-) -> Element<'a, Message> {
+) -> Option<Surface<'a, Message>> {
     let r = tokens::roles(scheme);
 
     let input = text_input("Scrollback lines", &draft.scrollback_lines)
@@ -113,5 +113,5 @@ pub fn modal<'a>(
         .width(Length::Fixed(420.0))
         .style(style::dialog(r));
 
-    Modal::new(base, dialog, r).progress(progress).into()
+    Modal::new(dialog, r).progress(progress).into()
 }

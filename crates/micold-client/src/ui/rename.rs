@@ -4,21 +4,21 @@
 
 use crate::app::{Message, RenameDraft};
 use micold_core::tokens::{self, spacing, type_scale};
+use crate::ui::cdk::overlay::Surface;
 use crate::ui::material::Modal;
 use crate::ui::style;
 use iced::widget::{button, column, container, row, text, text_input};
-use iced::{Element, Length};
+use iced::Length;
 use micold_core::project::RenameError;
 use micold_core::theme::ColorScheme;
 
-/// Stack the rename dialog as a modal overlay on top of `base`, at transition `progress`
+/// The rename dialog as a modal surface, at transition `progress`
 /// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
 pub fn modal<'a>(
-    base: Element<'a, Message>,
     draft: &'a RenameDraft,
     scheme: ColorScheme,
     progress: f32,
-) -> Element<'a, Message> {
+) -> Option<Surface<'a, Message>> {
     let r = tokens::roles(scheme);
 
     let input = text_input("Project name", &draft.text)
@@ -64,5 +64,5 @@ pub fn modal<'a>(
         .width(Length::Fixed(420.0))
         .style(style::dialog(r));
 
-    Modal::new(base, dialog, r).progress(progress).into()
+    Modal::new(dialog, r).progress(progress).into()
 }

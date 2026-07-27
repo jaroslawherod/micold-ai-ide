@@ -60,6 +60,54 @@ impl Trigger {
     ];
 }
 
+/// Which band of the z-order a floating surface belongs to (FR-010).
+///
+/// Stacking used to be whatever fell out of composition order: each surface wrapped the previous
+/// one, so "which is on top" was a property of the order the view function happened to build them
+/// in. Declaring the band explicitly makes the order a property of *what the surface is*, so
+/// reordering the composition cannot reorder the screen.
+///
+/// Variants are declared bottom-to-top and the derived `Ord` is that order — adding a variant in
+/// the middle moves it in the z-order, which is the intent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Layer {
+    /// A panel attached to a trigger that stays put: the overflow menu, the project switcher.
+    Popover,
+    /// A panel anchored at the cursor. Opens *over* a popover, because right-clicking a row in an
+    /// open switcher must not put the row's own menu behind the panel it came from.
+    ContextMenu,
+    /// A modal dialog. Always above every non-modal surface — a dialog beneath a menu would be
+    /// unreachable, since the dialog captures input the menu is then drawn on top of.
+    Dialog,
+}
+
+impl Layer {
+    /// Every band, bottom-to-top, so callers (and the totality test) can enumerate exhaustively.
+    pub const ALL: &'static [Layer] = &[Layer::Popover, Layer::ContextMenu, Layer::Dialog];
+
+    /// The surface kind this band implies, so a caller cannot pair a dialog band with non-modal
+    /// dismissal by accident. `Dialog` is the dismissible variant; a caller that needs
+    /// [`Surface::NonDismissibleDialog`] states so explicitly.
+    pub fn surface(self) -> Surface {
+        match self {
+            Layer::Popover | Layer::ContextMenu => Surface::NonModal,
+            Layer::Dialog => Surface::Dialog,
+        }
+    }
+}
+
+/// Orders surfaces bottom-to-top by band, keeping the caller's order **within** a band.
+///
+/// Stable on purpose: two surfaces in the same band (two context menus, say) have no intrinsic
+/// order to appeal to, so preserving the order they were registered in is the only answer that is
+/// both deterministic and not arbitrary. Across bands the result is independent of registration
+/// order, which is the invariant FR-010 asks for.
+pub fn stack_order<T: Copy>(surfaces: &[(Layer, T)]) -> Vec<(Layer, T)> {
+    let mut ordered = surfaces.to_vec();
+    ordered.sort_by_key(|(layer, _)| *layer);
+    ordered
+}
+
 /// Whether `trigger` dismisses `surface`.
 ///
 /// Total by construction — every combination is answered, which is precisely what the five
@@ -93,5 +141,15 @@ mod tests {
         assert!(Trigger::ALL
             .iter()
             .all(|t| !dismisses(Surface::NonDismissibleDialog, *t)));
+    }
+
+    /// The point of the band: the same two surfaces come out the same way round however they were
+    /// registered. This is what composition order used to decide.
+    #[test]
+    fn a_dialog_outranks_a_menu_whichever_was_registered_first() {
+        let menu_first = stack_order(&[(Layer::Popover, "menu"), (Layer::Dialog, "dialog")]);
+        let dialog_first = stack_order(&[(Layer::Dialog, "dialog"), (Layer::Popover, "menu")]);
+        assert_eq!(menu_first, dialog_first);
+        assert_eq!(menu_first.last().unwrap().1, "dialog");
     }
 }

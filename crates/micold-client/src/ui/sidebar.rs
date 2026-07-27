@@ -155,6 +155,10 @@ pub fn view<'a>(
     ))
     .height(Length::Fill)
     .style(style::scrollbar(r))
+    // Scrolling the list is the third dismissal trigger (feature 017, FR-009): a menu opened from
+    // a row is stale once the rows have moved. Reported unconditionally — whether anything closes
+    // is the reducer's decision, taken through the shared rule.
+    .on_scroll(|_| Message::ScrolledBeneathOverlay)
     .into();
 
     // Minimal left/right padding to maximize name/tag width (FR-009); a little vertical breathing

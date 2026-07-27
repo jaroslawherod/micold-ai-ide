@@ -1,6 +1,7 @@
 //! iced rendering layer for the main window. Bin-only; compiled with the `gui` feature.
 
 mod about;
+pub mod cdk;
 mod confirm_delete;
 mod confirm_forget;
 mod confirm_session_remove;
@@ -293,9 +294,13 @@ pub fn view<'a>(
         base = stack![base, capture].into();
     }
 
-    // Float the toolbar's overflow menu over everything (no toolbar reflow), fading in/out.
-    let base: Element<'a, Message> = material::MenuOverlay::new(
-        base,
+    // Every floating surface from here down is *pushed onto one overlay* rather than wrapped
+    // around the previous one (FR-008). The order they are pushed in is not the order they are
+    // drawn in: the overlay sorts by each surface's own layer, so a dialog is above a menu because
+    // it is a dialog, not because this function happens to build it last (FR-010).
+
+    // The toolbar's overflow menu (no toolbar reflow), fading in/out.
+    let overflow_menu: Option<cdk::overlay::Surface<'a, Message>> = material::MenuOverlay::new(
         toolbar::overflow_items(state),
         Message::HelpMenuToggled,
         roles,
@@ -303,9 +308,9 @@ pub fn view<'a>(
     .progress(motion.get(MotionKey::Menu))
     .into();
 
-    // Float the project switcher panel. Rows are built purely from the workspace: active
-    // marker, running-background-session count, and unavailable badge. Mutually exclusive with
-    // the overflow menu (handled in the reducer).
+    // The project switcher panel. Rows are built purely from the workspace: active marker,
+    // running-background-session count, and unavailable badge. Mutually exclusive with the
+    // overflow menu (handled in the reducer).
     let switcher_rows: Vec<material::ProjectRow<Message>> = state
         .switcher_entries()
         .into_iter()
@@ -320,8 +325,7 @@ pub fn view<'a>(
             on_context: Some(Message::ProjectMenuToggled(e.path)),
         })
         .collect();
-    let base = material::ProjectSwitcherOverlay::new(
-        base,
+    let switcher: Option<cdk::overlay::Surface<'a, Message>> = material::ProjectSwitcherOverlay::new(
         switcher_rows,
         Message::ProjectSelectorOpened,
         Message::ProjectSwitcherToggled,
@@ -330,19 +334,19 @@ pub fn view<'a>(
     .open(state.project_switcher_open)
     .into();
 
-    // Float the right-clicked project's context menu at the cursor (feature 015), like a normal
-    // desktop context menu: the panel's top-left corner sits at the click point. The anchor is
-    // clamped at render time (not when the menu opened) so a window resize while it is showing
-    // can never leave the panel hanging off the edge. The switcher stays open behind it.
-    let base = match &state.project_menu_open {
-        Some(menu) => {
+    // The right-clicked project's context menu, at the cursor (feature 015), like a normal desktop
+    // context menu: the panel's top-left corner sits at the click point. The anchor is clamped at
+    // render time (not when the menu opened) so a window resize while it is showing can never leave
+    // the panel hanging off the edge. The switcher stays open behind it — which is now a property
+    // of the context-menu layer rather than of the order these are built in.
+    let project_menu: Option<cdk::overlay::Surface<'a, Message>> =
+        state.project_menu_open.as_ref().and_then(|menu| {
             let (x, y) = crate::app::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(1),
                 state.window_size,
             );
             material::MenuOverlay::new(
-                base,
                 vec![material::MenuItem::new(
                     Icon::Delete,
                     "Forget project",
@@ -353,86 +357,70 @@ pub fn view<'a>(
             )
             .anchor(iced::Point::new(x as f32, y as f32))
             .into()
-        }
-        None => base,
-    };
+        });
 
-    // Float the worktree right-click context menu over everything, anchored near the sidebar
-    // (feature 008, FR-013). Only present while a worktree's menu is open.
-    let base = match &state.worktree_menu_open {
-        Some(dir) => material::MenuOverlay::new(
-            base,
-            worktree_menu_items(dir, &state.worktree_display_name(dir)),
-            Message::WorktreeMenuDismissed,
-            roles,
-        )
-        .anchor(iced::Point::new(24.0, 96.0))
-        .into(),
-        None => base,
-    };
+    // The worktree right-click context menu, anchored near the sidebar (feature 008, FR-013).
+    // Only present while a worktree's menu is open.
+    let worktree_menu: Option<cdk::overlay::Surface<'a, Message>> =
+        state.worktree_menu_open.as_ref().and_then(|dir| {
+            material::MenuOverlay::new(
+                worktree_menu_items(dir, &state.worktree_display_name(dir)),
+                Message::WorktreeMenuDismissed,
+                roles,
+            )
+            .anchor(iced::Point::new(24.0, 96.0))
+            .into()
+        });
 
-    // Float the session right-click context menu over everything (bugfix BUG-003). Only present
-    // while a session's menu is open.
-    let base = match state.session_menu_open {
-        Some(id) => material::MenuOverlay::new(
-            base,
-            session_menu_items(id),
-            Message::SessionMenuDismissed,
-            roles,
-        )
-        .anchor(iced::Point::new(24.0, 96.0))
-        .into(),
-        None => base,
-    };
+    // The session right-click context menu (bugfix BUG-003). Only present while a session's menu
+    // is open.
+    let session_menu: Option<cdk::overlay::Surface<'a, Message>> =
+        state.session_menu_open.and_then(|id| {
+            material::MenuOverlay::new(session_menu_items(id), Message::SessionMenuDismissed, roles)
+                .anchor(iced::Point::new(24.0, 96.0))
+                .into()
+        });
 
     // The overlay fade progress (0 = hidden, 1 = fully shown). Drives both the enter (a live
     // overlay fading in as this rises 0→1) and the exit (a dismissing snapshot fading out as it
     // falls 1→0). At <= 0.001 the modal renders `base` unchanged.
     let overlay_progress = motion.get(MotionKey::Overlay);
-    match state.overlay {
+    let modal: Option<cdk::overlay::Surface<'a, Message>> = match state.overlay {
         // No overlay open. If one is still fading out, render its snapshot (captured before the
-        // core cleared its live state) so the exit animation has something to draw (FR-002).
-        Overlay::None => match dismissing {
-            Some(closing) => {
-                dismissing_modal(base, closing, scheme, overlay_progress, env_include_outcome)
-            }
-            None => base,
-        },
-        Overlay::About => about::modal(base, scheme, overlay_progress),
-        Overlay::ProjectSelector => match &state.selector {
-            Some(selector) => project_selector::modal(base, selector, scheme, overlay_progress),
-            // Overlay flagged but no selector state — render the base defensively.
-            None => base,
-        },
-        Overlay::RenameProject => match &state.rename_draft {
-            Some(draft) => rename::modal(base, draft, scheme, overlay_progress),
-            None => base,
-        },
-        Overlay::AddWorktree => match &state.worktree_form {
-            Some(form) => worktree_form::modal(
-                base,
+        // core cleared its live state) so the exit animation has something to draw (FR-002). A
+        // snapshot is not interactive, so it carries no dismissal.
+        Overlay::None => dismissing.and_then(|closing| {
+            dismissing_modal(closing, scheme, overlay_progress, env_include_outcome)
+        }),
+        Overlay::About => about::modal(scheme, overlay_progress),
+        // Overlay flagged but no live state — render nothing rather than an empty dialog.
+        Overlay::ProjectSelector => state
+            .selector
+            .as_ref()
+            .and_then(|selector| project_selector::modal(selector, scheme, overlay_progress)),
+        Overlay::RenameProject => state
+            .rename_draft
+            .as_ref()
+            .and_then(|draft| rename::modal(draft, scheme, overlay_progress)),
+        Overlay::AddWorktree => state.worktree_form.as_ref().and_then(|form| {
+            worktree_form::modal(
                 form,
                 state.worktree_error.as_deref(),
                 scheme,
                 overlay_progress,
-            ),
-            None => base,
-        },
-        Overlay::Settings => match &state.settings_draft {
-            Some(draft) => {
-                settings_form::modal(base, draft, scheme, overlay_progress, env_include_outcome)
-            }
-            None => base,
-        },
-        Overlay::ConfirmWorktreeDelete => match &state.worktree_delete_target {
-            Some(dir) => {
+            )
+        }),
+        Overlay::Settings => state.settings_draft.as_ref().and_then(|draft| {
+            settings_form::modal(draft, scheme, overlay_progress, env_include_outcome)
+        }),
+        Overlay::ConfirmWorktreeDelete => {
+            state.worktree_delete_target.as_ref().and_then(|dir| {
                 let branch = state
                     .worktrees
                     .iter()
                     .find(|w| &w.dir_name == dir)
                     .and_then(|w| w.branch.as_deref());
                 confirm_delete::modal(
-                    base,
                     dir,
                     &state.worktree_display_name(dir),
                     branch,
@@ -440,42 +428,49 @@ pub fn view<'a>(
                     scheme,
                     overlay_progress,
                 )
-            }
-            None => base,
-        },
-        Overlay::RenameWorktree => match &state.worktree_rename_draft {
-            Some(draft) => worktree_rename::modal(base, draft, scheme, overlay_progress),
-            None => base,
-        },
-        Overlay::ConfirmSessionRemove => match state
+            })
+        }
+        Overlay::RenameWorktree => state
+            .worktree_rename_draft
+            .as_ref()
+            .and_then(|draft| worktree_rename::modal(draft, scheme, overlay_progress)),
+        Overlay::ConfirmSessionRemove => state
             .session_remove_target
             .and_then(|id| state.workspace.find_session(id))
-        {
-            Some((_, session)) => confirm_session_remove::modal(
-                base,
-                session.label.display(),
-                scheme,
-                overlay_progress,
-            ),
-            None => base,
-        },
-        Overlay::ConfirmForgetProject => match &state.forget_target {
-            Some(path) => {
-                // The display name and running-session count are read from the catalog/sessions
-                // at render time; the count (FR-002a) is exactly the set the binary will stop.
-                let display_name = state
-                    .workspace
-                    .projects
-                    .iter()
-                    .find(|p| &p.path == path)
-                    .map(|p| p.display_name.clone())
-                    .unwrap_or_else(|| micold_core::project::default_display_name(path));
-                let running = state.workspace.running_session_count(path);
-                confirm_forget::modal(base, &display_name, running, scheme, overlay_progress)
-            }
-            None => base,
-        },
-    }
+            .and_then(|(_, session)| {
+                confirm_session_remove::modal(session.label.display(), scheme, overlay_progress)
+            }),
+        Overlay::ConfirmForgetProject => state.forget_target.as_ref().and_then(|path| {
+            // The display name and running-session count are read from the catalog/sessions at
+            // render time; the count (FR-002a) is exactly the set the binary will stop.
+            let display_name = state
+                .workspace
+                .projects
+                .iter()
+                .find(|p| &p.path == path)
+                .map(|p| p.display_name.clone())
+                .unwrap_or_else(|| micold_core::project::default_display_name(path));
+            let running = state.workspace.running_session_count(path);
+            confirm_forget::modal(&display_name, running, scheme, overlay_progress)
+        }),
+    };
+
+    // Clicking the scrim closes a dialog exactly the way Escape does, so the two cannot disagree:
+    // both ask `on_escape` what this dialog's cancellation is (FR-009, the unified-dismissal
+    // change sanctioned by FR-024). A fading-out snapshot has no live overlay and so gets none.
+    let modal = match crate::app::on_escape(state) {
+        Some(cancel) => modal.map(|surface| surface.on_dismiss(cancel)),
+        None => modal,
+    };
+
+    cdk::overlay::Overlay::new(base)
+        .push_maybe(overflow_menu)
+        .push_maybe(switcher)
+        .push_maybe(project_menu)
+        .push_maybe(worktree_menu)
+        .push_maybe(session_menu)
+        .push_maybe(modal)
+        .into()
 }
 
 /// The items in a worktree's right-click context menu (feature 008, FR-013; "Copy name" added
@@ -518,24 +513,21 @@ fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
 /// has already cleared its live state (see [`crate::app::ClosingOverlay`]). Delegates to the same
 /// per-overlay `modal` render functions as the live path, so the exit is the enter in reverse.
 fn dismissing_modal<'a>(
-    base: Element<'a, Message>,
     closing: &'a crate::app::ClosingOverlay,
     scheme: ColorScheme,
     progress: f32,
     env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
-) -> Element<'a, Message> {
+) -> Option<cdk::overlay::Surface<'a, Message>> {
     use crate::app::ClosingOverlay;
     match closing {
-        ClosingOverlay::About => about::modal(base, scheme, progress),
-        ClosingOverlay::Selector(selector) => {
-            project_selector::modal(base, selector, scheme, progress)
-        }
-        ClosingOverlay::Rename(draft) => rename::modal(base, draft, scheme, progress),
+        ClosingOverlay::About => about::modal(scheme, progress),
+        ClosingOverlay::Selector(selector) => project_selector::modal(selector, scheme, progress),
+        ClosingOverlay::Rename(draft) => rename::modal(draft, scheme, progress),
         ClosingOverlay::Worktree(form, error) => {
-            worktree_form::modal(base, form, error.as_deref(), scheme, progress)
+            worktree_form::modal(form, error.as_deref(), scheme, progress)
         }
         ClosingOverlay::Settings(draft) => {
-            settings_form::modal(base, draft, scheme, progress, env_include_outcome)
+            settings_form::modal(draft, scheme, progress, env_include_outcome)
         }
         ClosingOverlay::ConfirmDelete(dir) => {
             // Fading-out snapshot: the override may already be gone, so fall back to the derived
@@ -543,16 +535,14 @@ fn dismissing_modal<'a>(
             // now too — this non-interactive snapshot fades the dialog without the branch
             // checkbox rather than reconstructing it.
             let friendly = micold_core::naming::display_name(dir);
-            confirm_delete::modal(base, dir, &friendly, None, false, scheme, progress)
+            confirm_delete::modal(dir, &friendly, None, false, scheme, progress)
         }
-        ClosingOverlay::WorktreeRename(draft) => {
-            worktree_rename::modal(base, draft, scheme, progress)
-        }
+        ClosingOverlay::WorktreeRename(draft) => worktree_rename::modal(draft, scheme, progress),
         ClosingOverlay::ConfirmSessionRemove(label) => {
-            confirm_session_remove::modal(base, label, scheme, progress)
+            confirm_session_remove::modal(label, scheme, progress)
         }
         ClosingOverlay::ConfirmForget(display_name, running) => {
-            confirm_forget::modal(base, display_name, *running, scheme, progress)
+            confirm_forget::modal(display_name, *running, scheme, progress)
         }
     }
 }

@@ -2,17 +2,22 @@
 //!
 //! Follows the split idiom of [`super::menu`]: a [`ProjectSwitcherTrigger`] icon+label button
 //! that lives in the toolbar (placed left of the overflow [`super::MenuTrigger`]), and a
-//! [`ProjectSwitcherOverlay`] that floats the project list **above** the window as a true
-//! overlay, so opening it never reflows the bar. Rows carry an active marker, a running
-//! background-session count, and an unavailable badge; a trailing "Add project…" row opens the
-//! folder browser. Reuses the shared backdrop/stack overlay machinery rather than forking one.
+//! [`ProjectSwitcherOverlay`] that floats the project list **above** the window, so opening it
+//! never reflows the bar. Rows carry an active marker, a running background-session count, and an
+//! unavailable badge; a trailing "Add project…" row opens the folder browser.
+//!
+//! Floating, dismissal and z-order come from the one shared primitive
+//! ([`cdk::overlay`](crate::ui::cdk::overlay), FR-008) — this module builds the panel and says
+//! where it wants to sit.
 
 use super::{menu_panel, Tooltip};
 use crate::icons::{icon_role, Icon, IconSurface};
-use micold_core::tokens::{spacing, type_scale, Roles};
+use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::{icon, style};
-use iced::widget::{button, column, container, mouse_area, row, text, Space};
+use iced::widget::{button, column, mouse_area, row, text};
 use iced::{Alignment, Element, Length};
+use micold_core::overlay::Layer;
+use micold_core::tokens::{spacing, type_scale, Roles};
 
 /// The width of the switcher panel.
 const PANEL_WIDTH: f32 = 260.0;
@@ -74,36 +79,29 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherTrigger<M>> for Element<'a, M> {
     }
 }
 
-/// Floats the switcher panel over `base`, anchored top-right below the toolbar. An invisible
-/// full-window backdrop dismisses it on an outside click. When `open` is false the overlay is
-/// absent and `base` is returned as-is. Builder form (Principle VIII):
-/// `ProjectSwitcherOverlay::new(base, rows, on_add, on_dismiss, roles).open(b).into()`.
+/// The switcher panel, anchored top-right below the toolbar. Builder form (Principle VIII):
+/// `ProjectSwitcherOverlay::new(rows, on_add, on_dismiss, roles).open(b).into()`, yielding
+/// `Option<Surface>` — `None` while closed, so a closed switcher leaves no trace.
 pub struct ProjectSwitcherOverlay<'a, M> {
-    base: Element<'a, M>,
     rows: Vec<ProjectRow<M>>,
     on_add: M,
     on_dismiss: M,
     roles: Roles,
     open: bool,
+    lifetime: std::marker::PhantomData<&'a ()>,
 }
 
 impl<'a, M: Clone + 'a> ProjectSwitcherOverlay<'a, M> {
-    /// A switcher panel over `base` listing `rows`, with an "Add project…" row emitting
-    /// `on_add` and outside-click dismissal via `on_dismiss`. Closed by default.
-    pub fn new(
-        base: impl Into<Element<'a, M>>,
-        rows: Vec<ProjectRow<M>>,
-        on_add: M,
-        on_dismiss: M,
-        roles: Roles,
-    ) -> Self {
+    /// A switcher panel listing `rows`, with an "Add project…" row emitting `on_add` and
+    /// outside-click dismissal via `on_dismiss`. Closed by default.
+    pub fn new(rows: Vec<ProjectRow<M>>, on_add: M, on_dismiss: M, roles: Roles) -> Self {
         Self {
-            base: base.into(),
             rows,
             on_add,
             on_dismiss,
             roles,
             open: false,
+            lifetime: std::marker::PhantomData,
         }
     }
 
@@ -114,18 +112,18 @@ impl<'a, M: Clone + 'a> ProjectSwitcherOverlay<'a, M> {
     }
 }
 
-impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Element<'a, M> {
+impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Option<Surface<'a, M>> {
     fn from(m: ProjectSwitcherOverlay<'a, M>) -> Self {
         let ProjectSwitcherOverlay {
-            base,
             rows,
             on_add,
             on_dismiss,
             roles: r,
             open,
+            ..
         } = m;
         if !open {
-            return base;
+            return None;
         }
 
         let active_tint = icon_role(IconSurface::Badge, r);
@@ -182,26 +180,17 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Element<'a, M> {
             .on_press(on_add),
         );
 
-        let panel = container(menu_panel(list, Length::Fixed(PANEL_WIDTH), r, true))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Right)
-            .align_y(iced::alignment::Vertical::Top)
-            .padding(iced::Padding {
-                top: TOP_OFFSET,
-                right: spacing::SM,
-                bottom: 0.0,
-                left: 0.0,
-            });
-
-        // Invisible backdrop that dismisses the switcher on any outside click.
-        let backdrop = mouse_area(
-            container(Space::new().width(Length::Fill).height(Length::Fill))
-                .width(Length::Fill)
-                .height(Length::Fill),
+        let panel = menu_panel(list, Length::Fixed(PANEL_WIDTH), r, true);
+        Some(
+            Surface::new(
+                Layer::Popover,
+                panel,
+                Anchor::TopEnd {
+                    top: TOP_OFFSET,
+                    end: spacing::SM,
+                },
+            )
+            .on_dismiss(on_dismiss),
         )
-        .on_press(on_dismiss);
-
-        iced::widget::stack![base, backdrop, panel].into()
     }
 }

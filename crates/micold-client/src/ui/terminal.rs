@@ -355,26 +355,33 @@ pub fn pane<'a>(
 
     // While the right-click context menu is open, float it over the terminal body anchored at the
     // clicked point; choosing Copy/Paste or clicking outside dismisses it (FR-013).
+    //
+    // Hosted on the terminal body rather than on the window's overlay, because `(x, y)` is
+    // pane-local: the pane's origin is not known at render time, so there is nothing to translate
+    // the point by. Same primitive, mounted one level down.
     let body: Element<'a, Message> = match state.terminal_context_menu {
-        Some((x, y)) => ContextMenu::new(
-            body,
-            vec![
-                MenuItem {
-                    icon: None,
-                    label: "Copy".to_string(),
-                    message: Message::TerminalCopyRequested,
-                },
-                MenuItem {
-                    icon: None,
-                    label: "Paste".to_string(),
-                    message: Message::TerminalPasteRequested,
-                },
-            ],
-            (x, y),
-            Message::TerminalContextMenuClosed,
-            r,
-        )
-        .into(),
+        Some((x, y)) => crate::ui::cdk::overlay::Overlay::new(body)
+            .push(
+                ContextMenu::new(
+                    vec![
+                        MenuItem {
+                            icon: None,
+                            label: "Copy".to_string(),
+                            message: Message::TerminalCopyRequested,
+                        },
+                        MenuItem {
+                            icon: None,
+                            label: "Paste".to_string(),
+                            message: Message::TerminalPasteRequested,
+                        },
+                    ],
+                    (x, y),
+                    Message::TerminalContextMenuClosed,
+                    r,
+                )
+                .into(),
+            )
+            .into(),
         None => body,
     };
 
