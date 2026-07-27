@@ -6,7 +6,7 @@
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusalReason};
-use micold_core::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 use tokio_util::codec::Framed;
 
 #[tokio::test]
@@ -23,6 +23,7 @@ async fn matching_handshake_gets_welcome_and_pong() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_package_version: PACKAGE_VERSION.into(),
         }))
         .await
         .unwrap();
@@ -64,6 +65,7 @@ async fn mismatched_handshake_is_refused_naming_both_sides() {
             protocol_version: PROTOCOL_VERSION + 1,
             schema_hash: SCHEMA_HASH,
             client_build: "stale-client".into(),
+            client_package_version: PACKAGE_VERSION.into(),
         }))
         .await
         .unwrap();
@@ -84,6 +86,51 @@ async fn mismatched_handshake_is_refused_naming_both_sides() {
     }
 
     // The daemon closes the connection after refusing.
+    assert!(
+        client.next().await.is_none(),
+        "connection must close after refusal"
+    );
+    server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn build_mismatch_is_refused_distinctly_when_contract_still_matches() {
+    // T093 (convergence F2, FR-022a/SC-009a) — a same-contract `.deb` upgrade must be caught end to
+    // end through the real accept path, not only at the pure `handshake::evaluate` unit level
+    // (`crates/micold-core/tests/handshake.rs`).
+    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
+    let state = std::sync::Arc::new(micold_daemon::state::DaemonState::new(
+        micold_daemon::catalog::Catalog::ephemeral(),
+    ));
+    let server = tokio::spawn(micold_daemon::server::serve_connection(state, server_io));
+    let mut client = Framed::new(client_io, ClientCodec::new());
+
+    // Matching contract, but a package version that differs from this build's own.
+    client
+        .send(Frame::Control(ClientMsg::Hello {
+            protocol_version: PROTOCOL_VERSION,
+            schema_hash: SCHEMA_HASH,
+            client_build: "micold-ai-ide/0.0.0-stale".into(),
+            client_package_version: "0.0.0-stale".into(),
+        }))
+        .await
+        .unwrap();
+
+    match client.next().await.unwrap().unwrap() {
+        Frame::Control(DaemonMsg::Refused {
+            reason:
+                RefusalReason::BuildMismatch {
+                    client_build,
+                    daemon_build,
+                },
+        }) => {
+            assert_eq!(client_build, "micold-ai-ide/0.0.0-stale");
+            assert_eq!(daemon_build, micold_daemon::server::daemon_build());
+        }
+        other => panic!("expected Refused::BuildMismatch, got {other:?}"),
+    }
+
+    // Same as a contract mismatch: the daemon closes the connection after refusing.
     assert!(
         client.next().await.is_none(),
         "connection must close after refusal"

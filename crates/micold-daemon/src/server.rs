@@ -215,29 +215,44 @@ where
     let mut framed = Framed::new(stream, DaemonCodec::new());
 
     // --- Handshake: the first frame must be a Hello, and it must match exactly. ---
-    let (client_version, client_hash, client_build) = match framed.next().await {
-        Some(Ok(Frame::Control(ClientMsg::Hello {
-            protocol_version,
-            schema_hash,
-            client_build,
-        }))) => (protocol_version, schema_hash, client_build),
-        Some(Ok(_)) => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "expected Hello as the first frame",
-            ))
-        }
-        Some(Err(e)) => return Err(io::Error::other(e)),
-        None => return Ok(()), // hung up before saying hello
-    };
+    let (client_version, client_hash, client_build, client_package_version) =
+        match framed.next().await {
+            Some(Ok(Frame::Control(ClientMsg::Hello {
+                protocol_version,
+                schema_hash,
+                client_build,
+                client_package_version,
+            }))) => (
+                protocol_version,
+                schema_hash,
+                client_build,
+                client_package_version,
+            ),
+            Some(Ok(_)) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "expected Hello as the first frame",
+                ))
+            }
+            Some(Err(e)) => return Err(io::Error::other(e)),
+            None => return Ok(()), // hung up before saying hello
+        };
 
-    if let Err(reason) = handshake::evaluate(client_version, client_hash, daemon_build()) {
+    if let Err(reason) = handshake::evaluate(
+        client_version,
+        client_hash,
+        &client_package_version,
+        client_build.clone(),
+        daemon_build(),
+    ) {
         // Identity + versions only — never any session content (FR-047).
         tracing::warn!(
             client_build = %client_build,
             client_version,
+            client_package_version = %client_package_version,
             daemon_version = micold_core::protocol::version::PROTOCOL_VERSION,
-            "refusing client: contract mismatch"
+            daemon_package_version = micold_core::protocol::version::PACKAGE_VERSION,
+            "refusing client: contract or build mismatch"
         );
         framed
             .send(Frame::Control(DaemonMsg::Refused { reason }))

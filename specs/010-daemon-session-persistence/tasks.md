@@ -359,6 +359,68 @@ See `bugs/BUG-001.md`.
 
 ---
 
+## Phase 12: Bugfix BUG-002 — daemon not restarted (or flagged stale) on a same-contract `.deb` upgrade
+
+**Goal**: the FR-021 handshake only refuses on a `PROTOCOL_VERSION`/`SCHEMA_HASH` mismatch, so a
+`.deb` upgrade whose daemon-side fix doesn't touch the wire schema — the common case, e.g. the
+BUG-001 fix — never trips it: the new client silently attaches to the old, already-running daemon
+via the `AlreadyRunning` singleton path, and the fix stays inert until something unrelated restarts
+the daemon. Adds FR-022a (build-staleness detection independent of wire-contract compatibility). See
+`bugs/BUG-002.md`.
+
+- [X] T088 [P] [US6] Test in `crates/micold-core/tests/handshake.rs`: same `protocol_version`/
+  `schema_hash` but differing `client_build`/`daemon_build` returns a `RefusalReason::BuildMismatch`
+  distinct from `VersionMismatch`; matching builds still return `Ok(())` (FR-022a, BUG-002). **Done**:
+  discovered mid-implementation that `client_build`/`daemon_build` are free-form diagnostic strings
+  with different program-name prefixes (`"micold-ai-ide/…"` vs `"micold-daemon …"`) that can never be
+  equal even on a matching release, so comparing them directly was never viable — confirmed with the
+  user before proceeding (per the project's "verify or ask, don't silently assume" convention).
+  Landed a dedicated `PACKAGE_VERSION` constant instead (below). 6 tests in `handshake.rs`: the two
+  new ones (`build_mismatch_is_refused_distinctly_when_contract_still_matches`,
+  `matching_package_version_is_accepted_even_with_differing_build_strings`) plus the 4 existing tests
+  updated for the new `evaluate()` signature.
+- [X] T089 [US6] Implement build-mismatch detection: add `RefusalReason::BuildMismatch{client_build,
+  daemon_build}` in `crates/micold-core/src/protocol/messages.rs`; thread `client_build` into
+  `handshake::evaluate` (`crates/micold-core/src/protocol/handshake.rs`) and compare it against
+  `daemon_build()` (`crates/micold-daemon/src/server.rs`) whenever `protocol_version`/`schema_hash`
+  already match. Depends on T088. (FR-022a, BUG-002) **Done**: added `PACKAGE_VERSION: &str =
+  env!("CARGO_PKG_VERSION")` to `crates/micold-core/src/protocol/version.rs` — every workspace member
+  shares one version (`version.workspace = true`), and `release-please` bumps it on every release
+  (confirmed against `CHANGELOG.md`/`git log` — 0.2.0 → 0.3.0 → 0.4.0, one bump per release), so it
+  changes on every `.deb` build whether or not the wire contract moved. Added `client_package_version`
+  to `ClientMsg::Hello` (a wire-visible change — bumped `PROTOCOL_VERSION` 1→2 per this file's own
+  "MUST be bumped" convention; the release that ships this fix will itself trip the *existing*
+  `VersionMismatch` path once via the schema-hash change, then `BuildMismatch` covers every
+  same-contract release after that). `handshake::evaluate` now takes `client_package_version` and
+  `client_build` and checks contract first (unchanged), then package version, returning
+  `RefusalReason::BuildMismatch{client_build, daemon_build}` on a same-contract difference.
+  `server.rs::serve_connection` destructures the new Hello field and passes it through; its refusal
+  log line gained `client_package_version`/`daemon_package_version` fields. Updated all 16
+  `ClientMsg::Hello` construction sites across the daemon/core integration tests for the new field.
+  `cargo test --workspace` (103 groups), `cargo clippy --workspace --all-targets -- -D warnings`,
+  `cargo fmt --check` all clean.
+- [X] T090 [US6] Client: extend the existing version-mismatch restart-action UI (`crates/micold-client/`,
+  T074) to also handle `Connected::Refused(BuildMismatch)` — same "Restart service" action and
+  stop/spawn mechanics, but presented as a distinct, lower-severity notice without the "live
+  processes will be lost" warning (the contract still matches). Depends on T089. (FR-022a, BUG-002)
+  **Done**: `daemon.rs`'s `connect_and_pump` matches `RefusalReason::BuildMismatch` alongside
+  `VersionMismatch` and sends a new `Message::DaemonBuildMismatch{client_build, daemon_build}`
+  (`app.rs`). `main.rs`'s `App` gained a sibling `build_mismatch: Option<(String, String)>` field
+  (cleared on every successful connect and on "Restart service", alongside `version_mismatch`);
+  `connection_status()` checks it with the same precedence tier as (but after) `version_mismatch`.
+  `ui/mod.rs` gained `ConnectionStatus::BuildMismatch` and its banner: "A newer session service is
+  installed" / "…your sessions are unaffected either way and remain resumable", reusing
+  `Message::ConnectionRestartServiceRequested` — the mechanics (stop old, auto-reconnect spawns
+  matching) are identical to the contract-mismatch case, only the wording differs.
+- [X] T091 [P] [US6] User-guide doc: extend `docs/daemon.md`'s "A version mismatch fails loudly, and
+  recovers (User Story 6)" section to distinguish build-staleness (same contract, different binary —
+  most bugfix/feature releases) from a wire-contract mismatch, so users understand why an upgrade did
+  or didn't restart the daemon. (FR-022a, FR-042, BUG-002) **Done**: new "After installing an update"
+  subsection between the existing "Your sessions survive the restart" bullet and "Interrupted-resumable
+  sessions after any service restart".
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase dependencies
@@ -410,6 +472,9 @@ stories would be. That is inherent to replacing the process boundary, not a task
 landed the matcher/hooks wrapper fix in `settings_json()`; T087's regression coverage folded into
 T045's existing unit test; `cargo test --workspace` (98 groups) green.
 
+**Bugfix**: 2026-07-27 — BUG-002 Added Phase 12 (T088–T091) for build-staleness detection (FR-022a).
+See `bugs/BUG-002.md`.
+
 ---
 
 ## Notes
@@ -421,9 +486,21 @@ T045's existing unit test; `cargo test --workspace` (98 groups) green.
   `SessionRouter`/`TerminalBackend` seam carries no production traffic (deleted in T030), and the test
   count is 259 not 63 (T007/T079). `bincode` is dead — grid frames use `postcard` (T010, T015).
 
-## Phase 12: Convergence
+## Phase 13: Convergence
 
-- [X] T088 This feature's own distinctive requirements were verified directly and hold: FR-016a/b
+Produced by `/speckit-converge` after T088–T091 (BUG-002) landed. Both items trace to the
+version/build-mismatch banner surface US6/FR-021/022/022a touch; other user stories were not
+re-derived from source (see the run's findings summary).
+
+- [X] T092 Add a unit test asserting `connection_status()`'s precedence order (`crates/micold-client/src/main.rs`) — `VersionMismatch` > `BuildMismatch` > `Displaced` > `Disconnected`/`Connected` — since the function contains decision/branching logic the GUI-wiring test exception explicitly excludes, and it currently has zero coverage anywhere in the crate per Constitution I (contradicts) **Done**: `connection_status_orders_mismatch_over_displaced_over_disconnected` in `main.rs`'s existing `#[cfg(test)] mod tests` — one `App`, mutated field-by-field through all five states, asserting each precedence step in turn.
+- [X] T093 Add an end-to-end test in `crates/micold-daemon/tests/handshake_flow.rs`, mirroring `mismatched_handshake_is_refused_naming_both_sides`, that drives `server::serve_connection` with a matching `protocol_version`/`schema_hash` but a differing `client_package_version` and asserts a `Refused{reason: RefusalReason::BuildMismatch{..}}` frame is received, closing the gap between FR-022a's pure-function unit coverage (T088) and its wire-level round-trip per FR-022a / SC-009a (partial) **Done**: `build_mismatch_is_refused_distinctly_when_contract_still_matches` — real `serve_connection` over an in-memory duplex, matching contract + stale `client_package_version`, asserts `RefusalReason::BuildMismatch` naming both builds and that the daemon closes the connection, mirroring the existing contract-mismatch test. `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --check` all clean.
+
+## Phase 14: Convergence (retrofit session, 2026-07-27)
+
+Produced by a separate, broader `/speckit-converge` retrofit sweep across all 21 features in
+`specs/`, run against this feature's state before T088–T093 (BUG-002 and its follow-up) landed.
+
+- [X] T094 This feature's own distinctive requirements were verified directly and hold: FR-016a/b
   (the `activity.rs` FSM is purely hook-driven — grepped for zero `Instant`/`elapsed`/timing
   logic anywhere near it, confirming no quiescence inference survived the FR-016b rewrite),
   FR-031/FR-035 (`Message::DaemonDisconnected` resolves every in-flight `pending_op` to an
