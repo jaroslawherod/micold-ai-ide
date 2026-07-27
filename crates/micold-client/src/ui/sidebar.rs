@@ -4,8 +4,8 @@
 use crate::app::{Message, State, TagFilter};
 use crate::icons::Icon;
 use crate::ui::material::{
-    self, Accordion, ActivityBadge, Button, ButtonVariant, Divider, FilterTrigger, IconButton,
-    Scrollable, SurfaceKind, Text, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
+    self, Accordion, ActivityBadge, Button, ButtonVariant, Divider, FilterTrigger, HoverReveal,
+    IconButton, Scrollable, SurfaceKind, Text, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
 };
 use iced::widget::{column, container, mouse_area, row, Space};
 use iced::{Alignment, Element, Length};
@@ -21,11 +21,7 @@ const STRIP_WIDTH: f32 = 32.0;
 
 /// Render the sidebar for the active project's worktrees and sessions, at the current
 /// (adjustable) width.
-pub fn view<'a>(
-    state: &'a State,
-    scheme: micold_core::theme::ColorScheme,
-    row_fx: &crate::motion::Animator<u64>,
-) -> Element<'a, Message> {
+pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let width = state.sidebar_width_px() as f32;
 
@@ -124,7 +120,7 @@ pub fn view<'a>(
         None
     };
 
-    let tree: Element<'_, Message> = TreeView::new(build_items(state, entries, r, row_fx), r)
+    let tree: Element<'_, Message> = TreeView::new(build_items(state, entries, r), r)
         .label_size(sidebar::NAME)
         .into();
     let list: Element<'_, Message> = match hint {
@@ -327,31 +323,20 @@ fn tag_chip(tag: &Tag, r: Roles) -> (String, Rgb) {
     }
 }
 
-/// Blend `from`→`to` by `t` (0..=1), for fading an icon's tint.
-fn lerp_rgb(from: Rgb, to: Rgb, t: f32) -> Rgb {
-    let t = t.clamp(0.0, 1.0);
-    let mix = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
-    Rgb {
-        r: mix(from.r, to.r),
-        g: mix(from.g, to.g),
-        b: mix(from.b, to.b),
-    }
-}
-
-/// One action icon in a worktree row's hover cluster. Its tint fades from the sidebar surface
-/// (invisible at `progress` 0) to `base_tint` (fully shown at 1), so it appears/disappears on
-/// hover without a scrim. When `active` (the hovered row) it is pressable and carries a tooltip;
-/// otherwise it is inert. The button occupies its slot regardless, so the row never reflows.
+/// One action icon in a worktree row's hover cluster. When `active` (the hovered row) it is
+/// pressable and carries a tooltip; otherwise it is inert. The button occupies its slot
+/// regardless, so the row never reflows.
+///
+/// It does not fade itself: the whole cluster does, through [`HoverReveal`], which is one track
+/// per row rather than one per icon and so cannot let a row's two icons drift apart.
 fn action_icon(
     glyph: Icon,
-    base_tint: Rgb,
+    tint: Rgb,
     message: Message,
     tooltip: &'static str,
     active: bool,
-    progress: f32,
     r: Roles,
 ) -> Element<'static, Message> {
-    let tint = lerp_rgb(r.surface, base_tint, progress);
     let button = IconButton::new(glyph, r)
         .size(TypeRole::SidebarName)
         .tint(tint)
@@ -365,13 +350,12 @@ fn action_icon(
 
 /// The hover-revealed row-action cluster for a worktree (feature 008): an add-session "+" (only
 /// when a session can start) and a trash icon that requests deletion. The cluster is rendered on
-/// EVERY row so its width is always reserved (no reflow when it appears); `progress` fades the
-/// icons in/out, and `active` (the hovered row) gates whether they are pressable.
+/// EVERY row so its width is always reserved (no reflow when it appears); `active` (the hovered
+/// row) both gates whether the icons are pressable and is the reveal's destination.
 fn row_actions_cluster(
     dir: &str,
     can_start_session: bool,
     active: bool,
-    progress: f32,
     r: Roles,
 ) -> Element<'static, Message> {
     let mut cluster = row![].spacing(spacing::XS).align_y(Alignment::Center);
@@ -384,7 +368,6 @@ fn row_actions_cluster(
             },
             "Start a new session in this worktree",
             active,
-            progress,
             r,
         ));
     }
@@ -394,10 +377,9 @@ fn row_actions_cluster(
         Message::WorktreeDeleteRequested(dir.to_string()),
         "Delete this worktree",
         active,
-        progress,
         r,
     ));
-    cluster.into()
+    HoverReveal::new(cluster, r.surface).shown(active).into()
 }
 
 /// Flatten the sidebar's location list (feature 010: the "Default" entry, then worktrees) into
@@ -406,7 +388,6 @@ fn build_items(
     state: &State,
     entries: Vec<crate::app::SidebarEntry>,
     r: Roles,
-    row_fx: &crate::motion::Animator<u64>,
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
     let hovered = state.hovered_worktree.as_deref();
@@ -451,14 +432,7 @@ fn build_items(
         // fades its icons in/out independently via its own animation track (feature 008). The
         // hovered row is the pressable one.
         let active = hovered == Some(dir.as_str());
-        let progress = row_fx.get(crate::ui::worktree_fx_key(&dir));
-        item = item.trailing_element(row_actions_cluster(
-            &dir,
-            wt.can_start_session(),
-            active,
-            progress,
-            r,
-        ));
+        item = item.trailing_element(row_actions_cluster(&dir, wt.can_start_session(), active, r));
         items.push(item);
 
         if node.expanded {
@@ -515,9 +489,10 @@ fn build_default_item(
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
 
-    // `active: true, progress: 1.0` gives the always-visible, always-pressable button this row
-    // needs (see the doc comment above), reusing the same construction as a worktree row's
-    // hover-revealed action icons instead of hand-rebuilding it.
+    // `active: true` gives the always-visible, always-pressable button this row needs (see the doc
+    // comment above), reusing the same construction as a worktree row's hover-revealed action icons
+    // instead of hand-rebuilding it. It is deliberately not wrapped in `HoverReveal`: this row's
+    // action is always shown, so it has nothing to reveal.
     let start_session = action_icon(
         Icon::AddSession,
         r.primary,
@@ -526,7 +501,6 @@ fn build_default_item(
         },
         "Start a new session in the project root",
         true,
-        1.0,
         r,
     );
 

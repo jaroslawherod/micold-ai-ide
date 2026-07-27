@@ -148,16 +148,6 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
         .into()
 }
 
-/// Animation key for a worktree row's hover-revealed actions fade (feature 008). Each worktree
-/// gets its own track (keyed by a hash of its `dir_name`) so rows fade in and out independently
-/// — hovering B while A fades out animates both at once.
-pub fn worktree_fx_key(dir_name: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    dir_name.hash(&mut hasher);
-    hasher.finish()
-}
-
 /// The stack of dismissible global notification banners, newest last. Empty when there is
 /// nothing to report, in which case it occupies no space.
 fn notifications<'a>(state: &'a State, r: Roles) -> Element<'a, Message> {
@@ -211,7 +201,6 @@ pub fn view<'a>(
     display_offset: usize,
     motion: &Animator<MotionKey>,
     dismissing: Option<&'a crate::app::ClosingOverlay>,
-    row_fx: &crate::motion::Animator<u64>,
     env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
     connection: &ConnectionStatus,
 ) -> Element<'a, Message> {
@@ -234,10 +223,7 @@ pub fn view<'a>(
                 sidebar::collapsed_strip(scheme)
             } else {
                 row![
-                    material::slide(
-                        sidebar::view(state, scheme, row_fx),
-                        motion.get(MotionKey::Sidebar)
-                    ),
+                    material::slide(sidebar::view(state, scheme), motion.get(MotionKey::Sidebar)),
                     sidebar::handle(scheme, motion.get(MotionKey::HandleHover))
                 ]
                 .into()

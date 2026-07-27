@@ -66,8 +66,6 @@ const ANIM_TICK: Duration = Duration::from_millis(16);
 const SIDEBAR_SLIDE: Duration = Duration::from_millis(114);
 /// Resize-handle hover highlight — preserves the prior gentle ~0.8s ramp (was step 0.02).
 const HANDLE_HOVER: Duration = Duration::from_millis(800);
-/// Hover-revealed row actions fade (feature 008) — quick, so the icons feel responsive.
-const ROW_ACTIONS_FADE: Duration = Duration::from_millis(120);
 
 /// Convert an animation `duration` into the per-tick progress step the [`Animator`] advances by
 /// on each [`ANIM_TICK`], clamped to `(0, 1]`.
@@ -155,12 +153,6 @@ struct App {
     /// The overlay currently fading out (rendered from this snapshot until its fade completes),
     /// or `None` when no overlay is leaving.
     dismissing: Option<ClosingOverlay>,
-    /// Per-worktree hover-reveal fade tracks (feature 008), keyed by a hash of `dir_name` so each
-    /// row's action icons fade in/out independently (hovering one while another fades out).
-    row_fx: Animator<u64>,
-    /// The worktree hovered on the previous update, to detect hover-enter/leave transitions and
-    /// start the corresponding fade.
-    prev_hovered: Option<String>,
     /// Whether the OS window currently has input focus (idle-CPU fix). Gates the
     /// terminal/OS-theme poll subscriptions: `true` until the first `Unfocused` event,
     /// which matches iced's behavior of not emitting an initial `Focused` on launch.
@@ -328,7 +320,6 @@ fn motion_animating(app: &App) -> bool {
     motion_targets(app)
         .iter()
         .any(|(key, target, _)| (app.motion.get(*key) - target).abs() > f32::EPSILON)
-        || app.row_fx.animating()
 }
 
 impl Drop for App {
@@ -436,8 +427,6 @@ fn boot() -> (App, Task<Message>) {
             motion,
             handle_hovered: false,
             dismissing: None,
-            row_fx: Animator::new(),
-            prev_hovered: None,
             window_focused: true,
             last_grid: None,
             env_include_enabled,
@@ -548,25 +537,6 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
         } else {
             None
         };
-    }
-
-    // On a hover-enter/leave transition, animate the row's action icons: fade the newly hovered
-    // row in (from hidden) and the previously hovered row out (feature 008).
-    if app.core.hovered_worktree != app.prev_hovered {
-        let s = step(ROW_ACTIONS_FADE);
-        if let Some(old) = &app.prev_hovered {
-            app.row_fx
-                .to(micold_client::ui::worktree_fx_key(old), 0.0, s);
-        }
-        if let Some(new) = &app.core.hovered_worktree {
-            let key = micold_client::ui::worktree_fx_key(new);
-            // Start from hidden so it animates in (unless it's mid-fade-out and re-hovered).
-            if app.row_fx.get(key) <= f32::EPSILON {
-                app.row_fx.set(key, 0.0);
-            }
-            app.row_fx.to(key, 1.0, s);
-        }
-        app.prev_hovered = app.core.hovered_worktree.clone();
     }
 
     task
@@ -1072,7 +1042,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::AnimationTick => {
             apply_motion_targets(app);
             app.motion.tick();
-            app.row_fx.tick();
             Task::none()
         }
 
@@ -1851,7 +1820,6 @@ fn view(app: &App) -> iced::Element<'_, Message> {
         app.display_offset,
         &app.motion,
         app.dismissing.as_ref(),
-        &app.row_fx,
         &app.env_include_last_outcome,
         &connection_status(app),
     )
@@ -2731,8 +2699,6 @@ mod tests {
             motion: Animator::new(),
             handle_hovered: false,
             dismissing: None,
-            row_fx: Animator::new(),
-            prev_hovered: None,
             window_focused: true,
             last_grid: None,
             env_include_enabled: micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED,
@@ -2774,8 +2740,6 @@ mod tests {
             motion: Animator::new(),
             handle_hovered: false,
             dismissing: None,
-            row_fx: Animator::new(),
-            prev_hovered: None,
             window_focused: true,
             last_grid: None,
             env_include_enabled: micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED,
@@ -2827,8 +2791,6 @@ mod tests {
             motion: Animator::new(),
             handle_hovered: false,
             dismissing: None,
-            row_fx: Animator::new(),
-            prev_hovered: None,
             window_focused: true,
             last_grid: None,
             env_include_enabled: micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED,
@@ -2990,8 +2952,6 @@ mod tests {
             motion: Animator::new(),
             handle_hovered: false,
             dismissing: None,
-            row_fx: Animator::new(),
-            prev_hovered: None,
             window_focused: true,
             last_grid: None,
             env_include_enabled: micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED,

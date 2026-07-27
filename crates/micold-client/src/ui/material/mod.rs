@@ -45,7 +45,7 @@ mod tree_view;
 
 pub use accordion::Accordion;
 pub use activity_badge::ActivityBadge;
-pub use animation::{expand, fade, scale, scrim, slide, ViewFade};
+pub use animation::{expand, fade, scale, scrim, slide, HoverReveal, ViewFade};
 pub use button::{Button, Variant as ButtonVariant};
 pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;

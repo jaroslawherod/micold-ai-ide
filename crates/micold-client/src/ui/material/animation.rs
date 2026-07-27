@@ -526,6 +526,52 @@ impl<'a, M: Clone + 'a> From<ViewFade<'a, M>> for Element<'a, M> {
 }
 
 // ---------------------------------------------------------------------------------------
+// HoverReveal (controls that appear when their row is pointed at)
+// ---------------------------------------------------------------------------------------
+
+/// How long a row's actions take to appear or disappear. Quick, so they feel like a response to
+/// the pointer rather than an animation being played at the user.
+const HOVER_REVEAL: Duration = Duration::from_millis(120);
+
+/// Controls that fade in while their row is pointed at, and out again when it is not.
+///
+/// Occupies its space whether or not it is showing, so a row never reflows under the pointer —
+/// that is why it fades rather than appearing. Builder form (Principle VIII):
+/// `HoverReveal::new(actions, roles.surface).shown(hovered).into()`.
+///
+/// Each instance owns its own track (FR-011). Before feature 017 these shared one central animator
+/// keyed by a *hash of the row's name*, so two worktrees whose names collided would have faded as
+/// one; there is now no identity to collide, because there is no registry to hold it.
+pub struct HoverReveal<'a, M> {
+    content: Element<'a, M>,
+    backdrop: micold_core::tokens::Rgb,
+    shown: bool,
+}
+
+impl<'a, M: Clone + 'a> HoverReveal<'a, M> {
+    /// Hidden controls, over a `backdrop` matching the surface the row sits on.
+    pub fn new(content: impl Into<Element<'a, M>>, backdrop: micold_core::tokens::Rgb) -> Self {
+        Self {
+            content: content.into(),
+            backdrop,
+            shown: false,
+        }
+    }
+
+    /// Whether the row is currently pointed at.
+    pub fn shown(mut self, shown: bool) -> Self {
+        self.shown = shown;
+        self
+    }
+}
+
+impl<'a, M: Clone + 'a> From<HoverReveal<'a, M>> for Element<'a, M> {
+    fn from(h: HoverReveal<'a, M>) -> Self {
+        fade(h.content, h.shown, HOVER_REVEAL, h.backdrop).into()
+    }
+}
+
+// ---------------------------------------------------------------------------------------
 // Scrim (the dimming behind a modal surface)
 // ---------------------------------------------------------------------------------------
 
