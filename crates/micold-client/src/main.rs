@@ -2012,6 +2012,12 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
             core.workspace.projects.push(project);
         }
     }
+    // Sessions observed transitioning into `Restarting` this reconciliation (feature 008,
+    // FR-011/SC-007) — collected here and applied after the loop below, since
+    // `note_background_restart` needs `&mut core` while `list` still holds `core.workspace`
+    // borrowed. `note_background_restart` itself no-ops for the active project's session, so
+    // background-ness isn't checked here.
+    let mut newly_restarting: Vec<SessionId> = Vec::new();
     for project in &snapshot.projects {
         let list = core
             .workspace
@@ -2022,6 +2028,11 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
         for summary in &project.sessions {
             let lifecycle = wire_to_lifecycle(&summary.lifecycle);
             if let Some(existing) = list.iter_mut().find(|s| s.id == summary.id) {
+                if !matches!(existing.lifecycle, SessionLifecycle::Restarting { .. })
+                    && matches!(lifecycle, SessionLifecycle::Restarting { .. })
+                {
+                    newly_restarting.push(existing.id);
+                }
                 existing.lifecycle = lifecycle;
                 existing.activity = summary.activity.clone();
                 // Adopt the daemon's title only when it has a real one. The daemon now overlays the
@@ -2049,6 +2060,9 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
         }
         // Drop sessions the daemon no longer reports (archived/removed on its side).
         list.retain(|s| snap_ids.contains(&s.id));
+    }
+    for id in newly_restarting {
+        core.note_background_restart(id);
     }
     // Mirror the active project's worktrees from the daemon's git discovery into the render state
     // (the sidebar reads `core.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
@@ -2361,6 +2375,7 @@ fn scan(dir: PathBuf) -> Message {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_client::app::{NoticeLevel, Notification};
     use micold_core::protocol::messages::{ActivitySignal, ProjectSnapshot, SessionSummary};
 
     fn summary(id: SessionId, title: &str, lifecycle: WireLifecycle) -> SessionSummary {
@@ -2438,6 +2453,62 @@ mod tests {
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, b);
         assert_eq!(core.active_session, None, "dangling active pointer cleared");
+    }
+
+    // Convergence fix (retrofit session, 2026-07-27): a session transitioning to `Restarting` in
+    // a background (inactive) project's snapshot must raise the FR-011/SC-007 return notice.
+    // `State::note_background_restart` existed and was unit-tested in isolation
+    // (`tests/background_restart.rs`), but nothing called it from the daemon-driven reconcile
+    // path after feature 010 moved supervision into the daemon — so no background restart was
+    // ever actually detected or notified.
+    #[test]
+    fn reconcile_detects_a_background_restart_and_arms_the_return_notice() {
+        let mut core = State::default();
+        core.workspace.active = Some(PathBuf::from("/b")); // /a is the background project
+
+        let a = SessionId::new();
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with("/a", vec![summary(a, "A", WireLifecycle::Running)]),
+            false,
+        );
+        assert!(core.restarted_while_inactive.is_empty());
+
+        // /a's session crashes and the daemon starts restarting it, while /a is still inactive.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                "/a",
+                vec![summary(a, "A", WireLifecycle::Restarting { attempts: 1 })],
+            ),
+            false,
+        );
+        assert!(
+            core.restarted_while_inactive.contains(&a),
+            "a background session's transition into Restarting must be detected and marked"
+        );
+
+        // A further Restarting snapshot (still retrying) must not re-mark or duplicate anything.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                "/a",
+                vec![summary(a, "A", WireLifecycle::Restarting { attempts: 2 })],
+            ),
+            false,
+        );
+        assert_eq!(core.restarted_while_inactive.len(), 1);
+
+        // Returning to /a fires the return notice (mirrors `background_restart.rs`).
+        core.record_foreground();
+        assert!(core.switch_active(Path::new("/a")));
+        assert_eq!(
+            core.notifications,
+            vec![Notification {
+                level: NoticeLevel::Info,
+                message: "A background session was restarted while you were away.".to_string(),
+            }]
+        );
     }
 
     #[test]
