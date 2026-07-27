@@ -1,0 +1,12 @@
+# Cap how much of the machine a build or test run may take.
+#
+# `jobs` limits the parallel compilation units cargo schedules (applies to
+# `cargo build`, `cargo test`, `cargo run`, ...); `RUST_TEST_THREADS` limits the
+# threads libtest uses to *execute* tests. Both are overridable ad hoc:
+# `cargo build -j 8`, or `RUST_TEST_THREADS=8 cargo test` (env vars set in the
+# shell win over the `[env]` table unless `force = true`).
+[build]
+jobs = 4
+
+[env]
+RUST_TEST_THREADS = "4"
