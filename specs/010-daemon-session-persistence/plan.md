@@ -138,6 +138,13 @@ Thread-per-session is comfortably within budget at this scale and is required an
       into `text(..)`, which draws in iced's default font (Fira Sans); neither that font nor the
       shipped Material font maps those codepoints, so the badge rendered as tofu. Reaching outside
       `Icon` also escapes the `tests/icons_font.rs` build-time guard entirely (FR-016e, SC-018).
+      **Bugfix 2026-07-27 (BUG-005)**: adding a shared primitive to a row does not discharge the
+      obligation to *reconcile it with what the row already renders*. `activity_badge.rs` was pushed
+      into `TreeItem`'s badge slot beside a pre-existing, unconditional `Icon::ActiveMarker`
+      (`check_circle`) that feature 005 had installed as a generic session bullet — leaving two
+      leading glyphs, one carrying no state. A new indicator primitive MUST subsume or displace the
+      affordance it duplicates, and a primitive that renders nothing in one of its states MUST still
+      occupy a constant-width slot so the row does not reflow around it (FR-016f, SC-019).
 
 ---
 
@@ -210,7 +217,9 @@ crates/
                 ├── terminal_pane.rs      # retargeted to the wire grid; client-side selection
                 ├── connection_banner.rs  # NEW shared primitive (builder API)
                 └── activity_badge.rs     # NEW shared primitive (builder API); glyphs MUST come
-                                          #   from `icons::Icon`, never raw literals (BUG-004)
+                                          #   from `icons::Icon`, never raw literals (BUG-004);
+                                          #   sole leading indicator on a session row, and its slot
+                                          #   is constant-width incl. Unknown (BUG-005)
 
 packaging/
 ├── micold-daemon.socket # systemd user unit
@@ -511,6 +520,13 @@ control plane you can read by eye is the justification for carrying two encoding
    enum and passes a literal to `text(..)` — exactly how BUG-004 shipped. *Mitigation*: a
    source-level guard test that fails on non-ASCII glyph literals in client UI code (T103), so the
    invariant is defended rather than merely documented.
+7. **A new row indicator can silently stack on an inherited one.** Nothing forces a feature adding an
+   indicator to audit what the row already draws, so feature 010's activity badge landed beside
+   feature 005's unconditional `check_circle` and shipped two leading glyphs — one of them
+   meaningless — for the life of the feature (BUG-005). *Mitigation*: FR-016f makes "sole leading
+   indicator" an explicit requirement, and T108 asserts the label offset is identical across all
+   four `ActivitySignal` variants, so a re-added constant glyph or a variable-width slot fails a
+   test rather than waiting to be noticed by eye.
 
 ---
 
@@ -519,3 +535,8 @@ control plane you can read by eye is the justification for carrying two encoding
 **Bugfix**: 2026-07-27 — BUG-004 Updated from bugfix patch: annotated Principle VIII with the
 shared-`Icon` sourcing rule, marked the `activity_badge.rs` structure entry, and added Risk 6 (the
 tofu guard's blind spot). See `bugs/BUG-004.md`.
+
+**Bugfix**: 2026-07-27 — BUG-005 Updated from bugfix patch: annotated Principle VIII with the
+subsume-what-you-duplicate rule and the constant-width-slot rule, extended the `activity_badge.rs`
+structure entry, and added Risk 7 (a new indicator stacking on an inherited one). See
+`bugs/BUG-005.md`.

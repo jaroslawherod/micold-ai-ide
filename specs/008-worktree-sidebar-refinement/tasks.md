@@ -193,7 +193,7 @@ missing/invalid cue.
 ### Implementation
 
 - [x] T043 [US5] Inject the `Status` tag from `WorktreeStatus` into a worktree row's tags and render the name in the `error` role color for non-`Valid` worktrees (missing/invalid cue, FR-011) in `src/app.rs` + `src/ui/sidebar.rs`.
-- [x] T044 [US5] Confirm the leading git icon is fully removed and apply `sidebar::{NAME,TAG,SESSION}` sizes to the worktree/session rows in `src/ui/material/tree_view.rs` + `src/ui/sidebar.rs` (FR-010, FR-012).
+- [x] T044 [US5] Confirm the leading git icon is fully removed and apply `sidebar::{NAME,TAG,SESSION}` sizes to the worktree/session rows in `src/ui/material/tree_view.rs` + `src/ui/sidebar.rs` (FR-010, FR-012). **Cross-feature note 2026-07-27 (BUG-005)**: correct as written and not reopened — FR-010 names *worktree* rows, and the git icon was indeed removed from them. Recording the boundary because it was later mistaken for a whole-sidebar cleanup: **session** rows kept a leading `Icon::ActiveMarker` (`check_circle`) that feature 005 had installed, so the sidebar stayed half-migrated for four features. FR-010's rationale (compact rows, no leading icon that does not vary) applies equally to session rows; feature 010 FR-016f now states it for them. See `specs/010-daemon-session-persistence/bugs/BUG-005.md`.
 - [x] T045 [US5] Reduce the sidebar outer horizontal padding to `spacing::XS` and shrink the `tree_view` per-depth indent step in `src/ui/sidebar.rs` + `src/ui/material/tree_view.rs` (FR-009).
 - [x] T046 [P] [US5] Document the compact sidebar and the missing/invalid indicator in `docs/`.
 
@@ -309,3 +309,7 @@ story is a shippable increment; run its tests + `quickstart.md` slice before mov
   T055 changes shared `Git` behaviour — re-run the full suite, not just `worktree_delete.rs`.
 
 **Bugfix**: 2026-07-20 — BUG-001 Updated from bugfix patch
+
+**Bugfix**: 2026-07-27 — BUG-005 (feature 010) Cross-feature note added to T044 recording that
+FR-010's icon removal covered worktree rows only; session rows kept theirs. No task reopened. See
+`specs/010-daemon-session-persistence/bugs/BUG-005.md`.

@@ -485,10 +485,16 @@ fn session_tree_item(
         _ => r.on_surface,
     };
     let selected = active_session == Some(session.id);
+    // No leading icon: the activity dot below is the row's *sole* leading indicator (FR-016f).
+    // A session row used to carry an unconditional `Icon::ActiveMarker` (`check_circle`) here — a
+    // feature-005 leftover from that icon's real job, marking the *active known project*. It never
+    // varied with session state, so it read as "done / OK" on a failed or interrupted session while
+    // competing with the dot that does vary (BUG-005). Lifecycle still reaches the user: `tint`
+    // above colours the label itself, not just a glyph.
     TreeItem::new(1, session.label.display().to_string(), tint)
-        .with_icon(Icon::ActiveMarker)
         // The derived activity dot beside the name (feature 010 US2, FR-016d): Working/AwaitingInput
-        // show a filled dot, Ended a hollow one, Unknown nothing (ambient — H2).
+        // show a filled dot, Ended a hollow one, Unknown nothing (ambient — H2) in a slot that stays
+        // the same width either way, so names stay aligned as signals change (FR-016f).
         .badge(ActivityBadge::<Message>::new(session.activity.clone(), r))
         .selected(selected)
         .on_press(Message::SessionSelected(session.id))
@@ -544,4 +550,59 @@ fn build_default_item(
     }
 
     items
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use micold_core::protocol::messages::ActivitySignal;
+    use micold_core::session::Session;
+    use micold_core::theme::ColorScheme;
+
+    fn session(activity: ActivitySignal, lifecycle: SessionLifecycle) -> Session {
+        let mut s = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+        s.activity = activity;
+        s.lifecycle = lifecycle;
+        s
+    }
+
+    /// FR-016f: the activity badge is a session row's *sole* leading indicator. A constant glyph
+    /// beside it carries no state while competing with the one that does — this is BUG-005, where
+    /// an unconditional `check_circle` read as "done/OK" on failed and interrupted sessions alike.
+    #[test]
+    fn a_session_row_has_no_leading_icon() {
+        let r = tokens::roles(ColorScheme::Dark);
+        for lifecycle in [
+            SessionLifecycle::Idle,
+            SessionLifecycle::Starting,
+            SessionLifecycle::Running,
+            SessionLifecycle::Restarting { attempts: 1 },
+            SessionLifecycle::Failed,
+            SessionLifecycle::InterruptedResumable,
+        ] {
+            let s = session(ActivitySignal::Unknown, lifecycle);
+            let item: TreeItem<'_, Message> = session_tree_item(&s, None, r);
+            assert!(
+                item.icon.is_none(),
+                "session row for {lifecycle:?} still carries a leading icon"
+            );
+            assert!(
+                item.badge.is_some(),
+                "the activity badge must still occupy the row's indicator slot"
+            );
+        }
+    }
+
+    /// The lifecycle distinction survives the icon's removal because the row tint is applied to the
+    /// label too (`tree_view.rs`), so no state information rode on the glyph alone (FR-006a).
+    #[test]
+    fn lifecycle_still_reaches_the_row_through_the_tint() {
+        let r = tokens::roles(ColorScheme::Dark);
+        let tint = |l| session_tree_item(&session(ActivitySignal::Unknown, l), None, r).tint;
+
+        assert_eq!(tint(SessionLifecycle::Failed), r.error);
+        assert_eq!(tint(SessionLifecycle::Idle), r.on_surface_variant);
+        assert_eq!(tint(SessionLifecycle::InterruptedResumable), r.primary);
+        assert_eq!(tint(SessionLifecycle::Running), r.on_surface);
+    }
 }

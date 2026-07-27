@@ -11,7 +11,7 @@
 
 use crate::icons::Icon;
 use crate::ui::icon;
-use iced::widget::Space;
+use iced::widget::{container, Space};
 use iced::{Element, Length};
 use micold_core::protocol::messages::ActivitySignal;
 use micold_core::tokens::{sidebar, Roles};
@@ -80,15 +80,26 @@ impl<'a, M: 'a> From<ActivityBadge<'a, M>> for Element<'a, M> {
         //
         // Filled centre for live states, empty ring for a spent one: the states stay distinct by
         // *shape*, not by tint alone, so the distinction survives for a colour-blind user.
-        let (glyph, color) = match emphasis(&badge.signal) {
-            Some(BadgeEmphasis::Working) => (Icon::ActivityWorking, r.primary),
-            Some(BadgeEmphasis::Attention) => (Icon::ActivityWorking, r.error),
-            Some(BadgeEmphasis::Ended) => (Icon::ActivityEnded, r.on_surface_variant),
-            // Unknown is ambient — nothing is drawn (H2), but the slot is still occupied so rows
-            // stay uniform whether or not a session has a signal yet.
-            None => return Space::new().width(Length::Shrink).into(),
+        let inner: Element<'a, M> = match emphasis(&badge.signal) {
+            Some(BadgeEmphasis::Working) => icon(Icon::ActivityWorking, badge.size, r.primary),
+            Some(BadgeEmphasis::Attention) => icon(Icon::ActivityWorking, badge.size, r.error),
+            Some(BadgeEmphasis::Ended) => {
+                icon(Icon::ActivityEnded, badge.size, r.on_surface_variant)
+            }
+            // Unknown is ambient — nothing is drawn (H2). The slot is still reserved below.
+            None => Space::new().into(),
         };
-        icon(glyph, badge.size, color)
+
+        // The slot is a fixed `size`-wide box in *every* state, drawn or not (FR-016f, SC-019).
+        // Since BUG-005 removed the constant `check_circle` that used to anchor the row, this badge
+        // is a session row's only leading element: a `Shrink` slot would let a hook-less session's
+        // name sit left of its siblings, and would make a row shift horizontally as its signal
+        // moved Unknown → Working → Ended. Centring keeps the glyph in the box if a future icon's
+        // advance differs from the nominal 1em.
+        container(inner)
+            .center_x(Length::Fixed(badge.size))
+            .center_y(Length::Shrink)
+            .into()
     }
 }
 
@@ -114,5 +125,29 @@ mod tests {
         );
         // H1/H2: Unknown must never render an attention cue.
         assert_eq!(emphasis(&ActivitySignal::Unknown), None);
+    }
+
+    /// FR-016f / SC-019: the slot is constant-width in **every** state, including `Unknown` where
+    /// nothing is drawn. Without this the badge is the row's only leading element (BUG-005 removed
+    /// the icon that used to anchor it), so a `Shrink` slot would let a hook-less session's name sit
+    /// left of its siblings and make a row shift horizontally as its signal changes.
+    #[test]
+    fn the_slot_is_constant_width_in_every_state_including_unknown() {
+        let r = micold_core::tokens::roles(micold_core::theme::ColorScheme::Dark);
+        for signal in [
+            ActivitySignal::Unknown,
+            ActivitySignal::Working,
+            ActivitySignal::AwaitingInput,
+            ActivitySignal::Ended {
+                reason: "exit 0".into(),
+            },
+        ] {
+            let element: Element<'_, ()> = ActivityBadge::new(signal.clone(), r).into();
+            assert_eq!(
+                element.as_widget().size().width,
+                Length::Fixed(sidebar::TAG),
+                "the badge slot for {signal:?} is not the reserved width"
+            );
+        }
     }
 }

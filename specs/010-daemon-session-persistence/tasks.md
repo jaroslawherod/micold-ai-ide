@@ -669,6 +669,17 @@ rendered as tofu. Resolved 2026-07-27: the dots are now `Icon::ActivityWorking`/
 rather than a runtime blank box. `mise run test` green (104 groups), `cargo clippy -D warnings` and
 `cargo fmt --check` clean. See `bugs/BUG-004.md`.
 
+**Bugfix**: 2026-07-27 — BUG-005 Added Phase 19 (T106–T109) to remove the unconditional
+`check_circle` from session rows and make the badge slot constant-width. **No task reopened**: T048's
+scope was building and rendering the badge, which it did; nothing owned reconciling it with the icon
+the row already drew. Implemented 2026-07-27: T106–T108 done (icon dropped; the badge slot is a
+`Fixed(sidebar::TAG)` box in every state including `Unknown`; two red-first tests pin both
+properties). `mise run test` green (114 groups), `cargo clippy --workspace --all-targets -- -D
+warnings` and `cargo fmt --check` clean. **T109 remains open** — the app was launched and connected
+without any FR-022a mismatch or daemon restart, but a fresh client opens with worktrees collapsed and
+this environment has no input-injection tool to expand one, so the session rows were never seen. See
+`bugs/BUG-005.md`.
+
 ---
 
 ## Notes
@@ -797,3 +808,107 @@ the plan's technical decisions — not a full re-audit of every already-`[X]` ta
   never taken and `ApproxLineIds` is what ships. Verified: `mise run test` green (105 groups),
   `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check` both clean. This
   also re-closes **T005**, whose `DEFERRED to T030` rationale had expired.
+
+---
+
+## Phase 19: Bugfix BUG-005 — the obsolete `check_circle` icon on every session row
+
+**Goal**: every session row draws an unconditional `Icon::ActiveMarker` (`check_circle`, `U+F0BE`)
+immediately left of the activity dot (`crates/micold-client/src/ui/sidebar.rs:489`). It does not vary
+with state, so it carries no information while reading as "done / OK" on failed and
+interrupted-but-resumable sessions alike, and it competes with the one indicator that *does* vary
+(FR-016c, FR-016d). It is a leftover: feature 004 defined `ActiveMarker` as the **active
+known-project** marker (`contracts/icon-api.md:70`), and feature 005 (`6aff29b`) reused the variant
+as a generic session bullet. Feature 008 removed the equivalent leading icon from *worktree* rows
+(its FR-010/T044) but was scoped not to touch session rows, leaving the sidebar half-migrated.
+
+**T048 is not reopened**: its stated scope was building the badge and rendering it, which it did.
+The defect is that the pre-existing icon was never reconciled with the new one — no task owned that.
+
+**Validated before patching** (see `bugs/BUG-005.md` §Validation): removing the icon loses no
+information. The row's lifecycle tint is applied to the label as well as the icon
+(`tree_view.rs:234`), so `Failed`/`Idle`/`InterruptedResumable` colouring still reaches the user via
+the session name. The badge is *not* asked to absorb lifecycle — `SessionLifecycle` (process
+supervision) and `ActivitySignal` (hooks) are different domains and the badge cannot express
+`Failed` or `InterruptedResumable`, nor should it (H1/H2). The one real function the icon performs
+is incidental: it is the row's fixed-width leading anchor, which the badge is not, hence T107.
+
+- [X] T106 [US2] Drop `.with_icon(Icon::ActiveMarker)` from `session_tree_item` in
+  `crates/micold-client/src/ui/sidebar.rs:489` so the activity badge is the row's sole leading
+  indicator (FR-016f). **Keep the `Icon::ActiveMarker` variant and its two legitimate call sites** —
+  `src/ui/shell.rs:163` and `src/ui/material/project_switcher.rs:138`, where "active" is a real
+  varying property of the row; only the sidebar use is obsolete. No change to `TreeItem`'s optional
+  `icon` field: worktree rows and other consumers may still set one. Depends on T107 landing in the
+  same change (removing the icon before the slot is constant-width regresses alignment).
+  **Done**: the `.with_icon(..)` call is gone from `session_tree_item`
+  (`crates/micold-client/src/ui/sidebar.rs`); the comment in its place records *why* the glyph was
+  there (feature 005 leftover from the active-known-project marker) so it is not re-added by someone
+  reading the row as under-decorated. `Icon::ActiveMarker` and both legitimate call sites
+  (`shell.rs:163`, `project_switcher.rs:138`) are untouched, as is `TreeItem`'s optional `icon`
+  field — worktree rows and other consumers are unaffected. Landed together with T107.
+- [X] T107 [US2] Make the badge slot constant-width in
+  `crates/micold-client/src/ui/material/activity_badge.rs:88`: the `Unknown` arm returns a `Space` of
+  fixed width `sidebar::TAG` (the badge's own size) instead of `Length::Shrink`, so nothing is drawn
+  for `Unknown` (H2 — unchanged) but the slot is still reserved (FR-016f, SC-019). `Unknown` is not
+  an edge case: it is the default for a project whose hooks are unconfigured and the state every
+  session occupies before its first signal, so without this a hook-less project shows a ragged list
+  and a signalled row's name shifts horizontally as it moves unknown → working → ended. This also
+  fixes an existing minor defect — a `Shrink` spacer between two elements in a `.spacing(spacing::XS)`
+  row contributes *two* XS gaps instead of one, so `Unknown` rows already have a wider leading gutter
+  than signalled ones.
+  **Done, with a correction to this task's own premise**: fixing only the `Unknown` arm would *not*
+  have satisfied SC-019. The drawn arms return `icon(..)`, which is a `Text` widget whose width is
+  `Length::Shrink` — so the slot's width would still have been "10.0 for Unknown, whatever the glyph
+  advance happens to be otherwise". Material Symbols glyphs advance 1em, so it would have *looked*
+  right at `sidebar::TAG` = 10.0 while remaining a font-metric coincidence rather than a guarantee,
+  and untestable without pixel measurement. Implemented instead as a `container(inner)` with
+  `.center_x(Length::Fixed(badge.size))` wrapping **every** state, so the declared width is
+  `Fixed(10.0)` for all four signals; `Unknown` still draws nothing (an empty `Space` inside the
+  box), preserving H2. Centring also keeps a future icon inside the box if its advance differs.
+- [X] T108 [P] [US2] Assert the invariant so it cannot silently regress (plan Risk 7): a test that
+  `session_tree_item` produces a row with no leading icon, and that the label's leading offset is
+  identical across all four `ActivitySignal` variants (`Unknown`, `Working`, `AwaitingInput`,
+  `Ended`) — the check that would have caught both the stacked glyph and the variable-width slot.
+  Must FAIL against the current tree and pass after T106+T107 (Principle I). Note `TreeItem` fields
+  are `pub`, so the leading-icon half is assertable without a renderer; prefer asserting the
+  constructed `TreeItem`/badge geometry over pixel measurement.
+  **Done**: three tests, all confirmed RED against the pre-fix tree and GREEN after T106+T107.
+  (a) `ui::sidebar::tests::a_session_row_has_no_leading_icon` — `item.icon.is_none()` and
+  `item.badge.is_some()` across all six `SessionLifecycle` variants (RED with "session row for Idle
+  still carries a leading icon"). (b)
+  `ui::material::activity_badge::tests::the_slot_is_constant_width_in_every_state_including_unknown`
+  — `element.as_widget().size().width == Length::Fixed(sidebar::TAG)` for all four `ActivitySignal`
+  variants (RED with `left: Shrink, right: Fixed(10.0)`). (c) an added
+  `lifecycle_still_reaches_the_row_through_the_tint` pins the property that makes the removal
+  safe — `Failed`→`error`, `Idle`→`on_surface_variant`, `InterruptedResumable`→`primary`,
+  `Running`→`on_surface` — so a future change that moves lifecycle back onto a glyph, or drops the
+  tint, fails here. This one passed before the fix by design: it documents an invariant the fix
+  *relies on*, it is not a regression test for the bug. Both new tests live inline
+  (`#[cfg(test)] mod tests`) next to the private items they assert, matching `activity_badge.rs`'s
+  existing pattern, so no API was widened to make the code testable.
+- [ ] T109 [US2] Verify in the running app (`mise run run`): session rows show exactly one leading
+  indicator, names in the list all begin at the same horizontal offset, and a row does not shift as
+  its signal changes (SC-019). Update `docs/daemon.md`'s activity-dot section only if it describes
+  the removed icon. Depends on T106–T107. Expect the same disposition as T104/T084 if driving a real
+  session through the transitions needs a human at the GUI — say so explicitly rather than implying a
+  walkthrough happened.
+  **Left open — the app was launched, but the session rows were never seen.** The build was run
+  (`./target/debug/micold-ai-ide`) against the live daemon and it connected cleanly: **no FR-022a
+  contract mismatch and no daemon restart**, contrary to what this task anticipated — the debug
+  client simply attached and, because the installed client already held the project, displayed the
+  US5 takeover banner and went read-only. What blocked the check was mundane: a freshly started
+  client opens with every worktree **collapsed**, so no session rows render, and this environment has
+  no way to click one open — GNOME Shell's `Eval` is disabled and no input-injection tool exists
+  (`ydotool`, `wtype`, `xdotool`, `dotool` all absent under Wayland). Screenshots themselves work via
+  `xdg-desktop-portal`; the GNOME `Screenshot` D-Bus method is `AccessDenied` and PIL's X11 grab
+  fails `BadMatch` on rootless XWayland.
+  **What the screenshots did establish**: the *installed* (pre-fix) client was captured showing the
+  bug exactly as reported — a `check_circle` on every session row, including one beside a red
+  attention dot on `Modify Rust config to use 4 CPUs max`. That is the "before"; the "after" is the
+  missing half.
+  **Discharged without it**: the doc half — `grep` over `docs/` finds no reference to `check_circle`,
+  `ActiveMarker` or a session-row leading icon, so `docs/daemon.md` needs no change (its activity-dot
+  table describes the dot only, which is unchanged). The geometry half is covered deterministically
+  by T108, which asserts the two properties SC-019 names (one leading indicator; identical slot width
+  across all four signals) at the widget level rather than by eye. What remains is purely visual
+  confirmation — expand a worktree in a client running this build and look at the session rows.

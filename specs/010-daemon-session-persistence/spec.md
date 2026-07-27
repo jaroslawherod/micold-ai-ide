@@ -384,6 +384,17 @@ a session survived; confirm it does not survive without the setting.
   a colour-blind user and in any theme.
   **Bugfix**: 2026-07-27 — BUG-004 added this requirement; the indicator shipped as raw `●`/`○`
   literals that no bundled font maps, so every signalled session rendered an identical blank box.
+- **FR-016f**: The activity indicator MUST be the **only** leading indicator on a session row — no
+  second glyph may sit beside it that does not vary with session state, since a constant glyph
+  carries no information while competing with the one that does (FR-016c). A session's *lifecycle*
+  state (starting / running / restarting / failed / interrupted-but-resumable) is conveyed by the
+  row's tint, which applies to the session name itself, and MUST NOT be encoded as a second glyph.
+  The indicator's slot MUST be constant-width for every activity state including **unknown** — where
+  nothing is drawn (FR-016c) the slot MUST still be reserved — so session names stay aligned with one
+  another and a row does not shift horizontally as its signal changes.
+  **Bugfix**: 2026-07-27 — BUG-005 added this requirement; session rows carried an unconditional
+  `check_circle` glyph left of the activity dot, which read as "done/OK" on failed and interrupted
+  sessions alike. See `bugs/BUG-005.md`.
 - **FR-017**: Scrollback MUST be retained by the service up to the service-owned configured limit
   (FR-012a), including output produced while detached, and MUST be requestable by range so the client
   can scroll without holding all history.
@@ -562,12 +573,20 @@ compatibility), a new Edge Case, a 4th acceptance scenario on User Story 6, and 
 - **SC-018**: Zero blank-box ("tofu") placeholders appear anywhere in the session list, and the
   working / awaiting-input / ended indicators are told apart by shape with colour removed (0 states
   that collapse to the same silhouette).
+- **SC-019**: A session row shows exactly one leading indicator, and every session name in the list
+  begins at the same horizontal offset regardless of activity state (0 rows misaligned, 0 horizontal
+  shift as a session moves unknown → working → awaiting input → ended).
 
 ---
 
 **Bugfix**: 2026-07-27 — BUG-004 Added FR-016e (activity indicator MUST come from the shared closed
 icon vocabulary and stay shape-distinct) and SC-018 (zero tofu in the session list, shape-distinct
 indicators). See `bugs/BUG-004.md`.
+
+**Bugfix**: 2026-07-27 — BUG-005 Added FR-016f (the activity indicator is a session row's sole
+leading indicator; lifecycle rides the row tint, not a second glyph; the slot is constant-width for
+every state including unknown) and SC-019 (one indicator per row, no horizontal shift as the signal
+changes). See `bugs/BUG-005.md`.
 
 ---
 
