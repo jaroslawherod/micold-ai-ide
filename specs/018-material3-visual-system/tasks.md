@@ -191,7 +191,7 @@ Test command throughout: `mise run test` (`cargo test --workspace`).
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [ ] T069 [P] Delete the superseded notification style function from `crates/micold-client/src/ui/material/style.rs` and any feature-003 token constants left unreferenced after Phase 2
-- [ ] T070 [P] Fix the stale test command in `CLAUDE.md`, which documents `cargo test --no-default-features --all-targets` against a repository whose `mise.toml` runs `cargo test --workspace` (research R6)
+- [X] T070 [P] ~~Fix the stale test command in `CLAUDE.md`~~ — already done as part of [017](../017-material-component-architecture/tasks.md) T003; kept here only so the numbering is stable
 - [ ] T071 [P] Cross-cutting documentation review and `docs/` index/navigation updates (Principle VII)
 - [ ] T072 Run the full `quickstart.md` Part B walkthrough in the **light** scheme and record the result
 - [ ] T073 Run the full `quickstart.md` Part B walkthrough in the **dark** scheme and record the result

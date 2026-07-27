@@ -8,7 +8,7 @@ document replaces it in full. Where feature 003's contract and this one disagree
 Durable definition of the single design system every surface draws from. All values live in the
 render-free core as pure data (feature 017), so the contrast invariant (FR-004), the type scale, the
 elevation levels, the shape scale, the state-layer opacities and the motion tokens are all
-exercised by `cargo test --no-default-features`. Only the conversion of these values into
+exercised by `cargo test --workspace`. Only the conversion of these values into
 rendering types is GUI-only. If a value changes here, the core and its tests change with it.
 
 Dimensions are given in Material's density-independent pixels and are applied as the equivalent
