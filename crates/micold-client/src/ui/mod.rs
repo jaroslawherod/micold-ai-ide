@@ -72,6 +72,73 @@ pub enum MotionKey {
     SidebarFilter,
 }
 
+/// The daemon-connection state, as it concerns the *active* project (US5, FR-024/027). Computed by
+/// the binary (the connection is binary-owned runtime state) and passed to [`view`] so the shell can
+/// show a persistent status banner. `Connected` renders nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectionStatus {
+    /// The service is reachable and this window holds the active project.
+    Connected,
+    /// The service connection is down; displayed content may be stale and is auto-reconnecting.
+    Disconnected,
+    /// Another window took over the active project (`by` = its build/identity). This window is
+    /// read-only until the user takes it back (FR-024).
+    Displaced {
+        /// The taking-over window's identity string.
+        by: String,
+    },
+    /// The running service speaks a different contract version (US6, FR-021/022). Names both versions
+    /// and offers a one-click restart of the service.
+    VersionMismatch {
+        /// This client's protocol version.
+        client: u32,
+        /// The running daemon's protocol version.
+        daemon: u32,
+        /// The running daemon's build string.
+        daemon_build: String,
+    },
+}
+
+/// The persistent connection-status strip, shown between the toolbar and the notification stack.
+/// Empty (zero-height) when connected, so it never crowds a healthy session.
+fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a, Message> {
+    let banner = match status {
+        ConnectionStatus::Connected => return Space::new(0, 0).into(),
+        ConnectionStatus::Disconnected => material::ConnectionBanner::new(
+            "Not connected to the session service",
+            "The displayed content may be stale. Reconnecting…",
+            roles,
+        ),
+        ConnectionStatus::Displaced { by } => material::ConnectionBanner::new(
+            "Another window took over this project",
+            format!("{by} is now attached — this window is read-only until you take it back."),
+            roles,
+        )
+        .action("Take over", Message::ConnectionTakeoverRequested),
+        ConnectionStatus::VersionMismatch {
+            client,
+            daemon,
+            daemon_build,
+        } => material::ConnectionBanner::new(
+            "The session service is a different version",
+            format!(
+                "This app speaks contract v{client}; the running service ({daemon_build}) speaks \
+                 v{daemon}. Restart the service to match — running processes stop, but your \
+                 sessions are preserved and resumable."
+            ),
+            roles,
+        )
+        .action(
+            "Restart service",
+            Message::ConnectionRestartServiceRequested,
+        ),
+    };
+    container(banner)
+        .padding([spacing::SM, spacing::MD])
+        .width(Length::Fill)
+        .into()
+}
+
 /// Animation key for a worktree row's hover-revealed actions fade (feature 008). Each worktree
 /// gets its own track (keyed by a hash of its `dir_name`) so rows fade in and out independently
 /// — hovering B while A fades out animates both at once.
@@ -130,6 +197,7 @@ pub fn view<'a>(
     dismissing: Option<&'a crate::app::ClosingOverlay>,
     row_fx: &crate::motion::Animator<u64>,
     env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
+    connection: &ConnectionStatus,
 ) -> Element<'a, Message> {
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
@@ -172,6 +240,7 @@ pub fn view<'a>(
     // a branch that could not be taken. Nothing may nest this inside an `if`.
     let mut base: Element<'a, Message> = container(column![
         toolbar::view(state, scheme),
+        connection_banner(connection, roles),
         notifications(state, roles),
         body
     ])

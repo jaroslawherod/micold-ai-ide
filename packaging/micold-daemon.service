@@ -1,0 +1,23 @@
+# systemd *user* unit — installed to /usr/lib/systemd/user/, NOT enabled at install (US7, FR-038).
+# Socket-activated by micold-daemon.socket; the daemon adopts the passed listener via LISTEN_FDS
+# (`listenfd`), so no readiness protocol is needed and Type=simple is correct — the kernel queues
+# connections on the already-listening socket until the daemon accepts.
+[Unit]
+Description=Micold session daemon
+Requires=micold-daemon.socket
+After=micold-daemon.socket
+
+[Service]
+# The daemon adopts the socket-activation fd automatically; it does not implement sd_notify, so this
+# is Type=simple (not notify). Startup produces no interrupted-resumable relaunch (FR-006b).
+Type=simple
+ExecStart=/usr/bin/micold-daemon
+# Restart only on failure: a future clean idle-exit (exit 0) must stay stopped so the socket can
+# re-activate it on the next connection — `always` would defeat activation (research R5.3).
+Restart=on-failure
+RestartSec=2s
+# The daemon defaults to `info`; an admin can override here. It never requires a display (FR-039).
+Environment=MICOLD_LOG=info
+
+[Install]
+WantedBy=default.target

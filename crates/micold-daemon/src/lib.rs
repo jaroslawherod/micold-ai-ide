@@ -10,11 +10,14 @@
 pub mod activity;
 pub mod catalog;
 pub mod framer;
+pub mod hooks;
 pub mod lifecycle;
 pub mod logging;
+pub mod platform;
 pub mod server;
 pub mod singleton;
 pub mod state;
+pub mod supervision;
 pub mod supervisor;
 pub mod terminal;
 

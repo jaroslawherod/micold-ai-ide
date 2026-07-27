@@ -16,7 +16,7 @@ use micold_core::project::validate_rename;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{
-    ClientMsg, DaemonMsg, ErrorKind, OperationResult, SessionProcess,
+    ClientMsg, DaemonMsg, ErrorKind, LogSink, OperationResult, SessionProcess,
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
@@ -27,6 +27,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
 use crate::catalog::Catalog;
+use crate::hooks;
 use crate::logging;
 use crate::singleton::{self, Acquisition};
 use crate::state::DaemonState;
@@ -52,6 +53,46 @@ pub async fn run() -> io::Result<()> {
     // A recovered (corrupt) catalog is surfaced, not swallowed (data-model C4).
     tracing::info!(load_status = ?catalog.load_status(), "catalog adopted");
     let state = Arc::new(DaemonState::new(catalog));
+    // Hand the diagnostics handle to the shared state so the `LogLocation`/`RecentErrors`/
+    // `SetLogLevel` RPCs can serve it (FR-043–046).
+    state.set_diagnostics(logging);
+
+    // FR-006a/b: sessions that were running when the service last stopped come back as
+    // `InterruptedResumable` — never auto-relaunched, resumable by one explicit user action. This is
+    // the ONLY lifecycle daemon startup may produce (data-model L4). Blocking (stats the provider
+    // store), so it runs off the async runtime; it completes before the accept loop starts.
+    {
+        let startup = Arc::clone(&state);
+        let marked =
+            tokio::task::spawn_blocking(move || startup.present_interrupted_resumable_at_startup())
+                .await
+                .unwrap_or(0);
+        if marked > 0 {
+            tracing::info!(
+                count = marked,
+                "presented interrupted-resumable sessions after restart"
+            );
+        }
+    }
+
+    // Restart supervision runs on its own timer, independent of any client connection: a session
+    // that crashes with no window open is restarted anyway (US4, FR-005).
+    spawn_supervisor(Arc::clone(&state));
+
+    // The loopback activity-hook receiver (US2, T045/T046): bind an ephemeral 127.0.0.1 port and
+    // record it on the shared state so AI-CLI spawns point `claude`'s lifecycle hooks at it. A bind
+    // failure is non-fatal — activity degrades to `Unknown` (H1), never to a wrong signal.
+    match hooks::HookReceiver::bind(hooks::default_settings_dir()).await {
+        Ok((receiver, listener)) => {
+            let tokens = receiver.tokens();
+            state.set_hooks(receiver);
+            tokio::spawn(hooks::serve(listener, tokens, Arc::clone(&state)));
+            tracing::info!("activity-hook receiver listening on loopback");
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "could not bind the activity-hook receiver; activity will be Unknown");
+        }
+    }
 
     // systemd socket activation (Linux, opportunistic — MUST NOT be required; protocol.md §2).
     #[cfg(target_os = "linux")]
@@ -60,8 +101,14 @@ pub async fn run() -> io::Result<()> {
         return serve_unix(state, listener).await;
     }
 
-    let endpoint = endpoint::resolve()?;
-    match singleton::acquire(&endpoint).await? {
+    let endpoint = endpoint::resolve().inspect_err(|e| {
+        tracing::error!(error = %e, "could not resolve the endpoint to bind");
+    })?;
+    let acquisition = singleton::acquire(&endpoint).await.inspect_err(|e| {
+        // Endpoint bind failure, logged with its reason before it propagates (FR-045).
+        tracing::error!(endpoint = %endpoint.socket_path.display(), error = %e, "failed to bind the endpoint");
+    })?;
+    match acquisition {
         Acquisition::AlreadyRunning => {
             tracing::info!(
                 endpoint = %endpoint.socket_path.display(),
@@ -71,9 +118,44 @@ pub async fn run() -> io::Result<()> {
         }
         Acquisition::Bound(bound) => {
             tracing::info!(endpoint = %bound.socket_path().display(), "listening");
+            // Record our pid in the lock file so a version-mismatched client can stop us for its
+            // "restart service" action (FR-022): a mismatched client can't handshake, so a control
+            // message can't reach us — a recorded pid is the version-agnostic stop handle. Writing
+            // through a separate fd does not disturb the daemon's held `flock` (advisory, per-OFD).
+            if let Err(e) = std::fs::write(&endpoint.lock_path, std::process::id().to_string()) {
+                tracing::warn!(error = %e, "could not record daemon pid in the lock file");
+            }
             serve_interprocess(state, bound).await
         }
     }
+}
+
+/// How often the restart supervisor polls live sessions for exits. Fast enough that a crash-restart
+/// feels immediate, cheap enough to be negligible at idle with a handful of sessions (US4).
+const SUPERVISION_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Spawn the restart-supervision loop (US4, FR-005). Ticks on [`SUPERVISION_INTERVAL`], drives the
+/// crash-loop policy for any session whose child exited, and broadcasts `CatalogChanged` when a
+/// lifecycle moved. The supervision itself is blocking (PTY spawn / process teardown), so it runs on
+/// a blocking thread, never on the async runtime (module invariant).
+fn spawn_supervisor(state: Arc<DaemonState>) {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(SUPERVISION_INTERVAL);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            ticker.tick().await;
+            let worker = Arc::clone(&state);
+            let changed = tokio::task::spawn_blocking(move || worker.supervise_exited_sessions())
+                .await
+                .unwrap_or_default();
+            // Drain out-of-band terminal signals (title + spinner-derived activity, US2 T046/T047)
+            // on the same cadence. It is lock-only (no blocking I/O), so it runs on the async task.
+            let signals_changed = state.drain_signals();
+            if !changed.is_empty() || signals_changed {
+                state.broadcast_catalog();
+            }
+        }
+    });
 }
 
 /// Adopt an `LISTEN_FDS`-provided Unix socket, if this process is the intended recipient.
@@ -254,7 +336,52 @@ where
                     }
                 }
             }
-            ClientMsg::Detach { project } => state.detach(id, &project),
+            ClientMsg::Detach { project } => {
+                tracing::info!(client = id, project = %project.display(), "project detached");
+                state.detach(id, &project);
+            }
+            // --- Diagnostics (US6/Phase 10, FR-043–046) ---
+            ClientMsg::LogLocationRequest { req } => {
+                let (path, sink) = state
+                    .diagnostics()
+                    .map(|d| (d.path.clone(), d.sink))
+                    .unwrap_or((None, LogSink::Stderr));
+                state.send(id, DaemonMsg::LogLocation { req, path, sink });
+            }
+            ClientMsg::RecentErrorsRequest { req, limit } => {
+                let entries = state
+                    .diagnostics()
+                    .map(|d| d.recent_errors(limit as usize))
+                    .unwrap_or_default();
+                state.send(id, DaemonMsg::RecentErrors { req, entries });
+            }
+            ClientMsg::SetLogLevel { req, directives } => match state.diagnostics() {
+                Some(d) => match d.set_directives(&directives) {
+                    Ok(()) => {
+                        // The directives are operator-supplied config, never terminal content (FR-047).
+                        tracing::info!(%directives, "log level changed");
+                        send_ack(state, id, req);
+                    }
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::InvalidInput,
+                            message: "invalid log directives".into(),
+                            detail: Some(e),
+                        },
+                    ),
+                },
+                None => state.send(
+                    id,
+                    DaemonMsg::OperationError {
+                        req,
+                        kind: ErrorKind::Internal,
+                        message: "diagnostics are not available".into(),
+                        detail: None,
+                    },
+                ),
+            },
             ClientMsg::SessionInput {
                 session,
                 serial,

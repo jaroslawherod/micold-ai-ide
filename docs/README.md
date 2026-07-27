@@ -25,3 +25,12 @@ verified in CI.
 - [Settings](user-guide/settings.md) — the Settings dialog, the terminal scrollback limit, and
   environment-include (auto-picking up your shell environment for sessions, configuring or
   disabling it, and recovering from a failed script).
+
+## The session service (daemon)
+
+- [The Micold session daemon](daemon.md) — the background service that hosts your sessions so they
+  survive closing (or crashing) the window: what survives and what doesn't, instant reattach and
+  bounded scrollback, project/worktree operations running through the service, unattended crash
+  supervision, one-window-per-project with deliberate takeover and half-open-connection detection,
+  what a version mismatch looks like and how restart-and-resume behaves, surviving logout on Linux,
+  and where the service logs.

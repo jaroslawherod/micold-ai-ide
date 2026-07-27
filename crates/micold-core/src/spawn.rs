@@ -18,6 +18,8 @@ use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
+use crate::endpoint::Endpoint;
+
 /// Environment variable overriding which daemon binary to spawn. Primarily for tests and for
 /// development builds where the binary is not beside the client.
 pub const DAEMON_BIN_ENV: &str = "MICOLD_DAEMON_BIN";
@@ -63,6 +65,59 @@ pub fn spawn_detached_daemon() -> io::Result<u32> {
 
     // Deliberately not awaited/waited: the child must outlive us (FR-003).
     command.spawn().map(|child| child.id())
+}
+
+/// The pid the running daemon recorded in its lock file, if any (`None` when the file is absent,
+/// empty, or unparseable — e.g. an older daemon that predates pid recording).
+pub fn running_daemon_pid(endpoint: &Endpoint) -> Option<u32> {
+    std::fs::read_to_string(&endpoint.lock_path)
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+}
+
+/// Stop the running daemon so a matching one can be spawned in its place — the client half of the
+/// version-mismatch "restart service" action (FR-022). A mismatched client cannot handshake, so this
+/// terminates the daemon by the pid it recorded, then the caller's normal `connect_or_spawn` starts a
+/// fresh, matching daemon (none will be listening once this one exits). Best-effort and idempotent:
+/// returns `Ok(false)` when no pid was recorded (nothing to stop), `Ok(true)` when a stop was issued.
+pub fn stop_running_daemon(endpoint: &Endpoint) -> io::Result<bool> {
+    match running_daemon_pid(endpoint) {
+        Some(pid) => {
+            terminate_daemon(pid)?;
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
+/// Send a terminate to the daemon process. Unix uses `SIGTERM` so the daemon's `Drop` can unlink its
+/// socket cleanly; a still-stuck daemon is superseded anyway once its socket stops accepting.
+#[cfg(unix)]
+fn terminate_daemon(pid: u32) -> io::Result<()> {
+    // SAFETY: `kill` takes a pid and a signal and cannot corrupt this process's memory. An ESRCH
+    // (already gone) is success for our purpose — nothing left to stop.
+    let rc = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+    if rc == 0 {
+        return Ok(());
+    }
+    let err = io::Error::last_os_error();
+    if err.raw_os_error() == Some(libc::ESRCH) {
+        Ok(())
+    } else {
+        Err(err)
+    }
+}
+
+/// Windows daemon termination lands with the Windows CI gate (T083/W5), alongside the rest of the
+/// deliberately-deferred Windows process control.
+#[cfg(not(unix))]
+fn terminate_daemon(_pid: u32) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "stopping the daemon is not yet implemented on this platform",
+    ))
 }
 
 #[cfg(unix)]

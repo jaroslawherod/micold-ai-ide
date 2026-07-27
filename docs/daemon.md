@@ -49,6 +49,55 @@ keeps reopening a busy session fast regardless of how long it ran unattended.
 - The daemon persists the *catalog* (your projects, worktrees, and session identities) to disk, so
   those reappear after a reboot — but a session's live process and its on-screen scrollback do not.
 
+## Attaching, driving, and the activity badges (User Story 2)
+
+Opening a project **attaches** the window to it: the window starts drawing that project's sessions
+and sending your keystrokes to them. Closing the window, or switching away, **detaches** — the
+sessions keep running in the daemon (that is User Story 1); detaching only stops the *drawing*.
+Because the terminal lives in the daemon, scrolling, selecting text, and resizing the pane are all
+handled inside the window against the grid it already has — they cost no round trip to the daemon and
+stay responsive even while a session is producing output quickly.
+
+### The activity dot
+
+Every session in the sidebar carries a small **activity dot** next to its name, so you can tell at a
+glance what each one is doing without opening it:
+
+| Dot | Meaning |
+|---|---|
+| **Filled, accent** | **Working** — the agent is actively doing something. |
+| **Filled, attention** | **Awaiting input** — the agent's turn ended and it is likely waiting for you. |
+| _(no dot)_ | **Unknown** — the daemon has no signal yet (see below). This is deliberate, not a bug. |
+| **Hollow** | **Ended** — the session's process has finished. |
+
+The important, and unusual, one is **Unknown shows nothing**. The daemon derives activity from
+`claude`'s own lifecycle hooks — the authoritative "I started a turn / I finished a turn" signals —
+not from guessing based on how quiet the terminal is (which was measured and does not work: a session
+can sit silent for half a minute mid-task). So if those hooks aren't reaching the daemon — you ran a
+bare CLI, or hooks are misconfigured — the daemon reports **Unknown** rather than inventing an
+"idle" or "needs you" cue it can't stand behind. **A blank dot means "I don't know", never "nothing
+is happening."**
+
+"Awaiting input" is a *strong hint*, not a guarantee: a turn can end and then continue on its own
+(auto-continuation, or a hook that resumes it), so treat the attention dot as "probably your turn,"
+not a hard stop.
+
+### How the daemon knows (and what it never sees)
+
+The daemon points each `claude` session at a small **loopback-only** listener — bound to
+`127.0.0.1` on a random port, reachable only from your own machine — and `claude` posts a one-line
+notice to it at each turn boundary. Each session gets its own unguessable token; a request without it
+is refused. The listener does exactly one thing — report a session's activity — and can touch nothing
+else: not your projects, not session input, not the catalog. It is wired up through a per-session
+settings file the daemon writes, so **your own `claude` configuration is never modified**. The
+notices are never written to a log (they can carry file paths and prompt metadata).
+
+The session **title** shown in the sidebar comes from the same terminal stream: `claude` continuously
+sets the terminal title to the session's generated name, and the daemon reads it directly and pushes
+it to every window — replacing an older approach that repeatedly re-scanned a transcript file. A
+leading status glyph (the little spinner) is stripped before display; the title text itself is
+treated as untrusted and length-bounded.
+
 ## Project and worktree operations run through the daemon (User Story 3)
 
 Adding or renaming a project, creating, renaming, or deleting a worktree, and creating or deleting a
@@ -78,12 +127,166 @@ A couple of current limitations worth knowing:
   is always recoverable.
 - The scrollback limit in Settings is applied by the daemon; other Settings are still saved locally.
 
-## Surviving logout
+## Sessions are supervised even with no window open (User Story 4)
 
-On Linux, whether the daemon outlives your closing the app depends on how it was started; making it
-survive a full logout is covered under User Story 7 and documented there when it lands.
+Because a session's process lives in the daemon, the daemon can watch over it whether or not a window
+is attached — and it does. The behaviour is **identical** attended and unattended: closing the window
+never changes how a session's exit is handled.
+
+- **A crash restarts automatically.** If a session's process exits unexpectedly (a nonzero exit or a
+  signal — a crash, an out-of-memory kill), the daemon relaunches it. For a `claude` session that
+  means resuming the same conversation, so a crash mid-task is recovered on its own.
+
+- **A normal exit just stops it.** If the process ends cleanly — you quit `claude`, or a shell
+  `exit` — the session is left **stopped**, not restarted. Reopening it starts it again on demand.
+
+- **A crash *loop* gives up, loudly.** If a session keeps crashing, the daemon retries a bounded
+  number of times (three consecutive restarts) and then settles it in a **Failed** state instead of
+  restarting forever. Failed is durable: it shows up in the session list the next time a window
+  attaches — with the attempt count — and you can restart it manually once you've addressed the
+  cause. This is the same limit whether or not a window was open while it was crashing.
+
+- **Teardown reaps the whole process tree.** Closing or deleting a session terminates not just its
+  top-level process but any helpers it spawned, so nothing is orphaned in the background.
+
+**A recovered session heals.** A restart that *survives* — the new process is still running on the
+next supervision check, rather than crashing again immediately — returns the session to a normal
+running state and **resets the crash-loop counter**. So repeated crashes only add up while they are
+happening back-to-back; an occasional crash that recovers cleanly never creeps toward the give-up
+limit over the session's lifetime. Only a genuine tight loop (crash, restart, crash again before it
+could survive a check) exhausts the budget and settles `Failed`.
+
+## One window per project, with deliberate takeover (User Story 5)
+
+Because the sessions live in the daemon, more than one app window can talk to it at once. To keep two
+windows from fighting over the same terminal, a project may be **attached** to only one window at a
+time. This is per-project, not global: you can have several windows open, each on a different project,
+all fully live and never interfering with one another.
+
+- **A second window on the same project is refused — with an offer, not a wall.** If you open a
+  window on a project another window already holds, attachment is refused with a message naming the
+  current holder and how long it has held it, and offering to **take over**. Nothing happens to the
+  other window until you confirm.
+
+- **Takeover is deliberate and non-destructive.** When you confirm, the new window becomes the holder
+  and the previous one is **displaced**: it shows a banner saying another window took over, stops
+  sending input, and goes read-only for that project — but it does **not** close, and its other
+  projects are untouched. A "Take over" button on that banner claims the project back the same way,
+  displacing whoever holds it now.
+
+- **A holder that goes away frees the project automatically.** If the window holding a project simply
+  closes — or crashes — the project becomes attachable again with no ceremony and no service restart.
+  The next window to ask for it just gets it.
+
+### Detecting a dead connection
+
+An ordinary close sends a clean disconnect, so the daemon frees the project at once. A **half-open**
+connection is trickier: if a window's machine loses power or its network drops, no disconnect ever
+arrives and the socket would otherwise sit there forever, with the window still showing the last
+screen as though it were live. To prevent that, the window sends a lightweight keepalive probe every
+few seconds and expects a prompt reply; if the service goes silent past a short deadline, the window
+declares itself **disconnected within ten seconds**, stops presenting the stale screen as live, and
+shows a banner. It then reconnects on its own in the background, and on reconnect re-reads the
+service's authoritative state rather than replaying whatever it missed — so the window always settles
+on what is actually true, never on a guess.
+
+### Trying it with a second window
+
+To see the exclusivity behaviour, launch a second app instance pointed at the same project while the
+first is open: the second is refused with the takeover offer. Confirm the takeover and watch the first
+window drop to its read-only "taken over" banner while the second becomes live. Close the second, and
+the first can take the project back from its banner. Two instances on two *different* projects, by
+contrast, both stay fully live.
+
+## A version mismatch fails loudly, and recovers (User Story 6)
+
+The window and the service talk over a versioned contract. When you rebuild and relaunch the app but
+an **older service is still running** from before the rebuild, the two no longer agree on the
+contract — and rather than misbehave subtly, the window refuses to connect and tells you exactly what
+happened.
+
+- **The diagnostic names both sides.** The banner says the running service speaks one contract
+  version while this app speaks another, and includes the service's build string — enough to see at a
+  glance that a stale service is the problem.
+
+- **One click fixes it.** The banner offers **Restart service**. Choosing it stops the old service
+  and lets the app start a fresh one that matches, then reconnects — no command to type, no manual
+  process hunting. Because a mismatched window can't even complete the handshake, the app stops the
+  old service directly rather than asking it politely.
+
+- **Your sessions survive the restart; live processes do not.** Restarting the service stops the
+  processes it was hosting, and the banner says so plainly. But the sessions themselves are durable:
+  after the restart they come back in the **interrupted-resumable** state below, ready to continue.
+
+### Interrupted-resumable sessions after any service restart
+
+Whenever the service starts and finds sessions that were running when it last stopped — whether from
+the version-mismatch restart above, a crash, or a reboot — it does **not** relaunch them. Doing so
+would make an agent take action you never asked for. Instead each such session is shown in a distinct
+**interrupted-resumable** state:
+
+- It is visibly different from a *running* session and from one you *deliberately stopped* — you can
+  tell at a glance which sessions were mid-flight when the service went down.
+- Nothing restarts on its own. A single explicit action (opening the session) resumes it, continuing
+  the prior conversation exactly where it left off.
+
+This is the safety guarantee behind the whole restart story: **a service restart can never cause an
+agent to do anything without you asking.**
+
+## Finding the logs and recent errors
+
+When something misbehaves, the overflow menu's **"Session service diagnostics"** asks the service two
+things and shows the answers:
+
+- **Where it logs.** Depending on how it was started, the service logs to the systemd journal, to your
+  terminal, or to a size-capped rotating file under your user data directory — the diagnostic tells
+  you which, and the file path when it's a file.
+- **Its recent errors.** A short list of the most recent warnings and errors the service recorded, so
+  you can see what went wrong without hunting through a log file.
+
+Logs never contain terminal output or anything you typed — sessions are referenced by identity and
+state only, so credentials and code in a session are never written to a log. Total log size is
+hard-capped, so the log can't grow without bound even if the service runs for weeks.
+
+## Surviving logout (User Story 7)
+
+Closing the window always leaves your sessions running (that is the whole point of the daemon). But a
+full **logout** is different: by default the system tears down everything you were running when your
+login session ends, the daemon included. Making sessions survive a logout is:
+
+- **Supported on Linux**, via one explicit, user-enabled setting (below). It is **never turned on for
+  you** — not by installation, not silently.
+- **Not supported on macOS or Windows.** There is no unprivileged equivalent, so the app does not
+  pretend to offer one. On those platforms sessions survive closing the window but not logging out.
+
+### Enabling it (Linux)
+
+The app does it for you: open the overflow menu and choose **"Keep sessions after logout."** That
+runs, in your own session, the two steps that matter:
+
+1. `loginctl enable-linger` — lets your user manager (and anything it runs) keep going after you log
+   out.
+2. `systemctl --user enable --now micold-daemon.socket` — moves the session service under that
+   lingering user manager, so it is no longer tied to your login session.
+
+If you prefer to do it by hand, run those two commands yourself, in that order.
+
+> **Order matters — it is not retroactive.** Enabling linger does **not** rescue a service that is
+> *already* running inside your login session; that process stays put and still dies at logout. You
+> must enable linger **first**, then (re)start the service under the user manager. The menu action
+> does exactly this — it enables linger, stops the session-bound service, and restarts it under the
+> lingering manager — which is why using it is simpler than hand-rolling the commands.
+
+If enabling linger is refused (some hardened systems restrict it via policy), the app tells you rather
+than silently pretending it worked; ask your administrator to enable lingering for your account.
+
+### How it is packaged
+
+The systemd **user** units ship with the app (in `/usr/lib/systemd/user/`) but are **inert until you
+enable them** — installation touches no per-user manager. The service is the same single binary
+whether the user manager socket-activates it or a window spawns it directly, so nothing behaves
+differently based on how it started.
 
 ---
 
-*This document grows with the feature: attach/detach and the activity badges (User Story 2) are
-appended as those land.*
+*This document covers the daemon feature end to end (User Stories 1–7).*

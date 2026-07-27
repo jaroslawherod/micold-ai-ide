@@ -21,7 +21,9 @@ use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, DaemonSettings, ProjectSnapshot, SessionSummary,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation};
+use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation, TerminalMode};
+
+use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
 use micold_core::settings::{clamp_scrollback, JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -365,6 +367,70 @@ impl Catalog {
         Ok(archived)
     }
 
+    /// Apply the restart supervision policy to a session whose child exited (US4, FR-005), mutating
+    /// its lifecycle in place. Returns the owning project, the action the daemon must carry out, and
+    /// the session's `cwd`/`mode` (so the caller can respawn on `Restart` without a second lookup).
+    /// `None` if the session is no longer in the catalog (already removed) — nothing to supervise.
+    pub fn supervise_session_exit(
+        &mut self,
+        id: SessionId,
+        outcome: ExitOutcome,
+    ) -> Option<(PathBuf, SupervisionAction, PathBuf, TerminalMode)> {
+        let (project, session) = self.workspace.find_session_mut(id)?;
+        let cwd = session.location.cwd(&project);
+        let mode = session.mode;
+        let action = supervise_exit(session, outcome);
+        Some((project, action, cwd, mode))
+    }
+
+    /// Mark a session `Running` **iff** it is currently `Restarting` — a respawned process that has
+    /// stayed up since the last supervision observation is now healthy, which resets the crash-loop
+    /// counter (closes the L5 gap: crashes far apart no longer accumulate toward `Failed`). Returns
+    /// the owning project when it transitioned, for a `CatalogChanged` broadcast. A no-op for every
+    /// other lifecycle, so it never resurrects `Idle`/`Failed` or re-announces a steady `Running`.
+    pub fn mark_running_if_restarting(&mut self, id: SessionId) -> Option<PathBuf> {
+        let (project, session) = self.workspace.find_session_mut(id)?;
+        if matches!(session.lifecycle, SessionLifecycle::Restarting { .. }) {
+            session.mark_running();
+            Some(project)
+        } else {
+            None
+        }
+    }
+
+    /// Present interrupted-but-resumable sessions after a service restart (FR-006a/b).
+    ///
+    /// Every durable session loads `Idle`. This walks the non-archived AI-CLI sessions and, for each
+    /// one `is_resumable` reports a recorded conversation for, flips `Idle → InterruptedResumable` —
+    /// the "was running when the service last stopped, resumable, never auto-relaunched" state. A
+    /// session with no conversation (created but never started) stays `Idle`, which is what makes the
+    /// two visibly distinct (FR-006a). `is_resumable` is injected so the daemon can back it with the
+    /// real provider while tests drive it deterministically. Lifecycle is not persisted (S3), so this
+    /// mutates in memory only — no write. Regular (shell) sessions have no conversation to resume and
+    /// are skipped. Returns the count marked (diagnostics).
+    pub fn present_interrupted_resumable(
+        &mut self,
+        is_resumable: impl Fn(SessionId, &Path, TerminalMode) -> bool,
+    ) -> usize {
+        let mut marked = 0;
+        for (project, sessions) in self.workspace.sessions.iter_mut() {
+            for session in sessions.iter_mut() {
+                if session.archived
+                    || session.mode != TerminalMode::AiCli
+                    || !matches!(session.lifecycle, SessionLifecycle::Idle)
+                {
+                    continue;
+                }
+                let cwd = session.location.cwd(project);
+                if is_resumable(session.id, &cwd, session.mode) {
+                    session.mark_interrupted_resumable();
+                    marked += 1;
+                }
+            }
+        }
+        marked
+    }
+
     /// Persist the project catalog atomically (temp + rename). A no-op for an ephemeral catalog.
     pub fn persist(&self) -> io::Result<()> {
         if let Some(store) = &self.project_store {
@@ -394,9 +460,8 @@ fn session_summary(session: &Session) -> SessionSummary {
     }
 }
 
-/// Map the in-process lifecycle to its wire form. The wire adds `InterruptedResumable` and a
-/// `Failed { reason, attempts }` variant the in-process enum does not yet carry (T073 reconciles
-/// the two); a plain `Failed` maps with an empty reason here.
+/// Map the in-process lifecycle to its wire form. The wire `Failed { reason, attempts }` carries a
+/// reason the in-process enum does not yet track; a plain `Failed` maps with an empty reason here.
 fn wire_lifecycle(lifecycle: SessionLifecycle) -> WireLifecycle {
     match lifecycle {
         SessionLifecycle::Idle => WireLifecycle::Idle,
@@ -407,5 +472,6 @@ fn wire_lifecycle(lifecycle: SessionLifecycle) -> WireLifecycle {
             reason: String::new(),
             attempts: micold_core::session::MAX_RESTART_ATTEMPTS,
         },
+        SessionLifecycle::InterruptedResumable => WireLifecycle::InterruptedResumable,
     }
 }

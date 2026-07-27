@@ -41,6 +41,11 @@ pub type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;
 pub struct VtSignals {
     dirty: Arc<AtomicBool>,
     bell: Arc<AtomicBool>,
+    /// A braille-spinner glyph was seen on an OSC-0 title since the last drain — positive evidence
+    /// of `Working` (activity invariant H1a, T046). Detected from the **raw** title before the glyph
+    /// is stripped for display, so it is captured here as an edge rather than recovered from the
+    /// (stripped) [`Self::title`].
+    spinner: Arc<AtomicBool>,
     title: Arc<Mutex<Option<String>>>,
     child_exit: Arc<Mutex<Option<i32>>>,
 }
@@ -59,6 +64,12 @@ impl VtSignals {
     /// Take and clear the bell edge.
     pub fn take_bell(&self) -> bool {
         self.bell.swap(false, Ordering::AcqRel)
+    }
+
+    /// Take and clear the spinner edge — true when a braille-spinner title was seen since the last
+    /// call. The activity drain feeds this to the FSM as `SpinnerObserved` (Working-only, H1a).
+    pub fn take_spinner(&self) -> bool {
+        self.spinner.swap(false, Ordering::AcqRel)
     }
 
     /// The most recent OSC-0 title reported by the process, if any (already glyph-stripped — T047).
@@ -118,8 +129,13 @@ impl EventListener for DaemonListener {
                 self.reply(format(size).as_bytes());
             }
             // OSC-0 title (T047): captured for the catalog, stripped of a leading status glyph, and
-            // treated as untrusted text. `ResetTitle` clears it.
+            // treated as untrusted text. `ResetTitle` clears it. A braille-spinner glyph in the *raw*
+            // title is Working-only activity evidence (T046, H1a) — captured as an edge before it is
+            // stripped, since the stored (stripped) title no longer carries the glyph.
             Event::Title(title) => {
+                if crate::activity::is_spinner_title(&title) {
+                    self.signals.spinner.store(true, Ordering::Release);
+                }
                 *self.signals.title.lock().expect("title lock poisoned") =
                     Some(strip_status_glyph(&title));
             }

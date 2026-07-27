@@ -26,6 +26,7 @@ use micold_core::session::SessionId;
 use micold_core::terminal::{claude_args, default_shell_command, LaunchSpec};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 
+use crate::supervision::ExitOutcome;
 use crate::terminal::{DaemonListener, SharedTerm, SharedWriter, VtSignals};
 
 /// The grid size a session starts with before any client reports its real pane dimensions
@@ -72,6 +73,11 @@ pub struct PtySession {
     size: Arc<Mutex<WindowSize>>,
     /// Set true when the reader thread sees EOF on the PTY (the child's output ended).
     reader_done: Arc<AtomicBool>,
+    /// The child's exit outcome once reaped — `Some(success)` after [`Self::is_alive`] or
+    /// [`Self::exit_outcome`] observes the child gone, `None` while it is still running. Cached
+    /// because `try_wait` only yields the status once; the supervisor reads it after the child dies
+    /// to classify a clean exit vs a crash (US4, FR-005).
+    exit: Arc<Mutex<Option<bool>>>,
     /// The reader thread handle, joined on drop.
     reader: Option<JoinHandle<()>>,
 }
@@ -84,6 +90,7 @@ impl PtySession {
         spec: &LaunchSpec,
         scrollback_lines: usize,
         initial_size: Option<(u16, u16)>,
+        settings_file: Option<&std::path::Path>,
     ) -> io::Result<Self> {
         let mut cmd = CommandBuilder::new(ClaudeProvider.command());
         cmd.cwd(&spec.cwd);
@@ -92,6 +99,12 @@ impl PtySession {
         }
         for arg in claude_args(spec) {
             cmd.arg(arg);
+        }
+        // A per-session `--settings` file wires the activity hooks without touching user config
+        // (contracts/hooks.md §Configuration, T046). Absent when the hook receiver did not start.
+        if let Some(path) = settings_file {
+            cmd.arg("--settings");
+            cmd.arg(path);
         }
         Self::spawn(id, cmd, scrollback_lines, initial_size)
     }
@@ -199,6 +212,7 @@ impl PtySession {
             signals,
             size,
             reader_done,
+            exit: Arc::new(Mutex::new(None)),
             reader: Some(reader),
         })
     }
@@ -261,11 +275,47 @@ impl PtySession {
 
     /// Whether the child is still running, via a non-blocking `try_wait` reap. Authoritative for
     /// liveness (the reader-thread EOF flag is only a hint — a child can close stdout yet linger).
+    /// On observing the child gone, caches its exit success bit for [`Self::exit_outcome`].
     pub fn is_alive(&self) -> bool {
         match self.child.lock() {
-            Ok(mut child) => matches!(child.try_wait(), Ok(None)),
+            Ok(mut child) => match child.try_wait() {
+                Ok(Some(status)) => {
+                    self.cache_exit(status.success());
+                    false
+                }
+                Ok(None) => true,
+                // A reap error means we can no longer track the child; treat it as gone (a crash,
+                // so supervision can react) rather than pretend it is alive forever.
+                Err(_) => {
+                    self.cache_exit(false);
+                    false
+                }
+            },
             Err(_) => false,
         }
+    }
+
+    /// Record the child's exit success bit the first time it is observed (idempotent — later reaps
+    /// never overwrite the first-seen outcome).
+    fn cache_exit(&self, success: bool) {
+        if let Ok(mut e) = self.exit.lock() {
+            e.get_or_insert(success);
+        }
+    }
+
+    /// The child's exit outcome once it has exited, or `None` while it is still running. Reaps via
+    /// [`Self::is_alive`] if not yet observed, so a caller can poll this directly. Drives the
+    /// restart supervision policy (US4, FR-005): a clean exit stops the session, a crash restarts.
+    pub fn exit_outcome(&self) -> Option<ExitOutcome> {
+        if self.exit.lock().ok().and_then(|e| *e).is_none() {
+            // Not yet observed — attempt a reap now.
+            let _ = self.is_alive();
+        }
+        self.exit
+            .lock()
+            .ok()
+            .and_then(|e| *e)
+            .map(ExitOutcome::from_success)
     }
 
     /// Whether the PTY reader has seen EOF (the child's output stream ended). A hint for the framer;
@@ -279,8 +329,13 @@ impl PtySession {
         self.child.lock().ok().and_then(|c| c.process_id())
     }
 
-    /// Terminate and reap the child (FR-015a / session close).
+    /// Terminate and reap the child (FR-015a / session close). Signals the child's whole process
+    /// **group** first so grandchildren the session forked don't orphan (FR-036, T061), then reaps
+    /// the direct child.
     pub fn kill(&self) -> io::Result<()> {
+        if let Some(pid) = self.pid() {
+            crate::platform::terminate_process_tree(pid);
+        }
         if let Ok(mut child) = self.child.lock() {
             child.kill()?;
             let _ = child.wait();
@@ -316,5 +371,103 @@ impl Dimensions for TermSizeShim {
     }
     fn columns(&self) -> usize {
         self.cols
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    /// A `sh -c "<script>"` command builder for a real, short-lived child.
+    fn sh(script: &str) -> CommandBuilder {
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg(script);
+        cmd
+    }
+
+    /// Poll `exit_outcome` until the child is reaped (bounded), returning the classification.
+    fn wait_for_exit(session: &PtySession) -> ExitOutcome {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(outcome) = session.exit_outcome() {
+                return outcome;
+            }
+            assert!(Instant::now() < deadline, "child did not exit in time");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[test]
+    fn a_zero_exit_is_classified_clean() {
+        let s = PtySession::spawn(SessionId::new(), sh("exit 0"), 100, None).unwrap();
+        assert_eq!(wait_for_exit(&s), ExitOutcome::Clean);
+    }
+
+    #[test]
+    fn a_nonzero_exit_is_classified_crashed() {
+        let s = PtySession::spawn(SessionId::new(), sh("exit 3"), 100, None).unwrap();
+        assert_eq!(wait_for_exit(&s), ExitOutcome::Crashed);
+    }
+
+    #[test]
+    fn a_live_child_has_no_exit_outcome_yet() {
+        let s = PtySession::spawn(SessionId::new(), sh("sleep 5"), 100, None).unwrap();
+        assert!(s.is_alive());
+        assert_eq!(s.exit_outcome(), None);
+        let _ = s.kill();
+    }
+
+    #[test]
+    fn the_first_seen_outcome_is_cached_and_stable() {
+        let s = PtySession::spawn(SessionId::new(), sh("exit 0"), 100, None).unwrap();
+        let first = wait_for_exit(&s);
+        // Repeated reads never flip the outcome (try_wait only yields the status once).
+        assert_eq!(s.exit_outcome(), Some(first));
+        assert_eq!(s.exit_outcome(), Some(ExitOutcome::Clean));
+    }
+
+    /// FR-036 / T061: tearing down a session reaps its whole process group, not just the direct
+    /// child — a backgrounded grandchild must not orphan.
+    #[test]
+    fn kill_reaps_the_whole_process_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join("grandchild.pid");
+        // sh backgrounds a `sleep` (a grandchild in the same process group), records its pid, then
+        // waits. Killing the group must take the grandchild with it.
+        let script = format!("sleep 300 & echo $! > {} ; wait", pidfile.display());
+        let session = PtySession::spawn(SessionId::new(), sh(&script), 100, None).unwrap();
+
+        // Read the grandchild pid once the shell has recorded it.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let grandchild: i32 = loop {
+            if let Ok(text) = std::fs::read_to_string(&pidfile) {
+                if let Ok(pid) = text.trim().parse::<i32>() {
+                    break pid;
+                }
+            }
+            assert!(Instant::now() < deadline, "grandchild pid never recorded");
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        // SAFETY: `kill(pid, 0)` sends no signal; it only probes whether the process exists.
+        assert_eq!(
+            unsafe { libc::kill(grandchild, 0) },
+            0,
+            "grandchild should be alive before teardown"
+        );
+
+        session.kill().unwrap();
+
+        // The grandchild is gone once the group teardown reaches it (bounded — reparenting +
+        // reaping is not instantaneous).
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while unsafe { libc::kill(grandchild, 0) } == 0 {
+            assert!(
+                Instant::now() < deadline,
+                "grandchild survived the process-group teardown"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 }

@@ -19,14 +19,16 @@ use micold_core::protocol::messages::{
     CatalogSnapshot, DaemonMsg, DaemonSettings, RefusalReason, SessionProcess, SessionSummary,
     WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::session::{SessionId, ShellInstanceId, TerminalMode};
+use micold_core::session::{SessionId, SessionLabel, ShellInstanceId, TerminalMode};
 use micold_core::terminal::{LaunchMode, LaunchSpec};
 use micold_core::worktree::{self, Worktree};
 use tokio::sync::mpsc;
 
+use crate::activity::{Activity, ActivityEvent};
 use crate::catalog::Catalog;
 use crate::framer::Framer;
 use crate::lifecycle::Lifecycle;
+use crate::supervision::{ExitOutcome, SupervisionAction};
 use crate::supervisor::PtySession;
 
 /// A per-connection client identity (ephemeral; never persisted).
@@ -37,6 +39,14 @@ pub struct DaemonState {
     inner: Mutex<Inner>,
     next_id: AtomicU64,
     lifecycle: Lifecycle,
+    /// The diagnostics handle (log location, runtime level reload, recent-errors ring), set once at
+    /// startup by `server::run`. Absent for tests and the ephemeral catalog, which don't init logging.
+    diagnostics: std::sync::OnceLock<crate::logging::Logging>,
+    /// The loopback hook receiver (US2, T045/T046), set once at startup by `server::run`. Absent for
+    /// tests and when binding fails — activity then degrades to `Unknown` (H1), never to a wrong
+    /// signal. When present, `start_session` writes each AI-CLI session a `--settings` file pointing
+    /// `claude`'s lifecycle hooks at it.
+    hooks: std::sync::OnceLock<crate::hooks::HookReceiver>,
 }
 
 struct Inner {
@@ -78,6 +88,14 @@ struct LiveSession {
     /// otherwise switching the attached process (a fresh per-process receiver) would classify the
     /// next legitimate serial as a false `Lost` (G2, protocol.md §7).
     input: InputReceiver,
+    /// The derived activity FSM (US2, T046). Per session (not per process) and **not persisted** —
+    /// it resets to `Unknown` on daemon restart (H3/A4). Fed by claude-CLI lifecycle hooks (the
+    /// loopback receiver) and by braille-spinner title evidence (`SpinnerObserved`, Working-only).
+    activity: Activity,
+    /// The most recent OSC-0 title observed on the attached process (glyph-stripped), used to
+    /// project a live session title and to debounce title-change pushes (T047). Not persisted;
+    /// re-emitted by `claude` on resume.
+    last_title: Option<String>,
 }
 
 /// Build a fresh [`Proc`] around a spawned PTY, with a session-lived framer.
@@ -135,6 +153,8 @@ impl DaemonState {
             }),
             next_id: AtomicU64::new(1),
             lifecycle: Lifecycle::new(),
+            diagnostics: std::sync::OnceLock::new(),
+            hooks: std::sync::OnceLock::new(),
         }
     }
 
@@ -145,6 +165,38 @@ impl DaemonState {
     /// The lifecycle counters (FR-002).
     pub fn lifecycle(&self) -> &Lifecycle {
         &self.lifecycle
+    }
+
+    /// Record the diagnostics handle at startup so the `LogLocation`/`RecentErrors`/`SetLogLevel`
+    /// RPCs can serve it (FR-043–046). A no-op if already set.
+    pub fn set_diagnostics(&self, logging: crate::logging::Logging) {
+        let _ = self.diagnostics.set(logging);
+    }
+
+    /// The diagnostics handle, if logging was initialised (absent in tests / ephemeral catalog).
+    pub fn diagnostics(&self) -> Option<&crate::logging::Logging> {
+        self.diagnostics.get()
+    }
+
+    /// Record the loopback hook receiver at startup so AI-CLI spawns can be pointed at it (US2,
+    /// T045/T046). A no-op if already set.
+    pub fn set_hooks(&self, receiver: crate::hooks::HookReceiver) {
+        let _ = self.hooks.set(receiver);
+    }
+
+    /// Prepare a session's activity-hook `--settings` file, if the hook receiver is running. Returns
+    /// `None` when hooks are unavailable (tests, or a bind failure) or when writing the file fails —
+    /// the caller then spawns without hooks and activity stays `Unknown` (H1), never wrong. Blocking
+    /// (a small file write); the AI-CLI spawn path is already off the async runtime.
+    fn hook_settings_file(&self, id: SessionId) -> Option<PathBuf> {
+        let receiver = self.hooks.get()?;
+        match receiver.prepare_settings(id) {
+            Ok(path) => Some(path),
+            Err(e) => {
+                tracing::warn!(session = %id.0, error = %e, "could not write hook settings; activity will be Unknown");
+                None
+            }
+        }
     }
 
     /// The `Welcome` payload for a freshly-handshaked client.
@@ -162,6 +214,7 @@ impl DaemonState {
         let mut snapshot = inner.catalog.snapshot();
         let overrides = &inner.catalog.workspace().worktree_names;
         for project in &mut snapshot.projects {
+            Self::overlay_live_summaries(inner, &mut project.sessions);
             if let Some(discovered) = inner.worktrees.get(&project.path) {
                 let names = overrides.get(&project.path);
                 project.worktrees = discovered
@@ -179,6 +232,21 @@ impl DaemonState {
             }
         }
         snapshot
+    }
+
+    /// Overlay each summary's runtime-only fields — `activity` and the live OSC-0 title — from the
+    /// live registry (US2, T046/T047). Durable state (the catalog) never carries activity (H3/A4) and
+    /// the persisted `label` lags the terminal title, so both are projected here at snapshot time. A
+    /// session with no live entry keeps the catalog's values (activity `Unknown`, the persisted label).
+    fn overlay_live_summaries(inner: &Inner, summaries: &mut [SessionSummary]) {
+        for summary in summaries {
+            if let Some(live) = inner.sessions.get(&summary.id) {
+                summary.activity = live.activity.signal().clone();
+                if let Some(title) = &live.last_title {
+                    summary.title = SessionLabel::Named(title.clone());
+                }
+            }
+        }
     }
 
     /// Register a client, returning its id and the receiver its writer task drains. Increments the
@@ -270,7 +338,9 @@ impl DaemonState {
                 since: Instant::now(),
             },
         );
-        Ok(inner.catalog.sessions_for(&project))
+        let mut sessions = inner.catalog.sessions_for(&project);
+        Self::overlay_live_summaries(&inner, &mut sessions);
+        Ok(sessions)
     }
 
     /// Release `id`'s attachment on `project` (if it holds it).
@@ -489,6 +559,25 @@ impl DaemonState {
         self.lock().catalog.archive_session_ids(&empty)
     }
 
+    /// FR-006a/b: at service startup, present every session with a recorded AI-CLI conversation as
+    /// `InterruptedResumable` (never auto-relaunched — only an explicit `SessionStart` resumes it).
+    /// **Blocking** (it stats the provider's conversation store), so the caller runs it off the async
+    /// runtime. Runs exactly once, before the accept loop starts, so there is no other client to
+    /// contend for the lock — the provider stat happening under the lock is safe here for that reason
+    /// (unlike the steady-state paths, which must never block under the lock). Returns the count.
+    pub fn present_interrupted_resumable_at_startup(&self) -> usize {
+        use micold_core::provider::{AiCliProvider, ClaudeProvider};
+        let provider = ClaudeProvider;
+        let Some(config) = provider.config_dir() else {
+            return 0;
+        };
+        self.lock()
+            .catalog
+            .present_interrupted_resumable(|id, cwd, _mode| {
+                provider.has_recorded_conversation(&config, cwd, id.0)
+            })
+    }
+
     /// The (non-archived) session summaries for a project, from durable state. Used to build the
     /// `Attached` reply after any attach-time pruning so it reflects the pruned result.
     pub fn sessions_for(&self, project: &Path) -> Vec<SessionSummary> {
@@ -550,12 +639,15 @@ impl DaemonState {
                     mode: launch,
                     env,
                 };
-                PtySession::spawn_claude(id, &spec, plan.scrollback, None)?
+                let settings = self.hook_settings_file(id);
+                PtySession::spawn_claude(id, &spec, plan.scrollback, None, settings.as_deref())?
             }
             TerminalMode::Regular => {
                 PtySession::spawn_shell(id, &plan.cwd, &env, plan.scrollback, None)?
             }
         };
+        // Session-start event with the launch reason (FR-045). No terminal content — id + mode only.
+        tracing::info!(session = %id.0, mode = ?plan.mode, ?launch, "session started");
         self.register_session(session);
         Ok(())
     }
@@ -573,6 +665,8 @@ impl DaemonState {
                 procs,
                 attached: SessionProcess::Primary,
                 input: InputReceiver::new(),
+                activity: Activity::new(),
+                last_title: None,
             },
         );
         pty
@@ -589,6 +683,191 @@ impl DaemonState {
                 .get(&SessionProcess::Primary)
                 .map(|p| Arc::clone(&p.pty))
         })
+    }
+
+    /// Supervise every live session whose primary process has exited (US4, FR-005): apply the
+    /// crash-loop policy to the catalog, respawn on `Restart`, and drop the live process on
+    /// `Stop`/`GiveUp`. Runs on a timer regardless of whether any client is attached — the identity
+    /// between attended and unattended handling is the whole point of this user story.
+    ///
+    /// Locking discipline (module invariant): the policy is applied and respawn plans gathered under
+    /// the lock; the blocking PTY spawn and the old-process teardown happen **off** the lock. Returns
+    /// the distinct projects whose catalog lifecycle changed, so the caller broadcasts one
+    /// `CatalogChanged` per affected project.
+    pub fn supervise_exited_sessions(&self) -> Vec<PathBuf> {
+        // Phase 1 — under the lock: classify exits, apply the policy, gather the follow-up work.
+        let scrollback;
+        let mut changed: Vec<PathBuf> = Vec::new();
+        let mut to_drop: Vec<SessionId> = Vec::new();
+        let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode)> = Vec::new();
+        {
+            let mut inner = self.lock();
+            scrollback = inner.catalog.settings_wire().scrollback_lines;
+            // Partition live primaries into those that have exited and those still alive. The alive
+            // set is captured *before* this tick's respawns, so a process respawned this tick is not
+            // in it — that is what lets a genuine survivor (alive since the previous tick) reset while
+            // a crash-looping respawn keeps advancing toward `Failed`.
+            let mut exited: Vec<(SessionId, ExitOutcome)> = Vec::new();
+            let mut alive: Vec<SessionId> = Vec::new();
+            for (id, live) in &inner.sessions {
+                let Some(proc) = live.procs.get(&SessionProcess::Primary) else {
+                    continue;
+                };
+                if proc.pty.is_alive() {
+                    alive.push(*id);
+                } else {
+                    // A reaped-but-unclassifiable exit is treated as a crash so supervision still
+                    // runs rather than the session lingering as a dead-but-alive entry.
+                    exited.push((*id, proc.pty.exit_outcome().unwrap_or(ExitOutcome::Crashed)));
+                }
+            }
+            for (id, outcome) in exited {
+                match inner.catalog.supervise_session_exit(id, outcome) {
+                    Some((project, SupervisionAction::Restart, cwd, mode)) => {
+                        // Session exit + restart-attempt event, with the reason (FR-045).
+                        tracing::warn!(session = %id.0, reason = "unexpected exit", "session crashed; restarting");
+                        changed.push(project);
+                        to_respawn.push((id, cwd, mode));
+                    }
+                    Some((project, SupervisionAction::GiveUp, _, _)) => {
+                        tracing::error!(session = %id.0, reason = "crash loop", "session gave up after repeated crashes (Failed)");
+                        changed.push(project);
+                        to_drop.push(id);
+                    }
+                    Some((project, SupervisionAction::Stop, _, _)) => {
+                        tracing::info!(session = %id.0, reason = "clean exit", "session stopped");
+                        changed.push(project);
+                        to_drop.push(id);
+                    }
+                    // Session already gone from the catalog (closed concurrently) — just reap the
+                    // orphaned live entry, no catalog change to broadcast.
+                    None => to_drop.push(id),
+                }
+            }
+            // Survivors: a session still alive while marked `Restarting` has stayed up since its
+            // respawn (at least one tick ago) — it is healthy now, so reset it to `Running`, which
+            // clears the crash-loop counter (closes the L5 gap).
+            for id in alive {
+                if let Some(project) = inner.catalog.mark_running_if_restarting(id) {
+                    tracing::info!(session = %id.0, reason = "restart survived", "session recovered; running");
+                    changed.push(project);
+                }
+            }
+        }
+        // Phase 2 — off the lock: tear down stopped/failed processes (blocking kill+join in Drop).
+        for id in to_drop {
+            self.remove_session(id);
+        }
+        // Phase 3 — off the lock: respawn restart-eligible sessions.
+        for (id, cwd, mode) in to_respawn {
+            self.respawn_primary(id, cwd, mode, scrollback);
+        }
+        changed.sort();
+        changed.dedup();
+        changed
+    }
+
+    /// Apply an activity [`ActivityEvent`] to a live session's FSM (US2, T046). Returns `true` if the
+    /// derived signal changed, so the caller can push a `CatalogChanged` reflecting the new badge.
+    /// A no-op (returns `false`) for an unknown/not-live session — a hook for a session the daemon is
+    /// not hosting reports nothing, matching invariant H1 (never invent state).
+    pub fn note_activity(&self, session: SessionId, event: ActivityEvent) -> bool {
+        let mut inner = self.lock();
+        let Some(live) = inner.sessions.get_mut(&session) else {
+            return false;
+        };
+        let before = live.activity.signal().clone();
+        live.activity.apply(event);
+        live.activity.signal() != &before
+    }
+
+    /// Drain each live session's out-of-band terminal signals into runtime state (US2, T046/T047):
+    /// the latest OSC-0 title (debounced against `last_title`) and the braille-spinner edge (fed to
+    /// the FSM as Working-only evidence, H1a). Returns `true` if any session's projected summary
+    /// changed, so the supervisor tick pushes one `CatalogChanged`. Cheap and lock-only — it reads
+    /// atomics/`Mutex<Option<String>>` already populated by the reader thread, never blocking I/O.
+    pub fn drain_signals(&self) -> bool {
+        let mut changed = false;
+        let mut inner = self.lock();
+        for live in inner.sessions.values_mut() {
+            let Some(proc) = live.procs.get(&live.attached) else {
+                continue;
+            };
+            let signals = proc.pty.signals();
+            // A spinner glyph seen since the last drain is positive `Working` evidence.
+            if signals.take_spinner() {
+                let before = live.activity.signal().clone();
+                live.activity.apply(ActivityEvent::SpinnerObserved);
+                if live.activity.signal() != &before {
+                    changed = true;
+                }
+            }
+            // The live title, debounced: only a real change is a push.
+            let title = signals.title();
+            if title != live.last_title {
+                live.last_title = title;
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    /// Respawn a session's primary process after a crash and swap it into the live registry, marking
+    /// the session `Running` (resets the crash-loop counter). On a spawn *failure* (rare — the binary
+    /// is gone), count it as another crash so the retry budget still advances toward `Failed` instead
+    /// of leaving a dead entry that looks alive.
+    fn respawn_primary(&self, id: SessionId, cwd: PathBuf, mode: TerminalMode, scrollback: usize) {
+        let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
+        let spawned = match mode {
+            TerminalMode::AiCli => {
+                let spec = LaunchSpec {
+                    cwd,
+                    session_id: id.0,
+                    mode: LaunchMode::Resume,
+                    env,
+                };
+                let settings = self.hook_settings_file(id);
+                PtySession::spawn_claude(id, &spec, scrollback, None, settings.as_deref())
+            }
+            TerminalMode::Regular => PtySession::spawn_shell(id, &cwd, &env, scrollback, None),
+        };
+        match spawned {
+            Ok(session) => {
+                // Swap in the fresh process; the old (dead) one is dropped off the lock. The session
+                // stays `Restarting { attempts }` (set by the policy) — it is NOT reset to `Running`
+                // here, so a process that crashes again right after respawn keeps advancing the
+                // crash-loop counter toward `Failed`. The counter has no time window (L5 caveat):
+                // only an explicit healthy signal (a future attach/first-output path) resets it.
+                let _old = self.swap_primary(id, session);
+            }
+            Err(_) => {
+                // Couldn't even respawn — count it as a further crash so the budget still advances,
+                // and drop the dead entry so it does not masquerade as alive.
+                let _ = self
+                    .lock()
+                    .catalog
+                    .supervise_session_exit(id, ExitOutcome::Crashed);
+                self.remove_session(id);
+            }
+        }
+    }
+
+    /// Replace a session's `Primary` process with `session`, returning the displaced [`Proc`] so the
+    /// caller drops it **off** the lock. If the session vanished meanwhile (closed concurrently), the
+    /// freshly-spawned process is torn down off the lock instead of leaking.
+    fn swap_primary(&self, id: SessionId, session: PtySession) -> Option<Proc> {
+        let pty = Arc::new(session);
+        let mut inner = self.lock();
+        let Some(live) = inner.sessions.get_mut(&id) else {
+            drop(inner);
+            // `pty` drops here, now that the lock is released: its Drop kills + joins off-lock.
+            return None;
+        };
+        let old = live
+            .procs
+            .insert(SessionProcess::Primary, new_proc(pty, id));
+        drop(inner);
+        old
     }
 
     /// The *attached* process's PTY handle, if the daemon is hosting the session.

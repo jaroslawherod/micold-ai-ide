@@ -74,6 +74,11 @@ pub enum SessionLifecycle {
     Restarting { attempts: u8 },
     /// Auto-restart gave up after repeated quick failures (FR-022a); user may retry manually.
     Failed,
+    /// The service restarted (reboot, crash, or a deliberate contract-mismatch restart) and found a
+    /// durable record of a session that had a recorded conversation. Presented distinctly from both
+    /// `Running` and a deliberately stopped (`Idle`) session, and **never auto-relaunched** — only a
+    /// single explicit `start` resumes it (FR-006a/b, data-model L4).
+    InterruptedResumable,
 }
 
 /// The maximum consecutive auto-restarts before giving up (FR-022a crash-loop guard).
@@ -218,6 +223,9 @@ pub struct Session {
     pub label: SessionLabel,
     /// Runtime state of the AI CLI process (transient — not persisted).
     pub lifecycle: SessionLifecycle,
+    /// Derived activity signal from the daemon (feature 010 US2, FR-016d) — transient, never
+    /// persisted, resets to `Unknown` on daemon restart (H3). Drives the sidebar activity badge.
+    pub activity: crate::protocol::messages::ActivitySignal,
     /// Which process is attached to the visible pane (feature 010). Persisted (FR-011).
     pub mode: TerminalMode,
     /// Every currently-open Regular Terminal instance, in creation ("open") order (feature 011;
@@ -249,6 +257,7 @@ impl Session {
             location,
             label: SessionLabel::Pending,
             lifecycle: SessionLifecycle::Starting,
+            activity: crate::protocol::messages::ActivitySignal::Unknown,
             mode: TerminalMode::AiCli,
             shells: Vec::new(),
             active_shell: None,
@@ -272,6 +281,7 @@ impl Session {
             location,
             label,
             lifecycle: SessionLifecycle::Idle,
+            activity: crate::protocol::messages::ActivitySignal::Unknown,
             mode,
             shells: Vec::new(),
             active_shell: None,
@@ -376,13 +386,26 @@ impl Session {
         )
     }
 
-    /// Begin (or resume) running: `Idle`/`Failed` → `Starting` (FR-010, FR-023a).
+    /// Begin (or resume) running: `Idle`/`Failed`/`InterruptedResumable` → `Starting` (FR-010,
+    /// FR-023a). For an `InterruptedResumable` session this is the single explicit action that
+    /// resumes the prior conversation (FR-006a) — startup never does it automatically (FR-006b).
     pub fn start(&mut self) {
         if matches!(
             self.lifecycle,
-            SessionLifecycle::Idle | SessionLifecycle::Failed
+            SessionLifecycle::Idle
+                | SessionLifecycle::Failed
+                | SessionLifecycle::InterruptedResumable
         ) {
             self.lifecycle = SessionLifecycle::Starting;
+        }
+    }
+
+    /// Present a durable session as interrupted-but-resumable after a service restart (FR-006a): a
+    /// no-op unless it is currently `Idle` (the state every session loads in), so this never
+    /// overrides a persisted `Failed`, a live process, or an already-marked session.
+    pub fn mark_interrupted_resumable(&mut self) {
+        if matches!(self.lifecycle, SessionLifecycle::Idle) {
+            self.lifecycle = SessionLifecycle::InterruptedResumable;
         }
     }
 
@@ -417,6 +440,14 @@ impl Session {
     /// auto-restart applies (FR-023). Note: as of feature 008, merely *switching* the active
     /// project no longer calls this — switched-away sessions keep running in the background.
     pub fn stop_for_project_change(&mut self) {
+        self.lifecycle = SessionLifecycle::Idle;
+    }
+
+    /// The process exited **cleanly** on its own (status 0 — the user quit `claude`, ran `exit`):
+    /// → `Idle`, no auto-restart (FR-004 scenario 3). Distinct from [`Self::on_unexpected_exit`],
+    /// which governs crashes with the retry budget. Resets any in-flight crash-loop counter, since
+    /// a clean exit is not a failure.
+    pub fn record_clean_exit(&mut self) {
         self.lifecycle = SessionLifecycle::Idle;
     }
 

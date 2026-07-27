@@ -196,6 +196,19 @@ struct App {
     /// The last catalog snapshot the daemon sent (welcome or `CatalogChanged`). Not yet rendered —
     /// the sidebar/session-list retarget onto it lands with the render switch (T042).
     daemon_catalog: Option<micold_core::protocol::messages::CatalogSnapshot>,
+    /// Projects this window has been displaced from by another window's takeover (US5, FR-024),
+    /// keyed by project path → the taking-over window's identity. A displaced project is read-only
+    /// here (input suppressed, a banner shown) until the user takes it back or reconnects. Cleared
+    /// on a fresh connect. Empty in the common single-window case.
+    displaced: HashMap<PathBuf, String>,
+    /// Whether the daemon connection is currently down (between a `DaemonDisconnected` and the next
+    /// `DaemonConnected`). Drives the stale-content banner (FR-027). `daemon.is_none()` also implies
+    /// this, but the flag is explicit for clarity at the render site.
+    disconnected: bool,
+    /// A pending contract-version mismatch (US6, FR-021/022): `(client_version, daemon_version,
+    /// daemon_build)`. `Some` while the running daemon's contract differs from ours — drives the
+    /// version-mismatch banner and its "restart service" action. Cleared on a successful connect.
+    version_mismatch: Option<(u32, u32, String)>,
     /// Correlation-id counter for the client's mutating RPCs (FR-009).
     next_req: u64,
     /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
@@ -471,6 +484,9 @@ fn boot() -> (App, Task<Message>) {
             env_include_last_outcome,
             daemon: None,
             daemon_catalog: None,
+            displaced: HashMap::new(),
+            disconnected: false,
+            version_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         },
@@ -658,6 +674,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             catalog,
             settings,
         } => {
+            // A fresh connection resyncs from authoritative state (FR-028): clear the transient
+            // disconnected/displaced flags. If a project is still held by another window, the
+            // re-attach below is refused and the displaced state is re-established from that reply.
+            app.disconnected = false;
+            app.displaced.clear();
+            app.version_mismatch = None;
             // The daemon is the single writer of settings + sessions; adopt what it reports.
             app.scrollback_lines = settings.scrollback_lines;
             reconcile_catalog(&mut app.core, &catalog, false);
@@ -833,7 +855,47 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         None => {}
                     }
                 }
-                // Other control messages (pong, attach/displaced) are consumed as their flows land.
+                // Diagnostics replies (Phase 10, FR-046): surface as notices.
+                DaemonMsg::LogLocation { path, sink, .. } => {
+                    let where_ = match path {
+                        Some(p) => format!("a file at {}", p.display()),
+                        None => format!("{sink:?}"),
+                    };
+                    app.core
+                        .notify_info(format!("The session service logs to {where_}."));
+                }
+                DaemonMsg::RecentErrors { entries, .. } => {
+                    if entries.is_empty() {
+                        app.core
+                            .notify_info("The session service reports no recent errors.");
+                    } else {
+                        let latest = entries.last().unwrap();
+                        app.core.notify_error(format!(
+                            "The session service reported {} recent issue(s); most recent: [{}] {}",
+                            entries.len(),
+                            latest.level,
+                            latest.message
+                        ));
+                    }
+                }
+                // Another window took over a project we held (US5, FR-024). Mark it read-only here —
+                // input is suppressed and a "take over" banner is shown — but never terminate.
+                DaemonMsg::Displaced { project, by } => {
+                    app.displaced.insert(project, by);
+                }
+                // A (re)attach was refused. `ProjectBusy` means another window holds it: surface the
+                // same take-over banner as a live displacement, naming the current holder.
+                DaemonMsg::Refused {
+                    reason:
+                        micold_core::protocol::messages::RefusalReason::ProjectBusy {
+                            project,
+                            holder,
+                            ..
+                        },
+                } => {
+                    app.displaced.insert(project, holder);
+                }
+                // Other control messages (Pong, Attached) are consumed as their flows land.
                 _ => {}
             }
             Task::none()
@@ -863,6 +925,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::DaemonDisconnected => {
             app.daemon = None;
+            // Content on screen is now stale; the banner says so (FR-027). The subscription is
+            // already auto-reconnecting with backoff.
+            app.disconnected = true;
             // Any request still in flight will never get a reply on this connection (`req`s are
             // per-connection). Resolve each to an explicit *unknown* outcome — never a silent
             // success or failure — and reconcile against authoritative state on reconnect
@@ -878,8 +943,114 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::DaemonConnectFailed(reason) => {
+            app.disconnected = true;
             app.core
                 .notify_error(format!("Could not connect to the session daemon: {reason}"));
+            Task::none()
+        }
+        // The user chose to take the active project back after being displaced (FR-024): re-attach
+        // with force, which displaces the current holder, and re-view its active session.
+        Message::ConnectionTakeoverRequested => {
+            if let (Some(project), Some(d)) =
+                (app.core.workspace.active.clone(), app.daemon.clone())
+            {
+                app.displaced.remove(&project);
+                d.send(ClientMsg::Attach {
+                    project: project.clone(),
+                    force: true,
+                });
+                d.send(ClientMsg::SetViewedSession {
+                    project,
+                    session: app.core.active_session,
+                });
+            }
+            Task::none()
+        }
+        // The daemon refused us on a contract mismatch (US6, FR-021): record it so the banner can
+        // name both versions and offer the restart action. The connection subscription keeps
+        // retrying in the background; each retry re-sets this identically until the user acts.
+        Message::DaemonVersionMismatch {
+            client,
+            daemon,
+            daemon_build,
+        } => {
+            app.version_mismatch = Some((client, daemon, daemon_build));
+            Task::none()
+        }
+        // "Restart service" (FR-022): stop the mismatched daemon by its recorded pid. A mismatched
+        // client can't send it a control message, so termination is the version-agnostic stop. Once
+        // it exits, the auto-reconnect loop finds nothing listening and spawns a matching daemon;
+        // previously-live sessions then reload as interrupted-resumable (FR-006a). Live processes are
+        // lost — we say so — but the durable sessions survive.
+        Message::ConnectionRestartServiceRequested => {
+            app.version_mismatch = None;
+            app.core.notify_info(
+                "Restarting the session service — running processes are stopped, but your \
+                 sessions are preserved and can be resumed.",
+            );
+            Task::perform(
+                async {
+                    tokio::task::spawn_blocking(|| {
+                        let endpoint = micold_core::endpoint::resolve()?;
+                        micold_core::spawn::stop_running_daemon(&endpoint)
+                    })
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .map_err(|e: std::io::Error| e.to_string())
+                },
+                |r: Result<bool, String>| match r {
+                    Ok(_) => Message::NoOp,
+                    Err(e) => Message::DaemonConnectFailed(format!(
+                        "could not stop the mismatched service: {e}"
+                    )),
+                },
+            )
+        }
+        // Make sessions survive logout (US7, FR-038; Linux only). Runs off-thread — it spawns
+        // `loginctl`/`systemctl` — and reports the outcome as a toast. Never enabled by install.
+        Message::LogoutSurvivalRequested => Task::perform(
+            async {
+                tokio::task::spawn_blocking(|| {
+                    let endpoint = micold_core::endpoint::resolve().map_err(|e| {
+                        micold_core::logout_survival::SurvivalOutcome::Failed(e.to_string())
+                    })?;
+                    Ok(micold_core::logout_survival::enable(&endpoint))
+                })
+                .await
+                .unwrap_or_else(|e| {
+                    Err(micold_core::logout_survival::SurvivalOutcome::Failed(
+                        e.to_string(),
+                    ))
+                })
+            },
+            |r: Result<
+                micold_core::logout_survival::SurvivalOutcome,
+                micold_core::logout_survival::SurvivalOutcome,
+            >| {
+                let outcome = r.unwrap_or_else(|e| e);
+                Message::LogoutSurvivalOutcome(outcome.user_message())
+            },
+        ),
+        Message::LogoutSurvivalOutcome(message) => {
+            app.core.notify_info(message);
+            Task::none()
+        }
+        // Ask the daemon where it logs and for its recent errors (Phase 10, FR-046). The replies
+        // arrive as `LogLocation`/`RecentErrors` events, shown as notices. Uncorrelated: only the
+        // latest answer matters, so no pending-op bookkeeping is needed.
+        Message::DiagnosticsRequested => {
+            if let Some(d) = &app.daemon {
+                let req = app.next_req;
+                app.next_req += 2;
+                d.send(ClientMsg::LogLocationRequest { req });
+                d.send(ClientMsg::RecentErrorsRequest {
+                    req: req + 1,
+                    limit: 20,
+                });
+            } else {
+                app.core
+                    .notify_error("Not connected to the session service — no diagnostics to show.");
+            }
             Task::none()
         }
 
@@ -1376,6 +1547,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // the write-gate to the shell): input to a non-running process is discarded, not
         // buffered.
         Message::TerminalBytes(bytes) => {
+            // A window displaced from the active project is read-only: it MUST send zero further
+            // input (FR-024). Bail before stamping so no serial is consumed (a consumed-but-unsent
+            // serial would be an unrecoverable gap in the input log, G2).
+            if active_project_displaced(app) {
+                return Task::none();
+            }
             if let Some(id) = app.core.active_session {
                 // The daemon owns process liveness: it routes input to the session's attached
                 // process and drops it harmlessly if that process isn't running. Gating on a
@@ -1633,7 +1810,42 @@ fn view(app: &App) -> iced::Element<'_, Message> {
         app.dismissing.as_ref(),
         &app.row_fx,
         &app.env_include_last_outcome,
+        &connection_status(app),
     )
+}
+
+/// Whether this window has been displaced from the active project (US5, FR-024) — the read-only
+/// condition that suppresses input.
+fn active_project_displaced(app: &App) -> bool {
+    app.core
+        .workspace
+        .active
+        .as_ref()
+        .is_some_and(|p| app.displaced.contains_key(p))
+}
+
+/// The connection state for the status banner (US5/US6). Precedence: a contract mismatch (US6) wins
+/// — it blocks every connection and has the most specific action — then a per-project takeover (US5),
+/// then a plain disconnect. Each names the situation and offers a concrete action.
+fn connection_status(app: &App) -> micold_client::ui::ConnectionStatus {
+    use micold_client::ui::ConnectionStatus;
+    if let Some((client, daemon, daemon_build)) = &app.version_mismatch {
+        return ConnectionStatus::VersionMismatch {
+            client: *client,
+            daemon: *daemon,
+            daemon_build: daemon_build.clone(),
+        };
+    }
+    if let Some(project) = app.core.workspace.active.as_ref() {
+        if let Some(by) = app.displaced.get(project) {
+            return ConnectionStatus::Displaced { by: by.clone() };
+        }
+    }
+    if app.disconnected {
+        ConnectionStatus::Disconnected
+    } else {
+        ConnectionStatus::Connected
+    }
 }
 
 fn theme(app: &App) -> iced::Theme {
@@ -1705,10 +1917,12 @@ fn view_and_start(app: &mut App, id: SessionId) {
 
 /// Map a wire lifecycle back to the domain one (inverse of the daemon's `wire_lifecycle`).
 /// `InterruptedResumable` — a session the daemon found durably-running after a restart, never
-/// auto-relaunched — reads as `Idle` on the client (resumable on select).
+/// auto-relaunched — is carried through as its own state so the sidebar/status can present it
+/// distinctly and its select action resumes it (FR-006a).
 fn wire_to_lifecycle(w: &WireLifecycle) -> SessionLifecycle {
     match w {
-        WireLifecycle::Idle | WireLifecycle::InterruptedResumable => SessionLifecycle::Idle,
+        WireLifecycle::Idle => SessionLifecycle::Idle,
+        WireLifecycle::InterruptedResumable => SessionLifecycle::InterruptedResumable,
         WireLifecycle::Starting => SessionLifecycle::Starting,
         WireLifecycle::Running => SessionLifecycle::Running,
         WireLifecycle::Restarting { attempts } => SessionLifecycle::Restarting {
@@ -1804,9 +2018,10 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
             let lifecycle = wire_to_lifecycle(&summary.lifecycle);
             if let Some(existing) = list.iter_mut().find(|s| s.id == summary.id) {
                 existing.lifecycle = lifecycle;
-                // Adopt the daemon's title only when it has a real one — the daemon doesn't yet push
-                // OSC-0 titles into the catalog, so its summary can regress to `Pending`; don't let
-                // that clobber a title the client already learned (TODO: daemon title push, T047).
+                existing.activity = summary.activity.clone();
+                // Adopt the daemon's title only when it has a real one. The daemon now overlays the
+                // live OSC-0 title onto the summary (T047), but a summary can still be `Pending`
+                // before the first title arrives; don't let that clobber a title already learned.
                 if let SessionLabel::Named(_) = summary.title {
                     existing.label = summary.title.clone();
                 }
@@ -1823,6 +2038,7 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
                     TerminalMode::AiCli,
                 );
                 s.lifecycle = lifecycle;
+                s.activity = summary.activity.clone();
                 list.push(s);
             }
         }
@@ -2360,6 +2576,9 @@ mod tests {
             env_include_last_outcome: EnvIncludeOutcome::Disabled,
             daemon: None,
             daemon_catalog: None,
+            displaced: HashMap::new(),
+            disconnected: false,
+            version_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         };
@@ -2400,6 +2619,9 @@ mod tests {
             env_include_last_outcome: EnvIncludeOutcome::Disabled,
             daemon: None,
             daemon_catalog: None,
+            displaced: HashMap::new(),
+            disconnected: false,
+            version_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         };
