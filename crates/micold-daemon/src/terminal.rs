@@ -143,8 +143,9 @@ impl EventListener for DaemonListener {
                 *self.signals.title.lock().expect("title lock poisoned") = None;
             }
             // In-band child exit; the supervisor's `wait()` is authoritative for liveness.
-            Event::ChildExit(code) => {
-                *self.signals.child_exit.lock().expect("exit lock poisoned") = Some(code);
+            Event::ChildExit(status) => {
+                *self.signals.child_exit.lock().expect("exit lock poisoned") =
+                    Some(exit_code(status));
             }
             Event::Bell => self.signals.bell.store(true, Ordering::Release),
             // Any new content / cursor movement dirties the frame (depth-1 — T032).
@@ -155,6 +156,23 @@ impl EventListener for DaemonListener {
             _ => {}
         }
     }
+}
+
+/// Flatten a child's exit into the single `i32` [`VtSignals::child_exit`] reports.
+///
+/// `alacritty_terminal` 0.26 widened `Event::ChildExit` from a bare code to a full `ExitStatus`,
+/// which also covers death by signal — a case the old `i32` could not express. A normal exit keeps
+/// its code; a signal death becomes `128 + signo`, the encoding a shell reports, so the two stay
+/// distinguishable rather than collapsing into one value.
+fn exit_code(status: std::process::ExitStatus) -> i32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            return 128 + signal;
+        }
+    }
+    status.code().unwrap_or(-1)
 }
 
 /// Drop a single leading terminal status glyph from an OSC-0 title (T047). Agents prefix the title
