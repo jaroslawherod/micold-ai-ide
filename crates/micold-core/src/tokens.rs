@@ -6,8 +6,8 @@
 //! (`src/ui/style.rs`) converts these into iced types. Values are the durable contract in
 //! contracts/design-tokens.md.
 
-use micold_core::naming::ConventionalType;
-use micold_core::theme::ColorScheme;
+use crate::naming::ConventionalType;
+use crate::theme::ColorScheme;
 
 /// A plain 8-bit-per-channel sRGB color. The GUI maps this to `iced::Color`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

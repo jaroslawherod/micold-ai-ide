@@ -4,18 +4,27 @@
 
 use crate::app::{Message, State};
 use crate::icons::{icon_role, Icon, IconSurface};
-use crate::tokens::{self, spacing, type_scale, Rgb};
-use crate::ui::{icon, style};
-use iced::widget::{button, column, container, row, text};
+use crate::ui::material::{self, Button, ButtonVariant, Glyph, SurfaceKind, Text, TypeRole};
+use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::project::Availability;
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, spacing, Rgb, Roles};
 
-/// An icon + text label laid out as a horizontal button/badge content.
-fn labeled<'a>(glyph: Icon, tint: Rgb, size: f32, label: &str) -> iced::widget::Row<'a, Message> {
-    row![icon(glyph, size, tint), text(label.to_string()).size(size)]
-        .spacing(spacing::XS)
-        .align_y(Alignment::Center)
+/// An icon + text label laid out as a horizontal button/badge content, both at the same role.
+fn labeled<'a>(
+    glyph: Icon,
+    tint: Rgb,
+    role: TypeRole,
+    label: &str,
+    r: Roles,
+) -> iced::widget::Row<'a, Message> {
+    row![
+        Glyph::new(glyph, role, r).tint(tint),
+        Text::new(label.to_string(), role, r)
+    ]
+    .spacing(spacing::XS)
+    .align_y(Alignment::Center)
 }
 
 /// Render the shell body for the current workspace state.
@@ -30,48 +39,62 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
 
     // Header: the active project (FR-014, FR-015) or the empty state (FR-016).
     let header: Element<'_, Message> = match state.workspace.active_project() {
-        Some(project) => container(
+        Some(project) => material::Surface::new(
             column![
-                text(format!("Active project: {}", project.display_name))
-                    .size(type_scale::HEADLINE),
-                text(project.path.display().to_string())
-                    .size(type_scale::LABEL)
-                    .style(style::muted(r)),
-                button(labeled(
-                    Icon::OpenProject,
-                    on_surface_tint,
-                    type_scale::BODY,
-                    "Open another project"
-                ))
-                .on_press(Message::ProjectSelectorOpened)
-                .style(style::outlined(r)),
+                Text::new(
+                    format!("Active project: {}", project.display_name),
+                    TypeRole::Headline,
+                    r
+                ),
+                Text::new(project.path.display().to_string(), TypeRole::Label, r).muted(),
+                Button::with_content(
+                    labeled(
+                        Icon::OpenProject,
+                        on_surface_tint,
+                        TypeRole::Body,
+                        "Open another project",
+                        r
+                    ),
+                    ButtonVariant::Outlined,
+                    r
+                )
+                .on_press(Message::ProjectSelectorOpened),
             ]
             .spacing(spacing::SM),
+            SurfaceKind::Plain,
+            r,
         )
         .padding(spacing::LG)
         .width(Length::Fill)
-        .style(style::surface(r))
         .into(),
-        None => container(
+        None => material::Surface::new(
             column![
-                text("No project open").size(type_scale::DISPLAY),
-                text("Open a folder to set it as your working space.")
-                    .size(type_scale::BODY)
-                    .style(style::muted(r)),
-                button(labeled(
-                    Icon::OpenProject,
-                    on_primary_tint,
-                    type_scale::BODY,
-                    "Open a project"
-                ))
-                .on_press(Message::ProjectSelectorOpened)
-                .style(style::filled(r)),
+                Text::new("No project open", TypeRole::Display, r),
+                Text::new(
+                    "Open a folder to set it as your working space.",
+                    TypeRole::Body,
+                    r
+                )
+                .muted(),
+                Button::with_content(
+                    labeled(
+                        Icon::OpenProject,
+                        on_primary_tint,
+                        TypeRole::Body,
+                        "Open a project",
+                        r
+                    ),
+                    ButtonVariant::Filled,
+                    r
+                )
+                .on_press(Message::ProjectSelectorOpened),
             ]
             .spacing(spacing::MD),
+            SurfaceKind::Plain,
+            r,
         )
         .padding(spacing::LG)
         .width(Length::Fill)
-        .style(style::surface(r))
         .into(),
     };
 
@@ -88,7 +111,8 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
     // and unavailable folders, blocking their reopen (FR-022, FR-023).
     if !state.workspace.projects.is_empty() {
         let active = state.workspace.active.clone();
-        let mut list = column![text("Known projects").size(type_scale::TITLE)].spacing(spacing::SM);
+        let mut list =
+            column![Text::new("Known projects", TypeRole::Title, r)].spacing(spacing::SM);
 
         for project in &state.workspace.projects {
             let is_active = active.as_ref() == Some(&project.path);
@@ -97,61 +121,61 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             // The active project is marked with a check icon; unavailable folders with an
             // error icon — both replacing the former text decorations (FR-005).
             let reopen = if available {
-                button(labeled(
-                    Icon::OpenProject,
-                    on_primary_tint,
-                    type_scale::BODY,
-                    "Open",
-                ))
+                Button::with_content(
+                    labeled(
+                        Icon::OpenProject,
+                        on_primary_tint,
+                        TypeRole::Body,
+                        "Open",
+                        r,
+                    ),
+                    ButtonVariant::Filled,
+                    r,
+                )
                 .on_press(Message::KnownProjectReopened(project.path.clone()))
-                .style(style::filled(r))
             } else {
-                button(text("Unavailable").size(type_scale::BODY)).style(style::filled(r))
+                Button::filled("Unavailable", r)
             };
 
             // Renaming affects only the stored name, so it is allowed even when the folder
             // is unavailable (FR-017, FR-018).
-            let rename = button(labeled(
-                Icon::Rename,
-                on_surface_tint,
-                type_scale::BODY,
-                "Rename",
-            ))
-            .on_press(Message::RenameStarted(project.path.clone()))
-            .style(style::outlined(r));
+            let rename = Button::with_content(
+                labeled(Icon::Rename, on_surface_tint, TypeRole::Body, "Rename", r),
+                ButtonVariant::Outlined,
+                r,
+            )
+            .on_press(Message::RenameStarted(project.path.clone()));
 
             // Forget removes the project (and its remembered metadata) from the list. Enabled for
             // every entry — including Unavailable ones, for which it is the primary way to clear a
             // stale entry (feature 014, FR-001/FR-011). The trash icon is error-tinted to signal
             // the destructive-to-metadata action; the confirmation dialog is the real safeguard.
-            let forget = button(labeled(
-                Icon::Delete,
-                error_tint,
-                type_scale::BODY,
-                "Forget",
-            ))
-            .on_press(Message::ProjectForgetRequested(project.path.clone()))
-            .style(style::outlined(r));
+            let forget = Button::with_content(
+                labeled(Icon::Delete, error_tint, TypeRole::Body, "Forget", r),
+                ButtonVariant::Outlined,
+                r,
+            )
+            .on_press(Message::ProjectForgetRequested(project.path.clone()));
 
             let mut entry = row![].spacing(spacing::SM).align_y(Alignment::Center);
             if is_active {
-                entry = entry.push(icon(Icon::ActiveMarker, type_scale::BODY, badge_tint));
+                entry =
+                    entry.push(Glyph::new(Icon::ActiveMarker, TypeRole::Body, r).tint(badge_tint));
             }
             if !available {
-                entry = entry.push(icon(Icon::Unavailable, type_scale::BODY, error_tint));
+                entry =
+                    entry.push(Glyph::new(Icon::Unavailable, TypeRole::Body, r).tint(error_tint));
             }
             entry = entry.push(
-                text(project.display_name.clone())
-                    .size(type_scale::BODY)
-                    .width(Length::Fill),
+                Text::new(project.display_name.clone(), TypeRole::Body, r).width(Length::Fill),
             );
 
             // Git repositories carry a "git" badge in the known list too (FR-006).
             if project.is_git_repo {
                 entry = entry.push(
                     row![
-                        icon(Icon::Git, type_scale::LABEL, badge_tint),
-                        text("git").size(type_scale::LABEL).style(style::muted(r)),
+                        Glyph::new(Icon::Git, TypeRole::Label, r).tint(badge_tint),
+                        Text::new("git", TypeRole::Label, r).muted(),
                     ]
                     .spacing(spacing::XS)
                     .align_y(Alignment::Center),
@@ -160,15 +184,15 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
 
             let entry = entry.push(reopen).push(rename).push(forget);
             list = list.push(
-                container(entry)
+                material::Surface::new(entry, SurfaceKind::ListItem, r)
                     .padding(spacing::MD)
-                    .width(Length::Fill)
-                    .style(style::list_item(r)),
+                    .width(Length::Fill),
             );
         }
         body = body.push(list);
     }
 
+    // A plain layout container: padding and size only, no surface of its own (FR-003).
     container(body)
         .padding(spacing::LG)
         .width(Length::Fill)

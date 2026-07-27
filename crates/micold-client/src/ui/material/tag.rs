@@ -6,10 +6,10 @@
 //! as a chainable builder terminating in `.into()` (Principle VIII builder-API rule), so it is
 //! reused rather than each feature forking a bespoke chip.
 
-use crate::tokens::{sidebar, spacing, Rgb};
-use crate::ui::style;
+use crate::ui::material::style;
 use iced::widget::{container, text};
 use iced::{Element, Padding};
+use micold_core::tokens::{sidebar, spacing, Rgb};
 use std::marker::PhantomData;
 
 /// A pill-shaped tag chip. Construct with a label + `accent` color (rendered as a dimmed tonal

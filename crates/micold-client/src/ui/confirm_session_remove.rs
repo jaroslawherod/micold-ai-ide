@@ -3,48 +3,37 @@
 //! path back into the sidebar (the removed session's record is dropped outright).
 
 use crate::app::Message;
-use crate::tokens::{self, spacing, type_scale};
-use crate::ui::material::Modal;
-use crate::ui::style;
-use iced::widget::{button, column, container, row, text};
-use iced::{Element, Length};
+use crate::ui::cdk::overlay::Surface;
+use crate::ui::material::{self, Button, Modal, SurfaceKind, Text, TypeRole};
+use iced::widget::{column, row};
+use iced::Length;
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, spacing};
 
-/// Stack the confirm-remove dialog for a session (shown by its sidebar `label`) as a modal over
-/// `base`, at transition `progress` (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
-pub fn modal<'a>(
-    base: Element<'a, Message>,
-    label: &str,
-    scheme: ColorScheme,
-    progress: f32,
-) -> Element<'a, Message> {
+/// The confirm-remove dialog for a session (shown by its sidebar `label`) as a modal surface,
+/// at transition `progress` (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
+pub fn modal<'a>(label: &str, scheme: ColorScheme, progress: f32) -> Option<Surface<'a, Message>> {
     let r = tokens::roles(scheme);
 
     let warning = "This permanently deletes the session. Unlike Close, it cannot be recovered — \
                    the underlying `claude` conversation itself is untouched, but the app will \
-                   never show or resume it again."
-        .to_string();
+                   never show or resume it again.";
 
     let fields = column![
-        text(format!("Remove “{label}”?")).size(type_scale::HEADLINE),
-        text(warning).size(type_scale::BODY).style(style::muted(r)),
+        Text::new(format!("Remove “{label}”?"), TypeRole::Headline, r),
+        Text::new(warning, TypeRole::Body, r).muted(),
     ]
     .spacing(spacing::MD);
 
     let actions = row![
-        button(text("Remove").size(type_scale::BODY))
-            .on_press(Message::SessionRemoveConfirmed)
-            .style(style::filled(r)),
-        button(text("Cancel").size(type_scale::BODY))
-            .on_press(Message::SessionRemoveCancelled)
-            .style(style::outlined(r)),
+        Button::filled("Remove", r).on_press(Message::SessionRemoveConfirmed),
+        Button::outlined("Cancel", r).on_press(Message::SessionRemoveCancelled),
     ]
     .spacing(spacing::SM);
 
-    let dialog = container(fields.push(actions))
+    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
         .padding(spacing::LG)
-        .width(Length::Fixed(460.0))
-        .style(style::dialog(r));
+        .width(Length::Fixed(460.0));
 
-    Modal::new(base, dialog, r).progress(progress).into()
+    Modal::new(dialog, r).progress(progress).into()
 }

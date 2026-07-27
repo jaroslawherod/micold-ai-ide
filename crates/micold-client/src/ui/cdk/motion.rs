@@ -1,0 +1,130 @@
+//! Per-instance animation state (feature 017, FR-011, FR-014, FR-025).
+//!
+//! The application used to hold every animated element's progress centrally: one global
+//! enumeration naming them all, and two animators keyed by it. Adding an animated element meant
+//! editing that enum, allocating an identity, threading a float down through the view, and
+//! remembering to clean the track up afterwards. Per-row fades needed an identity the caller had
+//! to invent, so rows were keyed by a *hash of their name* — two worktrees whose names collided
+//! would have animated as one.
+//!
+//! A [`Progress`] is one animated scalar, held by the widget that animates. The renderer already
+//! keeps per-instance state in the widget tree, so this needs no store, no identity and no
+//! cleanup: two instances cannot interfere because neither can see the other, and a removed
+//! widget drops its state — which makes "nothing animates after an element disappears" structural
+//! rather than policed.
+//!
+//! **No appearance.** How *far* a transition has come is behaviour; what it looks like on the way
+//! is the material layer's business, and the speed comes from the caller.
+
+use iced::advanced::Shell;
+use iced::window;
+use iced::Event;
+
+/// One animated scalar, owned by the widget that animates it.
+///
+/// Conventionally `0.0` (hidden, idle, collapsed) to `1.0` (shown, highlighted, expanded), though
+/// nothing here requires that range.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Progress {
+    value: f32,
+    target: f32,
+}
+
+impl Progress {
+    /// A track resting at `initial`. It is not animating: a component built already-open must not
+    /// animate into existence.
+    pub fn new(initial: f32) -> Self {
+        Self {
+            value: initial,
+            target: initial,
+        }
+    }
+
+    /// The current value.
+    pub fn value(self) -> f32 {
+        self.value
+    }
+
+    /// Whether the track is still moving — i.e. whether another frame is needed.
+    ///
+    /// The load-bearing half of idle quiescence (FR-025, SC-008): a track that never says it has
+    /// arrived holds the render loop awake for good.
+    pub fn animating(self) -> bool {
+        (self.value - self.target).abs() > f32::EPSILON
+    }
+
+    /// Step toward `target` by at most `speed`, clamped so it never overshoots.
+    ///
+    /// Overshoot is not a rounding detail — a scrim alpha above 1.0 or below 0.0 renders as a
+    /// visible flash at the end of every transition.
+    ///
+    /// A non-positive or non-finite `speed` would never converge and would hold the render loop
+    /// awake, so it arrives immediately instead. Refusing to animate is recoverable; refusing to
+    /// stop is not.
+    pub fn advance_to(&mut self, target: f32, speed: f32) {
+        self.target = target;
+        let distance = target - self.value;
+        if distance.abs() <= f32::EPSILON {
+            self.value = target;
+            return;
+        }
+        if !speed.is_finite() || speed <= 0.0 {
+            self.value = target;
+            return;
+        }
+        self.value = if distance.abs() <= speed {
+            target
+        } else {
+            self.value + speed * distance.signum()
+        };
+    }
+
+    /// Advance on a frame tick, and ask for the next frame while still moving.
+    ///
+    /// The whole self-animating contract in one call: a widget hands it the event it received and
+    /// where it wants to be, and gets back what to draw. Only a redraw tick advances the track, so
+    /// a burst of mouse-move events cannot fast-forward a transition.
+    ///
+    /// Returns the value to draw with.
+    pub fn on_event<M>(
+        &mut self,
+        event: &Event,
+        target: f32,
+        speed: f32,
+        shell: &mut Shell<'_, M>,
+    ) -> f32 {
+        if matches!(event, Event::Window(window::Event::RedrawRequested(_))) {
+            self.advance_to(target, speed);
+        } else if (target - self.target).abs() > f32::EPSILON {
+            // The destination changed between frames — start moving now rather than waiting for a
+            // tick that nothing has asked for yet.
+            self.target = target;
+        }
+        if self.animating() {
+            shell.request_redraw();
+        }
+        self.value
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The one property the whole arrangement rests on: it stops. Everything else is a detail.
+    #[test]
+    fn it_converges_and_then_rests() {
+        let mut p = Progress::new(0.0);
+        for _ in 0..100 {
+            p.advance_to(1.0, 0.25);
+        }
+        assert_eq!(p.value(), 1.0);
+        assert!(!p.animating());
+    }
+
+    #[test]
+    fn a_fresh_track_is_already_at_rest() {
+        assert!(!Progress::new(0.0).animating());
+        assert!(!Progress::new(1.0).animating());
+    }
+}

@@ -1,13 +1,14 @@
 //! Design-token invariants (SC-005): every `on_*` foreground role must meet WCAG AA
 //! contrast (>= 4.5:1 for normal text) against its paired surface, in BOTH the light and
-//! dark schemes. Pure — no iced, runs under `cargo test --no-default-features`.
+//! dark schemes. Pure — no renderer. Lives in `micold-core`, which declares no rendering dependency, so this
+//! gate cannot accidentally come to depend on one (feature 017, FR-020/FR-022).
 //!
 //! Contrast is computed with the WCAG 2.x relative-luminance formula so a future palette
 //! tweak that breaks legibility fails CI (contracts/design-tokens.md).
 
-use micold_client::tokens::{roles, sidebar, type_scale, Rgb, Roles};
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{roles, sidebar, type_scale, Rgb, Roles};
 
 /// Linearize a single 0..=255 sRGB channel per the WCAG definition.
 fn linearize(channel: u8) -> f64 {

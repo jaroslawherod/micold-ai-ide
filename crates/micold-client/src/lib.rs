@@ -13,5 +13,4 @@ pub mod input;
 pub mod keymap;
 pub mod motion;
 pub mod selection;
-pub mod tokens;
 pub mod ui;

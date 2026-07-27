@@ -72,15 +72,19 @@ macro_rules! wrapped_child_widget {
 /// Wrap `content` in a fade: `progress` 1.0 is fully visible, 0.0 fully faded to `backdrop`.
 /// The backdrop should match the surface the content sits on (iced still has no true opacity,
 /// so this composites a scrim over the child).
+///
+/// Takes a colour *role* rather than a resolved colour: a public component API must not name a
+/// rendering-stack type (FR-013), and a caller that had to resolve one would need the styling
+/// layer to do it — which is exactly the reach this feature closes.
 pub fn fade<'a, Message: 'a>(
     content: impl Into<Element<'a, Message>>,
     progress: f32,
-    backdrop: Color,
+    backdrop: micold_core::tokens::Rgb,
 ) -> Element<'a, Message> {
     Fade {
         content: content.into(),
         progress: progress.clamp(0.0, 1.0),
-        backdrop,
+        backdrop: super::style::color(backdrop),
     }
     .into()
 }

@@ -1,0 +1,168 @@
+//! The sanctioned behaviour delta (feature 017, T015 — FR-009, FR-024).
+//!
+//! Feature 017 is defined by changing nothing the user can see. It makes exactly one exception:
+//! the five hand-rolled floating surfaces answered "when does this close?" differently, and
+//! consolidating them onto one primitive means adopting one answer. FR-024 sanctions that, and
+//! scopes it to dismissal alone.
+//!
+//! This file is the complete list. Each test names a surface whose behaviour moved, states what it
+//! used to do, and asserts what it does now — so the delta is a thing that can be reviewed rather
+//! than a thing that has to be taken on trust. `specs/017-material-component-architecture/`'s
+//! `behavior-delta.md` is the prose version of the same list.
+
+use micold_client::app::{Message, Overlay, State};
+use micold_core::overlay::{dismisses, Surface, Trigger};
+
+/// A state with the overflow menu open.
+fn with_help_menu() -> State {
+    let mut state = State::default();
+    state.update(Message::HelpMenuToggled);
+    assert!(state.help_menu_open, "precondition: the menu is open");
+    state
+}
+
+// ---------------------------------------------------------------------------
+// Change 1 — dialogs gained scrim-click dismissal.
+// ---------------------------------------------------------------------------
+
+/// **Was**: a dialog could only be closed by Escape or by a button inside it; the scrim swallowed
+/// clicks and did nothing with them. **Is**: a scrim click cancels the dialog, exactly as Escape
+/// does.
+///
+/// Asserted through `on_escape`, which is the single source both paths now read: `ui::view` hands
+/// the scrim whatever `on_escape` would produce, so the two cannot drift apart.
+#[test]
+fn a_dialog_now_dismisses_on_a_scrim_click() {
+    assert!(
+        dismisses(Surface::Dialog, Trigger::OutsideClick),
+        "the unified rule must close a dialog on an outside click"
+    );
+
+    let mut state = State::default();
+    state.open_overlay(Overlay::About);
+    assert_eq!(
+        micold_client::app::on_escape(&state),
+        Some(Message::AboutClosed),
+        "the scrim emits whatever Escape would, so the two paths cannot disagree"
+    );
+}
+
+/// The other half of the same change: a dialog must still survive scrolling behind it. Gaining
+/// scrim-click dismissal must not turn a dialog into a menu.
+#[test]
+fn a_dialog_still_survives_scrolling_behind_it() {
+    assert!(!dismisses(Surface::Dialog, Trigger::ScrollBeneath));
+
+    let mut state = State::default();
+    state.open_overlay(Overlay::About);
+    state.update(Message::ScrolledBeneathOverlay);
+    assert_eq!(
+        state.overlay,
+        Overlay::About,
+        "scrolling behind a dialog must not close it"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Change 2 — non-modal surfaces gained scroll dismissal.
+// ---------------------------------------------------------------------------
+
+/// **Was**: scrolling the worktree list left every open menu hanging where it was, anchored to
+/// content that had moved out from under it. Nothing reported the scroll, so no surface could
+/// react. **Is**: the scrollable reports it and every non-modal surface closes.
+#[test]
+fn a_menu_now_closes_when_the_list_beneath_it_scrolls() {
+    assert!(dismisses(Surface::NonModal, Trigger::ScrollBeneath));
+
+    let mut state = with_help_menu();
+    state.update(Message::ScrolledBeneathOverlay);
+    assert!(
+        !state.help_menu_open,
+        "the overflow menu must close when content scrolls beneath it"
+    );
+}
+
+/// Every non-modal surface, not just the one that was convenient to test — the point of unifying
+/// is that they no longer differ.
+#[test]
+fn every_non_modal_surface_closes_on_a_scroll_beneath() {
+    let mut state = State {
+        help_menu_open: true,
+        project_switcher_open: true,
+        sidebar_filter_open: true,
+        ..State::default()
+    };
+
+    state.update(Message::ScrolledBeneathOverlay);
+
+    assert!(!state.help_menu_open, "overflow menu");
+    assert!(!state.project_switcher_open, "project switcher");
+    assert!(!state.sidebar_filter_open, "sidebar filter panel");
+    assert!(state.project_menu_open.is_none(), "project context menu");
+    assert!(state.worktree_menu_open.is_none(), "worktree context menu");
+    assert!(state.session_menu_open.is_none(), "session context menu");
+}
+
+// ---------------------------------------------------------------------------
+// What did *not* change. Guards against the delta quietly widening.
+// ---------------------------------------------------------------------------
+
+/// Outside-click dismissal of a menu is not new — it is the behaviour every menu already had, and
+/// the one the others were unified *onto*. If this ever fails, the consolidation lost something.
+#[test]
+fn outside_click_dismissal_of_a_menu_is_unchanged() {
+    assert!(dismisses(Surface::NonModal, Trigger::OutsideClick));
+
+    let mut state = with_help_menu();
+    state.update(Message::HelpMenuToggled);
+    assert!(!state.help_menu_open);
+}
+
+/// Escape closes what it always closed. Feature 017 changed which *other* gestures close a
+/// surface, never which surfaces Escape reaches.
+#[test]
+fn escape_still_reaches_exactly_what_it_used_to() {
+    for (overlay, expected) in [
+        (Overlay::About, Message::AboutClosed),
+        (Overlay::ProjectSelector, Message::ProjectSelectorClosed),
+        (Overlay::RenameProject, Message::RenameCancelled),
+        (Overlay::AddWorktree, Message::AddWorktreeCancelled),
+        (Overlay::Settings, Message::SettingsCancelled),
+        (
+            Overlay::ConfirmWorktreeDelete,
+            Message::WorktreeDeleteCancelled,
+        ),
+        (Overlay::RenameWorktree, Message::WorktreeRenameCancelled),
+        (
+            Overlay::ConfirmSessionRemove,
+            Message::SessionRemoveCancelled,
+        ),
+        (
+            Overlay::ConfirmForgetProject,
+            Message::ProjectForgetCancelled,
+        ),
+    ] {
+        let mut state = State::default();
+        state.open_overlay(overlay);
+        assert_eq!(
+            micold_client::app::on_escape(&state),
+            Some(expected),
+            "Escape changed for {overlay:?}"
+        );
+    }
+}
+
+/// Scrolling with nothing open must do nothing at all. The scrollable reports every scroll
+/// unconditionally, so the reducer sees this message constantly; it must be inert.
+#[test]
+fn scrolling_with_nothing_open_changes_nothing() {
+    let mut state = State::default();
+    let before = state.clone();
+    state.update(Message::ScrolledBeneathOverlay);
+    assert_eq!(
+        state.overlay, before.overlay,
+        "an idle scroll must not touch the overlay"
+    );
+    assert!(!state.help_menu_open);
+    assert!(!state.project_switcher_open);
+}

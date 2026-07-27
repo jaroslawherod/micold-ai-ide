@@ -1959,7 +1959,7 @@ fn connection_status(app: &App) -> micold_client::ui::ConnectionStatus {
 }
 
 fn theme(app: &App) -> iced::Theme {
-    micold_client::ui::style::theme(app.core.color_scheme())
+    micold_client::ui::theme(app.core.color_scheme())
 }
 
 /// The absolute [`LineId`] shown at viewport `row` of `grid`, accounting for scrollback `offset`.

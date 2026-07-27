@@ -3,33 +3,21 @@
 
 use crate::app::{Message, State, TagFilter};
 use crate::icons::Icon;
-use crate::tokens::{self, sidebar, spacing, type_scale, Rgb, Roles};
 use crate::ui::material::{
-    expand, menu_panel, ActivityBadge, FilterTrigger, IconButton, ToggleChip, Tooltip, TreeItem,
-    TreeView,
+    self, expand, menu_panel, ActivityBadge, Button, ButtonVariant, Divider, FilterTrigger,
+    IconButton, Scrollable, SurfaceKind, Text, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
 };
-use crate::ui::style;
-use iced::widget::{button, column, container, mouse_area, row, scrollable, text, Space};
+use iced::widget::{column, container, mouse_area, row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::naming::Tag;
 use micold_core::session::{SessionLifecycle, SessionLocation};
+use micold_core::tokens::{self, sidebar, spacing, Rgb, Roles};
 use micold_core::worktree::WorktreeStatus;
 
 /// Width of the draggable resize handle between the sidebar and the main area.
 const HANDLE_WIDTH: f32 = 6.0;
 /// Width of the collapsed strip that hosts the "show sidebar" button.
 const STRIP_WIDTH: f32 = 32.0;
-
-/// Linearly interpolate between two colors (`t` 0→1), for the handle's animated hover highlight.
-fn lerp_color(from: iced::Color, to: iced::Color, t: f32) -> iced::Color {
-    let t = t.clamp(0.0, 1.0);
-    iced::Color {
-        r: from.r + (to.r - from.r) * t,
-        g: from.g + (to.g - from.g) * t,
-        b: from.b + (to.b - from.b) * t,
-        a: from.a + (to.a - from.a) * t,
-    }
-}
 
 /// Render the sidebar for the active project's worktrees and sessions, at the current
 /// (adjustable) width.
@@ -65,9 +53,7 @@ pub fn view<'a>(
     );
     let header = row![
         filter_toggle,
-        text("Worktrees")
-            .size(type_scale::TITLE)
-            .width(Length::Fill),
+        Text::new("Worktrees", TypeRole::Title, r).width(Length::Fill),
         add_worktree,
         hide,
     ]
@@ -108,22 +94,26 @@ pub fn view<'a>(
     // "no match / clear filters" branch would offer to clear a filter that was never applied.
     let hint: Option<Element<'_, Message>> = if !state.has_visible_worktrees() {
         Some(
-            text("No worktrees yet. Add one to get started.")
-                .size(type_scale::LABEL)
-                .style(style::muted(r))
-                .into(),
+            Text::new(
+                "No worktrees yet. Add one to get started.",
+                TypeRole::Label,
+                r,
+            )
+            .muted()
+            .into(),
         )
     } else if no_worktree_entries {
         // Active filter matched nothing (FR-027): a message + a one-tap clear.
         Some(
             column![
-                text("No worktrees match the filter.")
-                    .size(type_scale::LABEL)
-                    .style(style::muted(r)),
-                button(text("Clear filters").size(sidebar::TAG))
-                    .padding(spacing::XS)
-                    .style(style::text_button(r))
-                    .on_press(Message::SidebarFiltersCleared),
+                Text::new("No worktrees match the filter.", TypeRole::Label, r).muted(),
+                Button::with_content(
+                    Text::new("Clear filters", TypeRole::SidebarTag, r),
+                    ButtonVariant::Text,
+                    r
+                )
+                .padding(spacing::XS)
+                .on_press(Message::SidebarFiltersCleared),
             ]
             .spacing(spacing::XS)
             .into(),
@@ -141,20 +131,20 @@ pub fn view<'a>(
     };
     // Scroll the list when it exceeds the sidebar height, with a thin themed scrollbar.
     // The list gets a little right padding so rows never sit under the scrollbar.
-    let body: Element<'_, Message> = scrollable(container(list).padding(iced::Padding {
-        top: 0.0,
-        right: spacing::SM,
-        bottom: 0.0,
-        left: 0.0,
-    }))
-    .direction(scrollable::Direction::Vertical(
-        scrollable::Scrollbar::new()
-            .width(4.0)
-            .scroller_width(4.0)
-            .margin(1.0),
-    ))
+    let body: Element<'_, Message> = Scrollable::new(
+        container(list).padding(iced::Padding {
+            top: 0.0,
+            right: spacing::SM,
+            bottom: 0.0,
+            left: 0.0,
+        }),
+        r,
+    )
     .height(Length::Fill)
-    .style(style::scrollbar(r))
+    // Scrolling the list is the third dismissal trigger (feature 017, FR-009): a menu opened from
+    // a row is stale once the rows have moved. Reported unconditionally — whether anything closes
+    // is the reducer's decision, taken through the shared rule.
+    .on_scroll(Message::ScrolledBeneathOverlay)
     .into();
 
     // Minimal left/right padding to maximize name/tag width (FR-009); a little vertical breathing
@@ -170,10 +160,9 @@ pub fn view<'a>(
         .width(Length::Fixed(width))
         .height(Length::Fill);
 
-    container(content)
+    material::Surface::new(content, SurfaceKind::Sidebar, r)
         .width(Length::Fixed(width))
         .height(Length::Fill)
-        .style(style::sidebar_surface(r))
         .into()
 }
 
@@ -186,21 +175,16 @@ pub fn handle(scheme: micold_core::theme::ColorScheme, hover: f32) -> Element<'s
     // The invisible grab zone is blended with the sidebar surface and sits on the LEFT; the 1px
     // separator line sits on the RIGHT, flush against the main area — so no window-background gap
     // shows between the separator and the terminal.
-    let grab = container(
+    let grab = material::Surface::new(
         Space::new()
             .width(Length::Fixed(HANDLE_WIDTH - 1.0))
             .height(Length::Fill),
+        SurfaceKind::Sidebar,
+        r,
     )
-    .height(Length::Fill)
-    .style(style::sidebar_surface(r));
+    .height(Length::Fill);
     // The separator brightens toward the accent as the pointer hovers (animated via `hover`).
-    let line_color = lerp_color(style::separator(r), style::color(r.primary), hover);
-    let line = container(Space::new().width(Length::Fixed(1.0)).height(Length::Fill))
-        .height(Length::Fill)
-        .style(move |_t: &iced::Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(line_color)),
-            ..Default::default()
-        });
+    let line: Element<'static, Message> = Divider::vertical(r).accent(hover).into();
     mouse_area(row![grab, line].height(Length::Fill))
         .on_press(Message::SidebarDragStarted)
         .on_enter(Message::SidebarHandleHovered(true))
@@ -220,22 +204,18 @@ pub fn collapsed_strip(scheme: micold_core::theme::ColorScheme) -> Element<'stat
         "Show sidebar",
         r,
     );
-    let content = container(
+    let content = material::Surface::new(
         column![show]
             .align_x(Alignment::Center)
             .padding(spacing::XS),
+        SurfaceKind::Sidebar,
+        r,
     )
     .width(Length::Fixed(STRIP_WIDTH - 1.0))
-    .height(Length::Fill)
-    .style(style::sidebar_surface(r));
+    .height(Length::Fill);
 
     // A subtle right border so the collapsed strip still reads as a bounded panel edge.
-    let border = container(Space::new().width(Length::Fixed(1.0)).height(Length::Fill))
-        .height(Length::Fill)
-        .style(move |_t: &iced::Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(style::separator(r))),
-            ..Default::default()
-        });
+    let border: Element<'static, Message> = Divider::vertical(r).into();
 
     row![content, border].height(Length::Fill).into()
 }
@@ -295,9 +275,8 @@ fn reveal_chip(state: &State, r: Roles) -> Element<'static, Message> {
 fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
     let available = state.available_tag_filters();
     if available.is_empty() {
-        return text("No tags to filter yet.")
-            .size(sidebar::TAG)
-            .style(style::muted(r))
+        return Text::new("No tags to filter yet.", TypeRole::SidebarTag, r)
+            .muted()
             .into();
     }
     let mut col = column![].spacing(spacing::XS);
@@ -314,10 +293,13 @@ fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
     }
     if !state.sidebar_filters.is_empty() {
         col = col.push(
-            button(text("Clear filters").size(sidebar::TAG))
-                .padding(spacing::XS)
-                .style(style::text_button(r))
-                .on_press(Message::SidebarFiltersCleared),
+            Button::with_content(
+                Text::new("Clear filters", TypeRole::SidebarTag, r),
+                ButtonVariant::Text,
+                r,
+            )
+            .padding(spacing::XS)
+            .on_press(Message::SidebarFiltersCleared),
         );
     }
     col.into()
@@ -369,7 +351,7 @@ fn action_icon(
 ) -> Element<'static, Message> {
     let tint = lerp_rgb(r.surface, base_tint, progress);
     let button = IconButton::new(glyph, r)
-        .size(sidebar::NAME)
+        .size(TypeRole::SidebarName)
         .tint(tint)
         .on_press_maybe(active.then_some(message));
     if active {

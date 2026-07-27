@@ -10,11 +10,11 @@
 //! Exposed as a chainable builder terminating in `.into()` (Principle VIII builder-API rule).
 
 use crate::icons::Icon;
-use crate::tokens::{sidebar, Roles};
 use crate::ui::icon;
 use iced::widget::Space;
 use iced::{Element, Length};
 use micold_core::protocol::messages::ActivitySignal;
+use micold_core::tokens::{sidebar, Roles};
 use std::marker::PhantomData;
 
 /// The visual emphasis a signal deserves in the list. `None` from [`emphasis`] means "render nothing"

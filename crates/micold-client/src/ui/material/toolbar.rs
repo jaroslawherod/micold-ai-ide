@@ -4,10 +4,10 @@
 //! title on the leading edge and a set of action elements pushed to the trailing edge. Reused
 //! by the app shell; any future top bar should reuse it rather than fork a bespoke bar.
 
-use crate::tokens::{spacing, type_scale, Roles};
-use crate::ui::style;
+use crate::ui::material::style;
 use iced::widget::{column, container, row, text, Space};
 use iced::{Alignment, Background, Element, Length};
+use micold_core::tokens::{spacing, type_scale, Roles};
 
 /// A toolbar with a `title` on the leading edge and trailing action elements (Principle VIII
 /// builder-API rule): construct with the required title + roles, add actions, then `.into()`.

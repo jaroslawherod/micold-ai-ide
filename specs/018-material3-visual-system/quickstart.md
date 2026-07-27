@@ -1,0 +1,158 @@
+# Quickstart: Validating the Material 3 Visual System
+
+**Feature**: `specs/018-material3-visual-system` | **Date**: 2026-07-26
+
+Two parts. **Part A** is automated and gates the build. **Part B** is the recorded manual procedure
+that validates the GUI wiring the render-free core cannot assert — the constitution's Principle I
+GUI-wiring exception requires this to exist and to be followed, not improvised.
+
+Run Part B **twice**: once in the light scheme, once in dark.
+
+---
+
+## Prerequisites
+
+```sh
+mise trust          # first time in a fresh worktree only
+mise run test       # cargo test --workspace
+mise run run        # cargo run -p micold-client
+```
+
+A test repository with **at least a dozen worktrees** across several conventional-commit types
+(`feat/`, `fix/`, `chore/`, `docs/`…) — needed for the tag-color and sidebar-density checks.
+
+---
+
+## Part A — automated gates
+
+```sh
+mise run test
+```
+
+| Gate | Test | Proves |
+|------|------|--------|
+| AA contrast, both schemes, every pair | `micold-core/tests/tokens_contrast.rs` | SC-001, FR-004, FR-005 |
+| Tone ramps monotonic in luminance | `micold-core/tests/tokens_contrast.rs` | catches ramp transcription error |
+| Type/elevation/shape/state/motion invariants | `micold-core/tests/tokens_scales.rs` | SC-009, FR-007/014/018/020/033 |
+| Snackbar queue: one visible, dedup, cap, severity duration | `micold-core/tests/notify_queue.rs` | FR-032a, FR-032b |
+| Both Roboto faces load at expected weights | `micold-client/tests/roboto_font.rs` | FR-008a, SC-012 |
+| No raw text size literal at any call site | `micold-client/tests/type_role_call_sites.rs` | SC-003, FR-010 |
+
+**Expected**: all pass. A failure in the contrast gate must block the change — it is a hard
+invariant carried over from feature 003, not a warning.
+
+Verify the render-free boundary is real, not conventional:
+
+```sh
+grep -c iced crates/micold-core/Cargo.toml     # expect 0
+cargo test -p micold-core                      # tokens exercised with no renderer present
+```
+
+---
+
+## Part B — manual walkthrough
+
+### B0. First-run identity check *(do this first)*
+
+`mise run run`.
+
+- [ ] The accent color is **purple**, not the previous blue. This is intended (FR-005b) — the
+      palette is now Material's baseline scheme. If it is still blue, the palette did not take.
+- [ ] Text renders in **Roboto**, not the platform UI font. Confirm by changing the OS UI font and
+      relaunching: the app must be unchanged (FR-008, SC-006).
+
+### B1. Depth and surface hierarchy — US1 (P1)
+
+- [ ] Window background, sidebar and any raised card sit at **visibly different tonal levels**, and
+      none uses a border to say so (FR-002, SC-002).
+- [ ] Open a dialog: it has a **drop shadow**, a scrim behind it, and a notably larger corner than
+      a card (FR-028).
+- [ ] Open a context menu and the project switcher popover: each **floats** with its own shadow.
+- [ ] Open a context menu **over an open dialog**: the menu renders above, keeping its own shadow;
+      neither flattens into the other (FR-017).
+- [ ] Every button container is **fully pill-shaped** (FR-019).
+- [ ] Scan for leftover decorative outlines. An outline is only legitimate as a divider, an
+      outlined control's border, or a focus ring (FR-003).
+
+### B2. Typography — US2 (P2)
+
+- [ ] In a dialog, title / body / caption are each distinguishable from the other two **without
+      relying on position** (SC-004).
+- [ ] Multi-line body text uses the role's line height, not default line spacing (FR-007).
+- [ ] **Terminal output is still monospaced** with its own grid metrics (FR-012). Type a command
+      and confirm column alignment is unaffected.
+- [ ] Sidebar text is still visibly denser than equivalent text elsewhere (FR-011).
+- [ ] Create a worktree whose name contains a character outside Roboto's coverage (e.g. CJK). It
+      renders via fallback — **no missing-glyph boxes** (FR-013).
+
+### B3. Interaction states — US3 (P3)
+
+- [ ] Hover in turn: sidebar row, tree item, known-projects row, menu item, context-menu item,
+      chip, tag, each button variant. **Every one** changes visibly (FR-021, SC-005).
+- [ ] Press and hold each: the change is **stronger** than hover.
+- [ ] A selected worktree row and a selected filter chip show a **persistent** treatment, distinct
+      from hover (FR-020).
+- [ ] Tab into a dialog's text field: a focus indicator is visible **without** the pointer over it
+      (FR-022). Hover it while focused — both remain resolvable.
+- [ ] Confirm buttons/rows/menu items show **no** focus ring. This is expected — accepted fidelity
+      gap #2 (FR-043), not a defect.
+- [ ] A disabled control is dimmed, **including** a self-coloring icon glyph (FR-023).
+
+### B4. Component anatomy — US4 (P4)
+
+- [ ] App bar: correct height, title in the app-bar title role, not a cramped strip (FR-025).
+- [ ] **Scroll the sidebar** away from the top → app bar takes its elevated appearance; scroll back
+      → it returns (FR-025a).
+- [ ] Sidebar rows all at the dense density; known-projects rows all at standard (FR-026).
+- [ ] **Count worktrees visible without scrolling, against the same repo before the change.** Must
+      not have dropped materially (FR-026a) — this is the guard on the density decision.
+- [ ] Icon buttons are comfortable to hit; the target extends beyond the visible glyph (FR-027).
+- [ ] Dialog actions are grouped at the **trailing** edge with the defined spacing (FR-028).
+- [ ] Trigger a notification: it appears as a **floating snackbar**, not an inline strip (FR-032).
+- [ ] Trigger several rapidly: **exactly one visible**, others follow in turn (FR-032a).
+- [ ] Trigger an error: it stays for the **long** duration and can still be dismissed manually
+      (FR-032b).
+- [ ] Trigger a snackbar **while a dialog is open**: it renders above the scrim and does not
+      permanently block the dialog's actions.
+
+### B5. Motion — US5 (P5)
+
+- [ ] Each existing animation — overlay fade, sidebar slide, menu fade, row hover fade — still
+      triggers and ends in the **same visual state** as before (FR-035, SC-010).
+- [ ] Fades accelerate and decelerate rather than moving at a constant rate (FR-034).
+- [ ] The sidebar slide reads as more expressive than the small fades (emphasized vs standard set).
+- [ ] App-bar elevation and snackbar enter/exit are animated, not instant (FR-035a).
+- [ ] Leave the app idle: no animation runs at rest (the clock still gates itself).
+
+### B6. No behavior change — FR-036
+
+The critical regression pass. Walk **every** screen, dialog and flow:
+
+- [ ] Create, rename and delete a worktree.
+- [ ] Create a worktree from a **new** branch, then from an **existing** branch; exercise both the
+      reuse and the overwrite resolutions, and switch the branch-source toggle back and forth
+      confirming no residual state. (Feature 016 landed this flow after this spec was written — it
+      is inside the no-behavior-change scope and its form is the most heavily restyled in US2.)
+- [ ] Watch the worktree-creation progress indicator name each step as it runs.
+- [ ] Start, switch and remove a session; confirm a Default (project-root) session still works.
+- [ ] Open, filter and switch projects; forget a project.
+- [ ] Every keyboard shortcut behaves as before — arrow keys, Tab and PageUp/Down still reach the
+      **terminal**, unchanged.
+- [ ] Terminal input, output, scrollback and selection unaffected.
+- [ ] Quit and relaunch: all persisted state restores identically.
+
+- [ ] **Exactly one** behavioral difference is observed in the whole pass: notifications now show
+      one at a time and dismiss on a timeout (FR-036a). Anything else is a defect in this feature.
+
+### B7. Scheme switch under load
+
+- [ ] With a dialog, a menu **and** a snackbar simultaneously on screen, switch light ↔ dark. Every
+      visible surface re-resolves — roles, elevation, state layers — with **no restart**.
+
+---
+
+## Recording the result
+
+Record the run in the PR: date, platform, scheme(s) exercised, and any unchecked box with its
+reason. An unchecked box in **B6** blocks merge — it is a behavior regression, which this feature
+defines as a defect.
