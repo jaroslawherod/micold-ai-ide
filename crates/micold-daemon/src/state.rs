@@ -452,6 +452,20 @@ impl DaemonState {
             .collect()
     }
 
+    /// The git branch bound to `project`'s `dir_name` worktree, from the live git-discovery cache
+    /// (T053; feature 013, FR-011). `None` if the worktree is unknown or has no bound branch
+    /// (an orphan/invalid directory) — the caller treats that as "nothing to delete", never as
+    /// an error.
+    pub fn worktree_branch(&self, project: &Path, dir_name: &str) -> Option<String> {
+        let inner = self.lock();
+        inner
+            .worktrees
+            .get(project)?
+            .iter()
+            .find(|w| w.dir_name == dir_name)
+            .and_then(|w| w.branch.clone())
+    }
+
     /// Archive (durably) every session of `project`'s `dir_name` worktree and drop each from the live
     /// registry, returning the removed primaries so the caller can `kill()` them **outside** the lock
     /// (module invariant; mirrors `remove_session`). Gated: the caller invokes this only after the git

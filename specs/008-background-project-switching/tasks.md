@@ -146,6 +146,24 @@ gui-gated layer in `src/main.rs` and `src/ui/**`.
 - [x] T033 Verify build + full test suite (`cargo test` and `cargo test --no-default-features`) pass on Linux, macOS, and Windows (Principle VI).
 - [ ] T034 Run `quickstart.md` validation: headless test commands + the 7-step manual walkthrough (SC-001…SC-007).
 
+## Phase 7: Convergence
+
+- [X] T035 (regression, introduced by feature 010's daemon migration) `State::note_background_restart`
+  — which raises the FR-011/SC-007 "a background session was restarted while you were away"
+  notice — had zero production call sites; it was only ever invoked by its own isolated test
+  (`tests/background_restart.rs`). Originally the client itself supervised session
+  restarts and could call it directly; once feature 010 moved all restart/crash-loop
+  supervision into the daemon, the client only learns lifecycle changes by periodically
+  reconciling a `CatalogSnapshot`, and nothing in that reconcile path ever detected "a
+  session just transitioned into `Restarting`" to raise the marker. Fixed
+  `reconcile_catalog` in `src/main.rs` to compare each session's incoming lifecycle against
+  its previous value and call `note_background_restart` on a transition into `Restarting`
+  (the method itself no-ops for the active project, so no additional active/inactive check
+  is needed at the call site). Regression test:
+  `reconcile_detects_a_background_restart_and_arms_the_return_notice` (inline
+  `#[cfg(test)] mod tests` in `main.rs`, alongside the existing `reconcile_catalog` tests),
+  confirmed red without the fix and green with it. Per FR-011 (missing).
+
 ---
 
 ## Dependencies & Execution Order

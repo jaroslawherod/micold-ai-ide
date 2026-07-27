@@ -248,6 +248,25 @@ branch, or directory is left behind afterward (quickstart.md §3).
   population and the failure/rollback path both confirmed. §4: covered by T019's reasoning — no
   platform-specific code.)*
 
+## Phase 7: Convergence
+
+- [X] T021 [US3] FR-006/SC-003 require the user be able to identify which submodule failed and
+  why "directly from what's shown, without inspecting logs" — but
+  `DaemonMsg::OperationError`'s `detail` field (git's own stderr verbatim, the only place a
+  submodule failure names itself and its cause) was destructured with `..` and silently
+  discarded in `main.rs`'s `WorktreeCreate` error handling; the form only ever showed the
+  generic "git failed to create the worktree" message for every creation failure, submodule or
+  not. Extracted a pure `worktree_create_error_text(message, detail) -> String` in `main.rs`
+  that appends a non-blank `detail` to `message`, and wired it into the `OperationError` handler.
+  Regression tests: `worktree_create_error_appends_a_non_blank_detail` and
+  `worktree_create_error_falls_back_to_message_when_detail_is_absent_or_blank` (inline
+  `#[cfg(test)] mod tests` in `main.rs`). Per FR-006 (missing).
+  **Partial**: this surfaces git's raw diagnostic text (which normally names the submodule path
+  and the underlying cause in git's own words) rather than building the *structured* three-way
+  category (network / auth / unreachable-commit) FR-006 also describes — a reliable
+  cross-platform classifier over arbitrary git/ssh/curl stderr text is a materially larger,
+  fragile undertaking and was judged out of scope for this fix; left open if the team wants it.
+
 ---
 
 ## Dependencies & Execution Order

@@ -560,15 +560,17 @@ fn session_has_conversation(project_path: &Path, session: &micold_core::session:
     provider.has_recorded_conversation(&config, &cwd, session.id.0)
 }
 
-fn persist_settings(core: &State) {
+fn persist_settings(core: &mut State) {
     if let Some(store) = JsonFileSettingsStore::default_location() {
         // Preserve the persisted scrollback limit (feature 006) and environment-include settings
         // (feature 011) when saving a theme change — this function only ever changes `theme`.
         let existing = store.load().settings;
-        let _ = store.save(&Settings {
+        if let Err(err) = store.save(&Settings {
             theme: core.theme_pref,
             ..existing
-        });
+        }) {
+            core.notify_error(format!("Couldn't save your settings: {err}"));
+        }
     }
 }
 
@@ -828,6 +830,22 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                             }
                         }
                     }
+                    // Feature 013 (FR-015): the worktree directory and its sessions are already
+                    // gone by this point (that half always succeeds here) — a failed branch
+                    // deletion is reported as a distinct, non-blocking notice rather than
+                    // silently discarded, so choosing "delete the branch" that git then refuses
+                    // (e.g. unreachable commits) doesn't look like it silently kept the branch.
+                    Some(PendingOp::WorktreeDelete(dir)) => {
+                        if let OperationResult::WorktreeDeleted {
+                            branch_delete_failed: true,
+                        } = result
+                        {
+                            app.core.notify_error(format!(
+                                "The worktree \"{dir}\" was removed, but its branch could not be \
+                                 deleted (it may hold commits not present elsewhere)."
+                            ));
+                        }
+                    }
                     _ => {}
                 },
                 // FR-024: a stage push names the step in flight. Peeked, not removed — the
@@ -840,12 +858,23 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         app.core.update(Message::WorktreeCreateStageChanged(stage));
                     }
                 }
-                DaemonMsg::OperationError { req, message, .. } => {
+                DaemonMsg::OperationError {
+                    req,
+                    message,
+                    detail,
+                    ..
+                } => {
                     match app.pending_ops.remove(&req) {
                         // A failed worktree create shows in the form (keeps it open to retry), not a
-                        // toast — mirroring the old local-create failure path.
+                        // toast — mirroring the old local-create failure path. `detail` carries git's
+                        // own stderr verbatim (feature 010, FR-006/SC-003): for a submodule fetch
+                        // failure this is normally the only place that names which submodule failed
+                        // and why (auth/network/unreachable commit) — `message` alone is the generic
+                        // "git failed to create the worktree".
                         Some(PendingOp::WorktreeCreate(_)) => {
-                            app.core.update(Message::WorktreeCreateFailed(message));
+                            app.core.update(Message::WorktreeCreateFailed(
+                                worktree_create_error_text(message, detail),
+                            ));
                         }
                         // Feature 016: both branch queries back the open form, so their failures
                         // belong on its own error line. A notification would be raised into the
@@ -1247,7 +1276,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::ThemePreferenceChanged(_) | Message::ThemeModeCycled => {
             app.core.update(message);
-            persist_settings(&app.core);
+            persist_settings(&mut app.core);
             Task::none()
         }
         // Validate the form, then create the worktree (incl. any submodule fetch) via git,
@@ -1741,13 +1770,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.env_include_script_path = draft.env_include_script_path;
             app.env_include_timeout_secs = env_include_timeout_secs;
             if let Some(store) = JsonFileSettingsStore::default_location() {
-                let _ = store.save(&Settings {
+                if let Err(err) = store.save(&Settings {
                     theme: app.core.theme_pref,
                     scrollback_lines,
                     env_include_enabled: app.env_include_enabled,
                     env_include_script_path: app.env_include_script_path.clone(),
                     env_include_timeout_secs,
-                });
+                }) {
+                    app.core
+                        .notify_error(format!("Couldn't save your settings: {err}"));
+                }
             }
             // The enabled/path/timeout settings themselves changed, so every previously cached
             // directory's snapshot is stale (BUG-002) — clear all of them, then eagerly re-source
@@ -1797,12 +1829,17 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     session_cwd_for_location(&project, &SessionLocation::Worktree(dir.clone()));
                 app.env_include_cache.remove(&cwd);
                 let (p, d) = (project, dir.clone());
+                // Feature 013 (FR-011/FR-012): the user's explicit keep/delete choice from the
+                // confirm dialog, defaulting to "delete the branch" (`worktree_delete_keep_branch`
+                // defaults to `false`).
+                let delete_branch = !app.core.worktree_delete_keep_branch;
                 send_op(app, PendingOp::WorktreeDelete(dir), move |req| {
                     ClientMsg::WorktreeDelete {
                         req,
                         project: p,
                         dir_name: d,
                         stop_sessions: true,
+                        delete_branch,
                     }
                 });
             }
@@ -2034,6 +2071,12 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
             core.workspace.projects.push(project);
         }
     }
+    // Sessions observed transitioning into `Restarting` this reconciliation (feature 008,
+    // FR-011/SC-007) — collected here and applied after the loop below, since
+    // `note_background_restart` needs `&mut core` while `list` still holds `core.workspace`
+    // borrowed. `note_background_restart` itself no-ops for the active project's session, so
+    // background-ness isn't checked here.
+    let mut newly_restarting: Vec<SessionId> = Vec::new();
     for project in &snapshot.projects {
         let list = core
             .workspace
@@ -2044,6 +2087,11 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
         for summary in &project.sessions {
             let lifecycle = wire_to_lifecycle(&summary.lifecycle);
             if let Some(existing) = list.iter_mut().find(|s| s.id == summary.id) {
+                if !matches!(existing.lifecycle, SessionLifecycle::Restarting { .. })
+                    && matches!(lifecycle, SessionLifecycle::Restarting { .. })
+                {
+                    newly_restarting.push(existing.id);
+                }
                 existing.lifecycle = lifecycle;
                 existing.activity = summary.activity.clone();
                 // Adopt the daemon's title only when it has a real one. The daemon now overlays the
@@ -2071,6 +2119,9 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
         }
         // Drop sessions the daemon no longer reports (archived/removed on its side).
         list.retain(|s| snap_ids.contains(&s.id));
+    }
+    for id in newly_restarting {
+        core.note_background_restart(id);
     }
     // Mirror the active project's worktrees from the daemon's git discovery into the render state
     // (the sidebar reads `core.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
@@ -2363,6 +2414,18 @@ fn os_theme_poll(interval: Duration) -> Subscription<Message> {
     every(interval).map(|_instant| Message::SystemThemeChanged(detect_system_scheme()))
 }
 
+/// The worktree-creation failure text shown in the form (feature 010, FR-006/SC-003): appends
+/// `detail` (the daemon's `OperationError.detail`, git's own stderr verbatim) to `message` when
+/// present and non-blank. For a submodule fetch failure, `message` alone is the generic "git
+/// failed to create the worktree" — `detail` is normally the only place that names which
+/// submodule failed and why (auth/network/unreachable commit).
+fn worktree_create_error_text(message: String, detail: Option<String>) -> String {
+    match detail {
+        Some(detail) if !detail.trim().is_empty() => format!("{message}: {}", detail.trim()),
+        _ => message,
+    }
+}
+
 fn start_dir() -> PathBuf {
     directories::UserDirs::new()
         .map(|dirs| dirs.home_dir().to_path_buf())
@@ -2383,7 +2446,42 @@ fn scan(dir: PathBuf) -> Message {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_client::app::{NoticeLevel, Notification};
     use micold_core::protocol::messages::{ActivitySignal, ProjectSnapshot, SessionSummary};
+
+    // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
+    // own stderr, e.g. naming which submodule failed and why) was destructured with `..` and
+    // silently discarded — the worktree-creation form only ever showed the generic
+    // "git failed to create the worktree" message, never the diagnostic FR-006/SC-003 requires.
+    #[test]
+    fn worktree_create_error_appends_a_non_blank_detail() {
+        assert_eq!(
+            worktree_create_error_text(
+                "git failed to create the worktree".to_string(),
+                Some(
+                    "fatal: could not read Username for 'https://example.com': terminal prompts disabled"
+                        .to_string()
+                ),
+            ),
+            "git failed to create the worktree: fatal: could not read Username for \
+             'https://example.com': terminal prompts disabled"
+        );
+    }
+
+    #[test]
+    fn worktree_create_error_falls_back_to_message_when_detail_is_absent_or_blank() {
+        assert_eq!(
+            worktree_create_error_text("git failed to create the worktree".to_string(), None),
+            "git failed to create the worktree"
+        );
+        assert_eq!(
+            worktree_create_error_text(
+                "git failed to create the worktree".to_string(),
+                Some("   ".to_string())
+            ),
+            "git failed to create the worktree"
+        );
+    }
 
     fn summary(id: SessionId, title: &str, lifecycle: WireLifecycle) -> SessionSummary {
         SessionSummary {
@@ -2460,6 +2558,62 @@ mod tests {
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, b);
         assert_eq!(core.active_session, None, "dangling active pointer cleared");
+    }
+
+    // Convergence fix (retrofit session, 2026-07-27): a session transitioning to `Restarting` in
+    // a background (inactive) project's snapshot must raise the FR-011/SC-007 return notice.
+    // `State::note_background_restart` existed and was unit-tested in isolation
+    // (`tests/background_restart.rs`), but nothing called it from the daemon-driven reconcile
+    // path after feature 010 moved supervision into the daemon — so no background restart was
+    // ever actually detected or notified.
+    #[test]
+    fn reconcile_detects_a_background_restart_and_arms_the_return_notice() {
+        let mut core = State::default();
+        core.workspace.active = Some(PathBuf::from("/b")); // /a is the background project
+
+        let a = SessionId::new();
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with("/a", vec![summary(a, "A", WireLifecycle::Running)]),
+            false,
+        );
+        assert!(core.restarted_while_inactive.is_empty());
+
+        // /a's session crashes and the daemon starts restarting it, while /a is still inactive.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                "/a",
+                vec![summary(a, "A", WireLifecycle::Restarting { attempts: 1 })],
+            ),
+            false,
+        );
+        assert!(
+            core.restarted_while_inactive.contains(&a),
+            "a background session's transition into Restarting must be detected and marked"
+        );
+
+        // A further Restarting snapshot (still retrying) must not re-mark or duplicate anything.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                "/a",
+                vec![summary(a, "A", WireLifecycle::Restarting { attempts: 2 })],
+            ),
+            false,
+        );
+        assert_eq!(core.restarted_while_inactive.len(), 1);
+
+        // Returning to /a fires the return notice (mirrors `background_restart.rs`).
+        core.record_foreground();
+        assert!(core.switch_active(Path::new("/a")));
+        assert_eq!(
+            core.notifications,
+            vec![Notification {
+                level: NoticeLevel::Info,
+                message: "A background session was restarted while you were away.".to_string(),
+            }]
+        );
     }
 
     #[test]

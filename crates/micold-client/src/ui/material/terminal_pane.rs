@@ -5,9 +5,9 @@
 //! Adapted from `iced_term 0.6.0` `view.rs` (MIT © Ilya Shvyryalkin). Key/mouse input and the
 //! full focus gate land in feature 006 US2/US3; this file covers colour rendering + click focus.
 
-use crate::app::{Message, SelectKind};
+use crate::app::{route_key, KeyRouting, Message, SelectKind};
 use crate::grid::GridCache;
-use crate::keymap::{self, KeyOutput};
+use crate::keymap;
 use crate::selection::Selection;
 use crate::ui::terminal::{
     cell_font, encode_mouse_report, shows_cursor, wire_cell_colors, CellMetrics, TermPalette,
@@ -791,10 +791,10 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             _ => {}
         }
 
-        // Keyboard input reaches the process ONLY while focused (FR-006/FR-008/FR-009).
-        if !self.focused {
-            return event::Status::Ignored;
-        }
+        // Keyboard input reaches the process ONLY while focused (FR-006/FR-008/FR-009), decided
+        // by the tested pure `route_key` (Constitution Principle I: the focus-gate decision lives
+        // in tested core logic, not only in this untestable widget method — see
+        // `tests/terminal_focus.rs`).
         if let Event::Keyboard(keyboard::Event::KeyPressed {
             key,
             modifiers,
@@ -810,30 +810,32 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 mods: to_keymap_mods(modifiers),
                 text: text.map(|t| t.to_string()),
             };
-            return match keymap::encode(&input, self.key_term_mode()) {
-                KeyOutput::Bytes(bytes) => {
+            let output = keymap::encode(&input, self.key_term_mode());
+            return match route_key(self.focused, output) {
+                KeyRouting::App => event::Status::Ignored,
+                KeyRouting::Write(bytes) => {
                     shell.publish(Message::TerminalBytes(bytes));
                     event::Status::Captured
                 }
-                KeyOutput::ReleaseFocus => {
+                KeyRouting::ReleaseFocus => {
                     shell.publish(Message::TerminalFocusReleased);
                     event::Status::Captured
                 }
-                KeyOutput::NewTerminalInstance => {
+                KeyRouting::NewTerminalInstance => {
                     shell.publish(Message::ShellInstanceOpenRequested);
                     event::Status::Captured
                 }
-                KeyOutput::Copy => {
+                KeyRouting::Copy => {
                     clipboard.write(ClipboardKind::Standard, self.selectable_content());
                     event::Status::Captured
                 }
-                KeyOutput::Paste => {
+                KeyRouting::Paste => {
                     if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
                         shell.publish(Message::TerminalBytes(pasted.into_bytes()));
                     }
                     event::Status::Captured
                 }
-                KeyOutput::Ignore => event::Status::Ignored,
+                KeyRouting::Ignore => event::Status::Ignored,
             };
         }
         event::Status::Ignored

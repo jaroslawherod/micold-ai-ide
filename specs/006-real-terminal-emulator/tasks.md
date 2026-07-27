@@ -317,6 +317,28 @@ through the scrollback and the scrollbar appears.
 **Checkpoint**: Touchpad scrolling moves the viewport on every supported platform and windowing
 system; discrete-wheel behavior is unchanged.
 
+## Phase 11: Convergence
+
+- [X] T058 [US2/US3] `app::route_key`/`KeyRouting` — the tested pure function meant to decide
+  FR-009's focus gate — had zero production call sites; `src/ui/material/terminal_pane.rs`'s
+  `on_event` duplicated the same decision inline (`if !self.focused { return Ignored }` +
+  a second, hand-written match over `KeyOutput`) instead of calling it, leaving the actual
+  focus-gate decision only in untestable widget code (a Constitution Principle I gap: this is
+  decision logic, not thin glue) while `tests/terminal_focus.rs` kept testing the orphaned
+  function, giving false coverage of a path nothing exercises. Fixed by having `on_event` call
+  `route_key(self.focused, keymap::encode(...))` and match on `KeyRouting` instead of
+  duplicating its logic — no behavior change, the same decision now has one source of truth.
+  Per FR-009 (contradicts).
+- [X] T059 [US2] `app::should_write_to` (FR-012a's Running-only write gate) was also dead: it
+  checked a client-side `SessionLifecycle`, but feature 010's daemon migration moved process
+  liveness — and this gate — entirely into the daemon (`DaemonState::session_input` drops input
+  for any session absent from its live registry; see `main.rs`'s own comment at the
+  `Message::TerminalBytes` handler explaining the client no longer tracks lifecycle for this
+  purpose). Removed the dead function and its stale `write_gating_only_when_running` test;
+  updated `tests/terminal_focus.rs`'s header comment to point at where the gate actually lives
+  now. No behavior change — FR-012a's guarantee is still upheld, just daemon-side. Per FR-012a
+  (contradicts).
+
 **Bugfix**: 2026-07-20 — BUG-002 Updated from bugfix patch. T028's "wheel delta → `Scroll(n)`" test
 scope was too narrow (whole-line deltas only) — widened via T055 rather than reopening T028, whose
 original scope was met. Added Phase 10 (T053–T056) for the sub-line scroll accumulator.

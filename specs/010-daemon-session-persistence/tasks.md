@@ -494,3 +494,34 @@ re-derived from source (see the run's findings summary).
 
 - [X] T092 Add a unit test asserting `connection_status()`'s precedence order (`crates/micold-client/src/main.rs`) — `VersionMismatch` > `BuildMismatch` > `Displaced` > `Disconnected`/`Connected` — since the function contains decision/branching logic the GUI-wiring test exception explicitly excludes, and it currently has zero coverage anywhere in the crate per Constitution I (contradicts) **Done**: `connection_status_orders_mismatch_over_displaced_over_disconnected` in `main.rs`'s existing `#[cfg(test)] mod tests` — one `App`, mutated field-by-field through all five states, asserting each precedence step in turn.
 - [X] T093 Add an end-to-end test in `crates/micold-daemon/tests/handshake_flow.rs`, mirroring `mismatched_handshake_is_refused_naming_both_sides`, that drives `server::serve_connection` with a matching `protocol_version`/`schema_hash` but a differing `client_package_version` and asserts a `Refused{reason: RefusalReason::BuildMismatch{..}}` frame is received, closing the gap between FR-022a's pure-function unit coverage (T088) and its wire-level round-trip per FR-022a / SC-009a (partial) **Done**: `build_mismatch_is_refused_distinctly_when_contract_still_matches` — real `serve_connection` over an in-memory duplex, matching contract + stale `client_package_version`, asserts `RefusalReason::BuildMismatch` naming both builds and that the daemon closes the connection, mirroring the existing contract-mismatch test. `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --check` all clean.
+
+## Phase 14: Convergence (retrofit session, 2026-07-27)
+
+Produced by a separate, broader `/speckit-converge` retrofit sweep across all 21 features in
+`specs/`, run against this feature's state before T088–T093 (BUG-002 and its follow-up) landed.
+
+- [X] T094 This feature's own distinctive requirements were verified directly and hold: FR-016a/b
+  (the `activity.rs` FSM is purely hook-driven — grepped for zero `Instant`/`elapsed`/timing
+  logic anywhere near it, confirming no quiescence inference survived the FR-016b rewrite),
+  FR-031/FR-035 (`Message::DaemonDisconnected` resolves every in-flight `pending_op` to an
+  explicit "unknown outcome" notification, never silent success/failure, per the reconnect-reads-
+  authoritative-state contract), and FR-007a (`prune_empty_off_runtime` is called only from the
+  `Attach` handler, never a background timer, so pruning never runs unattended).
+- **Not new findings, but tracked back here for a single point of reference**: this retrofit
+  sweep found and fixed four separate cases where this feature's migration of session/worktree
+  lifecycle logic from the client into the daemon silently dropped wiring that a pre-existing
+  feature's own spec required, each verified red→green with a regression test:
+  - `specs/005-worktree-session-terminal/tasks.md` T081 — the FR-020c durable archive marker
+    (`AiCliProvider::mark_archived`) was never called from the daemon's `archive_session`/
+    `archive_worktree_sessions`/`archive_session_ids`.
+  - `specs/006-real-terminal-emulator/tasks.md` T058/T059 — `app::route_key`/`KeyRouting`
+    (FR-009's focus gate) and `app::should_write_to` (FR-012a's write gate) both became
+    orphaned pure functions once the daemon took over process liveness.
+  - `specs/008-background-project-switching/tasks.md` T035 — `State::note_background_restart`
+    (FR-011) was never called from `reconcile_catalog`, so the daemon-driven snapshot
+    reconciliation never detected a background session transitioning into `Restarting`.
+  - `specs/013-create-worktree-refinement/tasks.md` T030 — `ClientMsg::WorktreeDelete` shipped
+    with no wire field for the keep/delete-branch choice (FR-011/FR-012/FR-014), so the daemon
+    hardcoded "always keep the branch" regardless of the confirm dialog's checkbox.
+  No further instances were found in this feature's own scope. Recorded here in case it's useful
+  context for reviewing future migrations of similar scope.

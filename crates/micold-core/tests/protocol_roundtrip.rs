@@ -152,6 +152,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             project: PathBuf::from("/a"),
             dir_name: "feat-x".into(),
             stop_sessions: false,
+            delete_branch: true,
         },
         ClientMsg::WorktreeRename {
             req: 6,

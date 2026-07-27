@@ -430,3 +430,29 @@ file (SC-011). See `bugs/BUG-003.md`.
 `mark_archived` for the sessions it killed, so a worktree recreated under the same name later
 could have its old sessions resurrected. Added T079: fix + regression test
 (`tests/worktree_delete.rs`).
+
+## Phase 8: Convergence
+
+- [X] T081 (regression of BUG-003, introduced by feature 010's daemon migration) Restore the
+  FR-020c durable provider-side marker in `crates/micold-daemon/src/catalog.rs`:
+  `Catalog::archive_session` (the `SessionDelete` RPC — both Close FR-015a and Remove FR-015c
+  route through it, per `main.rs`'s own comments claiming the marker was written),
+  `archive_worktree_sessions` (`WorktreeDelete`), and `archive_session_ids` (empty-session
+  pruning) all set the in-catalog `archived` flag but never called
+  `AiCliProvider::mark_archived` — the durable, catalog-independent marker BUG-003 exists
+  specifically so a lost/corrupted catalog can't let reconciliation (FR-020b) resurrect a
+  closed/removed session. When feature 010 moved session lifecycle from the client into the
+  daemon, this call was lost even though `Session::archive()`'s own doc comment and `main.rs`'s
+  RPC-dispatch comments both still assert it happens. Added a free `mark_archived_durable`
+  helper in `catalog.rs` (a free function, not a method, since it must run while a session list
+  borrowed from `self.workspace` is still mutably held) and wired it into all three call sites.
+  Regression test: `archiving_a_session_always_writes_the_durable_provider_marker` in the new
+  `tests/session_archive_durable_marker.rs` (all three scenarios in one `#[test]` function,
+  since they share the process-global `CLAUDE_CONFIG_DIR` env var and would otherwise race each
+  other under `cargo test`'s default parallelism) — confirmed red without the fix, green with
+  it. Per FR-020c (missing).
+- Noted, not fixed (dead/unreachable code, out of scope for this pass): the daemon's
+  `ClientMsg::SessionKill`/`SessionStop` handler in `server.rs` has its own
+  `TODO(T053): archive the durable record...` and truly never calls `archive_session` either —
+  but the client never sends either message (`SessionCloseRequested`/`SessionRemoveConfirmed`
+  both send `SessionDelete` instead), so this path currently affects no live requirement.
