@@ -10,6 +10,8 @@
 //! and the z-order (FR-008). What is left here is appearance: the panel's width, its padding, and
 //! how far below the app bar it hangs.
 
+use std::time::Duration;
+
 use crate::icons::Icon;
 use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
@@ -112,36 +114,42 @@ impl<'a, M: Clone + 'a> From<MenuTrigger<M>> for Element<'a, M> {
     }
 }
 
-/// The menu panel, anchored top-right below the toolbar by default, with a fade driven by
-/// `progress` (0 = hidden, 1 = fully shown). Builder form (Principle VIII):
-/// `MenuOverlay::new(items, on_dismiss, roles).progress(p).into()`, yielding `Option<Surface>` —
-/// `None` once the fade has finished, so a closed menu leaves no trace.
+/// How long the panel takes to fade in or out.
+const FADE: Duration = Duration::from_millis(90);
+
+/// The menu panel, anchored top-right below the toolbar by default, fading itself in and out.
+/// Builder form (Principle VIII): `MenuOverlay::new(items, on_dismiss, roles).open(flag).into()`.
+///
+/// A closed menu still yields a surface, and that is deliberate: the panel has to outlive the
+/// state that opened it or there would be nothing left on screen to fade out. It costs an inert,
+/// zero-size layer — the panel stops drawing and stops accepting input the moment the fade
+/// finishes — and it carries no dismissal while closed, so nothing beneath it is blocked.
 pub struct MenuOverlay<'a, M> {
     items: Vec<MenuItem<M>>,
     on_dismiss: M,
     roles: Roles,
-    progress: f32,
+    open: bool,
     anchor: Option<iced::Point>,
     lifetime: std::marker::PhantomData<&'a ()>,
 }
 
 impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
-    /// A menu panel with `items`, dismissing via `on_dismiss`, themed by `roles`. Fully shown by
-    /// default; set [`Self::progress`] to fade.
+    /// A menu panel with `items`, dismissing via `on_dismiss`, themed by `roles`. Open by
+    /// default — a context menu is built because it was just summoned.
     pub fn new(items: Vec<MenuItem<M>>, on_dismiss: M, roles: Roles) -> Self {
         Self {
             items,
             on_dismiss,
             roles,
-            progress: 1.0,
+            open: true,
             anchor: None,
             lifetime: std::marker::PhantomData,
         }
     }
 
-    /// Fade progress (0 = hidden → yields no surface; 1 = fully shown).
-    pub fn progress(mut self, progress: f32) -> Self {
-        self.progress = progress;
+    /// Whether the menu is open. Going from `true` to `false` plays the fade out.
+    pub fn open(mut self, open: bool) -> Self {
+        self.open = open;
         self
     }
 
@@ -157,27 +165,26 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
     }
 }
 
-impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Option<Surface<'a, M>> {
+impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
     fn from(m: MenuOverlay<'a, M>) -> Self {
         let MenuOverlay {
             items,
             on_dismiss,
             roles: r,
-            progress,
+            open,
             anchor,
             ..
         } = m;
-        if progress <= 0.001 {
-            return None;
-        }
 
         // Fade the panel box itself (scrim of its own surface colour). Where it lands is the
         // overlay's business; how wide and how padded it is, is this module's.
         let panel = super::fade(
             menu_panel(item_column(items, r), Length::Fixed(PANEL_WIDTH), r, true),
-            progress,
+            open,
+            FADE,
             r.surface,
-        );
+        )
+        .animate_in();
 
         let (layer, anchor) = match anchor {
             Some(point) => (Layer::ContextMenu, Anchor::Point(point)),
@@ -189,7 +196,14 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Option<Surface<'a, M>> {
                 },
             ),
         };
-        Some(Surface::new(layer, panel, anchor).on_dismiss(on_dismiss))
+        let surface = Surface::new(layer, panel, anchor);
+        // A closed menu carries no dismissal: there is nothing left to close, and a backdrop that
+        // outlived the menu would swallow the next click for the length of the fade.
+        if open {
+            surface.on_dismiss(on_dismiss)
+        } else {
+            surface
+        }
     }
 }
 

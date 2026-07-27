@@ -4,8 +4,8 @@
 use crate::app::{Message, State, TagFilter};
 use crate::icons::Icon;
 use crate::ui::material::{
-    self, expand, menu_panel, ActivityBadge, Button, ButtonVariant, Divider, FilterTrigger,
-    IconButton, Scrollable, SurfaceKind, Text, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
+    self, Accordion, ActivityBadge, Button, ButtonVariant, Divider, FilterTrigger, IconButton,
+    Scrollable, SurfaceKind, Text, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
 };
 use iced::widget::{column, container, mouse_area, row, Space};
 use iced::{Alignment, Element, Length};
@@ -25,7 +25,6 @@ pub fn view<'a>(
     state: &'a State,
     scheme: micold_core::theme::ColorScheme,
     row_fx: &crate::motion::Animator<u64>,
-    filter_progress: f32,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let width = state.sidebar_width_px() as f32;
@@ -62,21 +61,24 @@ pub fn view<'a>(
 
     // The filter chips (feature 008) live in an accordion that expands/collapses below the
     // header (feature 009) — collapsed to zero height by default, pushing the worktree list
-    // down rather than floating over it. Skip building `filter_bar()` (an O(worktrees) scan
-    // plus a chip `Element` tree) while fully collapsed — the common steady state — since it
-    // would only be thrown away as invisible; `expand()` itself already renders a bare
-    // zero-height node with no content to lay out or hit-test in that case.
+    // down rather than floating over it.
+    //
+    // Built on every render, including while collapsed. It used to be skipped in that case
+    // (`filter_bar()` is an O(worktrees) scan plus a chip `Element` tree), but the test was "is
+    // the reveal still in progress", which only the accordion itself can answer now that it owns
+    // its own track — and asking it would mean it could no longer be built from a single pass over
+    // the state. A collapsed accordion lays out and hit-tests nothing regardless.
     //
     // Feature 014 (FR-010c): the reveal chip is the accordion's FIRST element and is rendered
     // unconditionally — deliberately not inside `filter_bar()`, which returns early with "No tags
     // to filter yet." exactly when a project's only worktrees are agent-owned, i.e. when the
     // control matters most.
-    let filter_accordion: Element<'_, Message> = if filter_progress > 0.001 {
-        let body = column![reveal_chip(state, r), filter_bar(state, r)].spacing(spacing::XS);
-        expand(menu_panel(body, Length::Shrink, r, false), filter_progress)
-    } else {
-        Space::new().height(Length::Fixed(0.0)).into()
-    };
+    let filter_accordion: Element<'_, Message> = Accordion::new(
+        column![reveal_chip(state, r), filter_bar(state, r)].spacing(spacing::XS),
+        r,
+    )
+    .open(state.sidebar_filter_open)
+    .into();
 
     // The "Default" entry (feature 010) is always present once a project is open — see
     // `sidebar_entries()` — so, unlike before this feature, the sidebar is never truly "empty":

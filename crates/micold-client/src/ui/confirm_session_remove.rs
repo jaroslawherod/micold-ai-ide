@@ -3,16 +3,16 @@
 //! path back into the sidebar (the removed session's record is dropped outright).
 
 use crate::app::Message;
-use crate::ui::cdk::overlay::Surface;
-use crate::ui::material::{self, Button, Modal, SurfaceKind, Text, TypeRole};
+use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
+use iced::Element;
 use iced::Length;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
-/// The confirm-remove dialog for a session (shown by its sidebar `label`) as a modal surface,
-/// at transition `progress` (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
-pub fn modal<'a>(label: &str, scheme: ColorScheme, progress: f32) -> Option<Surface<'a, Message>> {
+/// The confirm-remove dialog for a session (shown by its sidebar `label`) as a modal surface, as the dialog body; `ui::view` wraps it
+/// in the shared [`Modal`](crate::ui::material::Modal) transition.
+pub fn modal<'a>(label: &str, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
     let warning = "This permanently deletes the session. Unlike Close, it cannot be recovered — \
@@ -35,5 +35,5 @@ pub fn modal<'a>(label: &str, scheme: ColorScheme, progress: f32) -> Option<Surf
         .padding(spacing::LG)
         .width(Length::Fixed(460.0));
 
-    Modal::new(dialog, r).progress(progress).into()
+    dialog.into()
 }

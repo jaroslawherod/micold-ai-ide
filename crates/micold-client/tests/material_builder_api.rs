@@ -48,7 +48,8 @@ struct Declared {
     convertible: bool,
     /// Exposes at least one public field — i.e. it is a data record the caller fills in.
     public_fields: bool,
-    /// Has at least one constructor — a public method taking no `self`.
+    /// Has at least one constructor — a public method taking no `self`, or a public free function
+    /// in the same module that returns it.
     has_constructor: bool,
     /// Public methods that are neither `new` nor a `self`-consuming builder step.
     non_builder_methods: Vec<String>,
@@ -136,14 +137,14 @@ fn declarations() -> Vec<Declared> {
             let body = struct_body(&code, &name);
             let public_fields = body.lines().any(|l| l.trim_start().starts_with("pub "));
 
-            let (has_constructor, non_builder_methods) = inherent_methods(&code, &name);
+            let (associated, non_builder_methods) = inherent_methods(&code, &name);
 
             out.push(Declared {
-                name,
+                name: name.clone(),
                 module: module.clone(),
                 convertible,
                 public_fields,
-                has_constructor,
+                has_constructor: associated || has_free_constructor(&code, &name),
                 non_builder_methods,
             });
         }
@@ -176,6 +177,27 @@ fn struct_body(code: &str, name: &str) -> String {
         }
     }
     after[open..end].to_string()
+}
+
+/// Whether a public free function in the same module returns `name`, i.e. constructs it.
+///
+/// The animation wrappers are built this way — `fade(content, shown, over, backdrop)` rather than
+/// `Fade::new(...)` — matching how the rendering stack names its own widget constructors
+/// (`container(x)`, `button(x)`). It satisfies the rule this file exists for just as an associated
+/// constructor does: the component arrives from its required inputs in one call, and everything
+/// optional is a chainable step afterwards. What Principle VIII rules out is a component assembled
+/// field by field, not a lowercase name.
+fn has_free_constructor(code: &str, name: &str) -> bool {
+    code.match_indices("pub fn ").any(|(at, _)| {
+        let end = code[at..].find('{').map(|o| at + o).unwrap_or(code.len());
+        let Some((_, returns)) = code[at..end].split_once("->") else {
+            return false;
+        };
+        let returns = returns.trim_start();
+        // Guard the boundary so `Scale` is not credited to a `Scaled` constructor.
+        returns.starts_with(name)
+            && !returns[name.len()..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
+    })
 }
 
 /// Scans every `impl … Name…` block for public methods, returning `(has_constructor, offenders)`.

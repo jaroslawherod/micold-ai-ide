@@ -79,6 +79,29 @@ because "the app looks identical" must not be quietly true-except-for-this.
 keep its default scrollbar. That preserves an accident by making it a supported option, which is the
 opposite of what wrapping is for.
 
+### 4. A click during the overflow menu's fade-out no longer reopens it
+
+| | Before | After |
+|---|---|---|
+| Click while the menu is open | closes it | closes it |
+| Click during the ~90ms fade-out | **swallowed, and reopened the menu** | passes through to what is beneath |
+| Click once the fade has finished | passes through | passes through |
+
+**Why**: the menu's backdrop — the layer that turns an outside click into a dismissal — used to
+exist for as long as the panel was drawn, including the 90ms it spent fading out. A click landing in
+that window was read as "outside the open menu" and emitted `HelpMenuToggled`, which, with the menu
+already closed, opened it again.
+
+Making the panel self-animating (T039a) separated the two lifetimes: the panel is still on screen
+because it is finishing its fade, but the surface only carries a dismissal while the menu is
+actually open. There is no longer a window in which a click means something the user did not intend.
+
+**Surfaces affected**: the toolbar overflow menu — the only fading one. Context menus and the
+project switcher appear and disappear without a transition, so they never had the window.
+
+**This is a fix, not a preserved behaviour**, and it is listed here because it is user-noticeable:
+double-clicking the overflow-menu button used to be able to leave the menu open.
+
 ---
 
 ## What did not change

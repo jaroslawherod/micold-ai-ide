@@ -12,11 +12,11 @@
 //! ([`micold_core::overlay::dismisses`]) and stacking from the surface's own
 //! [`Layer`] — so reordering the composition cannot reorder the screen.
 //!
-//! **No appearance.** A scrim colour arrives already resolved from the material layer; this module
-//! decides *that there is a backdrop*, never what colour it is.
+//! **No appearance.** A scrim arrives already built from the material layer; this module decides
+//! *that there is a backdrop* and what it blocks, never what it looks like.
 
 use iced::widget::{container, mouse_area, opaque, stack, Space};
-use iced::{Color, Element, Length, Padding, Point};
+use iced::{Element, Length, Padding, Point};
 use micold_core::overlay::{dismisses, stack_order, Layer, Trigger};
 
 /// Where a panel sits in the window.
@@ -43,7 +43,7 @@ pub struct Surface<'a, M> {
     layer: Layer,
     panel: Element<'a, M>,
     anchor: Anchor,
-    scrim: Option<Color>,
+    scrim: Option<Element<'a, M>>,
     on_dismiss: Option<M>,
     kind: micold_core::overlay::Surface,
 }
@@ -65,10 +65,10 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
         }
     }
 
-    /// Tint the backdrop with an already-resolved colour. Without this the backdrop is invisible
-    /// but still present — it is what catches an outside click.
-    pub fn scrim(mut self, color: Color) -> Self {
-        self.scrim = Some(color);
+    /// Fill the backdrop with an already-built layer from the material side. Without this the
+    /// backdrop is invisible but still present — it is what catches an outside click.
+    pub fn scrim(mut self, layer: impl Into<Element<'a, M>>) -> Self {
+        self.scrim = Some(layer.into());
         self
     }
 
@@ -105,19 +105,17 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
 
         // No tint and nothing to dismiss: a layer that neither blocks nor closes is just a wasted
         // stack frame.
-        if self.scrim.is_none() && dismisser.is_none() {
+        let scrim = self.scrim.take();
+        if scrim.is_none() && dismisser.is_none() {
             return None;
         }
+        let tinted = scrim.is_some();
 
-        let mut fill = container(Space::new().width(Length::Fill).height(Length::Fill))
-            .width(Length::Fill)
-            .height(Length::Fill);
-        if let Some(color) = self.scrim {
-            fill = fill.style(move |_: &iced::Theme| container::Style {
-                background: Some(iced::Background::Color(color)),
-                ..container::Style::default()
-            });
-        }
+        let fill = container(
+            scrim.unwrap_or_else(|| Space::new().width(Length::Fill).height(Length::Fill).into()),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill);
 
         let catcher: Element<'a, M> = match dismisser {
             Some(message) => mouse_area(fill).on_press(message).into(),
@@ -126,10 +124,7 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
 
         // A tinted backdrop also blocks: the window beneath is dimmed precisely because it is not
         // available. An invisible backdrop only catches presses, leaving hover and scroll alone.
-        Some(match self.scrim {
-            Some(_) => opaque(catcher),
-            None => catcher,
-        })
+        Some(if tinted { opaque(catcher) } else { catcher })
     }
 
     /// The positioned panel layer.

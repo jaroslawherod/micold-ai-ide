@@ -75,21 +75,34 @@ fn code_only(src: &str) -> String {
 /// and unreachable from a call site, which is what actually keeps callers away from it.
 const STYLE_MODULE: &str = "material/style.rs";
 
-/// Every `pub fn` signature in the library, as `(module, signature line)`.
+/// Every `pub fn` signature in the library, as `(module, whitespace-normalised signature)`.
 ///
-/// Single-line only, which is what the library's signatures are; a multi-line one would be missed,
-/// so `the_scan_finds_the_signatures_it_should` pins the count against silent under-reporting.
+/// Signatures are gathered whole rather than line by line. Most of this library's are wrapped
+/// across several lines by the formatter, and a line-based scan sees only `pub fn slide<'a, M: 'a>(`
+/// — the parameters, which are the entire point of the check, sit on their own lines and go
+/// unread. That made an empty [`REMAINING`] provable without being true.
 fn public_signatures() -> Vec<(String, String)> {
     let mut out = Vec::new();
     for (module, src) in library_sources() {
         if module == STYLE_MODULE {
             continue;
         }
-        for line in code_only(&src).lines() {
-            let trimmed = line.trim_start();
-            if trimmed.starts_with("pub fn ") || trimmed.starts_with("pub const fn ") {
-                out.push((module.clone(), trimmed.to_string()));
-            }
+        let code = code_only(&src);
+        for (start, _) in code
+            .match_indices("pub fn ")
+            .chain(code.match_indices("pub const fn "))
+        {
+            // A signature runs to the body's opening brace (or `;` for a trait method). Neither
+            // appears earlier: a return type may name generics and lifetimes, never a block.
+            let end = code[start..]
+                .find(['{', ';'])
+                .map(|offset| start + offset)
+                .unwrap_or(code.len());
+            let signature = code[start..end]
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            out.push((module.clone(), signature));
         }
     }
     out
@@ -121,37 +134,27 @@ const FORBIDDEN: &[(&str, &str)] = &[
     ),
 ];
 
-/// Signatures allowed to carry a progress value permanently.
-///
-/// The animation wrappers are the transition primitives themselves: `fade(content, progress,
-/// backdrop)` is *about* the progress, the way `container(x).padding(p)` is about the padding.
-/// They are the seam where a self-animating component reads its own track — an owner, not a
-/// caller. Everything else must have none.
-const SANCTIONED: &[&str] = &[
-    "pub fn fade",
-    "pub fn slide",
-    "pub fn scale",
-    "pub fn expand",
-];
-
 /// Signatures that still take a progress value **and should not**.
 ///
 /// Each is a component whose presentation state has not yet moved into it (T039–T042). They are
 /// listed rather than exempted: `the_remaining_leaks_are_exactly_these` fails both when one is
 /// fixed without being struck off and when a new one appears, so the list can only shrink. Empty
 /// is the finish line for FR-013 and SC-004.
+///
+/// There is no companion list of *sanctioned* leaks. There used to be: the four animation wrappers
+/// were exempt on the grounds that a transition primitive is legitimately about its own progress.
+/// That reasoning dissolved once they began owning their tracks — `fade(content, shown, over,
+/// backdrop)` says where the element should be, not how far along it is — so the exemption went
+/// with it. Nothing in the library is now allowed to name a progress value it does not own.
 const REMAINING: &[(&str, &str)] = &[
+    (
+        "material/animation.rs",
+        "the sidebar drawer's slide is still central: at zero width the sidebar is replaced by \
+         the collapsed rail, and owning that decision means owning both elements (T039)",
+    ),
     (
         "material/divider.rs",
         "the resize handle's hover track is still central (T041)",
-    ),
-    (
-        "material/menu.rs",
-        "the menu fade track is still central (T039)",
-    ),
-    (
-        "material/modal.rs",
-        "the overlay fade track is still central (T039)",
     ),
 ];
 
@@ -159,9 +162,6 @@ const REMAINING: &[(&str, &str)] = &[
 fn leaking_modules() -> Vec<(String, String)> {
     let mut out = Vec::new();
     for (module, sig) in public_signatures() {
-        if SANCTIONED.iter().any(|s| sig.starts_with(s)) {
-            continue;
-        }
         for (needle, meaning) in FORBIDDEN {
             if sig.contains(needle) {
                 out.push((
@@ -243,8 +243,15 @@ fn the_scan_finds_the_signatures_it_should() {
         "expected the library's public surface, found {} signatures",
         sigs.len()
     );
+    // The wrapped-signature case specifically: `fade`'s parameters live on their own lines, and a
+    // scan that stopped at the first newline would report it as taking nothing at all.
+    let fade = sigs
+        .iter()
+        .find(|(_, s)| s.starts_with("pub fn fade"))
+        .expect("expected `fade` among the signatures");
     assert!(
-        sigs.iter().any(|(_, s)| s.starts_with("pub fn fade")),
-        "expected `fade` among the signatures — if it moved, SANCTIONED is now stale"
+        fade.1.contains("backdrop: micold_core::tokens::Rgb"),
+        "the scan must read a signature's parameters, not just its first line: {}",
+        fade.1
     );
 }

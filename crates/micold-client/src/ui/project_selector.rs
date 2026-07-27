@@ -4,9 +4,8 @@
 
 use crate::app::Message;
 use crate::icons::{icon_role, Icon, IconSurface};
-use crate::ui::cdk::overlay::Surface;
 use crate::ui::material::{
-    self, Button, ButtonVariant, Glyph, Modal, Scrollable, SurfaceKind, Text, TypeRole,
+    self, Button, ButtonVariant, Glyph, Scrollable, SurfaceKind, Text, TypeRole,
 };
 use iced::widget::{column, row};
 use iced::{Alignment, Element, Length};
@@ -14,13 +13,9 @@ use micold_core::selector::{Selector, SelectorStatus};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
-/// The folder browser as a modal surface, at transition `progress`
-/// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
-pub fn modal<'a>(
-    selector: &'a Selector,
-    scheme: ColorScheme,
-    progress: f32,
-) -> Option<Surface<'a, Message>> {
+/// The folder browser as the dialog body; `ui::view` wraps it in the shared
+/// [`Modal`](crate::ui::material::Modal) transition.
+pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let on_surface_tint = icon_role(IconSurface::AppBarAction, r);
     let on_primary_tint = icon_role(IconSurface::PrimaryButton, r);
@@ -120,5 +115,5 @@ pub fn modal<'a>(
     .width(Length::Fixed(560.0))
     .height(Length::Fixed(420.0));
 
-    Modal::new(dialog, r).progress(progress).into()
+    dialog.into()
 }
