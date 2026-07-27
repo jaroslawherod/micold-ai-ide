@@ -60,6 +60,25 @@ worktree context menu, session context menu.
 (`Message::ScrolledBeneathOverlay`); the reducer asks `micold_core::overlay::dismisses` whether
 anything closes. With nothing open the message is inert.
 
+### 3. The folder browser's scrollbar is now the design system's
+
+| | Before | After |
+|---|---|---|
+| Sidebar list scrollbar | themed, 4px, 1px margin | unchanged |
+| Folder-browser list scrollbar | the rendering stack's default | **themed, 4px, 1px margin** |
+
+**Why**: nobody chose the difference. The sidebar's scrollable was written with an explicit style
+and the folder browser's without one, and they have looked different ever since. Wrapping the
+scrollable meant picking one, and the design system already specifies which.
+
+**This is a visual change**, and therefore the one exception to this feature's zero-visual-change
+property that is not about dismissal. It is listed here rather than in the parity walkthrough
+because "the app looks identical" must not be quietly true-except-for-this.
+
+**Considered and rejected**: giving the wrapper an `unthemed()` step so the folder browser could
+keep its default scrollbar. That preserves an accident by making it a supported option, which is the
+opposite of what wrapping is for.
+
 ---
 
 ## What did not change

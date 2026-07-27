@@ -4,14 +4,15 @@
 
 use crate::app::Message;
 use crate::icons::{icon_role, Icon, IconSurface};
-use micold_core::tokens::{self, spacing, type_scale};
 use crate::ui::cdk::overlay::Surface;
-use crate::ui::material::Modal;
-use crate::ui::{icon, style};
-use iced::widget::{button, column, container, row, scrollable, text};
+use crate::ui::material::{
+    self, Button, ButtonVariant, Glyph, Modal, Scrollable, SurfaceKind, Text, TypeRole,
+};
+use iced::widget::{column, row};
 use iced::{Alignment, Element, Length};
 use micold_core::selector::{Selector, SelectorStatus};
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, spacing};
 
 /// The folder browser as a modal surface, at transition `progress`
 /// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
@@ -26,97 +27,93 @@ pub fn modal<'a>(
     let badge_tint = icon_role(IconSurface::Badge, r);
 
     let header = row![
-        button(
+        Button::with_content(
             row![
-                icon(Icon::NavigateUp, type_scale::BODY, on_surface_tint),
-                text("Up").size(type_scale::BODY),
+                Glyph::new(Icon::NavigateUp, TypeRole::Body, r).tint(on_surface_tint),
+                Text::new("Up", TypeRole::Body, r),
             ]
             .spacing(spacing::XS)
-            .align_y(Alignment::Center)
+            .align_y(Alignment::Center),
+            ButtonVariant::Outlined,
+            r
         )
-        .on_press(Message::SelectorNavigatedUp)
-        .style(style::outlined(r)),
-        text(selector.current_dir.display().to_string())
-            .size(type_scale::LABEL)
-            .style(style::muted(r)),
+        .on_press(Message::SelectorNavigatedUp),
+        Text::new(selector.current_dir.display().to_string(), TypeRole::Label, r).muted(),
     ]
     .spacing(spacing::SM)
     .align_y(iced::Alignment::Center);
 
     let body: Element<'a, Message> = match &selector.status {
-        SelectorStatus::Loading => text("Loading…").size(type_scale::BODY).into(),
-        SelectorStatus::Error(message) => text(format!("Cannot read this folder: {message}"))
-            .size(type_scale::BODY)
-            .style(style::muted(r))
-            .into(),
+        SelectorStatus::Loading => Text::new("Loading…", TypeRole::Body, r).into(),
+        SelectorStatus::Error(message) => Text::new(
+            format!("Cannot read this folder: {message}"),
+            TypeRole::Body,
+            r,
+        )
+        .muted()
+        .into(),
         SelectorStatus::Ready => {
             let mut list = column![].spacing(spacing::XS);
             if selector.entries.is_empty() {
-                list = list.push(
-                    text("(no subfolders here)")
-                        .size(type_scale::BODY)
-                        .style(style::muted(r)),
-                );
+                list = list.push(Text::new("(no subfolders here)", TypeRole::Body, r).muted());
             } else {
                 for entry in &selector.entries {
                     // Git repositories are marked with a "git" badge (FR-006).
-                    let mut label = row![text(entry.name.clone())
-                        .size(type_scale::BODY)
-                        .width(Length::Fill)]
-                    .spacing(spacing::SM)
-                    .align_y(iced::Alignment::Center);
+                    let mut label =
+                        row![Text::new(entry.name.clone(), TypeRole::Body, r).width(Length::Fill)]
+                            .spacing(spacing::SM)
+                            .align_y(iced::Alignment::Center);
                     if entry.is_git_repo {
                         label = label.push(
                             row![
-                                icon(Icon::Git, type_scale::LABEL, badge_tint),
-                                text("git").size(type_scale::LABEL).style(style::muted(r)),
+                                Glyph::new(Icon::Git, TypeRole::Label, r).tint(badge_tint),
+                                Text::new("git", TypeRole::Label, r).muted(),
                             ]
                             .spacing(spacing::XS)
                             .align_y(Alignment::Center),
                         );
                     }
                     list = list.push(
-                        button(label)
+                        Button::with_content(label, ButtonVariant::Text, r)
                             .on_press(Message::SelectorNavigatedInto(entry.path.clone()))
-                            .width(Length::Fill)
-                            .style(style::text_button(r)),
+                            .width(Length::Fill),
                     );
                 }
             }
-            scrollable(list).height(Length::Fill).into()
+            Scrollable::new(list, r).height(Length::Fill).into()
         }
     };
 
     let actions = row![
-        button(
+        Button::with_content(
             row![
-                icon(Icon::OpenProject, type_scale::BODY, on_primary_tint),
-                text("Open this folder").size(type_scale::BODY),
+                Glyph::new(Icon::OpenProject, TypeRole::Body, r).tint(on_primary_tint),
+                Text::new("Open this folder", TypeRole::Body, r),
             ]
             .spacing(spacing::XS)
-            .align_y(Alignment::Center)
+            .align_y(Alignment::Center),
+            ButtonVariant::Filled,
+            r
         )
-        .on_press(Message::FolderChosen(selector.current_dir.clone()))
-        .style(style::filled(r)),
-        button(text("Cancel").size(type_scale::BODY))
-            .on_press(Message::ProjectSelectorClosed)
-            .style(style::outlined(r)),
+        .on_press(Message::FolderChosen(selector.current_dir.clone())),
+        Button::outlined("Cancel", r).on_press(Message::ProjectSelectorClosed),
     ]
     .spacing(spacing::SM);
 
-    let dialog = container(
+    let dialog = material::Surface::new(
         column![
-            text("Open a project").size(type_scale::HEADLINE),
+            Text::new("Open a project", TypeRole::Headline, r),
             header,
             body,
             actions
         ]
         .spacing(spacing::MD),
+        SurfaceKind::Dialog,
+        r,
     )
     .padding(spacing::MD)
     .width(Length::Fixed(560.0))
-    .height(Length::Fixed(420.0))
-    .style(style::dialog(r));
+    .height(Length::Fixed(420.0));
 
     Modal::new(dialog, r).progress(progress).into()
 }

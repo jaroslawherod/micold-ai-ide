@@ -2,14 +2,13 @@
 //! 006, FR-019/FR-020). Currently exposes the embedded-terminal scrollback limit.
 
 use crate::app::{Message, SettingsDraft};
-use micold_core::tokens::{self, spacing, type_scale};
 use crate::ui::cdk::overlay::Surface;
-use crate::ui::material::Modal;
-use crate::ui::style;
-use iced::widget::{button, checkbox, column, container, row, text, text_input};
+use crate::ui::material::{self, Button, Checkbox, Modal, SurfaceKind, Text, TextField, TypeRole};
+use iced::widget::{column, row};
 use iced::Length;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, spacing};
 
 /// The failure category + diagnostic text for the most recent environment-include resolution
 /// attempt, or `None` when it succeeded (or the feature is disabled) — FR-012/FR-013.
@@ -36,38 +35,27 @@ pub fn modal<'a>(
 ) -> Option<Surface<'a, Message>> {
     let r = tokens::roles(scheme);
 
-    let input = text_input("Scrollback lines", &draft.scrollback_lines)
+    let input = TextField::new("Scrollback lines", &draft.scrollback_lines, r)
         .on_input(Message::SettingsScrollbackChanged)
-        .on_submit(Message::SettingsSaved)
-        .padding(spacing::SM)
-        .style(style::input(r));
+        .on_submit(Message::SettingsSaved);
 
     // Environment-include: enabled flag, script path, timeout — grouped as one visually
     // distinct set, separate from the scrollback field above (FR-015).
-    let env_include_enabled_checkbox = checkbox(draft.env_include_enabled)
-        .label("Enabled")
-        .on_toggle(Message::SettingsEnvIncludeEnabledToggled)
-        .style(style::checkbox(r));
-    let env_include_path_input = text_input("Script path", &draft.env_include_script_path)
+    let env_include_enabled_checkbox = Checkbox::new("Enabled", draft.env_include_enabled, r)
+        .on_toggle(Message::SettingsEnvIncludeEnabledToggled);
+    let env_include_path_input = TextField::new("Script path", &draft.env_include_script_path, r)
         .on_input(Message::SettingsEnvIncludePathChanged)
-        .on_submit(Message::SettingsSaved)
-        .padding(spacing::SM)
-        .style(style::input(r));
-    let env_include_timeout_input = text_input("Timeout (seconds)", &draft.env_include_timeout)
-        .on_input(Message::SettingsEnvIncludeTimeoutChanged)
-        .on_submit(Message::SettingsSaved)
-        .padding(spacing::SM)
-        .style(style::input(r));
+        .on_submit(Message::SettingsSaved);
+    let env_include_timeout_input =
+        TextField::new("Timeout (seconds)", &draft.env_include_timeout, r)
+            .on_input(Message::SettingsEnvIncludeTimeoutChanged)
+            .on_submit(Message::SettingsSaved);
 
     let mut fields = column![
-        text("Settings").size(type_scale::HEADLINE),
-        text("Terminal scrollback limit (lines)")
-            .size(type_scale::LABEL)
-            .style(style::muted(r)),
+        Text::new("Settings", TypeRole::Headline, r),
+        Text::new("Terminal scrollback limit (lines)", TypeRole::Label, r).muted(),
         input,
-        text("Environment include")
-            .size(type_scale::LABEL)
-            .style(style::muted(r)),
+        Text::new("Environment include", TypeRole::Label, r).muted(),
         env_include_enabled_checkbox,
         env_include_path_input,
         env_include_timeout_input,
@@ -75,43 +63,25 @@ pub fn modal<'a>(
     .spacing(spacing::MD);
 
     if let Some((label, diagnostic)) = failure_label_and_diagnostic(env_include_outcome) {
-        fields = fields.push(text(label).size(type_scale::LABEL).style(
-            move |_theme: &iced::Theme| iced::widget::text::Style {
-                color: Some(style::color(r.error)),
-            },
-        ));
+        fields = fields.push(Text::new(label, TypeRole::Label, r).tint(r.error));
         if !diagnostic.is_empty() {
-            fields = fields.push(
-                text(diagnostic.to_string())
-                    .size(type_scale::LABEL)
-                    .style(style::muted(r)),
-            );
+            fields = fields.push(Text::new(diagnostic, TypeRole::Label, r).muted());
         }
     }
 
     if let Some(error) = &draft.error {
-        let error = error.clone();
-        fields = fields.push(text(error).size(type_scale::LABEL).style(
-            move |_theme: &iced::Theme| iced::widget::text::Style {
-                color: Some(style::color(r.error)),
-            },
-        ));
+        fields = fields.push(Text::new(error.clone(), TypeRole::Label, r).tint(r.error));
     }
 
     let actions = row![
-        button(text("Save").size(type_scale::BODY))
-            .on_press(Message::SettingsSaved)
-            .style(style::filled(r)),
-        button(text("Cancel").size(type_scale::BODY))
-            .on_press(Message::SettingsCancelled)
-            .style(style::outlined(r)),
+        Button::filled("Save", r).on_press(Message::SettingsSaved),
+        Button::outlined("Cancel", r).on_press(Message::SettingsCancelled),
     ]
     .spacing(spacing::SM);
 
-    let dialog = container(fields.push(actions))
+    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
         .padding(spacing::LG)
-        .width(Length::Fixed(420.0))
-        .style(style::dialog(r));
+        .width(Length::Fixed(420.0));
 
     Modal::new(dialog, r).progress(progress).into()
 }

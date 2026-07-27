@@ -124,15 +124,15 @@ fn raw_size_references(code: &str) -> usize {
 // ---------------------------------------------------------------------------
 
 /// Feature-module lines constructing a wrapped rendering widget. Measured baseline: **86** across
-/// the 13 modules research R2 counted; seven remain. Lines rather than modules, because "13 modules leak" does
+/// the 13 modules research R2 counted; five remain. Lines rather than modules, because "13 modules leak" does
 /// not shrink until a module reaches zero, and this needs to move on every migration.
-const WIDGET_BUDGET: usize = 65;
+const WIDGET_BUDGET: usize = 50;
 
 /// Feature-module lines referencing the styling layer. Measured baseline: **113**.
-const STYLE_BUDGET: usize = 83;
+const STYLE_BUDGET: usize = 62;
 
 /// Feature-module lines selecting a raw text size. Measured baseline: **114**.
-const RAW_SIZE_BUDGET: usize = 86;
+const RAW_SIZE_BUDGET: usize = 65;
 
 fn totals() -> (usize, usize, usize) {
     let mut widgets = 0;

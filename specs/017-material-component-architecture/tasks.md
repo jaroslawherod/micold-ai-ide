@@ -113,10 +113,10 @@ Test command: `mise run test` (`cargo test --workspace`).
 ## Phase 5: User Story 1 (continued) - Migrate the feature modules
 
 - [ ] T026 [P] [US1] Migrate `crates/micold-client/src/ui/shell.rs` onto the wrappers (FR-001, FR-002)
-- [ ] T027 [P] [US1] Migrate `crates/micold-client/src/ui/project_selector.rs` onto the wrappers (FR-001, FR-002)
+- [X] T027 [P] [US1] Migrate `crates/micold-client/src/ui/project_selector.rs` onto the wrappers (FR-001, FR-002)
 - [ ] T028 [P] [US1] Migrate `crates/micold-client/src/ui/worktree_form.rs` onto the wrappers (FR-001, FR-002) — the largest module
 - [X] T029 [P] [US1] Migrate `crates/micold-client/src/ui/worktree_rename.rs` and `rename.rs` onto the wrappers (FR-001, FR-002)
-- [ ] T030 [P] [US1] Migrate `crates/micold-client/src/ui/settings_form.rs` onto the wrappers (FR-001, FR-002)
+- [X] T030 [P] [US1] Migrate `crates/micold-client/src/ui/settings_form.rs` onto the wrappers (FR-001, FR-002)
 - [X] T031 [P] [US1] Migrate `crates/micold-client/src/ui/about.rs` onto the wrappers (FR-001, FR-002)
 - [X] T032 [P] [US1] Migrate `crates/micold-client/src/ui/confirm_delete.rs`, `confirm_forget.rs` and `confirm_session_remove.rs` onto the wrappers (FR-001, FR-002)
 - [ ] T033 [P] [US1] Migrate `crates/micold-client/src/ui/terminal.rs` onto the wrappers (FR-001, FR-002), leaving the terminal canvas itself untouched
