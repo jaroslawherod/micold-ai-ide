@@ -22,6 +22,7 @@ use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, Te
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
+use micold_core::worktree::{CreateMode, CreateStage};
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
@@ -151,7 +152,7 @@ fn worktrees_for(snapshot: &CatalogSnapshot, project: &Path) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn worktree_create_duplicate_branch_is_rejected_without_side_effects() {
+async fn worktree_create_on_a_taken_branch_with_new_branch_mode_is_refused_without_side_effects() {
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
     init_git_repo(project.path());
@@ -170,6 +171,7 @@ async fn worktree_create_duplicate_branch_is_rejected_without_side_effects() {
             project: project.path().to_path_buf(),
             branch: "feature/dup".into(),
             dir_name: "dup".into(),
+            mode: CreateMode::NewBranch,
         }))
         .await
         .unwrap();
@@ -179,9 +181,12 @@ async fn worktree_create_duplicate_branch_is_rejected_without_side_effects() {
     })
     .await;
     match reply {
-        // A duplicate branch is caught pre-flight → the specific, actionable AlreadyExists (not a
-        // generic GitFailed): no git mutation was attempted, so there is nothing to roll back.
-        DaemonMsg::OperationError { kind, .. } => assert_eq!(kind, ErrorKind::AlreadyExists),
+        // Feature 016 changed what this means. An existing branch is no longer an error in itself
+        // — it is a decision the client resolves first (reuse / overwrite / cancel). Asking for
+        // `NewBranch` on a name that is already taken is therefore a *stale answer*: pre-flight
+        // re-runs daemon-side and refuses before any git mutation (FR-009), so there is still
+        // nothing to roll back.
+        DaemonMsg::OperationError { kind, .. } => assert_eq!(kind, ErrorKind::Refused),
         other => panic!("expected OperationError, got {other:?}"),
     }
 
@@ -219,6 +224,7 @@ async fn worktree_create_git_failure_reports_stderr_and_leaves_no_dir() {
             project: project.path().to_path_buf(),
             branch: "bad..branch".into(),
             dir_name: "bad".into(),
+            mode: CreateMode::NewBranch,
         }))
         .await
         .unwrap();
@@ -260,6 +266,7 @@ async fn worktree_create_succeeds_and_propagates() {
             project: project.path().to_path_buf(),
             branch: "feature/new".into(),
             dir_name: "new".into(),
+            mode: CreateMode::NewBranch,
         }))
         .await
         .unwrap();
@@ -707,4 +714,255 @@ async fn attach_prunes_empty_sessions_but_keeps_live_ones() {
             "an idle, no-conversation session is pruned once observed"
         );
     }
+}
+
+// =======================================================================================
+// Feature 016 — the existing-branch flow end-to-end through the daemon.
+//
+// These are the tests `FakeGit` cannot give: real git, real RPCs, real wire types.
+// =======================================================================================
+
+/// FR-001/FR-004: reusing an existing branch creates the worktree ON it, history intact.
+#[tokio::test]
+async fn worktree_create_can_reuse_an_existing_branch() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+    create_branch(project.path(), "feature/reuse");
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeCreate {
+            req: 1,
+            project: project.path().to_path_buf(),
+            branch: "feature/reuse".into(),
+            dir_name: "reuse".into(),
+            mode: CreateMode::ReuseLocal,
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 1, .. })
+    })
+    .await;
+    assert!(matches!(reply, DaemonMsg::OperationOk { .. }));
+
+    // On the branch it was told to reuse — not a new one.
+    let head = Command::new("git")
+        .arg("-C")
+        .arg(project.path().join(".claude/worktrees/reuse"))
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .expect("git runs");
+    assert_eq!(
+        String::from_utf8_lossy(&head.stdout).trim(),
+        "feature/reuse"
+    );
+}
+
+/// FR-021: a branch checked out elsewhere is refused by name, not with a bare git failure.
+#[tokio::test]
+async fn worktree_create_on_a_branch_held_by_the_project_checkout_is_refused() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    // The repository's own current branch.
+    let current = Command::new("git")
+        .arg("-C")
+        .arg(project.path())
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .expect("git runs");
+    let current = String::from_utf8_lossy(&current.stdout).trim().to_string();
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeCreate {
+            req: 1,
+            project: project.path().to_path_buf(),
+            branch: current.clone(),
+            dir_name: "held".into(),
+            mode: CreateMode::ReuseLocal,
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationError { req: 1, .. })
+    })
+    .await;
+    match reply {
+        DaemonMsg::OperationError { kind, message, .. } => {
+            assert_eq!(kind, ErrorKind::Busy);
+            assert!(
+                message.contains(&current) && message.contains("project"),
+                "the message must name the branch and its holder, got: {message}"
+            );
+        }
+        other => panic!("expected OperationError, got {other:?}"),
+    }
+}
+
+/// FR-001: pre-flight classifies over the wire and mutates nothing.
+#[tokio::test]
+async fn branch_preflight_reports_an_existing_branch_without_touching_anything() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+    create_branch(project.path(), "feature/exists");
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    client
+        .send(Frame::Control(ClientMsg::BranchPreflight {
+            req: 1,
+            project: project.path().to_path_buf(),
+            branch: "feature/exists".into(),
+            dir_name: "exists".into(),
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 1, .. })
+    })
+    .await;
+    match reply {
+        DaemonMsg::OperationOk {
+            result: OperationResult::BranchPreflight { situation },
+            ..
+        } => assert_eq!(
+            situation,
+            micold_core::worktree::BranchSituation::LocalAvailable {
+                branch: "feature/exists".into()
+            }
+        ),
+        other => panic!("expected a BranchPreflight result, got {other:?}"),
+    }
+
+    // Read-only: no worktree directory appeared.
+    assert!(!project.path().join(".claude/worktrees/exists").exists());
+}
+
+/// FR-011/FR-012: the picker's list arrives over the wire, with the held branch marked.
+#[tokio::test]
+async fn branch_list_returns_candidates_with_block_reasons() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+    create_branch(project.path(), "feature/free");
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    client
+        .send(Frame::Control(ClientMsg::BranchList {
+            req: 1,
+            project: project.path().to_path_buf(),
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 1, .. })
+    })
+    .await;
+    match reply {
+        DaemonMsg::OperationOk {
+            result: OperationResult::BranchList { candidates },
+            ..
+        } => {
+            let free = candidates
+                .iter()
+                .find(|c| c.name == "feature/free")
+                .expect("the free branch is listed");
+            assert!(free.is_available());
+            // The project's own checkout is listed too — visible, but marked unavailable.
+            assert!(
+                candidates.iter().any(|c| !c.is_available()),
+                "the branch held by the project checkout must be listed as unavailable: {candidates:?}"
+            );
+        }
+        other => panic!("expected a BranchList result, got {other:?}"),
+    }
+}
+
+/// FR-024 — the daemon streams the stage as the create advances, so the client can name the step
+/// being performed. The *wording* is the client's; what must arrive here is the stage itself, in
+/// order, before the terminal reply.
+#[tokio::test]
+async fn worktree_create_streams_its_stages_before_the_terminal_reply() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+    create_branch(project.path(), "feature/staged");
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeCreate {
+            req: 1,
+            project: project.path().to_path_buf(),
+            branch: "feature/staged".into(),
+            dir_name: "staged".into(),
+            mode: CreateMode::ReuseLocal,
+        }))
+        .await
+        .unwrap();
+
+    // Collect the progress pushes that precede the terminal reply.
+    let mut stages = Vec::new();
+    loop {
+        let msg = expect_control(&mut client, |m| {
+            matches!(
+                m,
+                DaemonMsg::OperationProgress { req: 1, .. } | DaemonMsg::OperationOk { req: 1, .. }
+            )
+        })
+        .await;
+        match msg {
+            DaemonMsg::OperationProgress { stage, .. } => stages.push(stage),
+            DaemonMsg::OperationOk { .. } => break,
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    assert_eq!(
+        stages,
+        vec![CreateStage::PreflightCheck, CreateStage::CreatingWorktree],
+        "the stages a successful create passes through, each reported once"
+    );
+    // And the client can word them for the mode it asked for — the point of FR-024.
+    assert_eq!(
+        stages[1].label(&CreateMode::ReuseLocal),
+        "Checking out existing branch"
+    );
 }

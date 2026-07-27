@@ -17,6 +17,7 @@ use micold_core::protocol::messages::{
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{SessionId, SessionLabel};
+use micold_core::worktree::{CreateMode, CreateStage};
 use uuid::Uuid;
 
 fn sid() -> SessionId {
@@ -115,6 +116,35 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             project: PathBuf::from("/a"),
             branch: "feat/x".into(),
             dir_name: "feat-x".into(),
+            mode: CreateMode::NewBranch,
+        },
+        // Feature 016: the non-default modes and both read-only branch queries must survive the
+        // wire too — `TrackRemote` carries a payload, so it is the interesting one.
+        ClientMsg::WorktreeCreate {
+            req: 41,
+            project: PathBuf::from("/a"),
+            branch: "feat/x".into(),
+            dir_name: "feat-x".into(),
+            mode: CreateMode::ReuseLocal,
+        },
+        ClientMsg::WorktreeCreate {
+            req: 42,
+            project: PathBuf::from("/a"),
+            branch: "feat/x".into(),
+            dir_name: "feat-x".into(),
+            mode: CreateMode::TrackRemote {
+                remote: "origin".into(),
+            },
+        },
+        ClientMsg::BranchPreflight {
+            req: 43,
+            project: PathBuf::from("/a"),
+            branch: "feat/x".into(),
+            dir_name: "feat-x".into(),
+        },
+        ClientMsg::BranchList {
+            req: 44,
+            project: PathBuf::from("/a"),
         },
         ClientMsg::WorktreeDelete {
             req: 5,
@@ -255,6 +285,10 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             by: "other-client".into(),
         },
         DaemonMsg::Pong { nonce: 5 },
+        DaemonMsg::OperationProgress {
+            req: 7,
+            stage: CreateStage::CreatingWorktree,
+        },
         DaemonMsg::CatalogChanged {
             catalog: sample_catalog(),
         },

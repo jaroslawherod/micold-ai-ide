@@ -209,3 +209,91 @@ fn display_name_never_empty() {
         assert!(!display_name(name).is_empty());
     }
 }
+
+// =======================================================================================
+// Feature 016 — the branch → directory inverse mapping (FR-014).
+// =======================================================================================
+
+use micold_core::naming::dir_name_from_branch;
+
+#[test]
+fn dir_name_from_branch_inverts_the_derive_mapping() {
+    // The round trip that matters: a branch `derive()` would have produced maps back to the
+    // directory `derive()` would have produced alongside it.
+    for (type_, ticket, name) in [
+        ("feat", Some("abc-123"), "login page"),
+        ("fix", None, "crash on start"),
+        ("chore", Some("x1"), "bump deps"),
+    ] {
+        let derived = derive(&WorktreeNaming {
+            type_: ConventionalType::from_token(type_),
+            ticket: ticket.map(str::to_string),
+            name: name.to_string(),
+        })
+        .unwrap();
+        assert_eq!(
+            dir_name_from_branch(&derived.branch),
+            derived.dir_name,
+            "branch {} should map back to its own directory",
+            derived.branch
+        );
+    }
+}
+
+#[test]
+fn dir_name_from_branch_flattens_every_segment() {
+    assert_eq!(
+        dir_name_from_branch("feat/abc-123-login"),
+        "feat-abc-123-login"
+    );
+    assert_eq!(dir_name_from_branch("main"), "main");
+    assert_eq!(
+        dir_name_from_branch("feature/JIRA-9/Fix Thing"),
+        "feature-jira-9-fix-thing"
+    );
+}
+
+#[test]
+fn dir_name_from_branch_slugifies_each_segment() {
+    // Uppercase folded, punctuation collapsed to single dashes, no leading/trailing dash.
+    assert_eq!(dir_name_from_branch("Feat/Login_Page!"), "feat-login-page");
+    assert_eq!(dir_name_from_branch("a//b"), "a-b");
+    assert_eq!(
+        dir_name_from_branch("/leading/trailing/"),
+        "leading-trailing"
+    );
+}
+
+#[test]
+fn dir_name_from_branch_keeps_the_windows_reserved_name_guard() {
+    // Inherited from `slugify` — a directory literally named `con` is unusable on Windows
+    // (Constitution Principle VI).
+    assert_eq!(dir_name_from_branch("con"), "con-wt");
+    assert_eq!(dir_name_from_branch("feat/con"), "feat-con-wt");
+}
+
+#[test]
+fn dir_name_from_branch_yields_empty_when_nothing_usable_remains() {
+    // Callers treat empty as "cannot derive a directory" rather than creating `.claude/worktrees/`.
+    assert_eq!(dir_name_from_branch("///"), "");
+    assert_eq!(dir_name_from_branch("!!!"), "");
+}
+
+#[test]
+fn dir_name_from_branch_output_is_always_a_valid_directory_segment() {
+    for branch in [
+        "feat/x",
+        "Feat/ABC-1/Some Name",
+        "release/v1.2.3",
+        "a/b/c/d",
+    ] {
+        let dir = dir_name_from_branch(branch);
+        assert!(!dir.is_empty());
+        assert!(!dir.starts_with('-') && !dir.ends_with('-'), "{dir}");
+        assert!(
+            dir.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
+            "{dir} must be [a-z0-9-] only"
+        );
+    }
+}

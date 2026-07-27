@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::session::{SessionId, SessionLabel, ShellInstanceId};
+use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
 // ---------------------------------------------------------------------------------------------
 // Client → Daemon
@@ -191,6 +192,32 @@ pub enum ClientMsg {
         branch: String,
         /// Worktree directory name.
         dir_name: String,
+        /// How to obtain the branch: a fresh one, an existing local one, a forced replacement, or
+        /// one tracking a remote (feature 016). The daemon re-verifies this against a fresh
+        /// pre-flight before acting (FR-009).
+        mode: CreateMode,
+    },
+    /// Classify what stands between the user and a new worktree on `branch`, so the client can
+    /// offer reuse/overwrite instead of failing (feature 016, FR-001). Read-only — the daemon
+    /// mutates nothing while answering this.
+    BranchPreflight {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// Branch name the client derived or the user selected.
+        branch: String,
+        /// Worktree directory name that would be created, for the directory-clash check.
+        dir_name: String,
+    },
+    /// List every local and remote-tracking branch, annotated with why each is unavailable, for
+    /// the existing-branch picker (feature 016, FR-011). Reads local ref storage only — the daemon
+    /// never contacts a remote for this (FR-020).
+    BranchList {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
     },
     /// Delete a worktree. `stop_sessions` MUST be true if sessions are live, else it fails (W2).
     WorktreeDelete {
@@ -314,6 +341,19 @@ pub enum DaemonMsg {
     CatalogChanged {
         /// The new snapshot.
         catalog: CatalogSnapshot,
+    },
+    /// A long-running operation reached a new stage (feature 016, FR-024).
+    ///
+    /// Pushed between the request and its `OperationOk`/`OperationError`, so the client can name
+    /// the step actually being performed instead of a generic "working…". Lossy by nature: a
+    /// client that misses one simply shows the next stage, and the terminal reply is what closes
+    /// the operation. Only the *stage* travels — the wording is the client's, derived from the
+    /// stage and the mode it asked for.
+    OperationProgress {
+        /// Correlation id of the in-flight request.
+        req: u64,
+        /// The stage that operation just entered.
+        stage: CreateStage,
     },
     /// A single session's summary changed.
     SessionChanged {
@@ -596,6 +636,16 @@ pub enum OperationResult {
     WorktreeCreated {
         /// The new worktree's directory name.
         dir_name: String,
+    },
+    /// The classification of a branch name (feature 016, FR-001).
+    BranchPreflight {
+        /// What stands between the user and a new worktree on that name.
+        situation: BranchSituation,
+    },
+    /// The repository's branches for the picker (feature 016, FR-011).
+    BranchList {
+        /// Every branch, ordered and annotated with any block reason.
+        candidates: Vec<BranchCandidate>,
     },
 }
 

@@ -2,12 +2,26 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "packages": {
     ".": {
-      "release-type": "rust",
+      "release-type": "simple",
+      "component": "micold-ai-ide",
       "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
       "include-v-in-tag": true,
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": false,
-      "draft": true
+      "draft": true,
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value === \"micold-core\" || @.name.value === \"micold-daemon\" || @.name.value === \"micold-client\")].version"
+        }
+      ]
     }
   }
 }

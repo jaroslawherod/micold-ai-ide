@@ -131,7 +131,16 @@ is unnecessary overhead this avoids.
 
 ## Creating a worktree
 
-Click **add** in the sidebar header to open the New worktree form:
+Click **add** in the sidebar header to open the New worktree form. At the top, two chips choose
+where the worktree's branch comes from:
+
+- **New branch** (the default) — describe the work and the app derives a fresh branch name.
+- **Existing branch** — pick a branch that already exists. See
+  [Working from an existing branch](#working-from-an-existing-branch) below.
+
+### Creating a new branch
+
+With **New branch** selected:
 
 1. **Type** — a select control: click it to open a list of every Conventional-Commits type
    (`feat`, `fix`, `chore`, `docs`, …), then click one to choose it. The control always shows the
@@ -149,15 +158,21 @@ worktree at `.claude/worktrees/feat-abc-123-login-page`. With no ticket, `chore`
 `chore/cleanup`. Illegal characters in the ticket or name are automatically simplified (slugified).
 
 Creating a worktree makes the new git branch and worktree for you — no manual git commands. If the
-name collides with an existing worktree or branch, creation is blocked with a message. If anything
-fails partway, the app rolls back so no half-created branch or directory is left behind.
+derived name collides with a branch that already exists, the app asks what you want to do rather
+than refusing — see [Working from an existing branch](#working-from-an-existing-branch). If the
+worktree *folder* already exists, creation is blocked with a message, because no branch choice can
+resolve that. If anything fails partway, the app rolls back so no half-created branch or directory
+is left behind.
 
 If the project uses git submodules, they're fetched automatically as part of creating the
 worktree — including submodules nested inside other submodules — so the new worktree is ready to
 use immediately, with no extra `git submodule` commands to run yourself. Projects without
 submodules are unaffected. While a worktree is being created, the form shows a progress bar
-alongside a short description of what's currently happening (for example "Checking for naming
-conflicts," "Creating branch and worktree," or "Setting up submodules") — the description only
+alongside a short description of what's currently happening. That description names the step for
+what you actually chose — "Checking out existing branch" when you reused one, "Replacing branch and
+creating worktree" when you overwrote one, "Creating tracking branch and worktree" when you
+continued from a remote, and "Creating branch and worktree" for an ordinary new branch — followed by
+"Setting up submodules" where they apply — the description only
 ever names a step that's actually part of this creation, so a repository without submodules never
 shows a submodule-related step. This can take a little longer than usual for a repository with
 submodules to fetch, so seeing the description change (rather than a single static message) is
@@ -170,6 +185,58 @@ back the same way any other creation failure is, and the error names the submodu
 and why, so you can fix the problem and try again.
 
 > Naming formats are fixed in this version and are intended to become configurable later.
+
+## Working from an existing branch
+
+Work doesn't always start in this app. You might have begun a branch in a terminal, pushed one
+from another machine, or been handed one by a colleague. Either route below brings it into a
+worktree without leaving the app.
+
+### Picking the branch from a list
+
+Choose the **Existing branch** chip in the New worktree form and pick from the list. Each row
+shows the branch name and, for a branch that only exists on a remote, which remote it came from:
+
+| Row | Meaning |
+|-----|---------|
+| `feat/login` | A local branch, ready to use. |
+| `feat/reporting · origin` | Exists on `origin`, not yet on this machine. |
+| `feat/login · in use by feat-login` | Already checked out in that worktree — not available. |
+| `main · in use by the project checkout` | The project's own current branch — not available. |
+
+The worktree folder is derived from the branch name — `feat/abc-123-login` becomes
+`.claude/worktrees/feat-abc-123-login` — and the form shows it before you create.
+
+> **Remote branches reflect your last fetch.** The app never contacts a remote here; it reads
+> only what's already in your repository. Run `git fetch` yourself first if you want the list to
+> be current.
+
+### When the name you typed is already taken
+
+If you're creating a new branch and the derived name already exists, the form asks what to do
+instead of refusing:
+
+- **Reuse branch** — create the worktree on the existing branch, with all of its commits intact.
+  This is what you want to continue work started elsewhere.
+- **Overwrite…** — discard that branch and start again from the current checkout. Asks for a
+  second confirmation first, because it destroys commits.
+- **Cancel** — change nothing. Your form entries are kept, so you can adjust and try again.
+
+If the branch exists only on a remote, the choices are **Continue from `<remote>`** (creates a
+local branch at the remote branch's tip and tracks it, so your next push goes back to the right
+place) or **Start fresh** (an ordinary new branch at the current checkout, which will diverge
+from the remote branch of the same name).
+
+> **Overwrite cannot be undone from the app.** The old commits are no longer reachable from that
+> branch. Git's reflog may still hold them for a while, but recovering from it is a manual git
+> operation the app does not offer — treat overwrite as permanent.
+
+### When a branch can't be used
+
+A branch that is already checked out somewhere can't back a second worktree — git allows a branch
+in only one place at a time. The app says so and names where it is: another worktree, or the
+project's own checkout. Neither reuse nor overwrite is offered. Open that location to continue
+there, or pick a different name.
 
 ## Managing a worktree (right-click)
 
