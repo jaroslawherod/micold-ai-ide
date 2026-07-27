@@ -131,6 +131,13 @@ Thread-per-session is comfortably within budget at this scale and is required an
       `src/ui/material/` using the chainable builder-into-`Element` API, not feature-local one-offs.
       `TerminalPane` is retargeted from `&RuntimeTerminal` to a wire grid cache but keeps its
       existing builder shape (`TerminalPane::new(..).focused(..)`).
+      **Bugfix 2026-07-27 (BUG-004)**: "shared primitive" is not satisfied by a new `material/`
+      module alone — a primitive that draws a glyph MUST source it from the shared `Icon` vocabulary
+      (feature 004 FR-002/FR-003) and render it through the `icon(..)` helper in the Material Symbols
+      font. `activity_badge.rs` satisfied the module rule but hardcoded `"\u{25CF}"`/`"\u{25CB}"`
+      into `text(..)`, which draws in iced's default font (Fira Sans); neither that font nor the
+      shipped Material font maps those codepoints, so the badge rendered as tofu. Reaching outside
+      `Icon` also escapes the `tests/icons_font.rs` build-time guard entirely (FR-016e, SC-018).
 
 ---
 
@@ -202,7 +209,8 @@ crates/
             └── material/
                 ├── terminal_pane.rs      # retargeted to the wire grid; client-side selection
                 ├── connection_banner.rs  # NEW shared primitive (builder API)
-                └── activity_badge.rs     # NEW shared primitive (builder API)
+                └── activity_badge.rs     # NEW shared primitive (builder API); glyphs MUST come
+                                          #   from `icons::Icon`, never raw literals (BUG-004)
 
 packaging/
 ├── micold-daemon.socket # systemd user unit
@@ -498,7 +506,16 @@ control plane you can read by eye is the justification for carrying two encoding
 5. **259 tests, not 63 — and the workspace split now *forces* every one to move to an owning crate.**
    *Mitigation*: W6 tracks redistribution with a per-test disposition record (FR-041 forbids silent
    deletion); W0 gates on `cargo test --workspace` staying green through the crate move.
+6. **The build-time tofu guard is only as wide as `Icon::ALL`.** `tests/icons_font.rs` (feature 004
+   T005) proves every enum variant resolves to a glyph, but it cannot see a surface that skips the
+   enum and passes a literal to `text(..)` — exactly how BUG-004 shipped. *Mitigation*: a
+   source-level guard test that fails on non-ASCII glyph literals in client UI code (T103), so the
+   invariant is defended rather than merely documented.
 
 ---
 
 **Bugfix**: 2026-07-27 — BUG-003 Updated from bugfix patch.
+
+**Bugfix**: 2026-07-27 — BUG-004 Updated from bugfix patch: annotated Principle VIII with the
+shared-`Icon` sourcing rule, marked the `activity_badge.rs` structure entry, and added Risk 6 (the
+tofu guard's blind spot). See `bugs/BUG-004.md`.

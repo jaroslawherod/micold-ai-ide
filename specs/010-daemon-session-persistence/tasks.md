@@ -180,7 +180,15 @@ close UI; cold start attaches in < 3 s (quickstart S2, S3).
 - [X] T045 [US2] Implement the loopback HTTP hook receiver: bind `127.0.0.1`/`::1` only, ephemeral port, per-session bearer token, 403 on mismatch, bounded bodies, no body logging, in `crates/micold-daemon/src/hooks.rs` (contracts/hooks.md). **Done**: `HookReceiver` binds `127.0.0.1:0` (ephemeral, never `0.0.0.0`), holds a per-session token registry, and a hand-rolled bounded HTTP/1.1 handler enforces every listener rule — POST `/hook/<uuid>` only, per-session bearer token with a bare `403` on mismatch (never revealing session existence), `MAX_HEAD`/`MAX_BODY` bounds (431/413), and bodies are never logged. Recognised hooks drive `DaemonState::note_activity` and push one `CatalogChanged`. Pure parsing (`parse_head`/`session_id_from_path`/`classify_hook`/`settings_json`) is unit-tested (9); the bind→POST→activity path incl. 403 is in `tests/hooks_receiver.rs` (3). Bound + served from `server::run`; a bind failure is non-fatal (activity degrades to `Unknown`, H1). **Re-fixed (⚠️ was reopened BUG-001, 2026-07-27)**: `settings_json()` was rejected by `claude`'s settings validator for every event (missing `matcher`/`hooks` wrapper); fixed by T086. The receiver itself (bind, token auth, bounds, no-log) was unaffected throughout.
 - [X] T046 [US2] Implement the activity FSM (hooks + `Event::Title` spinner as Working-only evidence, invariant H1a; transcript JSONL as explicitly-degraded fallback) in `crates/micold-daemon/src/activity.rs`; write the per-session `--settings` file so user config is never modified. **Done**: the FSM core (`Activity`/`ActivityEvent`/`HookKind`/`is_spinner_title`) is now wired end-to-end. Each `LiveSession` owns an `Activity`; hooks feed it via `note_activity` (T045); the `DaemonListener` captures a braille-spinner edge from the *raw* OSC title (before glyph-strip) into `VtSignals`, and `DaemonState::drain_signals` (on the supervisor cadence) applies it as `SpinnerObserved`. Activity is overlaid onto every `SessionSummary` at snapshot time (never persisted, H3), so a change broadcasts one `CatalogChanged`. `spawn_claude` gets a per-session `--settings` file (`HookReceiver::prepare_settings`) so user config is untouched. Covered by `tests/activity_pipeline.rs`. (Transcript-JSONL degraded fallback remains a later refinement.) **Re-fixed (⚠️ was reopened BUG-001, 2026-07-27)**: the settings file was rejected by `claude` before any hook could fire; fixed by T086. The FSM and per-session settings-file wiring were otherwise unaffected throughout.
 - [X] T047 [US2] Adopt `Event::Title` (OSC 0) as the push-based session-title source, stripping the leading status glyph by codepoint range and treating the text as untrusted; retire the 120 ms transcript rescan (`src/main.rs:754`) and the lossy path-slug transform (`src/provider.rs:361-373`). **Done**: the `DaemonListener` captures each OSC-0 title into `VtSignals` (glyph-stripped via `strip_status_glyph`, treated as untrusted); `DaemonState::drain_signals` debounces it and overlays the live title onto each `SessionSummary` (a change → one `CatalogChanged`). The client adopts the daemon-overlaid title in `reconcile_catalog`. The 120 ms client-side transcript rescan and the lossy path-slug transform were already removed in the daemon re-architecture (the client no longer has a `provider.rs`; `main.rs:754` is now diagnostics handling).
-- [X] T048 [P] [US2] Build the `activity_badge` shared primitive (builder-into-`Element` API, Principle VIII) in `crates/micold-client/src/ui/material/activity_badge.rs`; render it in the session list for every session (FR-016d). **Done**: `ActivityBadge::new(signal, roles).into()` renders a status dot — filled accent for `Working`, filled attention for `AwaitingInput`, hollow for `Ended`, and **nothing** for `Unknown` (ambient, H2 — never a "needs you" cue the app can't justify). The signal→emphasis decision is a pure, unit-tested `emphasis()` fn. Threaded through: a transient `activity` field on the core `Session`, set from each `SessionSummary` in `reconcile_catalog`, and rendered via a new `TreeItem::badge` slot in `session_tree_item` for every session.
+- [X] T048 [P] [US2] Build the `activity_badge` shared primitive (builder-into-`Element` API, Principle VIII) in `crates/micold-client/src/ui/material/activity_badge.rs`; render it in the session list for every session (FR-016d). **Done**: `ActivityBadge::new(signal, roles).into()` renders a status dot — filled accent for `Working`, filled attention for `AwaitingInput`, hollow for `Ended`, and **nothing** for `Unknown` (ambient, H2 — never a "needs you" cue the app can't justify). The signal→emphasis decision is a pure, unit-tested `emphasis()` fn. Threaded through: a transient `activity` field on the core `Session`, set from each `SessionSummary` in `reconcile_catalog`, and rendered via a new `TreeItem::badge` slot in `session_tree_item` for every session. **Reopened
+  (BUG-004, 2026-07-27)**: the dots never reach the user — the badge hardcodes `"\u{25CF}"`/`"\u{25CB}"`
+  into `text(..)`, which draws in `iced::Font::DEFAULT` (Fira Sans). Verified with `ttf-parser`:
+  neither Fira Sans nor the shipped `MaterialSymbolsOutlined.ttf` maps U+25CF or U+25CB, so every
+  signalled session renders an identical blank box ("tofu") and the filled-vs-hollow shape encoding
+  FR-016d relies on is lost. The pure `emphasis()` decision and the signal plumbing are correct and
+  unaffected; only the glyph sourcing is wrong. **Re-fixed (⚠️ was reopened BUG-004, 2026-07-27)**:
+  T101 moved the dots into the `Icon` vocabulary and renders them through `crate::ui::icon(..)` in
+  the Material Symbols font. `emphasis()` and its unit test are byte-for-byte unchanged.
 - [X] T049 [US2] User-guide doc: attach/detach flow and what the working / awaiting-input / unknown badges mean, in `docs/daemon.md` (Principle VII). **Done**: `docs/daemon.md` gained an "Attaching, driving, and the activity badges (User Story 2)" section — attach/detach semantics, the activity-dot table (Working / Awaiting input / Unknown-shows-nothing / Ended), why absent hooks report `Unknown` rather than guessing, the "awaiting input is a strong hint not a guarantee" caveat (H4), and how the loopback receiver + OSC-title source work (and what they never log/modify).
 
 **Checkpoint**: US1 + US2 together deliver the MVP — persistent sessions you can drive.
@@ -599,7 +607,6 @@ T053 re-closed. `cargo test --workspace` (103 groups) green; `cargo clippy --wor
 -- -D warnings` and `cargo fmt --check` both clean.
 
 ---
-
 ## Dependencies & Execution Order
 
 ### Phase dependencies
@@ -654,6 +661,14 @@ T045's existing unit test; `cargo test --workspace` (98 groups) green.
 **Bugfix**: 2026-07-27 — BUG-002 Added Phase 12 (T088–T091) for build-staleness detection (FR-022a).
 See `bugs/BUG-002.md`.
 
+**Bugfix**: 2026-07-27 — BUG-004 Added Phase 17 (T101–T104); reopened then re-closed T048. The
+activity badge drew raw `●`/`○` literals in iced's default font, which maps neither codepoint, so it
+rendered as tofu. Resolved 2026-07-27: the dots are now `Icon::ActivityWorking`/`ActivityEnded`
+(`U+E837`/`U+E836`) drawn through `crate::ui::icon(..)`, pinned in `tests/icons.rs` +
+`PROVENANCE.md`, and a new `tests/ui_glyph_literals.rs` guard makes a hardcoded glyph a test failure
+rather than a runtime blank box. `mise run test` green (104 groups), `cargo clippy -D warnings` and
+`cargo fmt --check` clean. See `bugs/BUG-004.md`.
+
 ---
 
 ## Notes
@@ -673,3 +688,71 @@ Produced by `/speckit-converge` after T095–T099 (BUG-003) landed, scoped to th
 area (see the run's findings summary — not a full re-audit of every already-`[X]` task).
 
 - [X] T100 Wire `micold-client`'s `Message::SettingsSaved` handler (`crates/micold-client/src/main.rs`, ~L1674-1739) to send `ClientMsg::SettingsSet` (scrollback + the three env-include fields) to the daemon when connected, instead of relying solely on its own direct `JsonFileSettingsStore` write — a change currently only reaches a running daemon after that daemon's next restart (`Catalog::load`/`load_default` read `settings.json` exactly once at boot, `crates/micold-daemon/src/catalog.rs:42-67`), contradicting FR-012a's "a requested change MUST take effect for all sessions" and FR-012b's identical mirror (missing). **Done**: `SettingsSaved` now sends `ClientMsg::SettingsSet` with all four fields as `Some(...)` (matching the existing all-or-nothing local-save semantics — no per-field diffing) whenever `app.daemon` is connected, added a `PendingOp::SettingsSet` so a failure surfaces via the existing generic `notify_error` fallback and a disconnect-before-reply resolves to "unknown" like every other mutating RPC (T055); silently skipped when disconnected (no `notify_error`), since settings-saving already has a fully working local-only path that every other `send_op` caller lacks. **Discovered while implementing**: two more spots needed the identical fix to actually deliver "takes effect for all sessions/clients" (FR-011) rather than just scrollback — `DaemonMsg::SettingsChanged`'s handler (only synced `scrollback_lines`, never the three env-include fields, so another window's — or this client's own echoed-back — change was silently dropped) and `Message::DaemonConnected`'s handler (same gap, for the one-time welcome snapshot). Both now sync all four fields and re-source env-include (`env_include_cache.clear()` + `refresh_env_include`), mirroring the local-save path's own post-save behavior. `daemon::Outbox::new` changed from private to `pub` (not `pub(crate)` — `main.rs` is a separate binary crate from the `micold_client` library, so `pub(crate)` would not reach it) so tests can build a real `Outbox` over a manually-created channel. Added 4 tests in `main.rs`'s `mod tests` covering: the RPC is sent with the right fields; it's a silent no-op while disconnected; `DaemonConnected` adopts the daemon's authoritative env-include settings over a stale local read; `SettingsChanged` syncs all four fields. Verified: `cargo test --workspace` (103 groups) green; `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo fmt --check` clean.
+
+
+---
+
+## Phase 17: Bugfix BUG-004 — the activity badge renders as tofu
+
+**Goal**: the session-list activity dot is drawn from raw `●`/`○` literals in iced's default font,
+which maps neither codepoint, so every signalled session shows an identical blank box instead of the
+filled/hollow dot FR-016d promises. T048 (Phase 4, above) is reopened for this. Fixing it also closes
+the gap that let it ship: the build-time tofu guard only covers `Icon::ALL`, so any surface that skips
+the enum escapes it (FR-016e, SC-018). See `bugs/BUG-004.md`.
+
+- [X] T101 [US2] Add the activity-dot glyphs to the closed `Icon` enum in
+  `crates/micold-client/src/icons.rs` (`Icon::ActivityWorking` filled, `Icon::ActivityEnded` hollow),
+  add them to `Icon::ALL`, and render the badge through the existing `icon(..)` helper instead of
+  `text("\u{25CF}")` in `crates/micold-client/src/ui/material/activity_badge.rs` (FR-016d, FR-016e).
+  Keep the pure `emphasis()` fn and its unit test unchanged — the signal→emphasis decision was never
+  at fault. Depends on T048 (reopened above). **Done**: `Icon::ActivityWorking` → `U+E837`
+  (`radio_button_checked`), `Icon::ActivityEnded` → `U+E836` (`radio_button_unchecked`); the badge's
+  `From<ActivityBadge> for Element` now returns `icon(glyph, badge.size, color)` and no longer
+  imports `text`/`style`. `emphasis()` and its test are byte-for-byte unchanged.
+  **Correction to this task's own premise**: the codepoints it proposed are wrong. The shipped font
+  is a static instance pinned at **FILL=0**, and at that axis value `circle` (`EF4A`), `lens`
+  (`E3FA`) and `fiber_manual_record` (`E061`) all rasterize as *rings*, not solid discs — verified
+  by rendering them out of the shipped file. Using them would have replaced one bug with a subtler
+  one: two identical-looking rings, failing SC-018's shape-distinctness while passing every glyph
+  presence check. `radio_button_checked` is the only same-diameter glyph in this file with a
+  genuinely filled centre. Rasterized at the real badge size (`sidebar::TAG` = 10px): Working =
+  ring with filled centre (ink 21.6), Ended = empty ring (ink 13.2) — visibly distinct by shape.
+- [X] T102 [P] [US2] Record the two new glyphs in `assets/fonts/PROVENANCE.md`'s "Curated icon →
+  glyph name → codepoint" table and lock their codepoints in `crates/micold-client/tests/icons.rs`,
+  matching the existing per-variant rows (feature 004 FR-003 pinning convention). The existing
+  `tests/icons_font.rs::every_icon_codepoint_has_a_glyph` then covers them automatically, since it
+  iterates `Icon::ALL`. Depends on T101. **Done**: both rows added to the PROVENANCE table plus a
+  note recording *why* they are radio-button glyphs (the FILL=0 finding above), so a future
+  maintainer picking by icon name is warned. `tests/icons.rs` pins both codepoints and the curated
+  set size moves 26 → 28. `every_icon_codepoint_has_a_glyph` passes over the widened `Icon::ALL`.
+- [X] T103 [P] [US2] Close the guard gap that let BUG-004 ship: add a source-level test asserting no
+  client UI source file hardcodes an icon glyph — the check that would have failed at build time on
+  T048's `"\u{25CF}"` (SC-018, feature 004 SC-005). Scope it to `crates/micold-client/src/ui/` so it
+  states the real invariant ("every glyph the UI draws comes from `Icon`") without tripping on
+  ordinary non-ASCII copy elsewhere. Independent of T101/T102 — it must FAIL against the current
+  tree and pass after T101 (Principle I). **Done**: `crates/micold-client/tests/ui_glyph_literals.rs`
+  scans every `src/ui/**/*.rs`, extracts string/char literals (skipping comments, decoding `\u{..}`
+  escapes) and flags any character in the icon-like Unicode blocks — Geometric Shapes, Dingbats,
+  Braille, Arrows, Box Drawing, Private Use Area, Misc Symbols/Pictographs. Confirmed RED first on
+  exactly the three real offenders (`activity_badge.rs:77/78/79`), GREEN after T101.
+  **Two rejected earlier framings**, both worth recording: (a) scoping the check to "a literal
+  passed as the first argument of `text(`" *missed the actual bug*, because the badge passed a
+  variable, not a literal — the guard must scan literals wherever they appear; (b) flagging any
+  non-ASCII character over-fired on seven pieces of ordinary UI prose (em dashes, ellipses), which
+  would have got the test muted rather than obeyed. Naming the symbol blocks is what makes it both
+  sound and quiet. A companion `the_guard_actually_works` test asserts the scanner still finds
+  `"\u{25CF}"`, still ignores prose and comments, and still sees `activity_badge.rs`, so the guard
+  cannot rot into vacuous green.
+- [X] T104 [US2] Verify the fix in the running app (`mise run run`): confirm the session list shows a
+  filled dot for working / awaiting-input and a hollow one for ended, with zero blank boxes, and that
+  the three states are told apart by shape with colour ignored (SC-018). Update `docs/daemon.md`'s
+  activity-dot table only if the rendered shapes differ from what T049 documented. Depends on T101.
+  **Done, with the GUI walkthrough deferred** (same disposition as T084): the *glyph* half is
+  verified deterministically rather than by eye — both codepoints rasterized out of the shipped font
+  at the exact badge size (`sidebar::TAG` = 10px) produce real ink in visibly different shapes
+  (filled centre vs empty ring), which is the property SC-018 asks for and the one that was broken.
+  `docs/daemon.md` needs no change: its table says "Filled" / "Hollow", which still describes what
+  renders. The remaining live-app step — seeing a real session transition Working → Awaiting input →
+  Ended in the sidebar — needs a human at the GUI with an active `claude` session; it is not
+  reproducible headlessly here, and spawning a real agent session in the user's environment to force
+  the transitions would be a side effect well beyond the fix.

@@ -34,6 +34,8 @@ fn expected(icon: Icon) -> char {
         Icon::ProjectRoot => '\u{e88a}',
         Icon::AddTerminalInstance => '\u{e146}',
         Icon::Close => '\u{e5cd}',
+        Icon::ActivityWorking => '\u{e837}',
+        Icon::ActivityEnded => '\u{e836}',
     }
 }
 
@@ -55,8 +57,9 @@ fn all_covers_every_variant_without_duplicates() {
     // (feature 009), +3 for AiCli/RegularTerminal/ReleaseFocus, +1 for ProjectRoot (T012)
     // (all feature 010), +1 for Close (session row's trailing action, shared with feature 011's
     // terminal-instance close action rather than double-counted), +1 for AddTerminalInstance
-    // (feature 011).
-    assert_eq!(Icon::ALL.len(), 26, "curated set size");
+    // (feature 011), +2 for ActivityWorking/ActivityEnded (feature 010's session activity dots,
+    // moved into the vocabulary by BUG-004).
+    assert_eq!(Icon::ALL.len(), 28, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

@@ -9,9 +9,10 @@
 //!
 //! Exposed as a chainable builder terminating in `.into()` (Principle VIII builder-API rule).
 
+use crate::icons::Icon;
 use crate::tokens::{sidebar, Roles};
-use crate::ui::style;
-use iced::widget::{text, Space};
+use crate::ui::icon;
+use iced::widget::Space;
 use iced::{Element, Length};
 use micold_core::protocol::messages::ActivitySignal;
 use std::marker::PhantomData;
@@ -72,20 +73,22 @@ impl<'a, M: 'a> ActivityBadge<'a, M> {
 impl<'a, M: 'a> From<ActivityBadge<'a, M>> for Element<'a, M> {
     fn from(badge: ActivityBadge<'a, M>) -> Self {
         let r = badge.roles;
-        // `●` (U+25CF) filled for live states, `○` (U+25CB) hollow for a spent one.
+        // Drawn from the shared `Icon` vocabulary, never a raw literal (FR-016e): only glyphs in
+        // `Icon::ALL` are proven present in the shipped font at build time, and only `icon(..)`
+        // draws in that font — a plain `text(..)` uses the default text font, which maps neither
+        // `●` nor `○`, so the badge rendered as tofu (BUG-004).
+        //
+        // Filled centre for live states, empty ring for a spent one: the states stay distinct by
+        // *shape*, not by tint alone, so the distinction survives for a colour-blind user.
         let (glyph, color) = match emphasis(&badge.signal) {
-            Some(BadgeEmphasis::Working) => ("\u{25CF}", r.primary),
-            Some(BadgeEmphasis::Attention) => ("\u{25CF}", r.error),
-            Some(BadgeEmphasis::Ended) => ("\u{25CB}", r.on_surface_variant),
+            Some(BadgeEmphasis::Working) => (Icon::ActivityWorking, r.primary),
+            Some(BadgeEmphasis::Attention) => (Icon::ActivityWorking, r.error),
+            Some(BadgeEmphasis::Ended) => (Icon::ActivityEnded, r.on_surface_variant),
             // Unknown is ambient — nothing is drawn (H2), but the slot is still occupied so rows
             // stay uniform whether or not a session has a signal yet.
             None => return Space::with_width(Length::Shrink).into(),
         };
-        let tint = style::color(color);
-        text(glyph)
-            .size(badge.size)
-            .style(move |_t: &iced::Theme| text::Style { color: Some(tint) })
-            .into()
+        icon(glyph, badge.size, color)
     }
 }
 

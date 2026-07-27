@@ -53,7 +53,7 @@ surface can render an icon until this phase is complete.
 ### Tests (write first, MUST fail before implementation — Principle I)
 
 - [X] T004 [P] Core mapping test in `tests/icons.rs` (runs under `--no-default-features`): asserts `Icon::glyph()` returns the pinned codepoint (from T003) for every variant, and `Icon::ALL` covers every variant with no duplicates (FR-003, SC-006).
-- [X] T005 [P] Font-integrity test in `tests/icons_font.rs` (runs under `--features gui`): loads the embedded font and asserts every `Icon::glyph()` codepoint resolves to a real glyph (no tofu) and the pinned `MATERIAL_SYMBOLS` family name matches the file (SC-005).
+- [X] T005 [P] Font-integrity test in `tests/icons_font.rs` (runs under `--features gui`): loads the embedded font and asserts every `Icon::glyph()` codepoint resolves to a real glyph (no tofu) and the pinned `MATERIAL_SYMBOLS` family name matches the file (SC-005). **Scope note (BUG-004, 2026-07-27)**: correct as written, but it iterates `Icon::ALL` only, so it cannot see a surface that skips the enum and passes a raw literal to `text(..)` — the blind spot that let feature 010's activity badge ship as tofu. Widening the guard is tracked as T103 in `specs/010-daemon-session-persistence/tasks.md`; this task stays closed.
 
 ### Implementation (make T004–T005 pass)
 

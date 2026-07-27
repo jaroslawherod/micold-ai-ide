@@ -65,6 +65,16 @@ pyftsubset _static.ttf \
 | `ProjectRoot`  | `home`                 | `E88A`         |
 | `AddTerminalInstance` | `add_box`      | `E146`         |
 | `Close`       | `close`                | `E5CD`         |
+| `ActivityWorking` | `radio_button_checked` | `E837`     |
+| `ActivityEnded` | `radio_button_unchecked` | `E836`   |
+
+**Why the activity dots are radio-button glyphs** (BUG-004): this file is a static instance
+pinned at **FILL=0**, and at that axis value the nominally-solid dots — `circle` (`EF4A`),
+`lens` (`E3FA`), `fiber_manual_record` (`E061`) — all render as *rings*, not discs (verified by
+rasterizing them from this file). `radio_button_checked` is the only same-diameter glyph here
+with a genuinely filled centre, so this pair is what actually reads as filled-vs-hollow in *this*
+font. Picking by icon name alone would have reproduced the bug in a new form: two rings that look
+identical. If the FILL axis is ever changed, re-check these two before trusting the names.
 
 This table documents which of the font's (now much larger) set of glyphs the app actually
 *uses* — it is no longer the list of what the shipped file *contains* (that's every upstream
