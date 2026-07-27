@@ -4,15 +4,15 @@
 //! Nothing on disk (the folder, its files, or any git worktrees) is deleted; the dialog says so.
 
 use crate::app::Message;
-use crate::ui::cdk::overlay::Surface;
-use crate::ui::material::{self, Button, Modal, SurfaceKind, Text, TypeRole};
+use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
+use iced::Element;
 use iced::Length;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
-/// The confirm-forget dialog for the project shown by `display_name` as a modal surface,
-/// at transition `progress` (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
+/// The confirm-forget dialog for the project shown by `display_name` as a modal surface, as the dialog body; `ui::view` wraps it
+/// in the shared [`Modal`](crate::ui::material::Modal) transition.
 ///
 /// `running_sessions` is the number of the project's currently-running sessions that will be
 /// stopped on confirm (FR-002a). When it is `0`, no session-stop line is shown; when it is `> 0`,
@@ -22,8 +22,7 @@ pub fn modal<'a>(
     display_name: &str,
     running_sessions: usize,
     scheme: ColorScheme,
-    progress: f32,
-) -> Option<Surface<'a, Message>> {
+) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
     let mut fields = column![
@@ -66,5 +65,5 @@ pub fn modal<'a>(
         .padding(spacing::LG)
         .width(Length::Fixed(460.0));
 
-    Modal::new(dialog, r).progress(progress).into()
+    dialog.into()
 }

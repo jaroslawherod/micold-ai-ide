@@ -8,6 +8,7 @@
 //!
 //! [`Roles`]: micold_core::tokens::Roles
 
+mod accordion;
 mod activity_badge;
 mod animation;
 mod button;
@@ -42,8 +43,9 @@ mod toggle_chip;
 mod toolbar;
 mod tree_view;
 
+pub use accordion::Accordion;
 pub use activity_badge::ActivityBadge;
-pub use animation::{expand, fade, scale, slide};
+pub use animation::{expand, fade, scale, scrim, slide, HoverReveal, ViewFade};
 pub use button::{Button, Variant as ButtonVariant};
 pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;

@@ -2,10 +2,9 @@
 //! 006, FR-019/FR-020). Currently exposes the embedded-terminal scrollback limit.
 
 use crate::app::{Message, SettingsDraft};
-use crate::ui::cdk::overlay::Surface;
-use crate::ui::material::{self, Button, Checkbox, Modal, SurfaceKind, Text, TextField, TypeRole};
+use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};
-use iced::Length;
+use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
@@ -23,16 +22,15 @@ fn failure_label_and_diagnostic(outcome: &EnvIncludeOutcome) -> Option<(&'static
     }
 }
 
-/// The Settings dialog as a modal surface, at transition `progress`
-/// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]). `env_include_outcome` is the most recent
+/// The Settings dialog as the dialog body; `ui::view` wraps it in the shared
+/// [`Modal`](crate::ui::material::Modal) transition. `env_include_outcome` is the most recent
 /// environment-include resolution attempt's result, rendered as a read-only failure note when
 /// it didn't succeed (feature 011, FR-012/FR-013).
 pub fn modal<'a>(
     draft: &'a SettingsDraft,
     scheme: ColorScheme,
-    progress: f32,
     env_include_outcome: &'a EnvIncludeOutcome,
-) -> Option<Surface<'a, Message>> {
+) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
     let input = TextField::new("Scrollback lines", &draft.scrollback_lines, r)
@@ -83,5 +81,5 @@ pub fn modal<'a>(
         .padding(spacing::LG)
         .width(Length::Fixed(420.0));
 
-    Modal::new(dialog, r).progress(progress).into()
+    dialog.into()
 }

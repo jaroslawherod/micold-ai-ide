@@ -3,21 +3,16 @@
 //! the folder on disk or the git branch. Mirrors the project rename dialog.
 
 use crate::app::{Message, WorktreeRenameDraft};
-use crate::ui::cdk::overlay::Surface;
-use crate::ui::material::{self, Button, Modal, SurfaceKind, Text, TextField, TypeRole};
+use crate::ui::material::{self, Button, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};
-use iced::Length;
+use iced::{Element, Length};
 use micold_core::project::RenameError;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
-/// The worktree-rename dialog as a modal surface, at transition `progress`
-/// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
-pub fn modal<'a>(
-    draft: &'a WorktreeRenameDraft,
-    scheme: ColorScheme,
-    progress: f32,
-) -> Option<Surface<'a, Message>> {
+/// The worktree-rename dialog as the dialog body; `ui::view` wraps it in the shared
+/// [`Modal`](crate::ui::material::Modal) transition.
+pub fn modal<'a>(draft: &'a WorktreeRenameDraft, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
     let input = TextField::new("Worktree name", &draft.text, r)
@@ -54,5 +49,5 @@ pub fn modal<'a>(
         .padding(spacing::LG)
         .width(Length::Fixed(420.0));
 
-    Modal::new(dialog, r).progress(progress).into()
+    dialog.into()
 }

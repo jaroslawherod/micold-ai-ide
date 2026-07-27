@@ -5,13 +5,18 @@
 //! no general per-widget opacity, so the transition is composed from primitives the renderer *does*
 //! expose (research R3): an animated dimming **scrim** (which reveals the window beneath as it
 //! clears — FR-003) plus a dialog **fade + lift** ([`fade`](super::fade) toward the surface colour
-//! and [`scale`](super::scale) about centre). Driven by a single `progress` (1.0 = fully shown,
-//! 0.0 = hidden), so a consumer only builds its dialog body and supplies a progress value.
+//! and [`scale`](super::scale) about centre).
 //!
-//! What it no longer does is *place* itself. Centring, input blocking, dismissal and z-order all
+//! A consumer builds its dialog body and says whether it is open. The three tracks that carry it in
+//! and out are owned by the widgets that draw them (FR-011): they share a target, a duration and a
+//! frame clock, so they move in lockstep without anything coordinating them.
+//!
+//! What it does not do is *place* itself. Centring, input blocking, dismissal and z-order all
 //! moved to [`cdk::overlay`](crate::ui::cdk::overlay), the one primitive every floating surface now
 //! shares (FR-008). This module decides the scrim's colour and the dialog's transition — appearance
 //! — and hands the result over.
+
+use std::time::Duration;
 
 use crate::ui::cdk::overlay::{Anchor, Surface};
 use iced::{Color, Element};
@@ -22,31 +27,47 @@ use micold_core::tokens::Roles;
 /// looks unchanged at rest — only the transition is new).
 const SCRIM_ALPHA: f32 = 0.6;
 
+/// Dialog entrance — Material Design 3 "medium" duration; clearly perceptible (the ~90ms this
+/// replaced was not).
+const ENTER: Duration = Duration::from_millis(250);
+/// Dialog exit — ~0.8× the entrance (Material convention: exits are quicker).
+const EXIT: Duration = Duration::from_millis(200);
+
 /// A modal dialog. Builder form (Principle VIII):
-/// `Modal::new(dialog, roles).progress(p).on_dismiss(msg).into()`, yielding
-/// `Option<Surface>` — `None` once the transition has finished, so a closed dialog leaves no trace.
+/// `Modal::new(dialog, roles).shown(open).on_dismiss(msg).on_hidden(msg).into()`.
 pub struct Modal<'a, M> {
     dialog: Element<'a, M>,
     roles: Roles,
-    progress: f32,
+    shown: bool,
+    key: u64,
     on_dismiss: Option<M>,
+    on_hidden: Option<M>,
 }
 
 impl<'a, M: Clone + 'a> Modal<'a, M> {
-    /// A modal `dialog` themed by `roles`. Fully shown by default; set [`Self::progress`] to
-    /// animate the enter/exit.
+    /// A modal `dialog` themed by `roles`, open — a dialog is built because it is being shown.
+    /// It animates in from hidden; [`Self::shown`] `false` animates it back out again.
     pub fn new(dialog: impl Into<Element<'a, M>>, roles: Roles) -> Self {
         Self {
             dialog: dialog.into(),
             roles,
-            progress: 1.0,
+            shown: true,
+            key: 0,
             on_dismiss: None,
+            on_hidden: None,
         }
     }
 
-    /// Transition progress (0 = hidden → yields no surface; 1 = fully shown).
-    pub fn progress(mut self, progress: f32) -> Self {
-        self.progress = progress;
+    /// Whether the dialog is open. Going from `true` to `false` plays the exit.
+    pub fn shown(mut self, shown: bool) -> Self {
+        self.shown = shown;
+        self
+    }
+
+    /// Which dialog this is, so that opening a different one over the top of the current one
+    /// enters from the beginning rather than inheriting a transition that had already finished.
+    pub fn restart_on(mut self, key: u64) -> Self {
+        self.key = key;
         self
     }
 
@@ -56,33 +77,61 @@ impl<'a, M: Clone + 'a> Modal<'a, M> {
         self.on_dismiss = Some(message);
         self
     }
+
+    /// The message emitted once the exit has finished, so whoever is holding the dialog's
+    /// render data can let go of it. Without it a closed dialog would keep its surface forever.
+    pub fn on_hidden(mut self, message: M) -> Self {
+        self.on_hidden = Some(message);
+        self
+    }
 }
 
-impl<'a, M: Clone + 'a> From<Modal<'a, M>> for Option<Surface<'a, M>> {
+impl<'a, M: Clone + 'a> From<Modal<'a, M>> for Surface<'a, M> {
     fn from(m: Modal<'a, M>) -> Self {
         let Modal {
             dialog,
             roles,
-            progress,
+            shown,
+            key,
             on_dismiss,
+            on_hidden,
         } = m;
-        let progress = progress.clamp(0.0, 1.0);
-        // Hidden / finished: no scrim, no dialog, no input capture — just the app beneath.
-        if progress <= 0.001 {
-            return None;
-        }
 
         // The dialog fades its contents toward its own surface colour, then lifts (scales about
         // its centre). Together with the scrim this reads as a Material dialog enter/exit.
-        let dialog = super::scale(super::fade(dialog, progress, roles.surface), progress);
+        let dialog = super::scale(
+            super::fade(dialog, shown, ENTER, roles.surface)
+                .exiting_over(EXIT)
+                .animate_in()
+                .restart_on(key),
+            shown,
+            ENTER,
+        )
+        .exiting_over(EXIT)
+        .animate_in()
+        .restart_on(key);
 
-        let surface = Surface::new(Layer::Dialog, dialog, Anchor::Center).scrim(Color {
-            a: progress * SCRIM_ALPHA,
-            ..Color::BLACK
-        });
-        Some(match on_dismiss {
+        // The scrim is the track that reports the exit as finished: it outlives the dialog body
+        // visually, and it is the layer whose disappearance means the window is usable again.
+        let mut scrim = super::scrim(
+            Color {
+                a: SCRIM_ALPHA,
+                ..Color::BLACK
+            },
+            shown,
+            ENTER,
+        )
+        .exiting_over(EXIT)
+        .animate_in()
+        .restart_on(key);
+        if let Some(message) = on_hidden {
+            scrim = scrim.on_hidden(message);
+        }
+
+        let surface = Surface::new(Layer::Dialog, dialog, Anchor::Center).scrim(scrim);
+        match on_dismiss {
             Some(message) => surface.on_dismiss(message),
             None => surface,
-        })
+        }
     }
 }

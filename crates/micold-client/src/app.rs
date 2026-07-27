@@ -566,6 +566,11 @@ pub enum Message {
     /// [`micold_core::overlay::Trigger::ScrollBeneath`]. Emitted unconditionally by the scrollable
     /// that moved; deciding whether anything closes is the reducer's job, via the shared rule.
     ScrolledBeneathOverlay,
+    /// A dialog has finished animating out (feature 017, FR-011). Emitted by the `Modal` component
+    /// itself, which owns the transition, so the binary can release the snapshot it was rendering
+    /// from ([`ClosingOverlay`]). The binary used to watch a central progress value for this; the
+    /// component now says it, which is the only part of a transition an application still needs.
+    OverlayTransitionFinished,
     /// The pointer entered a worktree row (feature 008), by `dir_name`; reveals its row actions.
     WorktreeHovered(String),
     /// The pointer left a worktree row (feature 008), by `dir_name`; hides its row actions.
@@ -1758,6 +1763,9 @@ impl State {
             | Message::TerminalPasteRequested
             | Message::TextCopyRequested(_)
             | Message::SidebarHandleHovered(_)
+            // The closing dialog's snapshot is a binary-owned render detail (`App::dismissing`),
+            // so releasing it is the binary's business; the pure core never knew about it.
+            | Message::OverlayTransitionFinished
             // Focus state is tracked by the binary (gui runtime), not the pure core.
             | Message::WindowFocusChanged(_) => {}
         }
@@ -2208,6 +2216,7 @@ pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> Ke
 /// we capture the data here *before* the reducer runs and render from this snapshot during the
 /// exit animation. Each variant carries a clone of exactly what that overlay's render function
 /// needs (all `Clone`, straight from the core `State`).
+#[derive(Debug)]
 pub enum ClosingOverlay {
     About,
     Selector(Selector),
@@ -2220,6 +2229,28 @@ pub enum ClosingOverlay {
     /// Fading-out confirm-forget dialog (feature 014): the project's display name and the
     /// running-session count captured at close time, so the exit animation matches the live view.
     ConfirmForget(String, usize),
+}
+
+impl ClosingOverlay {
+    /// Which overlay this is a snapshot of.
+    ///
+    /// The renderer needs a dialog's identity to stay put across the close — a transition that
+    /// sees its subject change restarts, and a dialog whose identity vanished the instant it began
+    /// closing would jump to hidden instead of animating out. `state.overlay` is already `None` by
+    /// then, so the snapshot is the only thing that still knows.
+    pub fn overlay(&self) -> Overlay {
+        match self {
+            ClosingOverlay::About => Overlay::About,
+            ClosingOverlay::Selector(_) => Overlay::ProjectSelector,
+            ClosingOverlay::Rename(_) => Overlay::RenameProject,
+            ClosingOverlay::Worktree(..) => Overlay::AddWorktree,
+            ClosingOverlay::Settings(_) => Overlay::Settings,
+            ClosingOverlay::ConfirmDelete(_) => Overlay::ConfirmWorktreeDelete,
+            ClosingOverlay::WorktreeRename(_) => Overlay::RenameWorktree,
+            ClosingOverlay::ConfirmSessionRemove(_) => Overlay::ConfirmSessionRemove,
+            ClosingOverlay::ConfirmForget(..) => Overlay::ConfirmForgetProject,
+        }
+    }
 }
 
 /// Whether keystrokes may be written to a session's shell PTY given its `ShellLifecycle`

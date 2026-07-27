@@ -19,6 +19,24 @@
 use iced::advanced::Shell;
 use iced::window;
 use iced::Event;
+use std::time::Duration;
+
+/// The frame interval a per-frame step is derived against (~60fps).
+///
+/// A track advances by a fixed amount per redraw rather than by elapsed wall-clock time, so a
+/// transition's real duration is only nominal: on a slower display it takes proportionally longer.
+/// That is exactly what the central animator did — it stepped a fixed amount per 16ms clock tick —
+/// so keeping the arithmetic identical is what makes this feature's transitions look unchanged.
+/// Moving to elapsed-time interpolation is a visual change, and therefore feature 018's to make.
+const FRAME: Duration = Duration::from_millis(16);
+
+/// The per-frame step that carries a track across its full `0.0..=1.0` range in `duration`.
+///
+/// Timings are stated as durations at the call site because that is what a motion spec is written
+/// in; a bare step like `0.14` says nothing about how long anything takes.
+pub fn step_for(duration: Duration) -> f32 {
+    (FRAME.as_secs_f32() / duration.as_secs_f32()).clamp(f32::EPSILON, 1.0)
+}
 
 /// One animated scalar, owned by the widget that animates it.
 ///
@@ -77,6 +95,29 @@ impl Progress {
         } else {
             self.value + speed * distance.signum()
         };
+    }
+
+    /// Snap to `value` and come to rest there, abandoning whatever was in flight.
+    ///
+    /// For when a component's *identity* changes under it rather than its target: the main view
+    /// showing a different session is not the old view continuing, so it starts its entrance from
+    /// the beginning instead of finishing the previous one.
+    pub fn restart_at(&mut self, value: f32) {
+        self.value = value;
+        self.target = value;
+    }
+
+    /// [`Self::on_event`], with the step stated as the duration of a full `0.0 → 1.0` traversal.
+    ///
+    /// The form components use: a motion spec says "90ms", not "0.18 per frame".
+    pub fn on_frame<M>(
+        &mut self,
+        event: &Event,
+        target: f32,
+        over: Duration,
+        shell: &mut Shell<'_, M>,
+    ) -> f32 {
+        self.on_event(event, target, step_for(over), shell)
     }
 
     /// Advance on a frame tick, and ask for the next frame while still moving.

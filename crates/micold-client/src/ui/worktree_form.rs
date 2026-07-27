@@ -8,9 +8,8 @@
 //! normal actions, so cancelling leaves every input where the user left it (FR-007).
 
 use crate::app::{BranchSource, Message, ResolutionState, WorktreeForm, WorktreeFormStatus};
-use crate::ui::cdk::overlay::Surface;
 use crate::ui::material::{
-    self, Button, Modal, Select, StageProgress, SurfaceKind, Text, TextField, ToggleChip, TypeRole,
+    self, Button, Select, StageProgress, SurfaceKind, Text, TextField, ToggleChip, TypeRole,
 };
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
@@ -19,14 +18,13 @@ use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
 use micold_core::worktree::{BlockReason, BranchOrigin, BranchSituation, CreateMode};
 
-/// The add-worktree form as a modal surface, at transition `progress`
-/// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
+/// The add-worktree form as the dialog body; `ui::view` wraps it in the shared
+/// [`Modal`](crate::ui::material::Modal) transition.
 pub fn modal<'a>(
     form: &'a WorktreeForm,
     error: Option<&'a str>,
     scheme: ColorScheme,
-    progress: f32,
-) -> Option<Surface<'a, Message>> {
+) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let is_creating = form.status == WorktreeFormStatus::Creating;
 
@@ -115,7 +113,7 @@ pub fn modal<'a>(
         .padding(spacing::LG)
         .width(Length::Fixed(520.0));
 
-    Modal::new(dialog, r).progress(progress).into()
+    dialog.into()
 }
 
 /// The new-branch / existing-branch switch (feature 016, FR-010), built from the shared

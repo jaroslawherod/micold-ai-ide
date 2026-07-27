@@ -57,21 +57,15 @@ const ANIM_TICK: Duration = Duration::from_millis(16);
 
 // Animation timing as legible durations (not opaque per-frame steps); the per-tick step the
 // `Animator` consumes is derived via `step()` below (FR-013).
-/// Overlay fade-in — Material Design 3 "medium" duration; clearly perceptible (the prior ~90ms
-/// was imperceptible).
-const OVERLAY_ENTER: Duration = Duration::from_millis(250);
-/// Overlay fade-out — ~0.8× the enter (Material convention: exits are quicker).
-const OVERLAY_EXIT: Duration = Duration::from_millis(200);
-/// Overflow-menu fade — preserves the prior feel (was step 0.18 ≈ 90ms).
-const MENU_FADE: Duration = Duration::from_millis(90);
-/// Main-view fade — preserves the prior feel (was step 0.18 ≈ 90ms).
-const MAIN_FADE: Duration = Duration::from_millis(90);
+//
+// Only the two the central animator still drives are left here. A component that owns its own
+// transition owns the timing of it too — the dialog enter/exit sits in `material::modal`, the menu
+// fade in `material::menu`, the content-area fade in `material::animation` — because how long a
+// thing takes is part of how it looks, and this is the application, not the design system.
 /// Sidebar slide — preserves the prior feel (was step 0.14 ≈ 114ms).
 const SIDEBAR_SLIDE: Duration = Duration::from_millis(114);
 /// Resize-handle hover highlight — preserves the prior gentle ~0.8s ramp (was step 0.02).
 const HANDLE_HOVER: Duration = Duration::from_millis(800);
-/// Hover-revealed row actions fade (feature 008) — quick, so the icons feel responsive.
-const ROW_ACTIONS_FADE: Duration = Duration::from_millis(120);
 
 /// Convert an animation `duration` into the per-tick progress step the [`Animator`] advances by
 /// on each [`ANIM_TICK`], clamped to `(0, 1]`.
@@ -151,22 +145,14 @@ struct App {
     /// The configured terminal scrollback limit (feature 006), loaded from settings and applied
     /// to newly spawned sessions.
     scrollback_lines: usize,
-    /// The single shared animation driver for all UI motion (menu / sidebar / main / handle /
-    /// overlay). Replaces the former per-animation `*_anim` fields (FR-007).
+    /// The shared animation driver for the motion the application still owns — the sidebar slide
+    /// and its resize-handle hover. Everything else animates itself, in the widget tree (FR-011).
     motion: Animator<MotionKey>,
-    /// Identity of the current main content, to detect changes that trigger a fade.
-    main_key: String,
     /// Whether the pointer is over the sidebar resize handle (drives its hover highlight).
     handle_hovered: bool,
     /// The overlay currently fading out (rendered from this snapshot until its fade completes),
     /// or `None` when no overlay is leaving.
     dismissing: Option<ClosingOverlay>,
-    /// Per-worktree hover-reveal fade tracks (feature 008), keyed by a hash of `dir_name` so each
-    /// row's action icons fade in/out independently (hovering one while another fades out).
-    row_fx: Animator<u64>,
-    /// The worktree hovered on the previous update, to detect hover-enter/leave transitions and
-    /// start the corresponding fade.
-    prev_hovered: Option<String>,
     /// Whether the OS window currently has input focus (idle-CPU fix). Gates the
     /// terminal/OS-theme poll subscriptions: `true` until the first `Unfocused` event,
     /// which matches iced's behavior of not emitting an initial `Focused` on launch.
@@ -299,49 +285,20 @@ fn refresh_env_include(app: &mut App, cwd: &Path) {
     app.env_include_cache.insert(cwd.to_path_buf(), snapshot);
 }
 
-/// Identity of the main content area, used to trigger a fade when it changes.
-fn main_content_key(core: &State) -> String {
-    if core.workspace.active_project().is_none() {
-        "none".to_string()
-    } else if let Some(id) = core.active_session {
-        format!("s:{id}")
-    } else {
-        "project".to_string()
-    }
-}
-
 /// The desired `(target, duration)` for each state-driven motion key, derived from the current
 /// state. Used both to advance the animator (in [`apply_motion_targets`]) and to decide whether
 /// the animation clock should run (in [`motion_animating`]), so the two never disagree.
-///
-/// `MotionKey::Overlay` is intentionally absent: it is driven by the overlay open/close
-/// lifecycle in `update`, not by steady-state.
-fn motion_targets(app: &App) -> [(MotionKey, f32, Duration); 5] {
+fn motion_targets(app: &App) -> [(MotionKey, f32, Duration); 2] {
     [
-        (
-            MotionKey::Menu,
-            if app.core.help_menu_open { 1.0 } else { 0.0 },
-            MENU_FADE,
-        ),
         (
             MotionKey::Sidebar,
             if app.core.sidebar_hidden { 0.0 } else { 1.0 },
             SIDEBAR_SLIDE,
         ),
-        (MotionKey::Main, 1.0, MAIN_FADE),
         (
             MotionKey::HandleHover,
             if app.handle_hovered { 1.0 } else { 0.0 },
             HANDLE_HOVER,
-        ),
-        (
-            MotionKey::SidebarFilter,
-            if app.core.sidebar_filter_open {
-                1.0
-            } else {
-                0.0
-            },
-            MENU_FADE,
         ),
     ]
 }
@@ -353,28 +310,16 @@ fn apply_motion_targets(app: &mut App) {
     }
 }
 
-/// The overlay fade's target: fully shown while an overlay is open, fully hidden otherwise
-/// (including while a just-closed overlay is fading out — the snapshot in `App::dismissing`
-/// only supplies render data, it does not change the target).
-fn overlay_motion_target(app: &App) -> f32 {
-    if app.core.overlay == Overlay::None {
-        0.0
-    } else {
-        1.0
-    }
-}
-
-/// Whether any animation still needs to advance — gates the animation clock (FR-014). Compares
-/// each key's current value against its freshly derived target so a just-reset track (e.g. the
-/// main-view fade reset to 0 on a content change) is detected even before the animator's stored
-/// target is refreshed. `MotionKey::Overlay` is handled by [`overlay_motion_target`].
+/// Whether any centrally driven animation still needs to advance — gates the animation clock
+/// (FR-014). Compares each key's current value against its freshly derived target, so a track
+/// retargeted this frame is detected before the animator's stored target catches up.
+///
+/// Self-animating components are deliberately absent: each asks the runtime for its own next frame
+/// while it is moving, and stops asking when it arrives, so nothing here has to know they exist.
 fn motion_animating(app: &App) -> bool {
-    let steady = motion_targets(app)
+    motion_targets(app)
         .iter()
-        .any(|(key, target, _)| (app.motion.get(*key) - target).abs() > f32::EPSILON);
-    let overlay =
-        (app.motion.get(MotionKey::Overlay) - overlay_motion_target(app)).abs() > f32::EPSILON;
-    steady || overlay || app.row_fx.animating()
+        .any(|(key, target, _)| (app.motion.get(*key) - target).abs() > f32::EPSILON)
 }
 
 impl Drop for App {
@@ -466,16 +411,11 @@ fn boot() -> (App, Task<Message>) {
         core.set_worktrees(discover_worktrees(&repo));
     }
     let mut motion = Animator::new();
-    motion.set(MotionKey::Menu, 0.0);
     motion.set(
         MotionKey::Sidebar,
         if core.sidebar_hidden { 0.0 } else { 1.0 },
     );
-    motion.set(MotionKey::Main, 1.0);
     motion.set(MotionKey::HandleHover, 0.0);
-    motion.set(MotionKey::Overlay, 0.0);
-    motion.set(MotionKey::SidebarFilter, 0.0);
-    let main_key = main_content_key(&core);
     (
         App {
             core,
@@ -485,11 +425,8 @@ fn boot() -> (App, Task<Message>) {
             display_offset: 0,
             scrollback_lines,
             motion,
-            main_key,
             handle_hovered: false,
             dismissing: None,
-            row_fx: Animator::new(),
-            prev_hovered: None,
             window_focused: true,
             last_grid: None,
             env_include_enabled,
@@ -590,45 +527,16 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 
     let task = update_inner(app, message);
 
-    // Drive the overlay fade on open/close transitions (US1).
+    // Hand a closing overlay's snapshot to the renderer so its exit has something to draw (US1).
+    // The transition itself belongs to `material::Modal`, which reports back with
+    // `OverlayTransitionFinished` once it is over; the snapshot is released there.
     let overlay_after = app.core.overlay;
     if overlay_before != overlay_after {
-        if overlay_after == Overlay::None {
-            // Closed (Cancel / Esc / successful submit): fade the snapshot out.
-            app.dismissing = snapshot_before;
-            app.motion.to(MotionKey::Overlay, 0.0, step(OVERLAY_EXIT));
+        app.dismissing = if overlay_after == Overlay::None {
+            snapshot_before
         } else {
-            // Opened (or switched to a different overlay): fade the new one in from hidden.
-            app.dismissing = None;
-            app.motion.set(MotionKey::Overlay, 0.0);
-            app.motion.to(MotionKey::Overlay, 1.0, step(OVERLAY_ENTER));
-        }
-    }
-
-    // Trigger a main-view fade-in whenever the displayed content changes.
-    let key = main_content_key(&app.core);
-    if key != app.main_key {
-        app.main_key = key;
-        app.motion.set(MotionKey::Main, 0.0);
-    }
-
-    // On a hover-enter/leave transition, animate the row's action icons: fade the newly hovered
-    // row in (from hidden) and the previously hovered row out (feature 008).
-    if app.core.hovered_worktree != app.prev_hovered {
-        let s = step(ROW_ACTIONS_FADE);
-        if let Some(old) = &app.prev_hovered {
-            app.row_fx
-                .to(micold_client::ui::worktree_fx_key(old), 0.0, s);
-        }
-        if let Some(new) = &app.core.hovered_worktree {
-            let key = micold_client::ui::worktree_fx_key(new);
-            // Start from hidden so it animates in (unless it's mid-fade-out and re-hovered).
-            if app.row_fx.get(key) <= f32::EPSILON {
-                app.row_fx.set(key, 0.0);
-            }
-            app.row_fx.to(key, 1.0, s);
-        }
-        app.prev_hovered = app.core.hovered_worktree.clone();
+            None
+        };
     }
 
     task
@@ -1134,11 +1042,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::AnimationTick => {
             apply_motion_targets(app);
             app.motion.tick();
-            app.row_fx.tick();
-            // Once the leaving overlay has fully faded, release its snapshot.
-            if app.dismissing.is_some() && app.motion.get(MotionKey::Overlay) <= 0.001 {
-                app.dismissing = None;
-            }
+            Task::none()
+        }
+
+        // The closing dialog has finished animating out; its snapshot has served its purpose.
+        Message::OverlayTransitionFinished => {
+            app.dismissing = None;
             Task::none()
         }
         // Pointer entered/left the sidebar resize handle; the hover highlight animates via the
@@ -1911,7 +1820,6 @@ fn view(app: &App) -> iced::Element<'_, Message> {
         app.display_offset,
         &app.motion,
         app.dismissing.as_ref(),
-        &app.row_fx,
         &app.env_include_last_outcome,
         &connection_status(app),
     )
@@ -2789,11 +2697,8 @@ mod tests {
             display_offset: 0,
             scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
             motion: Animator::new(),
-            main_key: main_content_key(&State::default()),
             handle_hovered: false,
             dismissing: None,
-            row_fx: Animator::new(),
-            prev_hovered: None,
             window_focused: true,
             last_grid: None,
             env_include_enabled: micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED,
@@ -2833,11 +2738,8 @@ mod tests {
             display_offset: 0,
             scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
             motion: Animator::new(),
-            main_key: main_content_key(&State::default()),
             handle_hovered: false,
             dismissing: None,
-            row_fx: Animator::new(),
-            prev_hovered: None,
             window_focused: true,
             last_grid: None,
             env_include_enabled: micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED,
@@ -2887,11 +2789,8 @@ mod tests {
             display_offset: 0,
             scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
             motion: Animator::new(),
-            main_key: main_content_key(&State::default()),
             handle_hovered: false,
             dismissing: None,
-            row_fx: Animator::new(),
-            prev_hovered: None,
             window_focused: true,
             last_grid: None,
             env_include_enabled: micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED,
@@ -3051,11 +2950,8 @@ mod tests {
             display_offset: 0,
             scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
             motion: Animator::new(),
-            main_key: main_content_key(&State::default()),
             handle_hovered: false,
             dismissing: None,
-            row_fx: Animator::new(),
-            prev_hovered: None,
             window_focused: true,
             last_grid: None,
             env_include_enabled: micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED,
