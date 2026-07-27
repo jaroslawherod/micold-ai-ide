@@ -10,8 +10,8 @@
 //! codepoints are pinned from the shipped font and documented in
 //! `assets/fonts/PROVENANCE.md`; `tests/icons.rs` regression-locks them.
 
-use micold_core::tokens::{Rgb, Roles};
 use micold_core::session::TerminalMode;
+use micold_core::tokens::{Rgb, Roles};
 
 /// A named Material symbol representing one concept or action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

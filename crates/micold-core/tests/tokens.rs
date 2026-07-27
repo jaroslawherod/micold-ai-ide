@@ -6,9 +6,9 @@
 //! Contrast is computed with the WCAG 2.x relative-luminance formula so a future palette
 //! tweak that breaks legibility fails CI (contracts/design-tokens.md).
 
-use micold_core::tokens::{roles, sidebar, type_scale, Rgb, Roles};
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{roles, sidebar, type_scale, Rgb, Roles};
 
 /// Linearize a single 0..=255 sRGB channel per the WCAG definition.
 fn linearize(channel: u8) -> f64 {

@@ -5,11 +5,11 @@
 //! any future hierarchical navigation should reuse it rather than fork a bespoke widget.
 
 use crate::icons::Icon;
-use micold_core::tokens::{shape, spacing, type_scale, Rgb, Roles};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
 use iced::widget::{button, column, container, mouse_area, row, text, Row, Space};
 use iced::{Alignment, Element, Length};
+use micold_core::tokens::{shape, spacing, type_scale, Rgb, Roles};
 
 /// One row in a [`tree_view`]. Generic over the message type so it is reusable across features.
 pub struct TreeItem<'a, M> {

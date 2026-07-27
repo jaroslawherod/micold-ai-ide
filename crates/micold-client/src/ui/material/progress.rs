@@ -8,10 +8,10 @@
 //! total duration or step count — it exists to stay visibly present for the operation's
 //! duration, while the paired label names the concrete current step (`CreateStage::label`).
 
-use micold_core::tokens::{shape, spacing, type_scale, Roles};
 use crate::ui::material::style;
 use iced::widget::{column, progress_bar, text};
 use iced::{Element, Length};
+use micold_core::tokens::{shape, spacing, type_scale, Roles};
 
 /// Bar thickness, in logical pixels.
 const HEIGHT: f32 = 4.0;

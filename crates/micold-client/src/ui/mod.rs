@@ -24,11 +24,11 @@ mod worktree_rename;
 use crate::app::{Message, Overlay, State};
 use crate::icons::Icon;
 use crate::motion::Animator;
-use micold_core::tokens::{self, spacing, Roles};
 use iced::widget::{column, container, mouse_area, row, stack, Space};
 use iced::{Element, Length, Subscription};
 use micold_core::session::SessionId;
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, spacing, Roles};
 
 // The icon font and the two primitives that draw a glyph moved into the component library with
 // everything else that decides an appearance (FR-001). Re-exported here for `main`, which
@@ -315,14 +315,15 @@ pub fn view<'a>(
             on_context: Some(Message::ProjectMenuToggled(e.path)),
         })
         .collect();
-    let switcher: Option<cdk::overlay::Surface<'a, Message>> = material::ProjectSwitcherOverlay::new(
-        switcher_rows,
-        Message::ProjectSelectorOpened,
-        Message::ProjectSwitcherToggled,
-        roles,
-    )
-    .open(state.project_switcher_open)
-    .into();
+    let switcher: Option<cdk::overlay::Surface<'a, Message>> =
+        material::ProjectSwitcherOverlay::new(
+            switcher_rows,
+            Message::ProjectSelectorOpened,
+            Message::ProjectSwitcherToggled,
+            roles,
+        )
+        .open(state.project_switcher_open)
+        .into();
 
     // The right-clicked project's context menu, at the cursor (feature 015), like a normal desktop
     // context menu: the panel's top-left corner sits at the click point. The anchor is clamped at
@@ -403,23 +404,21 @@ pub fn view<'a>(
         Overlay::Settings => state.settings_draft.as_ref().and_then(|draft| {
             settings_form::modal(draft, scheme, overlay_progress, env_include_outcome)
         }),
-        Overlay::ConfirmWorktreeDelete => {
-            state.worktree_delete_target.as_ref().and_then(|dir| {
-                let branch = state
-                    .worktrees
-                    .iter()
-                    .find(|w| &w.dir_name == dir)
-                    .and_then(|w| w.branch.as_deref());
-                confirm_delete::modal(
-                    dir,
-                    &state.worktree_display_name(dir),
-                    branch,
-                    state.worktree_delete_keep_branch,
-                    scheme,
-                    overlay_progress,
-                )
-            })
-        }
+        Overlay::ConfirmWorktreeDelete => state.worktree_delete_target.as_ref().and_then(|dir| {
+            let branch = state
+                .worktrees
+                .iter()
+                .find(|w| &w.dir_name == dir)
+                .and_then(|w| w.branch.as_deref());
+            confirm_delete::modal(
+                dir,
+                &state.worktree_display_name(dir),
+                branch,
+                state.worktree_delete_keep_branch,
+                scheme,
+                overlay_progress,
+            )
+        }),
         Overlay::RenameWorktree => state
             .worktree_rename_draft
             .as_ref()

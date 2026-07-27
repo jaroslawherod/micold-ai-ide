@@ -6,12 +6,12 @@
 //! `Element`. Reused across the sidebar and any icon action rather than each feature forking one.
 
 use crate::icons::Icon;
-use crate::ui::material::text::TypeRole;
-use micold_core::tokens::{spacing, Rgb, Roles};
 use crate::ui::material::glyph::{icon, icon_colored};
 use crate::ui::material::style;
+use crate::ui::material::text::TypeRole;
 use iced::widget::button;
 use iced::Element;
+use micold_core::tokens::{spacing, Rgb, Roles};
 use std::marker::PhantomData;
 
 /// A boxed button style function — lets [`From::from`] pick between [`style::text_button`] and

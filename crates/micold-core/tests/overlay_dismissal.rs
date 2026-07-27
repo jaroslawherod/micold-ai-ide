@@ -63,7 +63,10 @@ fn the_rule_is_total_across_every_surface_and_trigger() {
         Surface::ALL.len() * Trigger::ALL.len(),
         "every surface/trigger combination must be defined"
     );
-    assert!(combinations >= 9, "expected at least 3 surfaces x 3 triggers");
+    assert!(
+        combinations >= 9,
+        "expected at least 3 surfaces x 3 triggers"
+    );
 }
 
 /// The behavior change this feature sanctions is *unification*, which is only meaningful if the

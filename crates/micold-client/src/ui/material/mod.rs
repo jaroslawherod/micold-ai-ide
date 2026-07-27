@@ -79,9 +79,9 @@ pub fn theme(scheme: micold_core::theme::ColorScheme) -> iced::Theme {
     style::theme(scheme)
 }
 
-use micold_core::tokens::{spacing, type_scale, Roles};
 use iced::widget::{container, text as text_widget, tooltip};
 use iced::Element;
+use micold_core::tokens::{spacing, type_scale, Roles};
 
 /// Re-exported so call sites can pick a `Tooltip::position(...)` without reaching into `iced`
 /// directly.

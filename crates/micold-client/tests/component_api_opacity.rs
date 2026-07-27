@@ -98,7 +98,10 @@ fn public_signatures() -> Vec<(String, String)> {
 /// Things a public component signature must not name, and what each would mean if it did.
 const FORBIDDEN: &[(&str, &str)] = &[
     ("MotionKey", "an animation key the caller has to allocate"),
-    ("Animator", "an animator handle the caller has to own and tick"),
+    (
+        "Animator",
+        "an animator handle the caller has to own and tick",
+    ),
     ("Track", "the animator's internal per-element state"),
     (
         "progress: f32",
@@ -124,7 +127,12 @@ const FORBIDDEN: &[(&str, &str)] = &[
 /// backdrop)` is *about* the progress, the way `container(x).padding(p)` is about the padding.
 /// They are the seam where a self-animating component reads its own track — an owner, not a
 /// caller. Everything else must have none.
-const SANCTIONED: &[&str] = &["pub fn fade", "pub fn slide", "pub fn scale", "pub fn expand"];
+const SANCTIONED: &[&str] = &[
+    "pub fn fade",
+    "pub fn slide",
+    "pub fn scale",
+    "pub fn expand",
+];
 
 /// Signatures that still take a progress value **and should not**.
 ///
@@ -156,7 +164,10 @@ fn leaking_modules() -> Vec<(String, String)> {
         }
         for (needle, meaning) in FORBIDDEN {
             if sig.contains(needle) {
-                out.push((module.clone(), format!("`{sig}` names `{needle}` — {meaning}")));
+                out.push((
+                    module.clone(),
+                    format!("`{sig}` names `{needle}` — {meaning}"),
+                ));
             }
         }
     }

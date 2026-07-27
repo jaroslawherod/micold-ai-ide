@@ -141,6 +141,9 @@ fn prose_about_appearance_does_not_count_as_appearance() {
     let src = "//! This module holds no Roles.\n/* not even tokens:: here */\nlet x = 1;\n";
     let code = code_only(src);
     assert!(!code.contains("Roles"), "line comment survived stripping");
-    assert!(!code.contains("tokens::"), "block comment survived stripping");
+    assert!(
+        !code.contains("tokens::"),
+        "block comment survived stripping"
+    );
     assert!(code.contains("let x = 1;"), "stripper ate real code");
 }

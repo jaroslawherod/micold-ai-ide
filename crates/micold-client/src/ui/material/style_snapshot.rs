@@ -29,13 +29,13 @@
 
 use std::fmt::Write as _;
 
+use super::style;
+use crate::app::NoticeLevel;
 use iced::widget::{button, checkbox, container, pick_list, scrollable, text_input};
 use iced::Theme;
-use crate::app::NoticeLevel;
-use micold_core::tokens::{self, Roles};
-use super::style;
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, Roles};
 
 const FIXTURE: &str = include_str!("../../../tests/fixtures/style_snapshot.txt");
 
@@ -59,7 +59,12 @@ fn render_all() -> String {
 
         // --- Bare colours ---------------------------------------------------
         writeln!(s, "separator = {:?}", style::separator(r)).unwrap();
-        writeln!(s, "disabled_color(on_surface) = {:?}", style::disabled_color(r.on_surface)).unwrap();
+        writeln!(
+            s,
+            "disabled_color(on_surface) = {:?}",
+            style::disabled_color(r.on_surface)
+        )
+        .unwrap();
 
         // --- Container surfaces ---------------------------------------------
         let containers: Vec<(&str, ContainerStyleFn)> = vec![
@@ -86,7 +91,12 @@ fn render_all() -> String {
             let f = style::chip(r.tag_fill(t));
             writeln!(s, "container.chip[{t:?}] = {:?}", f(&theme)).unwrap();
         }
-        writeln!(s, "container.chip[issue] = {:?}", style::chip(r.tag_issue)(&theme)).unwrap();
+        writeln!(
+            s,
+            "container.chip[issue] = {:?}",
+            style::chip(r.tag_issue)(&theme)
+        )
+        .unwrap();
 
         // --- Text ------------------------------------------------------------
         writeln!(s, "text.muted = {:?}", style::muted(r)(&theme)).unwrap();
@@ -136,11 +146,31 @@ fn render_all() -> String {
         let cb = style::checkbox(r);
         for checked in [false, true] {
             for (st_name, st) in [
-                ("active", checkbox::Status::Active { is_checked: checked }),
-                ("hovered", checkbox::Status::Hovered { is_checked: checked }),
-                ("disabled", checkbox::Status::Disabled { is_checked: checked }),
+                (
+                    "active",
+                    checkbox::Status::Active {
+                        is_checked: checked,
+                    },
+                ),
+                (
+                    "hovered",
+                    checkbox::Status::Hovered {
+                        is_checked: checked,
+                    },
+                ),
+                (
+                    "disabled",
+                    checkbox::Status::Disabled {
+                        is_checked: checked,
+                    },
+                ),
             ] {
-                writeln!(s, "checkbox[{st_name},checked={checked}] = {:?}", cb(&theme, st)).unwrap();
+                writeln!(
+                    s,
+                    "checkbox[{st_name},checked={checked}] = {:?}",
+                    cb(&theme, st)
+                )
+                .unwrap();
             }
         }
 
@@ -201,7 +231,10 @@ fn resolved_styles_match_the_recorded_baseline() {
 
     if std::env::var_os("UPDATE_STYLE_SNAPSHOT").is_some() {
         std::fs::write(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/style_snapshot.txt"),
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/style_snapshot.txt"
+            ),
             &current,
         )
         .expect("write snapshot fixture");
@@ -248,7 +281,10 @@ fn snapshot_covers_both_schemes_and_every_component() {
         "container.notification[error]",
         "text.muted",
     ] {
-        assert!(s.contains(probe), "snapshot is missing coverage for `{probe}`");
+        assert!(
+            s.contains(probe),
+            "snapshot is missing coverage for `{probe}`"
+        );
     }
     // A truncated fixture must fail loudly rather than pass by covering nothing.
     let entries = s.lines().filter(|l| l.contains(" = ")).count();

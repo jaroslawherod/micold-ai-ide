@@ -27,7 +27,9 @@ fn run_to_rest(p: &mut Progress, target: f32, speed: f32) -> usize {
             return frame;
         }
     }
-    panic!("progress never came to rest — a step that does not converge would hang the render loop");
+    panic!(
+        "progress never came to rest — a step that does not converge would hang the render loop"
+    );
 }
 
 /// The headline property: two instances are independent. This is what the hashed row-identity
@@ -43,7 +45,11 @@ fn two_instances_animate_independently() {
     }
 
     assert!(a.value() > 0.0, "a should have moved");
-    assert_eq!(b.value(), 0.0, "b must not have moved — it was never advanced");
+    assert_eq!(
+        b.value(),
+        0.0,
+        "b must not have moved — it was never advanced"
+    );
 
     // And now only `b`, faster. Neither observes the other.
     for _ in 0..2 {
@@ -93,7 +99,11 @@ fn a_track_stops_asking_for_frames_once_it_arrives() {
     let mut p = Progress::new(0.0);
     let frames = run_to_rest(&mut p, 1.0, 0.25);
 
-    assert_eq!(p.value(), 1.0, "must land exactly on the target, not near it");
+    assert_eq!(
+        p.value(),
+        1.0,
+        "must land exactly on the target, not near it"
+    );
     assert!(!p.animating(), "must be quiescent at rest");
     assert!(
         frames <= 8,
@@ -160,6 +170,9 @@ fn a_degenerate_speed_arrives_rather_than_hanging() {
         let mut p = Progress::new(0.0);
         p.advance_to(1.0, speed);
         assert_eq!(p.value(), 1.0, "speed {speed} must arrive immediately");
-        assert!(!p.animating(), "speed {speed} must not keep asking for frames");
+        assert!(
+            !p.animating(),
+            "speed {speed} must not keep asking for frames"
+        );
     }
 }

@@ -74,10 +74,7 @@ impl<'a, M: Clone + 'a> From<Modal<'a, M>> for Option<Surface<'a, M>> {
 
         // The dialog fades its contents toward its own surface colour, then lifts (scales about
         // its centre). Together with the scrim this reads as a Material dialog enter/exit.
-        let dialog = super::scale(
-            super::fade(dialog, progress, roles.surface),
-            progress,
-        );
+        let dialog = super::scale(super::fade(dialog, progress, roles.surface), progress);
 
         let surface = Surface::new(Layer::Dialog, dialog, Anchor::Center).scrim(Color {
             a: progress * SCRIM_ALPHA,

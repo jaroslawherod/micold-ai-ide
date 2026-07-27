@@ -17,11 +17,23 @@ use micold_core::tokens::{self, shape, spacing, type_scale, Rgb};
 fn every_role_value_survives_the_move_unchanged() {
     let light = tokens::roles(ColorScheme::Light);
     assert_eq!(light.background, Rgb::hex(0xFDFCFF), "light.background");
-    assert_eq!(light.on_background, Rgb::hex(0x1A1C1E), "light.on_background");
+    assert_eq!(
+        light.on_background,
+        Rgb::hex(0x1A1C1E),
+        "light.on_background"
+    );
     assert_eq!(light.surface, Rgb::hex(0xFFFFFF), "light.surface");
     assert_eq!(light.on_surface, Rgb::hex(0x1A1C1E), "light.on_surface");
-    assert_eq!(light.surface_variant, Rgb::hex(0xEEF0F4), "light.surface_variant");
-    assert_eq!(light.on_surface_variant, Rgb::hex(0x43474E), "light.on_surface_variant");
+    assert_eq!(
+        light.surface_variant,
+        Rgb::hex(0xEEF0F4),
+        "light.surface_variant"
+    );
+    assert_eq!(
+        light.on_surface_variant,
+        Rgb::hex(0x43474E),
+        "light.on_surface_variant"
+    );
     assert_eq!(light.primary, Rgb::hex(0x005DB8), "light.primary");
     assert_eq!(light.on_primary, Rgb::hex(0xFFFFFF), "light.on_primary");
     assert_eq!(light.outline, Rgb::hex(0x73777F), "light.outline");
@@ -33,8 +45,16 @@ fn every_role_value_survives_the_move_unchanged() {
     assert_eq!(dark.on_background, Rgb::hex(0xE2E2E6), "dark.on_background");
     assert_eq!(dark.surface, Rgb::hex(0x212426), "dark.surface");
     assert_eq!(dark.on_surface, Rgb::hex(0xE2E2E6), "dark.on_surface");
-    assert_eq!(dark.surface_variant, Rgb::hex(0x2B2F31), "dark.surface_variant");
-    assert_eq!(dark.on_surface_variant, Rgb::hex(0xC3C7CF), "dark.on_surface_variant");
+    assert_eq!(
+        dark.surface_variant,
+        Rgb::hex(0x2B2F31),
+        "dark.surface_variant"
+    );
+    assert_eq!(
+        dark.on_surface_variant,
+        Rgb::hex(0xC3C7CF),
+        "dark.on_surface_variant"
+    );
     assert_eq!(dark.primary, Rgb::hex(0xA6C8FF), "dark.primary");
     assert_eq!(dark.on_primary, Rgb::hex(0x00325B), "dark.on_primary");
     assert_eq!(dark.outline, Rgb::hex(0x8D9199), "dark.outline");

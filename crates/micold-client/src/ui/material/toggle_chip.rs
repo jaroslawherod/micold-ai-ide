@@ -7,10 +7,10 @@
 //!
 //! Exposed as a chainable builder terminating in `.into()` (Principle VIII builder-API rule).
 
-use micold_core::tokens::{shape, sidebar, spacing, Rgb, Roles};
 use crate::ui::material::style;
 use iced::widget::{button, text};
 use iced::{Background, Border, Color, Element};
+use micold_core::tokens::{shape, sidebar, spacing, Rgb, Roles};
 
 /// A pill-shaped on/off chip: filled in its accent while active, outlined while inactive.
 /// Pressing it emits `on_press`.

@@ -5,13 +5,13 @@
 //! values come from `src/tokens.rs` (contracts/design-tokens.md).
 
 use crate::app::NoticeLevel;
-use micold_core::tokens::{self, shape, Rgb, Roles};
 use iced::overlay::menu;
 use iced::widget::{
     button, checkbox as checkbox_widget, container, pick_list, scrollable, text, text_input,
 };
 use iced::{Background, Border, Color, Theme};
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, shape, Rgb, Roles};
 
 /// Convert a token color into an iced color.
 pub fn color(c: Rgb) -> Color {

@@ -14,9 +14,9 @@ use crate::ui::material::{
 };
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
-use micold_core::tokens::{self, spacing, Roles};
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, spacing, Roles};
 use micold_core::worktree::{BlockReason, BranchOrigin, BranchSituation, CreateMode};
 
 /// The add-worktree form as a modal surface, at transition `progress`
@@ -75,12 +75,8 @@ pub fn modal<'a>(
         if form.source == BranchSource::Existing {
             if let Some(reason) = &candidate.blocked_by {
                 fields = fields.push(
-                    Text::new(
-                        block_sentence(&candidate.name, reason),
-                        TypeRole::Label,
-                        r,
-                    )
-                    .tint(r.error),
+                    Text::new(block_sentence(&candidate.name, reason), TypeRole::Label, r)
+                        .tint(r.error),
                 );
             }
         }

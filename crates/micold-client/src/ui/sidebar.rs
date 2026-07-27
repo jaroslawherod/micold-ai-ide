@@ -9,9 +9,9 @@ use crate::ui::material::{
 };
 use iced::widget::{column, container, mouse_area, row, Space};
 use iced::{Alignment, Element, Length};
-use micold_core::tokens::{self, sidebar, spacing, Rgb, Roles};
 use micold_core::naming::Tag;
 use micold_core::session::{SessionLifecycle, SessionLocation};
+use micold_core::tokens::{self, sidebar, spacing, Rgb, Roles};
 use micold_core::worktree::WorktreeStatus;
 
 /// Width of the draggable resize handle between the sidebar and the main area.
@@ -152,10 +152,10 @@ pub fn view<'a>(
     let content = column![header, filter_accordion, body]
         .spacing(spacing::SM)
         .padding(iced::Padding {
-            top: spacing::SM as f32,
-            bottom: spacing::SM as f32,
-            left: spacing::XS as f32,
-            right: spacing::XS as f32,
+            top: spacing::SM,
+            bottom: spacing::SM,
+            left: spacing::XS,
+            right: spacing::XS,
         })
         .width(Length::Fixed(width))
         .height(Length::Fill);

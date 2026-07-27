@@ -129,8 +129,8 @@ fn declarations() -> Vec<Declared> {
             }
 
             // Anything mentioning the type in a `From<...>` position terminates in `.into()`.
-            let convertible = code.contains(&format!("From<{name}<"))
-                || code.contains(&format!("From<{name}>"));
+            let convertible =
+                code.contains(&format!("From<{name}<")) || code.contains(&format!("From<{name}>"));
 
             // Public fields make it a record the caller populates, not a builder.
             let body = struct_body(&code, &name);
@@ -205,7 +205,8 @@ fn inherent_methods(code: &str, name: &str) -> (bool, Vec<String>) {
 
         // Only inherent impls of this type; trait impls (`impl From<X> for Y`) are not the
         // builder surface.
-        let targets_type = header.contains(&format!(" {name}<")) || header.ends_with(&format!(" {name} "));
+        let targets_type =
+            header.contains(&format!(" {name}<")) || header.ends_with(&format!(" {name} "));
         if !targets_type || header.contains(" for ") {
             continue;
         }

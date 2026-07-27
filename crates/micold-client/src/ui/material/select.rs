@@ -12,10 +12,10 @@
 //! seeds the open menu's highlighted row from the current value, so reopening the list visibly
 //! marks the current selection (FR-003) with no bespoke state of this app's own.
 
-use micold_core::tokens::{spacing, type_scale, Roles};
 use crate::ui::material::style;
 use iced::widget::pick_list;
 use iced::{Element, Length};
+use micold_core::tokens::{spacing, type_scale, Roles};
 
 /// A Material-styled select control. Builder form (Principle VIII):
 /// `Select::new(options, selected, on_selected, roles).placeholder("...").into()`.

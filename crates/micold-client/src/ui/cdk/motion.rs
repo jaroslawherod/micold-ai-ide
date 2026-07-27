@@ -16,8 +16,8 @@
 //! **No appearance.** How *far* a transition has come is behaviour; what it looks like on the way
 //! is the material layer's business, and the speed comes from the caller.
 
-use iced::window::{self, RedrawRequest};
 use iced::advanced::Shell;
+use iced::window;
 use iced::Event;
 
 /// One animated scalar, owned by the widget that animates it.
@@ -101,7 +101,7 @@ impl Progress {
             self.target = target;
         }
         if self.animating() {
-            shell.request_redraw(RedrawRequest::NextFrame);
+            shell.request_redraw();
         }
         self.value
     }

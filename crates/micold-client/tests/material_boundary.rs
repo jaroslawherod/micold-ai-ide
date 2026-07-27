@@ -203,7 +203,10 @@ fn breakdown() -> String {
                 style_references(&code),
                 raw_size_references(&code),
             );
-            (w + s + z, format!("  {name:<28} widgets={w:<4} style={s:<4} sizes={z}"))
+            (
+                w + s + z,
+                format!("  {name:<28} widgets={w:<4} style={s:<4} sizes={z}"),
+            )
         })
         .filter(|(total, _)| *total > 0)
         .collect();

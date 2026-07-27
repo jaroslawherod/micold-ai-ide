@@ -5,11 +5,11 @@
 
 use crate::app::{help_actions, Message, State};
 use crate::icons::Icon;
-use micold_core::tokens;
 use crate::ui::material::{MenuItem, MenuTrigger, ProjectSwitcherTrigger, Toolbar};
 use iced::Element;
 use micold_core::metadata::AppMetadata;
 use micold_core::theme::{ColorScheme, ThemePreference};
+use micold_core::tokens;
 
 /// The icon representing the current theme mode (shown on the menu's mode toggle).
 fn mode_icon(pref: ThemePreference) -> Icon {

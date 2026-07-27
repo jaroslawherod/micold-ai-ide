@@ -15,7 +15,6 @@ use crate::ui::material::{
     self, Button, ButtonVariant, ContextMenu, IconButton, MenuItem, SurfaceKind, TerminalPane,
     Text, Tooltip, TooltipPosition, TypeRole,
 };
-use micold_core::tokens::{self, spacing, Rgb};
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
@@ -24,6 +23,7 @@ use iced::{Alignment, Color, Element, Font, Length};
 use micold_core::protocol::grid::{WireColor, WireStyle};
 use micold_core::session::{SessionId, SessionLifecycle, ShellLifecycle, TerminalMode};
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, spacing, Rgb};
 
 /// The terminal font size (monospace). Cell metrics are derived from it.
 pub const TERM_FONT_SIZE: f32 = 13.0;

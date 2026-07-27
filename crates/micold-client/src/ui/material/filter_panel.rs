@@ -9,8 +9,8 @@
 
 use super::{IconButton, Tooltip};
 use crate::icons::Icon;
-use micold_core::tokens::Roles;
 use iced::Element;
+use micold_core::tokens::Roles;
 
 /// The filter trigger: an icon button (emitting `on_toggle`) placed in the sidebar header,
 /// tinted to reflect whether any filter is currently active (feature 009 US2, research R4).

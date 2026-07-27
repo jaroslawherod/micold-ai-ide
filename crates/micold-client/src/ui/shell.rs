@@ -4,9 +4,7 @@
 
 use crate::app::{Message, State};
 use crate::icons::{icon_role, Icon, IconSurface};
-use crate::ui::material::{
-    self, Button, ButtonVariant, Glyph, SurfaceKind, Text, TypeRole,
-};
+use crate::ui::material::{self, Button, ButtonVariant, Glyph, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::project::Availability;
@@ -161,10 +159,12 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
 
             let mut entry = row![].spacing(spacing::SM).align_y(Alignment::Center);
             if is_active {
-                entry = entry.push(Glyph::new(Icon::ActiveMarker, TypeRole::Body, r).tint(badge_tint));
+                entry =
+                    entry.push(Glyph::new(Icon::ActiveMarker, TypeRole::Body, r).tint(badge_tint));
             }
             if !available {
-                entry = entry.push(Glyph::new(Icon::Unavailable, TypeRole::Body, r).tint(error_tint));
+                entry =
+                    entry.push(Glyph::new(Icon::Unavailable, TypeRole::Body, r).tint(error_tint));
             }
             entry = entry.push(
                 Text::new(project.display_name.clone(), TypeRole::Body, r).width(Length::Fill),

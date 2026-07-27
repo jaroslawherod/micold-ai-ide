@@ -38,7 +38,12 @@ pub fn modal<'a>(
             r
         )
         .on_press(Message::SelectorNavigatedUp),
-        Text::new(selector.current_dir.display().to_string(), TypeRole::Label, r).muted(),
+        Text::new(
+            selector.current_dir.display().to_string(),
+            TypeRole::Label,
+            r
+        )
+        .muted(),
     ]
     .spacing(spacing::SM)
     .align_y(iced::Alignment::Center);
