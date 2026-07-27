@@ -38,8 +38,10 @@ pub struct Welcome {
 
 /// The outcome of a connect attempt.
 pub enum Connected {
-    /// Handshake accepted.
-    Ready(DaemonConnection, Welcome),
+    /// Handshake accepted. The connection is boxed (clippy::large_enum_variant) — `DaemonSettings`
+    /// gained a `String` field for the environment-include setting (FR-012b, BUG-003), which tipped
+    /// this variant well past `Refused`'s size.
+    Ready(Box<DaemonConnection>, Welcome),
     /// Handshake refused — typically a version/schema mismatch needing the restart action (FR-022).
     Refused(RefusalReason),
 }
@@ -92,7 +94,7 @@ pub async fn handshake(stream: Stream, client_build: &str) -> io::Result<Connect
             catalog,
             settings,
         }))) => Ok(Connected::Ready(
-            framed,
+            Box::new(framed),
             Welcome {
                 daemon_build,
                 catalog,

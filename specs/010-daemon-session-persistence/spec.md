@@ -329,6 +329,15 @@ a session survived; confirm it does not survive without the setting.
   to retention at all times, including while no client is attached. A client MUST be able to read its
   current value and request a change; a requested change MUST take effect for all sessions and MUST
   persist across restarts of both the client and the service.
+- **FR-012b** *(added — BUG-003)*: The environment-include setting (feature 011: an enabled flag, a
+  script path, and a timeout — e.g. sourcing the user's `~/.bashrc`) is, like the scrollback limit
+  (FR-012a), a durable, service-owned setting. The service MUST read and apply it — resolving the
+  configured script in the session's own project/worktree directory — for every session/shell process
+  it spawns, including a session started fresh, a session respawned after a crash (FR-005), and a
+  regular-terminal shell instance opened for an existing session, identically to how a client-driven
+  launch would resolve it. A client MUST be able to read and change all three parts of this setting
+  through the service (mirroring FR-012a), and a change MUST take effect for every subsequently
+  spawned session/shell process without requiring a service restart.
 
 ### Viewing sessions
 
@@ -609,3 +618,12 @@ planning, but the spec commits to them so requirements stay testable.
   owns it. The service is the single writer (FR-008); a user editing the file underneath it is
   unsupported and its outcome is undefined. (Scoped out per user decision after analysis G3; the
   edge case below is retained only as a known non-goal.)
+
+**Bugfix**: 2026-07-27 — BUG-003 The daemon's own session-spawn path (`start_session`,
+`respawn_primary`, `open_shell` in `crates/micold-daemon/src/state.rs`) never resolved the
+environment-include setting (feature 011) at all — every spawned process's environment was
+hardcoded to just `TERM`, so variables exported from a user's `~/.bashrc` (or whatever script is
+configured) never reached a daemon-spawned session, even though the client (`micold-client`)
+resolves this correctly for its own launch path. FR-012b added (env-include is a service-owned
+setting the daemon MUST apply at every spawn site, mirroring FR-012a's scrollback precedent). See
+`bugs/BUG-003.md`.

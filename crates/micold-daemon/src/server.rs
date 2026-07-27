@@ -553,11 +553,28 @@ where
             ClientMsg::SettingsSet {
                 req,
                 scrollback_lines,
+                env_include_enabled,
+                env_include_script_path,
+                env_include_timeout_secs,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
                     None => Ok(()),
-                };
+                }
+                .and_then(|()| {
+                    if env_include_enabled.is_none()
+                        && env_include_script_path.is_none()
+                        && env_include_timeout_secs.is_none()
+                    {
+                        Ok(())
+                    } else {
+                        state.set_env_include(
+                            env_include_enabled,
+                            env_include_script_path,
+                            env_include_timeout_secs,
+                        )
+                    }
+                });
                 match result {
                     Ok(()) => state.send(
                         id,
@@ -787,6 +804,11 @@ where
                     );
                     continue;
                 }
+                // Computed before `repo` moves into the closure below — the same path a session
+                // located in this worktree resolves as its `cwd`, so the env-include cache entry for
+                // it can be dropped once the delete succeeds (BUG-003: a worktree recreated for the
+                // same branch reuses this exact path).
+                let cache_path = repo.join(".claude/worktrees").join(&dir_name);
                 let dir2 = dir_name.clone();
                 let result = tokio::task::spawn_blocking(move || {
                     let target = repo.join(".claude/worktrees").join(&dir2);
@@ -810,6 +832,7 @@ where
                                 tracing::warn!(%e, "archiving deleted worktree's sessions failed")
                             }
                         }
+                        state.invalidate_env_include(&cache_path);
                         refresh_worktrees_and_broadcast(state, project).await;
                         state.send(
                             id,

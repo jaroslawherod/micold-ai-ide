@@ -106,6 +106,9 @@ async fn a_settings_mutation_reaches_a_second_connected_client() {
     a.send(Frame::Control(ClientMsg::SettingsSet {
         req: 1,
         scrollback_lines: Some(5_000),
+        env_include_enabled: None,
+        env_include_script_path: None,
+        env_include_timeout_secs: None,
     }))
     .await
     .unwrap();

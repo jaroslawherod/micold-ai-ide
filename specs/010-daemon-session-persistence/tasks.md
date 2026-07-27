@@ -203,7 +203,7 @@ stderr preserved, and a second window observing the change (quickstart S8).
 
 ### Implementation
 
-- [X] T053 [US3] Implement the correlated mutating-request handlers (`ProjectAdd/Remove/Rename`, `WorktreeCreate/Delete/Rename`, `SessionCreate/Delete`, `SettingsSet`) resolving to exactly one `OperationOk`/`OperationError` in `crates/micold-daemon/src/catalog.rs`; every git call a named RPC, no `GitRun` escape hatch (FR-009). **Main-sync**: `WorktreeDelete` and `SessionDelete` must **archive** the affected sessions (`Session::archive()`), not drop them — mirroring main `7dc9c8a` so a subsequent reconcile cannot resurrect them; env setup for spawned sessions must resolve the environment in the session's own directory (main `2862bab`, `env_include`). **Main-sync (2026-07-23, main `d88c7a1`)**: the kill + archive + record-drop for a `WorktreeDelete` must be **gated on the removal actually succeeding** — never done unconditionally before the git delete is attempted. On a failed delete (locked worktree, branch checked out elsewhere, permission error) the sessions must be left **untouched** (not killed, not archived, records intact); otherwise the durable archive marker turns an FR-023-recoverable failure into permanent session loss, since the marker also blocks reconciliation-based recovery. The `OperationError` reply carries git's stderr (T050); the catalog reconciles from git truth either way.
+- [X] T053 [US3] Implement the correlated mutating-request handlers (`ProjectAdd/Remove/Rename`, `WorktreeCreate/Delete/Rename`, `SessionCreate/Delete`, `SettingsSet`) resolving to exactly one `OperationOk`/`OperationError` in `crates/micold-daemon/src/catalog.rs`; every git call a named RPC, no `GitRun` escape hatch (FR-009). **Main-sync**: `WorktreeDelete` and `SessionDelete` must **archive** the affected sessions (`Session::archive()`), not drop them — mirroring main `7dc9c8a` so a subsequent reconcile cannot resurrect them; env setup for spawned sessions must resolve the environment in the session's own directory (main `2862bab`, `env_include`). **Main-sync (2026-07-23, main `d88c7a1`)**: the kill + archive + record-drop for a `WorktreeDelete` must be **gated on the removal actually succeeding** — never done unconditionally before the git delete is attempted. On a failed delete (locked worktree, branch checked out elsewhere, permission error) the sessions must be left **untouched** (not killed, not archived, records intact); otherwise the durable archive marker turns an FR-023-recoverable failure into permanent session loss, since the marker also blocks reconciliation-based recovery. The `OperationError` reply carries git's stderr (T050); the catalog reconciles from git truth either way. **Re-closed by T095 (was reopened BUG-003, 2026-07-27)**: the `env_include` clause above was unimplemented — `micold_core::env_include` was referenced nowhere in `crates/micold-daemon/`, and all three PTY-spawn sites in `state.rs` hardcoded a `TERM`-only environment. Fixed by T093–T095 (Phase 13). The RPC handlers, archive-on-delete, and gated-removal behavior described elsewhere in this task were unaffected throughout.
 - [X] T054 [US3] Fix the current dropped-error violation: worktree deletion errors must surface (was discarded at `src/main.rs:783-784`) (FR-032, Principle III).
 - [X] T055 [US3] Implement client-side pending/disabled control state per in-flight `req` (no duplicate submission) and the unknown-outcome resolution on reconnect in `crates/micold-client/`.
 - [X] T056 [US3] Implement empty-session pruning that runs **only** for a project with an attached client (FR-007a) in `crates/micold-daemon/src/catalog.rs`. **Main-sync**: pruning must treat already-`archived` sessions as gone (never revive or re-count them) and mark, not delete, so it composes with the anti-resurrection invariant (main `93a0a08`).
@@ -359,6 +359,138 @@ See `bugs/BUG-001.md`.
 
 ---
 
+## Phase 13: Bugfix BUG-003 — daemon never resolves `env_include`, so no daemon-spawned session sees `~/.bashrc`-exported variables
+
+**Goal**: All three of the daemon's own PTY-spawn sites (`start_session`, `respawn_primary`,
+`open_shell` in `crates/micold-daemon/src/state.rs`) resolve the environment-include setting
+(feature 011) in the session's own directory and merge it into the spawned process's environment,
+exactly as `micold-client`'s launch path already does — and the three `env_include_*` settings
+fields become readable/settable through the daemon, mirroring the existing `scrollback_lines`
+precedent (FR-012a/FR-012b). Reopens T053's env-include clause (see above).
+
+**Independent Test**: Configure `env_include` (enabled, default `~/.bashrc` path) with a plain
+`export SOME_TOKEN=abc123` line; start a session so the daemon spawns it (fresh `SessionCreate`,
+a crash respawn, or a regular-terminal `open_shell` instance); confirm the spawned process's
+environment contains `SOME_TOKEN=abc123`, matching what `micold-client`'s own spawn path already
+produces for the same script.
+
+### Tests for BUG-003 (MANDATORY — Constitution Principle I) ⚠️
+
+> Written FIRST; confirmed to FAIL before implementation.
+
+- [X] T092 [P] [BUG-003] Add a failing test in `crates/micold-daemon/tests/session_start.rs` (or a
+  new `env_include_spawn.rs`, whichever fits): construct a `Catalog`/`DaemonState` test harness
+  directly against a `Settings` with `env_include_enabled: true` and `env_include_script_path`
+  pointing at a real disposable script containing a plain unconditional `export` (mirroring the
+  real-subprocess pattern `tests/env_include_resolve.rs` established for BUG-001/BUG-002 in
+  `specs/011-env-include-script/`) — no dependency on T093/T094, since `Settings` already carries
+  the three fields today (`crates/micold-core/src/settings.rs:94-102`); only the spawn path (T095)
+  needs to change for this to pass. Call `start_session`, and assert the spawned `PtySession`'s
+  child process actually has that variable set. Confirmed failing today: the hardcoded
+  `vec![("TERM", ...)]` means no such variable can ever appear (`bugs/BUG-003.md`). **Done**: landed
+  co-located in `session_start.rs` as `a_daemon_spawned_session_sees_env_include_resolved_variables`
+  — writes a disposable script exporting `BUG003_MARKER`, starts a Regular (shell) session via
+  `start_session`, drives it with `session_input` to `echo` the variable back, and asserts it
+  appears in the live PTY's rendered grid (mirroring `drive_loop.rs`'s `visible_text` pattern) —
+  proving the variable is actually in the spawned process's own environment, not just resolvable in
+  the abstract.
+- [X] T093 [P] [BUG-003] Extend `DaemonSettings` (`crates/micold-core/src/protocol/messages.rs:
+  620-623`) with `env_include_enabled: bool`, `env_include_script_path: String`,
+  `env_include_timeout_secs: u64`; update `Catalog::settings_wire()`
+  (`crates/micold-daemon/src/catalog.rs:87-91`) to populate them from `self.settings` (mirroring
+  `scrollback_lines`, FR-012b). Read-side only (what the daemon reports to a client); no dependency
+  on T094/T095. **Done**: fields added; `settings_wire()` populates them. `DaemonSettings` dropped
+  its `Copy` derive (a `String` field can't be `Copy`) — no call site relied on copy semantics
+  (every use already constructs or clones it fresh). **Discovered while implementing**: the added
+  `String` field tipped `Connected::Ready(DaemonConnection, Welcome)` (`crates/micold-core/src/
+  connect.rs`) — which embeds a `Welcome` carrying this `DaemonSettings` — over clippy's
+  `large_enum_variant` threshold against the much-smaller `Refused(RefusalReason)` variant; fixed by
+  boxing the connection (`Ready(Box<DaemonConnection>, Welcome)`, matching clippy's own suggested
+  fix), updating the one construction site (`connect.rs::handshake`) and confirming the two
+  destructuring call sites (`micold-client/src/daemon.rs`, `micold-daemon/tests/autospawn.rs`)
+  still compile — they do, since `Box`'s special move-out support lets `conn.split()`/`drop(conn)`
+  work unchanged through the box.
+- [X] T094 [BUG-003] Add `env_include_enabled: Option<bool>`, `env_include_script_path:
+  Option<String>`, `env_include_timeout_secs: Option<u64>` to the `ClientMsg::SettingsSet` variant
+  itself (`crates/micold-core/src/protocol/messages.rs:261-266`, alongside the existing
+  `scrollback_lines: Option<usize>`), and extend the daemon's handler
+  (`crates/micold-daemon/src/server.rs:553-558`) so a client can request a change to any of the
+  three env-include settings, persisting via the same `Catalog`/`SettingsStore` path
+  `set_scrollback` already uses. Write-side counterpart to T093; no dependency on T093/T095 (touches
+  a different message variant and a different settings-mutation path). **Done**: added the three
+  optional fields to `SettingsSet`; `Catalog::set_env_include` (mirroring `set_scrollback`, clamping
+  the timeout via `clamp_env_include_timeout`) and `DaemonState::set_env_include` (mirroring
+  `set_scrollback`'s broadcast-`SettingsChanged` shape) added; `server.rs`'s handler now applies
+  scrollback and/or env-include depending on which fields are present, short-circuiting to a no-op
+  `Ok(())` when neither settings kind is present. `DaemonState::set_env_include` calls
+  `invalidate_env_include_all()` (T095) after persisting, closing the T095/T094 cache-invalidation
+  handoff this task's own text left open. Updated the two other `ClientMsg::SettingsSet`
+  construction sites the new required fields broke (`crates/micold-daemon/tests/
+  daemon_lifecycle.rs`, `crates/micold-core/tests/protocol_roundtrip.rs`) and the `DaemonSettings`
+  struct literals in `protocol_roundtrip.rs`'s round-trip fixtures (T093).
+- [X] T095 [BUG-003] Add a per-directory `env_include` resolution cache owned by
+  `DaemonState`/`Catalog` (there is no `App` in the daemon to hold one, unlike `micold-client`'s
+  `env_include_cache: HashMap<PathBuf, EnvIncludeSnapshot>`); call `micold_core::env_include::
+  resolve` (with `merge_with_term`) against the session's own `cwd` at all three spawn sites in
+  `crates/micold-daemon/src/state.rs` — `start_session` (replacing the hardcoded `env` at line 633),
+  `respawn_primary` (line 820), `open_shell` (line 952) — gated on `env_include_enabled` and
+  short-circuiting to `TERM`-only when disabled or the path is blank, mirroring `micold-client`'s
+  existing caller-side convention, reading straight from `Catalog`'s already-loaded `Settings` (no
+  dependency on T093/T094 — those only add a *wire* projection/mutation path for clients, which
+  this task's spawn-time read does not go through). Invalidate the cache entry for a path on
+  `WorktreeDelete` (mirroring the follow-on fix recorded in
+  `specs/011-env-include-script/bugs/BUG-002.md`'s Resolution). If T094 lands first, also invalidate
+  every cached directory on a `SettingsSet` that changes any of the three fields; if T095 lands
+  first, T094 must add that invalidation call when it wires up the handler — whichever task lands
+  second closes this loop. Makes T092 pass; re-closes T053's env-include clause. **Done**: added
+  `env_include_cache: HashMap<PathBuf, Vec<(String, String)>>` to `Inner` (caches the already-
+  `merge_with_term`-merged vars, ready to hand straight to a spawn site's `env`);
+  `DaemonState::env_include_vars_for(cwd)` reads the enabled/path/timeout settings and checks the
+  cache under one short lock, drops the lock before calling `env_include::resolve` (which spawns a
+  real subprocess and may block up to the configured timeout — the module's existing invariant that
+  blocking work never happens under the state lock, same reason PTY spawning itself is off-lock),
+  then re-locks briefly to cache the result. All three spawn sites now call
+  `self.env_include_vars_for(&cwd)` instead of the hardcoded `vec![("TERM", ...)]`.
+  `DaemonState::invalidate_env_include`/`invalidate_env_include_all` added; the `WorktreeDelete`
+  handler (`server.rs`) now calls `invalidate_env_include` with the deleted worktree's path
+  (computed before `repo` moves into the delete's `spawn_blocking` closure) once the git delete
+  actually succeeds — mirroring BUG-002 (011)'s equivalent fix for the exact same "path gets reused
+  by the same branch name" hazard.
+- [X] T096 [P] [BUG-003] User-guide doc: note in `docs/daemon.md` that daemon-spawned sessions
+  (including crash respawns and regular-terminal instances) resolve `env_include` identically to a
+  client-initiated launch, per-directory (Principle VII). Depends on T095 (describes its finished
+  behavior). **Done**: added to the "Project and worktree operations run through the daemon (User
+  Story 3)" section, ahead of the existing "current limitations" list.
+
+**Checkpoint**: A daemon-spawned session (fresh, respawned after a crash, or a regular-terminal
+instance) sees the same `env_include`-resolved variables a `micold-client`-spawned session in the
+same directory would; T092's regression test passes; `mise run test` stays green throughout. **Met**
+— verified: `cargo test --workspace` green (103 test groups, 0 failures, including T092's new test);
+`cargo clippy --workspace --all-targets -- -D warnings` clean (after the `Connected::Ready` boxing
+fix above); `cargo fmt --check` clean.
+
+**Known follow-up, out of scope for this bugfix**: `micold-client`'s own `Message::SettingsSaved`
+handler (`crates/micold-client/src/main.rs`) persists settings by writing `settings.json` directly
+via its own local `JsonFileSettingsStore`, for every field including scrollback — it never sends
+`ClientMsg::SettingsSet` to a *running* daemon at all (confirmed: zero references to `SettingsSet`
+anywhere in `crates/micold-client/`). A settings change made while a daemon is already running only
+takes effect for daemon-spawned sessions once the daemon restarts and re-reads the file (the
+"Deferred within this task" pattern already flagged for scrollback in T067's docs note is this same
+gap, pre-existing and not introduced by BUG-003). This does not block BUG-003's own fix — the
+default configuration (env-include enabled, default `~/.bashrc` path) never goes through this path
+at all, only a live-edit-while-running scenario does — but is worth its own follow-up task if a user
+needs to see an env-include settings change apply without restarting the daemon.
+
+**Bugfix**: 2026-07-27 — BUG-003 Added Phase 13 (T092–T096); reopened T053's env-include clause.
+FR-012b added to spec.md; plan.md's W2 gained a design-correction note on the daemon's settings
+projection and per-directory cache. See `bugs/BUG-003.md`. Resolved 2026-07-27: T093–T095 landed
+the daemon-side `env_include` wiring (settings projection/mutation + the per-directory cache and
+its use at all three spawn sites); T092's regression test passes; T096 documents the behavior;
+T053 re-closed. `cargo test --workspace` (103 groups) green; `cargo clippy --workspace --all-targets
+-- -D warnings` and `cargo fmt --check` both clean.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase dependencies
@@ -420,3 +552,9 @@ T045's existing unit test; `cargo test --workspace` (98 groups) green.
 - Two brief premises were falsified in planning and are baked into the tasks above: the
   `SessionRouter`/`TerminalBackend` seam carries no production traffic (deleted in T030), and the test
   count is 259 not 63 (T007/T079). `bincode` is dead — grid frames use `postcard` (T010, T015).
+
+---
+
+## Phase 14: Convergence
+
+- [X] T097 Wire `micold-client`'s `Message::SettingsSaved` handler (`crates/micold-client/src/main.rs`, ~L1674-1739) to send `ClientMsg::SettingsSet` (scrollback + the three env-include fields) to the daemon when connected, instead of relying solely on its own direct `JsonFileSettingsStore` write — a change currently only reaches a running daemon after that daemon's next restart (`Catalog::load`/`load_default` read `settings.json` exactly once at boot, `crates/micold-daemon/src/catalog.rs:42-67`), contradicting FR-012a's "a requested change MUST take effect for all sessions" and FR-012b's identical mirror (missing). **Done**: `SettingsSaved` now sends `ClientMsg::SettingsSet` with all four fields as `Some(...)` (matching the existing all-or-nothing local-save semantics — no per-field diffing) whenever `app.daemon` is connected, added a `PendingOp::SettingsSet` so a failure surfaces via the existing generic `notify_error` fallback and a disconnect-before-reply resolves to "unknown" like every other mutating RPC (T055); silently skipped when disconnected (no `notify_error`), since settings-saving already has a fully working local-only path that every other `send_op` caller lacks. **Discovered while implementing**: two more spots needed the identical fix to actually deliver "takes effect for all sessions/clients" (FR-011) rather than just scrollback — `DaemonMsg::SettingsChanged`'s handler (only synced `scrollback_lines`, never the three env-include fields, so another window's — or this client's own echoed-back — change was silently dropped) and `Message::DaemonConnected`'s handler (same gap, for the one-time welcome snapshot). Both now sync all four fields and re-source env-include (`env_include_cache.clear()` + `refresh_env_include`), mirroring the local-save path's own post-save behavior. `daemon::Outbox::new` changed from private to `pub` (not `pub(crate)` — `main.rs` is a separate binary crate from the `micold_client` library, so `pub(crate)` would not reach it) so tests can build a real `Outbox` over a manually-created channel. Added 4 tests in `main.rs`'s `mod tests` covering: the RPC is sent with the right fields; it's a silent no-op while disconnected; `DaemonConnected` adopts the daemon's authoritative env-include settings over a stale local read; `SettingsChanged` syncs all four fields. Verified: `cargo test --workspace` (103 groups) green; `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo fmt --check` clean.

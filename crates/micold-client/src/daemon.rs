@@ -48,7 +48,11 @@ pub struct Outbox {
 }
 
 impl Outbox {
-    fn new(tx: mpsc::UnboundedSender<ClientMsg>) -> Self {
+    /// `pub` (not private) so the binary's own tests (`main.rs`'s `update_inner` tests, T097) can
+    /// build a real `Outbox` over a manually-created channel and assert what gets sent, without
+    /// needing a live connection — the binary is a separate crate from this library, so
+    /// `pub(crate)` would not reach it.
+    pub fn new(tx: mpsc::UnboundedSender<ClientMsg>) -> Self {
         Self {
             tx,
             id: std::sync::Arc::new(()),

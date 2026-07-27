@@ -24,7 +24,9 @@ use micold_core::protocol::messages::{
 use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation, TerminalMode};
 
 use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
-use micold_core::settings::{clamp_scrollback, JsonFileSettingsStore, Settings, SettingsStore};
+use micold_core::settings::{
+    clamp_env_include_timeout, clamp_scrollback, JsonFileSettingsStore, Settings, SettingsStore,
+};
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
 
@@ -83,10 +85,13 @@ impl Catalog {
         self.load_status
     }
 
-    /// The current settings projected to the wire (FR-012a).
+    /// The current settings projected to the wire (FR-012a, FR-012b).
     pub fn settings_wire(&self) -> DaemonSettings {
         DaemonSettings {
             scrollback_lines: self.settings.scrollback_lines,
+            env_include_enabled: self.settings.env_include_enabled,
+            env_include_script_path: self.settings.env_include_script_path.clone(),
+            env_include_timeout_secs: self.settings.env_include_timeout_secs,
         }
     }
 
@@ -175,6 +180,30 @@ impl Catalog {
             store.save(&self.settings)?;
         }
         Ok(clamped)
+    }
+
+    /// Set any of the three service-owned environment-include settings (leaving a field unchanged
+    /// when its argument is `None`), clamping the timeout to the supported range, persisting the
+    /// change atomically (FR-012b, BUG-003).
+    pub fn set_env_include(
+        &mut self,
+        enabled: Option<bool>,
+        script_path: Option<String>,
+        timeout_secs: Option<u64>,
+    ) -> io::Result<()> {
+        if let Some(enabled) = enabled {
+            self.settings.env_include_enabled = enabled;
+        }
+        if let Some(script_path) = script_path {
+            self.settings.env_include_script_path = script_path;
+        }
+        if let Some(timeout_secs) = timeout_secs {
+            self.settings.env_include_timeout_secs = clamp_env_include_timeout(timeout_secs);
+        }
+        if let Some(store) = &self.settings_store {
+            store.save(&self.settings)?;
+        }
+        Ok(())
     }
 
     /// Create a new session in `project` at `worktree_dir` (empty = the project root / `Default`
