@@ -120,13 +120,23 @@ unsanctioned delegation appears and when a sanctioned one disappears without bei
 The rule must be **total** for surfaces on the primitive: no combination of surface kind and
 trigger may be undefined.
 
-> **Known shortfall against FR-009.** FR-009 requires *every* non-modal floating surface to dismiss
-> on outside click, Escape and scroll beneath. The select dropdown meets one of the three: iced's
-> `pick_list` closes on any left press, has no Escape handler, and does not close when content
-> scrolls beneath it. Unifying it would mean intercepting those events in a wrapper around
-> `pick_list` — real work, and a user-visible behavior change, so it is recorded here rather than
-> made silently. Earlier revisions of this contract listed the select dropdown as following the
-> unified rule, which was never true.
+> **Known shortfall against FR-009 — accepted deviation.** FR-009 requires *every* non-modal
+> floating surface to dismiss on outside click, Escape and scroll beneath. The select dropdown
+> meets one of the three: iced's `pick_list` closes on any left press, has no Escape handler, and
+> does not close when content scrolls beneath it. Earlier revisions of this contract listed the
+> select dropdown as following the unified rule, which was never true.
+>
+> **Decided**: accept the gap rather than fix it now. `pick_list`'s open/closed state is private to
+> `iced_widget` — no `Operation`, no public hook — so closing it on Escape or scroll beneath is not
+> reachable through a wrapper. The only way to add it is to vendor `pick_list.rs` (929 lines) and
+> `overlay/menu.rs` (~340 lines) into this crate and add the missing event handling, which trades a
+> minor interaction gap for a permanent fork: manual reconciliation against upstream on every iced
+> upgrade, and a second hand-rolled overlay implementation of exactly the kind FR-008 consolidated
+> away. Not worth it for closing a combo box with Escape.
+>
+> **Revisit if**: iced adds a public way to close a `pick_list` programmatically or exposes
+> Escape/scroll hooks directly (check on the next iced upgrade), or if this gap starts costing real
+> user complaints — at which point the vendoring cost above is the thing to weigh against it.
 
 ---
 
