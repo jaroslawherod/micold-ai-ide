@@ -4,9 +4,9 @@
 //! iced exposes no element opacity (still true as of 0.14 — `widget::opaque` gates events, it
 //! does not blend), so [`Fade`] approximates a fade by compositing a
 //! scrim of the surrounding surface color over its child via `fill_quad` (alpha = `1 -
-//! progress`). [`Slide`] performs a real horizontal reveal using the renderer's
-//! transformation/clip: it animates its own laid-out width and slides the child in from the
-//! left, clipped to the visible area. Both are passthrough widgets — layout, events, and the
+//! progress`). [`Expand`] performs a real vertical reveal using the renderer's
+//! transformation/clip: it animates its own laid-out height and reveals the child top-down,
+//! clipped to the visible area. Both are passthrough widgets — layout, events, and the
 //! overlay are delegated to the child.
 //!
 //! # Self-animating (feature 017, FR-011/FR-014)
@@ -246,14 +246,12 @@ macro_rules! motion_builder {
 }
 
 /// Shared `children`/`diff`/`operate` for a single-child widget whose `layout()` wraps its
-/// child in `layout::Node::with_children(outer_size, vec![child])` (as [`Slide`] and
-/// [`Expand`] both do) rather than returning the child's node directly (as [`Fade`]/[`Scale`]
-/// do, so they don't need this — they forward to the child using their own `layout` as-is).
-/// `update`/`mouse_interaction`/`draw`/`overlay` stay hand-written per widget: `Slide`
-/// forwards the raw cursor (its translate-based reveal already moves the hidden child out of
-/// the interactive area), while `Expand` clips the cursor to its own bounds first (its
-/// top-anchored reveal never translates the child, so it needs that instead) — a real
-/// difference, not incidental duplication.
+/// child in `layout::Node::with_children(outer_size, vec![child])` (as [`Expand`] does)
+/// rather than returning the child's node directly (as [`Fade`]/[`Scale`] do, so they don't
+/// need this — they forward to the child using their own `layout` as-is).
+/// `update`/`mouse_interaction`/`draw`/`overlay` stay hand-written per widget: `Expand` clips
+/// the cursor to its own bounds first, because its top-anchored reveal never translates the
+/// child out of the interactive area the way a horizontal slide would.
 macro_rules! wrapped_child_widget {
     () => {
         fn children(&self) -> Vec<Tree> {
@@ -262,8 +260,8 @@ macro_rules! wrapped_child_widget {
     };
 }
 
-/// `operate` for a wrapper whose `layout()` nests the child in a node of its own ([`Slide`],
-/// [`Expand`]). [`Fade`] and [`Scale`] return the child's node as-is and so address it directly.
+/// `operate` for a wrapper whose `layout()` nests the child in a node of its own ([`Expand`]).
+/// [`Fade`] and [`Scale`] return the child's node as-is and so address it directly.
 macro_rules! operate_nested_child {
     () => {
         fn operate(
@@ -683,179 +681,13 @@ where
 }
 
 // ---------------------------------------------------------------------------------------
-// Slide (horizontal reveal from the left)
-// ---------------------------------------------------------------------------------------
-
-/// Wrap `content` in a horizontal slide reveal: `progress` 1.0 is fully expanded, 0.0 fully
-/// collapsed (zero width). The child slides in from the left, clipped to the visible width.
-///
-/// **The last wrapper still driven from outside** (feature 017, T039). It stays that way because
-/// the sidebar it serves does not merely shrink to nothing — at zero width it is *replaced* by the
-/// collapsed rail, and deciding that from in here means owning both elements, which is the
-/// navigation-drawer component this wrapper has yet to become. Until then the sidebar's track is
-/// the one thing left in [`MotionKey`](crate::ui::MotionKey).
-pub fn slide<'a, Message: 'a>(
-    content: impl Into<Element<'a, Message>>,
-    progress: f32,
-) -> Element<'a, Message> {
-    Slide {
-        content: content.into(),
-        progress: progress.clamp(0.0, 1.0),
-    }
-    .into()
-}
-
-struct Slide<'a, Message, Theme, Renderer> {
-    content: Element<'a, Message, Theme, Renderer>,
-    progress: f32,
-}
-
-impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
-    for Slide<'_, Message, Theme, Renderer>
-where
-    Renderer: renderer::Renderer,
-{
-    wrapped_child_widget!();
-    operate_nested_child!();
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(std::slice::from_ref(&self.content));
-    }
-
-    fn size(&self) -> Size<Length> {
-        let inner = self.content.as_widget().size();
-        Size::new(Length::Shrink, inner.height)
-    }
-
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        let progress = self.progress;
-        let child = self
-            .content
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits);
-        let full = child.size();
-        let width = (full.width * progress).max(0.0);
-        // Reserve the animated width; slide the child left so it reveals from the edge.
-        let child = child.translate(Vector::new(-(full.width - width), 0.0));
-        layout::Node::with_children(Size::new(width, full.height), vec![child])
-    }
-
-    fn update(
-        &mut self,
-        tree: &mut Tree,
-        event: &Event,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, Message>,
-        viewport: &Rectangle,
-    ) {
-        if let Some(child) = layout.children().next() {
-            self.content.as_widget_mut().update(
-                &mut tree.children[0],
-                event,
-                child,
-                cursor,
-                renderer,
-                clipboard,
-                shell,
-                viewport,
-            );
-        }
-    }
-
-    fn mouse_interaction(
-        &self,
-        tree: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
-        match layout.children().next() {
-            Some(child) => self.content.as_widget().mouse_interaction(
-                &tree.children[0],
-                child,
-                cursor,
-                viewport,
-                renderer,
-            ),
-            None => mouse::Interaction::None,
-        }
-    }
-
-    fn draw(
-        &self,
-        tree: &Tree,
-        renderer: &mut Renderer,
-        theme: &Theme,
-        style: &renderer::Style,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-    ) {
-        let Some(child) = layout.children().next() else {
-            return;
-        };
-        // Clip to the (animated) visible width so the sliding child never overflows.
-        renderer.with_layer(layout.bounds(), |renderer| {
-            self.content.as_widget().draw(
-                &tree.children[0],
-                renderer,
-                theme,
-                style,
-                child,
-                cursor,
-                viewport,
-            );
-        });
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'b>,
-        renderer: &Renderer,
-        viewport: &Rectangle,
-        translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        let child = layout.children().next()?;
-        self.content.as_widget_mut().overlay(
-            &mut tree.children[0],
-            child,
-            renderer,
-            viewport,
-            translation,
-        )
-    }
-}
-
-impl<'a, Message, Theme, Renderer> From<Slide<'a, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: 'a,
-    Theme: 'a,
-    Renderer: 'a + renderer::Renderer,
-{
-    fn from(slide: Slide<'a, Message, Theme, Renderer>) -> Self {
-        Element::new(slide)
-    }
-}
-
-// ---------------------------------------------------------------------------------------
 // Expand (vertical accordion reveal, top-anchored)
 // ---------------------------------------------------------------------------------------
 
 /// Reveal `content` vertically over `over`: fully expanded when `shown`, zero height when not.
-/// Unlike [`slide`] (which anchors the reveal to the trailing edge, suited to a panel sliding out
-/// from behind a fixed handle), `expand` anchors to the *top* — the child is never translated, so
-/// it always reveals top-down, growing the space below it (feature 009's sidebar filter accordion).
+/// Unlike the drawer's horizontal reveal (which anchors to the trailing edge, suited to a panel
+/// sliding out from behind a fixed handle), `expand` anchors to the *top* — the child is never
+/// translated, so it reveals top-down, growing the space below it (feature 009's filter accordion).
 ///
 /// Builder form (Principle VIII): `expand(content, shown, over).into()`.
 pub fn expand<'a, M: Clone + 'a>(
@@ -908,7 +740,7 @@ where
         let full = child.size();
         let height = (full.height * progress).max(0.0);
         // No translation: the child's top edge stays put, so growing height reveals it
-        // top-down (an accordion opening below its trigger), unlike `Slide`'s edge anchor.
+        // top-down (an accordion opening below its trigger), unlike the drawer's edge anchor.
         layout::Node::with_children(Size::new(full.width, height), vec![child])
     }
 

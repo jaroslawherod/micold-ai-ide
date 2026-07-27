@@ -2,7 +2,7 @@
 //!
 //! All custom widgets/components live here and mimic Angular Material: a flat toolbar, an
 //! overflow menu, a segmented/tree navigation, icon buttons, tooltips, and the [`fade`] /
-//! [`slide`] animation wrappers. Features MUST reuse or extend these rather than fork bespoke
+//! [`expand`] animation wrappers. Features MUST reuse or extend these rather than fork bespoke
 //! one-off widgets. Every component is theme-aware (draws from the active [`Roles`]) and
 //! cross-platform. This module is the living catalog Principle VIII refers to.
 //!
@@ -21,8 +21,10 @@ pub mod glyph;
 mod icon_button;
 mod menu;
 mod modal;
+mod navigation_drawer;
 mod progress;
 mod project_switcher;
+mod resize_handle;
 mod scrollable;
 mod select;
 /// The one place design tokens become rendering types. Internal by intent (FR-002): a feature
@@ -46,7 +48,7 @@ mod tree_view;
 
 pub use accordion::Accordion;
 pub use activity_badge::ActivityBadge;
-pub use animation::{expand, fade, scale, scrim, slide, HoverReveal, ViewFade};
+pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
 pub use button::{Button, Variant as ButtonVariant};
 pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;
@@ -57,8 +59,10 @@ pub use glyph::Glyph;
 pub use icon_button::IconButton;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
+pub use navigation_drawer::NavigationDrawer;
 pub use progress::StageProgress;
 pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};
+pub use resize_handle::ResizeHandle;
 pub use scrollable::Scrollable;
 pub use select::Select;
 pub use surface::{Kind as SurfaceKind, Surface};

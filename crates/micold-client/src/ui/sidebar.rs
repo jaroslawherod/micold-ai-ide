@@ -7,15 +7,13 @@ use crate::ui::material::{
     self, Accordion, ActivityBadge, Button, ButtonVariant, Divider, FilterTrigger, HoverReveal,
     IconButton, Scrollable, SurfaceKind, Text, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
 };
-use iced::widget::{column, container, mouse_area, row, Space};
+use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::naming::Tag;
 use micold_core::session::{SessionLifecycle, SessionLocation};
 use micold_core::tokens::{self, sidebar, spacing, Rgb, Roles};
 use micold_core::worktree::WorktreeStatus;
 
-/// Width of the draggable resize handle between the sidebar and the main area.
-const HANDLE_WIDTH: f32 = 6.0;
 /// Width of the collapsed strip that hosts the "show sidebar" button.
 const STRIP_WIDTH: f32 = 32.0;
 
@@ -161,33 +159,6 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     material::Surface::new(content, SurfaceKind::Sidebar, r)
         .width(Length::Fixed(width))
         .height(Length::Fill)
-        .into()
-}
-
-/// The resize handle between the sidebar and the main area. The drag zone itself is invisible
-/// (a thin transparent hit target) with a single 1px boundary line that reads as the
-/// sidebar's right border; hovering shows the horizontal-resize cursor. Pressing it starts a
-/// resize drag (the binary captures the drag with a full-window overlay).
-pub fn handle(scheme: micold_core::theme::ColorScheme, hover: f32) -> Element<'static, Message> {
-    let r = tokens::roles(scheme);
-    // The invisible grab zone is blended with the sidebar surface and sits on the LEFT; the 1px
-    // separator line sits on the RIGHT, flush against the main area — so no window-background gap
-    // shows between the separator and the terminal.
-    let grab = material::Surface::new(
-        Space::new()
-            .width(Length::Fixed(HANDLE_WIDTH - 1.0))
-            .height(Length::Fill),
-        SurfaceKind::Sidebar,
-        r,
-    )
-    .height(Length::Fill);
-    // The separator brightens toward the accent as the pointer hovers (animated via `hover`).
-    let line: Element<'static, Message> = Divider::vertical(r).accent(hover).into();
-    mouse_area(row![grab, line].height(Length::Fill))
-        .on_press(Message::SidebarDragStarted)
-        .on_enter(Message::SidebarHandleHovered(true))
-        .on_exit(Message::SidebarHandleHovered(false))
-        .interaction(iced::mouse::Interaction::ResizingHorizontally)
         .into()
 }
 

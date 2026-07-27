@@ -26,7 +26,6 @@ fn state_with_active() -> State {
 fn defaults_visible_with_default_width() {
     let state = State::default();
     assert!(!state.sidebar_hidden);
-    assert!(!state.sidebar_dragging);
     assert_eq!(state.sidebar_width_px(), SIDEBAR_DEFAULT_WIDTH);
 }
 
@@ -39,26 +38,22 @@ fn toggling_hides_and_shows() {
     assert!(!state.sidebar_hidden);
 }
 
+/// The drag protocol changed with feature 017 (T041): the resize handle owns the drag itself, so
+/// there is no longer a start or an end to report and no `sidebar_dragging` flag to gate on. A
+/// width message *is* the drag — the handle only speaks while it is being moved.
 #[test]
-fn drag_updates_width_only_while_dragging() {
+fn a_reported_width_is_adopted() {
     let mut state = State::default();
-    // A move with no active drag is ignored.
-    state.update(Message::SidebarDragMoved(250));
-    assert_eq!(state.sidebar_width_px(), SIDEBAR_DEFAULT_WIDTH);
-
-    state.update(Message::SidebarDragStarted);
-    assert!(state.sidebar_dragging);
     state.update(Message::SidebarDragMoved(250));
     assert_eq!(state.sidebar_width_px(), 250);
-
-    state.update(Message::SidebarDragEnded);
-    assert!(!state.sidebar_dragging);
 }
 
+/// Clamping stays here rather than moving into the handle with the drag. How wide the sidebar is
+/// allowed to be is a decision about the application's layout, not about the edge being dragged —
+/// exactly the logical/presentation split FR-012 draws.
 #[test]
 fn drag_width_is_clamped_to_bounds() {
     let mut state = State::default();
-    state.update(Message::SidebarDragStarted);
 
     state.update(Message::SidebarDragMoved(10)); // below min
     assert_eq!(state.sidebar_width_px(), SIDEBAR_MIN_WIDTH);

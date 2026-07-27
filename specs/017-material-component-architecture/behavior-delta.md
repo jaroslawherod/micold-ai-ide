@@ -143,3 +143,51 @@ one to remove.
 pane-local and the pane's origin is not known at render time, so there is nothing to translate the
 point by. Same primitive (`cdk::overlay::Overlay`), mounted one level down. Its dismissal follows the
 same rule.
+
+---
+
+## T039b/T041: the resize drag no longer needs a full-window capture layer
+
+The sidebar's resize handle is 6px wide, and a pointer leaves a 6px target almost immediately once
+it starts moving. The previous implementation handled this by mounting a **transparent capture layer
+over the entire window** for the duration of the drag: `ui::view` stacked a full-size `mouse_area`
+whenever `state.sidebar_dragging` was set, and that layer — not the handle — tracked the cursor and
+ended the drag.
+
+The handle now owns the drag itself. A widget's `update` receives every mouse event, not only the
+ones over its own bounds, so a handle that remembers it is being dragged can follow the pointer
+anywhere on screen without anything being laid over the window.
+
+**Two user-visible consequences**, both improvements, both worth stating rather than discovering:
+
+- **Events during a drag no longer pass through a capture layer.** The old layer sat above
+  everything and swallowed what it did not use. Anything under the pointer mid-drag now sees events
+  normally, apart from the cursor movement the handle captures.
+- **The hover highlight stays lit while dragging away from the edge.** Previously the highlight was
+  driven by `on_enter`/`on_exit` on the handle's own `mouse_area`, so pulling the pointer away
+  during a drag unlit the edge while it was still being moved. It now stays lit until release.
+
+## T041: a reported width is no longer gated on a drag flag
+
+`Message::SidebarDragMoved` used to be ignored unless `state.sidebar_dragging` was set, because a
+full-window layer was emitting it and the reducer needed to know whether a drag was genuinely in
+progress. `SidebarDragStarted` and `SidebarDragEnded` existed only to maintain that flag.
+
+With the handle owning the drag, it emits a width **only** while being dragged, so the flag has no
+remaining purpose and both messages are gone. The reducer now adopts any width it is given.
+
+This is a real weakening of a reducer-level invariant, and it is deliberate: the guard was
+compensating for an emitter that could not be trusted to speak only when it meant to. Clamping to
+`SIDEBAR_MIN_WIDTH`/`SIDEBAR_MAX_WIDTH` stays in the reducer, where it belongs — how wide the
+sidebar may be is a decision about the application's layout, not about the edge being dragged.
+
+## T042: the animation clock is gone
+
+The application no longer runs a 60fps `AnimationTick` subscription. Every transition is played by
+the component that owns it, and a self-animating widget asks the runtime for its next frame only
+while it is actually moving.
+
+The previous arrangement already gated the clock on `motion_animating(app)`, so an idle window was
+not ticking — the difference is that there is now no central clock to gate, and no global
+enumeration of what might be animating. `MotionKey`, `Animator`, and the whole
+`micold_client::motion` module are deleted.

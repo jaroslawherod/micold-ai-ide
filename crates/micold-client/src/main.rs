@@ -15,9 +15,7 @@ use micold_client::app::{
 };
 use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
-use micold_client::motion::Animator;
 use micold_client::selection::{Anchor, SelectGranularity, Selection};
-use micold_client::ui::MotionKey;
 use micold_core::env_include::{self, EnvIncludeOutcome};
 use micold_core::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
@@ -51,27 +49,6 @@ const OS_THEME_POLL: Duration = Duration::from_millis(500);
 /// means leaving the app, which is exactly what unfocuses it. Kept at 1s so SC-003's
 /// "within 1 second" holds whether or not the window happens to hold focus.
 const BACKGROUND_OS_THEME_POLL: Duration = Duration::from_secs(1);
-
-/// The animation clock tick interval (~60fps).
-const ANIM_TICK: Duration = Duration::from_millis(16);
-
-// Animation timing as legible durations (not opaque per-frame steps); the per-tick step the
-// `Animator` consumes is derived via `step()` below (FR-013).
-//
-// Only the two the central animator still drives are left here. A component that owns its own
-// transition owns the timing of it too — the dialog enter/exit sits in `material::modal`, the menu
-// fade in `material::menu`, the content-area fade in `material::animation` — because how long a
-// thing takes is part of how it looks, and this is the application, not the design system.
-/// Sidebar slide — preserves the prior feel (was step 0.14 ≈ 114ms).
-const SIDEBAR_SLIDE: Duration = Duration::from_millis(114);
-/// Resize-handle hover highlight — preserves the prior gentle ~0.8s ramp (was step 0.02).
-const HANDLE_HOVER: Duration = Duration::from_millis(800);
-
-/// Convert an animation `duration` into the per-tick progress step the [`Animator`] advances by
-/// on each [`ANIM_TICK`], clamped to `(0, 1]`.
-fn step(duration: Duration) -> f32 {
-    (ANIM_TICK.as_secs_f32() / duration.as_secs_f32()).clamp(f32::EPSILON, 1.0)
-}
 
 /// The binary's application state: the pure core plus gui-only runtime handles.
 /// A mutating RPC the client has sent to the daemon and is awaiting a reply for (T055). Tracked per
@@ -145,11 +122,6 @@ struct App {
     /// The configured terminal scrollback limit (feature 006), loaded from settings and applied
     /// to newly spawned sessions.
     scrollback_lines: usize,
-    /// The shared animation driver for the motion the application still owns — the sidebar slide
-    /// and its resize-handle hover. Everything else animates itself, in the widget tree (FR-011).
-    motion: Animator<MotionKey>,
-    /// Whether the pointer is over the sidebar resize handle (drives its hover highlight).
-    handle_hovered: bool,
     /// The overlay currently fading out (rendered from this snapshot until its fade completes),
     /// or `None` when no overlay is leaving.
     dismissing: Option<ClosingOverlay>,
@@ -285,43 +257,6 @@ fn refresh_env_include(app: &mut App, cwd: &Path) {
     app.env_include_cache.insert(cwd.to_path_buf(), snapshot);
 }
 
-/// The desired `(target, duration)` for each state-driven motion key, derived from the current
-/// state. Used both to advance the animator (in [`apply_motion_targets`]) and to decide whether
-/// the animation clock should run (in [`motion_animating`]), so the two never disagree.
-fn motion_targets(app: &App) -> [(MotionKey, f32, Duration); 2] {
-    [
-        (
-            MotionKey::Sidebar,
-            if app.core.sidebar_hidden { 0.0 } else { 1.0 },
-            SIDEBAR_SLIDE,
-        ),
-        (
-            MotionKey::HandleHover,
-            if app.handle_hovered { 1.0 } else { 0.0 },
-            HANDLE_HOVER,
-        ),
-    ]
-}
-
-/// Push the current state-derived targets into the animator before ticking.
-fn apply_motion_targets(app: &mut App) {
-    for (key, target, duration) in motion_targets(app) {
-        app.motion.to(key, target, step(duration));
-    }
-}
-
-/// Whether any centrally driven animation still needs to advance — gates the animation clock
-/// (FR-014). Compares each key's current value against its freshly derived target, so a track
-/// retargeted this frame is detected before the animator's stored target catches up.
-///
-/// Self-animating components are deliberately absent: each asks the runtime for its own next frame
-/// while it is moving, and stops asking when it arrives, so nothing here has to know they exist.
-fn motion_animating(app: &App) -> bool {
-    motion_targets(app)
-        .iter()
-        .any(|(key, target, _)| (app.motion.get(*key) - target).abs() > f32::EPSILON)
-}
-
 impl Drop for App {
     /// On shutdown, disconnect cleanly (`Goodbye`) — the daemon keeps every session running so it
     /// survives the UI closing (FR-001). The client owns no process to kill.
@@ -410,12 +345,6 @@ fn boot() -> (App, Task<Message>) {
     if let Some(repo) = core.workspace.active.clone() {
         core.set_worktrees(discover_worktrees(&repo));
     }
-    let mut motion = Animator::new();
-    motion.set(
-        MotionKey::Sidebar,
-        if core.sidebar_hidden { 0.0 } else { 1.0 },
-    );
-    motion.set(MotionKey::HandleHover, 0.0);
     (
         App {
             core,
@@ -424,8 +353,6 @@ fn boot() -> (App, Task<Message>) {
             selection: None,
             display_offset: 0,
             scrollback_lines,
-            motion,
-            handle_hovered: false,
             dismissing: None,
             window_focused: true,
             last_grid: None,
@@ -1038,22 +965,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        // Advance every animation toward its target via the shared driver.
-        Message::AnimationTick => {
-            apply_motion_targets(app);
-            app.motion.tick();
-            Task::none()
-        }
-
         // The closing dialog has finished animating out; its snapshot has served its purpose.
         Message::OverlayTransitionFinished => {
             app.dismissing = None;
-            Task::none()
-        }
-        // Pointer entered/left the sidebar resize handle; the hover highlight animates via the
-        // animation clock.
-        Message::SidebarHandleHovered(hovered) => {
-            app.handle_hovered = hovered;
             Task::none()
         }
         Message::ProjectSelectorOpened => {
@@ -1818,7 +1732,6 @@ fn view(app: &App) -> iced::Element<'_, Message> {
         app.attached_grid(),
         app.selection.as_ref(),
         app.display_offset,
-        &app.motion,
         app.dismissing.as_ref(),
         &app.env_include_last_outcome,
         &connection_status(app),
@@ -2195,10 +2108,10 @@ fn subscription(app: &App) -> Subscription<Message> {
     subs.push(os_theme_poll(os_theme_poll_interval(app.window_focused)));
     // The terminal output poll is gone — the daemon streams grid frames over the connection. Worktree
     // create now runs on the daemon too, so there is no local progress buffer to drain (T055).
-    // Run the animation clock only while something is actually animating (FR-014).
-    if motion_animating(app) {
-        subs.push(every(ANIM_TICK).map(|_| Message::AnimationTick));
-    }
+    // No animation clock. Every transition is played by the widget that owns it, and a widget
+    // that is moving asks the runtime for the next frame itself — so the idle window schedules
+    // nothing at all, rather than ticking 60 times a second to advance tracks that have all
+    // arrived (FR-014, FR-025).
     // Track the pointer ONLY while the project switcher is open (feature 015), so a right-click
     // on a row can anchor its context menu at the cursor. Scoping it this way keeps the idle
     // window free of per-mouse-move redraws — the switcher is a brief, deliberate interaction.
@@ -2696,8 +2609,6 @@ mod tests {
             selection: None,
             display_offset: 0,
             scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
-            motion: Animator::new(),
-            handle_hovered: false,
             dismissing: None,
             window_focused: true,
             last_grid: None,
@@ -2737,8 +2648,6 @@ mod tests {
             selection: None,
             display_offset: 0,
             scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
-            motion: Animator::new(),
-            handle_hovered: false,
             dismissing: None,
             window_focused: true,
             last_grid: None,
@@ -2788,8 +2697,6 @@ mod tests {
             selection: None,
             display_offset: 0,
             scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
-            motion: Animator::new(),
-            handle_hovered: false,
             dismissing: None,
             window_focused: true,
             last_grid: None,
@@ -2949,8 +2856,6 @@ mod tests {
             selection: None,
             display_offset: 0,
             scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
-            motion: Animator::new(),
-            handle_hovered: false,
             dismissing: None,
             window_focused: true,
             last_grid: None,
