@@ -17,7 +17,7 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg};
-use micold_core::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -79,6 +79,7 @@ async fn connect(state: &std::sync::Arc<DaemonState>) -> Client {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test".into(),
+            client_package_version: PACKAGE_VERSION.into(),
         }))
         .await
         .unwrap();

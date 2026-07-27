@@ -8,7 +8,18 @@
 //! stricter than the version check, never a substitute for it.
 
 /// The wire protocol version. MUST be bumped on any wire-visible change.
-pub const PROTOCOL_VERSION: u32 = 1;
+///
+/// Bumped 1 → 2 for `ClientMsg::Hello::client_package_version` (FR-022a, BUG-002).
+pub const PROTOCOL_VERSION: u32 = 2;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
+
+/// This build's package version (`CARGO_PKG_VERSION` of *this* crate). Every workspace member
+/// shares one version (`version.workspace = true`), so this is also the daemon's and the client's
+/// own package version, each frozen into its own compiled binary — the same way `PROTOCOL_VERSION`
+/// and `SCHEMA_HASH` are. Unlike them, it changes on **every** release, wire-visible or not, which
+/// is exactly the granularity FR-022a needs: detecting that the on-disk `.deb` shipped a newer
+/// daemon than the one still running, independent of whether the wire contract moved (FR-022a,
+/// BUG-002).
+pub const PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -17,7 +17,7 @@ use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{
     CatalogSnapshot, ClientMsg, DaemonMsg, ErrorKind, OperationResult,
 };
-use micold_core::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
@@ -101,6 +101,7 @@ async fn connect(state: &std::sync::Arc<DaemonState>) -> Client {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test".into(),
+            client_package_version: PACKAGE_VERSION.into(),
         }))
         .await
         .unwrap();
