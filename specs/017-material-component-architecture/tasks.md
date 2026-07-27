@@ -249,3 +249,70 @@ US1 alone delivers the feature's central value: appearance is decided in one pla
 - No task in this feature may change a token *value*, a colour, a height or any other appearance. Re-valuing is [`018`](../018-material3-visual-system/tasks.md)'s work
 - The press ripple and the density scale were deliberately deferred to 018 — both serve an appearance that does not exist yet, and building them here would add untested code with no consumer
 - If a call site tempts you to style something, the wrapper is missing a capability — add it to the wrapper (FR-002)
+
+---
+
+## Phase 8: Convergence
+
+Appended by `/speckit-converge`. Every item traces to an artifact that says something the code does
+not, or to a property the code currently has by luck rather than by enforcement.
+
+- [ ] T054 Assert that the frame request lives only behind the motion primitive's `animating()` guard, so quiescence is enforced rather than merely true today per SC-008, FR-025 (partial)
+
+  > `quickstart.md` §B6's second checkbox — press every interactive element, then idle, and confirm
+  > no animation state is held — is unticked, and T052 says plainly that it was not done. What
+  > closes it is not the manual pass but the structural fact underneath it: `shell.request_redraw()`
+  > occurs at exactly one place in the whole rendering layer, `cdk/motion.rs`, guarded by
+  > `self.animating()`. That is a stronger guarantee than pressing every button, because it holds
+  > for buttons nobody thought to press. It is also unpinned — a component calling
+  > `request_redraw()` directly would pass the boundary, builder and opacity gates untouched. A
+  > source scan in the shape of those gates converts today's accident into tomorrow's invariant.
+
+- [ ] T055 Correct `contracts/component-api.md` §3 so it describes the overlay arrangement that was built, not the one that was planned per FR-027 (contradicts)
+
+  > §3 asserts "All floating surfaces are built on a single overlay primitive" and lists the select
+  > dropdown among the non-modal surfaces following unified dismissal. Neither is true:
+  > `select.rs` delegates to the rendering stack's widget-attached overlay, keeps that stack's own
+  > dismissal, and never had a hand-rolled implementation to remove. `behavior-delta.md` records
+  > this accurately under *Deviations*; the contract contradicts it.
+  >
+  > This matters more than a stale line because FR-027 designates the contract "the durable
+  > reference the implementation is checked against". A reference that misstates what was built
+  > checks nothing. T045 verified the contract and corrected the hovered-row row, but did not reach
+  > §3 — worth recording as a miss, since the same pass was meant to catch exactly this.
+  >
+  > Say what is actually true: four hand-rolled implementations became zero, one window-level
+  > primitive owns window-level surfaces, and widget-attached dropdowns delegate to the stack's own
+  > single shared overlay.
+
+- [ ] T056 Hold the widget-attached-overlay exception at exactly one, enforced rather than described per FR-008, SC-003 (partial)
+
+  > SC-003 claims "exactly one overlay implementation exists, down from five". After T055 the
+  > contract will say what is true — one primitive plus one sanctioned delegation — but nothing
+  > stops a second delegation appearing. The failure mode is the feature's own origin story: five
+  > implementations did not arrive at once, they accreted one at a time, each individually
+  > reasonable.
+  >
+  > The pattern already exists in this codebase. `component_api_opacity`'s `REMAINING` list fails
+  > both when a new leak appears *and* when the list names something already fixed. An exception
+  > list of exactly one entry, held the same way, means the second one has to be argued for in a
+  > diff rather than noticed years later.
+
+- [ ] T057 Record the sidebar-name ellipsis in `behavior-delta.md`, and the component that delivered it per FR-024, T015 (contradicts)
+
+  > `behavior-delta.md` is introduced as "the complete list of what this feature changes that a user
+  > can notice" and currently lists four changes. A fifth shipped on this branch: an over-long
+  > session name now ends in an ellipsis instead of overflowing its row and colliding with the close
+  > button, delivered by `material/ellipsized.rs` in `cb7f126` — a component no requirement, plan
+  > entry or task calls for.
+  >
+  > The nuance is worth writing down rather than smoothing over. The *defect* predated the feature:
+  > `Wrapping::None` never implied clipping, and the label's layout dated to 2026-07-16. So this is
+  > not a refactor regression. But a user comparing the pre-017 build to the post-017 build sees a
+  > difference that the document promising completeness does not mention, and "we changed nothing
+  > visible except these four things" is the single claim this feature asks reviewers to trust.
+  >
+  > Record it as a defect fix distinct from the sanctioned dismissal changes, and note that
+  > `Ellipsized` is gated automatically by the builder-API and opacity tests because both scan the
+  > component directory rather than an enumerated list — which is why unplanned work still landed
+  > inside the boundary.
