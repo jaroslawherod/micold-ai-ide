@@ -324,6 +324,26 @@ One-client-per-project with force-takeover (FR-023–025); half-open detection v
 (FR-026); resync-by-reading-current-state on reconnect (FR-028); systemd units shipped but not
 enabled at install, with the client enabling in-session; user-guide documentation (FR-042).
 
+**Build-staleness detection (FR-022a, BUG-002)**: the FR-021 handshake refuses only on a
+`PROTOCOL_VERSION`/`SCHEMA_HASH` mismatch, so a `.deb` upgrade whose daemon-side change doesn't touch
+the wire schema — the common case — never trips it, and the new client silently attaches to the old,
+already-running daemon via the `AlreadyRunning` singleton path. The original plan was to compare the
+existing `client_build`/`daemon_build` diagnostic strings directly, but those turned out non-viable:
+they carry different program-name prefixes (`"micold-ai-ide/…"` vs `"micold-daemon …"`) that can
+never be equal even on an identical release. Landed instead: a dedicated `PACKAGE_VERSION` constant
+(`crates/micold-core/src/protocol/version.rs`, backed by the workspace-shared `CARGO_PKG_VERSION`,
+which `release-please` bumps on every release regardless of wire-schema changes) exchanged via a new
+`client_package_version` field on `Hello`. `PROTOCOL_VERSION` bumped 1→2 accordingly (that new field
+is itself wire-visible). A same-contract package-version difference refuses with a new
+`RefusalReason::BuildMismatch` variant, distinct from `VersionMismatch`, reusing FR-022's client-side
+restart action — without the "live processes will be lost" warning, since a matching contract means
+nothing is actually at risk. `client_build`/`daemon_build` remain diagnostic-only, named in both
+refusal kinds' banners.
+
+**Bugfix**: 2026-07-27 — BUG-002 Added build-staleness detection to W6 (FR-022a). Resolved
+2026-07-27: `PACKAGE_VERSION` + `RefusalReason::BuildMismatch` landed (T088–T091); see
+`bugs/BUG-002.md`.
+
 **Test redistribution** (FR-041): move each of the 259 tests to its owning crate — pure-logic tests
 to `micold-core`, supervision/protocol/lifecycle to `micold-daemon`, any render-coupled tests to
 `micold-client`. Record a per-test disposition (moved / rewritten against the daemon / retired with

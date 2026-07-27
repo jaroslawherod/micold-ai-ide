@@ -209,6 +209,14 @@ struct App {
     /// daemon_build)`. `Some` while the running daemon's contract differs from ours — drives the
     /// version-mismatch banner and its "restart service" action. Cleared on a successful connect.
     version_mismatch: Option<(u32, u32, String)>,
+    /// A pending same-contract build mismatch (US6, FR-022a, BUG-002): `(client_build,
+    /// daemon_build)`. `Some` while the running daemon's package version differs from ours despite a
+    /// matching wire contract — drives the build-mismatch banner and its "restart service" action.
+    /// Cleared on a successful connect. Mutually exclusive with `version_mismatch` in practice (the
+    /// handshake reports at most one refusal reason per attempt), but kept as its own field rather
+    /// than folded into one enum so each clears independently of the other's precedence in
+    /// `connection_status`.
+    build_mismatch: Option<(String, String)>,
     /// Correlation-id counter for the client's mutating RPCs (FR-009).
     next_req: u64,
     /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
@@ -487,6 +495,7 @@ fn boot() -> (App, Task<Message>) {
             displaced: HashMap::new(),
             disconnected: false,
             version_mismatch: None,
+            build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         },
@@ -680,6 +689,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.disconnected = false;
             app.displaced.clear();
             app.version_mismatch = None;
+            app.build_mismatch = None;
             // The daemon is the single writer of settings + sessions; adopt what it reports.
             app.scrollback_lines = settings.scrollback_lines;
             reconcile_catalog(&mut app.core, &catalog, false);
@@ -977,13 +987,23 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.version_mismatch = Some((client, daemon, daemon_build));
             Task::none()
         }
-        // "Restart service" (FR-022): stop the mismatched daemon by its recorded pid. A mismatched
-        // client can't send it a control message, so termination is the version-agnostic stop. Once
-        // it exits, the auto-reconnect loop finds nothing listening and spawns a matching daemon;
-        // previously-live sessions then reload as interrupted-resumable (FR-006a). Live processes are
-        // lost — we say so — but the durable sessions survive.
+        // Same contract, different package version (US6, FR-022a, BUG-002): record it so the banner
+        // can name both builds and offer the restart action, distinct from a contract mismatch.
+        Message::DaemonBuildMismatch {
+            client_build,
+            daemon_build,
+        } => {
+            app.build_mismatch = Some((client_build, daemon_build));
+            Task::none()
+        }
+        // "Restart service" (FR-022/022a): stop the mismatched daemon by its recorded pid. A
+        // mismatched client can't send it a control message, so termination is the version-agnostic
+        // stop. Once it exits, the auto-reconnect loop finds nothing listening and spawns a matching
+        // daemon; previously-live sessions then reload as interrupted-resumable (FR-006a). Live
+        // processes are lost — we say so — but the durable sessions survive.
         Message::ConnectionRestartServiceRequested => {
             app.version_mismatch = None;
+            app.build_mismatch = None;
             app.core.notify_info(
                 "Restarting the session service — running processes are stopped, but your \
                  sessions are preserved and can be resumed.",
@@ -1825,14 +1845,21 @@ fn active_project_displaced(app: &App) -> bool {
 }
 
 /// The connection state for the status banner (US5/US6). Precedence: a contract mismatch (US6) wins
-/// — it blocks every connection and has the most specific action — then a per-project takeover (US5),
-/// then a plain disconnect. Each names the situation and offers a concrete action.
+/// — it blocks every connection and has the most specific action — then a same-contract build
+/// mismatch (US6, FR-022a), then a per-project takeover (US5), then a plain disconnect. Each names
+/// the situation and offers a concrete action.
 fn connection_status(app: &App) -> micold_client::ui::ConnectionStatus {
     use micold_client::ui::ConnectionStatus;
     if let Some((client, daemon, daemon_build)) = &app.version_mismatch {
         return ConnectionStatus::VersionMismatch {
             client: *client,
             daemon: *daemon,
+            daemon_build: daemon_build.clone(),
+        };
+    }
+    if let Some((client_build, daemon_build)) = &app.build_mismatch {
+        return ConnectionStatus::BuildMismatch {
+            client_build: client_build.clone(),
             daemon_build: daemon_build.clone(),
         };
     }
@@ -2579,6 +2606,7 @@ mod tests {
             displaced: HashMap::new(),
             disconnected: false,
             version_mismatch: None,
+            build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         };
@@ -2622,6 +2650,7 @@ mod tests {
             displaced: HashMap::new(),
             disconnected: false,
             version_mismatch: None,
+            build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
         };

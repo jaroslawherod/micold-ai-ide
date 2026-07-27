@@ -168,6 +168,27 @@ async fn connect_and_pump(
                 PumpEnd::AppGone
             };
         }
+        // Same contract, different package version — most releases don't touch the wire schema, so
+        // this is the common shape a `.deb` upgrade takes (US6, FR-022a, BUG-002). Its own
+        // recoverable state, distinct from a contract mismatch: nothing is actually incompatible,
+        // only stale.
+        Connected::Refused(micold_core::protocol::messages::RefusalReason::BuildMismatch {
+            client_build,
+            daemon_build,
+        }) => {
+            let sent = output
+                .send(Message::DaemonBuildMismatch {
+                    client_build,
+                    daemon_build,
+                })
+                .await
+                .is_ok();
+            return if sent {
+                PumpEnd::Disconnected
+            } else {
+                PumpEnd::AppGone
+            };
+        }
         Connected::Refused(reason) => {
             return report_connect_failure(
                 output,

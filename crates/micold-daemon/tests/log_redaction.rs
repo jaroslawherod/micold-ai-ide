@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::ClientMsg;
-use micold_core::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 use micold_core::session::SessionId;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
@@ -65,6 +65,7 @@ async fn no_log_line_contains_terminal_content_or_input() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test".into(),
+            client_package_version: PACKAGE_VERSION.into(),
         }))
         .await
         .unwrap();

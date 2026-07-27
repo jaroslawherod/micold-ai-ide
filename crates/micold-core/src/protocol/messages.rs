@@ -50,6 +50,10 @@ pub enum ClientMsg {
         schema_hash: [u8; 32],
         /// Human-facing build string for diagnostics.
         client_build: String,
+        /// The client's compiled [`crate::protocol::version::PACKAGE_VERSION`] — changes on every
+        /// release, wire-visible or not, so a same-contract `.deb` upgrade over an already-running
+        /// daemon is still detected (FR-022a, BUG-002).
+        client_package_version: String,
     },
     /// Attach to a project. `force = true` is a confirmed takeover, only sent after explicit user
     /// confirmation (FR-023).
@@ -477,6 +481,16 @@ pub enum RefusalReason {
         client_hash: [u8; 32],
         /// Daemon schema hash.
         daemon_hash: [u8; 32],
+        /// Daemon build string.
+        daemon_build: String,
+    },
+    /// Same wire contract, different package version — a `.deb` upgrade over an already-running
+    /// daemon that a `VersionMismatch` would not catch (FR-022a, BUG-002). Names both builds so the
+    /// client can render a distinct, lower-severity diagnostic and offer the same restart action,
+    /// without implying that sessions are put at risk (the contract still matches).
+    BuildMismatch {
+        /// Client build string.
+        client_build: String,
         /// Daemon build string.
         daemon_build: String,
     },

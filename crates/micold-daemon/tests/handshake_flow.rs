@@ -6,7 +6,7 @@
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusalReason};
-use micold_core::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 use tokio_util::codec::Framed;
 
 #[tokio::test]
@@ -23,6 +23,7 @@ async fn matching_handshake_gets_welcome_and_pong() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_package_version: PACKAGE_VERSION.into(),
         }))
         .await
         .unwrap();
@@ -64,6 +65,7 @@ async fn mismatched_handshake_is_refused_naming_both_sides() {
             protocol_version: PROTOCOL_VERSION + 1,
             schema_hash: SCHEMA_HASH,
             client_build: "stale-client".into(),
+            client_package_version: PACKAGE_VERSION.into(),
         }))
         .await
         .unwrap();
