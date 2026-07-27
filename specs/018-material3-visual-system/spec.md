@@ -1,0 +1,331 @@
+# Feature Specification: Material 3 Visual System
+
+**Feature Branch**: `feat/improve-material-design`
+
+**Created**: 2026-07-26
+
+**Status**: Draft
+
+**Input**: User description: "Rebuild the application's visual layer so it reads unmistakably as a Material 3 (Material You) application, rather than a generic flat desktop app that merely borrows Material's color names and icon font."
+
+**Supersedes**: `specs/003-material-design-layout/contracts/design-tokens.md`. That contract defined the design system's *inputs* (a small role set, five raw type sizes, a spacing scale, four radii) but explicitly deferred elevation ("No numeric elevation tokens in v1"), typographic weight/line-height, tonal surface grading, and state layers beyond buttons. This feature corrects and completes that contract; the revised contract lives at `contracts/design-tokens.md` in this feature's directory.
+
+## Clarifications
+
+### Session 2026-07-26
+
+- Q: Which seed color should the Material 3 tonal ramps be generated from? → A: Material's baseline seed `#6750A4`. The application's identity color changes from blue to purple; in exchange the palette *is* the published M3 baseline scheme and every role value is checkable against a Material reference.
+- Q: How should the 10 per-type worktree tag colors and the issue tag fit into the tonal system? → A: Each type gets one fixed hue, read at the same tone recipe the accent roles use — fill tone 40 / text tone 100 in light, fill tone 80 / text tone 20 in dark. Tags become palette-and-tone pairs like every other role, so their AA compliance (including under state layers) is structural rather than hand-verified. Tag colors shift from their current values.
+- Q: How far should the notification rework go — snackbar appearance only, or full snackbar semantics? → A: Full Material semantics — one snackbar visible at a time, the rest queued behind it, each auto-dismissing on a timeout. Recorded as FR-036a. *(Superseded in part on 2026-07-27: it is now the **first** of two sanctioned exceptions — see FR-036b.)*
+- Q: What row density should list and tree rows use, given the sidebar's deliberate compactness? → A: The worktree sidebar uses a dense 36dp row; every other list uses the standard 48dp. *(Refined on 2026-07-27: these are no longer two named variants but two points on a four-step density scale — see feature 017. The heights are unchanged.)*
+- Q: What should drive the top app bar's elevated-on-scroll state? → A: The worktree sidebar's scroll offset — the only scroll region beneath the app bar in the current shell. The bar lifts to elevation 2 when the sidebar is scrolled away from the top and returns to elevation 0 when it is back at the top.
+
+### Session 2026-07-27
+
+- Q: Consolidating five overlays into one will change some surfaces' dismissal behavior. How should that interact with the no-behavior-change rule? → A: Unify dismissal too — all floating surfaces adopt one consistent Material dismissal behavior. This is a **second sanctioned exception** to FR-036, recorded in FR-036b.
+- Q: What performance acceptance criterion should this feature carry? → A: Both — idle quiescence (no frames requested and no measurable CPU at rest, every animation provably settles) **and** a frame-time budget measured on a defined reference scene, with an explicit cross-platform tolerance policy.
+- Q: How should the density scale be defined so it is testable and uniform? → A: Four steps — 0, −1, −2, −3 — each subtracting 4dp from a component's base height, honoured by lists, menu items, text fields and buttons. The sidebar's compact rows are density −3 on a 48dp list row, giving exactly the 36dp already in the contract.
+- Q: The spec now spans a structural refactor and a visual redesign. Should it stay one feature? → A: Split in two. **Feature A (structural)** — tokens, cdk/material layer split, widget wrappers, overlay consolidation, state ownership — lands first as a pure refactor with zero visual change. **Feature B (visual)** — the Material 3 visual system — builds on it. See "Feature Split" below for the requirement boundary.
+
+## User Scenarios & Testing *(mandatory)*
+
+### User Story 1 - The interface reads as Material at a glance (Priority: P1)
+
+A developer opens the application and, without touching anything, sees a screen with real depth: the window background, the sidebar, cards and raised surfaces sit at visibly different tonal levels; dialogs, menus and popovers float above the content with soft shadows rather than being outlined boxes drawn on the same plane; corners are the sizes Material assigns them — pill-shaped buttons, softly rounded cards, generously rounded dialogs. Hairline outlines appear only where something is genuinely being divided or where an outlined control is being drawn.
+
+**Why this priority**: This is the loudest and most visible half of "does not read as Material". Surface tone, elevation and shape are what a user perceives before reading a single word. Delivered alone, it already changes the app's identity, and every later story styles components that sit on top of these surfaces.
+
+**Independent Test**: Open the app in light and again in dark scheme, open a dialog, a context menu and the project switcher popover. Confirm each floats above what is behind it, that the background/sidebar/card levels are visually distinguishable without borders, and that no container carries a decorative outline that is not a divider, an outlined control, or a focus indicator.
+
+**Acceptance Scenarios**:
+
+1. **Given** the app is running in the light scheme, **When** the user views the main window, **Then** the window background, the sidebar surface, and any raised card render at visibly distinct tonal levels, and none of them uses a border to convey that difference.
+2. **Given** the app is running, **When** the user opens any dialog, **Then** the dialog renders with a drop shadow and a scrim behind it, at a notably larger corner radius than a card.
+3. **Given** the app is running in the dark scheme, **When** the user opens a menu or popover, **Then** the menu surface is tonally lighter than the surface behind it and carries a shadow, and remains legible.
+4. **Given** any button in the app, **When** the user views it, **Then** its container is fully pill-shaped.
+5. **Given** any container that previously drew a 1px outline purely for definition, **When** the user views it after the change, **Then** the outline is gone and the container is distinguished by its surface tone or elevation instead.
+
+---
+
+### User Story 2 - Text has a typographic voice (Priority: P2)
+
+A developer reads the interface and can tell headings from body text from captions without squinting: titles are heavier, body copy is regular weight, labels are small and medium-weight, and line spacing is comfortable rather than cramped. The same screen looks identical whether the developer is on Linux, macOS or Windows, because the application ships its own typeface rather than borrowing whatever the operating system supplies.
+
+**Why this priority**: Weight contrast is called out as the single loudest "this is not Material" signal, and shipping the typeface is what makes the result reproducible across platforms. It depends on nothing from Story 1, but is scoped second because depth is more immediately visible than weight.
+
+**Independent Test**: On a machine whose system UI font is deliberately unusual, launch the app and confirm the rendered typeface is the shipped one. Compare a dialog title, its body paragraph and a caption; confirm three distinguishable weights/sizes. Confirm the terminal contents still render monospaced.
+
+**Acceptance Scenarios**:
+
+1. **Given** the host system's default UI font is changed, **When** the app is launched, **Then** the application's text renders in the shipped typeface, unchanged.
+2. **Given** any dialog, **When** the user views it, **Then** the dialog title is visibly heavier and larger than its body text, and the body text is visibly heavier and larger than any caption beneath it.
+3. **Given** a multi-line block of body text, **When** the user views it, **Then** the lines are separated by the type role's line height rather than the renderer's default line spacing.
+4. **Given** the embedded terminal, **When** the user views its output, **Then** the output is still rendered in a monospaced typeface with its own grid metrics, unaffected by this change.
+5. **Given** the worktree sidebar, **When** the user compares its text to equivalent text elsewhere in the app, **Then** the sidebar text remains at its established reduced density.
+
+---
+
+### User Story 3 - The interface responds under the pointer and the keyboard (Priority: P3)
+
+A developer moves the pointer across the worktree sidebar, the known-projects list, a context menu and a chip; every one of them lightens under the cursor. Clicking any of them sends a ripple out from exactly where the pointer landed, spreading across the element and fading — the feedback that makes an interface feel Material rather than merely Material-colored. Tabbing through a dialog, the developer can always see which control holds focus.
+
+**Why this priority**: Inert surfaces make the app feel unresponsive, and invisible keyboard focus is an accessibility defect. It is scoped after the foundation because state layers are drawn *on top of* the surface roles Story 1 introduces.
+
+**Independent Test**: Hover every interactive element in the app in turn and confirm a visible change; press and hold each and confirm a stronger change; tab through every focusable element in every dialog and confirm a visible focus indicator at each stop.
+
+**Acceptance Scenarios**:
+
+1. **Given** any interactive element (list row, tree item, menu item, chip, tag, button, text field, select), **When** the pointer enters it, **Then** its surface visibly lightens or darkens.
+2. **Given** any interactive element, **When** the user presses and holds it, **Then** it shows a stronger state change than on hover.
+2a. **Given** any interactive element, **When** the user presses it, **Then** a ripple originates at the exact point pressed, expands to cover the element, stays clipped inside the element's own shape, and fades out.
+2b. **Given** one element is still rippling, **When** the user presses a second element, **Then** both ripples animate independently without interfering.
+3. **Given** a text field or the select control, **When** it receives keyboard focus, **Then** a focus indicator is visible without the pointer being over it.
+4. **Given** a selected worktree row or a selected filter chip, **When** the user views it, **Then** its selected state is visible as a persistent surface treatment distinct from hover.
+5. **Given** a disabled control, **When** the user views it, **Then** its content is dimmed, including a self-coloring icon glyph that cannot inherit its parent's disabled text color.
+
+---
+
+### User Story 4 - Components match the components they claim to be (Priority: P4)
+
+A developer familiar with Material recognises each element by its proportions: the top app bar is a proper app bar with a title-sized title and correct height, not a cramped strip; list rows have a defined density; icon buttons are comfortable to hit; dialogs have Material's padding and a trailing-aligned action row; notifications appear as a snackbar rather than an inline banner.
+
+**Why this priority**: Anatomy is the finishing pass that turns "Material colors and shadows" into "Material components". It builds on the surface, type, shape and state work of Stories 1–3.
+
+**Independent Test**: Measure or visually compare each listed component against the Material component it imitates — height, padding, density, and which type role its text uses — and confirm each matches the revised contract.
+
+**Acceptance Scenarios**:
+
+1. **Given** the main window, **When** the user views the top app bar, **Then** it occupies the app bar's defined height and its title renders in the app bar's title type role.
+2. **Given** the worktree sidebar is scrolled away from the top, **When** the user views the app bar, **Then** it shows its elevated appearance; **and When** the sidebar is scrolled back to the top, **Then** the app bar returns to its resting appearance.
+3. **Given** the worktree sidebar, **When** the user views it, **Then** every row is at the dense row density, and the number of worktrees visible without scrolling is not materially fewer than before the change.
+4. **Given** the known-projects list, **When** the user views it, **Then** every row is at the standard row density.
+5. **Given** any icon button, **When** the user targets it with the pointer, **Then** its interactive target is at least the defined minimum size even where its visible icon is smaller.
+6. **Given** a dialog with actions, **When** the user views it, **Then** the actions are grouped at the trailing edge of an action row with the defined spacing.
+7. **Given** an action that raises a global notification, **When** it fires, **Then** the notification appears as a snackbar — a floating, elevated, self-contained surface with its own inverse coloring — rather than as an inline strip in the layout.
+8. **Given** several notifications are raised in quick succession, **When** they fire, **Then** exactly one snackbar is visible at a time and the others follow in turn as each is dismissed or times out.
+9. **Given** an error-level notification, **When** it is shown, **Then** it remains on screen for the long duration rather than the short one, and can still be dismissed manually before that.
+
+---
+
+### User Story 5 - Movement feels like Material (Priority: P5)
+
+The animations already present — overlay fades, the sidebar slide, menu fades, row hover fades — run at Material's durations and on Material's easing curves, so transitions ease in and settle rather than moving linearly.
+
+**Why this priority**: The lowest-visibility item, and the only one that changes nothing structural. Every animated behavior already exists; only its timing and curve change.
+
+**Independent Test**: Trigger each existing animation and confirm it still starts, completes and ends in the same visual state as before, at the new timing.
+
+**Acceptance Scenarios**:
+
+1. **Given** any existing animation in the app, **When** it is triggered, **Then** it completes with the same start and end state as before the change.
+2. **Given** an overlay fade or a menu fade, **When** it runs, **Then** it accelerates and decelerates rather than progressing at a constant rate.
+3. **Given** the sidebar slide, **When** it runs, **Then** it uses the emphasized motion set, distinct from the standard set used by small fades.
+
+---
+
+### Edge Cases
+
+- **A surface is elevated in the dark scheme where shadow is nearly invisible.** The elevation level must still read, because the level also carries a tonal surface shift, not only a shadow.
+- **Two elevated surfaces overlap** (a context menu opened over a dialog). The higher-elevation surface must render above, with its own shadow, and must not be visually flattened into the lower one.
+- **A type role's line height would clip a glyph with tall ascenders or deep descenders.** The role's line height must accommodate the shipped typeface's metrics without clipping.
+- **The shipped typeface lacks a glyph** present in a worktree name, branch name or path (for example CJK or emoji). The text must still render via fallback rather than showing missing-glyph boxes.
+- **An element is pressed near its own corner, or is a narrow pill.** The ripple must stay clipped inside the element's shape rather than spilling past the rounded corner, and must still expand far enough to cover the element from an off-center origin.
+- **An element is unmounted mid-ripple** — a menu item pressed, closing the menu it lives in. The ripple must not outlive its element or leave an orphaned animation running.
+- **The pointer never moves before a press** (keyboard-triggered or synthetic activation, where no position is known). The ripple must fall back to the element's center rather than failing or drawing at the origin point.
+- **A state layer is applied over an accent-colored surface** (a filled button, a colored tag). The layer must remain visible and the content must remain above AA contrast in that state.
+- **A tag color and a state layer combine.** The per-type worktree tag colors and the issue tag must still meet AA in hover, pressed and selected states, in both schemes. Because tags now read the same tone recipe as the accent roles (FR-006a), this holds by construction rather than by tuning.
+- **A snackbar is queued behind another while its own trigger is no longer relevant** (for example the session it reported on has since been removed). The queued snackbar must still display without referring to state that no longer exists, or be dropped — it must not render a stale reference or fail.
+- **A run of identical notifications fires** (the same error repeating). Deduplication must collapse them rather than queueing the same message repeatedly and forcing the user to wait through each timeout.
+- **Keyboard focus lands on a text field that is also hovered.** Both indicators must be resolvable; focus must remain distinguishable from hover.
+- **A snackbar appears while a dialog is open.** The snackbar must render above the dialog and its scrim, and must not permanently block the dialog's actions.
+- **The window is resized very narrow or very short.** App bar height, row density and dialog padding must not cause content to be clipped or overlapped; no new responsive breakpoint behavior is introduced.
+- **A user switches scheme (or the OS switches it) while a dialog, menu and snackbar are all on screen.** Every visible surface must re-resolve to the other scheme's roles, elevation and state layers without a restart.
+
+## Requirements *(mandatory)*
+
+### Functional Requirements
+
+#### Color
+
+- **FR-001**: The design system MUST define a full Material 3 semantic color role set for both the light and the dark scheme, including: the graded neutral surfaces (`surface`, `surface_dim`, `surface_bright`, and the `surface_container_lowest` → `surface_container_highest` family), `surface_variant` / `on_surface_variant`, the paired accent roles (`primary` / `on_primary` / `primary_container` / `on_primary_container`, and the same quartets for `secondary`, `tertiary` and `error`), `outline` and `outline_variant`, `scrim`, `shadow`, and the inverse roles (`inverse_surface`, `inverse_on_surface`, `inverse_primary`).
+- **FR-002**: Visual hierarchy between containers MUST be expressed by surface tone and elevation. A container MUST NOT draw an outline solely to define its own edge.
+- **FR-003**: Outlines MUST appear only as (a) dividers between content, (b) the border of an outlined component variant, and (c) focus indicators.
+- **FR-004**: Every foreground role that carries text or icons MUST meet WCAG AA contrast (≥ 4.5:1) against every background role it is specified to render on, in both schemes, and this MUST be verified by an automated test that fails the build on violation.
+- **FR-005**: The AA contrast test MUST cover every role pair introduced by this feature, not only those carried over from the prior contract.
+- **FR-005a**: Both schemes MUST be derived from one seed color via Material 3 tonal ramps, and every semantic role MUST be defined as a palette-and-tone pair rather than as an independently chosen color value, so that a role added once is correct in both schemes and contrast follows from the tone delta (D1, D3).
+- **FR-005b**: The seed color MUST be Material 3's baseline seed `#6750A4`, so that the resulting role set is the published Material 3 baseline scheme and every value can be verified against a Material reference rather than against this project's own judgement. The application's accent color changes from its current blue to the baseline purple; this is an accepted, deliberate identity change.
+- **FR-006**: The per-type worktree tags and the issue tag MUST continue to render as visually distinguishable per-type colors and MUST continue to meet AA in both schemes. Their exact color values are expected to shift (FR-006a); what must survive is that each of the ten conventional-commit types, plus the issue tag, remains distinguishable from the others at a glance.
+- **FR-006a**: Each tag color MUST be defined as a palette-and-tone pair like every other role — one fixed hue per type, read at the same tone recipe the accent roles use (fill tone 40 / text tone 100 in the light scheme, fill tone 80 / text tone 20 in the dark scheme). No tag may be a hand-tuned value outside the tonal system, so that its AA compliance — including under the state layers of FR-024 — follows structurally from the tone delta rather than from case-by-case verification.
+
+#### Typography
+
+- **FR-007**: The design system MUST define a Material 3 type scale as named roles — display, headline, title, body and label, each in large, medium and small — where each role carries a size, a weight and a line height.
+- **FR-008**: The application MUST render its non-terminal text in a typeface that ships with the application, so that rendering is identical on Linux, macOS and Windows regardless of installed system fonts.
+- **FR-008a**: The shipped typeface MUST be Roboto — Material's own typeface — supplied as two static instances covering weight 400 (regular) and weight 500 (medium), which are the only weights the Material 3 type scale specifies. No variable font is shipped (D2).
+- **FR-009**: The shipped typeface MUST be redistributable under a license compatible with this repository, and MUST be documented with the same provenance rigor already applied to the Material Symbols icon font — an in-repo license file and a provenance document recording upstream source, the exact artifact shipped, and how it was produced.
+- **FR-010**: Every text rendering site in the application MUST select a named type role. No site may specify a raw pixel size, weight or line height directly.
+- **FR-011**: The worktree sidebar's deliberate reduced-density text sizing MUST survive this migration as explicit, named, auditable sidebar-scoped type roles — neither silently lost nor implicitly re-derived at call sites.
+- **FR-012**: The embedded terminal's own text MUST remain monospaced with its own grid metrics and MUST NOT be migrated to the type scale. Only the terminal's surrounding chrome is restyled.
+- **FR-013**: Text MUST render correctly for characters outside the shipped typeface's coverage, falling back rather than displaying missing-glyph placeholders.
+
+#### Elevation
+
+- **FR-014**: The design system MUST define a Material 3 elevation scale as named levels (level 0 through level 5), where each level specifies both the tonal surface shift it applies and the drop shadow that expresses it.
+- **FR-015**: Every surface that Material assigns an elevation — cards, dialogs, menus, context menus, popovers, snackbars, and the app bar's elevated-on-scroll state — MUST draw its depth from a named elevation level rather than from an ad-hoc border.
+- **FR-016**: Elevation MUST render correctly in both schemes, with the dark scheme relying proportionally more on the tonal surface shift than on the shadow.
+- **FR-017**: Overlapping elevated surfaces MUST render in elevation order, each retaining its own shadow.
+
+#### Shape
+
+- **FR-018**: The design system MUST define the full Material 3 shape scale: none, extra-small, small, medium, large, extra-large and full.
+- **FR-019**: Each component type MUST map to the corner size Material assigns it — in particular buttons and chips at full (pill), cards and list surfaces at medium, and dialogs at extra-large.
+
+#### Interaction states
+
+- **FR-020**: The design system MUST define state-layer opacities once, for hover, focus, pressed, dragged, selected, and disabled (both disabled content and disabled container).
+- **FR-021**: Every interactive surface in the application MUST apply the shared state layers — including list rows, tree items, navigation entries, menu items, context-menu items, chips, tags, buttons of every variant, text fields and the select control — not buttons alone.
+- **FR-022**: Every element that can hold keyboard focus MUST show a visible focus indicator when focused, distinguishable from its hover state. In this application that set is the text fields and the select control; see FR-043 for why it is not wider.
+- **FR-023**: The existing disabled-content dimming behavior MUST continue to work, including the case where a self-coloring icon glyph cannot inherit a disabled parent's text color and must be dimmed explicitly.
+- **FR-024a**: Pressing an interactive surface MUST produce Material's **ripple**: a circular indication that originates at the pointer's position within the element, expands until it covers the element, and fades out. The ripple is what distinguishes Material's press feedback from a plain color swap, and its absence is a primary reason the interface does not read as Material.
+- **FR-024b**: The ripple MUST originate at the actual press point, not at the element's center, and MUST be clipped to the element's own shape so it never spills past a pill or rounded corner.
+- **FR-024c**: The ripple MUST be drawn in the element's state-layer color at the pressed opacity, so it composes with the existing state layers rather than replacing them, and MUST work on every interactive surface the shared library provides — buttons of every variant, list rows, tree items, menu items and chips.
+- **FR-024d**: Ripples MUST be independent per element, so pressing one element while another is still fading animates both without interference, and MUST stop entirely once faded so nothing animates at rest.
+- **FR-024f**: The ripple renderer — press capture, geometry and per-instance state — MUST be built in the behavior layer that [feature 017](../017-material-component-architecture/spec.md) establishes, carrying no colour or opacity of its own. It was deliberately deferred out of 017 because it exists only to serve this feature's appearance.
+- **FR-024g**: Before the renderer is finalised, the coordinate space the pointer area reports MUST be confirmed against a real widget, since an origin expressed in the wrong frame would place every ripple incorrectly.
+- **FR-024e**: The ripple MUST hold its own origin, progress and lifetime **inside the component instance**. It MUST NOT require the application to store ripple state centrally, register an animation key, or thread a progress value in from outside. A call site presses a button; it never learns that a ripple exists.
+- **FR-024**: State layers applied over accent-colored or tag-colored surfaces MUST leave the content above AA contrast in the hover, focus, pressed, dragged and selected states. The disabled states are exempt: dimming content to the disabled opacity necessarily drops it below AA, and WCAG explicitly excludes inactive controls from its contrast requirement.
+
+#### Component anatomy
+
+- **FR-025**: The top app bar MUST match Material's **small** app bar anatomy — its defined height, its horizontal padding, and its title type role. The medium and large app bar variants are not adopted (D4).
+- **FR-025a**: The app bar MUST rise to its elevated appearance when the worktree sidebar is scrolled away from the top, and MUST return to its resting appearance when the sidebar is back at the top. The sidebar's scroll offset is the driving signal, being the only scroll region beneath the app bar in the current shell. The transition MUST use the motion tokens of FR-033.
+- **FR-026**: Every list and tree row MUST use one of exactly two named row densities, and every row in a given list context MUST use the same one. The worktree sidebar uses the **dense** density; the known-projects list and every other list uses the **standard** density. No list may invent a third density or size its rows ad hoc.
+- **FR-026b**: Density MUST be a theming axis expressed as a scale applied uniformly, not a per-component enumeration. The scale MUST have four steps — 0, −1, −2 and −3 — where each step below 0 subtracts 4dp from a component's base height. Lists, menu items, text fields and buttons MUST honour it, and no component may define its own step count or step size. The arithmetic MUST be asserted by a test, including that no component resolves to a fractional height.
+- **FR-026c**: The sidebar's dense rows MUST be an application of that scale — density −3 on the standard list row — not a bespoke variant. Because this feature is where component heights are introduced at all (today's components are content-sized), applying the scale here is the first point at which it can be done without changing appearance behind [feature 017](../017-material-component-architecture/spec.md)'s back.
+- **FR-026a**: The dense density exists to preserve the sidebar's deliberate compactness (FR-011): the number of worktrees visible without scrolling MUST NOT decrease materially compared to before this change. It is a named, auditable density drawn from Material's density levels, not an arbitrary reduction.
+- **FR-027**: Buttons MUST be provided in the filled, outlined, text and icon variants present in the app, each with Material's height, horizontal padding and label type role, and each with a minimum interactive target size that is honored even when the visible container is smaller.
+- **FR-028**: Dialogs MUST match Material's dialog anatomy — surface role, extra-large corner, content padding, title and body type roles, and an action row whose actions are grouped at the trailing edge with the defined spacing.
+- **FR-029**: Menus, context menus and popovers MUST match Material's menu anatomy — surface role, elevation level, corner size and item density.
+- **FR-030**: Chips and tags MUST match Material's chip anatomy — height, corner, padding and label type role.
+- **FR-031**: Text fields and the select control MUST adopt Material's **filled text field** anatomy: the filled container role, a container that is rounded on its top corners and square on its bottom, a bottom **active indicator** that thickens and switches to the accent color on focus, Material's field height, and the defined type roles for label, input value and supporting text. The current presentation — a uniformly bordered rounded rectangle on the plain surface role, at button height, whose only focus feedback is a border color change — matches no Material text field variant and is the specific defect this requirement corrects.
+- **FR-031a**: The label MUST sit **inside** the field container, above the input value, in the label type role and the on-container color — not outside the field as free-standing muted text. Placeholder text MUST NOT be used to carry the field's label; where today's placeholder states the field's name or an example, that content moves to the label and the supporting text respectively.
+- **FR-031b**: Text fields MUST provide a **supporting text** slot beneath the container for hints and validation messages, rendered in the supporting type role, and switching to the error color role together with the active indicator when the field is invalid.
+- **FR-031c**: Text fields and the select control MUST be provided by a single shared component in the component library, exposed through the established chainable builder API, so that container, active indicator, label, value and supporting text are composed in one place rather than reassembled at each of the seven call sites that render an input today.
+- **FR-031d**: The select control's dropdown MUST be treated as a menu for styling purposes — menu surface role, elevation and item density per FR-029 — rather than as a bordered panel on the plain surface role.
+- **FR-031e**: The progress indicator MUST match Material's linear progress indicator anatomy — track and active-indicator color roles, bar thickness, fully rounded ends, and the type role and color of its accompanying stage label.
+- **FR-031f**: Where the application cannot state how much of an operation is complete, the progress indicator MUST use Material's **indeterminate** presentation rather than a static partial fill. A bar frozen at a fixed fraction communicates a completion percentage the application does not actually know, which is a fidelity defect this feature exists to correct. The indeterminate animation MUST draw from the motion tokens (FR-033) and is one of the four new animations permitted by FR-035a.
+- **FR-032**: The global notification surface MUST be reworked as a Material snackbar — a floating, elevated surface using the inverse color roles, with the snackbar's corner, padding, minimum height and text/action type roles — replacing the current inline banner.
+- **FR-032a**: The snackbar MUST adopt Material's snackbar *semantics*, not only its appearance: at most one snackbar is visible at a time, further notifications queue behind it and are shown in turn, and each auto-dismisses after its duration elapses. Manual dismissal MUST remain available so a notification can be cleared before its timeout. The queue discipline MUST be a pure, independently testable structure (feature 017) that the snackbar component owns; the application supplies notifications and is not responsible for sequencing or timing them.
+- **FR-032c**: The existing persistent connection-status banner is a distinct component and MUST NOT be folded into the snackbar. It is a full-width strip stating that displayed content may be stale, deliberately not dismissible and not queued; Material treats banners and snackbars as different components. Only the dismissible notification stack becomes a snackbar.
+- **FR-032b**: Snackbar duration MUST vary by severity, so that an error is not lost before it can be read: informational notices use the short duration and errors use the long duration. Existing deduplication of identical consecutive notifications and the existing cap on retained notifications MUST be preserved, now applied to the queue.
+
+#### Motion
+
+- **FR-033**: The design system MUST define Material 3 motion tokens as named durations and named easing curves, distinguishing the standard set from the emphasized set.
+- **FR-034**: Every animation already present in the application — overlay fades, the sidebar slide, menu fades and row hover fades — MUST take its duration and easing from those tokens.
+- **FR-035**: Every existing animated behavior MUST keep its existing start state, end state and trigger. Only timing and easing change.
+- **FR-035a**: Four new animations are introduced by this feature and MUST also draw from the motion tokens: the app bar's transition between resting and elevated (FR-025a), the snackbar's enter and exit (FR-032), the indeterminate progress indicator (FR-031f), and the press ripple (FR-024a). These are additions or corrections of visual presentation, not modifications of existing behavior, and are the only new animations permitted.
+
+#### Structural constraints
+
+- **FR-036**: Every user-visible behavior MUST be unchanged: every user action, keyboard shortcut, dialog flow, terminal behavior and persistence path MUST work exactly as before. Any behavioral difference is a defect in this feature, except the one named in FR-036a.
+- **FR-036a**: The global notification surface is the **sanctioned exception** to FR-036. Adopting Material's snackbar semantics (FR-032a) necessarily changes how notifications behave: they are shown one at a time rather than stacked, and they dismiss themselves on a timeout rather than persisting until dismissed. This exception does not extend to what triggers a notification, what it says, or what the underlying action does.
+- **FR-036c**: The snackbar is the **only** sanctioned exception in this feature. Any other behavioral difference is a defect. (Floating-surface dismissal also changes, but that belongs to [feature 017](../017-material-component-architecture/spec.md) and lands before this feature begins.)
+- **FR-039**: The result MUST look the same on Linux, macOS and Windows.
+- **FR-039a**: At rest the application MUST request no frames and consume no measurable CPU. Every animation — including every ripple — MUST provably reach a settled state and release the resources it held. An animation that cannot terminate, or state retained after one completes, is a defect regardless of how it looks.
+- **FR-039b**: Rendering MUST stay within a frame-time budget on a **defined reference scene** — a specified worktree count, sidebar state and open surface — so the measurement is reproducible rather than dependent on whatever happened to be on screen. The scene definition MUST live alongside the measurement so a later regression is comparable to the original figure.
+- **FR-039c**: The frame-time budget MUST carry an explicit tolerance policy covering variation across the three supported platforms and their graphics stacks, and MUST state whether it gates the build or is reported for trend. Without that policy the budget is unfalsifiable and would fail arbitrarily in CI.
+- **FR-040**: The revised design-token contract MUST be published at `contracts/design-tokens.md` in this feature's directory, superseding the feature 003 contract, and MUST remain the single durable reference the implementation is checked against.
+- **FR-041**: The user-guide documentation MUST be updated in the same change to reflect the revised visual system.
+
+#### Accepted fidelity gaps
+
+- **FR-042**: Letter-spacing / tracking is a Material 3 type-scale property that the rendering stack in use cannot express. Each type role MUST record the Material tracking value it would carry, and the contract MUST state explicitly that tracking is not applied at render time. This is an accepted, documented fidelity gap, not a defect.
+- **FR-043**: Keyboard focus indicators cannot be shown on buttons, list rows, tree items, menu items or chips, because the rendering stack has no concept of focus for those widget types — only text inputs and text editors can hold focus at all. The application also has no keyboard traversal between those elements today, so nothing regresses. This is the second accepted, documented fidelity gap. Closing it would require building an application-level focus and tab-traversal model, which is a behavior addition (FR-036) and a separate feature.
+- **FR-044**: Material's text field label animates between a resting position over the input and a floating position at the top of the container. The rendering stack's text input has no label concept at all, so the shared text field composes the label alongside the input rather than inside it, and the label is rendered **persistently in its floating position** rather than transitioning between the two. The resulting field matches Material's populated state exactly; only the transition is absent. This is the third accepted, documented fidelity gap.
+
+### Key Entities
+
+- **Tonal palette**: One key hue's full tonal ramp — a fixed set of tones from darkest to lightest. Several ramps (neutral, neutral-variant, and the accent hues) are derived from a single seed color and are the raw material every color role is drawn from.
+- **Color role set**: The complete set of named semantic color roles for one scheme, each defined as a palette-and-tone pair. Two instances exist — light and dark — reading the same ramps at different tones. Pairs of roles (foreground, background) carry a contrast obligation.
+- **Type role**: A named typographic role (e.g. "title medium") carrying a size, a weight, a line height, and a recorded-but-unapplied tracking value. Fifteen roles form the scale, plus a small named set of sidebar-scoped reduced-density roles.
+- **Elevation level**: A named depth level carrying both a tonal surface shift and a drop-shadow definition. Six levels, level 0 through level 5.
+- **Shape size**: A named corner radius. Seven sizes, none through full.
+- **State layer**: A named interaction state with an opacity applied over a surface. Hover, focus, pressed, dragged, selected, disabled content and disabled container.
+- **Motion token**: A named duration or a named easing curve, grouped into the standard and emphasized sets.
+- **Component anatomy spec**: For one component type, the heights, paddings, densities, shape size, elevation level and type roles it must use.
+
+## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
+
+- **SC-001**: 100% of foreground/background role pairs specified to carry text or icons meet WCAG AA (≥ 4.5:1) in both the light and the dark scheme, proven by an automated test that fails the build on any violation.
+- **SC-002**: Zero surfaces in the application convey depth with a border where the revised contract assigns them an elevation level instead; every card, dialog, menu, context menu, popover, snackbar and elevated app bar renders a shadow.
+- **SC-003**: 100% of text rendering sites in the application resolve a named type role; zero sites specify a raw pixel size, weight or line height.
+- **SC-004**: At least three visually distinguishable font weights are in use across the interface, and a dialog's title, body and caption are each distinguishable from the other two without reference to their position.
+- **SC-005a**: 100% of interactive elements produce a ripple on press that starts at the press point and is clipped to the element's shape; zero ripples originate at an element's center or overflow its corners.
+- **SC-005**: 100% of interactive elements show a visible hover state and a visible pressed state; and 100% of the elements that can hold keyboard focus — the text fields and the select control — show a visible focus indicator. The two sets are deliberately different sizes; see FR-043.
+- **SC-006**: Launching the app on Linux, macOS and Windows with three different system UI fonts configured produces the same rendered typeface in all three cases.
+- **SC-007**: Walking every screen, dialog, menu and flow in both schemes reproduces every action that was available before the change, with zero functional differences — apart from exactly two sanctioned changes: notification presentation (FR-036a) and floating-surface dismissal (FR-036b). Every action remains reachable and produces the same result in both cases.
+- **SC-008**: Every component named in the anatomy requirements matches its contract entry for height, padding, density, shape size, elevation level and type roles, verified component by component against the contract.
+- **SC-010**: Every animation present before the change is still present after it, ends in the same visual state, and takes its duration and easing from a named motion token; the two new animations (app bar elevation, snackbar enter/exit) do the same, and no other new animation is introduced.
+- **SC-017**: With the application idle and no pointer over it, zero frames are requested and CPU use is indistinguishable from the pre-change build over a sustained observation window; after pressing every interactive element in turn, no animation state remains held.
+- **SC-018**: On the defined reference scene, frame time stays within the stated budget on all three platforms, measured with the recorded tolerance policy, and the figure is comparable against the pre-change build on the same scene.
+- **SC-012**: The shipped typeface's license and provenance are documented in-repo to the same standard as the existing icon font, and the license is compatible with the repository's Apache-2.0 license.
+
+## Assumptions
+
+- The application's information architecture is unchanged: the sidebar stays a sidebar (not a navigation rail), no floating action button is introduced, and no responsive breakpoint behavior is added. Those are candidates for a later feature.
+- Nothing about what the application does, what it stores, or how it talks to git, the terminal or the agent process changes.
+- Theming remains the existing follow-system / light / dark preference. No user-customizable seed color, contrast level or custom palette is introduced.
+- Material 3's *baseline* (default) scheme is the reference for role values, generated from Material's own baseline seed (FR-005b). A consequence the team has accepted: the application's accent color changes from its current blue to the baseline purple, and the ten tag colors shift to their tonal equivalents. This feature is not attempting Material You's dynamic-color extraction from a user's wallpaper, which has no meaningful desktop analogue here.
+- The spacing scale established by feature 003 (4 / 8 / 16 / 24 / 32) is retained unchanged; this feature adds no new spacing steps.
+- Where Material specifies a dimension in density-independent pixels, it is applied as the equivalent count of the rendering stack's logical pixels; the application is not introducing its own density scaling.
+- "Visible hover state" for the terminal means its surrounding chrome, not the terminal grid itself, which is exempt.
+- Verification of the visual criteria (SC-002, SC-004, SC-005, SC-007, SC-008) is a recorded manual walkthrough procedure where the render-free core cannot assert them, consistent with the constitution's GUI-wiring exception; the token-level criteria (SC-001, SC-003, SC-009, SC-010) are automated.
+- The prior contract's base-palette mapping (feature 003) is retained in spirit: the expanded role set is not expected to be expressible through the rendering stack's base palette alone, and per-component styling continues to resolve roles directly.
+
+## Resolved Decisions
+
+The feature description named four decisions to flag rather than assume. All four are resolved; each is now carried by a functional requirement above and by the revised contract.
+
+- **D1 — How the tonal palette is produced.** **Resolved: bake Material 3 tonal ramps as core data.** The tonal palettes (tones 0–100 for each key palette) are checked into the render-free core, and every semantic role is defined as a *palette + tone* pair rather than as a hand-picked hex value. Contrast becomes a structural property of the tone deltas rather than the outcome of hand-tuning, so adding a role later does not risk an AA regression. No new dependency, no build-time generation step, and every value stays an inspectable constant testable under `--no-default-features`. Carried by FR-001, FR-004, FR-005 and feature 017. *Clarified 2026-07-26:* the seed is Material's baseline `#6750A4` (FR-005b), and the tag colors join the same system (FR-006a).
+- **D2 — Which typeface ships, and in how many weights.** **Resolved: Roboto, shipped as two static instances — Regular (400) and Medium (500).** Roboto is Material's own typeface and is Apache-2.0, matching this repository's license and the provenance standard already set by the Material Symbols icon font. The Material 3 type scale specifies only weights 400 and 500, so two static instances express every role faithfully at the smallest binary cost; no variable font is needed. Carried by FR-007, FR-008 and FR-009.
+- **D3 — Whether light and dark are re-derived from a single seed color.** **Resolved: one seed, both schemes derived.** Both schemes read the same tonal ramps at different tones, which is how Material 3 itself works. The two schemes stay in lockstep, a role added once appears correctly in both, and they cannot drift apart. Follows directly from D1. Carried by FR-001 and FR-016.
+- **D4 — Whether the top app bar adopts Material 3's larger app bar variants.** **Resolved: the small app bar stays.** The app bar is corrected to Material's small-app-bar anatomy — its defined height, horizontal padding, title type role and elevate-on-scroll behavior — without adopting the medium/large variants. The taller variants would spend vertical space that a developer tool needs for content, and would edge into the information-architecture redesign this feature explicitly defers. Carried by FR-025.
+
+## Relationship to feature 017
+
+This specification was split on 2026-07-27. The structural half became
+**[`017-material-component-architecture`](../017-material-component-architecture/spec.md)**, which
+**must land first**.
+
+Feature 017 closes the boundary between the component library and the feature modules that use it:
+it wraps every styled rendering widget, splits the library into a behavior layer and an appearance
+layer, consolidates five floating-surface implementations into one, moves presentation state into
+the components that own it, and relocates the design tokens to the render-free core. It ends with
+**zero visual change**.
+
+This feature then changes how the application looks. Because 017 landed first, each visual decision
+here is made in **one place** rather than at the 119 call sites that style things today.
+
+**What 017 owns**: the component API contract, the wrapper library, the behavior layer, overlay
+consolidation and its dismissal change, state ownership, the density axis, and the token *move*.
+
+**What this feature owns**: every token *value* and its application — the baseline palette and tag
+re-derivation, elevation, shape, the typeface and type roles, state layers and ripple appearance,
+component anatomy, and motion.
+
+The dividing line is visibility: if it changes what the user sees, it is here; if it changes where a
+decision lives, it is in 017. Note that 017 relocates tokens **without re-valuing them** (its
+FR-021), precisely so its zero-visual-change property holds — introducing the new palette is this
+feature's first visible act.
+
+## Out of Scope
+
+- Any change to the application's information architecture — no navigation rail, no floating action button, no responsive breakpoints.
+- Any change to what the application does, what it stores, or how it talks to git, the terminal, or the agent process.
+- User-customizable theming beyond the existing follow-system / light / dark preference.
+- Material You dynamic color extracted from the host environment.
+- Changes to the embedded terminal's own text rendering, font or grid metrics.
+- Letter-spacing / tracking at render time (see FR-042).
