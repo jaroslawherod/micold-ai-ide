@@ -57,16 +57,19 @@ assets = [
     # systemd *user* units — shipped, NOT enabled at install; the client enables them in-session on
     # request (US7, FR-038, research R5.1). Path is /usr/lib/systemd/user/ (merged-/usr Debian),
     # never /etc/systemd/user/ (admin config).
-    ["packaging/micold-daemon.socket", "usr/lib/systemd/user/micold-daemon.socket", "644"],
-    ["packaging/micold-daemon.service", "usr/lib/systemd/user/micold-daemon.service", "644"],
-    ["packaging/micold-ai-ide.desktop", "usr/share/applications/micold-ai-ide.desktop", "644"],
-    ["assets/icon/png/icon-16.png", "usr/share/icons/hicolor/16x16/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-32.png", "usr/share/icons/hicolor/32x32/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-48.png", "usr/share/icons/hicolor/48x48/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-64.png", "usr/share/icons/hicolor/64x64/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-128.png", "usr/share/icons/hicolor/128x128/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-256.png", "usr/share/icons/hicolor/256x256/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/png/icon-512.png", "usr/share/icons/hicolor/512x512/apps/micold-ai-ide.png", "644"],
-    ["assets/icon/icon.svg", "usr/share/icons/hicolor/scalable/apps/micold-ai-ide.svg", "644"],
-    ["README.md", "usr/share/doc/micold-ai-ide/README.md", "644"],
+    # Asset source paths are resolved by cargo-deb relative to THIS crate's manifest dir, so the
+    # workspace-root files need `../../` (the `target/` binaries above are resolved via the shared
+    # target dir and stay bare).
+    ["../../packaging/micold-daemon.socket", "usr/lib/systemd/user/micold-daemon.socket", "644"],
+    ["../../packaging/micold-daemon.service", "usr/lib/systemd/user/micold-daemon.service", "644"],
+    ["../../packaging/micold-ai-ide.desktop", "usr/share/applications/micold-ai-ide.desktop", "644"],
+    ["../../assets/icon/png/icon-16.png", "usr/share/icons/hicolor/16x16/apps/micold-ai-ide.png", "644"],
+    ["../../assets/icon/png/icon-32.png", "usr/share/icons/hicolor/32x32/apps/micold-ai-ide.png", "644"],
+    ["../../assets/icon/png/icon-48.png", "usr/share/icons/hicolor/48x48/apps/micold-ai-ide.png", "644"],
+    ["../../assets/icon/png/icon-64.png", "usr/share/icons/hicolor/64x64/apps/micold-ai-ide.png", "644"],
+    ["../../assets/icon/png/icon-128.png", "usr/share/icons/hicolor/128x128/apps/micold-ai-ide.png", "644"],
+    ["../../assets/icon/png/icon-256.png", "usr/share/icons/hicolor/256x256/apps/micold-ai-ide.png", "644"],
+    ["../../assets/icon/png/icon-512.png", "usr/share/icons/hicolor/512x512/apps/micold-ai-ide.png", "644"],
+    ["../../assets/icon/icon.svg", "usr/share/icons/hicolor/scalable/apps/micold-ai-ide.svg", "644"],
+    ["../../README.md", "usr/share/doc/micold-ai-ide/README.md", "644"],
 ]
