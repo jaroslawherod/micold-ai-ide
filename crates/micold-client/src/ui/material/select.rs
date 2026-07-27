@@ -13,7 +13,7 @@
 //! marks the current selection (FR-003) with no bespoke state of this app's own.
 
 use micold_core::tokens::{spacing, type_scale, Roles};
-use crate::ui::style;
+use crate::ui::material::style;
 use iced::widget::pick_list;
 use iced::{Element, Length};
 

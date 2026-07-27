@@ -14,7 +14,10 @@
 //! remains necessary.
 //!
 //! Regenerate deliberately (only when a change to appearance is *intended*, i.e. never in this
-//! feature) with `UPDATE_STYLE_SNAPSHOT=1 cargo test -p micold-client --test style_snapshot`.
+//! feature) with `UPDATE_STYLE_SNAPSHOT=1 cargo test -p micold-client style_snapshot`.
+//!
+//! Lives inside the crate rather than in `tests/`: T036 made the styling layer crate-internal, so
+//! an integration test can no longer see the thing this asserts. That is the boundary working.
 //!
 //! **Regenerated once, for iced 0.13 → 0.14.** The renderer's style structs changed shape: the
 //! container gained `snap`, the pick-list menu gained a `shadow`, the scrollable gained an
@@ -28,13 +31,13 @@ use std::fmt::Write as _;
 
 use iced::widget::{button, checkbox, container, pick_list, scrollable, text_input};
 use iced::Theme;
-use micold_client::app::NoticeLevel;
+use crate::app::NoticeLevel;
 use micold_core::tokens::{self, Roles};
-use micold_client::ui::style;
+use super::style;
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 
-const FIXTURE: &str = include_str!("fixtures/style_snapshot.txt");
+const FIXTURE: &str = include_str!("../../../tests/fixtures/style_snapshot.txt");
 
 /// Each `impl Fn` returned by the style layer is its own opaque type, so they are boxed behind
 /// these aliases to be iterated as one list.
@@ -219,7 +222,7 @@ fn resolved_styles_match_the_recorded_baseline() {
              wrapper is not at parity with what it replaced.\n\n\
              First differing entries:\n{}\n\n\
              If (and only if) an appearance change is intended, regenerate with:\n  \
-             UPDATE_STYLE_SNAPSHOT=1 cargo test -p micold-client --test style_snapshot",
+             UPDATE_STYLE_SNAPSHOT=1 cargo test -p micold-client style_snapshot",
             diff.join("\n---\n")
         );
     }

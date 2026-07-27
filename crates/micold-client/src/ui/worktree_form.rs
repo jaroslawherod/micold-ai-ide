@@ -8,12 +8,13 @@
 //! normal actions, so cancelling leaves every input where the user left it (FR-007).
 
 use crate::app::{BranchSource, Message, ResolutionState, WorktreeForm, WorktreeFormStatus};
-use micold_core::tokens::{self, spacing, type_scale, Roles};
 use crate::ui::cdk::overlay::Surface;
-use crate::ui::material::{Modal, Select, StageProgress, ToggleChip};
-use crate::ui::style;
-use iced::widget::{button, column, container, row, text, text_input, Space};
+use crate::ui::material::{
+    self, Button, Modal, Select, StageProgress, SurfaceKind, Text, TextField, ToggleChip, TypeRole,
+};
+use iced::widget::{column, row, Space};
 use iced::{Element, Length};
+use micold_core::tokens::{self, spacing, Roles};
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::worktree::{BlockReason, BranchOrigin, BranchSituation, CreateMode};
@@ -29,7 +30,7 @@ pub fn modal<'a>(
     let r = tokens::roles(scheme);
     let is_creating = form.status == WorktreeFormStatus::Creating;
 
-    let heading = text("New worktree").size(type_scale::HEADLINE);
+    let heading = Text::new("New worktree", TypeRole::Headline, r);
 
     let mut fields = column![heading, source_switch(form, r)].spacing(spacing::MD);
 
@@ -47,19 +48,15 @@ pub fn modal<'a>(
             )
             .placeholder("Select a type…");
 
-            let ticket = text_input("Ticket (optional, e.g. ABC-123)", &form.ticket)
-                .on_input(Message::AddWorktreeTicketChanged)
-                .padding(spacing::SM)
-                .style(style::input(r));
+            let ticket = TextField::new("Ticket (optional, e.g. ABC-123)", &form.ticket, r)
+                .on_input(Message::AddWorktreeTicketChanged);
 
-            let name = text_input("Name (e.g. login page)", &form.name)
+            let name = TextField::new("Name (e.g. login page)", &form.name, r)
                 .on_input(Message::AddWorktreeNameChanged)
-                .on_submit(Message::AddWorktreeSubmitted)
-                .padding(spacing::SM)
-                .style(style::input(r));
+                .on_submit(Message::AddWorktreeSubmitted);
 
             fields = fields
-                .push(text("Type").size(type_scale::LABEL).style(style::muted(r)))
+                .push(Text::new("Type", TypeRole::Label, r).muted())
                 .push(type_select)
                 .push(ticket)
                 .push(name);
@@ -78,9 +75,12 @@ pub fn modal<'a>(
         if form.source == BranchSource::Existing {
             if let Some(reason) = &candidate.blocked_by {
                 fields = fields.push(
-                    text(block_sentence(&candidate.name, reason))
-                        .size(type_scale::LABEL)
-                        .style(error_text(r)),
+                    Text::new(
+                        block_sentence(&candidate.name, reason),
+                        TypeRole::Label,
+                        r,
+                    )
+                    .tint(r.error),
                 );
             }
         }
@@ -92,7 +92,7 @@ pub fn modal<'a>(
         .map(|e| e.to_string())
         .or_else(|| error.map(str::to_string));
     if let Some(message) = message {
-        fields = fields.push(text(message).size(type_scale::LABEL).style(error_text(r)));
+        fields = fields.push(Text::new(message, TypeRole::Label, r).tint(r.error));
     }
 
     // In-progress state while the daemon runs the create (T055). Git now runs on the daemon, which
@@ -115,19 +115,11 @@ pub fn modal<'a>(
         state => resolution_panel(state, r),
     };
 
-    let dialog = container(fields.push(actions))
+    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
         .padding(spacing::LG)
-        .width(Length::Fixed(520.0))
-        .style(style::dialog(r));
+        .width(Length::Fixed(520.0));
 
     Modal::new(dialog, r).progress(progress).into()
-}
-
-/// Red body text, for validation and block explanations.
-fn error_text(r: Roles) -> impl Fn(&iced::Theme) -> iced::widget::text::Style {
-    move |_theme: &iced::Theme| iced::widget::text::Style {
-        color: Some(style::color(r.error)),
-    }
 }
 
 /// The new-branch / existing-branch switch (feature 016, FR-010), built from the shared
@@ -153,28 +145,24 @@ fn source_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
 
 /// The existing-branch picker (feature 016, FR-011–FR-013).
 fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
-    let mut col = column![text("Branch")
-        .size(type_scale::LABEL)
-        .style(style::muted(r))]
-    .spacing(spacing::XS);
+    let mut col = column![Text::new("Branch", TypeRole::Label, r).muted()].spacing(spacing::XS);
 
     if form.candidates.is_empty() {
         // Never an empty control with no explanation (FR-013).
         return col
-            .push(
-                text("This repository has no other branches.")
-                    .size(type_scale::LABEL)
-                    .style(style::muted(r)),
-            )
+            .push(Text::new("This repository has no other branches.", TypeRole::Label, r).muted())
             .into();
     }
 
     if !form.candidates.iter().any(|c| c.is_available()) {
         // The list is shown anyway, so the per-branch reasons stay visible (FR-012).
         col = col.push(
-            text("No branches are available to reuse — every branch is already checked out.")
-                .size(type_scale::LABEL)
-                .style(style::muted(r)),
+            Text::new(
+                "No branches are available to reuse — every branch is already checked out.",
+                TypeRole::Label,
+                r,
+            )
+            .muted(),
         );
     }
 
@@ -196,9 +184,12 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
         .any(|c| !matches!(c.origin, BranchOrigin::Local))
     {
         col = col.push(
-            text("Remote branches reflect your last fetch. Nothing is downloaded here.")
-                .size(type_scale::LABEL)
-                .style(style::muted(r)),
+            Text::new(
+                "Remote branches reflect your last fetch. Nothing is downloaded here.",
+                TypeRole::Label,
+                r,
+            )
+            .muted(),
         );
     }
 
@@ -207,16 +198,12 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
 
 /// The ordinary Create / Cancel row.
 fn default_actions<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
-    let create_button = button(text("Create").size(type_scale::BODY)).style(style::filled(r));
     row![
-        if form.can_submit() {
-            create_button.on_press(Message::AddWorktreeSubmitted)
-        } else {
-            create_button
-        },
-        button(text("Cancel").size(type_scale::BODY))
-            .on_press(Message::AddWorktreeCancelled)
-            .style(style::outlined(r)),
+        // No press message when the form cannot be submitted — the button renders disabled from
+        // having nowhere to send, rather than from a flag that could disagree with one.
+        Button::filled("Create", r)
+            .on_press_maybe(form.can_submit().then_some(Message::AddWorktreeSubmitted)),
+        Button::outlined("Cancel", r).on_press(Message::AddWorktreeCancelled),
     ]
     .spacing(spacing::SM)
     .into()
@@ -241,9 +228,7 @@ fn block_sentence(branch: &str, reason: &BlockReason) -> String {
 /// The conflict prompt and its confirmation (feature 016, contract `branch-conflict.md` §3).
 fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Message> {
     let cancel = |label: &str| {
-        button(text(label.to_string()).size(type_scale::BODY))
-            .on_press(Message::AddWorktreeResolutionCancelled)
-            .style(style::outlined(r))
+        Button::outlined(label.to_string(), r).on_press(Message::AddWorktreeResolutionCancelled)
     };
 
     match state {
@@ -253,19 +238,18 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
         ResolutionState::ConfirmingOverwrite { situation } => {
             let branch = situation_branch(situation);
             column![
-                text(format!("Delete the branch '{branch}'?"))
-                    .size(type_scale::BODY)
-                    .style(error_text(r)),
-                text(
+                Text::new(format!("Delete the branch '{branch}'?"), TypeRole::Body, r)
+                    .tint(r.error),
+                Text::new(
                     "Its commits will be discarded and the branch recreated from the current \
-                     checkout. This cannot be undone from the app."
+                     checkout. This cannot be undone from the app.",
+                    TypeRole::Label,
+                    r
                 )
-                .size(type_scale::LABEL)
-                .style(style::muted(r)),
+                .muted(),
                 row![
-                    button(text("Delete and recreate").size(type_scale::BODY))
-                        .on_press(Message::AddWorktreeOverwriteConfirmed)
-                        .style(style::filled(r)),
+                    Button::filled("Delete and recreate", r)
+                        .on_press(Message::AddWorktreeOverwriteConfirmed),
                     // Back, not Cancel: returns to the choice (invariant 3, US2 AS3).
                     cancel("Back"),
                 ]
@@ -278,20 +262,23 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
         ResolutionState::Choosing { situation } => match situation {
             // FR-002: the choice this whole feature exists to offer.
             BranchSituation::LocalAvailable { branch } => column![
-                text(format!("The branch '{branch}' already exists.")).size(type_scale::BODY),
-                text(
+                Text::new(
+                    format!("The branch '{branch}' already exists."),
+                    TypeRole::Body,
+                    r
+                ),
+                Text::new(
                     "Reuse it to continue that work with its history intact, or overwrite it to \
-                     start again from the current checkout and discard its commits."
+                     start again from the current checkout and discard its commits.",
+                    TypeRole::Label,
+                    r
                 )
-                .size(type_scale::LABEL)
-                .style(style::muted(r)),
+                .muted(),
                 row![
-                    button(text("Reuse branch").size(type_scale::BODY))
-                        .on_press(Message::AddWorktreeResolutionChosen(CreateMode::ReuseLocal))
-                        .style(style::filled(r)),
-                    button(text("Overwrite…").size(type_scale::BODY))
-                        .on_press(Message::AddWorktreeOverwriteRequested)
-                        .style(style::outlined(r)),
+                    Button::filled("Reuse branch", r)
+                        .on_press(Message::AddWorktreeResolutionChosen(CreateMode::ReuseLocal)),
+                    Button::outlined("Overwrite…", r)
+                        .on_press(Message::AddWorktreeOverwriteRequested),
                     cancel("Cancel"),
                 ]
                 .spacing(spacing::SM),
@@ -310,35 +297,34 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
                 let mut choices = row![].spacing(spacing::SM);
                 for remote in remotes {
                     choices = choices.push(
-                        button(text(format!("Continue from {remote}")).size(type_scale::BODY))
-                            .on_press(Message::AddWorktreeResolutionChosen(
-                                CreateMode::TrackRemote {
-                                    remote: remote.clone(),
-                                },
-                            ))
-                            .style(style::filled(r)),
+                        Button::filled(format!("Continue from {remote}"), r).on_press(
+                            Message::AddWorktreeResolutionChosen(CreateMode::TrackRemote {
+                                remote: remote.clone(),
+                            }),
+                        ),
                     );
                 }
                 choices = choices
                     .push(
-                        button(text("Start fresh").size(type_scale::BODY))
-                            .on_press(Message::AddWorktreeResolutionChosen(CreateMode::NewBranch))
-                            .style(style::outlined(r)),
+                        Button::outlined("Start fresh", r)
+                            .on_press(Message::AddWorktreeResolutionChosen(CreateMode::NewBranch)),
                     )
                     .push(cancel("Cancel"));
 
                 column![
-                    text(format!(
-                        "'{branch}' exists {where_} but not on this machine."
-                    ))
-                    .size(type_scale::BODY),
-                    text(
+                    Text::new(
+                        format!("'{branch}' exists {where_} but not on this machine."),
+                        TypeRole::Body,
+                        r
+                    ),
+                    Text::new(
                         "Continuing picks that work up where it was left, tracking the remote \
                          branch. Starting fresh instead creates a different branch of the same \
-                         name, which will diverge from the remote one."
+                         name, which will diverge from the remote one.",
+                        TypeRole::Label,
+                        r
                     )
-                    .size(type_scale::LABEL)
-                    .style(style::muted(r)),
+                    .muted(),
                     choices,
                 ]
                 .spacing(spacing::SM)
@@ -347,15 +333,14 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
 
             // FR-021 (US5): explain and name the holder — no reuse, no overwrite offered.
             BranchSituation::Blocked { branch, reason } => column![
-                text(block_sentence(branch, reason))
-                    .size(type_scale::BODY)
-                    .style(error_text(r)),
-                text(
+                Text::new(block_sentence(branch, reason), TypeRole::Body, r).tint(r.error),
+                Text::new(
                     "A branch can only be checked out in one place at a time. Open that \
-                     location to continue there, or choose a different name."
+                     location to continue there, or choose a different name.",
+                    TypeRole::Label,
+                    r
                 )
-                .size(type_scale::LABEL)
-                .style(style::muted(r)),
+                .muted(),
                 row![cancel("OK")].spacing(spacing::SM),
             ]
             .spacing(spacing::SM)
@@ -368,12 +353,18 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_else(|| dir.display().to_string());
                 column![
-                    text(format!("A worktree folder named '{name}' already exists."))
-                        .size(type_scale::BODY)
-                        .style(error_text(r)),
-                    text("Choose a different name, or remove the existing folder first.")
-                        .size(type_scale::LABEL)
-                        .style(style::muted(r)),
+                    Text::new(
+                        format!("A worktree folder named '{name}' already exists."),
+                        TypeRole::Body,
+                        r
+                    )
+                    .tint(r.error),
+                    Text::new(
+                        "Choose a different name, or remove the existing folder first.",
+                        TypeRole::Label,
+                        r
+                    )
+                    .muted(),
                     row![cancel("OK")].spacing(spacing::SM),
                 ]
                 .spacing(spacing::SM)
@@ -401,16 +392,16 @@ fn preview<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
     match form.preview() {
         Ok(derived) => column![
             row![
-                text("Directory: ")
-                    .size(type_scale::LABEL)
-                    .style(style::muted(r)),
-                text(format!(".claude/worktrees/{}", derived.dir_name)).size(type_scale::LABEL),
+                Text::new("Directory: ", TypeRole::Label, r).muted(),
+                Text::new(
+                    format!(".claude/worktrees/{}", derived.dir_name),
+                    TypeRole::Label,
+                    r
+                ),
             ],
             row![
-                text("Branch: ")
-                    .size(type_scale::LABEL)
-                    .style(style::muted(r)),
-                text(derived.branch).size(type_scale::LABEL),
+                Text::new("Branch: ", TypeRole::Label, r).muted(),
+                Text::new(derived.branch, TypeRole::Label, r),
             ],
         ]
         .spacing(spacing::XS)

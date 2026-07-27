@@ -9,7 +9,7 @@
 //! duration, while the paired label names the concrete current step (`CreateStage::label`).
 
 use micold_core::tokens::{shape, spacing, type_scale, Roles};
-use crate::ui::style;
+use crate::ui::material::style;
 use iced::widget::{column, progress_bar, text};
 use iced::{Element, Length};
 

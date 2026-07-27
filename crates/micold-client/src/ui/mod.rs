@@ -12,14 +12,10 @@ mod rename;
 mod settings_form;
 mod shell;
 mod sidebar;
-// The styling layer now lives inside the component library, where it belongs: it is the one place
-// tokens become rendering types, and only components should be converting them (FR-002).
-//
-// Re-exported here as a **transitional shim** so the feature modules that still style things by
-// hand keep compiling while they are migrated one at a time. T036 deletes this line — at which
-// point a feature module is structurally unable to reach the styling layer, rather than merely
-// discouraged from it.
-pub use material::style;
+// The application's theme — the only thing the styling layer exposes beyond the component
+// library (FR-002). Defined in `material`, not here: a feature module naming the styling layer is
+// exactly what the boundary test forbids, and `ui/mod.rs` is a feature module.
+pub use material::theme;
 pub mod terminal;
 mod toolbar;
 mod worktree_form;

@@ -23,10 +23,16 @@ mod progress;
 mod project_switcher;
 mod scrollable;
 mod select;
-/// The one place design tokens become rendering types. Internal to the library by
-/// intent (FR-002): a feature module that could reach it could render an off-spec variant of a
-/// shared component, which is exactly the drift this feature removes.
-pub mod style;
+/// The one place design tokens become rendering types. Internal by intent (FR-002): a feature
+/// module that could reach it could render an off-spec variant of a shared component, which is
+/// exactly the drift this feature removes. `pub(crate)` rather than private only because the
+/// application's own theme function lives behind it — see [`crate::ui::theme`].
+pub(crate) mod style;
+
+/// The style layer's parity snapshot. Lives inside the crate rather than in `tests/` because the
+/// layer it asserts is no longer reachable from outside it — which is the point.
+#[cfg(test)]
+mod style_snapshot;
 mod surface;
 mod tag;
 mod terminal_pane;
@@ -62,6 +68,16 @@ pub use text_field::TextField;
 pub use toggle_chip::ToggleChip;
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
+
+/// The application's theme, derived from the active colour scheme.
+///
+/// The one part of the styling layer that reaches beyond the library. The window needs a theme to
+/// hand the renderer, and that is application wiring rather than a call site styling a widget —
+/// every other entry point is unreachable from outside, so a feature module is structurally unable
+/// to render an off-spec variant of a shared component (FR-002).
+pub fn theme(scheme: micold_core::theme::ColorScheme) -> iced::Theme {
+    style::theme(scheme)
+}
 
 use micold_core::tokens::{spacing, type_scale, Roles};
 use iced::widget::{container, text as text_widget, tooltip};

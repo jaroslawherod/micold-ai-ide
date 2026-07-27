@@ -7,7 +7,7 @@
 //! reused rather than each feature forking a bespoke chip.
 
 use micold_core::tokens::{sidebar, spacing, Rgb};
-use crate::ui::style;
+use crate::ui::material::style;
 use iced::widget::{container, text};
 use iced::{Element, Padding};
 use std::marker::PhantomData;

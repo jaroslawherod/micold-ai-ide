@@ -114,7 +114,7 @@ Test command: `mise run test` (`cargo test --workspace`).
 
 - [X] T026 [P] [US1] Migrate `crates/micold-client/src/ui/shell.rs` onto the wrappers (FR-001, FR-002)
 - [X] T027 [P] [US1] Migrate `crates/micold-client/src/ui/project_selector.rs` onto the wrappers (FR-001, FR-002)
-- [ ] T028 [P] [US1] Migrate `crates/micold-client/src/ui/worktree_form.rs` onto the wrappers (FR-001, FR-002) — the largest module
+- [X] T028 [P] [US1] Migrate `crates/micold-client/src/ui/worktree_form.rs` onto the wrappers (FR-001, FR-002) — the largest module
 - [X] T029 [P] [US1] Migrate `crates/micold-client/src/ui/worktree_rename.rs` and `rename.rs` onto the wrappers (FR-001, FR-002)
 - [X] T030 [P] [US1] Migrate `crates/micold-client/src/ui/settings_form.rs` onto the wrappers (FR-001, FR-002)
 - [X] T031 [P] [US1] Migrate `crates/micold-client/src/ui/about.rs` onto the wrappers (FR-001, FR-002)
@@ -122,7 +122,7 @@ Test command: `mise run test` (`cargo test --workspace`).
 - [X] T033 [P] [US1] Migrate `crates/micold-client/src/ui/terminal.rs` onto the wrappers (FR-001, FR-002), leaving the terminal canvas itself untouched
 - [X] T034 [P] [US1] Migrate `crates/micold-client/src/ui/sidebar.rs` onto the wrappers (FR-001, FR-002)
 - [X] T035 [P] [US1] Migrate `crates/micold-client/src/ui/mod.rs` onto the wrappers (FR-001, FR-002)
-- [ ] T036 [US1] Make `crates/micold-client/tests/material_boundary.rs` blocking and confirm all three counts reached zero (FR-004, SC-001)
+- [X] T036 [US1] Make `crates/micold-client/tests/material_boundary.rs` blocking and confirm all three counts reached zero (FR-004, SC-001). **86 / 113 / 114 → 0 / 0 / 0.** `material::style` is now `pub(crate)`, with `ui::theme` the single application-wiring entry point; `tests/style_snapshot.rs` moved into the crate as `src/ui/material/style_snapshot.rs`, because an integration test can no longer see the layer it asserts
 
 **Checkpoint**: Zero feature modules style anything. US1 complete.
 

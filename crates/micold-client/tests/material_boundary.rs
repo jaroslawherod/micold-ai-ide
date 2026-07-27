@@ -4,10 +4,16 @@
 //! render a slightly different button, and several do. The fix is structural rather than editorial:
 //! the component library wraps the rendering stack, and a feature module composes components.
 //!
-//! This test measures the boundary and refuses to let it get worse. Each budget below is a ceiling
-//! that only ever moves down; **all of them must be zero at T036**, when this test becomes the
-//! blocking gate for SC-001. Keeping it advisory until then is deliberate — flipping it to zero on
-//! the first migrated module would make every intermediate state unbuildable.
+//! **All three counts are now zero.** This is the blocking gate for SC-001: a feature module that
+//! constructs a styled widget, reaches the styling layer, or picks a raw text size fails here.
+//!
+//! It ratcheted down rather than starting at zero — flipping the budget on the first migrated
+//! module would have made every intermediate state unbuildable — but the ratchet is finished and
+//! the numbers below must not move again.
+//!
+//! The count is now belt to the structure's braces: `material::style` is `pub(crate)`, so a call
+//! site *cannot* reach it. What this still catches is the thing visibility cannot — a feature
+//! module building a raw widget, or naming a size instead of a type role.
 //!
 //! Text scanning, not type inspection: the property is about what a *source file* is allowed to
 //! name. A module that cannot name `text_input` cannot render an off-spec one.
@@ -159,20 +165,19 @@ fn raw_size_references(code: &str) -> usize {
 }
 
 // ---------------------------------------------------------------------------
-// Budgets. Each must reach 0 at T036 (Phase 5). Lower them as modules migrate;
-// never raise one.
+// The gate. All three reached zero at T036 (SC-001). Raising one is a
+// regression, not a budget adjustment.
 // ---------------------------------------------------------------------------
 
-/// Feature-module lines constructing a wrapped rendering widget. Measured baseline: **86** across
-/// the 13 modules research R2 counted; one remains. Lines rather than modules, because "13 modules leak" does
-/// not shrink until a module reaches zero, and this needs to move on every migration.
-const WIDGET_BUDGET: usize = 10;
+/// Feature-module lines constructing a wrapped rendering widget. Baseline was **86** across the 13
+/// modules research R2 counted.
+const WIDGET_BUDGET: usize = 0;
 
-/// Feature-module lines referencing the styling layer. Measured baseline: **113**.
-const STYLE_BUDGET: usize = 24;
+/// Feature-module lines referencing the styling layer. Baseline was **113**.
+const STYLE_BUDGET: usize = 0;
 
-/// Feature-module lines selecting a raw text size. Measured baseline: **114**.
-const RAW_SIZE_BUDGET: usize = 30;
+/// Feature-module lines selecting a raw text size. Baseline was **114**.
+const RAW_SIZE_BUDGET: usize = 0;
 
 fn totals() -> (usize, usize, usize) {
     let mut widgets = 0;
@@ -210,35 +215,37 @@ fn breakdown() -> String {
 }
 
 #[test]
-fn no_feature_module_builds_a_styled_widget_beyond_its_budget() {
+fn no_feature_module_builds_a_styled_widget() {
     let (widgets, _, _) = totals();
     assert!(
-        widgets <= WIDGET_BUDGET,
-        "feature modules construct wrapped rendering widgets at {widgets} lines, above the \
-         {WIDGET_BUDGET} ceiling — the boundary got worse.\n{}",
+        widgets == WIDGET_BUDGET,
+        "feature modules construct wrapped rendering widgets at {widgets} lines; the boundary is \
+         closed at {WIDGET_BUDGET}. Compose a component from `ui/material/` instead — and if none \
+         of them expresses what this needs, the component gains the capability (FR-002).\n{}",
         breakdown()
     );
 }
 
 #[test]
-fn no_feature_module_reaches_the_styling_layer_beyond_its_budget() {
+fn no_feature_module_reaches_the_styling_layer() {
     let (_, styles, _) = totals();
     assert!(
-        styles <= STYLE_BUDGET,
-        "feature modules reference the styling layer at {styles} lines, above the {STYLE_BUDGET} \
-         ceiling. If a call site needs an appearance a wrapper cannot express, the wrapper gains \
-         the capability (FR-002) — the call site must not reach around it.\n{}",
+        styles == STYLE_BUDGET,
+        "feature modules reference the styling layer at {styles} lines; the boundary is closed at \
+         {STYLE_BUDGET}. `material::style` is `pub(crate)`, so reaching it means the reference is \
+         inside the library — or someone widened its visibility.\n{}",
         breakdown()
     );
 }
 
 #[test]
-fn no_feature_module_picks_a_raw_text_size_beyond_its_budget() {
+fn no_feature_module_picks_a_raw_text_size() {
     let (_, _, sizes) = totals();
     assert!(
-        sizes <= RAW_SIZE_BUDGET,
-        "feature modules select a raw text size at {sizes} lines, above the {RAW_SIZE_BUDGET} \
-         ceiling — a size belongs to a type role, chosen by the component.\n{}",
+        sizes == RAW_SIZE_BUDGET,
+        "feature modules select a raw text size at {sizes} lines; the boundary is closed at \
+         {RAW_SIZE_BUDGET}. Name a `TypeRole` — the role owns the number, which is what makes the \
+         type scale a single edit.\n{}",
         breakdown()
     );
 }
@@ -259,17 +266,14 @@ fn the_scan_actually_finds_the_feature_modules() {
     }
 }
 
-/// The one that says what this is all for. Currently reports the distance to zero; at T036 the
-/// budgets are zeroed and this becomes the blocking statement of SC-001.
+/// SC-001 in one statement: three measured counts, all zero, from a baseline of 86 / 113 / 114.
 #[test]
-fn report_the_distance_to_zero() {
+fn the_boundary_is_closed() {
     let (widgets, styles, sizes) = totals();
-    let remaining = widgets + styles + sizes;
-    println!(
-        "boundary: widgets={widgets}/{WIDGET_BUDGET} style={styles}/{STYLE_BUDGET} \
-         sizes={sizes}/{RAW_SIZE_BUDGET} — {remaining} lines left to migrate\n{}",
+    assert_eq!(
+        (widgets, styles, sizes),
+        (0, 0, 0),
+        "SC-001 requires all three counts at zero; the offenders are:\n{}",
         breakdown()
     );
-    // Nothing to assert beyond the ceilings above until T036 zeroes them; this exists so the
-    // number is visible in every run rather than only when something regresses.
 }
