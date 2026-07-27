@@ -192,8 +192,14 @@ silently rendering a wrong or missing glyph.
   not introduce new sizes or color roles, only consumes them for icons.
 - The "Outlined" Material Symbols style at a single default weight/fill is sufficient for
   all current surfaces; multiple optical weights/fills are out of scope for this pass.
-- A curated subset of icons (only those needed by the surfaces in FR-005, plus a small
-  headroom for near-term surfaces) is bundled, not the entire Material Symbols catalog.
+- ~~A curated subset of icons (only those needed by the surfaces in FR-005, plus a small
+  headroom for near-term surfaces) is bundled, not the entire Material Symbols catalog.~~
+  (Superseded — spec/code alignment 2026-07-27: feature 009's research R6 replaced the shipped
+  font with **full glyph coverage** — every codepoint the upstream font maps — so adding a new
+  `Icon` variant never again requires regenerating the font binary, only `src/icons.rs` +
+  `tests/icons.rs`. See `assets/fonts/PROVENANCE.md`.) The bundled font ships full Material
+  Symbols Outlined glyph coverage; the curated set is expressed in code (the closed `Icon` enum),
+  not by subsetting the font file.
 - The chosen icon font is available under Apache-2.0 (matching the repository license), so
   no additional licensing negotiation is required; its license text/provenance is vendored
   in-repo.
