@@ -7,7 +7,7 @@
 use crate::icons::Icon;
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
-use iced::widget::{button, column, container, mouse_area, row, text, Row, Space};
+use iced::widget::{button, column, container, mouse_area, row, Row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::tokens::{shape, spacing, type_scale, Rgb, Roles};
 
@@ -224,16 +224,11 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 line = line.push(badge);
             }
 
-            line = line.push(
-                text(item.label)
-                    .size(label_size)
-                    // Keep the label on one line — clip rather than wrap onto a second row.
-                    .wrapping(text::Wrapping::None)
-                    .style(move |_t: &iced::Theme| text::Style {
-                        color: Some(style::color(item.tint)),
-                    })
-                    .width(Length::Fill),
-            );
+            // One line, ending in an ellipsis when the name is longer than the space the row's
+            // controls leave it. This used to be a plain `text(...).wrapping(Wrapping::None)`,
+            // which keeps the single line but does not clip: a long session name was measured at
+            // its full width and drawn straight over the close button beside it.
+            line = line.push(super::Ellipsized::new(item.label, label_size, item.tint));
 
             if let Some(custom) = item.trailing_custom {
                 line = line.push(custom);
