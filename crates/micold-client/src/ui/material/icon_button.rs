@@ -6,7 +6,8 @@
 //! `Element`. Reused across the sidebar and any icon action rather than each feature forking one.
 
 use crate::icons::Icon;
-use micold_core::tokens::{spacing, type_scale, Rgb, Roles};
+use crate::ui::material::text::TypeRole;
+use micold_core::tokens::{spacing, Rgb, Roles};
 use crate::ui::material::glyph::{icon, icon_colored};
 use crate::ui::material::style;
 use iced::widget::button;
@@ -31,13 +32,13 @@ pub struct IconButton<'a, M> {
 }
 
 impl<'a, M: Clone + 'a> IconButton<'a, M> {
-    /// Build an icon button for `glyph` themed by `roles`. Defaults: body-size, `on_surface`
-    /// tint, `spacing::XS` padding, no press action (disabled).
+    /// Build an icon button for `glyph` themed by `roles`. Defaults: the body role's size,
+    /// `on_surface` tint, `spacing::XS` padding, no press action (disabled).
     pub fn new(glyph: Icon, roles: Roles) -> Self {
         Self {
             glyph,
             roles,
-            size: type_scale::BODY,
+            size: TypeRole::Body.size(),
             tint: None,
             padding: spacing::XS,
             circular: false,
@@ -46,9 +47,10 @@ impl<'a, M: Clone + 'a> IconButton<'a, M> {
         }
     }
 
-    /// Override the glyph size.
-    pub fn size(mut self, size: f32) -> Self {
-        self.size = size;
+    /// Size the glyph to a type role instead of the default body role — so a call site names what
+    /// the icon should match rather than a number (FR-004).
+    pub fn size(mut self, role: TypeRole) -> Self {
+        self.size = role.size();
         self
     }
 

@@ -11,15 +11,15 @@ use crate::app::{Message, State};
 use crate::grid::GridCache;
 use crate::icons::Icon;
 use crate::icons::{mode_glyph, mode_tooltip};
-use micold_core::tokens::{self, spacing, type_scale, Rgb};
 use crate::ui::material::{
-    ContextMenu, IconButton, MenuItem, TerminalPane, Tooltip, TooltipPosition,
+    self, Button, ButtonVariant, ContextMenu, IconButton, MenuItem, SurfaceKind, TerminalPane,
+    Text, Tooltip, TooltipPosition, TypeRole,
 };
-use crate::ui::style;
+use micold_core::tokens::{self, spacing, Rgb};
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
-use iced::widget::{button, column, container, row, text, Space};
+use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Color, Element, Font, Length};
 use micold_core::protocol::grid::{WireColor, WireStyle};
 use micold_core::session::{SessionId, SessionLifecycle, ShellLifecycle, TerminalMode};
@@ -325,9 +325,12 @@ pub fn pane<'a>(
 
     let Some(active) = state.active_session else {
         return container(
-            text("Select or start a session to open its terminal.")
-                .size(type_scale::BODY)
-                .style(style::muted(r)),
+            Text::new(
+                "Select or start a session to open its terminal.",
+                TypeRole::Body,
+                r,
+            )
+            .muted(),
         )
         .padding(spacing::LG)
         .center_x(Length::Fill)
@@ -343,14 +346,10 @@ pub fn pane<'a>(
             .display_offset(display_offset)
             .focused(state.terminal_focused)
             .into(),
-        None => container(
-            text("Starting…")
-                .size(type_scale::LABEL)
-                .style(style::muted(r)),
-        )
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
-        .into(),
+        None => container(Text::new("Starting…", TypeRole::Label, r).muted())
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .into(),
     };
 
     // While the right-click context menu is open, float it over the terminal body anchored at the
@@ -391,9 +390,9 @@ pub fn pane<'a>(
     let mode = session_mode(state, active);
     let status = session_status(state, active);
     let mut bar = row![
-        text(session_title(state, active)).size(type_scale::LABEL),
+        Text::new(session_title(state, active), TypeRole::Label, r),
         Space::new().width(Length::Fill),
-        text(status).size(type_scale::LABEL).style(style::muted(r)),
+        Text::new(status, TypeRole::Label, r).muted(),
     ]
     .spacing(spacing::SM)
     .align_y(Alignment::Center);
@@ -402,13 +401,12 @@ pub fn pane<'a>(
     // running/starting, since there is nothing to restart.
     if attached_process_restartable(state, active) {
         bar = bar.push(
-            button(
-                text("restart")
-                    .size(type_scale::LABEL)
-                    .style(style::muted(r)),
+            Button::with_content(
+                Text::new("restart", TypeRole::Label, r).muted(),
+                ButtonVariant::Text,
+                r,
             )
             .padding(spacing::SM)
-            .style(style::text_button(r))
             .on_press(Message::TerminalRestartRequested),
         );
     }
@@ -467,10 +465,9 @@ pub fn pane<'a>(
         // Always the rightmost element in the bar — same reasoning as the "+" button above.
         .position(TooltipPosition::Left),
     );
-    let bottom_bar = container(bar)
+    let bottom_bar = material::Surface::new(bar, SurfaceKind::Toolbar, r)
         .width(Length::Fill)
-        .padding(spacing::SM)
-        .style(style::toolbar_surface(r));
+        .padding(spacing::SM);
 
     // Feature 006 US2: keystrokes stream live to the PTY through the focused `TerminalPane`;
     // the old line-input box is gone (FR-008). Click the terminal to focus it, then type.
@@ -575,10 +572,10 @@ fn instance_switcher_row<'a>(
     let mut entries = row![].spacing(spacing::SM).align_y(Alignment::Center);
     for instance in &session.shells {
         let is_active = session.active_shell == Some(instance.id);
-        let label = text(instance.id.0.to_string()).size(type_scale::LABEL);
+        let label = Text::new(instance.id.0.to_string(), TypeRole::Label, r);
         let close = Tooltip::new(
             IconButton::new(Icon::Close, r)
-                .size(type_scale::LABEL)
+                .size(TypeRole::Label)
                 .padding(spacing::XS)
                 .circular()
                 .on_press(Message::ShellInstanceCloseRequested(id, instance.id)),
@@ -597,25 +594,26 @@ fn instance_switcher_row<'a>(
             ShellLifecycle::NotStarted | ShellLifecycle::Exited
         ) {
             content = content.push(
-                button(
-                    text("restart")
-                        .size(type_scale::LABEL)
-                        .style(style::muted(r)),
+                Button::with_content(
+                    Text::new("restart", TypeRole::Label, r).muted(),
+                    ButtonVariant::Text,
+                    r,
                 )
                 .padding(spacing::SM)
-                .style(style::text_button(r))
                 .on_press(Message::ShellInstanceRestartRequested(id, instance.id)),
             );
         }
-        let tab = button(content)
-            .padding(spacing::SM)
-            .on_press(Message::ShellInstanceSelected(id, instance.id));
-        let tab = if is_active {
-            tab.style(style::filled(r))
+        // The active instance reads as filled, the rest as low-emphasis tabs.
+        let variant = if is_active {
+            ButtonVariant::Filled
         } else {
-            tab.style(style::text_button(r))
+            ButtonVariant::Text
         };
-        entries = entries.push(tab);
+        entries = entries.push(
+            Button::with_content(content, variant, r)
+                .padding(spacing::SM)
+                .on_press(Message::ShellInstanceSelected(id, instance.id)),
+        );
     }
     Some(entries.into())
 }

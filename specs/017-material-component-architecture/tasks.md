@@ -119,8 +119,8 @@ Test command: `mise run test` (`cargo test --workspace`).
 - [X] T030 [P] [US1] Migrate `crates/micold-client/src/ui/settings_form.rs` onto the wrappers (FR-001, FR-002)
 - [X] T031 [P] [US1] Migrate `crates/micold-client/src/ui/about.rs` onto the wrappers (FR-001, FR-002)
 - [X] T032 [P] [US1] Migrate `crates/micold-client/src/ui/confirm_delete.rs`, `confirm_forget.rs` and `confirm_session_remove.rs` onto the wrappers (FR-001, FR-002)
-- [ ] T033 [P] [US1] Migrate `crates/micold-client/src/ui/terminal.rs` onto the wrappers (FR-001, FR-002), leaving the terminal canvas itself untouched
-- [ ] T034 [P] [US1] Migrate `crates/micold-client/src/ui/sidebar.rs` onto the wrappers (FR-001, FR-002)
+- [X] T033 [P] [US1] Migrate `crates/micold-client/src/ui/terminal.rs` onto the wrappers (FR-001, FR-002), leaving the terminal canvas itself untouched
+- [X] T034 [P] [US1] Migrate `crates/micold-client/src/ui/sidebar.rs` onto the wrappers (FR-001, FR-002)
 - [X] T035 [P] [US1] Migrate `crates/micold-client/src/ui/mod.rs` onto the wrappers (FR-001, FR-002)
 - [ ] T036 [US1] Make `crates/micold-client/tests/material_boundary.rs` blocking and confirm all three counts reached zero (FR-004, SC-001)
 

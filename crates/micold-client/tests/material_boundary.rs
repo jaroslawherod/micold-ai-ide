@@ -107,13 +107,30 @@ const WRAPPED_WIDGETS: &[&str] = &[
 ];
 
 /// How many times a feature module names a wrapped rendering widget as a constructor call.
+///
+/// Matched at a word boundary, so a *method* whose name ends in a widget's — `row_tooltip(`,
+/// `menu_panel(` — is not mistaken for constructing one. Without that the count can never reach
+/// zero, because the offending name belongs to a builder step the library itself provides.
 fn widget_calls(code: &str) -> usize {
+    fn names_widget(line: &str, widget: &str) -> bool {
+        let needle = format!("{widget}(");
+        let mut from = 0;
+        while let Some(at) = line[from..].find(&needle) {
+            let start = from + at;
+            let preceded_by_ident = start > 0
+                && line[..start]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_');
+            if !preceded_by_ident {
+                return true;
+            }
+            from = start + needle.len();
+        }
+        false
+    }
     code.lines()
-        .filter(|line| {
-            WRAPPED_WIDGETS
-                .iter()
-                .any(|w| line.contains(&format!("{w}(")))
-        })
+        .filter(|line| WRAPPED_WIDGETS.iter().any(|w| names_widget(line, w)))
         .count()
 }
 
@@ -122,10 +139,22 @@ fn style_references(code: &str) -> usize {
     code.lines().filter(|line| line.contains("style::")).count()
 }
 
-/// How many times a feature module selects a raw text size instead of naming a type role.
+/// How many times a feature module selects a **raw** text size instead of naming a type role.
+///
+/// `.size(TypeRole::Label)` is the destination, not a violation — the whole point is that a call
+/// site says what the text *is* and the role supplies the number. What counts is reaching for the
+/// number itself: naming a scale constant, or passing anything to `.size(...)` that is not a role.
 fn raw_size_references(code: &str) -> usize {
     code.lines()
-        .filter(|line| line.contains("type_scale::") || line.contains(".size("))
+        .filter(|line| {
+            if line.contains("type_scale::") {
+                return true;
+            }
+            match line.split_once(".size(") {
+                Some((_, arg)) => !arg.trim_start().starts_with("TypeRole::"),
+                None => false,
+            }
+        })
         .count()
 }
 
@@ -135,15 +164,15 @@ fn raw_size_references(code: &str) -> usize {
 // ---------------------------------------------------------------------------
 
 /// Feature-module lines constructing a wrapped rendering widget. Measured baseline: **86** across
-/// the 13 modules research R2 counted; three remain. Lines rather than modules, because "13 modules leak" does
+/// the 13 modules research R2 counted; one remains. Lines rather than modules, because "13 modules leak" does
 /// not shrink until a module reaches zero, and this needs to move on every migration.
-const WIDGET_BUDGET: usize = 24;
+const WIDGET_BUDGET: usize = 10;
 
 /// Feature-module lines referencing the styling layer. Measured baseline: **113**.
-const STYLE_BUDGET: usize = 45;
+const STYLE_BUDGET: usize = 24;
 
 /// Feature-module lines selecting a raw text size. Measured baseline: **114**.
-const RAW_SIZE_BUDGET: usize = 45;
+const RAW_SIZE_BUDGET: usize = 30;
 
 fn totals() -> (usize, usize, usize) {
     let mut widgets = 0;
