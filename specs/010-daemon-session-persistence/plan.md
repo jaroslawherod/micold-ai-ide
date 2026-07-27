@@ -131,6 +131,13 @@ Thread-per-session is comfortably within budget at this scale and is required an
       `src/ui/material/` using the chainable builder-into-`Element` API, not feature-local one-offs.
       `TerminalPane` is retargeted from `&RuntimeTerminal` to a wire grid cache but keeps its
       existing builder shape (`TerminalPane::new(..).focused(..)`).
+      **Bugfix 2026-07-27 (BUG-004)**: "shared primitive" is not satisfied by a new `material/`
+      module alone — a primitive that draws a glyph MUST source it from the shared `Icon` vocabulary
+      (feature 004 FR-002/FR-003) and render it through the `icon(..)` helper in the Material Symbols
+      font. `activity_badge.rs` satisfied the module rule but hardcoded `"\u{25CF}"`/`"\u{25CB}"`
+      into `text(..)`, which draws in iced's default font (Fira Sans); neither that font nor the
+      shipped Material font maps those codepoints, so the badge rendered as tofu. Reaching outside
+      `Icon` also escapes the `tests/icons_font.rs` build-time guard entirely (FR-016e, SC-018).
 
 ---
 
@@ -202,7 +209,8 @@ crates/
             └── material/
                 ├── terminal_pane.rs      # retargeted to the wire grid; client-side selection
                 ├── connection_banner.rs  # NEW shared primitive (builder API)
-                └── activity_badge.rs     # NEW shared primitive (builder API)
+                └── activity_badge.rs     # NEW shared primitive (builder API); glyphs MUST come
+                                          #   from `icons::Icon`, never raw literals (BUG-004)
 
 packaging/
 ├── micold-daemon.socket # systemd user unit
@@ -279,6 +287,21 @@ logging with context detection and the bounded rotating sink, and the client-sid
 (FR-031); a failed worktree creation leaves no catalog entry and no directory (FR-032); git stderr
 survives the RPC boundary intact (FR-034); the daemon refuses to exit while a session is alive.
 
+**Design correction (BUG-003)**: T053's original scope named `env_include` resolution as part of
+this workstream ("main-sync" note added once feature 011 landed on `main`), but no corresponding
+code was ever written in `micold-daemon` — all three of the daemon's own PTY-spawn call sites
+(`start_session`, `respawn_primary`, `open_shell` in `state.rs`) hardcode a `TERM`-only environment.
+Fixing this (FR-012b) needs two things W2 did not originally account for: (1) `DaemonSettings`
+(the wire projection `Catalog::settings_wire()` produces) must gain the three `env_include_*`
+fields already present on `micold_core::settings::Settings`, and `ClientMsg::SettingsSet` must
+accept changes to them — mirroring the existing `scrollback_lines` precedent (FR-012a) exactly, not
+a new mechanism; (2) each of the three spawn sites must call `micold_core::env_include::resolve`
+(with `merge_with_term`) against the session's own directory before building its `env`, with a
+per-directory cache owned by `DaemonState`/`Catalog` (there is no `App` in the daemon to hold one,
+unlike `micold-client`'s existing `env_include_cache: HashMap<PathBuf, EnvIncludeSnapshot>`),
+invalidated on a `SettingsSet` that changes any of the three fields and on a worktree's deletion.
+See `bugs/BUG-003.md`.
+
 ### W3. Terminal ownership and grid streaming
 
 `Term` per session behind `FairMutex`; the reader thread absorbs the blocking `wait()`; shadow
@@ -323,6 +346,26 @@ no hooks configured reports unknown rather than a wrong answer.
 One-client-per-project with force-takeover (FR-023–025); half-open detection via a 3 s-ping / 9 s-deadline keepalive (SC-011 ≤10 s; analysis I1)
 (FR-026); resync-by-reading-current-state on reconnect (FR-028); systemd units shipped but not
 enabled at install, with the client enabling in-session; user-guide documentation (FR-042).
+
+**Build-staleness detection (FR-022a, BUG-002)**: the FR-021 handshake refuses only on a
+`PROTOCOL_VERSION`/`SCHEMA_HASH` mismatch, so a `.deb` upgrade whose daemon-side change doesn't touch
+the wire schema — the common case — never trips it, and the new client silently attaches to the old,
+already-running daemon via the `AlreadyRunning` singleton path. The original plan was to compare the
+existing `client_build`/`daemon_build` diagnostic strings directly, but those turned out non-viable:
+they carry different program-name prefixes (`"micold-ai-ide/…"` vs `"micold-daemon …"`) that can
+never be equal even on an identical release. Landed instead: a dedicated `PACKAGE_VERSION` constant
+(`crates/micold-core/src/protocol/version.rs`, backed by the workspace-shared `CARGO_PKG_VERSION`,
+which `release-please` bumps on every release regardless of wire-schema changes) exchanged via a new
+`client_package_version` field on `Hello`. `PROTOCOL_VERSION` bumped 1→2 accordingly (that new field
+is itself wire-visible). A same-contract package-version difference refuses with a new
+`RefusalReason::BuildMismatch` variant, distinct from `VersionMismatch`, reusing FR-022's client-side
+restart action — without the "live processes will be lost" warning, since a matching contract means
+nothing is actually at risk. `client_build`/`daemon_build` remain diagnostic-only, named in both
+refusal kinds' banners.
+
+**Bugfix**: 2026-07-27 — BUG-002 Added build-staleness detection to W6 (FR-022a). Resolved
+2026-07-27: `PACKAGE_VERSION` + `RefusalReason::BuildMismatch` landed (T088–T091); see
+`bugs/BUG-002.md`.
 
 **Test redistribution** (FR-041): move each of the 259 tests to its owning crate — pure-logic tests
 to `micold-core`, supervision/protocol/lifecycle to `micold-daemon`, any render-coupled tests to
@@ -463,3 +506,16 @@ control plane you can read by eye is the justification for carrying two encoding
 5. **259 tests, not 63 — and the workspace split now *forces* every one to move to an owning crate.**
    *Mitigation*: W6 tracks redistribution with a per-test disposition record (FR-041 forbids silent
    deletion); W0 gates on `cargo test --workspace` staying green through the crate move.
+6. **The build-time tofu guard is only as wide as `Icon::ALL`.** `tests/icons_font.rs` (feature 004
+   T005) proves every enum variant resolves to a glyph, but it cannot see a surface that skips the
+   enum and passes a literal to `text(..)` — exactly how BUG-004 shipped. *Mitigation*: a
+   source-level guard test that fails on non-ASCII glyph literals in client UI code (T103), so the
+   invariant is defended rather than merely documented.
+
+---
+
+**Bugfix**: 2026-07-27 — BUG-003 Updated from bugfix patch.
+
+**Bugfix**: 2026-07-27 — BUG-004 Updated from bugfix patch: annotated Principle VIII with the
+shared-`Icon` sourcing rule, marked the `activity_badge.rs` structure entry, and added Risk 6 (the
+tofu guard's blind spot). See `bugs/BUG-004.md`.

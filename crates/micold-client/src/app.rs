@@ -26,11 +26,6 @@ use micold_core::worktree::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-/// The labels of the top toolbar's entries, in display order.
-///
-/// The shell deliberately exposes exactly one entry — "Help" (FR-002, FR-003).
-pub const TOOLBAR_ENTRIES: [&str; 1] = ["Help"];
-
 /// The labels of the actions revealed under the "Help" menu, in display order.
 ///
 /// "Help" exposes exactly one action — "About" (FR-003, FR-004).
@@ -42,11 +37,6 @@ pub const SIDEBAR_MIN_WIDTH: u16 = 180;
 pub const SIDEBAR_MAX_WIDTH: u16 = 600;
 /// Default sidebar width in pixels, used until the user resizes it.
 pub const SIDEBAR_DEFAULT_WIDTH: u16 = 300;
-
-/// The top toolbar's entry labels. See [`TOOLBAR_ENTRIES`].
-pub fn toolbar_entries() -> &'static [&'static str] {
-    &TOOLBAR_ENTRIES
-}
 
 /// The actions under the "Help" menu. See [`HELP_ACTIONS`].
 pub fn help_actions() -> &'static [&'static str] {
@@ -803,8 +793,18 @@ pub enum Message {
         /// The running daemon's human-facing build string.
         daemon_build: String,
     },
-    /// The user chose "restart service" after a version mismatch (US6, FR-022): stop the mismatched
-    /// daemon so the auto-reconnect spawns a matching one. Handled by the binary.
+    /// The daemon refused the handshake on a same-contract package-version difference (US6,
+    /// FR-022a, BUG-002): the wire contract matches, but a `.deb` upgrade installed a newer build
+    /// than the one still running. Carries both build strings so the client can render a distinct,
+    /// lower-severity diagnostic than [`Message::DaemonVersionMismatch`]. Handled by the binary.
+    DaemonBuildMismatch {
+        /// This client's human-facing build string.
+        client_build: String,
+        /// The running daemon's human-facing build string.
+        daemon_build: String,
+    },
+    /// The user chose "restart service" after a version or build mismatch (US6, FR-022/022a): stop
+    /// the mismatched daemon so the auto-reconnect spawns a matching one. Handled by the binary.
     ConnectionRestartServiceRequested,
     /// A completed side-effecting task that carries nothing to apply (e.g. the daemon-stop task).
     NoOp,
@@ -1024,6 +1024,7 @@ impl State {
             | Message::DaemonConnectFailed(_)
             | Message::ConnectionTakeoverRequested
             | Message::DaemonVersionMismatch { .. }
+            | Message::DaemonBuildMismatch { .. }
             | Message::ConnectionRestartServiceRequested
             | Message::NoOp
             | Message::DiagnosticsRequested
@@ -2181,13 +2182,6 @@ pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> Ke
         KeyOutput::NewTerminalInstance => KeyRouting::NewTerminalInstance,
         KeyOutput::Ignore => KeyRouting::Ignore,
     }
-}
-
-/// Whether keystrokes may be written to a session's PTY given its lifecycle (FR-012a): only
-/// while `Running`. In other states input is discarded (no buffering); focus/scroll/copy still
-/// work.
-pub fn should_write_to(lifecycle: micold_core::session::SessionLifecycle) -> bool {
-    matches!(lifecycle, micold_core::session::SessionLifecycle::Running)
 }
 
 /// A snapshot of a just-closed overlay, kept alive by the client so it can keep being rendered

@@ -97,6 +97,16 @@ pub enum ConnectionStatus {
         /// The running daemon's build string.
         daemon_build: String,
     },
+    /// The running service is a same-contract different build — most releases don't touch the wire
+    /// protocol, so this is the common shape a `.deb` upgrade takes (US6, FR-022a, BUG-002). Offers
+    /// the same one-click restart as [`ConnectionStatus::VersionMismatch`], but without implying any
+    /// risk to live sessions: the contract still matches, so nothing is actually incompatible.
+    BuildMismatch {
+        /// This client's build string.
+        client_build: String,
+        /// The running daemon's build string.
+        daemon_build: String,
+    },
 }
 
 /// The persistent connection-status strip, shown between the toolbar and the notification stack.
@@ -130,6 +140,22 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
                 "This app speaks contract v{client}; the running service ({daemon_build}) speaks \
                  v{daemon}. Restart the service to match — running processes stop, but your \
                  sessions are preserved and resumable."
+            ),
+            roles,
+        )
+        .action(
+            "Restart service",
+            Message::ConnectionRestartServiceRequested,
+        ),
+        ConnectionStatus::BuildMismatch {
+            client_build,
+            daemon_build,
+        } => material::ConnectionBanner::new(
+            "A newer session service is installed",
+            format!(
+                "This app is {client_build}; the running service is still {daemon_build}. \
+                 Restart the service to pick up the update — your sessions are unaffected either \
+                 way and remain resumable."
             ),
             roles,
         )

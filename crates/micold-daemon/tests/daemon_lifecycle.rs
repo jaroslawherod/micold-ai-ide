@@ -13,7 +13,7 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusalReason};
-use micold_core::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 use micold_daemon::catalog::Catalog;
 use micold_daemon::lifecycle::may_exit;
 use micold_daemon::state::DaemonState;
@@ -39,6 +39,7 @@ async fn connect(state: &Arc<DaemonState>, build: &str) -> Client {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: build.into(),
+            client_package_version: PACKAGE_VERSION.into(),
         }))
         .await
         .unwrap();
@@ -106,6 +107,9 @@ async fn a_settings_mutation_reaches_a_second_connected_client() {
     a.send(Frame::Control(ClientMsg::SettingsSet {
         req: 1,
         scrollback_lines: Some(5_000),
+        env_include_enabled: None,
+        env_include_script_path: None,
+        env_include_timeout_secs: None,
     }))
     .await
     .unwrap();

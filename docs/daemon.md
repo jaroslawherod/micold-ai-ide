@@ -121,6 +121,12 @@ the same file at once could cause. In practice this changes three things you can
   failed — and when it reconnects, it reads the daemon's authoritative state so the window settles on
   what actually happened.
 
+Every session the daemon spawns — a fresh session, one resumed after a restart, a crash respawn, or
+a regular-terminal shell instance — resolves the environment-include setting (the same "source my
+`~/.bashrc`" mechanism from Settings) in that session's own project/worktree directory, exactly as a
+session opened from a running window would. This holds even for sessions the daemon starts entirely
+on its own, with no window attached — a crash respawn sees the same environment a fresh launch would.
+
 A couple of current limitations worth knowing:
 
 - Deleting a worktree keeps its git **branch** (only the worktree directory is removed), so a delete
@@ -217,6 +223,17 @@ happened.
 - **Your sessions survive the restart; live processes do not.** Restarting the service stops the
   processes it was hosting, and the banner says so plainly. But the sessions themselves are durable:
   after the restart they come back in the **interrupted-resumable** state below, ready to continue.
+
+### After installing an update
+
+Installing an updated package replaces the service binary on disk, but not the copy already running
+in memory — that only happens when something actually restarts it. Most releases don't change the
+version-mismatch contract above (only wire-breaking changes do), so they show a different, milder
+banner instead: **"A newer session service is installed."** It names both builds and offers the same
+**Restart service** action, but doesn't warn about sessions being put at risk — the two builds still
+speak the same contract, so nothing is actually incompatible, only stale. Until you restart it (or log
+out, or reboot), the service keeps running the version it was already running, even though the app you
+just relaunched is newer.
 
 ### Interrupted-resumable sessions after any service restart
 

@@ -21,12 +21,36 @@ use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, DaemonSettings, ProjectSnapshot, SessionSummary,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
+use micold_core::provider::{AiCliProvider, ClaudeProvider};
 use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation, TerminalMode};
 
 use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
-use micold_core::settings::{clamp_scrollback, JsonFileSettingsStore, Settings, SettingsStore};
+use micold_core::settings::{
+    clamp_env_include_timeout, clamp_scrollback, JsonFileSettingsStore, Settings, SettingsStore,
+};
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
+
+/// Record the durable, provider-side suppression marker for `session` (bugfix BUG-003, FR-020c)
+/// so reconciliation (FR-020b) never reconstructs it again, even if the catalog's own `archived`
+/// flag/persisted copy is later lost. Best-effort: mirrors [`AiCliProvider::mark_archived`]'s own
+/// non-fatal posture — a failure here is logged, never propagated, since the in-catalog
+/// `archived` flag was already set by the caller. A free function (not a `Catalog` method) so it
+/// can be called while a session list borrowed from `self.workspace` is still mutably held.
+fn mark_archived_durable(project: &Path, session: &Session) {
+    let provider = ClaudeProvider;
+    let Some(config_dir) = provider.config_dir() else {
+        tracing::warn!(
+            session = %session.id.0,
+            "could not resolve AI CLI provider config dir; durable archive marker not written"
+        );
+        return;
+    };
+    let cwd = session.location.cwd(project);
+    if let Err(err) = provider.mark_archived(&config_dir, &cwd, session.id.0) {
+        tracing::warn!(session = %session.id.0, %err, "failed to write durable archive marker");
+    }
+}
 
 /// The durable aggregate the daemon owns. The single writer of `projects.json` + `settings.json`.
 pub struct Catalog {
@@ -83,10 +107,13 @@ impl Catalog {
         self.load_status
     }
 
-    /// The current settings projected to the wire (FR-012a).
+    /// The current settings projected to the wire (FR-012a, FR-012b).
     pub fn settings_wire(&self) -> DaemonSettings {
         DaemonSettings {
             scrollback_lines: self.settings.scrollback_lines,
+            env_include_enabled: self.settings.env_include_enabled,
+            env_include_script_path: self.settings.env_include_script_path.clone(),
+            env_include_timeout_secs: self.settings.env_include_timeout_secs,
         }
     }
 
@@ -177,6 +204,30 @@ impl Catalog {
         Ok(clamped)
     }
 
+    /// Set any of the three service-owned environment-include settings (leaving a field unchanged
+    /// when its argument is `None`), clamping the timeout to the supported range, persisting the
+    /// change atomically (FR-012b, BUG-003).
+    pub fn set_env_include(
+        &mut self,
+        enabled: Option<bool>,
+        script_path: Option<String>,
+        timeout_secs: Option<u64>,
+    ) -> io::Result<()> {
+        if let Some(enabled) = enabled {
+            self.settings.env_include_enabled = enabled;
+        }
+        if let Some(script_path) = script_path {
+            self.settings.env_include_script_path = script_path;
+        }
+        if let Some(timeout_secs) = timeout_secs {
+            self.settings.env_include_timeout_secs = clamp_env_include_timeout(timeout_secs);
+        }
+        if let Some(store) = &self.settings_store {
+            store.save(&self.settings)?;
+        }
+        Ok(())
+    }
+
     /// Create a new session in `project` at `worktree_dir` (empty = the project root / `Default`
     /// location), persist the catalog, and return the daemon-assigned id (FR-009). The daemon owns
     /// the id and the durable record; the client learns it via `OperationOk`/`CatalogChanged`.
@@ -246,6 +297,7 @@ impl Catalog {
             for session in list.iter_mut() {
                 if !session.archived && session.location.is_worktree(dir_name) {
                     session.archive();
+                    mark_archived_durable(project, session);
                     archived.push(session.id);
                 }
             }
@@ -322,6 +374,7 @@ impl Catalog {
     pub fn archive_session(&mut self, session: SessionId) -> io::Result<Option<PathBuf>> {
         let owner = self.workspace.find_session_mut(session).map(|(path, s)| {
             s.archive();
+            mark_archived_durable(&path, s);
             path
         });
         if owner.is_some() {
@@ -354,9 +407,10 @@ impl Catalog {
     pub fn archive_session_ids(&mut self, ids: &[SessionId]) -> io::Result<Vec<SessionId>> {
         let mut archived = Vec::new();
         for &id in ids {
-            if let Some((_, session)) = self.workspace.find_session_mut(id) {
+            if let Some((project, session)) = self.workspace.find_session_mut(id) {
                 if !session.archived {
                     session.archive();
+                    mark_archived_durable(&project, session);
                     archived.push(id);
                 }
             }

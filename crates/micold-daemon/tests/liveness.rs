@@ -13,7 +13,7 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::keepalive::{Keepalive, KeepaliveAction, LIVENESS_DEADLINE};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
-use micold_core::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
@@ -34,6 +34,7 @@ async fn a_responsive_daemon_is_never_reaped() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_package_version: PACKAGE_VERSION.into(),
         }))
         .await
         .unwrap();
@@ -86,6 +87,7 @@ async fn a_half_open_connection_is_surfaced_within_10s() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_package_version: PACKAGE_VERSION.into(),
         }))
         .await
         .unwrap();

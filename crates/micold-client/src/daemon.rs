@@ -48,7 +48,11 @@ pub struct Outbox {
 }
 
 impl Outbox {
-    fn new(tx: mpsc::UnboundedSender<ClientMsg>) -> Self {
+    /// `pub` (not private) so the binary's own tests (`main.rs`'s `update_inner` tests, T100) can
+    /// build a real `Outbox` over a manually-created channel and assert what gets sent, without
+    /// needing a live connection — the binary is a separate crate from this library, so
+    /// `pub(crate)` would not reach it.
+    pub fn new(tx: mpsc::UnboundedSender<ClientMsg>) -> Self {
         Self {
             tx,
             id: std::sync::Arc::new(()),
@@ -163,6 +167,27 @@ async fn connect_and_pump(
                 .send(Message::DaemonVersionMismatch {
                     client,
                     daemon,
+                    daemon_build,
+                })
+                .await
+                .is_ok();
+            return if sent {
+                PumpEnd::Disconnected
+            } else {
+                PumpEnd::AppGone
+            };
+        }
+        // Same contract, different package version — most releases don't touch the wire schema, so
+        // this is the common shape a `.deb` upgrade takes (US6, FR-022a, BUG-002). Its own
+        // recoverable state, distinct from a contract mismatch: nothing is actually incompatible,
+        // only stale.
+        Connected::Refused(micold_core::protocol::messages::RefusalReason::BuildMismatch {
+            client_build,
+            daemon_build,
+        }) => {
+            let sent = output
+                .send(Message::DaemonBuildMismatch {
+                    client_build,
                     daemon_build,
                 })
                 .await

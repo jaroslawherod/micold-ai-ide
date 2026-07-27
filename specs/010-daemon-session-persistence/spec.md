@@ -221,6 +221,11 @@ confirm refusal plus a working restart action.
 3. **Given** the service was restarted for a version mismatch, **When** the user opens a session that
    was live before the restart, **Then** it is shown in the interrupted-resumable state and a single
    explicit action continues the prior conversation; it is not silently relaunched.
+4. **Given** a running service whose build differs from the newly-connecting client's build while
+   `PROTOCOL_VERSION` and `SCHEMA_HASH` still match, **When** the client connects, **Then** the
+   daemon is recognized as stale rather than silently accepted, and the client offers the same
+   restart action as a contract mismatch, without implying that live sessions are put at risk by the
+   mismatch itself. *(BUG-002)*
 
 ---
 
@@ -250,6 +255,11 @@ a session survived; confirm it does not survive without the setting.
 - **Stale endpoint**: a leftover communication endpoint from a service that died without cleanup —
   the client must detect that nothing is listening, reclaim the endpoint, and start a fresh service
   rather than hanging or failing permanently.
+- **Stale daemon after a same-contract upgrade**: a packaged upgrade replaces the on-disk daemon
+  binary while an old instance is already running; because the wire contract (`PROTOCOL_VERSION`/
+  `SCHEMA_HASH`) is unchanged for most releases, the existing contract-mismatch check does not fire
+  and the old process keeps serving clients indefinitely with no diagnostic. The client must also
+  detect a same-contract build difference and offer the restart action (FR-022a). *(BUG-002)*
 - **Startup race**: two clients launch simultaneously and both find no service — exactly one service
   must end up running and both clients must attach.
 - **Half-open connection**: the service is alive but the connection is silently dead (suspend/resume,
@@ -329,6 +339,15 @@ a session survived; confirm it does not survive without the setting.
   to retention at all times, including while no client is attached. A client MUST be able to read its
   current value and request a change; a requested change MUST take effect for all sessions and MUST
   persist across restarts of both the client and the service.
+- **FR-012b** *(added — BUG-003)*: The environment-include setting (feature 011: an enabled flag, a
+  script path, and a timeout — e.g. sourcing the user's `~/.bashrc`) is, like the scrollback limit
+  (FR-012a), a durable, service-owned setting. The service MUST read and apply it — resolving the
+  configured script in the session's own project/worktree directory — for every session/shell process
+  it spawns, including a session started fresh, a session respawned after a crash (FR-005), and a
+  regular-terminal shell instance opened for an existing session, identically to how a client-driven
+  launch would resolve it. A client MUST be able to read and change all three parts of this setting
+  through the service (mirroring FR-012a), and a change MUST take effect for every subsequently
+  spawned session/shell process without requiring a service restart.
 
 ### Viewing sessions
 
@@ -358,6 +377,13 @@ a session survived; confirm it does not survive without the setting.
 - **FR-016d**: The client MUST display each session's activity signal in the session list without the
   user opening that session, so a user attaching after time away can see at a glance which sessions are
   waiting on them.
+- **FR-016e**: The activity indicator MUST be rendered from the project's shared, closed icon
+  vocabulary — never from a raw character literal drawn in the default text font — so it is covered by
+  the build-time missing-glyph guard and can never degrade to a blank box at runtime. The displayed
+  states MUST remain distinguishable by **shape**, not by colour alone, so the distinction survives for
+  a colour-blind user and in any theme.
+  **Bugfix**: 2026-07-27 — BUG-004 added this requirement; the indicator shipped as raw `●`/`○`
+  literals that no bundled font maps, so every signalled session rendered an identical blank box.
 - **FR-017**: Scrollback MUST be retained by the service up to the service-owned configured limit
   (FR-012a), including output produced while detached, and MUST be requestable by range so the client
   can scroll without holding all history.
@@ -377,6 +403,12 @@ a session survived; confirm it does not survive without the setting.
 - **FR-022**: On version mismatch the client MUST offer an explicit action that stops the running
   service and starts a matching one, and MUST warn that live processes will be lost while sessions
   remain resumable.
+- **FR-022a**: On connect, the daemon and client MUST additionally compare their build identifiers,
+  independently of `PROTOCOL_VERSION`/`SCHEMA_HASH`. When the build identifiers differ but the wire
+  contract still matches, this MUST be surfaced as a distinct, named condition from a contract
+  mismatch (FR-021/FR-022) and the client MUST offer the same explicit restart action; unlike
+  FR-022, no "live processes will be lost" warning is required, since a matching contract means
+  sessions are not put at risk by the mismatch itself — only staleness is being resolved. *(BUG-002)*
 - **FR-023**: At most one client MAY be attached to a given project at a time. A second attach attempt
   MUST be refused with an explanatory error offering an explicit user-initiated takeover.
 - **FR-024**: On confirmed takeover, the displaced client MUST stop rendering and stop sending input
@@ -397,6 +429,10 @@ a session survived; confirm it does not survive without the setting.
   named, actionable error rather than surfacing the operating system's opaque failure. On macOS the
   usable limit is 103 bytes, which the user's application-support directory can exceed on its own.
 - **FR-030**: The endpoint MUST be accessible only to the owning user account.
+
+**Bugfix**: 2026-07-27 — BUG-002 Added FR-022a (build-staleness detection independent of wire-contract
+compatibility), a new Edge Case, a 4th acceptance scenario on User Story 6, and SC-009a. See
+`bugs/BUG-002.md`.
 
 ### Synchronous operations across the boundary
 
@@ -502,6 +538,9 @@ a session survived; confirm it does not survive without the setting.
 - **SC-009**: A version mismatch is detected on 100% of connection attempts and never results in
   partial or degraded operation; the offered restart action resolves it without the user running any
   command.
+- **SC-009a**: A same-contract build difference between the connecting client and the running daemon
+  is detected on 100% of connection attempts and offers the restart action, distinguishable from a
+  contract mismatch (SC-009). *(BUG-002)*
 - **SC-010**: A second window targeting an occupied project is refused 100% of the time with an
   actionable message; after takeover, the displaced window sends zero further input and exits zero
   times.
@@ -520,6 +559,15 @@ a session survived; confirm it does not survive without the setting.
 - **SC-017**: For every failure mode the spec commits to — failed startup, refused connection, session
   give-up, mutation failure — a user can determine the cause from logs reachable through the interface,
   without rebuilding the application or reading source. Zero failure modes leave no diagnostic trace.
+- **SC-018**: Zero blank-box ("tofu") placeholders appear anywhere in the session list, and the
+  working / awaiting-input / ended indicators are told apart by shape with colour removed (0 states
+  that collapse to the same silhouette).
+
+---
+
+**Bugfix**: 2026-07-27 — BUG-004 Added FR-016e (activity indicator MUST come from the shared closed
+icon vocabulary and stay shape-distinct) and SC-018 (zero tofu in the session list, shape-distinct
+indicators). See `bugs/BUG-004.md`.
 
 ---
 
@@ -609,3 +657,12 @@ planning, but the spec commits to them so requirements stay testable.
   owns it. The service is the single writer (FR-008); a user editing the file underneath it is
   unsupported and its outcome is undefined. (Scoped out per user decision after analysis G3; the
   edge case below is retained only as a known non-goal.)
+
+**Bugfix**: 2026-07-27 — BUG-003 The daemon's own session-spawn path (`start_session`,
+`respawn_primary`, `open_shell` in `crates/micold-daemon/src/state.rs`) never resolved the
+environment-include setting (feature 011) at all — every spawned process's environment was
+hardcoded to just `TERM`, so variables exported from a user's `~/.bashrc` (or whatever script is
+configured) never reached a daemon-spawned session, even though the client (`micold-client`)
+resolves this correctly for its own launch path. FR-012b added (env-include is a service-owned
+setting the daemon MUST apply at every spawn site, mirroring FR-012a's scrollback precedent). See
+`bugs/BUG-003.md`.

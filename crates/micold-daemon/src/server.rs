@@ -215,29 +215,44 @@ where
     let mut framed = Framed::new(stream, DaemonCodec::new());
 
     // --- Handshake: the first frame must be a Hello, and it must match exactly. ---
-    let (client_version, client_hash, client_build) = match framed.next().await {
-        Some(Ok(Frame::Control(ClientMsg::Hello {
-            protocol_version,
-            schema_hash,
-            client_build,
-        }))) => (protocol_version, schema_hash, client_build),
-        Some(Ok(_)) => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "expected Hello as the first frame",
-            ))
-        }
-        Some(Err(e)) => return Err(io::Error::other(e)),
-        None => return Ok(()), // hung up before saying hello
-    };
+    let (client_version, client_hash, client_build, client_package_version) =
+        match framed.next().await {
+            Some(Ok(Frame::Control(ClientMsg::Hello {
+                protocol_version,
+                schema_hash,
+                client_build,
+                client_package_version,
+            }))) => (
+                protocol_version,
+                schema_hash,
+                client_build,
+                client_package_version,
+            ),
+            Some(Ok(_)) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "expected Hello as the first frame",
+                ))
+            }
+            Some(Err(e)) => return Err(io::Error::other(e)),
+            None => return Ok(()), // hung up before saying hello
+        };
 
-    if let Err(reason) = handshake::evaluate(client_version, client_hash, daemon_build()) {
+    if let Err(reason) = handshake::evaluate(
+        client_version,
+        client_hash,
+        &client_package_version,
+        client_build.clone(),
+        daemon_build(),
+    ) {
         // Identity + versions only — never any session content (FR-047).
         tracing::warn!(
             client_build = %client_build,
             client_version,
+            client_package_version = %client_package_version,
             daemon_version = micold_core::protocol::version::PROTOCOL_VERSION,
-            "refusing client: contract mismatch"
+            daemon_package_version = micold_core::protocol::version::PACKAGE_VERSION,
+            "refusing client: contract or build mismatch"
         );
         framed
             .send(Frame::Control(DaemonMsg::Refused { reason }))
@@ -553,11 +568,28 @@ where
             ClientMsg::SettingsSet {
                 req,
                 scrollback_lines,
+                env_include_enabled,
+                env_include_script_path,
+                env_include_timeout_secs,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
                     None => Ok(()),
-                };
+                }
+                .and_then(|()| {
+                    if env_include_enabled.is_none()
+                        && env_include_script_path.is_none()
+                        && env_include_timeout_secs.is_none()
+                    {
+                        Ok(())
+                    } else {
+                        state.set_env_include(
+                            env_include_enabled,
+                            env_include_script_path,
+                            env_include_timeout_secs,
+                        )
+                    }
+                });
                 match result {
                     Ok(()) => state.send(
                         id,
@@ -765,6 +797,7 @@ where
                 project,
                 dir_name,
                 stop_sessions,
+                delete_branch,
             } => {
                 let Some((repo, true)) = state.project_repo(&project) else {
                     reject_non_repo(state, id, req, &project);
@@ -787,17 +820,35 @@ where
                     );
                     continue;
                 }
+                // Computed before `repo` moves into the closure below — the same path a session
+                // located in this worktree resolves as its `cwd`, so the env-include cache entry for
+                // it can be dropped once the delete succeeds (BUG-003: a worktree recreated for the
+                // same branch reuses this exact path).
+                let cache_path = repo.join(".claude/worktrees").join(&dir_name);
+                // Feature 013 (FR-011/FR-012): the user's explicit keep/delete choice, resolved
+                // against the worktree's actual bound branch (from the live git-discovery cache,
+                // not guessed from `dir_name`) — `None` for either an unbound/orphan worktree or
+                // when the user chose to keep the branch.
+                let branch_to_delete = if delete_branch {
+                    state.worktree_branch(&project, &dir_name)
+                } else {
+                    None
+                };
                 let dir2 = dir_name.clone();
                 let result = tokio::task::spawn_blocking(move || {
                     let target = repo.join(".claude/worktrees").join(&dir2);
-                    // Keep the branch (`None`): branch deletion is irreversible and the wire carries
-                    // no keep/delete choice, so losing only the worktree dir stays FR-023-recoverable.
-                    remove_worktree(&GitCli::new(), &repo, &target, None)
-                        .and_then(|_outcome| remove_worktree_dir(&target))
+                    let outcome = remove_worktree(
+                        &GitCli::new(),
+                        &repo,
+                        &target,
+                        branch_to_delete.as_deref(),
+                    )?;
+                    remove_worktree_dir(&target)?;
+                    Ok::<bool, std::io::Error>(outcome.branch_delete_failed)
                 })
                 .await;
                 match result {
-                    Ok(Ok(())) => {
+                    Ok(Ok(branch_delete_failed)) => {
                         // Gated on the git delete having succeeded (main `d88c7a1`): only now archive
                         // the worktree's sessions durably and kill their live procs (outside the lock).
                         match state.archive_and_remove_worktree_sessions(&project, &dir_name) {
@@ -810,12 +861,15 @@ where
                                 tracing::warn!(%e, "archiving deleted worktree's sessions failed")
                             }
                         }
+                        state.invalidate_env_include(&cache_path);
                         refresh_worktrees_and_broadcast(state, project).await;
                         state.send(
                             id,
                             DaemonMsg::OperationOk {
                                 req,
-                                result: OperationResult::Ack,
+                                result: OperationResult::WorktreeDeleted {
+                                    branch_delete_failed,
+                                },
                             },
                         );
                     }

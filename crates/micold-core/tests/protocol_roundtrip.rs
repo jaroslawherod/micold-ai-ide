@@ -48,6 +48,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             protocol_version: 1,
             schema_hash: [7u8; 32],
             client_build: "client-abc".into(),
+            client_package_version: "0.4.0".into(),
         },
         ClientMsg::Attach {
             project: PathBuf::from("/repo"),
@@ -151,6 +152,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             project: PathBuf::from("/a"),
             dir_name: "feat-x".into(),
             stop_sessions: false,
+            delete_branch: true,
         },
         ClientMsg::WorktreeRename {
             req: 6,
@@ -170,6 +172,9 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
         ClientMsg::SettingsSet {
             req: 9,
             scrollback_lines: Some(50_000),
+            env_include_enabled: Some(false),
+            env_include_script_path: Some("/custom/rc".into()),
+            env_include_timeout_secs: Some(20),
         },
         ClientMsg::LogLocationRequest { req: 10 },
         ClientMsg::RecentErrorsRequest { req: 11, limit: 20 },
@@ -267,6 +272,9 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             catalog: sample_catalog(),
             settings: DaemonSettings {
                 scrollback_lines: 10_000,
+                env_include_enabled: true,
+                env_include_script_path: "/home/user/.bashrc".into(),
+                env_include_timeout_secs: 10,
             },
         },
         DaemonMsg::Refused {
@@ -299,6 +307,9 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
                 scrollback_lines: 1_000,
+                env_include_enabled: false,
+                env_include_script_path: String::new(),
+                env_include_timeout_secs: 5,
             },
         },
         DaemonMsg::SessionTitleChanged {

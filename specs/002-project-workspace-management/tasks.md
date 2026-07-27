@@ -346,3 +346,12 @@ After Foundational: one developer takes US1 (unblocks the shared selector/worksp
 **Bugfix**: 2026-07-21 — BUG-001 Added Phase 8 (T048–T053): split the shared `projects.json`
 catalog from per-project state (sessions, worktree names, mode) so a storage fault is isolated to
 one project (FR-012a), plus a lossless migration for pre-split files. See `bugs/BUG-001.md`.
+
+## Phase 9: Convergence
+
+- [X] T055 Fix `persist_settings` (`crates/micold-client/src/main.rs:554`) and the duplicate inline
+  settings-save in the `SettingsSaved` handler (`main.rs:~1723`) so a failed `store.save(...)` is
+  routed to `core.notify_error(...)`, matching `persist()` and the explicit requirement in
+  `contracts/storage-schema.md` "Save-failure surfacing" — both call sites currently discard the
+  `Result` via `let _ = ...`, contradicting that contract (confirmed: no feature spec requires or
+  relies on this silent behavior) per FR-012b (contradicts)

@@ -1,15 +1,6 @@
-//! US1 integration tests: the top toolbar exposes exactly one entry, "Help" (FR-002, FR-003).
+//! Integration test: the overflow menu's "Help" action exposes exactly "About" (FR-004).
 
-use micold_client::app::{help_actions, toolbar_entries};
-
-#[test]
-fn toolbar_exposes_only_help() {
-    assert_eq!(
-        toolbar_entries(),
-        ["Help"],
-        "toolbar must contain exactly the Help entry"
-    );
-}
+use micold_client::app::help_actions;
 
 #[test]
 fn help_menu_exposes_only_about() {

@@ -50,6 +50,10 @@ pub enum ClientMsg {
         schema_hash: [u8; 32],
         /// Human-facing build string for diagnostics.
         client_build: String,
+        /// The client's compiled [`crate::protocol::version::PACKAGE_VERSION`] — changes on every
+        /// release, wire-visible or not, so a same-contract `.deb` upgrade over an already-running
+        /// daemon is still detected (FR-022a, BUG-002).
+        client_package_version: String,
     },
     /// Attach to a project. `force = true` is a confirmed takeover, only sent after explicit user
     /// confirmation (FR-023).
@@ -229,6 +233,9 @@ pub enum ClientMsg {
         dir_name: String,
         /// Whether to stop live sessions first.
         stop_sessions: bool,
+        /// Whether to also delete the worktree's git branch (feature 013, FR-011/FR-012).
+        /// `true` is today's (and the spec's) default; `false` keeps the branch.
+        delete_branch: bool,
     },
     /// Rename a worktree's display name.
     WorktreeRename {
@@ -257,12 +264,20 @@ pub enum ClientMsg {
         /// Target session.
         session: SessionId,
     },
-    /// Set the service-owned scrollback limit (FR-012a).
+    /// Set service-owned settings: the scrollback limit (FR-012a) and/or the environment-include
+    /// setting (FR-012b). Each field is independently optional — `None` leaves that setting
+    /// unchanged.
     SettingsSet {
         /// Correlation id.
         req: u64,
         /// New scrollback line cap, or `None` to leave unchanged.
         scrollback_lines: Option<usize>,
+        /// New environment-include enabled flag, or `None` to leave unchanged.
+        env_include_enabled: Option<bool>,
+        /// New environment-include script path, or `None` to leave unchanged.
+        env_include_script_path: Option<String>,
+        /// New environment-include timeout in seconds, or `None` to leave unchanged.
+        env_include_timeout_secs: Option<u64>,
     },
 
     // --- Diagnostics ---
@@ -480,6 +495,16 @@ pub enum RefusalReason {
         /// Daemon build string.
         daemon_build: String,
     },
+    /// Same wire contract, different package version — a `.deb` upgrade over an already-running
+    /// daemon that a `VersionMismatch` would not catch (FR-022a, BUG-002). Names both builds so the
+    /// client can render a distinct, lower-severity diagnostic and offer the same restart action,
+    /// without implying that sessions are put at risk (the contract still matches).
+    BuildMismatch {
+        /// Client build string.
+        client_build: String,
+        /// Daemon build string.
+        daemon_build: String,
+    },
     /// The project already has an attached client.
     ProjectBusy {
         /// Project identity path.
@@ -615,11 +640,17 @@ pub enum WorktreeStatus {
     Prunable,
 }
 
-/// The service-owned settings mirrored to clients (FR-012a).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// The service-owned settings mirrored to clients (FR-012a, FR-012b).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DaemonSettings {
     /// The scrollback retention limit, in lines.
     pub scrollback_lines: usize,
+    /// Whether the environment-include script is sourced for spawned sessions (FR-012b).
+    pub env_include_enabled: bool,
+    /// The configured environment-include script path.
+    pub env_include_script_path: String,
+    /// The environment-include sourcing timeout, in seconds.
+    pub env_include_timeout_secs: u64,
 }
 
 /// The result payload of a successful mutating request.
@@ -636,6 +667,14 @@ pub enum OperationResult {
     WorktreeCreated {
         /// The new worktree's directory name.
         dir_name: String,
+    },
+    /// A worktree was deleted (feature 013, FR-011/FR-015). The worktree directory and its
+    /// sessions are always gone by this point; `branch_delete_failed` reports the separate,
+    /// non-fatal outcome of the (optional) branch-deletion step.
+    WorktreeDeleted {
+        /// `true` when branch deletion was requested but git could not delete it (e.g. it holds
+        /// commits unreachable from elsewhere). Always `false` when the branch was kept.
+        branch_delete_failed: bool,
     },
     /// The classification of a branch name (feature 016, FR-001).
     BranchPreflight {

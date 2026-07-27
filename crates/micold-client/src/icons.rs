@@ -72,6 +72,13 @@ pub enum Icon {
     /// Regular Terminal instance (feature 011, FR-011). Distinct from [`Icon::Delete`] (a trash
     /// can): closing dismisses something without destroying anything on disk.
     Close,
+    /// A session's activity dot for a **live** state — working or awaiting input (feature 010
+    /// US2, FR-016d/FR-016e). A ring with a solid centre, so it reads as filled next to
+    /// [`Icon::ActivityEnded`]'s empty ring.
+    ActivityWorking,
+    /// A session's activity dot for a **spent** state — the session ended (FR-016d/FR-016e). An
+    /// empty ring, the same outer diameter as [`Icon::ActivityWorking`] so rows stay aligned.
+    ActivityEnded,
 }
 
 impl Icon {
@@ -103,6 +110,8 @@ impl Icon {
         Icon::ProjectRoot,
         Icon::AddTerminalInstance,
         Icon::Close,
+        Icon::ActivityWorking,
+        Icon::ActivityEnded,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -135,6 +144,13 @@ impl Icon {
             Icon::ProjectRoot => '\u{e88a}',
             Icon::AddTerminalInstance => '\u{e146}',
             Icon::Close => '\u{e5cd}',
+            // The shipped font is a static instance pinned at FILL=0 (PROVENANCE.md), where the
+            // nominally-solid dots (`circle`, `lens`, `fiber_manual_record`) all render as rings —
+            // verified by rasterizing them. `radio_button_checked` is the only same-diameter glyph
+            // with a genuinely filled centre, so this pair is what actually reads as filled vs
+            // hollow in *this* font rather than merely by icon name.
+            Icon::ActivityWorking => '\u{e837}',
+            Icon::ActivityEnded => '\u{e836}',
         }
     }
 }

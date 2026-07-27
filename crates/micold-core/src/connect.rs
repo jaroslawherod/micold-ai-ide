@@ -21,7 +21,7 @@ use crate::protocol::codec::{ClientCodec, Frame};
 use crate::protocol::messages::{
     CatalogSnapshot, ClientMsg, DaemonMsg, DaemonSettings, RefusalReason,
 };
-use crate::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
+use crate::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 
 /// A handshaked connection to the daemon.
 pub type DaemonConnection = Framed<Stream, ClientCodec>;
@@ -38,8 +38,10 @@ pub struct Welcome {
 
 /// The outcome of a connect attempt.
 pub enum Connected {
-    /// Handshake accepted.
-    Ready(DaemonConnection, Welcome),
+    /// Handshake accepted. The connection is boxed (clippy::large_enum_variant) — `DaemonSettings`
+    /// gained a `String` field for the environment-include setting (FR-012b, BUG-003), which tipped
+    /// this variant well past `Refused`'s size.
+    Ready(Box<DaemonConnection>, Welcome),
     /// Handshake refused — typically a version/schema mismatch needing the restart action (FR-022).
     Refused(RefusalReason),
 }
@@ -82,6 +84,7 @@ pub async fn handshake(stream: Stream, client_build: &str) -> io::Result<Connect
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: client_build.to_string(),
+            client_package_version: PACKAGE_VERSION.to_string(),
         }))
         .await
         .map_err(io::Error::other)?;
@@ -92,7 +95,7 @@ pub async fn handshake(stream: Stream, client_build: &str) -> io::Result<Connect
             catalog,
             settings,
         }))) => Ok(Connected::Ready(
-            framed,
+            Box::new(framed),
             Welcome {
                 daemon_build,
                 catalog,
