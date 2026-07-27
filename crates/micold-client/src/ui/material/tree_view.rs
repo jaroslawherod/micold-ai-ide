@@ -6,7 +6,8 @@
 
 use crate::icons::Icon;
 use micold_core::tokens::{shape, spacing, type_scale, Rgb, Roles};
-use crate::ui::{icon, style};
+use crate::ui::material::glyph::icon;
+use crate::ui::material::style;
 use iced::widget::{button, column, container, mouse_area, row, text, Row, Space};
 use iced::{Alignment, Element, Length};
 

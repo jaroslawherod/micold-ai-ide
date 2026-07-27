@@ -14,8 +14,37 @@ use std::marker::PhantomData;
 use crate::icons::Icon;
 use crate::ui::material::style;
 use crate::ui::material::text::TypeRole;
-use iced::Element;
+use iced::{Element, Font};
 use micold_core::tokens::{Rgb, Roles};
+
+/// The embedded Material Symbols (Outlined) icon font. Registered once at startup in `main` so
+/// every icon glyph resolves; see `assets/fonts/PROVENANCE.md`.
+pub const MATERIAL_SYMBOLS_BYTES: &[u8] =
+    include_bytes!("../../../../../assets/fonts/MaterialSymbolsOutlined.ttf");
+
+/// The font family the embedded icon file advertises (asserted by `tests/icons_font.rs`).
+pub const MATERIAL_SYMBOLS: Font = Font::with_name("Material Symbols Outlined");
+
+/// Draw `icon` at `size`, tinted with a foreground colour role (FR-004). Goes through
+/// [`style::color`] so the tint follows the active theme exactly like all other text, giving
+/// light/dark for free (FR-007).
+///
+/// The low-level primitive [`Glyph`] is built on. Prefer `Glyph`, which names a type role instead
+/// of a number; this stays public for the components that already resolve a size themselves.
+pub fn icon<'a, M: 'a>(icon: Icon, size: f32, color: Rgb) -> Element<'a, M> {
+    icon_colored(icon, size, style::color(color))
+}
+
+/// [`icon`] with an already-resolved colour, so callers can apply alpha — notably
+/// [`style::disabled_color`], since a glyph that colours itself does not inherit a disabled
+/// button's `text_color`.
+pub fn icon_colored<'a, M: 'a>(icon: Icon, size: f32, color: iced::Color) -> Element<'a, M> {
+    iced::widget::text(icon.glyph().to_string())
+        .font(MATERIAL_SYMBOLS)
+        .size(size)
+        .color(color)
+        .into()
+}
 
 /// An icon glyph sized to a type role. Builder form (Principle VIII):
 /// `Glyph::new(Icon::Git, TypeRole::Label, roles).tint(badge).into()`.
@@ -64,9 +93,9 @@ impl<'a, M: 'a> From<Glyph<'a, M>> for Element<'a, M> {
         let tint = g.tint.unwrap_or(g.roles.on_surface);
         let size = g.role.size();
         if g.disabled {
-            crate::ui::icon_colored(g.icon, size, style::disabled_color(tint))
+            icon_colored(g.icon, size, style::disabled_color(tint))
         } else {
-            crate::ui::icon(g.icon, size, tint)
+            icon(g.icon, size, tint)
         }
     }
 }

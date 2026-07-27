@@ -13,7 +13,8 @@
 use crate::icons::Icon;
 use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::{menu_panel, IconButton};
-use crate::ui::{icon, style};
+use crate::ui::material::glyph::icon;
+use crate::ui::material::style;
 use iced::widget::{button, column, row, text};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
@@ -175,7 +176,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Option<Surface<'a, M>> {
         let panel = super::fade(
             menu_panel(item_column(items, r), Length::Fixed(PANEL_WIDTH), r, true),
             progress,
-            style::color(r.surface),
+            r.surface,
         );
 
         let (layer, anchor) = match anchor {

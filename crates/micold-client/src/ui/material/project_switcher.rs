@@ -13,7 +13,8 @@
 use super::{menu_panel, Tooltip};
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::cdk::overlay::{Anchor, Surface};
-use crate::ui::{icon, style};
+use crate::ui::material::glyph::icon;
+use crate::ui::material::style;
 use iced::widget::{button, column, mouse_area, row, text};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;

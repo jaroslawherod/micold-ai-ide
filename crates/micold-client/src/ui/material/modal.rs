@@ -14,7 +14,6 @@
 //! — and hands the result over.
 
 use crate::ui::cdk::overlay::{Anchor, Surface};
-use crate::ui::style;
 use iced::{Color, Element};
 use micold_core::overlay::Layer;
 use micold_core::tokens::Roles;
@@ -76,7 +75,7 @@ impl<'a, M: Clone + 'a> From<Modal<'a, M>> for Option<Surface<'a, M>> {
         // The dialog fades its contents toward its own surface colour, then lifts (scales about
         // its centre). Together with the scrim this reads as a Material dialog enter/exit.
         let dialog = super::scale(
-            super::fade(dialog, progress, style::color(roles.surface)),
+            super::fade(dialog, progress, roles.surface),
             progress,
         );
 

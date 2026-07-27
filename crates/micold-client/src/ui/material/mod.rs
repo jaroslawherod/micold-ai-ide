@@ -14,7 +14,7 @@ mod button;
 mod checkbox;
 mod connection_banner;
 mod filter_panel;
-mod glyph;
+pub mod glyph;
 mod icon_button;
 mod menu;
 mod modal;

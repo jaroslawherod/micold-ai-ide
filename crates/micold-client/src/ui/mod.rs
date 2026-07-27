@@ -28,37 +28,16 @@ mod worktree_rename;
 use crate::app::{Message, Overlay, State};
 use crate::icons::Icon;
 use crate::motion::Animator;
-use micold_core::tokens::{self, spacing, type_scale, Rgb, Roles};
-use iced::widget::{button, column, container, mouse_area, row, stack, text, Space};
-use iced::{Element, Font, Length, Subscription};
+use micold_core::tokens::{self, spacing, Roles};
+use iced::widget::{column, container, mouse_area, row, stack, Space};
+use iced::{Element, Length, Subscription};
 use micold_core::session::SessionId;
 use micold_core::theme::ColorScheme;
 
-/// The embedded Material Symbols (Outlined) icon font. Registered once at startup in
-/// `main` so every icon glyph resolves; see `assets/fonts/PROVENANCE.md`.
-pub const MATERIAL_SYMBOLS_BYTES: &[u8] =
-    include_bytes!("../../../../assets/fonts/MaterialSymbolsOutlined.ttf");
-
-/// The font family the embedded icon file advertises (asserted by `tests/icons_font.rs`).
-pub const MATERIAL_SYMBOLS: Font = Font::with_name("Material Symbols Outlined");
-
-/// Render an [`Icon`] as an element at a design-system size, tinted with a foreground color
-/// role (FR-004). Reuses [`style::color`] so tint follows the active theme exactly like all
-/// other text, giving light/dark and disabled states for free (FR-007).
-pub fn icon<'a, M: 'a>(icon: Icon, size: f32, color: Rgb) -> Element<'a, M> {
-    icon_colored(icon, size, style::color(color))
-}
-
-/// [`icon`] with an already-resolved color, so callers can apply alpha — notably
-/// [`style::disabled_color`], since a glyph that colors itself does not inherit a disabled
-/// button's `text_color`.
-pub fn icon_colored<'a, M: 'a>(icon: Icon, size: f32, color: iced::Color) -> Element<'a, M> {
-    text(icon.glyph().to_string())
-        .font(MATERIAL_SYMBOLS)
-        .size(size)
-        .color(color)
-        .into()
-}
+// The icon font and the two primitives that draw a glyph moved into the component library with
+// everything else that decides an appearance (FR-001). Re-exported here for `main`, which
+// registers the font at startup, and for the tests that assert what the font file advertises.
+pub use material::glyph::{icon, icon_colored, MATERIAL_SYMBOLS, MATERIAL_SYMBOLS_BYTES};
 
 /// Identifies each animated element in the app. The generic [`Animator`] core
 /// (`crate::motion`) is keyed by this; adding a new animated element is: add a variant,
@@ -199,20 +178,25 @@ fn notifications<'a>(state: &'a State, r: Roles) -> Element<'a, Message> {
     let mut stack = column![].spacing(spacing::SM);
     for (index, notification) in state.notifications.iter().enumerate() {
         let banner = row![
-            text(notification.message.clone())
-                .size(type_scale::BODY)
+            material::Text::new(notification.message.clone(), material::TypeRole::Body, r)
                 .width(Length::Fill),
-            button(text("Dismiss").size(type_scale::LABEL))
-                .on_press(Message::NotificationDismissed(index))
-                .style(style::outlined(r)),
+            material::Button::with_content(
+                material::Text::new("Dismiss", material::TypeRole::Label, r),
+                material::ButtonVariant::Outlined,
+                r
+            )
+            .on_press(Message::NotificationDismissed(index)),
         ]
         .spacing(spacing::SM)
         .align_y(iced::Alignment::Center);
         stack = stack.push(
-            container(banner)
-                .padding(spacing::MD)
-                .width(Length::Fill)
-                .style(style::notification(r, notification.level)),
+            material::Surface::new(
+                banner,
+                material::SurfaceKind::Notification(notification.level),
+                r,
+            )
+            .padding(spacing::MD)
+            .width(Length::Fill),
         );
     }
     if state.notifications.is_empty() {
@@ -240,7 +224,7 @@ pub fn view<'a>(
 ) -> Element<'a, Message> {
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
-    let bg = style::color(roles.background);
+    let bg = roles.background;
 
     // With a project open, show the worktree sidebar beside the main area; the main area is
     // the embedded terminal when a session is active (FR-012), else the project surface. The
@@ -277,15 +261,18 @@ pub fn view<'a>(
     // every branch that decides what the body is. Deliberately unconditional: the failures this
     // replaces were all cases where state was set correctly but the only render site sat inside
     // a branch that could not be taken. Nothing may nest this inside an `if`.
-    let mut base: Element<'a, Message> = container(column![
-        toolbar::view(state, scheme),
-        connection_banner(connection, roles),
-        notifications(state, roles),
-        body
-    ])
+    let mut base: Element<'a, Message> = material::Surface::new(
+        column![
+            toolbar::view(state, scheme),
+            connection_banner(connection, roles),
+            notifications(state, roles),
+            body
+        ],
+        material::SurfaceKind::Window,
+        roles,
+    )
     .width(Length::Fill)
     .height(Length::Fill)
-    .style(style::window_bg(roles))
     .into();
 
     // While resizing, a full-window capture layer tracks the cursor and ends the drag on

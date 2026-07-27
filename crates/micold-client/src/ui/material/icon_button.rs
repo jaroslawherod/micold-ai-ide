@@ -7,7 +7,8 @@
 
 use crate::icons::Icon;
 use micold_core::tokens::{spacing, type_scale, Rgb, Roles};
-use crate::ui::{icon, icon_colored, style};
+use crate::ui::material::glyph::{icon, icon_colored};
+use crate::ui::material::style;
 use iced::widget::button;
 use iced::Element;
 use std::marker::PhantomData;

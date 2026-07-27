@@ -90,8 +90,19 @@ fn code_only(src: &str) -> String {
 /// Layout primitives are deliberately absent: rows, columns, spacers, stacks and pointer-area
 /// wrappers position other widgets and have nothing to style (FR-003). Wrapping them would add
 /// indirection for no gain, so naming them is not a violation.
+///
+/// `container` is absent for a subtler reason: it is *both*. A container with a style is a
+/// surface and belongs to the library; a container that only pads or aligns is layout and does
+/// not. The two are indistinguishable by name, and what separates them — the `.style(...)` — is
+/// what the styling-layer count already catches. Counting `container(` here would flag every
+/// padding wrapper in the codebase and could never reach zero.
 const WRAPPED_WIDGETS: &[&str] = &[
-    "button", "text_input", "pick_list", "checkbox", "scrollable", "container", "progress_bar",
+    "button",
+    "text_input",
+    "pick_list",
+    "checkbox",
+    "scrollable",
+    "progress_bar",
     "tooltip",
 ];
 
@@ -124,15 +135,15 @@ fn raw_size_references(code: &str) -> usize {
 // ---------------------------------------------------------------------------
 
 /// Feature-module lines constructing a wrapped rendering widget. Measured baseline: **86** across
-/// the 13 modules research R2 counted; five remain. Lines rather than modules, because "13 modules leak" does
+/// the 13 modules research R2 counted; three remain. Lines rather than modules, because "13 modules leak" does
 /// not shrink until a module reaches zero, and this needs to move on every migration.
-const WIDGET_BUDGET: usize = 50;
+const WIDGET_BUDGET: usize = 24;
 
 /// Feature-module lines referencing the styling layer. Measured baseline: **113**.
-const STYLE_BUDGET: usize = 62;
+const STYLE_BUDGET: usize = 45;
 
 /// Feature-module lines selecting a raw text size. Measured baseline: **114**.
-const RAW_SIZE_BUDGET: usize = 65;
+const RAW_SIZE_BUDGET: usize = 45;
 
 fn totals() -> (usize, usize, usize) {
     let mut widgets = 0;
