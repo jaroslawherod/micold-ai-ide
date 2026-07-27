@@ -39,11 +39,11 @@ impl<'a, M: 'a> From<StageProgress> for Element<'a, M> {
     fn from(p: StageProgress) -> Self {
         let r = p.roles;
         let bar = progress_bar(0.0..=1.0, VALUE)
-            .height(Length::Fixed(HEIGHT))
+            .girth(Length::Fixed(HEIGHT))
             .style(move |_theme: &iced::Theme| progress_bar::Style {
                 background: iced::Background::Color(style::color(r.surface_variant)),
                 bar: iced::Background::Color(style::color(r.primary)),
-                border: iced::border::rounded(shape::FULL as f32),
+                border: iced::border::rounded(shape::FULL),
             });
 
         column![

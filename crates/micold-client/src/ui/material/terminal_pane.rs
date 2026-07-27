@@ -25,8 +25,8 @@ use iced::advanced::widget::{tree, Tree, Widget};
 use iced::advanced::{Clipboard, Shell};
 use iced::widget::canvas::{Frame, Path, Stroke, Text};
 use iced::{
-    alignment, event, keyboard, mouse, Color, Element, Event, Length, Point, Rectangle, Renderer,
-    Size, Theme,
+    alignment, keyboard, mouse, Color, Element, Event, Length, Point, Rectangle, Renderer, Size,
+    Theme,
 };
 use micold_core::protocol::grid::{LineId, WireColor, WireStyle};
 
@@ -365,7 +365,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
     }
 
     fn layout(
-        &self,
+        &mut self,
         _tree: &mut Tree,
         _renderer: &Renderer,
         limits: &layout::Limits,
@@ -457,6 +457,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                         let glyph_fg = if is_cursor { default_bg } else { fg };
                         frame.fill_text(Text {
                             content: ch.to_string(),
+                            // New in 0.14; unbounded, matching the previous single-glyph behaviour.
+                            max_width: f32::INFINITY,
                             position: iced::Point::new(
                                 x + metrics.width / 2.0,
                                 y + metrics.height / 2.0,
@@ -464,8 +466,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                             color: glyph_fg,
                             size: iced::Pixels(metrics.size),
                             font: cell_font(flags),
-                            horizontal_alignment: alignment::Horizontal::Center,
-                            vertical_alignment: alignment::Vertical::Center,
+                            align_x: iced::widget::text::Alignment::Center,
+                            align_y: alignment::Vertical::Center,
                             line_height: iced::widget::text::LineHeight::Absolute(iced::Pixels(
                                 metrics.height,
                             )),
@@ -527,17 +529,17 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         renderer.draw_geometry(frame.into_geometry());
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         _renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
-    ) -> event::Status {
+    ) {
         let state = tree.state.downcast_mut::<PaneState>();
         let bounds = layout.bounds();
         let metrics = CellMetrics::new(TERM_FONT_SIZE);
@@ -596,7 +598,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                                     };
                                     shell.publish(Message::TerminalScrolled(delta));
                                 }
-                                return event::Status::Captured;
+                                shell.capture_event();
+                                return;
                             }
                         }
                     }
@@ -612,13 +615,15 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     // are batched before the app update runs, so relative deltas computed against
                     // the pre-batch offset would accumulate and jump the view (drag flicker).
                     shell.publish(Message::TerminalScrolledTo(target));
-                    return event::Status::Captured;
+                    shell.capture_event();
+                    return;
                 }
                 Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
                     if state.scrollbar_grab.is_some() =>
                 {
                     state.scrollbar_grab = None;
-                    return event::Status::Captured;
+                    shell.capture_event();
+                    return;
                 }
                 _ => {}
             }
@@ -653,7 +658,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     state.dragging = true;
                     shell.publish(Message::TerminalSelectStart { col, line, kind });
                 }
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             // Motion while a reported button is held (FR-013a). Only for processes that asked
             // for motion (MOUSE_DRAG / MOUSE_MOTION), and only once per grid cell crossed —
@@ -675,7 +681,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     }
                 }
                 state.reported_cell = Some((col, line));
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             // Release of a reported button (FR-013a). Must come before the selection arms: in
             // mouse mode `state.dragging` was never set, so the release previously fell through
@@ -694,12 +701,14 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 ) {
                     shell.publish(Message::TerminalBytes(seq));
                 }
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) if state.dragging => {
                 let (col, line) = grid_at(*position, bounds, metrics);
                 shell.publish(Message::TerminalSelectUpdate { col, line });
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.dragging => {
                 state.dragging = false;
@@ -708,7 +717,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 if !selected.is_empty() {
                     clipboard.write(ClipboardKind::Standard, selected);
                 }
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             // Middle-click pastes the clipboard into the focused process (FR-013) — unless the
             // process is tracking the mouse, in which case the gesture belongs to it (FR-013a).
@@ -731,7 +741,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 } else if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
                     shell.publish(Message::TerminalBytes(pasted.into_bytes()));
                 }
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             // Right-click opens the copy/paste context menu at the cursor (FR-013) — unless the
             // process is tracking the mouse, in which case it is forwarded (FR-013a). Shift
@@ -757,7 +768,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     let y = (pos.y - bounds.y).max(0.0) as u16;
                     shell.publish(Message::TerminalContextMenuOpened { x, y });
                 }
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             // Wheel scrolls the local scrollback, or forwards to a mouse-reporting program on
             // the alternate screen (FR-016 + wheel edge case).
@@ -778,11 +790,13 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                                 shell.publish(Message::TerminalBytes(seq));
                             }
                         }
-                        return event::Status::Captured;
+                        shell.capture_event();
+                        return;
                     }
                     WheelRouting::ScrollLocally { lines } => {
                         shell.publish(Message::TerminalScrolled(lines));
-                        return event::Status::Captured;
+                        shell.capture_event();
+                        return;
                     }
                     // Sub-line travel is banked in the residual; leave the event unhandled.
                     WheelRouting::Ignore => {}
@@ -793,7 +807,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
 
         // Keyboard input reaches the process ONLY while focused (FR-006/FR-008/FR-009).
         if !self.focused {
-            return event::Status::Ignored;
+            return;
         }
         if let Event::Keyboard(keyboard::Event::KeyPressed {
             key,
@@ -802,41 +816,40 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             ..
         }) = event
         {
-            let Some(k) = to_keymap_key(&key) else {
-                return event::Status::Ignored;
+            let Some(k) = to_keymap_key(key) else {
+                return;
             };
             let input = keymap::KeyInput {
                 key: k,
-                mods: to_keymap_mods(modifiers),
-                text: text.map(|t| t.to_string()),
+                mods: to_keymap_mods(*modifiers),
+                text: text.as_ref().map(|t| t.to_string()),
             };
-            return match keymap::encode(&input, self.key_term_mode()) {
+            match keymap::encode(&input, self.key_term_mode()) {
                 KeyOutput::Bytes(bytes) => {
                     shell.publish(Message::TerminalBytes(bytes));
-                    event::Status::Captured
+                    shell.capture_event();
                 }
                 KeyOutput::ReleaseFocus => {
                     shell.publish(Message::TerminalFocusReleased);
-                    event::Status::Captured
+                    shell.capture_event();
                 }
                 KeyOutput::NewTerminalInstance => {
                     shell.publish(Message::ShellInstanceOpenRequested);
-                    event::Status::Captured
+                    shell.capture_event();
                 }
                 KeyOutput::Copy => {
                     clipboard.write(ClipboardKind::Standard, self.selectable_content());
-                    event::Status::Captured
+                    shell.capture_event();
                 }
                 KeyOutput::Paste => {
                     if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
                         shell.publish(Message::TerminalBytes(pasted.into_bytes()));
                     }
-                    event::Status::Captured
+                    shell.capture_event();
                 }
-                KeyOutput::Ignore => event::Status::Ignored,
-            };
+                KeyOutput::Ignore => {}
+            }
         }
-        event::Status::Ignored
     }
 
     fn mouse_interaction(

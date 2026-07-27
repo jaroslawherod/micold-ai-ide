@@ -12,7 +12,7 @@ use micold_core::project::Availability;
 use micold_core::theme::ColorScheme;
 
 /// An icon + text label laid out as a horizontal button/badge content.
-fn labeled<'a>(glyph: Icon, tint: Rgb, size: u16, label: &str) -> iced::widget::Row<'a, Message> {
+fn labeled<'a>(glyph: Icon, tint: Rgb, size: f32, label: &str) -> iced::widget::Row<'a, Message> {
     row![icon(glyph, size, tint), text(label.to_string()).size(size)]
         .spacing(spacing::XS)
         .align_y(Alignment::Center)

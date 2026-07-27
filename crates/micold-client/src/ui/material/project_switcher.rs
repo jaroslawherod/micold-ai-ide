@@ -189,14 +189,14 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Element<'a, M> {
             .align_y(iced::alignment::Vertical::Top)
             .padding(iced::Padding {
                 top: TOP_OFFSET,
-                right: spacing::SM as f32,
+                right: spacing::SM,
                 bottom: 0.0,
                 left: 0.0,
             });
 
         // Invisible backdrop that dismisses the switcher on any outside click.
         let backdrop = mouse_area(
-            container(Space::new(Length::Fill, Length::Fill))
+            container(Space::new().width(Length::Fill).height(Length::Fill))
                 .width(Length::Fill)
                 .height(Length::Fill),
         )

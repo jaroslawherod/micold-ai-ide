@@ -47,7 +47,7 @@ pub fn emphasis(signal: &ActivitySignal) -> Option<BadgeEmphasis> {
 pub struct ActivityBadge<'a, M> {
     signal: ActivitySignal,
     roles: Roles,
-    size: u16,
+    size: f32,
     _marker: PhantomData<&'a M>,
 }
 
@@ -63,7 +63,7 @@ impl<'a, M: 'a> ActivityBadge<'a, M> {
     }
 
     /// Override the dot size (defaults to the sidebar tag size).
-    pub fn size(mut self, size: u16) -> Self {
+    pub fn size(mut self, size: f32) -> Self {
         self.size = size;
         self
     }
@@ -79,7 +79,7 @@ impl<'a, M: 'a> From<ActivityBadge<'a, M>> for Element<'a, M> {
             Some(BadgeEmphasis::Ended) => ("\u{25CB}", r.on_surface_variant),
             // Unknown is ambient — nothing is drawn (H2), but the slot is still occupied so rows
             // stay uniform whether or not a session has a signal yet.
-            None => return Space::with_width(Length::Shrink).into(),
+            None => return Space::new().width(Length::Shrink).into(),
         };
         let tint = style::color(color);
         text(glyph)

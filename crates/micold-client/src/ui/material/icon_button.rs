@@ -21,9 +21,9 @@ type ButtonStyleFn = Box<dyn Fn(&iced::Theme, button::Status) -> button::Style>;
 pub struct IconButton<'a, M> {
     glyph: Icon,
     roles: Roles,
-    size: u16,
+    size: f32,
     tint: Option<Rgb>,
-    padding: u16,
+    padding: f32,
     circular: bool,
     on_press: Option<M>,
     _marker: PhantomData<&'a ()>,
@@ -46,14 +46,14 @@ impl<'a, M: Clone + 'a> IconButton<'a, M> {
     }
 
     /// Override the glyph size.
-    pub fn size(mut self, size: u16) -> Self {
+    pub fn size(mut self, size: f32) -> Self {
         self.size = size;
         self
     }
 
     /// Override the button's padding (defaults to `spacing::XS`) — widen the click target for a
     /// button that otherwise sits in a dense row (e.g. `spacing::SM`).
-    pub fn padding(mut self, padding: u16) -> Self {
+    pub fn padding(mut self, padding: f32) -> Self {
         self.padding = padding;
         self
     }

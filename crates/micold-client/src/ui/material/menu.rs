@@ -50,10 +50,10 @@ const CONTEXT_MENU_WIDTH: f32 = 160.0;
 /// keeps the panel comfortably inside the window rather than flush against the edge.
 pub fn menu_panel_size(items: usize) -> (u16, u16) {
     /// Generous line box for a `BODY`-sized label (font size plus leading).
-    const LINE: u16 = type_scale::BODY + 6;
-    let item = LINE + spacing::SM * 2;
-    let gaps = (items.saturating_sub(1)) as u16 * spacing::XS;
-    let height = spacing::XS * 2 + items as u16 * item + gaps;
+    const LINE: u16 = type_scale::BODY as u16 + 6;
+    let item = LINE + spacing::SM as u16 * 2;
+    let gaps = (items.saturating_sub(1)) as u16 * spacing::XS as u16;
+    let height = spacing::XS as u16 * 2 + items as u16 * item + gaps;
     (PANEL_WIDTH as u16, height)
 }
 
@@ -193,7 +193,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Element<'a, M> {
                 .align_y(iced::alignment::Vertical::Top)
                 .padding(iced::Padding {
                     top: TOP_OFFSET,
-                    right: spacing::SM as f32,
+                    right: spacing::SM,
                     bottom: 0.0,
                     left: 0.0,
                 }),
@@ -201,7 +201,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Element<'a, M> {
 
         // Invisible backdrop that dismisses the menu on any outside click.
         let backdrop = mouse_area(
-            container(Space::new(Length::Fill, Length::Fill))
+            container(Space::new().width(Length::Fill).height(Length::Fill))
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
@@ -273,7 +273,7 @@ impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Element<'a, M> {
 
         // Invisible backdrop that dismisses the menu on any outside click.
         let backdrop = mouse_area(
-            container(Space::new(Length::Fill, Length::Fill))
+            container(Space::new().width(Length::Fill).height(Length::Fill))
                 .width(Length::Fill)
                 .height(Length::Fill),
         )

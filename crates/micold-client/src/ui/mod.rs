@@ -37,14 +37,14 @@ pub const MATERIAL_SYMBOLS: Font = Font::with_name("Material Symbols Outlined");
 /// Render an [`Icon`] as an element at a design-system size, tinted with a foreground color
 /// role (FR-004). Reuses [`style::color`] so tint follows the active theme exactly like all
 /// other text, giving light/dark and disabled states for free (FR-007).
-pub fn icon<'a, M: 'a>(icon: Icon, size: u16, color: Rgb) -> Element<'a, M> {
+pub fn icon<'a, M: 'a>(icon: Icon, size: f32, color: Rgb) -> Element<'a, M> {
     icon_colored(icon, size, style::color(color))
 }
 
 /// [`icon`] with an already-resolved color, so callers can apply alpha — notably
 /// [`style::disabled_color`], since a glyph that colors itself does not inherit a disabled
 /// button's `text_color`.
-pub fn icon_colored<'a, M: 'a>(icon: Icon, size: u16, color: iced::Color) -> Element<'a, M> {
+pub fn icon_colored<'a, M: 'a>(icon: Icon, size: f32, color: iced::Color) -> Element<'a, M> {
     text(icon.glyph().to_string())
         .font(MATERIAL_SYMBOLS)
         .size(size)
@@ -103,7 +103,12 @@ pub enum ConnectionStatus {
 /// Empty (zero-height) when connected, so it never crowds a healthy session.
 fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a, Message> {
     let banner = match status {
-        ConnectionStatus::Connected => return Space::new(0, 0).into(),
+        ConnectionStatus::Connected => {
+            return Space::new()
+                .width(Length::Fixed(0.0))
+                .height(Length::Fixed(0.0))
+                .into()
+        }
         ConnectionStatus::Disconnected => material::ConnectionBanner::new(
             "Not connected to the session service",
             "The displayed content may be stale. Reconnecting…",
@@ -253,7 +258,7 @@ pub fn view<'a>(
     // release, so the drag continues even when the pointer leaves the thin handle.
     if state.sidebar_dragging {
         let capture = mouse_area(
-            container(Space::new(Length::Fill, Length::Fill))
+            container(Space::new().width(Length::Fill).height(Length::Fill))
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
@@ -539,49 +544,120 @@ pub fn subscription(state: &State) -> Subscription<Message> {
     // The sidebar filter panel (feature 009) is a lightweight popover, not a modal `Overlay`,
     // so it's checked ahead of the `Overlay` match below (mirrors `on_escape`'s priority).
     if state.overlay == Overlay::None && state.sidebar_filter_open {
-        return iced::keyboard::on_key_press(|key, _modifiers| {
-            use iced::keyboard::{key::Named, Key};
-            matches!(key, Key::Named(Named::Escape)).then_some(Message::SidebarFilterMenuToggled)
+        return iced::keyboard::listen().filter_map(|event| {
+            use iced::keyboard::{key::Named, Event, Key};
+            matches!(
+                event,
+                Event::KeyPressed {
+                    key: Key::Named(Named::Escape),
+                    ..
+                }
+            )
+            .then_some(Message::SidebarFilterMenuToggled)
         });
     }
-    // `on_key_press` takes a non-capturing `fn`, so each overlay supplies its own.
+    // `Subscription::filter_map` takes a non-capturing (zero-sized) closure — same constraint
+    // the old `on_key_press` `fn` had — so each overlay still supplies its own.
     match state.overlay {
         Overlay::None => Subscription::none(),
-        Overlay::About => iced::keyboard::on_key_press(|key, _modifiers| {
-            use iced::keyboard::{key::Named, Key};
-            matches!(key, Key::Named(Named::Escape)).then_some(Message::AboutClosed)
+        Overlay::About => iced::keyboard::listen().filter_map(|event| {
+            use iced::keyboard::{key::Named, Event, Key};
+            matches!(
+                event,
+                Event::KeyPressed {
+                    key: Key::Named(Named::Escape),
+                    ..
+                }
+            )
+            .then_some(Message::AboutClosed)
         }),
-        Overlay::ProjectSelector => iced::keyboard::on_key_press(|key, _modifiers| {
-            use iced::keyboard::{key::Named, Key};
-            matches!(key, Key::Named(Named::Escape)).then_some(Message::ProjectSelectorClosed)
+        Overlay::ProjectSelector => iced::keyboard::listen().filter_map(|event| {
+            use iced::keyboard::{key::Named, Event, Key};
+            matches!(
+                event,
+                Event::KeyPressed {
+                    key: Key::Named(Named::Escape),
+                    ..
+                }
+            )
+            .then_some(Message::ProjectSelectorClosed)
         }),
-        Overlay::RenameProject => iced::keyboard::on_key_press(|key, _modifiers| {
-            use iced::keyboard::{key::Named, Key};
-            matches!(key, Key::Named(Named::Escape)).then_some(Message::RenameCancelled)
+        Overlay::RenameProject => iced::keyboard::listen().filter_map(|event| {
+            use iced::keyboard::{key::Named, Event, Key};
+            matches!(
+                event,
+                Event::KeyPressed {
+                    key: Key::Named(Named::Escape),
+                    ..
+                }
+            )
+            .then_some(Message::RenameCancelled)
         }),
-        Overlay::AddWorktree => iced::keyboard::on_key_press(|key, _modifiers| {
-            use iced::keyboard::{key::Named, Key};
-            matches!(key, Key::Named(Named::Escape)).then_some(Message::AddWorktreeCancelled)
+        Overlay::AddWorktree => iced::keyboard::listen().filter_map(|event| {
+            use iced::keyboard::{key::Named, Event, Key};
+            matches!(
+                event,
+                Event::KeyPressed {
+                    key: Key::Named(Named::Escape),
+                    ..
+                }
+            )
+            .then_some(Message::AddWorktreeCancelled)
         }),
-        Overlay::Settings => iced::keyboard::on_key_press(|key, _modifiers| {
-            use iced::keyboard::{key::Named, Key};
-            matches!(key, Key::Named(Named::Escape)).then_some(Message::SettingsCancelled)
+        Overlay::Settings => iced::keyboard::listen().filter_map(|event| {
+            use iced::keyboard::{key::Named, Event, Key};
+            matches!(
+                event,
+                Event::KeyPressed {
+                    key: Key::Named(Named::Escape),
+                    ..
+                }
+            )
+            .then_some(Message::SettingsCancelled)
         }),
-        Overlay::ConfirmWorktreeDelete => iced::keyboard::on_key_press(|key, _modifiers| {
-            use iced::keyboard::{key::Named, Key};
-            matches!(key, Key::Named(Named::Escape)).then_some(Message::WorktreeDeleteCancelled)
+        Overlay::ConfirmWorktreeDelete => iced::keyboard::listen().filter_map(|event| {
+            use iced::keyboard::{key::Named, Event, Key};
+            matches!(
+                event,
+                Event::KeyPressed {
+                    key: Key::Named(Named::Escape),
+                    ..
+                }
+            )
+            .then_some(Message::WorktreeDeleteCancelled)
         }),
-        Overlay::RenameWorktree => iced::keyboard::on_key_press(|key, _modifiers| {
-            use iced::keyboard::{key::Named, Key};
-            matches!(key, Key::Named(Named::Escape)).then_some(Message::WorktreeRenameCancelled)
+        Overlay::RenameWorktree => iced::keyboard::listen().filter_map(|event| {
+            use iced::keyboard::{key::Named, Event, Key};
+            matches!(
+                event,
+                Event::KeyPressed {
+                    key: Key::Named(Named::Escape),
+                    ..
+                }
+            )
+            .then_some(Message::WorktreeRenameCancelled)
         }),
-        Overlay::ConfirmSessionRemove => iced::keyboard::on_key_press(|key, _modifiers| {
-            use iced::keyboard::{key::Named, Key};
-            matches!(key, Key::Named(Named::Escape)).then_some(Message::SessionRemoveCancelled)
+        Overlay::ConfirmSessionRemove => iced::keyboard::listen().filter_map(|event| {
+            use iced::keyboard::{key::Named, Event, Key};
+            matches!(
+                event,
+                Event::KeyPressed {
+                    key: Key::Named(Named::Escape),
+                    ..
+                }
+            )
+            .then_some(Message::SessionRemoveCancelled)
         }),
-        Overlay::ConfirmForgetProject => iced::keyboard::on_key_press(|key, _modifiers| {
-            use iced::keyboard::{key::Named, Key};
-            matches!(key, Key::Named(Named::Escape)).then_some(Message::ProjectForgetCancelled)
+        Overlay::ConfirmForgetProject => iced::keyboard::listen().filter_map(|event| {
+            use iced::keyboard::{key::Named, Event, Key};
+            matches!(
+                event,
+                Event::KeyPressed {
+                    key: Key::Named(Named::Escape),
+                    ..
+                }
+            )
+            .then_some(Message::ProjectForgetCancelled)
         }),
     }
 }

@@ -51,9 +51,9 @@ fn blend(base: Color, over: Color, t: f32) -> Color {
     }
 }
 
-fn radius(px: u16) -> Border {
+fn radius(px: f32) -> Border {
     Border {
-        radius: (px as f32).into(),
+        radius: px.into(),
         ..Border::default()
     }
 }
@@ -74,6 +74,9 @@ pub fn theme(scheme: ColorScheme) -> Theme {
             primary: color(r.primary),
             // No dedicated success role in this UI; reuse primary.
             success: color(r.primary),
+            // Likewise no dedicated warning role (new in iced 0.14) — `error` is the closest
+            // token, and nothing in this UI renders a palette-driven warning today.
+            warning: color(r.error),
             danger: color(r.error),
         },
     )
@@ -96,7 +99,7 @@ pub fn surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
         border: Border {
             color: alpha(color(r.outline), 0.4),
             width: 1.0,
-            radius: (shape::MD as f32).into(),
+            radius: shape::MD.into(),
         },
         ..container::Style::default()
     }
@@ -110,7 +113,7 @@ pub fn dialog(r: Roles) -> impl Fn(&Theme) -> container::Style {
         border: Border {
             color: alpha(color(r.outline), 0.4),
             width: 1.0,
-            radius: (shape::LG as f32).into(),
+            radius: shape::LG.into(),
         },
         ..container::Style::default()
     }
@@ -147,7 +150,7 @@ pub fn menu_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
         border: Border {
             color: alpha(color(r.outline), 0.4),
             width: 1.0,
-            radius: (shape::SM as f32).into(),
+            radius: shape::SM.into(),
         },
         ..container::Style::default()
     }
@@ -158,7 +161,7 @@ pub fn menu_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
 pub fn select_field(r: Roles) -> impl Fn(&Theme, pick_list::Status) -> pick_list::Style {
     move |_theme, status| {
         let border_color = match status {
-            pick_list::Status::Hovered | pick_list::Status::Opened => color(r.primary),
+            pick_list::Status::Hovered | pick_list::Status::Opened { .. } => color(r.primary),
             pick_list::Status::Active => color(r.outline),
         };
         pick_list::Style {
@@ -169,7 +172,7 @@ pub fn select_field(r: Roles) -> impl Fn(&Theme, pick_list::Status) -> pick_list
             border: Border {
                 color: border_color,
                 width: 1.0,
-                radius: (shape::SM as f32).into(),
+                radius: shape::SM.into(),
             },
         }
     }
@@ -185,11 +188,13 @@ pub fn select_menu(r: Roles) -> impl Fn(&Theme) -> menu::Style {
         border: Border {
             color: alpha(color(r.outline), 0.4),
             width: 1.0,
-            radius: (shape::SM as f32).into(),
+            radius: shape::SM.into(),
         },
         text_color: color(r.on_surface),
         selected_text_color: color(r.on_primary),
         selected_background: Background::Color(color(r.primary)),
+        // New in 0.14; the default zero shadow keeps the flat 0.13 look.
+        shadow: iced::Shadow::default(),
     }
 }
 
@@ -212,7 +217,7 @@ pub fn scrollbar(r: Roles) -> impl Fn(&Theme, scrollable::Status) -> scrollable:
             background: Some(Background::Color(alpha(color(r.surface_variant), 0.6))),
             border: radius(shape::FULL),
             scroller: scrollable::Scroller {
-                color: thumb,
+                background: Background::Color(thumb),
                 border: radius(shape::FULL),
             },
         };
@@ -221,6 +226,18 @@ pub fn scrollbar(r: Roles) -> impl Fn(&Theme, scrollable::Status) -> scrollable:
             vertical_rail: rail,
             horizontal_rail: rail,
             gap: None,
+            // The autoscroll overlay is new in 0.14; themed to match the rest of the design
+            // system (surface pill, `outline` edge, flat) rather than iced's default.
+            auto_scroll: scrollable::AutoScroll {
+                background: Background::Color(alpha(color(r.surface), 0.9)),
+                border: Border {
+                    color: alpha(color(r.outline), 0.8),
+                    width: 1.0,
+                    radius: shape::FULL.into(),
+                },
+                shadow: iced::Shadow::default(),
+                icon: color(r.on_surface_variant),
+            },
         }
     }
 }
@@ -310,7 +327,7 @@ pub fn outlined(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
             border: Border {
                 color: border_color,
                 width: 1.0,
-                radius: (shape::SM as f32).into(),
+                radius: shape::SM.into(),
             },
             ..button::Style::default()
         }
@@ -395,7 +412,7 @@ pub fn checkbox(r: Roles) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbo
             border: Border {
                 color: border_color,
                 width: 1.0,
-                radius: (shape::SM as f32).into(),
+                radius: shape::SM.into(),
             },
             text_color: Some(color(r.on_surface)),
         }
@@ -406,7 +423,7 @@ pub fn checkbox(r: Roles) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbo
 pub fn input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
     move |_theme, status| {
         let border_color = match status {
-            text_input::Status::Focused => color(r.primary),
+            text_input::Status::Focused { .. } => color(r.primary),
             _ => color(r.outline),
         };
         text_input::Style {
@@ -414,7 +431,7 @@ pub fn input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_input::Sty
             border: Border {
                 color: border_color,
                 width: 1.0,
-                radius: (shape::SM as f32).into(),
+                radius: shape::SM.into(),
             },
             icon: color(r.on_surface_variant),
             placeholder: color(r.on_surface_variant),

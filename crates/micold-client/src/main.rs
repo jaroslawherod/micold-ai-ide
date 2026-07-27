@@ -402,13 +402,14 @@ fn window_settings() -> iced::window::Settings {
 }
 
 pub fn main() -> iced::Result {
-    iced::application("Micold AI IDE", update, view)
+    iced::application(boot, update, view)
+        .title("Micold AI IDE")
         .theme(theme)
         .default_font(iced::Font::DEFAULT)
         .font(micold_client::ui::MATERIAL_SYMBOLS_BYTES)
         .window(window_settings())
         .subscription(subscription)
-        .run_with(boot)
+        .run()
 }
 
 fn boot() -> (App, Task<Message>) {
@@ -493,8 +494,8 @@ fn boot() -> (App, Task<Message>) {
         // Ask for the initial window size up front: `resize_events` only fires on *changes*, so
         // without this the first context menu before any resize would have nothing to clamp
         // against (feature 015).
-        iced::window::get_latest()
-            .and_then(iced::window::get_size)
+        iced::window::latest()
+            .and_then(iced::window::size)
             .map(|size| Message::WindowResized {
                 width: size.width.max(0.0) as u16,
                 height: size.height.max(0.0) as u16,

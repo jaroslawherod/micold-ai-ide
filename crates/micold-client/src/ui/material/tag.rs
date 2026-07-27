@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 pub struct Tag<'a, M> {
     label: String,
     accent: Rgb,
-    size: u16,
+    size: f32,
     _marker: PhantomData<&'a M>,
 }
 
@@ -34,7 +34,7 @@ impl<'a, M: 'a> Tag<'a, M> {
     }
 
     /// Override the label text size.
-    pub fn size(mut self, size: u16) -> Self {
+    pub fn size(mut self, size: f32) -> Self {
         self.size = size;
         self
     }
@@ -46,8 +46,8 @@ impl<'a, M: 'a> From<Tag<'a, M>> for Element<'a, M> {
             .padding(Padding {
                 top: 0.0,
                 bottom: 0.0,
-                left: spacing::XS as f32,
-                right: spacing::XS as f32,
+                left: spacing::XS,
+                right: spacing::XS,
             })
             .style(style::chip(t.accent))
             .into()
