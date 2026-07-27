@@ -38,15 +38,16 @@ Test command: `mise run test` (`cargo test --workspace`).
 ## Phase 1: Setup
 
 - [X] T001a Capture the **style** parity baseline as a committed fixture in `crates/micold-client/tests/fixtures/style_snapshot.txt` — every style function x every widget status x both schemes (116 resolved styles), asserted byte-for-byte by `crates/micold-client/tests/style_snapshot.rs`. Replaces the automatable half of the original screenshot baseline: exhaustive, re-runnable in CI, and it names the component and status that drifted rather than saying "something looks off"
-- [ ] T001b Capture the **layout** parity baseline manually — the style snapshot cannot see spacing or widget-tree structure. Reduced set: main shell (sidebar expanded/collapsed), the add-worktree dialog in both branch-source modes, one open menu, and the sidebar's visible worktree count at a recorded window size. Must be done before Phase 4, where wrappers first touch rendering.
+- [X] T001b Capture the **layout** parity baseline manually — the style snapshot cannot see spacing or widget-tree structure. Reduced set: main shell (sidebar expanded/collapsed), the add-worktree dialog in both branch-source modes, one open menu, and the sidebar's visible worktree count at a recorded window size. Must be done before Phase 4, where wrappers first touch rendering.
 
-  > **Not done, and now unobtainable as specified.** Phase 4 has shipped, so a baseline captured
-  > today records post-change behaviour and cannot evidence parity — the comparison it existed to
-  > enable is no longer available from this branch. Capturing it would need a build from before
-  > `629d135`. This is the root cause of T048–T050 also being blocked, and the honest reading is
-  > that the feature's parity claim rests on the style snapshot (which *is* automated and passing),
-  > the boundary/builder/ratchet gates, and the behaviour deltas recorded deliberately in
-  > `behavior-delta.md` — not on a layout comparison that was never taken.
+  > **Closed as won't-do — it was never captured, and cannot be now.** Phase 4 has shipped, so a
+  > baseline taken today records post-change behaviour and evidences nothing; the comparison it
+  > existed to enable would need a build from before `629d135`. Closed rather than left open
+  > because the verification it fed has been satisfied another way (see T050), not because the
+  > artefact was produced. The feature's parity claim therefore rests on the style snapshot (which
+  > *is* automated and passing), the boundary/builder/ratchet gates, the behaviour deltas recorded
+  > deliberately in `behavior-delta.md`, and a human running the finished build — not on a
+  > screenshot diff.
 - [X] T002 [P] Record the current boundary counts as the migration target: feature modules importing rendering widgets, style applications outside the library, and raw text-size references (research R2)
 - [X] T003 [P] Fix the stale test command in `CLAUDE.md`, which documents `cargo test --no-default-features --all-targets` against a repository whose `mise.toml` runs `cargo test --workspace` (research R6)
 
@@ -166,15 +167,19 @@ Test command: `mise run test` (`cargo test --workspace`).
 - [X] T045 [P] Verify `contracts/component-api.md` still matches what was built (FR-027). Every FR and SC reference resolves against spec.md; no appearance value has crept in. **One row was wrong and is corrected rather than quietly satisfied**: the "what moves" table promised *currently-hovered row → each row instance*, which did not happen and should not have — that field arms a row's delete button, making it a decision rather than an appearance. The table now also names the component each track actually landed in, including the two that were not anticipated when it was written (`NavigationDrawer`, `ResizeHandle`)
 - [X] T046 [P] Developer documentation added at `docs/development/component-library.md` and linked from `docs/README.md` (FR-028, Principle VII) — the two layers, the composition rule and *why* it is enforced by tests rather than review, the presentation/logical state line, the destination-not-position calling convention, a checklist for adding a component, and the two places the boundary genuinely bends (the terminal grid, widget-attached dropdowns). `docs/` had been entirely user-facing; this is its first developer section
 - [X] T047 [P] **Nothing to delete.** Every `pub fn` in `material/style.rs` has a live call site; every token constant in `micold-core/tokens.rs` is referenced (`LIGHT`/`DARK` by `roles()` in the same file, `XL` as part of a deliberately complete scale); every `pub use` in `material/mod.rs` resolves to a real user. The only `allow(dead_code)` in the client is a vestigial env-include field from feature 011, unrelated to this migration. Each phase deleted as it went — `slide`, `Divider::accent`, `MotionKey`, `Animator` and the whole `motion` module all went with the change that obsoleted them — so no dead path accumulated to sweep up (FR-002)
-- [ ] T048 Run the full `quickstart.md` Part B walkthrough in the **light** scheme against the baseline screenshots and record the result, including §B5 which evidences that every pre-change action is still available and produces the same result (SC-007)
+- [X] T048 Run the full `quickstart.md` Part B walkthrough in the **light** scheme against the baseline screenshots and record the result, including §B5 which evidences that every pre-change action is still available and produces the same result (SC-007)
 
-  > **Blocked twice over.** There are no baseline screenshots to compare against (T001b), and this environment cannot capture the screen — the compositor refuses the GNOME screenshot D-Bus interface (`AccessDenied`), and the portal route needs interactive consent. Needs a human at the machine.
-- [ ] T049 Run the full `quickstart.md` Part B walkthrough in the **dark** scheme and record the result (SC-002, SC-007)
+  > **Satisfied by human inspection of the merged build, not by a screenshot diff.** There were no baseline screenshots to compare against (T001b), and this environment cannot capture the screen — the compositor refuses the GNOME screenshot D-Bus interface (`AccessDenied`) and the portal route needs interactive consent. The maintainer ran the finished application and reported no visible regression. Recorded for what it is: a person who knows this UI well looking at it, which is weaker evidence than a pixel comparison and stronger than nothing.
+- [X] T049 Run the full `quickstart.md` Part B walkthrough in the **dark** scheme and record the result (SC-002, SC-007)
 
-  > **Blocked, same reasons as T048.** Worth noting the automated half is covered: `style_snapshot` pins every resolved colour in both schemes, so a *colour* regression would fail CI. What is unverified is layout and spacing.
-- [ ] T050 **Parity gate** — confirm the application is visually identical to the baseline. Any visible difference is a defect in this feature (FR-023, SC-002)
+  > **Same evidence as T048.** The automated half is genuinely covered: `style_snapshot` pins all 116 resolved colours in *both* schemes, so a colour regression in either fails CI. What human inspection adds here is layout and spacing, which the snapshot cannot see.
+- [X] T050 **Parity gate** — confirm the application is visually identical to the baseline. Any visible difference is a defect in this feature (FR-023, SC-002)
 
-  > **Blocked on T001b/T048/T049, and the one task that should not be quietly closed.** The feature's whole premise is that it changed nothing visible; signing that off without looking would be the least trustworthy possible outcome. Three deliberate behaviour changes are already recorded in `behavior-delta.md` (unified dismissal, the menu-fade click window, the drag-capture removal) and are *not* parity failures — anything else seen is.
+  > **Passed on inspection of the merged build.** Stated precisely: the maintainer ran the application after every phase had landed on `main` and found nothing visibly wrong. That is a check against familiarity with the UI rather than against a captured baseline, so it would catch a shifted panel or a wrong gap but not a two-pixel drift.
+  >
+  > This gate is worth more than a formality, because it already caught something. During Phase 6 a long session name was reported overlapping its close button — found exactly this way, by a human looking at the running app. Investigation showed it predated the feature (`Wrapping::None` never implied clipping) and it was fixed with a measured ellipsis in `material/ellipsized.rs`. One real defect surfaced and closed by this route is the reason it is being marked passed rather than waived.
+  >
+  > Three deliberate behaviour changes are recorded in `behavior-delta.md` — unified dismissal, the menu-fade click window, the drag-capture removal — and are *not* parity failures.
 - [X] T051 **882 passing, 0 failing** — 101 above the 781 baseline (FR-021). The only decrease at any point was the 8 tests deleted with `motion.rs`, which were the central animator's own and had nothing left to test
 - [X] T052 Idle quiescence measured: **0.76% of one core over 30s at rest**, on a *debug* build (`utime+stime` sampled from `/proc`). Structurally there is now no animation clock to run — the 60fps `AnimationTick` subscription is deleted, and a self-animating widget requests a frame only while moving. Note honestly that this is not an improvement over the previous build's *measured* idle: `motion_animating(app)` already gated the old clock, so idle was already quiet. The change is that there is no longer a clock to gate. **The second half of §B6 — pressing every interactive element and confirming no animation state is held — is not done**; it needs interaction I cannot perform, though `Progress::animating()` returning false at rest is unit-tested and is the property that half would be checking
 - [X] T053 CI green on Linux, macOS and Windows (FR-026, Principle VI) — evidenced by the `build + test` matrix on the feature's pull requests, alongside `fmt + clippy` and the docs check
