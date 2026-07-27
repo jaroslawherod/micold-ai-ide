@@ -26,6 +26,12 @@ verified in CI.
   environment-include (auto-picking up your shell environment for sessions, configuring or
   disabling it, and recovering from a failed script).
 
+## Development
+
+- [The component library](development/component-library.md) — the two rendering layers, the rule
+  that feature modules compose components rather than styling widgets, how that rule is enforced in
+  CI, and what to do when adding a component.
+
 ## The session service (daemon)
 
 - [The Micold session daemon](daemon.md) — the background service that hosts your sessions so they
