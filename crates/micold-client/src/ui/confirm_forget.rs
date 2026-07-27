@@ -4,13 +4,12 @@
 //! Nothing on disk (the folder, its files, or any git worktrees) is deleted; the dialog says so.
 
 use crate::app::Message;
-use micold_core::tokens::{self, spacing, type_scale};
 use crate::ui::cdk::overlay::Surface;
-use crate::ui::material::Modal;
-use crate::ui::style;
-use iced::widget::{button, column, container, row, text};
+use crate::ui::material::{self, Button, Modal, SurfaceKind, Text, TypeRole};
+use iced::widget::{column, row};
 use iced::Length;
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, spacing};
 
 /// The confirm-forget dialog for the project shown by `display_name` as a modal surface,
 /// at transition `progress` (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
@@ -28,14 +27,15 @@ pub fn modal<'a>(
     let r = tokens::roles(scheme);
 
     let mut fields = column![
-        text(format!("Forget “{display_name}”?")).size(type_scale::HEADLINE),
-        text(
+        Text::new(format!("Forget “{display_name}”?"), TypeRole::Headline, r),
+        Text::new(
             "This removes the project from your list and discards what the app remembers about it \
              (its name, worktree-name overrides, and session records). Nothing on disk is deleted \
-             — the folder, its files, and any git worktrees are left untouched."
+             — the folder, its files, and any git worktrees are left untouched.",
+            TypeRole::Body,
+            r
         )
-        .size(type_scale::BODY)
-        .style(style::muted(r)),
+        .muted(),
     ]
     .spacing(spacing::MD);
 
@@ -47,26 +47,24 @@ pub fn modal<'a>(
             "sessions"
         };
         fields = fields.push(
-            text(format!("This will stop {running_sessions} running {noun}."))
-                .size(type_scale::BODY)
-                .style(style::muted(r)),
+            Text::new(
+                format!("This will stop {running_sessions} running {noun}."),
+                TypeRole::Body,
+                r,
+            )
+            .muted(),
         );
     }
 
     let actions = row![
-        button(text("Forget").size(type_scale::BODY))
-            .on_press(Message::ProjectForgetConfirmed)
-            .style(style::filled(r)),
-        button(text("Cancel").size(type_scale::BODY))
-            .on_press(Message::ProjectForgetCancelled)
-            .style(style::outlined(r)),
+        Button::filled("Forget", r).on_press(Message::ProjectForgetConfirmed),
+        Button::outlined("Cancel", r).on_press(Message::ProjectForgetCancelled),
     ]
     .spacing(spacing::SM);
 
-    let dialog = container(fields.push(actions))
+    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
         .padding(spacing::LG)
-        .width(Length::Fixed(460.0))
-        .style(style::dialog(r));
+        .width(Length::Fixed(460.0));
 
     Modal::new(dialog, r).progress(progress).into()
 }

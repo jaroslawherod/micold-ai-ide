@@ -4,13 +4,12 @@
 //! conditional on the branch-deletion checkbox below) before the user confirms.
 
 use crate::app::Message;
-use micold_core::tokens::{self, spacing, type_scale};
 use crate::ui::cdk::overlay::Surface;
-use crate::ui::material::Modal;
-use crate::ui::style;
-use iced::widget::{button, checkbox, column, container, row, text};
+use crate::ui::material::{self, Button, Checkbox, Modal, SurfaceKind, Text, TypeRole};
+use iced::widget::{column, row};
 use iced::Length;
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, spacing};
 
 /// Stack the confirm-delete dialog for the worktree `dir_name` (shown by its `friendly` display
 /// name — the rename override when set) as a modal surface, at transition `progress`
@@ -34,8 +33,8 @@ pub fn modal<'a>(
     );
 
     let mut fields = column![
-        text(format!("Delete “{friendly}”?")).size(type_scale::HEADLINE),
-        text(warning).size(type_scale::BODY).style(style::muted(r)),
+        Text::new(format!("Delete “{friendly}”?"), TypeRole::Headline, r),
+        Text::new(warning, TypeRole::Body, r).muted(),
     ]
     .spacing(spacing::MD);
 
@@ -45,27 +44,20 @@ pub fn modal<'a>(
     // confirm still deletes it — today's unconditional behavior (FR-012).
     if let Some(branch) = branch {
         fields = fields.push(
-            checkbox(!keep_branch)
-                .label(format!("Also delete the branch \"{branch}\""))
-                .on_toggle(|checked| Message::WorktreeDeleteKeepBranchToggled(!checked))
-                .style(style::checkbox(r)),
+            Checkbox::new(format!("Also delete the branch \"{branch}\""), !keep_branch, r)
+                .on_toggle(|checked| Message::WorktreeDeleteKeepBranchToggled(!checked)),
         );
     }
 
     let actions = row![
-        button(text("Delete").size(type_scale::BODY))
-            .on_press(Message::WorktreeDeleteConfirmed)
-            .style(style::filled(r)),
-        button(text("Cancel").size(type_scale::BODY))
-            .on_press(Message::WorktreeDeleteCancelled)
-            .style(style::outlined(r)),
+        Button::filled("Delete", r).on_press(Message::WorktreeDeleteConfirmed),
+        Button::outlined("Cancel", r).on_press(Message::WorktreeDeleteCancelled),
     ]
     .spacing(spacing::SM);
 
-    let dialog = container(fields.push(actions))
+    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
         .padding(spacing::LG)
-        .width(Length::Fixed(460.0))
-        .style(style::dialog(r));
+        .width(Length::Fixed(460.0));
 
     Modal::new(dialog, r).progress(progress).into()
 }

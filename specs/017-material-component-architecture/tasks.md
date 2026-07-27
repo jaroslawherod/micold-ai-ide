@@ -92,19 +92,19 @@ Test command: `mise run test` (`cargo test --workspace`).
 
 ### Tests for User Story 1 (write first, confirm they FAIL) ⚠️
 
-- [ ] T016 [P] [US1] Failing test in `crates/micold-client/tests/material_boundary.rs` asserting no module outside `ui/cdk/` and `ui/material/` imports a styled rendering widget or references the styling layer; layout primitives are explicitly allowed (FR-001, FR-002, FR-003, FR-004, SC-001)
-- [ ] T017 [P] [US1] Failing test in `crates/micold-client/tests/material_builder_api.rs` asserting every public component is constructed with required inputs only and terminates via the conversion into an element, per `contracts/component-api.md` §4 (Principle VIII)
+- [X] T016 [P] [US1] Failing test in `crates/micold-client/tests/material_boundary.rs` asserting no module outside `ui/cdk/` and `ui/material/` imports a styled rendering widget or references the styling layer; layout primitives are explicitly allowed (FR-001, FR-002, FR-003, FR-004, SC-001)
+- [X] T017 [P] [US1] Failing test in `crates/micold-client/tests/material_builder_api.rs` asserting every public component is constructed with required inputs only and terminates via the conversion into an element, per `contracts/component-api.md` §4 (Principle VIII)
 
 ### Implementation for User Story 1
 
-- [ ] T018 [US1] Move the styling module into `crates/micold-client/src/ui/material/style.rs` and reduce its visibility to the library so feature modules cannot reach it (FR-002)
-- [ ] T019 [P] [US1] Create the `Text` wrapper in `crates/micold-client/src/ui/material/text.rs` at today's appearance (FR-001, FR-005)
-- [ ] T020 [P] [US1] Create the `Button` wrapper in `crates/micold-client/src/ui/material/button.rs` with the variants currently in use, at today's appearance (FR-001, FR-005)
-- [ ] T021 [P] [US1] Create the `TextField` wrapper in `crates/micold-client/src/ui/material/text_field.rs` at today's appearance (FR-001, FR-005)
-- [ ] T022 [P] [US1] Create the `Checkbox` wrapper in `crates/micold-client/src/ui/material/checkbox.rs` at today's appearance (FR-001, FR-005)
-- [ ] T023 [P] [US1] Create the `Scrollable` wrapper in `crates/micold-client/src/ui/material/scrollable.rs` at today's appearance (FR-001, FR-005)
-- [ ] T024 [P] [US1] Create the `Surface` wrapper in `crates/micold-client/src/ui/material/surface.rs` for container-as-surface usage, at today's appearance (FR-001, FR-005)
-- [ ] T025 [US1] Export every wrapper from `crates/micold-client/src/ui/material/mod.rs` (FR-001)
+- [X] T018 [US1] Move the styling module into `crates/micold-client/src/ui/material/style.rs` and reduce its visibility to the library so feature modules cannot reach it (FR-002). **Moved**; a `pub use material::style` shim in `ui/mod.rs` keeps unmigrated modules compiling. Deleting the shim — and moving `tests/style_snapshot.rs` inside the crate, since an integration test cannot see a crate-internal module — is part of T036
+- [X] T019 [P] [US1] Create the `Text` wrapper in `crates/micold-client/src/ui/material/text.rs` at today's appearance (FR-001, FR-005)
+- [X] T020 [P] [US1] Create the `Button` wrapper in `crates/micold-client/src/ui/material/button.rs` with the variants currently in use, at today's appearance (FR-001, FR-005)
+- [X] T021 [P] [US1] Create the `TextField` wrapper in `crates/micold-client/src/ui/material/text_field.rs` at today's appearance (FR-001, FR-005)
+- [X] T022 [P] [US1] Create the `Checkbox` wrapper in `crates/micold-client/src/ui/material/checkbox.rs` at today's appearance (FR-001, FR-005)
+- [X] T023 [P] [US1] Create the `Scrollable` wrapper in `crates/micold-client/src/ui/material/scrollable.rs` at today's appearance (FR-001, FR-005)
+- [X] T024 [P] [US1] Create the `Surface` wrapper in `crates/micold-client/src/ui/material/surface.rs` for container-as-surface usage, at today's appearance (FR-001, FR-005)
+- [X] T025 [US1] Export every wrapper from `crates/micold-client/src/ui/material/mod.rs` (FR-001)
 
 **Checkpoint**: The library owns the rendering stack. Appearance unchanged.
 
@@ -115,10 +115,10 @@ Test command: `mise run test` (`cargo test --workspace`).
 - [ ] T026 [P] [US1] Migrate `crates/micold-client/src/ui/shell.rs` onto the wrappers (FR-001, FR-002)
 - [ ] T027 [P] [US1] Migrate `crates/micold-client/src/ui/project_selector.rs` onto the wrappers (FR-001, FR-002)
 - [ ] T028 [P] [US1] Migrate `crates/micold-client/src/ui/worktree_form.rs` onto the wrappers (FR-001, FR-002) — the largest module
-- [ ] T029 [P] [US1] Migrate `crates/micold-client/src/ui/worktree_rename.rs` and `rename.rs` onto the wrappers (FR-001, FR-002)
+- [X] T029 [P] [US1] Migrate `crates/micold-client/src/ui/worktree_rename.rs` and `rename.rs` onto the wrappers (FR-001, FR-002)
 - [ ] T030 [P] [US1] Migrate `crates/micold-client/src/ui/settings_form.rs` onto the wrappers (FR-001, FR-002)
-- [ ] T031 [P] [US1] Migrate `crates/micold-client/src/ui/about.rs` onto the wrappers (FR-001, FR-002)
-- [ ] T032 [P] [US1] Migrate `crates/micold-client/src/ui/confirm_delete.rs`, `confirm_forget.rs` and `confirm_session_remove.rs` onto the wrappers (FR-001, FR-002)
+- [X] T031 [P] [US1] Migrate `crates/micold-client/src/ui/about.rs` onto the wrappers (FR-001, FR-002)
+- [X] T032 [P] [US1] Migrate `crates/micold-client/src/ui/confirm_delete.rs`, `confirm_forget.rs` and `confirm_session_remove.rs` onto the wrappers (FR-001, FR-002)
 - [ ] T033 [P] [US1] Migrate `crates/micold-client/src/ui/terminal.rs` onto the wrappers (FR-001, FR-002), leaving the terminal canvas itself untouched
 - [ ] T034 [P] [US1] Migrate `crates/micold-client/src/ui/sidebar.rs` onto the wrappers (FR-001, FR-002)
 - [ ] T035 [P] [US1] Migrate `crates/micold-client/src/ui/mod.rs` onto the wrappers (FR-001, FR-002)

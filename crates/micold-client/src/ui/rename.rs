@@ -3,14 +3,13 @@
 //! disk (FR-018).
 
 use crate::app::{Message, RenameDraft};
-use micold_core::tokens::{self, spacing, type_scale};
 use crate::ui::cdk::overlay::Surface;
-use crate::ui::material::Modal;
-use crate::ui::style;
-use iced::widget::{button, column, container, row, text, text_input};
+use crate::ui::material::{self, Button, Modal, SurfaceKind, Text, TextField, TypeRole};
+use iced::widget::{column, row};
 use iced::Length;
 use micold_core::project::RenameError;
 use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, spacing};
 
 /// The rename dialog as a modal surface, at transition `progress`
 /// (1.0 = fully shown, 0.0 = hidden — see [`Modal`]).
@@ -21,17 +20,13 @@ pub fn modal<'a>(
 ) -> Option<Surface<'a, Message>> {
     let r = tokens::roles(scheme);
 
-    let input = text_input("Project name", &draft.text)
+    let input = TextField::new("Project name", &draft.text, r)
         .on_input(Message::RenameTextChanged)
-        .on_submit(Message::RenameConfirmed)
-        .padding(spacing::SM)
-        .style(style::input(r));
+        .on_submit(Message::RenameConfirmed);
 
     let mut fields = column![
-        text("Rename project").size(type_scale::HEADLINE),
-        text(draft.path.display().to_string())
-            .size(type_scale::LABEL)
-            .style(style::muted(r)),
+        Text::new("Rename project", TypeRole::Headline, r),
+        Text::new(draft.path.display().to_string(), TypeRole::Label, r).muted(),
         input,
     ]
     .spacing(spacing::MD);
@@ -42,27 +37,18 @@ pub fn modal<'a>(
             RenameError::Empty => "Name cannot be empty.",
             RenameError::Whitespace => "Name cannot be only whitespace.",
         };
-        fields = fields.push(text(message).size(type_scale::LABEL).style(
-            move |_theme: &iced::Theme| iced::widget::text::Style {
-                color: Some(style::color(r.error)),
-            },
-        ));
+        fields = fields.push(Text::new(message, TypeRole::Label, r).tint(r.error));
     }
 
     let actions = row![
-        button(text("Rename").size(type_scale::BODY))
-            .on_press(Message::RenameConfirmed)
-            .style(style::filled(r)),
-        button(text("Cancel").size(type_scale::BODY))
-            .on_press(Message::RenameCancelled)
-            .style(style::outlined(r)),
+        Button::filled("Rename", r).on_press(Message::RenameConfirmed),
+        Button::outlined("Cancel", r).on_press(Message::RenameCancelled),
     ]
     .spacing(spacing::SM);
 
-    let dialog = container(fields.push(actions))
+    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
         .padding(spacing::LG)
-        .width(Length::Fixed(420.0))
-        .style(style::dialog(r));
+        .width(Length::Fixed(420.0));
 
     Modal::new(dialog, r).progress(progress).into()
 }

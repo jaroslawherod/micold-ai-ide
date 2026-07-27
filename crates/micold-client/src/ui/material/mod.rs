@@ -10,6 +10,8 @@
 
 mod activity_badge;
 mod animation;
+mod button;
+mod checkbox;
 mod connection_banner;
 mod filter_panel;
 mod icon_button;
@@ -17,15 +19,25 @@ mod menu;
 mod modal;
 mod progress;
 mod project_switcher;
+mod scrollable;
 mod select;
+/// The one place design tokens become rendering types. Internal to the library by
+/// intent (FR-002): a feature module that could reach it could render an off-spec variant of a
+/// shared component, which is exactly the drift this feature removes.
+pub mod style;
+mod surface;
 mod tag;
 mod terminal_pane;
+mod text;
+mod text_field;
 mod toggle_chip;
 mod toolbar;
 mod tree_view;
 
 pub use activity_badge::ActivityBadge;
 pub use animation::{expand, fade, scale, slide};
+pub use button::{Button, Variant as ButtonVariant};
+pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;
 pub use filter_panel::FilterTrigger;
 pub use icon_button::IconButton;
@@ -33,19 +45,22 @@ pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger}
 pub use modal::Modal;
 pub use progress::StageProgress;
 pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};
+pub use scrollable::Scrollable;
 pub use select::Select;
+pub use surface::{Kind as SurfaceKind, Surface};
 pub use tag::Tag;
 #[cfg(test)]
 pub(crate) use terminal_pane::scrollbar_metrics;
 pub use terminal_pane::target_offset_delta;
 pub use terminal_pane::TerminalPane;
+pub use text::{Text, TypeRole};
+pub use text_field::TextField;
 pub use toggle_chip::ToggleChip;
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
 
 use micold_core::tokens::{spacing, type_scale, Roles};
-use crate::ui::style;
-use iced::widget::{container, text, tooltip};
+use iced::widget::{container, text as text_widget, tooltip};
 use iced::Element;
 
 /// Re-exported so call sites can pick a `Tooltip::position(...)` without reaching into `iced`
@@ -86,7 +101,7 @@ impl<'a, M: 'a> Tooltip<'a, M> {
 
 impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
     fn from(t: Tooltip<'a, M>) -> Self {
-        let tip = container(text(t.label).size(type_scale::LABEL))
+        let tip = container(text_widget(t.label).size(type_scale::LABEL))
             .padding(spacing::XS)
             .style(style::surface(t.roles));
         tooltip(t.content, tip, t.position).gap(spacing::XS).into()
