@@ -1,0 +1,177 @@
+//! No logical state moved into a component (feature 017, T044 — FR-012, FR-016, SC-006).
+//!
+//! Feature 017 moved *presentation* state out of the application and into the components that
+//! render it: how far a dialog has faded, how lit a resize handle is, how far a drawer has slid.
+//! The risk in a migration shaped like that is over-reach — a component that starts owning a
+//! decision rather than an appearance, at which point the application can no longer reason about
+//! its own behaviour and the state stops being persistable.
+//!
+//! The line is whether a value would still mean something with the screen switched off. A drawer's
+//! slide progress would not; whether the sidebar is *hidden* would, and does — it is written to
+//! disk and restored on the next run. So the second belongs to the application and the first does
+//! not, and this file pins that split for every piece of state the task enumerates.
+//!
+//! The deviation recorded against T040 is the same judgement: the hovered-row *field* stayed in the
+//! core, because it is what arms a row's delete button. A widget owning it privately would be a
+//! widget deciding whether a destructive action is available.
+
+use micold_client::app::{Message, Overlay, State, TagFilter, SIDEBAR_MIN_WIDTH};
+use micold_core::naming::ConventionalType;
+use micold_core::project::{Availability, Project};
+use micold_core::theme::ThemePreference;
+use std::path::PathBuf;
+
+fn with_project() -> State {
+    let mut state = State::default();
+    let path = PathBuf::from("/repo");
+    state.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(path);
+    state
+}
+
+/// Sidebar visibility survives in application state, and is reachable without rendering anything.
+///
+/// This is the one most easily mistaken for presentation — it *is* what the drawer animates
+/// toward. But the drawer owns only how far along the slide is; whether the sidebar should be open
+/// is a preference that outlives the window.
+#[test]
+fn sidebar_visibility_is_application_owned() {
+    let mut state = State::default();
+    assert!(!state.sidebar_hidden);
+    state.update(Message::SidebarToggled);
+    assert!(state.sidebar_hidden, "the flag must live on State");
+}
+
+/// Likewise the width. The handle reports where the pointer is; the application decides what width
+/// that means, including the clamp.
+#[test]
+fn sidebar_width_is_application_owned_and_clamped_here() {
+    let mut state = State::default();
+    state.update(Message::SidebarDragMoved(10));
+    assert_eq!(
+        state.sidebar_width_px(),
+        SIDEBAR_MIN_WIDTH,
+        "clamping is the application's decision, not the edge's"
+    );
+}
+
+/// Which overlay is open decides what the Escape key does and what the scrim dismisses. A
+/// component owning it would be a component deciding the application's modality.
+#[test]
+fn open_overlay_identity_is_application_owned() {
+    let mut state = State::default();
+    assert_eq!(state.overlay, Overlay::None);
+    state.open_overlay(Overlay::About);
+    assert_eq!(state.overlay, Overlay::About);
+}
+
+/// Menu identity is a *string* — which worktree's menu is open — not a boolean about a panel. The
+/// panel owns its fade; the application owns whose menu it is.
+#[test]
+fn open_menu_identity_is_application_owned() {
+    let mut state = State::default();
+    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
+    assert_eq!(state.worktree_menu_open.as_deref(), Some("feat-a"));
+    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
+    assert_eq!(state.worktree_menu_open, None);
+}
+
+/// Expanded tree nodes decide what the sidebar contains, not how it looks getting there.
+#[test]
+fn expanded_nodes_are_application_owned() {
+    let mut state = with_project();
+    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    assert!(state.expanded.contains("feat-a"));
+    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    assert!(!state.expanded.contains("feat-a"));
+}
+
+/// A filter changes which rows exist. A component that owned it would be a component deciding what
+/// the user is allowed to see.
+#[test]
+fn tag_filters_are_application_owned() {
+    let mut state = State::default();
+    let feature = TagFilter::Type(ConventionalType::Feat);
+    state.update(Message::SidebarFilterToggled(feature));
+    assert!(state.sidebar_filters.contains(&feature));
+    state.update(Message::SidebarFilterToggled(feature));
+    assert!(!state.sidebar_filters.contains(&feature));
+}
+
+/// The theme preference is written to disk and restored, so it could not live in a widget tree
+/// even in principle — the tree is rebuilt from scratch every frame.
+#[test]
+fn theme_preference_is_application_owned() {
+    let mut state = State::default();
+    let before = state.theme_pref;
+    state.update(Message::ThemeModeCycled);
+    assert_ne!(state.theme_pref, before);
+    assert!(matches!(
+        state.theme_pref,
+        ThemePreference::FollowSystem | ThemePreference::Light | ThemePreference::Dark
+    ));
+}
+
+/// Drafts are user input. Losing one to a re-render would be data loss, which is the sharpest form
+/// of the distinction this feature draws.
+#[test]
+fn drafts_are_application_owned() {
+    let mut state = with_project();
+    assert!(state.rename_draft.is_none());
+
+    state.update(Message::RenameStarted(PathBuf::from("/repo")));
+    state.update(Message::RenameTextChanged("renamed".to_string()));
+
+    let draft = state
+        .rename_draft
+        .as_ref()
+        .expect("an in-progress rename must survive on State, not in a rebuilt widget");
+    assert_eq!(
+        draft.text, "renamed",
+        "the typed text is the part that would be lost to a re-render"
+    );
+}
+
+/// The active session decides what the terminal is attached to.
+#[test]
+fn active_session_is_application_owned() {
+    let state = with_project();
+    assert!(state.active_session.is_none());
+    // The field exists and is readable without a renderer, which is the property under test:
+    // nothing about it requires a widget tree to interpret.
+}
+
+/// Worktrees are domain data, not presentation, and belong to the workspace either way.
+#[test]
+fn worktrees_are_application_owned() {
+    let state = with_project();
+    assert!(state.workspace.active_project().is_some());
+}
+
+/// The negative case, and the reason the others are worth asserting: the application holds *no*
+/// animation state at all any more. If a progress value, a motion key or an animator reappeared on
+/// `State`, presentation would have leaked back the other way.
+///
+/// Checked against the source rather than the type, because the failure is a field being *added* —
+/// something no assertion about existing fields could notice.
+#[test]
+fn no_animation_state_remains_on_the_application() {
+    let source = include_str!("../src/app.rs");
+    for forbidden in [
+        "MotionKey",
+        "Animator",
+        "sidebar_dragging",
+        "AnimationTick",
+        "progress: f32",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "`{forbidden}` is back in app.rs — presentation state has leaked into the application"
+        );
+    }
+}

@@ -149,21 +149,34 @@ mapping is a pure function while its builder handles presentation.
 
 ### What moves (FR-014, FR-015)
 
-| Currently central | Moves into |
-|---|---|
-| menu fade track | the menu component |
-| sidebar slide track | the sidebar component |
-| main-view fade track | the main view |
-| resize-handle hover track | the resize handle |
-| overlay fade track | the overlay primitive |
-| filter-panel fade track | the filter panel |
-| per-row hover-fade tracks, keyed by hashed row identity | each row instance |
-| currently-hovered row | each row instance |
-| resize-handle drag flag | the resize handle |
+| Currently central | Moved into | Built as |
+|---|---|---|
+| menu fade track | the menu component | `material::MenuOverlay` |
+| sidebar slide track | the sidebar component | `material::NavigationDrawer` |
+| main-view fade track | the main view | `material::ViewFade` |
+| resize-handle hover track | the resize handle | `material::ResizeHandle` |
+| overlay fade track | the overlay primitive | `material::Modal` |
+| filter-panel fade track | the filter panel | `material::Accordion` |
+| per-row hover-fade tracks, keyed by hashed row identity | each row instance | `material::HoverReveal` |
+| resize-handle drag flag | the resize handle | `material::ResizeHandle` |
 
 The global animated-element enumeration and both central animators are then deleted. Success is
 measured by adding a newly animated element and finding that no enumeration variant and no
 application-state field was needed (SC-005).
+
+**One row of the original table was wrong, and is removed rather than quietly satisfied.** It read
+*"currently-hovered row → each row instance"*. The hover *fade* did move, and the hashed row
+identity that was its actual defect is gone with it. The hovered-row **field** did not, and should
+not: it is what arms a row's delete button and attaches its tooltip. A widget owning that privately
+would be a widget deciding whether a destructive action is available — which is a decision, not an
+appearance, and so belongs on the far side of the FR-012 line drawn above. Recorded as a deviation
+against T040.
+
+Two components in the built table were not anticipated when it was written. `NavigationDrawer`
+exists because the sidebar's slide is not a wrapper that shrinks to nothing: at zero width the
+panel is *replaced* by the collapsed rail, so owning the slide means owning both elements.
+`ResizeHandle` took the drag as well as the hover, which let a full-window pointer-capture layer be
+deleted along with them.
 
 ### What deliberately does not move (FR-016)
 
