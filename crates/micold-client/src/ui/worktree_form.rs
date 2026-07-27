@@ -247,7 +247,7 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
     };
 
     match state {
-        ResolutionState::Idle => Space::with_height(Length::Fixed(0.0)).into(),
+        ResolutionState::Idle => Space::new().height(Length::Fixed(0.0)).into(),
 
         // FR-005: the destructive confirmation, reachable only from `Choosing`.
         ResolutionState::ConfirmingOverwrite { situation } => {
@@ -381,7 +381,7 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
             }
 
             // `Free` never raises a prompt (FR-025); nothing to render.
-            BranchSituation::Free => Space::with_height(Length::Fixed(0.0)).into(),
+            BranchSituation::Free => Space::new().height(Length::Fixed(0.0)).into(),
         },
     }
 }
@@ -415,6 +415,6 @@ fn preview<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
         ]
         .spacing(spacing::XS)
         .into(),
-        Err(_) => Space::with_height(Length::Fixed(0.0)).into(),
+        Err(_) => Space::new().height(Length::Fixed(0.0)).into(),
     }
 }

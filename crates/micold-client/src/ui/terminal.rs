@@ -385,7 +385,7 @@ pub fn pane<'a>(
     let status = session_status(state, active);
     let mut bar = row![
         text(session_title(state, active)).size(type_scale::LABEL),
-        Space::with_width(Length::Fill),
+        Space::new().width(Length::Fill),
         text(status).size(type_scale::LABEL).style(style::muted(r)),
     ]
     .spacing(spacing::SM)

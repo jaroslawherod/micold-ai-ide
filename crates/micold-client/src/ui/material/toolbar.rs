@@ -44,7 +44,7 @@ impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
     fn from(t: Toolbar<'a, M>) -> Self {
         let mut bar = row![
             text(t.title).size(type_scale::BODY),
-            Space::with_width(Length::Fill),
+            Space::new().width(Length::Fill),
         ]
         .spacing(spacing::MD)
         .align_y(Alignment::Center)
@@ -57,21 +57,17 @@ impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
         // Compact bar: tight vertical padding (`XS`) with comfortable horizontal padding (`SM`).
         let bar = container(bar)
             .width(Length::Fill)
-            .padding(iced::Padding::from([
-                spacing::XS as f32,
-                spacing::SM as f32,
-            ]))
+            .padding(iced::Padding::from([spacing::XS, spacing::SM]))
             .style(style::toolbar_surface(t.roles));
 
         // A thin bottom border separating the toolbar from the content below (a `Container`
         // border applies to all four sides, so this is a dedicated 1px line rather than the
         // surface style's own border).
-        let separator = container(Space::new(Length::Fill, Length::Fixed(1.0))).style(
-            move |_theme: &iced::Theme| iced::widget::container::Style {
+        let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
+            .style(move |_theme: &iced::Theme| iced::widget::container::Style {
                 background: Some(Background::Color(style::separator(t.roles))),
                 ..Default::default()
-            },
-        );
+            });
 
         column![bar, separator].into()
     }

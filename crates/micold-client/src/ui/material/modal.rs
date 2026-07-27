@@ -2,7 +2,7 @@
 //!
 //! Every modal dialog (About, project selector, rename, add worktree, Settings) enters and
 //! exits through this one component, so no overlay implements its own scrim/stack/`opaque`
-//! wiring (FR-011). iced 0.13 has no general per-widget opacity, so the transition is composed
+//! wiring (FR-011). iced has no general per-widget opacity, so the transition is composed
 //! from primitives the renderer *does* expose (research R3): an animated dimming **scrim**
 //! (`fill_quad` alpha, which reveals `base` as it clears — FR-003) plus a dialog **fade + lift**
 //! ([`fade`](super::fade) toward the surface color and [`scale`](super::scale) about center).

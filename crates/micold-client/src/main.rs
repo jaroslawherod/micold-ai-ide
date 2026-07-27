@@ -416,13 +416,14 @@ fn window_settings() -> iced::window::Settings {
 }
 
 pub fn main() -> iced::Result {
-    iced::application("Micold AI IDE", update, view)
+    iced::application(boot, update, view)
+        .title("Micold AI IDE")
         .theme(theme)
         .default_font(iced::Font::DEFAULT)
         .font(micold_client::ui::MATERIAL_SYMBOLS_BYTES)
         .window(window_settings())
         .subscription(subscription)
-        .run_with(boot)
+        .run()
 }
 
 fn boot() -> (App, Task<Message>) {
@@ -508,8 +509,8 @@ fn boot() -> (App, Task<Message>) {
         // Ask for the initial window size up front: `resize_events` only fires on *changes*, so
         // without this the first context menu before any resize would have nothing to clamp
         // against (feature 015).
-        iced::window::get_latest()
-            .and_then(iced::window::get_size)
+        iced::window::latest()
+            .and_then(iced::window::size)
             .map(|size| Message::WindowResized {
                 width: size.width.max(0.0) as u16,
                 height: size.height.max(0.0) as u16,
@@ -2693,10 +2694,10 @@ mod tests {
         assert!(os_theme_poll_interval(false) <= Duration::from_secs(1));
     }
 
-    /// Regression: iced 0.13's `Subscription::map` asserts the closure is zero-sized and panics
-    /// at construction otherwise. Threading `last_known` through the closure captured it and
-    /// crashed the app on startup; the poll now emits a unit message, so building it must not
-    /// panic.
+    /// Regression: `Subscription::map` requires a zero-sized (non-capturing) closure. Threading
+    /// `last_known` through the closure captured it and crashed the app on startup under iced
+    /// 0.13's `debug_assert!`; since 0.14 the same mistake is a `const {}` compile error, so this
+    /// test now only pins the construction path — the capture itself can no longer reach runtime.
     #[test]
     fn os_theme_poll_builds_with_a_non_capturing_closure() {
         let _ = os_theme_poll(OS_THEME_POLL);

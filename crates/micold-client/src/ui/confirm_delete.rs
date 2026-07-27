@@ -45,7 +45,8 @@ pub fn modal<'a>(
     // confirm still deletes it — today's unconditional behavior (FR-012).
     if let Some(branch) = branch {
         fields = fields.push(
-            checkbox(format!("Also delete the branch \"{branch}\""), !keep_branch)
+            checkbox(!keep_branch)
+                .label(format!("Also delete the branch \"{branch}\""))
                 .on_toggle(|checked| Message::WorktreeDeleteKeepBranchToggled(!checked))
                 .style(style::checkbox(r)),
         );

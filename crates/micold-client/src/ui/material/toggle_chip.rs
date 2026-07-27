@@ -66,8 +66,8 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
             .padding(iced::Padding {
                 top: 1.0,
                 bottom: 1.0,
-                left: spacing::SM as f32,
-                right: spacing::SM as f32,
+                left: spacing::SM,
+                right: spacing::SM,
             })
             .on_press(chip.on_press)
             .style(
@@ -81,7 +81,7 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
                     border: Border {
                         color: if active { fill } else { outline },
                         width: if active { 0.0 } else { 1.0 },
-                        radius: (shape::FULL as f32).into(),
+                        radius: shape::FULL.into(),
                     },
                     ..Default::default()
                 },

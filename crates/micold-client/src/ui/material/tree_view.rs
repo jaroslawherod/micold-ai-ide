@@ -157,7 +157,7 @@ impl<'a, M> TreeItem<'a, M> {
 pub struct TreeView<'a, M> {
     items: Vec<TreeItem<'a, M>>,
     roles: Roles,
-    label_size: u16,
+    label_size: f32,
 }
 
 impl<'a, M: Clone + 'a> TreeView<'a, M> {
@@ -171,7 +171,7 @@ impl<'a, M: Clone + 'a> TreeView<'a, M> {
     }
 
     /// Override the label + leading-icon size (e.g. the sidebar's 80% scale, FR-012).
-    pub fn label_size(mut self, size: u16) -> Self {
+    pub fn label_size(mut self, size: f32) -> Self {
         self.label_size = size;
         self
     }
@@ -189,8 +189,8 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
         for item in items {
             // Minimal base indent (feature 008, FR-009): depth-0 rows sit flush with the
             // sidebar's small left padding; each level nests by one step.
-            let indent = item.depth * spacing::MD;
-            let mut line = row![Space::with_width(Length::Fixed(indent as f32))]
+            let indent = f32::from(item.depth) * spacing::MD;
+            let mut line = row![Space::new().width(Length::Fixed(indent))]
                 .spacing(spacing::XS)
                 .align_y(Alignment::Center)
                 .width(Length::Fill);
@@ -211,9 +211,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                     }
                     line = line.push(twisty);
                 }
-                None => {
-                    line = line.push(Space::with_width(Length::Fixed(type_scale::LABEL as f32)))
-                }
+                None => line = line.push(Space::new().width(Length::Fixed(type_scale::LABEL))),
             }
 
             if let Some(glyph) = item.icon {
@@ -255,8 +253,8 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             let body: Element<'a, M> = if item.tags.is_empty() {
                 line.into()
             } else {
-                let tag_indent = indent as f32 + label_size as f32 + spacing::SM as f32;
-                let mut tag_row: Row<'a, M> = row![Space::with_width(Length::Fixed(tag_indent))]
+                let tag_indent = indent + label_size + spacing::SM;
+                let mut tag_row: Row<'a, M> = row![Space::new().width(Length::Fixed(tag_indent))]
                     .spacing(spacing::XS)
                     .align_y(Alignment::Center);
                 for (label, accent) in item.tags {
@@ -288,7 +286,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                             ..style::color(r.surface_variant)
                         })),
                         border: iced::Border {
-                            radius: (shape::SM as f32).into(),
+                            radius: shape::SM.into(),
                             ..Default::default()
                         },
                         ..Default::default()

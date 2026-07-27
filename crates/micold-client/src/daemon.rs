@@ -106,33 +106,38 @@ enum PumpEnd {
 }
 
 fn actor() -> impl Stream<Item = Message> {
-    iced::stream::channel(CHANNEL_CAPACITY, |mut output| async move {
-        // Resolve the endpoint once; it does not change over the app's life.
-        let endpoint = match endpoint::resolve() {
-            Ok(e) => e,
-            Err(err) => {
-                let _ = output
-                    .send(Message::DaemonConnectFailed(err.to_string()))
-                    .await;
-                return;
-            }
-        };
+    // iced 0.14 takes an `AsyncFnOnce` here (0.13 took an `FnOnce` returning a future), so the
+    // sender's type no longer falls out of inference and has to be named.
+    iced::stream::channel(
+        CHANNEL_CAPACITY,
+        |mut output: mpsc::Sender<Message>| async move {
+            // Resolve the endpoint once; it does not change over the app's life.
+            let endpoint = match endpoint::resolve() {
+                Ok(e) => e,
+                Err(err) => {
+                    let _ = output
+                        .send(Message::DaemonConnectFailed(err.to_string()))
+                        .await;
+                    return;
+                }
+            };
 
-        // Reconnect loop: connect, pump until the link drops, surface it, back off, repeat. A
-        // half-open connection is caught by the keepalive inside `pump`, so the client never sits
-        // forever presenting stale content as live (FR-026/027).
-        loop {
-            match connect_and_pump(&endpoint, &mut output).await {
-                PumpEnd::AppGone => return,
-                PumpEnd::Disconnected => {
-                    if output.send(Message::DaemonDisconnected).await.is_err() {
-                        return;
+            // Reconnect loop: connect, pump until the link drops, surface it, back off, repeat. A
+            // half-open connection is caught by the keepalive inside `pump`, so the client never sits
+            // forever presenting stale content as live (FR-026/027).
+            loop {
+                match connect_and_pump(&endpoint, &mut output).await {
+                    PumpEnd::AppGone => return,
+                    PumpEnd::Disconnected => {
+                        if output.send(Message::DaemonDisconnected).await.is_err() {
+                            return;
+                        }
+                        tokio::time::sleep(RECONNECT_BACKOFF).await;
                     }
-                    tokio::time::sleep(RECONNECT_BACKOFF).await;
                 }
             }
-        }
-    })
+        },
+    )
 }
 
 /// Connect (spawning the daemon on a cold start), announce `DaemonConnected`, then pump both

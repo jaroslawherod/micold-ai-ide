@@ -19,15 +19,15 @@ rust-version = "1.97"
 # is declared in exactly one place.
 [workspace.dependencies]
 # --- render-free core deps (never iced / never PTY) ---
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.150"
-uuid = { version = "1.20.0", features = ["v4", "serde"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+uuid = { version = "1.24.0", features = ["v4", "serde"] }
 directories = "6.0.0"
 # Wire encoding for the client<->daemon protocol (plan W1): compact grid frames.
 postcard = { version = "1.1", features = ["use-std"] }
 # `kill(2)`/`process_group` for the environment-include script timeout (feature 011) and
 # `geteuid`/`setsid` for the daemon endpoint + detached spawn — one pin for both.
-libc = "0.2.186"
+libc = "0.2.189"
 # --- transport / async (daemon; the client already has tokio via iced) — plan W1 ---
 # The shared framing codec lives in micold-core; the runtime + IPC live in the daemon/client.
 tokio = { version = "1.53", features = [
@@ -38,7 +38,7 @@ tokio = { version = "1.53", features = [
     "sync",
     "time",
 ] }
-tokio-util = { version = "0.7.18", features = ["codec"] }
+tokio-util = { version = "0.7.19", features = ["codec"] }
 interprocess = { version = "2.4.2", features = ["tokio"] }
 bytes = "1"
 listenfd = "1.0.2"
@@ -47,14 +47,14 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 file-rotate = "0.8.0"
 futures-util = { version = "0.3", features = ["sink"] }
 # --- client (iced) deps ---
-iced = { version = "0.13", features = ["tokio", "canvas", "advanced", "lazy"] }
+iced = { version = "0.14.0", features = ["tokio", "canvas", "advanced", "lazy"] }
 dark-light = "2.0"
 # --- terminal stack (client today; migrates into micold-daemon at T030) ---
 portable-pty = "0.9"
 alacritty_terminal = "0.26"
 # --- shared dev deps ---
 tempfile = "3.27.0"
-ttf-parser = "0.21"
+ttf-parser = "0.25.1"
 # Internal crate, referenced by path so client & daemon share the one core.
 micold-core = { path = "crates/micold-core" }
 

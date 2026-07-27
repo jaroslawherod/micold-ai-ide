@@ -89,7 +89,7 @@ pub fn view<'a>(
         let body = column![reveal_chip(state, r), filter_bar(state, r)].spacing(spacing::XS);
         expand(menu_panel(body, Length::Shrink, r, false), filter_progress)
     } else {
-        Space::with_height(Length::Fixed(0.0)).into()
+        Space::new().height(Length::Fixed(0.0)).into()
     };
 
     // The "Default" entry (feature 010) is always present once a project is open — see
@@ -143,7 +143,7 @@ pub fn view<'a>(
     // The list gets a little right padding so rows never sit under the scrollbar.
     let body: Element<'_, Message> = scrollable(container(list).padding(iced::Padding {
         top: 0.0,
-        right: spacing::SM as f32,
+        right: spacing::SM,
         bottom: 0.0,
         left: 0.0,
     }))
@@ -162,10 +162,10 @@ pub fn view<'a>(
     let content = column![header, filter_accordion, body]
         .spacing(spacing::SM)
         .padding(iced::Padding {
-            top: spacing::SM as f32,
-            bottom: spacing::SM as f32,
-            left: spacing::XS as f32,
-            right: spacing::XS as f32,
+            top: spacing::SM,
+            bottom: spacing::SM,
+            left: spacing::XS,
+            right: spacing::XS,
         })
         .width(Length::Fixed(width))
         .height(Length::Fill);
@@ -186,12 +186,16 @@ pub fn handle(scheme: micold_core::theme::ColorScheme, hover: f32) -> Element<'s
     // The invisible grab zone is blended with the sidebar surface and sits on the LEFT; the 1px
     // separator line sits on the RIGHT, flush against the main area — so no window-background gap
     // shows between the separator and the terminal.
-    let grab = container(Space::new(Length::Fixed(HANDLE_WIDTH - 1.0), Length::Fill))
-        .height(Length::Fill)
-        .style(style::sidebar_surface(r));
+    let grab = container(
+        Space::new()
+            .width(Length::Fixed(HANDLE_WIDTH - 1.0))
+            .height(Length::Fill),
+    )
+    .height(Length::Fill)
+    .style(style::sidebar_surface(r));
     // The separator brightens toward the accent as the pointer hovers (animated via `hover`).
     let line_color = lerp_color(style::separator(r), style::color(r.primary), hover);
-    let line = container(Space::new(Length::Fixed(1.0), Length::Fill))
+    let line = container(Space::new().width(Length::Fixed(1.0)).height(Length::Fill))
         .height(Length::Fill)
         .style(move |_t: &iced::Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(line_color)),
@@ -226,7 +230,7 @@ pub fn collapsed_strip(scheme: micold_core::theme::ColorScheme) -> Element<'stat
     .style(style::sidebar_surface(r));
 
     // A subtle right border so the collapsed strip still reads as a bounded panel edge.
-    let border = container(Space::new(Length::Fixed(1.0), Length::Fill))
+    let border = container(Space::new().width(Length::Fixed(1.0)).height(Length::Fill))
         .height(Length::Fill)
         .style(move |_t: &iced::Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(style::separator(r))),
