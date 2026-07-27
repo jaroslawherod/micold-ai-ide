@@ -136,8 +136,8 @@ Test command: `mise run test` (`cargo test --workspace`).
 
 ### Tests for User Story 2 (write first, confirm they FAIL) ⚠️
 
-- [ ] T037 [P] [US2] Failing test in `crates/micold-client/tests/component_state_isolation.rs` asserting two instances of the same animated component animate independently, and that a removed instance retains no state (FR-011, FR-025)
-- [ ] T038 [P] [US2] Failing test in `crates/micold-client/tests/component_api_opacity.rs` asserting no public component API exposes an animation key, progress value, style function or rendering-stack type (FR-013, SC-004)
+- [X] T037 [P] [US2] Failing test in `crates/micold-client/tests/component_state_isolation.rs` asserting two instances of the same animated component animate independently, and that a removed instance retains no state (FR-011, FR-025)
+- [X] T038 [P] [US2] Failing test in `crates/micold-client/tests/component_api_opacity.rs` asserting no public component API exposes an animation key, progress value, style function or rendering-stack type (FR-013, SC-004). Written as a **shrinking ratchet**: its `REMAINING` list names the three components whose state has not moved yet (`divider`, `menu`, `modal`) and fails both when one is fixed without being struck off and when a new one appears. Empty is the finish line, reached by T039–T042
 
 ### Implementation for User Story 2
 
