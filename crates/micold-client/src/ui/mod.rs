@@ -564,126 +564,49 @@ fn dismissing_modal<'a>(
 /// keyboard shortcuts — every key is owned by the focused terminal widget (so Esc and any app
 /// chord reach the `claude` process instead of driving the app).
 pub fn subscription(state: &State) -> Subscription<Message> {
+    /// One Esc-dismiss subscription, for `$message`.
+    ///
+    /// This is a macro rather than a helper `fn` because `Subscription::filter_map` requires a
+    /// **zero-sized** closure and derives the subscription's identity from that closure's
+    /// `TypeId`. A function taking the message would capture it (non-zero-sized, rejected at
+    /// compile time); a single shared closure would give every overlay the same identity, so
+    /// iced would keep the previous overlay's recipe alive across a switch and Esc would emit
+    /// the wrong message. Each macro expansion is a distinct closure expression, hence a
+    /// distinct type — exactly what the 0.13 `on_key_press(fn)` form gave us per call site.
+    macro_rules! on_escape {
+        ($message:expr) => {
+            iced::keyboard::listen().filter_map(|event| {
+                use iced::keyboard::{key::Named, Event, Key};
+                matches!(
+                    event,
+                    Event::KeyPressed {
+                        key: Key::Named(Named::Escape),
+                        ..
+                    }
+                )
+                .then_some($message)
+            })
+        };
+    }
+
     if state.terminal_focused {
         return Subscription::none();
     }
     // The sidebar filter panel (feature 009) is a lightweight popover, not a modal `Overlay`,
     // so it's checked ahead of the `Overlay` match below (mirrors `on_escape`'s priority).
     if state.overlay == Overlay::None && state.sidebar_filter_open {
-        return iced::keyboard::listen().filter_map(|event| {
-            use iced::keyboard::{key::Named, Event, Key};
-            matches!(
-                event,
-                Event::KeyPressed {
-                    key: Key::Named(Named::Escape),
-                    ..
-                }
-            )
-            .then_some(Message::SidebarFilterMenuToggled)
-        });
+        return on_escape!(Message::SidebarFilterMenuToggled);
     }
-    // `Subscription::filter_map` takes a non-capturing (zero-sized) closure — same constraint
-    // the old `on_key_press` `fn` had — so each overlay still supplies its own.
     match state.overlay {
         Overlay::None => Subscription::none(),
-        Overlay::About => iced::keyboard::listen().filter_map(|event| {
-            use iced::keyboard::{key::Named, Event, Key};
-            matches!(
-                event,
-                Event::KeyPressed {
-                    key: Key::Named(Named::Escape),
-                    ..
-                }
-            )
-            .then_some(Message::AboutClosed)
-        }),
-        Overlay::ProjectSelector => iced::keyboard::listen().filter_map(|event| {
-            use iced::keyboard::{key::Named, Event, Key};
-            matches!(
-                event,
-                Event::KeyPressed {
-                    key: Key::Named(Named::Escape),
-                    ..
-                }
-            )
-            .then_some(Message::ProjectSelectorClosed)
-        }),
-        Overlay::RenameProject => iced::keyboard::listen().filter_map(|event| {
-            use iced::keyboard::{key::Named, Event, Key};
-            matches!(
-                event,
-                Event::KeyPressed {
-                    key: Key::Named(Named::Escape),
-                    ..
-                }
-            )
-            .then_some(Message::RenameCancelled)
-        }),
-        Overlay::AddWorktree => iced::keyboard::listen().filter_map(|event| {
-            use iced::keyboard::{key::Named, Event, Key};
-            matches!(
-                event,
-                Event::KeyPressed {
-                    key: Key::Named(Named::Escape),
-                    ..
-                }
-            )
-            .then_some(Message::AddWorktreeCancelled)
-        }),
-        Overlay::Settings => iced::keyboard::listen().filter_map(|event| {
-            use iced::keyboard::{key::Named, Event, Key};
-            matches!(
-                event,
-                Event::KeyPressed {
-                    key: Key::Named(Named::Escape),
-                    ..
-                }
-            )
-            .then_some(Message::SettingsCancelled)
-        }),
-        Overlay::ConfirmWorktreeDelete => iced::keyboard::listen().filter_map(|event| {
-            use iced::keyboard::{key::Named, Event, Key};
-            matches!(
-                event,
-                Event::KeyPressed {
-                    key: Key::Named(Named::Escape),
-                    ..
-                }
-            )
-            .then_some(Message::WorktreeDeleteCancelled)
-        }),
-        Overlay::RenameWorktree => iced::keyboard::listen().filter_map(|event| {
-            use iced::keyboard::{key::Named, Event, Key};
-            matches!(
-                event,
-                Event::KeyPressed {
-                    key: Key::Named(Named::Escape),
-                    ..
-                }
-            )
-            .then_some(Message::WorktreeRenameCancelled)
-        }),
-        Overlay::ConfirmSessionRemove => iced::keyboard::listen().filter_map(|event| {
-            use iced::keyboard::{key::Named, Event, Key};
-            matches!(
-                event,
-                Event::KeyPressed {
-                    key: Key::Named(Named::Escape),
-                    ..
-                }
-            )
-            .then_some(Message::SessionRemoveCancelled)
-        }),
-        Overlay::ConfirmForgetProject => iced::keyboard::listen().filter_map(|event| {
-            use iced::keyboard::{key::Named, Event, Key};
-            matches!(
-                event,
-                Event::KeyPressed {
-                    key: Key::Named(Named::Escape),
-                    ..
-                }
-            )
-            .then_some(Message::ProjectForgetCancelled)
-        }),
+        Overlay::About => on_escape!(Message::AboutClosed),
+        Overlay::ProjectSelector => on_escape!(Message::ProjectSelectorClosed),
+        Overlay::RenameProject => on_escape!(Message::RenameCancelled),
+        Overlay::AddWorktree => on_escape!(Message::AddWorktreeCancelled),
+        Overlay::Settings => on_escape!(Message::SettingsCancelled),
+        Overlay::ConfirmWorktreeDelete => on_escape!(Message::WorktreeDeleteCancelled),
+        Overlay::RenameWorktree => on_escape!(Message::WorktreeRenameCancelled),
+        Overlay::ConfirmSessionRemove => on_escape!(Message::SessionRemoveCancelled),
+        Overlay::ConfirmForgetProject => on_escape!(Message::ProjectForgetCancelled),
     }
 }

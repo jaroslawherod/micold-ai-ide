@@ -2694,10 +2694,10 @@ mod tests {
         assert!(os_theme_poll_interval(false) <= Duration::from_secs(1));
     }
 
-    /// Regression: iced 0.13's `Subscription::map` asserts the closure is zero-sized and panics
-    /// at construction otherwise. Threading `last_known` through the closure captured it and
-    /// crashed the app on startup; the poll now emits a unit message, so building it must not
-    /// panic.
+    /// Regression: `Subscription::map` requires a zero-sized (non-capturing) closure. Threading
+    /// `last_known` through the closure captured it and crashed the app on startup under iced
+    /// 0.13's `debug_assert!`; since 0.14 the same mistake is a `const {}` compile error, so this
+    /// test now only pins the construction path — the capture itself can no longer reach runtime.
     #[test]
     fn os_theme_poll_builds_with_a_non_capturing_closure() {
         let _ = os_theme_poll(OS_THEME_POLL);
