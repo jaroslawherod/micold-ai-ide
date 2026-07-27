@@ -146,17 +146,12 @@ const FORBIDDEN: &[(&str, &str)] = &[
 /// That reasoning dissolved once they began owning their tracks — `fade(content, shown, over,
 /// backdrop)` says where the element should be, not how far along it is — so the exemption went
 /// with it. Nothing in the library is now allowed to name a progress value it does not own.
-const REMAINING: &[(&str, &str)] = &[
-    (
-        "material/animation.rs",
-        "the sidebar drawer's slide is still central: at zero width the sidebar is replaced by \
-         the collapsed rail, and owning that decision means owning both elements (T039)",
-    ),
-    (
-        "material/divider.rs",
-        "the resize handle's hover track is still central (T041)",
-    ),
-];
+/// Empty — the finish line, reached by T039b/T041.
+///
+/// It started at three and is kept empty by this test rather than by anyone remembering: a
+/// component that grows a progress parameter, a style closure or a rendering-stack type in its
+/// public signature fails here, and the fix is the component, not this list.
+const REMAINING: &[(&str, &str)] = &[];
 
 /// Every module whose public surface still names something forbidden.
 fn leaking_modules() -> Vec<(String, String)> {

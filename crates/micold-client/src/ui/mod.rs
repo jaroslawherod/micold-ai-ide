@@ -23,8 +23,7 @@ mod worktree_rename;
 
 use crate::app::{Message, Overlay, State};
 use crate::icons::Icon;
-use crate::motion::Animator;
-use iced::widget::{column, container, mouse_area, row, stack, Space};
+use iced::widget::{column, container, row, Space};
 use iced::{Element, Length, Subscription};
 use micold_core::session::SessionId;
 use micold_core::theme::ColorScheme;
@@ -34,21 +33,6 @@ use micold_core::tokens::{self, spacing, Roles};
 // everything else that decides an appearance (FR-001). Re-exported here for `main`, which
 // registers the font at startup, and for the tests that assert what the font file advertises.
 pub use material::glyph::{icon, icon_colored, MATERIAL_SYMBOLS, MATERIAL_SYMBOLS_BYTES};
-
-/// Identifies each animated element still driven centrally.
-///
-/// Feature 017 is emptying this: a component that animates now owns its own progress, in the widget
-/// tree, so it needs no identity here and nothing has to thread a float down to it (FR-011,
-/// FR-014). The menu fade, the main-view fade, the overlay fade and the filter accordion have all
-/// moved into their components; what is left is the sidebar drawer and its resize handle, whose
-/// migration is the remaining half of T039–T041.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MotionKey {
-    /// Sidebar slide (0 = collapsed, 1 = expanded).
-    Sidebar,
-    /// Sidebar resize-handle hover-highlight (0 = idle, 1 = fully highlighted).
-    HandleHover,
-}
 
 /// The daemon-connection state, as it concerns the *active* project (US5, FR-024/027). Computed by
 /// the binary (the connection is binary-owned runtime state) and passed to [`view`] so the shell can
@@ -189,17 +173,17 @@ fn notifications<'a>(state: &'a State, r: Roles) -> Element<'a, Message> {
 /// with any floating surface stacked on top. Every surface is styled from the active color
 /// scheme's design tokens.
 ///
-/// `motion` carries what is left of the central animation state — the sidebar slide and its
-/// resize-handle hover. Every other transition belongs to the component that plays it. `dismissing`
-/// is the snapshot of a just-closed overlay still animating out (rendered instead of a live overlay
-/// when `state.overlay` is already `None` — see [`crate::app::ClosingOverlay`]).
+/// No animation state is passed in: every transition belongs to the component that plays it, and
+/// each owns its progress in the widget tree (FR-011, FR-014). `dismissing` is the snapshot of a
+/// just-closed overlay still animating out — the one thing an application still has to hold, since
+/// it outlives the state that opened it (rendered instead of a live overlay when `state.overlay` is
+/// already `None` — see [`crate::app::ClosingOverlay`]).
 #[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     state: &'a State,
     grid: Option<&'a crate::grid::GridCache>,
     selection: Option<&'a crate::selection::Selection>,
     display_offset: usize,
-    motion: &Animator<MotionKey>,
     dismissing: Option<&'a crate::app::ClosingOverlay>,
     env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
     connection: &ConnectionStatus,
@@ -218,16 +202,19 @@ pub fn view<'a>(
             shell::view(state, scheme)
         };
         let main = material::ViewFade::new(main_inner, bg).showing(main_content_key(state));
-        let left: Element<'a, Message> =
-            if state.sidebar_hidden && motion.get(MotionKey::Sidebar) <= 0.001 {
-                sidebar::collapsed_strip(scheme)
-            } else {
-                row![
-                    material::slide(sidebar::view(state, scheme), motion.get(MotionKey::Sidebar)),
-                    sidebar::handle(scheme, motion.get(MotionKey::HandleHover))
-                ]
-                .into()
-            };
+        // The drawer owns both the panel and the rail that replaces it, so it decides which of them
+        // is on screen — the last thing the binary was reading a progress value to work out. All
+        // that is left to say here is whether the sidebar is open.
+        let left: Element<'a, Message> = material::NavigationDrawer::new(
+            sidebar::view(state, scheme),
+            sidebar::collapsed_strip(scheme),
+        )
+        .open(!state.sidebar_hidden)
+        .handle(
+            material::ResizeHandle::new(roles)
+                .on_resize(|x| Message::SidebarDragMoved(x.max(0.0) as u16)),
+        )
+        .into();
         row![left, main]
             .width(Length::Fill)
             .height(Length::Fill)
@@ -242,7 +229,7 @@ pub fn view<'a>(
     // every branch that decides what the body is. Deliberately unconditional: the failures this
     // replaces were all cases where state was set correctly but the only render site sat inside
     // a branch that could not be taken. Nothing may nest this inside an `if`.
-    let mut base: Element<'a, Message> = material::Surface::new(
+    let base: Element<'a, Message> = material::Surface::new(
         column![
             toolbar::view(state, scheme),
             connection_banner(connection, roles),
@@ -255,19 +242,6 @@ pub fn view<'a>(
     .width(Length::Fill)
     .height(Length::Fill)
     .into();
-
-    // While resizing, a full-window capture layer tracks the cursor and ends the drag on
-    // release, so the drag continues even when the pointer leaves the thin handle.
-    if state.sidebar_dragging {
-        let capture = mouse_area(
-            container(Space::new().width(Length::Fill).height(Length::Fill))
-                .width(Length::Fill)
-                .height(Length::Fill),
-        )
-        .on_move(|p| Message::SidebarDragMoved(p.x.max(0.0) as u16))
-        .on_release(Message::SidebarDragEnded);
-        base = stack![base, capture].into();
-    }
 
     // Every floating surface from here down is *pushed onto one overlay* rather than wrapped
     // around the previous one (FR-008). The order they are pushed in is not the order they are

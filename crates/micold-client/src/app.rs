@@ -692,17 +692,9 @@ pub enum Message {
     TerminalTick,
     /// Hide or show the sidebar (toggle).
     SidebarToggled,
-    /// The user began dragging the sidebar resize handle.
-    SidebarDragStarted,
-    /// The resize drag moved; carries the new intended width in pixels (cursor x).
+    /// The resize handle was dragged; carries the pointer x in pixels. The handle owns the drag
+    /// itself, so there is no start or end to report — only where the edge now is.
     SidebarDragMoved(u16),
-    /// The resize drag ended.
-    SidebarDragEnded,
-    /// The pointer entered (`true`) or left (`false`) the sidebar resize handle; drives its
-    /// animated hover highlight (handled by the binary).
-    SidebarHandleHovered(bool),
-    /// Animation clock tick (drives fade/slide progress; handled by the binary).
-    AnimationTick,
     /// The OS window gained (`true`) or lost (`false`) input focus. Handled by the binary,
     /// which gates the terminal/OS-theme poll subscriptions on it so a backgrounded window
     /// doesn't keep burning CPU on ticks nothing is looking at (idle-CPU fix).
@@ -888,8 +880,6 @@ pub struct State {
     pub sidebar_hidden: bool,
     /// The sidebar width in pixels. `0` means "use the default width" (see [`State::sidebar_width_px`]).
     pub sidebar_width: u16,
-    /// Whether a sidebar resize drag is in progress (transient).
-    pub sidebar_dragging: bool,
     /// Whether the embedded terminal holds input focus (feature 006). Default `false`; keys are
     /// delivered to the session process only while `true` (FR-009/FR-010/FR-012).
     pub terminal_focused: bool,
@@ -1670,19 +1660,12 @@ impl State {
             Message::SidebarToggled => {
                 self.sidebar_hidden = !self.sidebar_hidden;
             }
-            Message::SidebarDragStarted => {
-                self.sidebar_dragging = true;
-            }
+            // The handle only speaks while it is being dragged, so there is no flag to consult:
+            // an arriving width *is* the drag. Clamped here — how wide the sidebar may be is the
+            // application's decision, not the edge's.
             Message::SidebarDragMoved(x) => {
-                if self.sidebar_dragging {
-                    self.sidebar_width = x.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
-                }
+                self.sidebar_width = x.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
             }
-            Message::SidebarDragEnded => {
-                self.sidebar_dragging = false;
-            }
-            // Animation progress is tracked by the binary (gui runtime), not the pure core.
-            Message::AnimationTick => {}
 
             // ---- Feature 006 ----
             Message::TerminalFocused => {
@@ -1762,7 +1745,6 @@ impl State {
             | Message::TerminalCopyRequested
             | Message::TerminalPasteRequested
             | Message::TextCopyRequested(_)
-            | Message::SidebarHandleHovered(_)
             // The closing dialog's snapshot is a binary-owned render detail (`App::dismissing`),
             // so releasing it is the binary's business; the pure core never knew about it.
             | Message::OverlayTransitionFinished
