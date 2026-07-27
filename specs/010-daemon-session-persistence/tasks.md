@@ -40,8 +40,8 @@ prerequisites (MSRV, stable line IDs). Everything downstream depends on this.
 - [X] T002 Move existing render-free modules into `crates/micold-core/src/`; move `main.rs` + client-only modules + `ui/` into `crates/micold-client/src/`. **Done** via `git mv` (history preserved). **Boundary decided from the real import graph (user chose "lean core"):** core = the domain both binaries share — `session, store, workspace, git, worktree, settings, project, naming, metadata, fs_scan, provider, selector`, **plus `theme`** (needed by core `settings`) **and `terminal`** (the render-free `TerminalBackend`/`LaunchSpec` trait layer — its alacritty/PTY *impl* actually lives in `ui/terminal.rs` and migrates at T030). client = `main, app, keymap, icons, tokens, motion, ui/**`. `ClosingOverlay` relocated from the binary into `micold_client::app`. The 44 test files + `tests/support/` were redistributed to each crate's `tests/`; all import paths (`micold_ai_ide::` → `micold_core::`/`micold_client::`/`crate::`) and asset/`include_bytes!`/doctest paths rewritten.
 - [X] T003 In `crates/micold-core/Cargo.toml` declare only render-free deps (`serde`, `serde_json`, `uuid`, `directories`, `postcard`) — **no iced, no portable-pty, no alacritty**; this manifest IS the FR-040 enforcement. **Verified**: `cargo tree -p micold-core` shows zero iced/PTY/alacritty in the dependency tree.
 - [X] T004 Bump `rust-version` to **1.97** (latest stable, the installed toolchain) in the workspace manifest; deps pulled to current versions (Decision 1). `File::lock` confirmed available from std (no `fd-lock`); `clippy.toml` MSRV aligned to 1.97.
-- [ ] T005 **DEFERRED to T030.** Upgrade `alacritty_terminal` 0.25 → 0.26.0 and adapt child-exit handling (`ChildEvent::Exited(ExitStatus)`). Rationale: the alacritty/`ChildEvent` code still lives in `micold-client/src/ui/terminal.rs` (moved untouched, still on 0.25); the daemon has no terminal stack until T030. Bumping now would rewrite code that T030 relocates — the upgrade lands with that move. Client + workspace pin alacritty 0.25 in the interim (one version, no drift).
-- [X] T006 Define the stable-line-ID seam behind a `LineIdSource` trait in `crates/micold-daemon/src/terminal.rs`. **Done**: `trait LineIdSource { line_id(offset) -> LineId; oldest_available() -> LineId }` with the no-fork approximation `ApproxLineIds` (per plan Decision 2's mitigation — a line keeps its id as it scrolls, derived from a monotonic `total_lines` watermark minus `retained`, unit-tested for stability + monotonicity). The vendored VT fork (T005, still deferred) can swap in behind this trait without touching the framer. **T005 (alacritty 0.26 upgrade + vendored patch) remains deferred**: the daemon runs on 0.25 with the approximation, which is exactly the swappable-fallback the plan called for; the fork is a later spike gated on measured need (Risk 1).
+- [X] T005 **~~DEFERRED to T030.~~** Upgrade `alacritty_terminal` 0.25 → 0.26.0 and adapt child-exit handling (`ChildEvent::Exited(ExitStatus)`). Rationale: the alacritty/`ChildEvent` code still lives in `micold-client/src/ui/terminal.rs` (moved untouched, still on 0.25); the daemon has no terminal stack until T030. Bumping now would rewrite code that T030 relocates — the upgrade lands with that move. Client + workspace pin alacritty 0.25 in the interim (one version, no drift). **Done via T105 (2026-07-27)**: the deferral outlived its target — T030 closed and the upgrade did *not* land with it, leaving the plan (which pins 0.26.0) and the code (0.25) silently disagreeing until `/speckit-converge` caught it. The real break was `Event::ChildExit(i32)` → `Event::ChildExit(ExitStatus)` in the daemon, not `ChildEvent` in the client as predicted here. See T105 for the adaptation and verification.
+- [X] T006 Define the stable-line-ID seam behind a `LineIdSource` trait in `crates/micold-daemon/src/terminal.rs`. **Done**: `trait LineIdSource { line_id(offset) -> LineId; oldest_available() -> LineId }` with the no-fork approximation `ApproxLineIds` (per plan Decision 2's mitigation — a line keeps its id as it scrolls, derived from a monotonic `total_lines` watermark minus `retained`, unit-tested for stability + monotonicity). The vendored VT fork (T005, still deferred) can swap in behind this trait without touching the framer. **T005 (alacritty 0.26 upgrade + vendored patch) remains deferred**: the daemon runs on 0.25 with the approximation, which is exactly the swappable-fallback the plan called for; the fork is a later spike gated on measured need (Risk 1). **Correction (T105, 2026-07-27)**: the version half of that sentence is now stale — the daemon runs on **0.26.0**. The *vendored patch* half still stands: the fork was never taken, `ApproxLineIds` is still what ships behind this trait, and it remains a later spike gated on measured need.
 - [X] T007 Verify `cargo build --workspace` and `cargo test --workspace`. **Done, all green**: `cargo test --workspace` → **294 passed / 0 failed** (both crates' unit + integration + doctests); `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo fmt --all --check` clean. **Baseline for T079**: pre-split render-free `--no-default-features` = 220; documented full suite = 259; post-split workspace total (incl. per-crate doctests) = 294. `mise.toml` + `.github/workflows/ci.yml` updated from the removed `--features gui`/`--no-default-features` model to the workspace model.
 
 **Checkpoint**: ✅ Three crates compile; `micold-core`'s dependency tree contains no iced/PTY/alacritty — the render-free boundary is a compile error, not a convention. **T005/T006 deferred to T030** (their target code doesn't exist until the daemon terminal stack is carved out).
@@ -756,3 +756,44 @@ the enum escapes it (FR-016e, SC-018). See `bugs/BUG-004.md`.
   Ended in the sidebar — needs a human at the GUI with an active `claude` session; it is not
   reproducible headlessly here, and spawning a real agent session in the user's environment to force
   the transitions would be a side effect well beyond the fix.
+
+---
+
+## Phase 18: Convergence
+
+Produced by `/speckit-converge` (2026-07-27), scoped to a bounded sample of the requirement set plus
+the plan's technical decisions — not a full re-audit of every already-`[X]` task.
+
+- [X] T105 Upgrade `alacritty_terminal` 0.25 → 0.26.0 across the workspace (`Cargo.toml:54`,
+  inherited by `micold-daemon` and `micold-client`) and adapt child-exit handling
+  (`ChildEvent::Exited(ExitStatus)`), per `plan: Technical Context` — whose dependency table pins
+  **0.26.0** ("upgrade from 0.25") and whose step 3 lists the upgrade — (partial). The code is still
+  on 0.25. This restates T005, which cannot be relied on to carry the work: T005 is prefixed
+  `**DEFERRED to T030.**`, and T030 closed long ago, so its stated blocker no longer exists and an
+  implement pass would reasonably skip it as deferred. Converge is append-only and may not edit T005
+  in place, hence this task. **Two things to settle while doing it**, both of which may make "stay on
+  0.25" the right answer — record the decision either way rather than leaving the plan and the code
+  disagreeing: (a) the wire format sends `alacritty_terminal` enum discriminants verbatim
+  (`crates/micold-client/src/ui/terminal.rs:210` — "both processes link the same
+  `alacritty_terminal`, so decoding against …"), so the bump must land in both binaries together;
+  FR-022a's package-version handshake already refuses a mixed-build pair, so this is a build-ordering
+  concern rather than a correctness hole. (b) Plan Decision 2's vendored patch for stable line IDs
+  was never taken — `ApproxLineIds` (the plan's own sanctioned no-fork mitigation) is what ships
+  behind the `LineIdSource` trait, so the upgrade carries no vendored-patch rebase cost that Risk 1
+  anticipated.
+
+  **Done**: workspace pin `Cargo.toml:54` moved `"0.25"` → `"0.26"`; `cargo update -p
+  alacritty_terminal` resolved 0.25.1 → 0.26.0 (and pulled `signal-hook` 0.3.18 → 0.4.4
+  transitively). Exactly one call site broke, which is the child-exit adaptation T005 predicted —
+  though not where it expected it: there is no `ChildEvent` in this tree, the change is
+  `Event::ChildExit(i32)` → `Event::ChildExit(ExitStatus)` at
+  `crates/micold-daemon/src/terminal.rs:147`. Adapted by storing `code.code()` and documenting the
+  resulting ambiguity on `VtSignals::child_exit`: `None` now means "no ChildExit seen **or** signal-
+  terminated". That is acceptable here and only here — the accessor has **no callers anywhere in the
+  workspace**, and the supervisor's PTY `wait()` is what decides restart policy (FR-005/FR-022), not
+  this in-band value. Both settling questions from the task body resolved as anticipated: (a) the
+  bump is workspace-wide so both binaries move together, and FR-022a's package-version handshake
+  already refuses a mixed-build pair; (b) no vendored-patch rebase cost, since Decision 2's patch was
+  never taken and `ApproxLineIds` is what ships. Verified: `mise run test` green (105 groups),
+  `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check` both clean. This
+  also re-closes **T005**, whose `DEFERRED to T030` rationale had expired.
