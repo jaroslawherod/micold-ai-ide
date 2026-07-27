@@ -2674,4 +2674,79 @@ mod tests {
         );
         assert_eq!(app.last_grid, Some((180, 45)));
     }
+
+    #[test]
+    fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
+        // `connection_status` is decision/branching logic (Constitution I) picking which of five
+        // mutually-possible states wins — pins the precedence directly rather than relying on it
+        // only being exercised incidentally elsewhere (convergence finding F1, BUG-002).
+        use micold_client::ui::ConnectionStatus;
+
+        let mut app = App {
+            core: State::default(),
+            grids: HashMap::new(),
+            stamper: SessionInputStamper::new(),
+            selection: None,
+            display_offset: 0,
+            scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
+            motion: Animator::new(),
+            main_key: main_content_key(&State::default()),
+            handle_hovered: false,
+            dismissing: None,
+            row_fx: Animator::new(),
+            prev_hovered: None,
+            window_focused: true,
+            last_grid: None,
+            env_include_enabled: micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED,
+            env_include_script_path: String::new(),
+            env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
+            env_include_cache: HashMap::new(),
+            env_include_last_outcome: EnvIncludeOutcome::Disabled,
+            daemon: None,
+            daemon_catalog: None,
+            displaced: HashMap::new(),
+            disconnected: false,
+            version_mismatch: None,
+            build_mismatch: None,
+            next_req: 0,
+            pending_ops: HashMap::new(),
+        };
+
+        assert_eq!(connection_status(&app), ConnectionStatus::Connected);
+
+        app.disconnected = true;
+        assert_eq!(connection_status(&app), ConnectionStatus::Disconnected);
+
+        let project = PathBuf::from("/repo/demo");
+        app.core.workspace.active = Some(project.clone());
+        app.displaced.insert(project.clone(), "other-window".into());
+        assert_eq!(
+            connection_status(&app),
+            ConnectionStatus::Displaced {
+                by: "other-window".into()
+            },
+            "a takeover must win over a plain disconnect"
+        );
+
+        app.build_mismatch = Some(("client-1".into(), "daemon-0".into()));
+        assert_eq!(
+            connection_status(&app),
+            ConnectionStatus::BuildMismatch {
+                client_build: "client-1".into(),
+                daemon_build: "daemon-0".into(),
+            },
+            "a same-contract build mismatch must win over a takeover"
+        );
+
+        app.version_mismatch = Some((2, 1, "daemon-0".into()));
+        assert_eq!(
+            connection_status(&app),
+            ConnectionStatus::VersionMismatch {
+                client: 2,
+                daemon: 1,
+                daemon_build: "daemon-0".into(),
+            },
+            "a wire-contract mismatch must win over a same-contract build mismatch"
+        );
+    }
 }

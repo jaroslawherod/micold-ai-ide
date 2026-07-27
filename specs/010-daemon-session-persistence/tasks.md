@@ -485,3 +485,12 @@ See `bugs/BUG-002.md`.
 - Two brief premises were falsified in planning and are baked into the tasks above: the
   `SessionRouter`/`TerminalBackend` seam carries no production traffic (deleted in T030), and the test
   count is 259 not 63 (T007/T079). `bincode` is dead — grid frames use `postcard` (T010, T015).
+
+## Phase 13: Convergence
+
+Produced by `/speckit-converge` after T088–T091 (BUG-002) landed. Both items trace to the
+version/build-mismatch banner surface US6/FR-021/022/022a touch; other user stories were not
+re-derived from source (see the run's findings summary).
+
+- [X] T092 Add a unit test asserting `connection_status()`'s precedence order (`crates/micold-client/src/main.rs`) — `VersionMismatch` > `BuildMismatch` > `Displaced` > `Disconnected`/`Connected` — since the function contains decision/branching logic the GUI-wiring test exception explicitly excludes, and it currently has zero coverage anywhere in the crate per Constitution I (contradicts) **Done**: `connection_status_orders_mismatch_over_displaced_over_disconnected` in `main.rs`'s existing `#[cfg(test)] mod tests` — one `App`, mutated field-by-field through all five states, asserting each precedence step in turn.
+- [X] T093 Add an end-to-end test in `crates/micold-daemon/tests/handshake_flow.rs`, mirroring `mismatched_handshake_is_refused_naming_both_sides`, that drives `server::serve_connection` with a matching `protocol_version`/`schema_hash` but a differing `client_package_version` and asserts a `Refused{reason: RefusalReason::BuildMismatch{..}}` frame is received, closing the gap between FR-022a's pure-function unit coverage (T088) and its wire-level round-trip per FR-022a / SC-009a (partial) **Done**: `build_mismatch_is_refused_distinctly_when_contract_still_matches` — real `serve_connection` over an in-memory duplex, matching contract + stale `client_package_version`, asserts `RefusalReason::BuildMismatch` naming both builds and that the daemon closes the connection, mirroring the existing contract-mismatch test. `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --check` all clean.
