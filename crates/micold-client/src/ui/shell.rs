@@ -4,7 +4,7 @@
 
 use crate::app::{Message, State};
 use crate::icons::{icon_role, Icon, IconSurface};
-use crate::tokens::{self, spacing, type_scale, Rgb};
+use micold_core::tokens::{self, spacing, type_scale, Rgb};
 use crate::ui::{icon, style};
 use iced::widget::{button, column, container, row, text};
 use iced::{Alignment, Element, Length};

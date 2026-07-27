@@ -6,7 +6,7 @@
 //! `Element`. Reused across the sidebar and any icon action rather than each feature forking one.
 
 use crate::icons::Icon;
-use crate::tokens::{spacing, type_scale, Rgb, Roles};
+use micold_core::tokens::{spacing, type_scale, Rgb, Roles};
 use crate::ui::{icon, icon_colored, style};
 use iced::widget::button;
 use iced::Element;

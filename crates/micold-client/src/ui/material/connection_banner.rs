@@ -14,7 +14,7 @@ use iced::widget::{button, column, container, row, text};
 use iced::{Alignment, Element, Length};
 
 use crate::app::NoticeLevel;
-use crate::tokens::{spacing, type_scale, Roles};
+use micold_core::tokens::{spacing, type_scale, Roles};
 use crate::ui::style;
 
 /// A persistent connection-status banner. Construct with a title + detail, optionally add an action.

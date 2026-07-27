@@ -11,7 +11,7 @@ use crate::app::{Message, State};
 use crate::grid::GridCache;
 use crate::icons::Icon;
 use crate::icons::{mode_glyph, mode_tooltip};
-use crate::tokens::{self, spacing, type_scale, Rgb};
+use micold_core::tokens::{self, spacing, type_scale, Rgb};
 use crate::ui::material::{
     ContextMenu, IconButton, MenuItem, TerminalPane, Tooltip, TooltipPosition,
 };

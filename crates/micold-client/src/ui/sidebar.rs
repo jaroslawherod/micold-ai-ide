@@ -3,7 +3,7 @@
 
 use crate::app::{Message, State, TagFilter};
 use crate::icons::Icon;
-use crate::tokens::{self, sidebar, spacing, type_scale, Rgb, Roles};
+use micold_core::tokens::{self, sidebar, spacing, type_scale, Rgb, Roles};
 use crate::ui::material::{
     expand, menu_panel, ActivityBadge, FilterTrigger, IconButton, ToggleChip, Tooltip, TreeItem,
     TreeView,

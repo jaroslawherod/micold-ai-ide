@@ -5,7 +5,7 @@
 //! values come from `src/tokens.rs` (contracts/design-tokens.md).
 
 use crate::app::NoticeLevel;
-use crate::tokens::{self, shape, Rgb, Roles};
+use micold_core::tokens::{self, shape, Rgb, Roles};
 use iced::overlay::menu;
 use iced::widget::{
     button, checkbox as checkbox_widget, container, pick_list, scrollable, text, text_input,

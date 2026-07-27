@@ -171,15 +171,15 @@ pub fn roles(scheme: ColorScheme) -> Roles {
 /// applied in the GUI via `iced::Font`.
 pub mod type_scale {
     /// Large empty-state / dialog headline.
-    pub const DISPLAY: u16 = 32;
+    pub const DISPLAY: f32 = 32.0;
     /// Active-project name, section headers.
-    pub const HEADLINE: u16 = 24;
+    pub const HEADLINE: f32 = 24.0;
     /// App-bar title, list-item primary text.
-    pub const TITLE: u16 = 18;
+    pub const TITLE: f32 = 18.0;
     /// Default body text, descriptions.
-    pub const BODY: u16 = 14;
+    pub const BODY: f32 = 14.0;
     /// Paths, captions, badges.
-    pub const LABEL: u16 = 12;
+    pub const LABEL: f32 = 12.0;
 }
 
 /// Sidebar-scoped type sizes — 80% of the app-wide scale (FR-012). Applied ONLY within the
@@ -187,30 +187,30 @@ pub mod type_scale {
 /// "80%" intent is auditable (`tests/tokens.rs`).
 pub mod sidebar {
     /// Worktree display name — 80% of `type_scale::BODY` (14 → 11).
-    pub const NAME: u16 = 11;
+    pub const NAME: f32 = 11.0;
     /// Tag chip text — 80% of `type_scale::LABEL` (12 → 10).
-    pub const TAG: u16 = 10;
+    pub const TAG: f32 = 10.0;
     /// Session label — 80% of `type_scale::BODY` (14 → 11).
-    pub const SESSION: u16 = 11;
+    pub const SESSION: f32 = 11.0;
 }
 
 /// Spacing scale, in logical pixels. All padding/gaps use these steps (SC-007).
 pub mod spacing {
-    pub const XS: u16 = 4;
-    pub const SM: u16 = 8;
-    pub const MD: u16 = 16;
-    pub const LG: u16 = 24;
-    pub const XL: u16 = 32;
+    pub const XS: f32 = 4.0;
+    pub const SM: f32 = 8.0;
+    pub const MD: f32 = 16.0;
+    pub const LG: f32 = 24.0;
+    pub const XL: f32 = 32.0;
 }
 
 /// Corner radii, in logical pixels.
 pub mod shape {
     /// Buttons, badges.
-    pub const SM: u16 = 8;
+    pub const SM: f32 = 8.0;
     /// Cards / list items / surfaces.
-    pub const MD: u16 = 12;
+    pub const MD: f32 = 12.0;
     /// Dialogs.
-    pub const LG: u16 = 16;
+    pub const LG: f32 = 16.0;
     /// Pills.
-    pub const FULL: u16 = 9999;
+    pub const FULL: f32 = 9999.0;
 }

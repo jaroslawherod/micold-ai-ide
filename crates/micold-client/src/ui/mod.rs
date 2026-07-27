@@ -20,7 +20,7 @@ mod worktree_rename;
 use crate::app::{Message, Overlay, State};
 use crate::icons::Icon;
 use crate::motion::Animator;
-use crate::tokens::{self, spacing, type_scale, Rgb, Roles};
+use micold_core::tokens::{self, spacing, type_scale, Rgb, Roles};
 use iced::widget::{button, column, container, mouse_area, row, stack, text, Space};
 use iced::{Element, Font, Length, Subscription};
 use micold_core::session::SessionId;

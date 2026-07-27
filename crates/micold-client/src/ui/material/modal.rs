@@ -9,7 +9,7 @@
 //! Driven by a single `progress` (1.0 = fully shown, 0.0 = hidden), so a consumer only builds
 //! its dialog body and supplies a progress value.
 
-use crate::tokens::Roles;
+use micold_core::tokens::Roles;
 use crate::ui::style;
 use iced::widget::{center, container, opaque, stack};
 use iced::{Background, Color, Element};

@@ -5,7 +5,7 @@
 //! any future hierarchical navigation should reuse it rather than fork a bespoke widget.
 
 use crate::icons::Icon;
-use crate::tokens::{shape, spacing, type_scale, Rgb, Roles};
+use micold_core::tokens::{shape, spacing, type_scale, Rgb, Roles};
 use crate::ui::{icon, style};
 use iced::widget::{button, column, container, mouse_area, row, text, Row, Space};
 use iced::{Alignment, Element, Length};

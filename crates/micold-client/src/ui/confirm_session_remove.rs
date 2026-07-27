@@ -3,7 +3,7 @@
 //! path back into the sidebar (the removed session's record is dropped outright).
 
 use crate::app::Message;
-use crate::tokens::{self, spacing, type_scale};
+use micold_core::tokens::{self, spacing, type_scale};
 use crate::ui::material::Modal;
 use crate::ui::style;
 use iced::widget::{button, column, container, row, text};

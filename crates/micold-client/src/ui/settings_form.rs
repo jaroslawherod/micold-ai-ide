@@ -2,7 +2,7 @@
 //! 006, FR-019/FR-020). Currently exposes the embedded-terminal scrollback limit.
 
 use crate::app::{Message, SettingsDraft};
-use crate::tokens::{self, spacing, type_scale};
+use micold_core::tokens::{self, spacing, type_scale};
 use crate::ui::material::Modal;
 use crate::ui::style;
 use iced::widget::{button, checkbox, column, container, row, text, text_input};

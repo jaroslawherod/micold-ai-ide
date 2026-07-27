@@ -10,7 +10,7 @@
 //! codepoints are pinned from the shipped font and documented in
 //! `assets/fonts/PROVENANCE.md`; `tests/icons.rs` regression-locks them.
 
-use crate::tokens::{Rgb, Roles};
+use micold_core::tokens::{Rgb, Roles};
 use micold_core::session::TerminalMode;
 
 /// A named Material symbol representing one concept or action.

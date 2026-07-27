@@ -1,7 +1,7 @@
 //! The About dialog, rendered as a Material modal overlay within the main window (FR-013).
 
 use crate::app::Message;
-use crate::tokens::{self, spacing, type_scale};
+use micold_core::tokens::{self, spacing, type_scale};
 use crate::ui::material::Modal;
 use crate::ui::style;
 use iced::widget::{button, column, container, text};

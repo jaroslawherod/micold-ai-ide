@@ -12,7 +12,7 @@
 //! seeds the open menu's highlighted row from the current value, so reopening the list visibly
 //! marks the current selection (FR-003) with no bespoke state of this app's own.
 
-use crate::tokens::{spacing, type_scale, Roles};
+use micold_core::tokens::{spacing, type_scale, Roles};
 use crate::ui::style;
 use iced::widget::pick_list;
 use iced::{Element, Length};

@@ -3,7 +3,7 @@
 //! disk (FR-018).
 
 use crate::app::{Message, RenameDraft};
-use crate::tokens::{self, spacing, type_scale};
+use micold_core::tokens::{self, spacing, type_scale};
 use crate::ui::material::Modal;
 use crate::ui::style;
 use iced::widget::{button, column, container, row, text, text_input};

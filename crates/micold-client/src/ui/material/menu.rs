@@ -6,7 +6,7 @@
 //! Reused for the toolbar's overflow menu; any future dropdown should reuse it.
 
 use crate::icons::Icon;
-use crate::tokens::{spacing, type_scale, Roles};
+use micold_core::tokens::{spacing, type_scale, Roles};
 use crate::ui::material::{menu_panel, IconButton};
 use crate::ui::{icon, style};
 use iced::widget::{button, column, container, mouse_area, row, text, Space};

@@ -9,7 +9,7 @@
 
 use super::{IconButton, Tooltip};
 use crate::icons::Icon;
-use crate::tokens::Roles;
+use micold_core::tokens::Roles;
 use iced::Element;
 
 /// The filter trigger: an icon button (emitting `on_toggle`) placed in the sidebar header,

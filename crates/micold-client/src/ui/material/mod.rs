@@ -6,7 +6,7 @@
 //! one-off widgets. Every component is theme-aware (draws from the active [`Roles`]) and
 //! cross-platform. This module is the living catalog Principle VIII refers to.
 //!
-//! [`Roles`]: crate::tokens::Roles
+//! [`Roles`]: micold_core::tokens::Roles
 
 mod activity_badge;
 mod animation;
@@ -43,7 +43,7 @@ pub use toggle_chip::ToggleChip;
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
 
-use crate::tokens::{spacing, type_scale, Roles};
+use micold_core::tokens::{spacing, type_scale, Roles};
 use crate::ui::style;
 use iced::widget::{container, text, tooltip};
 use iced::Element;

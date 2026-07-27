@@ -141,7 +141,7 @@ fn type_tag_fills_are_distinct() {
 /// Sidebar sizes are exactly 80% of the app-wide scale, rounded (FR-012).
 #[test]
 fn sidebar_sizes_are_eighty_percent() {
-    let round80 = |base: u16| ((base as f64) * 0.8).round() as u16;
+    let round80 = |base: f32| (f64::from(base) * 0.8).round() as f32;
     assert_eq!(sidebar::NAME, round80(type_scale::BODY));
     assert_eq!(sidebar::TAG, round80(type_scale::LABEL));
     assert_eq!(sidebar::SESSION, round80(type_scale::BODY));

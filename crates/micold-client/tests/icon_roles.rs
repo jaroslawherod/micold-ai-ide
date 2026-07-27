@@ -7,7 +7,7 @@
 //! (including the `error`-tinted unavailable marker, which the text-only pairs don't cover).
 
 use micold_client::icons::{icon_role, IconSurface};
-use micold_client::tokens::{roles, Rgb};
+use micold_core::tokens::{roles, Rgb};
 use micold_core::theme::ColorScheme;
 
 /// Linearize a single 0..=255 sRGB channel per the WCAG definition.

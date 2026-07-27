@@ -5,7 +5,7 @@
 
 use crate::app::{help_actions, Message, State};
 use crate::icons::Icon;
-use crate::tokens;
+use micold_core::tokens;
 use crate::ui::material::{MenuItem, MenuTrigger, ProjectSwitcherTrigger, Toolbar};
 use iced::Element;
 use micold_core::metadata::AppMetadata;

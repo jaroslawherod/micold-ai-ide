@@ -8,7 +8,7 @@
 //! normal actions, so cancelling leaves every input where the user left it (FR-007).
 
 use crate::app::{BranchSource, Message, ResolutionState, WorktreeForm, WorktreeFormStatus};
-use crate::tokens::{self, spacing, type_scale, Roles};
+use micold_core::tokens::{self, spacing, type_scale, Roles};
 use crate::ui::material::{Modal, Select, StageProgress, ToggleChip};
 use crate::ui::style;
 use iced::widget::{button, column, container, row, text, text_input, Space};

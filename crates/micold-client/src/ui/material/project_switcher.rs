@@ -9,7 +9,7 @@
 
 use super::{menu_panel, Tooltip};
 use crate::icons::{icon_role, Icon, IconSurface};
-use crate::tokens::{spacing, type_scale, Roles};
+use micold_core::tokens::{spacing, type_scale, Roles};
 use crate::ui::{icon, style};
 use iced::widget::{button, column, container, mouse_area, row, text, Space};
 use iced::{Alignment, Element, Length};

@@ -7,7 +7,7 @@
 //!
 //! Exposed as a chainable builder terminating in `.into()` (Principle VIII builder-API rule).
 
-use crate::tokens::{shape, sidebar, spacing, Rgb, Roles};
+use micold_core::tokens::{shape, sidebar, spacing, Rgb, Roles};
 use crate::ui::style;
 use iced::widget::{button, text};
 use iced::{Background, Border, Color, Element};
