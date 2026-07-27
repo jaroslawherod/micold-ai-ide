@@ -73,12 +73,33 @@ not exist here yet, so building them now would add untested code with no consume
 
 ## 3. One overlay (FR-008 – FR-010)
 
-All floating surfaces are built on a single overlay primitive owning positioning, backdrop,
-dismissal and stacking order.
+**Window-level** floating surfaces are built on a single overlay primitive owning positioning,
+backdrop, dismissal and stacking order.
 
-The application has **five** independent implementations today — the modal, the overflow menu, the
-context menu, the project-switcher popover and the select dropdown — which is why their behavior
-has diverged.
+Before this feature there were **five** independent implementations — the modal, the overflow menu,
+the context menu, the project-switcher popover and the select dropdown — which is why their
+behavior had diverged.
+
+### What was built
+
+Four of the five moved onto `cdk::overlay`. Hand-rolled implementations went from four to zero.
+
+The **select dropdown did not move, and should not.** It is built on the rendering stack's
+`pick_list`, which implements `Widget::overlay()` itself and is positioned from its trigger's
+on-screen bounds. That is what lets it work inside a content-sized dialog, where a window-level
+surface has no fill-sized window to anchor against — precisely the failure a hand-rolled version
+produced, revealing the list inline. `select.rs` never had an implementation to remove.
+
+So the contract is one primitive for window-level surfaces, plus a **closed list** of delegations
+to the rendering stack's own overlay system, which is itself a single shared implementation:
+
+| Delegation | Where | Why it cannot be window-level |
+|---|---|---|
+| `pick_list` | `material/select.rs` | must anchor to its trigger inside a content-sized dialog |
+| `tooltip` | `material/mod.rs` | follows its trigger; has no backdrop, dismissal or stacking order to own |
+
+The list is held closed by `tests/one_overlay_implementation.rs`, which fails both when an
+unsanctioned delegation appears and when a sanctioned one disappears without being struck off.
 
 | Concern | Owner |
 |---|---|
@@ -91,11 +112,21 @@ has diverged.
 
 | Surface kind | Dismisses on |
 |---|---|
-| Non-modal (menus, context menus, popovers, select dropdown) | outside click, Escape, scroll beneath |
+| Non-modal on the primitive (menus, context menus, popovers) | outside click, Escape, scroll beneath |
 | Modal dialog | Escape, scrim click |
 | Modal declared non-dismissible | nothing — reserved for dialogs where losing input destroys work |
+| Widget-attached (select dropdown) | **the rendering stack's own rule** — any left click. Not Escape, not scroll beneath |
 
-The rule must be **total**: no combination of surface kind and trigger may be undefined.
+The rule must be **total** for surfaces on the primitive: no combination of surface kind and
+trigger may be undefined.
+
+> **Known shortfall against FR-009.** FR-009 requires *every* non-modal floating surface to dismiss
+> on outside click, Escape and scroll beneath. The select dropdown meets one of the three: iced's
+> `pick_list` closes on any left press, has no Escape handler, and does not close when content
+> scrolls beneath it. Unifying it would mean intercepting those events in a wrapper around
+> `pick_list` — real work, and a user-visible behavior change, so it is recorded here rather than
+> made silently. Earlier revisions of this contract listed the select dropdown as following the
+> unified rule, which was never true.
 
 ---
 
