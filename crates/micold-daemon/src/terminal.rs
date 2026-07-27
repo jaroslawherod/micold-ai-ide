@@ -77,8 +77,14 @@ impl VtSignals {
         self.title.lock().expect("title lock poisoned").clone()
     }
 
-    /// The child's VT-reported exit code, if the emulator saw `ChildExit`. Authoritative child
-    /// liveness is the PTY `wait()` in the supervisor; this is the in-band signal.
+    /// The child's VT-reported exit code, if the emulator saw `ChildExit` **and** the child exited
+    /// with a code. Authoritative child liveness is the PTY `wait()` in the supervisor; this is the
+    /// in-band signal.
+    ///
+    /// `None` is therefore ambiguous — no `ChildExit` seen, *or* seen but signal-terminated
+    /// (`ExitStatus::code()` is `None` on Unix when a signal killed the process). That ambiguity is
+    /// acceptable precisely because this value is informational: the supervisor's `wait()` decides
+    /// restart policy (FR-005/FR-022), never this.
     pub fn child_exit(&self) -> Option<i32> {
         *self.child_exit.lock().expect("exit lock poisoned")
     }
@@ -144,7 +150,11 @@ impl EventListener for DaemonListener {
             }
             // In-band child exit; the supervisor's `wait()` is authoritative for liveness.
             Event::ChildExit(code) => {
-                *self.signals.child_exit.lock().expect("exit lock poisoned") = Some(code);
+                // `alacritty_terminal` 0.26 widened this from a bare `i32` to `ExitStatus` (T105).
+                // We keep storing the code: it is informational only, and `wait()` in the
+                // supervisor — not this — is what decides restart policy. A signal-terminated child
+                // has no code and stores `None`; see `VtSignals::child_exit`.
+                *self.signals.child_exit.lock().expect("exit lock poisoned") = code.code();
             }
             Event::Bell => self.signals.bell.store(true, Ordering::Release),
             // Any new content / cursor movement dirties the frame (depth-1 — T032).
