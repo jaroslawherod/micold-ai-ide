@@ -2,6 +2,15 @@
 
 Guidance for Claude Code when working in this repository.
 
+## Response style: be concise
+
+Skip greetings, preambles, and recaps. Do not open with phrases like "I'd be happy to help",
+"Great question", or "Sure, I can do that". Do not close with a restatement of what you just did
+unless the user asks for a summary. Answer directly: for a question, give the answer; for a task,
+make the change and report only what changed and any follow-up the user needs to take. Output code
+without wrapping explanation unless the user asks how or why. Prefer one line over a paragraph, and
+a paragraph over a bulleted essay, when either communicates the same information.
+
 ## Use `mise` tasks, not raw `cargo` commands
 
 Prefer `mise run <task>` over invoking `cargo` directly — the tasks in `mise.toml` are the
