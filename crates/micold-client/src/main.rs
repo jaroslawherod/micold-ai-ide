@@ -551,15 +551,17 @@ fn session_has_conversation(project_path: &Path, session: &micold_core::session:
     provider.has_recorded_conversation(&config, &cwd, session.id.0)
 }
 
-fn persist_settings(core: &State) {
+fn persist_settings(core: &mut State) {
     if let Some(store) = JsonFileSettingsStore::default_location() {
         // Preserve the persisted scrollback limit (feature 006) and environment-include settings
         // (feature 011) when saving a theme change — this function only ever changes `theme`.
         let existing = store.load().settings;
-        let _ = store.save(&Settings {
+        if let Err(err) = store.save(&Settings {
             theme: core.theme_pref,
             ..existing
-        });
+        }) {
+            core.notify_error(format!("Couldn't save your settings: {err}"));
+        }
     }
 }
 
@@ -1227,7 +1229,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::ThemePreferenceChanged(_) | Message::ThemeModeCycled => {
             app.core.update(message);
-            persist_settings(&app.core);
+            persist_settings(&mut app.core);
             Task::none()
         }
         // Validate the form, then create the worktree (incl. any submodule fetch) via git,
@@ -1721,13 +1723,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.env_include_script_path = draft.env_include_script_path;
             app.env_include_timeout_secs = env_include_timeout_secs;
             if let Some(store) = JsonFileSettingsStore::default_location() {
-                let _ = store.save(&Settings {
+                if let Err(err) = store.save(&Settings {
                     theme: app.core.theme_pref,
                     scrollback_lines,
                     env_include_enabled: app.env_include_enabled,
                     env_include_script_path: app.env_include_script_path.clone(),
                     env_include_timeout_secs,
-                });
+                }) {
+                    app.core
+                        .notify_error(format!("Couldn't save your settings: {err}"));
+                }
             }
             // The enabled/path/timeout settings themselves changed, so every previously cached
             // directory's snapshot is stale (BUG-002) — clear all of them, then eagerly re-source
