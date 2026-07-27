@@ -377,6 +377,13 @@ a session survived; confirm it does not survive without the setting.
 - **FR-016d**: The client MUST display each session's activity signal in the session list without the
   user opening that session, so a user attaching after time away can see at a glance which sessions are
   waiting on them.
+- **FR-016e**: The activity indicator MUST be rendered from the project's shared, closed icon
+  vocabulary — never from a raw character literal drawn in the default text font — so it is covered by
+  the build-time missing-glyph guard and can never degrade to a blank box at runtime. The displayed
+  states MUST remain distinguishable by **shape**, not by colour alone, so the distinction survives for
+  a colour-blind user and in any theme.
+  **Bugfix**: 2026-07-27 — BUG-004 added this requirement; the indicator shipped as raw `●`/`○`
+  literals that no bundled font maps, so every signalled session rendered an identical blank box.
 - **FR-017**: Scrollback MUST be retained by the service up to the service-owned configured limit
   (FR-012a), including output produced while detached, and MUST be requestable by range so the client
   can scroll without holding all history.
@@ -552,6 +559,15 @@ compatibility), a new Edge Case, a 4th acceptance scenario on User Story 6, and 
 - **SC-017**: For every failure mode the spec commits to — failed startup, refused connection, session
   give-up, mutation failure — a user can determine the cause from logs reachable through the interface,
   without rebuilding the application or reading source. Zero failure modes leave no diagnostic trace.
+- **SC-018**: Zero blank-box ("tofu") placeholders appear anywhere in the session list, and the
+  working / awaiting-input / ended indicators are told apart by shape with colour removed (0 states
+  that collapse to the same silhouette).
+
+---
+
+**Bugfix**: 2026-07-27 — BUG-004 Added FR-016e (activity indicator MUST come from the shared closed
+icon vocabulary and stay shape-distinct) and SC-018 (zero tofu in the session list, shape-distinct
+indicators). See `bugs/BUG-004.md`.
 
 ---
 

@@ -104,6 +104,13 @@ silently rendering a wrong or missing glyph.
 - **Missing glyph / tofu**: If a requested icon has no glyph in the bundled font, the
   system MUST fail closed at build time (unknown named icons are not representable) so a
   blank box ("tofu") can never reach the running UI.
+  **Bugfix 2026-07-27 (BUG-004, feature 010)**: "not representable" holds only for callers
+  that go *through* the named icon set. A surface that bypasses it and passes a raw
+  character literal to a plain text widget escapes the guard entirely and renders tofu —
+  which is how feature 010's activity badge shipped `●`/`○` in the default text font, a font
+  mapping neither codepoint. The closed-vocabulary rule (FR-002/FR-003) MUST therefore be
+  enforced against *new surfaces*, not only against unknown names within the set; see
+  `specs/010-daemon-session-persistence/bugs/BUG-004.md` and its task T103.
 - **Very small or very large sizes**: Icons requested at the smallest label size and the
   largest display size MUST remain recognizable and correctly aligned with adjacent text.
 - **Icon-only vs icon+label controls**: Controls that show only an icon (no text label)
@@ -208,3 +215,10 @@ silently rendering a wrong or missing glyph.
   surfaces' existing text, not by this feature.
 - This feature is additive/visual only: it reuses the existing state model and message
   flow and does not add, remove, or alter any user action.
+
+---
+
+**Bugfix**: 2026-07-27 — BUG-004 (raised against feature 010) Annotated the "Missing glyph / tofu"
+edge case: SC-005's "0 missing-glyph occurrences at runtime" is currently false, because the
+build-time guard only covers callers that use the named icon set. The remediation task lives in
+`specs/010-daemon-session-persistence/tasks.md` (Phase 12, T103).
