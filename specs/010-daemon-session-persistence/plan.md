@@ -279,6 +279,21 @@ logging with context detection and the bounded rotating sink, and the client-sid
 (FR-031); a failed worktree creation leaves no catalog entry and no directory (FR-032); git stderr
 survives the RPC boundary intact (FR-034); the daemon refuses to exit while a session is alive.
 
+**Design correction (BUG-003)**: T053's original scope named `env_include` resolution as part of
+this workstream ("main-sync" note added once feature 011 landed on `main`), but no corresponding
+code was ever written in `micold-daemon` — all three of the daemon's own PTY-spawn call sites
+(`start_session`, `respawn_primary`, `open_shell` in `state.rs`) hardcode a `TERM`-only environment.
+Fixing this (FR-012b) needs two things W2 did not originally account for: (1) `DaemonSettings`
+(the wire projection `Catalog::settings_wire()` produces) must gain the three `env_include_*`
+fields already present on `micold_core::settings::Settings`, and `ClientMsg::SettingsSet` must
+accept changes to them — mirroring the existing `scrollback_lines` precedent (FR-012a) exactly, not
+a new mechanism; (2) each of the three spawn sites must call `micold_core::env_include::resolve`
+(with `merge_with_term`) against the session's own directory before building its `env`, with a
+per-directory cache owned by `DaemonState`/`Catalog` (there is no `App` in the daemon to hold one,
+unlike `micold-client`'s existing `env_include_cache: HashMap<PathBuf, EnvIncludeSnapshot>`),
+invalidated on a `SettingsSet` that changes any of the three fields and on a worktree's deletion.
+See `bugs/BUG-003.md`.
+
 ### W3. Terminal ownership and grid streaming
 
 `Term` per session behind `FairMutex`; the reader thread absorbs the blocking `wait()`; shadow
@@ -483,3 +498,7 @@ control plane you can read by eye is the justification for carrying two encoding
 5. **259 tests, not 63 — and the workspace split now *forces* every one to move to an owning crate.**
    *Mitigation*: W6 tracks redistribution with a per-test disposition record (FR-041 forbids silent
    deletion); W0 gates on `cargo test --workspace` staying green through the crate move.
+
+---
+
+**Bugfix**: 2026-07-27 — BUG-003 Updated from bugfix patch.

@@ -121,6 +121,12 @@ the same file at once could cause. In practice this changes three things you can
   failed — and when it reconnects, it reads the daemon's authoritative state so the window settles on
   what actually happened.
 
+Every session the daemon spawns — a fresh session, one resumed after a restart, a crash respawn, or
+a regular-terminal shell instance — resolves the environment-include setting (the same "source my
+`~/.bashrc`" mechanism from Settings) in that session's own project/worktree directory, exactly as a
+session opened from a running window would. This holds even for sessions the daemon starts entirely
+on its own, with no window attached — a crash respawn sees the same environment a fresh launch would.
+
 A couple of current limitations worth knowing:
 
 - Deleting a worktree keeps its git **branch** (only the worktree directory is removed), so a delete

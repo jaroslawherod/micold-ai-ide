@@ -8,16 +8,35 @@
 #![cfg(unix)]
 
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::time::{Duration, Instant};
 
+use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::index::{Column, Line};
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
-use micold_core::settings::JsonFileSettingsStore;
+use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
+use micold_daemon::supervisor::PtySession;
 use uuid::Uuid;
+
+/// The visible screen as one string, for content assertions (mirrors `drive_loop.rs`'s helper).
+fn visible_text(session: &PtySession) -> String {
+    let term = session.term().lock();
+    let grid = term.grid();
+    let (cols, rows) = (grid.columns(), grid.screen_lines());
+    let mut out = String::new();
+    for line in 0..rows {
+        for col in 0..cols {
+            out.push(grid[Line(line as i32)][Column(col)].c);
+        }
+        out.push('\n');
+    }
+    out
+}
 
 fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> bool {
     let deadline = Instant::now() + timeout;
@@ -98,6 +117,58 @@ fn session_start_spawns_and_registers_a_durable_session() {
     assert!(state.live_session(id).is_some());
 
     // Test-owned process: stop it so nothing leaks.
+    live.kill().expect("kill");
+}
+
+/// BUG-003: a session the daemon spawns must see variables sourced from the configured
+/// environment-include script (feature 011) — the same as a `micold-client`-spawned session would.
+/// Before the fix, all three of the daemon's spawn sites (`start_session`, `respawn_primary`,
+/// `open_shell`) hardcoded `env = vec![("TERM", ...)]` and never called
+/// `micold_core::env_include::resolve`, so no such variable could ever reach the spawned process
+/// regardless of what the configured script exported.
+#[test]
+fn a_daemon_spawned_session_sees_env_include_resolved_variables() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+
+    // A plain, unconditional export — no interactive guard (BUG-001), no directory-dependent hook
+    // (BUG-002): the simplest case env-include is supposed to handle unconditionally.
+    let script_path = project.path().join("env-include-script.sh");
+    std::fs::File::create(&script_path)
+        .unwrap()
+        .write_all(b"export BUG003_MARKER=daemon_env_include_works\n")
+        .unwrap();
+
+    JsonFileSettingsStore::at(store.path().join("settings.json"))
+        .save(&Settings {
+            env_include_enabled: true,
+            env_include_script_path: script_path.to_string_lossy().into_owned(),
+            ..Settings::default()
+        })
+        .unwrap();
+
+    let id = SessionId::from_uuid(Uuid::from_u128(0x5E55));
+    let state = DaemonState::new(catalog_with_shell_session(project.path(), store.path()));
+
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect("start must spawn the shell session");
+    let live = state.live_session(id).expect("session is now live");
+    assert!(
+        wait_until(Duration::from_secs(5), || live.is_alive()),
+        "the spawned shell process must be running"
+    );
+
+    // Drive the live shell to echo the variable back, proving it is actually in the spawned
+    // process's own environment (not just resolvable in the abstract).
+    state.session_input(id, 0, b"echo SEEN:$BUG003_MARKER\n");
+    assert!(
+        wait_until(Duration::from_secs(5), || visible_text(&live)
+            .contains("SEEN:daemon_env_include_works")),
+        "the daemon-spawned session must see the env-include-resolved variable:\n{}",
+        visible_text(&live)
+    );
+
     live.kill().expect("kill");
 }
 

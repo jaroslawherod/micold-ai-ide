@@ -64,6 +64,15 @@ struct Inner {
     /// **without** running a git subprocess under the state lock. Absent for a project not yet
     /// attached/refreshed — the snapshot then shows no worktrees for it until the first refresh.
     worktrees: HashMap<PathBuf, Vec<Worktree>>,
+    /// Per-directory cache of the environment-include-resolved variables (feature 011), already
+    /// merged with the hardcoded `TERM` pair — ready to hand straight to a spawn site's `env`
+    /// (FR-012b, BUG-003). Keyed by the directory the sourcing subprocess ran in, mirroring
+    /// `micold-client`'s pre-010 `env_include_cache`: a version-manager hook (mise, asdf, nvm,
+    /// pyenv, rbenv, …) computes its `PATH` contribution from the sourcing shell's own cwd, so one
+    /// directory-agnostic snapshot can never be correct for more than one project. Never persisted.
+    /// Cleared entirely on a `SettingsSet` that changes any env-include field; a single entry is
+    /// removed on that directory's `WorktreeDelete`.
+    env_include_cache: HashMap<PathBuf, Vec<(String, String)>>,
 }
 
 /// One live process of a session: its PTY and its framer. The [`PtySession`] is behind an `Arc` so
@@ -150,6 +159,7 @@ impl DaemonState {
                 attachments: HashMap::new(),
                 sessions: HashMap::new(),
                 worktrees: HashMap::new(),
+                env_include_cache: HashMap::new(),
             }),
             next_id: AtomicU64::new(1),
             lifecycle: Lifecycle::new(),
@@ -197,6 +207,63 @@ impl DaemonState {
                 None
             }
         }
+    }
+
+    /// The environment-include-resolved variables for `cwd`, merged with the hardcoded `TERM` pair
+    /// (FR-012b, BUG-003) — ready to hand straight to a spawn site's `env`. Disabled/blank-path
+    /// short-circuits to `merge_with_term(&[])` without spawning a subprocess or caching (contracts/
+    /// env-include-resolution.md's Non-goals). Otherwise served from `env_include_cache`, or
+    /// resolved and cached on a miss.
+    ///
+    /// Sourcing the script (`env_include::resolve`) spawns a real, disposable subprocess and may
+    /// block for up to the configured timeout (module invariant: never done under the state lock,
+    /// same reason PTY spawning itself happens off-lock) — so the settings/cache are read under a
+    /// short lock, the lock is dropped before resolving, and the result is written back under a
+    /// second short lock.
+    fn env_include_vars_for(&self, cwd: &Path) -> Vec<(String, String)> {
+        let (enabled, script_path, timeout_secs) = {
+            let settings = self.lock().catalog.settings_wire();
+            (
+                settings.env_include_enabled,
+                settings.env_include_script_path,
+                settings.env_include_timeout_secs,
+            )
+        };
+        if !enabled || script_path.trim().is_empty() {
+            return micold_core::env_include::merge_with_term(&[]);
+        }
+        if let Some(cached) = self.lock().env_include_cache.get(cwd) {
+            return cached.clone();
+        }
+        let (vars, outcome) = micold_core::env_include::resolve(
+            Path::new(&script_path),
+            cwd,
+            std::time::Duration::from_secs(timeout_secs),
+        );
+        if outcome != micold_core::env_include::EnvIncludeOutcome::Success {
+            tracing::warn!(?outcome, cwd = %cwd.display(), "env-include resolution did not succeed");
+        }
+        let merged = micold_core::env_include::merge_with_term(&vars);
+        self.lock()
+            .env_include_cache
+            .insert(cwd.to_path_buf(), merged.clone());
+        merged
+    }
+
+    /// Invalidate the cached environment-include resolution for one directory (BUG-003) — called
+    /// when the worktree at that path is deleted, mirroring the equivalent fix recorded in
+    /// `specs/011-env-include-script/bugs/BUG-002.md`'s Resolution: a worktree recreated for the
+    /// same branch reuses the exact same path (dir names are derived from the branch name), so a
+    /// stale pre-deletion snapshot would otherwise be served forever for that path.
+    pub fn invalidate_env_include(&self, cwd: &Path) {
+        self.lock().env_include_cache.remove(cwd);
+    }
+
+    /// Invalidate every cached environment-include resolution (BUG-003) — called when the
+    /// enabled/path/timeout settings themselves change (`SettingsSet`), since every cached
+    /// directory's snapshot was resolved under the now-stale configuration.
+    pub fn invalidate_env_include_all(&self) {
+        self.lock().env_include_cache.clear();
     }
 
     /// The `Welcome` payload for a freshly-handshaked client.
@@ -368,6 +435,27 @@ impl DaemonState {
             inner.catalog.set_scrollback(lines)?;
             inner.catalog.settings_wire()
         };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
+    /// Set any of the three environment-include settings and push `SettingsChanged` to every
+    /// client (FR-012b, FR-011). Invalidates every cached per-directory resolution (T098/BUG-003):
+    /// each cached directory's snapshot was resolved under the now-stale configuration.
+    pub fn set_env_include(
+        &self,
+        enabled: Option<bool>,
+        script_path: Option<String>,
+        timeout_secs: Option<u64>,
+    ) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner
+                .catalog
+                .set_env_include(enabled, script_path, timeout_secs)?;
+            inner.catalog.settings_wire()
+        };
+        self.invalidate_env_include_all();
         self.broadcast(DaemonMsg::SettingsChanged { settings });
         Ok(())
     }
@@ -611,8 +699,7 @@ impl DaemonState {
     /// (`SessionCreate` — `claude --session-id`), [`LaunchMode::Resume`] for bringing an existing
     /// durable session back (`SessionStart` — `claude --resume`). Ignored for a Regular/shell primary.
     ///
-    /// **T053 refinement pending**: the environment is a minimal `TERM` today; the full launch must
-    /// resolve `env_include` in the session's own directory (main `2862bab`).
+    /// Resolves `env_include` in the session's own directory (FR-012b, BUG-003).
     pub fn start_session(&self, id: SessionId, launch: LaunchMode) -> io::Result<()> {
         if self.live_session(id).is_some() {
             return Ok(()); // already running — Start is idempotent
@@ -644,7 +731,7 @@ impl DaemonState {
             ));
         };
 
-        let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
+        let env = self.env_include_vars_for(&plan.cwd);
         let session = match plan.mode {
             TerminalMode::AiCli => {
                 let spec = LaunchSpec {
@@ -831,7 +918,7 @@ impl DaemonState {
     /// is gone), count it as another crash so the retry budget still advances toward `Failed` instead
     /// of leaving a dead entry that looks alive.
     fn respawn_primary(&self, id: SessionId, cwd: PathBuf, mode: TerminalMode, scrollback: usize) {
-        let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
+        let env = self.env_include_vars_for(&cwd);
         let spawned = match mode {
             TerminalMode::AiCli => {
                 let spec = LaunchSpec {
@@ -963,7 +1050,7 @@ impl DaemonState {
                 "no such session in the catalog",
             ));
         };
-        let env = vec![("TERM".to_string(), "xterm-256color".to_string())];
+        let env = self.env_include_vars_for(&cwd);
         let pty = Arc::new(PtySession::spawn_shell(
             session, &cwd, &env, scrollback, None,
         )?);

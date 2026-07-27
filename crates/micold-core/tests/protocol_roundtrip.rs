@@ -172,6 +172,9 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
         ClientMsg::SettingsSet {
             req: 9,
             scrollback_lines: Some(50_000),
+            env_include_enabled: Some(false),
+            env_include_script_path: Some("/custom/rc".into()),
+            env_include_timeout_secs: Some(20),
         },
         ClientMsg::LogLocationRequest { req: 10 },
         ClientMsg::RecentErrorsRequest { req: 11, limit: 20 },
@@ -269,6 +272,9 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             catalog: sample_catalog(),
             settings: DaemonSettings {
                 scrollback_lines: 10_000,
+                env_include_enabled: true,
+                env_include_script_path: "/home/user/.bashrc".into(),
+                env_include_timeout_secs: 10,
             },
         },
         DaemonMsg::Refused {
@@ -301,6 +307,9 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
                 scrollback_lines: 1_000,
+                env_include_enabled: false,
+                env_include_script_path: String::new(),
+                env_include_timeout_secs: 5,
             },
         },
         DaemonMsg::SessionTitleChanged {

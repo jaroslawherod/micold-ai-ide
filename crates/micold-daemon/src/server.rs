@@ -568,11 +568,28 @@ where
             ClientMsg::SettingsSet {
                 req,
                 scrollback_lines,
+                env_include_enabled,
+                env_include_script_path,
+                env_include_timeout_secs,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
                     None => Ok(()),
-                };
+                }
+                .and_then(|()| {
+                    if env_include_enabled.is_none()
+                        && env_include_script_path.is_none()
+                        && env_include_timeout_secs.is_none()
+                    {
+                        Ok(())
+                    } else {
+                        state.set_env_include(
+                            env_include_enabled,
+                            env_include_script_path,
+                            env_include_timeout_secs,
+                        )
+                    }
+                });
                 match result {
                     Ok(()) => state.send(
                         id,
@@ -803,6 +820,11 @@ where
                     );
                     continue;
                 }
+                // Computed before `repo` moves into the closure below — the same path a session
+                // located in this worktree resolves as its `cwd`, so the env-include cache entry for
+                // it can be dropped once the delete succeeds (BUG-003: a worktree recreated for the
+                // same branch reuses this exact path).
+                let cache_path = repo.join(".claude/worktrees").join(&dir_name);
                 // Feature 013 (FR-011/FR-012): the user's explicit keep/delete choice, resolved
                 // against the worktree's actual bound branch (from the live git-discovery cache,
                 // not guessed from `dir_name`) — `None` for either an unbound/orphan worktree or
@@ -839,6 +861,7 @@ where
                                 tracing::warn!(%e, "archiving deleted worktree's sessions failed")
                             }
                         }
+                        state.invalidate_env_include(&cache_path);
                         refresh_worktrees_and_broadcast(state, project).await;
                         state.send(
                             id,

@@ -110,6 +110,11 @@ enum PendingOp {
     ProjectAdd,
     ProjectRemove,
     ProjectRename,
+    /// A `SettingsSet` (FR-012a/FR-012b, BUG-003/T100): the service echoes the persisted result
+    /// back as `SettingsChanged` to every connected client (including this one), which is what
+    /// actually applies it — this variant exists only so a failure reaches the user and a
+    /// disconnect-before-reply resolves to "unknown" like every other mutating RPC (T055).
+    SettingsSet,
 }
 
 impl PendingOp {
@@ -126,6 +131,7 @@ impl PendingOp {
             PendingOp::ProjectAdd => "add the project".into(),
             PendingOp::ProjectRemove => "remove the project".into(),
             PendingOp::ProjectRename => "rename the project".into(),
+            PendingOp::SettingsSet => "update the settings".into(),
         }
     }
 }
@@ -692,8 +698,17 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.displaced.clear();
             app.version_mismatch = None;
             app.build_mismatch = None;
-            // The daemon is the single writer of settings + sessions; adopt what it reports.
+            // The daemon is the single writer of settings + sessions; adopt what it reports
+            // (FR-012a/FR-012b) — including environment-include, which this client's own
+            // boot-time local read may predate (e.g. another window changed it while this one was
+            // still starting up). Re-source env-include under the now-authoritative values.
             app.scrollback_lines = settings.scrollback_lines;
+            app.env_include_enabled = settings.env_include_enabled;
+            app.env_include_script_path = settings.env_include_script_path;
+            app.env_include_timeout_secs = settings.env_include_timeout_secs;
+            app.env_include_cache.clear();
+            let cwd = default_resolution_cwd(&app.core);
+            refresh_env_include(app, &cwd);
             reconcile_catalog(&mut app.core, &catalog, false);
             app.daemon_catalog = Some(catalog);
             // Attach to the active project and view its active session so the daemon starts
@@ -717,8 +732,19 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     reconcile_catalog(&mut app.core, &catalog, true);
                     app.daemon_catalog = Some(catalog);
                 }
+                // A settings mutation reached the service — this client's own `SettingsSet` echoed
+                // back, or another window's (FR-011). Sync every service-owned field and re-source
+                // env-include, exactly like the local-save path below does for its own change
+                // (T100): the enabled/path/timeout settings may have changed, so every previously
+                // cached directory's snapshot is stale.
                 DaemonMsg::SettingsChanged { settings } => {
                     app.scrollback_lines = settings.scrollback_lines;
+                    app.env_include_enabled = settings.env_include_enabled;
+                    app.env_include_script_path = settings.env_include_script_path;
+                    app.env_include_timeout_secs = settings.env_include_timeout_secs;
+                    app.env_include_cache.clear();
+                    let cwd = default_resolution_cwd(&app.core);
+                    refresh_env_include(app, &cwd);
                 }
                 // Fetched scrollback: resolve + insert into the session's grid cache (FR-016/017).
                 DaemonMsg::ScrollbackResponse {
@@ -1781,6 +1807,25 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         .notify_error(format!("Couldn't save your settings: {err}"));
                 }
             }
+            // Also ask a connected daemon to apply the service-owned fields (scrollback,
+            // FR-012a; environment-include, FR-012b) so the change takes effect immediately for
+            // every session the daemon spawns — not just after its next restart re-reads the file
+            // this save just wrote (T100). Silently skipped while disconnected: unlike every other
+            // `send_op` caller, saving settings already has a fully-functional local-only path (the
+            // write above), so there's no "can't do this at all without a daemon" error to raise —
+            // the next daemon boot picks up the file regardless.
+            if let Some(daemon) = &app.daemon {
+                let req = app.next_req;
+                app.next_req += 1;
+                daemon.send(ClientMsg::SettingsSet {
+                    req,
+                    scrollback_lines: Some(scrollback_lines),
+                    env_include_enabled: Some(app.env_include_enabled),
+                    env_include_script_path: Some(app.env_include_script_path.clone()),
+                    env_include_timeout_secs: Some(env_include_timeout_secs),
+                });
+                app.pending_ops.insert(req, PendingOp::SettingsSet);
+            }
             // The enabled/path/timeout settings themselves changed, so every previously cached
             // directory's snapshot is stale (BUG-002) — clear all of them, then eagerly re-source
             // one representative directory so Settings shows fresh feedback immediately; every
@@ -2446,7 +2491,7 @@ fn scan(dir: PathBuf) -> Message {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use micold_client::app::{NoticeLevel, Notification};
+    use micold_client::app::{NoticeLevel, Notification, SettingsDraft};
     use micold_core::protocol::messages::{ActivitySignal, ProjectSnapshot, SessionSummary};
 
     // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
@@ -2827,6 +2872,167 @@ mod tests {
             },
         );
         assert_eq!(app.last_grid, Some((180, 45)));
+    }
+
+    /// Builds an `App` with every field at a neutral default, so each test only spells out the
+    /// fields it actually varies (mirrors the literal-construction pattern the other tests in this
+    /// module already use, factored out because T100's tests need several variants of it).
+    fn base_app() -> App {
+        App {
+            core: State::default(),
+            grids: HashMap::new(),
+            stamper: SessionInputStamper::new(),
+            selection: None,
+            display_offset: 0,
+            scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
+            motion: Animator::new(),
+            main_key: main_content_key(&State::default()),
+            handle_hovered: false,
+            dismissing: None,
+            row_fx: Animator::new(),
+            prev_hovered: None,
+            window_focused: true,
+            last_grid: None,
+            env_include_enabled: micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED,
+            env_include_script_path: String::new(),
+            env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
+            env_include_cache: HashMap::new(),
+            env_include_last_outcome: EnvIncludeOutcome::Disabled,
+            daemon: None,
+            daemon_catalog: None,
+            displaced: HashMap::new(),
+            disconnected: false,
+            version_mismatch: None,
+            build_mismatch: None,
+            next_req: 0,
+            pending_ops: HashMap::new(),
+        }
+    }
+
+    /// T100 (BUG-003 follow-up, FR-012a/FR-012b): saving Settings while connected to a daemon must
+    /// ask it to apply the service-owned fields too — not just write `settings.json` locally — so
+    /// the change takes effect for that daemon's already-running sessions immediately, rather than
+    /// only after its next restart.
+    #[test]
+    fn settings_saved_sends_settings_set_to_a_connected_daemon() {
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.core.settings_draft = Some(SettingsDraft {
+            scrollback_lines: "20000".into(),
+            env_include_enabled: false,
+            env_include_script_path: "/tmp/does-not-exist.sh".into(),
+            env_include_timeout: "15".into(),
+            error: None,
+        });
+
+        let _ = update_inner(&mut app, Message::SettingsSaved);
+
+        match rx.try_recv() {
+            Ok(ClientMsg::SettingsSet {
+                scrollback_lines,
+                env_include_enabled,
+                env_include_script_path,
+                env_include_timeout_secs,
+                ..
+            }) => {
+                assert_eq!(scrollback_lines, Some(20_000));
+                assert_eq!(env_include_enabled, Some(false));
+                assert_eq!(
+                    env_include_script_path,
+                    Some("/tmp/does-not-exist.sh".to_string())
+                );
+                assert_eq!(env_include_timeout_secs, Some(15));
+            }
+            other => panic!("expected a queued SettingsSet, got {other:?}"),
+        }
+        // Exactly one — a save must not double-send.
+        assert!(rx.try_recv().is_err(), "no second message queued");
+    }
+
+    /// The disconnected case is not an error: settings-saving already has a fully working local-only
+    /// path (the direct `settings.json` write above the daemon-send in `Message::SettingsSaved`), so
+    /// there is nothing to notify the user about — unlike every other `send_op`-routed mutation, which
+    /// has no such standalone path.
+    #[test]
+    fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
+        let mut app = base_app();
+        assert!(app.daemon.is_none());
+        app.core.settings_draft = Some(SettingsDraft {
+            scrollback_lines: "20000".into(),
+            env_include_enabled: true,
+            env_include_script_path: String::new(),
+            env_include_timeout: "15".into(),
+            error: None,
+        });
+
+        let _ = update_inner(&mut app, Message::SettingsSaved);
+
+        assert_eq!(
+            app.scrollback_lines, 20_000,
+            "the local field still updates"
+        );
+        assert!(app.pending_ops.is_empty(), "nothing was queued to send");
+    }
+
+    /// T100: a fresh connect (or reconnect) must adopt the daemon's authoritative env-include
+    /// settings too, not just scrollback — the daemon is the single source of truth for both
+    /// (FR-012a/FR-012b), and this client's own boot-time local read may already be stale relative
+    /// to it (e.g. another window changed a setting first).
+    #[test]
+    fn daemon_connected_adopts_the_authoritative_env_include_settings() {
+        let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.env_include_enabled = true;
+        app.env_include_script_path = "/tmp/stale-local-path.sh".into();
+        app.env_include_timeout_secs = 10;
+
+        let _ = update_inner(
+            &mut app,
+            Message::DaemonConnected {
+                outbox: micold_client::daemon::Outbox::new(tx),
+                catalog: snapshot_with("/repo/demo", Vec::new()),
+                settings: micold_core::protocol::messages::DaemonSettings {
+                    scrollback_lines: 12_345,
+                    env_include_enabled: false,
+                    env_include_script_path: "/authoritative/from-daemon.sh".into(),
+                    env_include_timeout_secs: 30,
+                },
+            },
+        );
+
+        assert_eq!(app.scrollback_lines, 12_345);
+        assert!(!app.env_include_enabled);
+        assert_eq!(app.env_include_script_path, "/authoritative/from-daemon.sh");
+        assert_eq!(app.env_include_timeout_secs, 30);
+    }
+
+    /// T100: a `SettingsChanged` push (this client's own `SettingsSet` echoed back, or another
+    /// window's) must sync every service-owned field, not just scrollback — the whole point of
+    /// sending `SettingsSet` at all is that the change takes effect without a restart.
+    #[test]
+    fn settings_changed_event_syncs_env_include_fields() {
+        let mut app = base_app();
+        app.env_include_enabled = true;
+        app.env_include_script_path = "/tmp/before.sh".into();
+        app.env_include_timeout_secs = 10;
+
+        let _ = update_inner(
+            &mut app,
+            Message::DaemonEvent(DaemonMsg::SettingsChanged {
+                settings: micold_core::protocol::messages::DaemonSettings {
+                    scrollback_lines: 5_000,
+                    env_include_enabled: false,
+                    env_include_script_path: "/tmp/after.sh".into(),
+                    env_include_timeout_secs: 45,
+                },
+            }),
+        );
+
+        assert_eq!(app.scrollback_lines, 5_000);
+        assert!(!app.env_include_enabled);
+        assert_eq!(app.env_include_script_path, "/tmp/after.sh");
+        assert_eq!(app.env_include_timeout_secs, 45);
     }
 
     #[test]

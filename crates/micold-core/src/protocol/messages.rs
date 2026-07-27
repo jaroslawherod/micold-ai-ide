@@ -264,12 +264,20 @@ pub enum ClientMsg {
         /// Target session.
         session: SessionId,
     },
-    /// Set the service-owned scrollback limit (FR-012a).
+    /// Set service-owned settings: the scrollback limit (FR-012a) and/or the environment-include
+    /// setting (FR-012b). Each field is independently optional — `None` leaves that setting
+    /// unchanged.
     SettingsSet {
         /// Correlation id.
         req: u64,
         /// New scrollback line cap, or `None` to leave unchanged.
         scrollback_lines: Option<usize>,
+        /// New environment-include enabled flag, or `None` to leave unchanged.
+        env_include_enabled: Option<bool>,
+        /// New environment-include script path, or `None` to leave unchanged.
+        env_include_script_path: Option<String>,
+        /// New environment-include timeout in seconds, or `None` to leave unchanged.
+        env_include_timeout_secs: Option<u64>,
     },
 
     // --- Diagnostics ---
@@ -632,11 +640,17 @@ pub enum WorktreeStatus {
     Prunable,
 }
 
-/// The service-owned settings mirrored to clients (FR-012a).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// The service-owned settings mirrored to clients (FR-012a, FR-012b).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DaemonSettings {
     /// The scrollback retention limit, in lines.
     pub scrollback_lines: usize,
+    /// Whether the environment-include script is sourced for spawned sessions (FR-012b).
+    pub env_include_enabled: bool,
+    /// The configured environment-include script path.
+    pub env_include_script_path: String,
+    /// The environment-include sourcing timeout, in seconds.
+    pub env_include_timeout_secs: u64,
 }
 
 /// The result payload of a successful mutating request.
