@@ -832,12 +832,23 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         app.core.update(Message::WorktreeCreateStageChanged(stage));
                     }
                 }
-                DaemonMsg::OperationError { req, message, .. } => {
+                DaemonMsg::OperationError {
+                    req,
+                    message,
+                    detail,
+                    ..
+                } => {
                     match app.pending_ops.remove(&req) {
                         // A failed worktree create shows in the form (keeps it open to retry), not a
-                        // toast — mirroring the old local-create failure path.
+                        // toast — mirroring the old local-create failure path. `detail` carries git's
+                        // own stderr verbatim (feature 010, FR-006/SC-003): for a submodule fetch
+                        // failure this is normally the only place that names which submodule failed
+                        // and why (auth/network/unreachable commit) — `message` alone is the generic
+                        // "git failed to create the worktree".
                         Some(PendingOp::WorktreeCreate(_)) => {
-                            app.core.update(Message::WorktreeCreateFailed(message));
+                            app.core.update(Message::WorktreeCreateFailed(
+                                worktree_create_error_text(message, detail),
+                            ));
                         }
                         // Feature 016: both branch queries back the open form, so their failures
                         // belong on its own error line. A notification would be raised into the
@@ -2355,6 +2366,18 @@ fn os_theme_poll(interval: Duration) -> Subscription<Message> {
     every(interval).map(|_instant| Message::SystemThemeChanged(detect_system_scheme()))
 }
 
+/// The worktree-creation failure text shown in the form (feature 010, FR-006/SC-003): appends
+/// `detail` (the daemon's `OperationError.detail`, git's own stderr verbatim) to `message` when
+/// present and non-blank. For a submodule fetch failure, `message` alone is the generic "git
+/// failed to create the worktree" — `detail` is normally the only place that names which
+/// submodule failed and why (auth/network/unreachable commit).
+fn worktree_create_error_text(message: String, detail: Option<String>) -> String {
+    match detail {
+        Some(detail) if !detail.trim().is_empty() => format!("{message}: {}", detail.trim()),
+        _ => message,
+    }
+}
+
 fn start_dir() -> PathBuf {
     directories::UserDirs::new()
         .map(|dirs| dirs.home_dir().to_path_buf())
@@ -2377,6 +2400,40 @@ mod tests {
     use super::*;
     use micold_client::app::{NoticeLevel, Notification};
     use micold_core::protocol::messages::{ActivitySignal, ProjectSnapshot, SessionSummary};
+
+    // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
+    // own stderr, e.g. naming which submodule failed and why) was destructured with `..` and
+    // silently discarded — the worktree-creation form only ever showed the generic
+    // "git failed to create the worktree" message, never the diagnostic FR-006/SC-003 requires.
+    #[test]
+    fn worktree_create_error_appends_a_non_blank_detail() {
+        assert_eq!(
+            worktree_create_error_text(
+                "git failed to create the worktree".to_string(),
+                Some(
+                    "fatal: could not read Username for 'https://example.com': terminal prompts disabled"
+                        .to_string()
+                ),
+            ),
+            "git failed to create the worktree: fatal: could not read Username for \
+             'https://example.com': terminal prompts disabled"
+        );
+    }
+
+    #[test]
+    fn worktree_create_error_falls_back_to_message_when_detail_is_absent_or_blank() {
+        assert_eq!(
+            worktree_create_error_text("git failed to create the worktree".to_string(), None),
+            "git failed to create the worktree"
+        );
+        assert_eq!(
+            worktree_create_error_text(
+                "git failed to create the worktree".to_string(),
+                Some("   ".to_string())
+            ),
+            "git failed to create the worktree"
+        );
+    }
 
     fn summary(id: SessionId, title: &str, lifecycle: WireLifecycle) -> SessionSummary {
         SessionSummary {
