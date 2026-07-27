@@ -1,5 +1,65 @@
 # Changelog
 
+## [0.5.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.4.0...micold-ai-ide-v0.5.0) (2026-07-27)
+
+
+### Features
+
+* **010:** daemon session persistence — US2 + US4–US7 (attach/activity, supervision, exclusivity, contract recovery, logout) ([34bd890](https://github.com/jaroslawherod/micold-ai-ide/commit/34bd890b0d9aab0228a7c5ecd6219a7f9432f02e))
+* **client:** per-session activity badge + live titles in the sidebar (feat 010 US2 T048/T049) ([3ecfcd8](https://github.com/jaroslawherod/micold-ai-ide/commit/3ecfcd837fea294274a5115c81a71dad9e7ff9d5))
+* **daemon:** loopback activity-hook receiver + per-session --settings wiring (feat 010 US2 T045/T046) ([b690ef5](https://github.com/jaroslawherod/micold-ai-ide/commit/b690ef5b47f59891174e43c1df611910b15766f3))
+* **daemon:** process-tree teardown + US4 docs (feat 010 US4 T061/T063) ([a39db33](https://github.com/jaroslawherod/micold-ai-ide/commit/a39db3321fbd27b15715b79c35330da3129b275c))
+* **daemon:** PtySession exit detection — reap + classify clean/crash (feat 010 US4 T060) ([416f9c3](https://github.com/jaroslawherod/micold-ai-ide/commit/416f9c31fdec7aa6f623450058b9181efa88c460))
+* **daemon:** reset a surviving restart to Running — close the L5 gap (feat 010 US4) ([25e96c5](https://github.com/jaroslawherod/micold-ai-ide/commit/25e96c5accf19ff47fed957ede1458db2f0026ff))
+* **daemon:** restart supervision policy — clean-exit vs crash-loop (feat 010 US4 T060 policy) ([450dac3](https://github.com/jaroslawherod/micold-ai-ide/commit/450dac30f319b88838183b27c61b1f64eb8b7cc8))
+* **daemon:** unattended restart supervision loop + respawn (feat 010 US4 T060/T058/T059/T062) ([188f900](https://github.com/jaroslawherod/micold-ai-ide/commit/188f90060bbd7b79f45c56eefa72303e181be55a))
+* **daemon:** wire the activity FSM + OSC title into the session projection (feat 010 US2 T046/T047) ([7b72bfe](https://github.com/jaroslawherod/micold-ai-ide/commit/7b72bfe24d7282e0d2239a12e339a05a5f0719ca))
+* **diagnostics:** daemon diagnostics surface + log-event/redaction tests (feat 010 T080/T080a/T081) ([66c74ff](https://github.com/jaroslawherod/micold-ai-ide/commit/66c74ff687e9dcaad5c6c8fc15a30e10503c1fd2))
+* **ui:** add the per-instance animation primitive ([1f898e6](https://github.com/jaroslawherod/micold-ai-ide/commit/1f898e6d6d33456fe83802534bfbef81a96e95de))
+* **ui:** close the component boundary ([2193375](https://github.com/jaroslawherod/micold-ai-ide/commit/21933755874f8b2bbc0f9be5260018165da65626))
+* **ui:** consolidate five floating surfaces onto one overlay primitive ([4b54f41](https://github.com/jaroslawherod/micold-ai-ide/commit/4b54f41b5c2d979a81bf1aeeb56ac4b4a00e369b))
+* **ui:** Material component architecture (feature 017) ([629d135](https://github.com/jaroslawherod/micold-ai-ide/commit/629d135000f583e2b78f4825c59bac66b243ff55))
+* **ui:** migrate the settings and folder-browser dialogs onto the library ([1c23acc](https://github.com/jaroslawherod/micold-ai-ide/commit/1c23accf6ebb4902a2ba18e6915d15e0a325552d))
+* **ui:** migrate the shell and window chrome onto the library ([5791bc9](https://github.com/jaroslawherod/micold-ai-ide/commit/5791bc9416eca85c8b74cc06967bd42933d6cae9))
+* **ui:** migrate the sidebar and terminal pane onto the library ([022a001](https://github.com/jaroslawherod/micold-ai-ide/commit/022a00140566c2eaf718cb01823858a192fa0354))
+* **ui:** wrap the rendering stack behind the component library ([29987c6](https://github.com/jaroslawherod/micold-ai-ide/commit/29987c6846979545daa4fcf7441afc982dc41e7b))
+* **us5:** exclusivity tests + client keepalive, banner & takeover (feat 010 US5) ([ce87145](https://github.com/jaroslawherod/micold-ai-ide/commit/ce8714521a20a06370fa73d42c64c9f762f95d74))
+* **us6:** interrupted-resumable sessions + version-mismatch restart (feat 010 US6) ([11174e3](https://github.com/jaroslawherod/micold-ai-ide/commit/11174e3be0f9c4383f7dcc84d934d5d2da6556e0))
+* **us7:** Linux logout survival via systemd user linger (feat 010 US7) ([0a3846c](https://github.com/jaroslawherod/micold-ai-ide/commit/0a3846cfe394dafd495754fe87a6a5f8f269903f))
+* **worktree:** name the creation step in progress (FR-024) + review fixes ([a695f49](https://github.com/jaroslawherod/micold-ai-ide/commit/a695f49b010865a86f5f5874ddd0afefed69ceb1))
+* **worktree:** name the creation step in progress (FR-024) + review fixes ([fede676](https://github.com/jaroslawherod/micold-ai-ide/commit/fede676e474b561c53c4c0eda26387e0e3037458))
+* **worktree:** reuse or overwrite an existing branch when creating a worktree ([f0b5e54](https://github.com/jaroslawherod/micold-ai-ide/commit/f0b5e54e6e6f9d4b8e6fdf301464246540775339))
+* **worktree:** reuse or overwrite an existing branch when creating a worktree ([4e06862](https://github.com/jaroslawherod/micold-ai-ide/commit/4e06862efdbd3ef8075e6d88bbd6a00b6667671b))
+
+
+### Bug Fixes
+
+* **001-app-shell-about:** close convergence gaps ([c5e565c](https://github.com/jaroslawherod/micold-ai-ide/commit/c5e565c9278232a508b2c04a160b978585a97baf))
+* **002-project-workspace-management:** surface settings save failures ([93e6fd4](https://github.com/jaroslawherod/micold-ai-ide/commit/93e6fd4a75d06d7699270dd272cbc90f2a0a82a3))
+* **005-worktree-session-terminal:** restore durable archive marker in the daemon ([06e9aa5](https://github.com/jaroslawherod/micold-ai-ide/commit/06e9aa5d36279db43ac180db66a62b081cd6684c))
+* **006-real-terminal-emulator:** reconnect the focus-gate to its tested pure function ([d011db2](https://github.com/jaroslawherod/micold-ai-ide/commit/d011db2e266e5b09dbdaf0ccf829493bbdc3e941))
+* **008-background-project-switching:** detect background restarts again ([f7c309d](https://github.com/jaroslawherod/micold-ai-ide/commit/f7c309d9cce4c3500a1762ac089718debd3a93ed))
+* **010-submodule-worktree-support:** stop discarding the worktree-create error detail ([7a2c86a](https://github.com/jaroslawherod/micold-ai-ide/commit/7a2c86abd146db270c07551c88566896ea42a2c2))
+* **013-create-worktree-refinement:** wire the keep/delete-branch choice to the daemon ([565dbe9](https://github.com/jaroslawherod/micold-ai-ide/commit/565dbe9f3f302bf24fa46699f64adfb7eaeb9c80))
+* **client:** draw the session activity badge from the shared icon vocabulary ([bbbc68a](https://github.com/jaroslawherod/micold-ai-ide/commit/bbbc68a856feb75232c1e3fd099ff52bc2a03e7b))
+* **client:** draw the session activity badge from the shared icon vocabulary ([380b1f8](https://github.com/jaroslawherod/micold-ai-ide/commit/380b1f88c48304d5356b5071e3a4ccb091fa71be))
+* close implementation drifts found via /speckit-converge retrofit sweep ([ca5efe7](https://github.com/jaroslawherod/micold-ai-ide/commit/ca5efe7a36cc50039e7d78651235ea40119910ab))
+* **daemon:** detect a stale daemon after a same-contract .deb upgrade ([#23](https://github.com/jaroslawherod/micold-ai-ide/issues/23)) ([bcd7d0a](https://github.com/jaroslawherod/micold-ai-ide/commit/bcd7d0a5baa9db722f2e20e37be6a4832b0abd1d))
+* **daemon:** fold underline_color into the shadow-diff style key ([e44c1e1](https://github.com/jaroslawherod/micold-ai-ide/commit/e44c1e17fdb3aee0dea11e38daa04217a1cc61aa))
+* **daemon:** resolve env-include for daemon-spawned sessions ([f3c63c8](https://github.com/jaroslawherod/micold-ai-ide/commit/f3c63c8367b9fba97a1e9ee64e9353520868cbf1))
+* **daemon:** resolve env-include for daemon-spawned sessions (BUG-003) ([64e9d7f](https://github.com/jaroslawherod/micold-ai-ide/commit/64e9d7f6718f3218259cc721d440f5bd8e80330f))
+* **daemon:** wrap Claude Code hook entries in the required matcher/hooks group ([42a9bfb](https://github.com/jaroslawherod/micold-ai-ide/commit/42a9bfb9f566dd3f8adcab382e29d22530bcc99f))
+* **deb:** resolve packaging/asset paths relative to the crate dir ([9114284](https://github.com/jaroslawherod/micold-ai-ide/commit/91142842af2eefbf29c812d1982fbcf697be1fea))
+* **deb:** resolve packaging/asset paths relative to the crate dir ([98f5be7](https://github.com/jaroslawherod/micold-ai-ide/commit/98f5be75624a19f39ba23cd10758161f52f0e46b))
+* **protocol:** carry NamedColor discriminant as u16 so default cells aren't red ([7de5a11](https://github.com/jaroslawherod/micold-ai-ide/commit/7de5a11cbc55e1f5cdbbb56ab0658d0f7226ea8d))
+* **release:** unbreak release-please after the workspace split ([5c2d6cd](https://github.com/jaroslawherod/micold-ai-ide/commit/5c2d6cd76cea1074348408f62642cb0cee356aeb))
+* **release:** unbreak release-please after the workspace split ([34adc39](https://github.com/jaroslawherod/micold-ai-ide/commit/34adc39054a114bbdfbc1ff43a3cec23fe5a2273))
+
+
+### Miscellaneous Chores
+
+* release micold-ai-ide 0.5.0 ([d73372d](https://github.com/jaroslawherod/micold-ai-ide/commit/d73372dc729ae580f9ab723e8fe0cc857a184073))
+
 ## [0.4.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.3.0...micold-ai-ide-v0.4.0) (2026-07-25)
 
 
