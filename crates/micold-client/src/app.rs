@@ -2173,13 +2173,6 @@ pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> Ke
     }
 }
 
-/// Whether keystrokes may be written to a session's PTY given its lifecycle (FR-012a): only
-/// while `Running`. In other states input is discarded (no buffering); focus/scroll/copy still
-/// work.
-pub fn should_write_to(lifecycle: micold_core::session::SessionLifecycle) -> bool {
-    matches!(lifecycle, micold_core::session::SessionLifecycle::Running)
-}
-
 /// A snapshot of a just-closed overlay, kept alive by the client so it can keep being rendered
 /// while it fades out. The pure core clears the overlay + its draft synchronously on close, so
 /// we capture the data here *before* the reducer runs and render from this snapshot during the
