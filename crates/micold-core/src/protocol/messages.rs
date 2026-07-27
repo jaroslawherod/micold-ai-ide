@@ -229,6 +229,9 @@ pub enum ClientMsg {
         dir_name: String,
         /// Whether to stop live sessions first.
         stop_sessions: bool,
+        /// Whether to also delete the worktree's git branch (feature 013, FR-011/FR-012).
+        /// `true` is today's (and the spec's) default; `false` keeps the branch.
+        delete_branch: bool,
     },
     /// Rename a worktree's display name.
     WorktreeRename {
@@ -636,6 +639,14 @@ pub enum OperationResult {
     WorktreeCreated {
         /// The new worktree's directory name.
         dir_name: String,
+    },
+    /// A worktree was deleted (feature 013, FR-011/FR-015). The worktree directory and its
+    /// sessions are always gone by this point; `branch_delete_failed` reports the separate,
+    /// non-fatal outcome of the (optional) branch-deletion step.
+    WorktreeDeleted {
+        /// `true` when branch deletion was requested but git could not delete it (e.g. it holds
+        /// commits unreachable from elsewhere). Always `false` when the branch was kept.
+        branch_delete_failed: bool,
     },
     /// The classification of a branch name (feature 016, FR-001).
     BranchPreflight {

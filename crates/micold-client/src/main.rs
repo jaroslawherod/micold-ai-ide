@@ -820,6 +820,22 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                             }
                         }
                     }
+                    // Feature 013 (FR-015): the worktree directory and its sessions are already
+                    // gone by this point (that half always succeeds here) — a failed branch
+                    // deletion is reported as a distinct, non-blocking notice rather than
+                    // silently discarded, so choosing "delete the branch" that git then refuses
+                    // (e.g. unreachable commits) doesn't look like it silently kept the branch.
+                    Some(PendingOp::WorktreeDelete(dir)) => {
+                        if let OperationResult::WorktreeDeleted {
+                            branch_delete_failed: true,
+                        } = result
+                        {
+                            app.core.notify_error(format!(
+                                "The worktree \"{dir}\" was removed, but its branch could not be \
+                                 deleted (it may hold commits not present elsewhere)."
+                            ));
+                        }
+                    }
                     _ => {}
                 },
                 // FR-024: a stage push names the step in flight. Peeked, not removed — the
@@ -1793,12 +1809,17 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     session_cwd_for_location(&project, &SessionLocation::Worktree(dir.clone()));
                 app.env_include_cache.remove(&cwd);
                 let (p, d) = (project, dir.clone());
+                // Feature 013 (FR-011/FR-012): the user's explicit keep/delete choice from the
+                // confirm dialog, defaulting to "delete the branch" (`worktree_delete_keep_branch`
+                // defaults to `false`).
+                let delete_branch = !app.core.worktree_delete_keep_branch;
                 send_op(app, PendingOp::WorktreeDelete(dir), move |req| {
                     ClientMsg::WorktreeDelete {
                         req,
                         project: p,
                         dir_name: d,
                         stop_sessions: true,
+                        delete_branch,
                     }
                 });
             }
