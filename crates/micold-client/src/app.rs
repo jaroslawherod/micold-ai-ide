@@ -26,11 +26,6 @@ use micold_core::worktree::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-/// The labels of the top toolbar's entries, in display order.
-///
-/// The shell deliberately exposes exactly one entry — "Help" (FR-002, FR-003).
-pub const TOOLBAR_ENTRIES: [&str; 1] = ["Help"];
-
 /// The labels of the actions revealed under the "Help" menu, in display order.
 ///
 /// "Help" exposes exactly one action — "About" (FR-003, FR-004).
@@ -42,11 +37,6 @@ pub const SIDEBAR_MIN_WIDTH: u16 = 180;
 pub const SIDEBAR_MAX_WIDTH: u16 = 600;
 /// Default sidebar width in pixels, used until the user resizes it.
 pub const SIDEBAR_DEFAULT_WIDTH: u16 = 300;
-
-/// The top toolbar's entry labels. See [`TOOLBAR_ENTRIES`].
-pub fn toolbar_entries() -> &'static [&'static str] {
-    &TOOLBAR_ENTRIES
-}
 
 /// The actions under the "Help" menu. See [`HELP_ACTIONS`].
 pub fn help_actions() -> &'static [&'static str] {

@@ -15,13 +15,17 @@ in [spec.md](../spec.md).
 
 | Element | Behavior | Traces to |
 |---------|----------|-----------|
-| "Help" entry | The **only** toolbar entry; always visible. | FR-002, FR-003 |
-| (any other entry) | MUST NOT exist. | FR-003 |
+| Overflow-menu trigger | Always visible; reveals the app's secondary actions. | FR-002, FR-003 |
+| (additional top-level triggers) | MAY exist, owned by later features (e.g. the feature 008 project switcher). | FR-002 |
 
-## C3. Help menu
+Per the spec's 2026-07-20 alignment note, the toolbar's single labelled "Help" entry became
+an unlabelled overflow-menu trigger as later features (003, 006, 008) added toolbar surfaces.
 
-- Selecting "Help" reveals an **"About"** action (FR-004).
-- "About" is the **only** action under Help (FR-003).
+## C3. Overflow menu
+
+- Selecting the overflow-menu trigger reveals **"About"**, plus any secondary actions owned
+  by later features (currently the theme-mode toggle from feature 003 and "Settings" from
+  feature 006) (FR-003, FR-004).
 
 ## C4. About activation
 
@@ -60,8 +64,10 @@ The dialog MUST display all four fields, all visible on first open without scrol
 
 ## C7. Focus
 
-- On open: keyboard focus moves **into the dialog** (lands on the Close button) (FR-014).
-- On close: keyboard focus returns to the **main window** (FR-014).
+- No keyboard focus change occurs on open or close: iced 0.13's `button` widget does not
+  implement the framework's focusable operation, so focus cannot be moved onto the Close
+  button (FR-014, superseded 2026-07-27 — see spec.md alignment note). Input-blocking (FR-013)
+  and Close/Esc dismissal already work regardless of focus state.
 
 ## C8. Cross-platform parity
 

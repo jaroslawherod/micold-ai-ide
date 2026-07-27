@@ -61,12 +61,17 @@ All Technical Context unknowns are resolved below. No `NEEDS CLARIFICATION` mark
 ## R5. Keyboard (Esc) and focus handling (FR-011, FR-014)
 
 - **Decision**: Subscribe to key presses via iced's keyboard subscription; map Esc to the
-  `AboutClosed` message **only while the overlay is open**. On open, move focus to the Close
-  button via a focus `Task`/operation; on close, return focus to the main window.
+  `AboutClosed` message **only while the overlay is open**. No focus `Task`/operation is used
+  on open or close.
 - **Rationale**: Cross-platform keyboard handling comes from iced's abstraction (Principle
   VI); gating Esc on overlay state satisfies the "Esc with no dialog open has no effect" edge
-  case. Focus movement satisfies FR-014 and keeps the dialog keyboard-accessible.
+  case. Focus movement was dropped 2026-07-27 (see spec.md alignment note): iced 0.13.4's
+  `button` widget does not implement the framework's focusable operation (only `text_input`/
+  `text_editor` do), so there is no supported way to move focus onto the Close button.
 - **Alternatives considered**: Global OS hotkey — rejected; unnecessary and platform-specific.
+  A custom `Operation`-based focusable wrapper around the Close button — rejected for this
+  single-button dialog as disproportionate complexity; revisit if iced adds native button
+  focus support or the dialog grows more interactive controls.
 
 ## R6. Testing strategy under Principle I
 

@@ -48,9 +48,9 @@ enum Overlay {
 
 | From | Message | To | Notes |
 |------|---------|----|-------|
-| `Overlay::None` | `AboutOpened` | `Overlay::About` | Triggered by activating Help → About (FR-005). Focus moves into dialog (FR-014). |
+| `Overlay::None` | `AboutOpened` | `Overlay::About` | Triggered by activating Help → About (FR-005). |
 | `Overlay::About` | `AboutOpened` | `Overlay::About` | Idempotent — no second instance (FR-015). |
-| `Overlay::About` | `AboutClosed` | `Overlay::None` | Close button (FR-010) or Esc (FR-011). Focus returns to main window (FR-014). |
+| `Overlay::About` | `AboutClosed` | `Overlay::None` | Close button (FR-010) or Esc (FR-011). No focus change occurs on either transition — see the 2026-07-27 alignment note on FR-014 in spec.md. |
 | `Overlay::None` | `AboutClosed` | `Overlay::None` | No-op — Esc with no dialog open has no effect (edge case). |
 
 State is unchanged by any transition other than switching `overlay`; the rest of the window
