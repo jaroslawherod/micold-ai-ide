@@ -47,6 +47,22 @@ fn init_git_repo(dir: &Path) {
     run(&["commit", "-q", "--allow-empty", "-m", "root"]);
 }
 
+/// Whether `branch` currently exists in `repo` (feature 013, FR-011/FR-012 regression check).
+fn branch_exists(repo: &Path, branch: &str) -> bool {
+    Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args([
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ])
+        .status()
+        .expect("git runs")
+        .success()
+}
+
 /// Pre-create a branch (for the duplicate-branch failure).
 fn create_branch(repo: &Path, branch: &str) {
     let ok = Command::new("git")
@@ -345,6 +361,7 @@ async fn worktree_delete_with_live_session_and_no_stop_is_refused() {
             project: project.path().to_path_buf(),
             dir_name: "wt1".into(),
             stop_sessions: false,
+            delete_branch: true,
         }))
         .await
         .unwrap();
@@ -414,6 +431,7 @@ async fn worktree_delete_with_stop_sessions_archives_and_removes() {
             project: project.path().to_path_buf(),
             dir_name: "wt2".into(),
             stop_sessions: true,
+            delete_branch: true,
         }))
         .await
         .unwrap();
@@ -425,7 +443,9 @@ async fn worktree_delete_with_stop_sessions_archives_and_removes() {
     assert!(matches!(
         ok,
         DaemonMsg::OperationOk {
-            result: OperationResult::Ack,
+            result: OperationResult::WorktreeDeleted {
+                branch_delete_failed: false
+            },
             ..
         }
     ));
@@ -448,6 +468,76 @@ async fn worktree_delete_with_stop_sessions_archives_and_removes() {
     assert!(
         !has_session,
         "the deleted worktree's session is archived out"
+    );
+    // Convergence fix (retrofit session, 2026-07-27): `delete_branch: true` (the default, per
+    // FR-012) must actually delete the branch — the wire previously had no field for this at
+    // all, and the daemon hardcoded `None` (keep), so the user's choice had zero effect.
+    assert!(
+        !branch_exists(project.path(), "wt2"),
+        "delete_branch: true must actually delete the branch (FR-011/FR-012/FR-014)"
+    );
+}
+
+#[tokio::test]
+async fn worktree_delete_with_delete_branch_false_keeps_the_branch() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        Vec::new(),
+    )));
+    let ok = Command::new("git")
+        .arg("-C")
+        .arg(project.path())
+        .args([
+            "worktree",
+            "add",
+            "-b",
+            "wt3",
+            ".claude/worktrees/wt3",
+            "HEAD",
+        ])
+        .output()
+        .unwrap()
+        .status
+        .success();
+    assert!(ok, "git worktree add for the fixture failed");
+
+    let mut client = connect_and_attach(&state, project.path()).await;
+    client
+        .send(Frame::Control(ClientMsg::WorktreeDelete {
+            req: 7,
+            project: project.path().to_path_buf(),
+            dir_name: "wt3".into(),
+            stop_sessions: true,
+            delete_branch: false,
+        }))
+        .await
+        .unwrap();
+
+    let ok = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 7, .. })
+    })
+    .await;
+    assert!(matches!(
+        ok,
+        DaemonMsg::OperationOk {
+            result: OperationResult::WorktreeDeleted {
+                branch_delete_failed: false
+            },
+            ..
+        }
+    ));
+    assert!(
+        !project.path().join(".claude/worktrees/wt3").exists(),
+        "the worktree directory was removed"
+    );
+    assert!(
+        branch_exists(project.path(), "wt3"),
+        "delete_branch: false must keep the branch (FR-013)"
     );
 }
 

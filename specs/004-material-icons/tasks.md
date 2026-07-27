@@ -151,6 +151,15 @@ confirm the correct glyph and that referencing an undefined variant is a compile
 - [X] T027 Verify build + full test suite pass on Linux, macOS, and Windows in CI (Principle VI, SC-007).
 - [X] T028 Run `quickstart.md` validation end-to-end (§1–§6), explicitly confirming §4 step 3 (toggle OS theme while running → all icons recolor, none left on the previous theme) and that no "tofu" appears (SC-004, SC-005).
 
+## Phase 7: Convergence
+
+- [X] T029 Correct spec.md's Assumptions section, which still describes "a curated subset of
+  icons... not the entire Material Symbols catalog": feature 009 (research R6) replaced the
+  shipped `assets/fonts/MaterialSymbolsOutlined.ttf` with **full glyph coverage** so adding an
+  `Icon` variant never requires regenerating the font (see `assets/fonts/PROVENANCE.md`). Added
+  an alignment note; no code change needed — the shipped font already reflects the current
+  reality per FR-002/FR-003 (contradicts)
+
 ---
 
 ## Dependencies & Execution Order

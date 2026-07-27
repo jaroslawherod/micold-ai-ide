@@ -48,7 +48,7 @@ pub struct Outbox {
 }
 
 impl Outbox {
-    /// `pub` (not private) so the binary's own tests (`main.rs`'s `update_inner` tests, T099) can
+    /// `pub` (not private) so the binary's own tests (`main.rs`'s `update_inner` tests, T100) can
     /// build a real `Outbox` over a manually-created channel and assert what gets sent, without
     /// needing a live connection — the binary is a separate crate from this library, so
     /// `pub(crate)` would not reach it.

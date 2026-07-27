@@ -1,9 +1,15 @@
-//! Focus-routing + write-gating contract tests (feature 006). Pure —
-//! `cargo test --no-default-features`. See `contracts/focus-model.md`.
+//! Focus-routing contract tests (feature 006). Pure — `cargo test --no-default-features`. See
+//! `contracts/focus-model.md`.
+//!
+//! The write-gate itself (FR-012a: discard input to a non-`Running` session) moved daemon-side
+//! when feature 010 introduced the session daemon — the daemon drops input for any session not
+//! present in its live registry (see `micold-daemon`'s `DaemonState::session_input`); the client
+//! no longer tracks process liveness for this purpose, so there is no client-side
+//! `should_write_to` left to test here.
 
-use micold_client::app::{route_key, should_write_to, KeyRouting, Overlay, State};
+use micold_client::app::{route_key, KeyRouting, Overlay, State};
 use micold_client::keymap::KeyOutput;
-use micold_core::session::{SessionLifecycle, SessionLocation};
+use micold_core::session::SessionLocation;
 
 #[test]
 fn base_state_defaults() {
@@ -55,17 +61,6 @@ fn new_terminal_instance_chord_never_yields_pty_bytes() {
         KeyRouting::NewTerminalInstance => {}
         other => panic!("expected NewTerminalInstance, got {other:?}"),
     }
-}
-
-#[test]
-fn write_gating_only_when_running() {
-    assert!(should_write_to(SessionLifecycle::Running));
-    assert!(!should_write_to(SessionLifecycle::Starting));
-    assert!(!should_write_to(SessionLifecycle::Restarting {
-        attempts: 1
-    }));
-    assert!(!should_write_to(SessionLifecycle::Failed));
-    assert!(!should_write_to(SessionLifecycle::Idle));
 }
 
 #[test]

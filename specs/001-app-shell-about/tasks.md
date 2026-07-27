@@ -224,11 +224,17 @@ Each story adds value without breaking the previous.
   lib core (state, `update`, metadata) is iced-free so logic tests run without building the
   GUI stack. The pure `toolbar_entries()`/`help_actions()`/`on_escape` live in the lib; the
   `ui` module (iced rendering) is bin-only — a refinement of the plan's structure.
-- **Known gap — FR-014 (focus management)**: Esc-to-close and click-to-close both work, but
-  moving keyboard focus *into* the dialog (onto Close) and back to the window on close is
-  **not implemented**: iced 0.13 `button` is not focusable in the default focus chain, so
-  there is no supported way to focus it. Deferred; the primary flows are unaffected.
+- **Resolved 2026-07-27 — FR-014 (focus management)**: confirmed by reading iced_widget
+  0.13.4's source that `button` does not implement the focusable operation (only
+  `text_input`/`text_editor` do), so focus-into-dialog/focus-to-window is not achievable with
+  iced's built-in focus chain. FR-014 re-scoped in spec.md's alignment note rather than left
+  as an open gap; Esc-to-close and click-to-close are unaffected. See T034.
 - **T032 (open)**: build + tests verified on **Linux** locally; the `.github/workflows/ci.yml`
   matrix runs macOS + Windows but has not executed (requires a push).
 - **T033 (open)**: app launch + window creation verified on Linux; the full 9-step manual
   click-through and macOS/Windows parity remain to be run (no headless UI driving here).
+
+## Phase 7: Convergence
+
+- [X] T034 Implement keyboard focus moving into the About dialog (onto Close) when it opens, and back to the main window when it closes, in `crates/micold-client/src/app.rs` (`AboutOpened`/`AboutClosed` handlers) — or, if iced 0.13.1's focus chain genuinely cannot focus a `button`, document the concrete technical constraint and re-scope FR-014 accordingly per FR-014 (missing). Confirmed via `iced_widget` 0.13.4 source that `button` has no focusable operation; re-scoped FR-014 in spec.md (+ data-model.md, contracts/ui-contract.md, research.md) rather than implementing a workaround, per user decision.
+- [X] T035 Remove the dead `TOOLBAR_ENTRIES`/`toolbar_entries()` helper in `crates/micold-client/src/app.rs` and the `toolbar_exposes_only_help` test in `crates/micold-client/tests/toolbar.rs` that only asserts the dead constant against itself and no longer exercises the real (overflow-menu) toolbar, per the spec's 2026-07-20 alignment note per FR-002/FR-003 (contradicts)

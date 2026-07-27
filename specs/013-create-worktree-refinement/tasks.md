@@ -350,6 +350,36 @@ submodule stage at all (quickstart.md §3) — independent of the type-select an
   (T006/T016/T025) with headless reducer/core tests providing the actual behavioral confidence;
   §5 (cross-platform note) covered by T028's reasoning — no platform-specific code.
 
+## Phase 8: Convergence
+
+- [X] T030 [US2] (regression, introduced by feature 010's daemon migration) FR-011/FR-012/FR-014
+  were fully built by this feature — the confirm dialog's keep/delete-branch checkbox,
+  `State::worktree_delete_keep_branch` (defaulting to `false`, i.e. "delete" per FR-012), and the
+  pure `remove_worktree(..., branch: Option<&str>)`/`RemoveOutcome::branch_delete_failed` logic
+  all existed and worked, per T028's own note ("the `branch_delete` outcome check reuses the same
+  `std::process::Command` → `git` mechanism"). But when feature 010 moved worktree deletion from
+  client-side execution into the daemon, `ClientMsg::WorktreeDelete` shipped with **no wire field**
+  for the user's choice at all, and the daemon's handler hardcoded `remove_worktree(..., None)` —
+  the confirm dialog's checkbox had zero effect; the branch was *always* kept, the opposite of
+  FR-012's default. A code comment admitted this ("the wire carries no keep/delete choice ...
+  deferred") but it was never tracked back to this feature's own tasks.md. Fixed:
+  - Added `delete_branch: bool` to `ClientMsg::WorktreeDelete` (`protocol/messages.rs`).
+  - Added `DaemonState::worktree_branch(project, dir_name)` resolving the worktree's actual bound
+    branch from the live git-discovery cache (not guessed from `dir_name`).
+  - `server.rs`'s handler now resolves `branch_to_delete` from `delete_branch` + `worktree_branch`
+    and passes it through to `remove_worktree`, instead of a hardcoded `None`.
+  - `main.rs` now sends `delete_branch: !worktree_delete_keep_branch` instead of omitting it.
+  - Added `OperationResult::WorktreeDeleted { branch_delete_failed }` (replacing the bare `Ack`)
+    so FR-015's "distinguishable failure" can round-trip; the client surfaces it via
+    `notify_error` when `true` (this exact reporting path was itself unwired — `_ => {}` — since
+    there was previously nothing to report).
+  - Regression tests in `tests/mutation_semantics.rs`:
+    `worktree_delete_with_stop_sessions_archives_and_removes` now asserts the branch is actually
+    gone with `delete_branch: true`; new `worktree_delete_with_delete_branch_false_keeps_the_branch`
+    asserts it survives with `delete_branch: false`. Confirmed red without the fix (branch survived
+    when it shouldn't have) and green with it.
+  Per FR-011/FR-012/FR-014/FR-015 (contradicts).
+
 ---
 
 ## Dependencies & Execution Order
