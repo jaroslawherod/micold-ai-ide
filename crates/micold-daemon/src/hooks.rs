@@ -325,27 +325,84 @@ fn classify_hook(body: &str) -> HookClass {
     }
 }
 
+/// An `http`-type hook entry (contracts/hooks.md §Configuration): posts the event JSON to `url`
+/// with a bearer token, rather than running a local command.
+#[derive(serde::Serialize)]
+struct HttpHook<'a> {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    url: &'a str,
+    headers: HttpHookHeaders,
+}
+
+#[derive(serde::Serialize)]
+struct HttpHookHeaders {
+    #[serde(rename = "Authorization")]
+    authorization: String,
+}
+
+/// The matcher-group wrapper every Claude Code hook type requires around its entries — a bare hook
+/// object placed directly in an event's array is rejected by the settings loader (BUG-001).
+#[derive(serde::Serialize)]
+struct MatcherGroup<'a> {
+    matcher: &'static str,
+    hooks: [HttpHook<'a>; 1],
+}
+
+/// The `hooks` map of the per-session `--settings` file: one matcher-group array per lifecycle
+/// event this daemon's activity FSM (`activity.rs::classify_hook`) understands, including
+/// `SubagentStop` (grouped with `Stop` there) — omitting an event here means `claude` never POSTs
+/// it at all, regardless of what `classify_hook` is prepared to handle.
+#[derive(serde::Serialize)]
+struct HooksMap<'a> {
+    #[serde(rename = "SessionStart")]
+    session_start: [MatcherGroup<'a>; 1],
+    #[serde(rename = "UserPromptSubmit")]
+    user_prompt_submit: [MatcherGroup<'a>; 1],
+    #[serde(rename = "PreToolUse")]
+    pre_tool_use: [MatcherGroup<'a>; 1],
+    #[serde(rename = "PostToolUse")]
+    post_tool_use: [MatcherGroup<'a>; 1],
+    #[serde(rename = "Stop")]
+    stop: [MatcherGroup<'a>; 1],
+    #[serde(rename = "SubagentStop")]
+    subagent_stop: [MatcherGroup<'a>; 1],
+    #[serde(rename = "Notification")]
+    notification: [MatcherGroup<'a>; 1],
+}
+
+#[derive(serde::Serialize)]
+struct SettingsDoc<'a> {
+    hooks: HooksMap<'a>,
+}
+
 /// The per-session `--settings` JSON that points `claude` at this receiver (contracts/hooks.md
 /// §Configuration). Every lifecycle hook posts to the same per-session URL carrying the bearer token
-/// in a header, so **user configuration is never modified**.
+/// in a header, so **user configuration is never modified**. Built from typed structs rather than
+/// untyped `serde_json::json!` so a key typo is a compile error, not a silent shape mismatch caught
+/// only against a live `claude` binary (BUG-001).
 pub fn settings_json(url: &str, token: &str) -> String {
-    let http = |_: &str| {
-        serde_json::json!([{
-            "type": "http",
-            "url": url,
-            "headers": { "Authorization": format!("Bearer {token}") },
-        }])
+    let group = || MatcherGroup {
+        matcher: "",
+        hooks: [HttpHook {
+            kind: "http",
+            url,
+            headers: HttpHookHeaders {
+                authorization: format!("Bearer {token}"),
+            },
+        }],
     };
-    let doc = serde_json::json!({
-        "hooks": {
-            "SessionStart": http("SessionStart"),
-            "UserPromptSubmit": http("UserPromptSubmit"),
-            "PreToolUse": http("PreToolUse"),
-            "PostToolUse": http("PostToolUse"),
-            "Stop": http("Stop"),
-            "Notification": http("Notification"),
-        }
-    });
+    let doc = SettingsDoc {
+        hooks: HooksMap {
+            session_start: [group()],
+            user_prompt_submit: [group()],
+            pre_tool_use: [group()],
+            post_tool_use: [group()],
+            stop: [group()],
+            subagent_stop: [group()],
+            notification: [group()],
+        },
+    };
     serde_json::to_string_pretty(&doc).expect("settings json is always serialisable")
 }
 
@@ -433,21 +490,37 @@ mod tests {
     fn settings_json_embeds_the_url_and_bearer_token() {
         let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok-123");
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-        let entry = &parsed["hooks"]["UserPromptSubmit"][0];
+        // The event's array entry is a matcher-group wrapper (BUG-001) — the `http` hook itself is
+        // nested under `hooks`, not placed directly in the top-level array.
+        let group = &parsed["hooks"]["UserPromptSubmit"][0];
+        let entry = &group["hooks"][0];
         assert_eq!(entry["type"], "http");
         assert_eq!(entry["url"], "http://127.0.0.1:5000/hook/abc");
         assert_eq!(entry["headers"]["Authorization"], "Bearer tok-123");
-        // Every lifecycle hook the FSM cares about is wired.
+        // Every lifecycle hook the FSM cares about is wired, and every one of them uses the
+        // matcher-group shape Claude Code's settings loader requires (BUG-001): each top-level
+        // array entry has a `matcher` field and a non-empty `hooks` array.
         for hook in [
             "SessionStart",
+            "UserPromptSubmit",
             "PreToolUse",
             "PostToolUse",
             "Stop",
+            "SubagentStop",
             "Notification",
         ] {
             assert!(
                 parsed["hooks"][hook].is_array(),
                 "{hook} must be configured"
+            );
+            let group = &parsed["hooks"][hook][0];
+            assert!(
+                group.get("matcher").is_some(),
+                "{hook}'s array entry must be a matcher-group object, not a bare hook"
+            );
+            assert!(
+                group["hooks"].as_array().is_some_and(|h| !h.is_empty()),
+                "{hook}'s matcher-group must have a non-empty nested hooks array"
             );
         }
     }

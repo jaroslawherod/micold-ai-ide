@@ -77,21 +77,36 @@ configuration is never modified**.
 ```jsonc
 {
   "hooks": {
-    "SessionStart":      [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }],
-    "UserPromptSubmit":  [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }],
-    "PreToolUse":        [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }],
-    "PostToolUse":       [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }],
-    "Stop":              [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }],
-    "Notification":      [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }]
+    "SessionStart":      [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }],
+    "UserPromptSubmit":  [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }],
+    "PreToolUse":        [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }],
+    "PostToolUse":       [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }],
+    "Stop":              [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }],
+    "SubagentStop":      [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }],
+    "Notification":      [{ "matcher": "", "hooks": [{ "type": "http", "url": "$URL", "headers": { "Authorization": "Bearer $TOKEN" } }] }]
   }
 }
 ```
 
 `$URL` is `http://127.0.0.1:<port>/hook/<session-uuid>`; `$TOKEN` is a per-session random secret.
 
-⚠️ **Unverified**: that `type: "http"` hooks accept a custom `headers` map. If they do not, the token
-moves into the URL path — still per-session and unguessable, but it would then appear in any hook
-logging. **Verify before implementing**; the fallback is a path-embedded token.
+**Bugfix (BUG-001, 2026-07-27)**: the example above previously flattened the hook object directly
+into each event's array (`[{ "type": "http", ... }]`), omitting the `matcher`/`hooks` wrapper every
+Claude Code hook type requires. `claude`'s settings validator rejected the generated file for every
+event (`hooks.<Event>.0.hooks: Expected array, but received undefined`), so no session's hooks ever
+reached the daemon. Corrected here; see `bugs/BUG-001.md` and `tasks.md` Phase 11. The same pass
+also added the previously-missing `SubagentStop` entry: `activity.rs::classify_hook` already
+grouped `"Stop" | "SubagentStop"` into the same transition, but nothing configured `claude` to ever
+send a `SubagentStop` hook in the first place — found by code review of the BUG-001 fix.
+
+⚠️ ~~**Unverified**: that `type: "http"` hooks accept a custom `headers` map. If they do not, the
+token moves into the URL path — still per-session and unguessable, but it would then appear in any
+hook logging. **Verify before implementing**; the fallback is a path-embedded token.~~
+**Confirmed (BUG-001)**: `type: "http"` is a real, supported hook type and does accept a custom
+`headers` map (confirmed against the official Claude Code hooks reference). What was *not*
+verified — and turned out wrong — was the array shape: every hook type's entries, `http` included,
+must be nested under a `{"matcher": ..., "hooks": [...]}` wrapper, not placed directly in the
+event's top-level array.
 
 ---
 
@@ -178,7 +193,8 @@ event-driven read rather than the current full-file rescan every 120 ms on the U
 
 | Item | Status |
 |---|---|
-| `type: "http"` hooks accept custom `headers` | ⚠️ **Unverified** — fallback is a path token |
+| `type: "http"` hooks accept custom `headers` | ✅ Confirmed (BUG-001) |
+| Each event's array entries need a `matcher`/`hooks` wrapper, not a bare hook object | ✅ Confirmed the hard way (BUG-001) — this was never listed as unverified and was simply wrong; see the Configuration section above |
 | `Notification` subtype values | ⚠️ **Unverified** — did not fire during testing |
 | Hook delivery inside a PTY session | ✅ Observed: `SessionStart → UserPromptSubmit → PreToolUse → PostToolUse → Stop` |
 | `Stop` timing relative to turn end | ✅ Observed ~12 ms before the turn-end result |

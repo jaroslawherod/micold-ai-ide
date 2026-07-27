@@ -23,6 +23,7 @@ tokio-util = { workspace = true }
 interprocess = { workspace = true }
 bytes = { workspace = true }
 listenfd = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 futures-util = { workspace = true }
 # Per-session hook tokens + session-uuid path parsing for the loopback activity receiver (US2, T045).
