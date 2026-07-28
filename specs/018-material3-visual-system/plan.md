@@ -67,8 +67,8 @@ exempt (FR-012). Tokens must remain nameable from a crate that cannot see `iced`
 build-failing gate (FR-004).
 
 **Scale/Scope**: ~15 type roles + 3 sidebar roles, ~36 color roles × 2 schemes, 6 elevation levels,
-7 shape sizes, 7 state layers, 12 motion tokens. Every existing component restyled, two new ones
-(snackbar, form field). Two font binaries added. Four new animations. **No feature module styles
+7 shape sizes, 7 state layers, 12 motion tokens. Every existing component restyled, three new ones
+(`FormField`, `Ripple`, `Snackbar`). Two font binaries added. Four new animations. **No feature module styles
 anything** — 017's boundary test fails the build if one does. Feature modules are still *edited*
 where a call site must name a type role, pass a density, or migrate a placeholder onto a label
 (T017–T021, T047, T053, T055, T061); what they may not do is decide how something looks.
@@ -104,9 +104,11 @@ where a call site must name a type role, pass a density, or migrate a placeholde
 - [x] **VIII. Reusable UI Component Foundation**: PASS — and materially strengthened. The library
   now *wraps* the rendering stack rather than sitting beside it (feature 017): feature modules cannot
   import a styled widget or reach the styling layer, enforced by a build-failing test (feature 017).
-  New primitives (`Button`, `Text`, `TextField`, `Checkbox`, `Scrollable`, `Ripple`, `Surface`,
-  `Snackbar`) all expose the chainable builder terminating in `.into()`. Pure layout primitives
-  stay unwrapped by explicit carve-out (feature 017), since they carry no Material appearance.
+  `Button`, `Text`, `TextField`, `Checkbox`, `Scrollable` and `Surface` already exist — feature 017
+  built them, and this feature restyles rather than introduces them. The primitives genuinely new
+  here are **`FormField`, `Ripple` and `Snackbar`**, and all three expose the chainable builder
+  terminating in `.into()`. Pure layout primitives stay unwrapped by explicit carve-out
+  (feature 017), since they carry no Material appearance.
 
 **Post-Phase-1 re-check**: PASS. Principle VIII moved from "satisfied by convention" to "enforced
 by a test", and components now own their own presentation state rather than the application holding
@@ -126,7 +128,8 @@ specs/018-material3-visual-system/
 ├── data-model.md        # Phase 1 output — token entity model
 ├── quickstart.md        # Phase 1 output — manual validation procedure
 ├── contracts/
-│   └── design-tokens.md # the revised design system contract (supersedes 003)
+│   ├── design-tokens.md # the revised design system contract (supersedes 003) — every *value*
+│   └── component-api.md # API surface of the three new components — every *shape*
 ├── checklists/
 │   └── requirements.md
 └── tasks.md             # Phase 2 output (/speckit-tasks — NOT created here)
@@ -189,7 +192,7 @@ parallelised; each ends in a demonstrable state. All of them presuppose 017 is c
 
 | Item | Why needed | Simpler alternative rejected because |
 |------|------------|--------------------------------------|
-| Two new shared primitives (`Surface`, `Snackbar`) rather than styling in place | FR-015 puts elevation on seven different surface kinds; without a shared primitive each would re-derive tonal-role + shadow + corner independently, which is exactly the duplication Principle VIII exists to prevent. `Snackbar` replaces an inline layout node with a floating one and owns queue presentation. | Styling each surface at its call site was rejected: it would spread the elevation table across ~7 modules and make a level change a 7-site edit. |
+| Three new shared primitives (`FormField`, `Ripple`, `Snackbar`) rather than styling in place | `FormField` wraps whichever control it is given and owns the parts every field shares — container, active indicator, label, supporting text, error state, adornments — on the model of Angular Material's form field, so a change to how fields present a label is one edit rather than one per field type (FR-031c). `Snackbar` replaces an inline layout node with a floating one and owns queue presentation. `Ripple` is the appearance half of 017's behavior-layer renderer. | Reassembling the field chrome at each of the seven input call sites is what the codebase does today, and is the duplication Principle VIII exists to prevent. `Surface` is **not** on this list — it already exists (017); this feature only puts the elevation scale behind it. |
 | Snackbar queue/timeout logic in `micold-core`, not in the UI layer | It is decision logic (which notification is visible, when it expires, how dedup interacts with the queue), so Principle I requires it to be tested — and the GUI-wiring exception explicitly does not cover code with branching of its own. | Putting it in `ui/` was rejected: it would be structurally unreachable from tests, which is the precise situation the constitution's exception carve-out refuses to extend to. |
 | Ripple state held in the component instance rather than centrally | FR-024e requires it: a call site presses a button and never learns a ripple exists. Feature 017's behavior layer provides the per-instance state hooks that make this possible, which is precisely why the ripple was deferred out of 017 (FR-024f). | Holding it in `micold-core` keyed by an animation key was this plan's original design and is now **rejected**: FR-024e forbids registering an animation key, and central state cannot deliver per-element independence (FR-024d) without the application knowing about every rippling element. Testability was the original argument for it, and 017 removed that argument — a client-level test drives the component and asserts its state directly, as `idle_requests_no_frames.rs` already does for the motion primitive. |
 

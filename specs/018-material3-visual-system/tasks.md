@@ -211,13 +211,15 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [ ] T042 [P] [US4] Failing test in `crates/micold-core/tests/tokens_anatomy.rs` asserting every component anatomy constant — app bar height, both row densities, minimum touch target, dialog padding, menu item height, chip height, text field height, progress thickness, snackbar min height — matches contract §7 (FR-025 – FR-032, SC-008)
 - [ ] T043 [P] [US4] Failing test in `crates/micold-client/tests/app_bar_scroll.rs` asserting the app bar's elevated flag derives from the sidebar's scroll offset (FR-025a)
 - [ ] T044 [P] [US4] Failing test in `crates/micold-client/tests/text_field_anatomy.rs` asserting the filled container role, rounded-top/square-bottom corners, and a bottom active indicator that thickens to 2dp accent on focus (FR-031)
+- [ ] T044a [P] [US4] Failing test in `crates/micold-client/tests/form_field_anatomy.rs` asserting the wrapper composes the shared parts around **whichever control it is given**: the label renders inside the container above the value in the label role and on-container colour; supporting text renders beneath in the supporting role; in the error state both the active indicator and the supporting text switch to the error role; leading and trailing adornment slots render when supplied and take no space when not; and the same assertions hold with a text input **and** with the select wrapped (FR-031a, FR-031b, FR-031c)
 
 ### Implementation for User Story 4
 
-- [ ] T045 [US4] Apply the filled text-field anatomy in `crates/micold-client/src/ui/material/text_field.rs` — 56dp height, filled container role, per-corner radius, bottom active indicator, 16dp padding (FR-031)
-- [ ] T046 [US4] Add the in-container label and the supporting-text slot to `crates/micold-client/src/ui/material/text_field.rs`, rendering the label persistently in its floating position (FR-031a, FR-031b, FR-044)
+- [ ] T044b [US4] Create the `FormField` wrapper in `crates/micold-client/src/ui/material/form_field.rs`, on the model of Angular Material's form field — the precedent this library already mimics. It owns the filled container, the active indicator, the in-container label, the supporting-text slot, the error presentation and the optional leading/trailing adornment slots, and it wraps whichever control it is handed rather than replacing it. Chainable builder terminating in `.into()` per `contracts/component-api.md` §2.1 (FR-031a, FR-031b, FR-031c, Principle VIII)
+- [ ] T045 [US4] Apply the filled text-field anatomy in `crates/micold-client/src/ui/material/text_field.rs` — 56dp height, per-corner radius, 16dp padding. The container and active indicator come from `FormField` (T044b); this task styles the input itself, not the shared chrome (FR-031)
+- [ ] T046 [US4] Compose `TextField` inside `FormField` so the label renders persistently in its floating position and the supporting-text slot is available, without `text_field.rs` reassembling either part itself (FR-031a, FR-031b, FR-031c, FR-044)
 - [ ] T047 [US4] Migrate the seven input call sites off placeholder-as-label onto label + supporting text per the contract §7.7 migration table, across `crates/micold-client/src/ui/worktree_form.rs`, `rename.rs`, `worktree_rename.rs` and `settings_form.rs` (FR-031a, FR-031b)
-- [ ] T048 [US4] Rebuild `crates/micold-client/src/ui/material/select.rs` on the `TextField` anatomy — including the bottom active indicator, which thickens and takes the accent colour on the **open** state rather than on focus (FR-043a) — and style its dropdown as a menu via the per-instance menu style, which does expose a shadow (FR-031, FR-031d, FR-043a)
+- [ ] T048 [US4] Compose `crates/micold-client/src/ui/material/select.rs` inside `FormField` so it gets the same container, label, supporting text and active indicator every other field has — the indicator thickening and taking the accent colour on the **open** state rather than on focus, since the select cannot report focus (FR-043a) — and style its dropdown as a menu via the per-instance menu style, which does expose a shadow (FR-031, FR-031c, FR-031d, FR-043a)
 - [ ] T049 [US4] Apply the linear progress anatomy in `crates/micold-client/src/ui/material/progress.rs` — `secondary_container` track, `primary` indicator, 4dp thickness, fully rounded (FR-031e)
 - [ ] T050 [US4] Replace the static 0.4 fill in `crates/micold-client/src/ui/material/progress.rs` with Material's indeterminate presentation, so the bar stops asserting a completion fraction the application cannot know (FR-031f)
 - [ ] T051 [US4] Implement the notification queue in `crates/micold-core/src/notify.rs` — one visible, ordered pending queue, severity-derived duration, dedup and cap preserved (FR-032a, FR-032b)
@@ -253,7 +255,7 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [ ] T064 [US5] Rework the motion primitive in `crates/micold-client/src/ui/cdk/motion.rs` (017 moved it there; `src/motion.rs` no longer exists) so track speeds derive from the core duration tokens and apply the named easing curves, keeping the `animating()` guard and its single frame-request site intact so no work runs at rest (FR-033, FR-034, FR-039a, FR-039e)
 - [ ] T065 [US5] Apply the assigned duration and easing per contract §6.3 in `crates/micold-client/src/ui/material/animation.rs`, `menu.rs`, `tree_view.rs` and `crates/micold-client/src/ui/sidebar.rs`, preserving each animation's existing trigger, start state and end state (FR-034, FR-035)
 - [ ] T066 [US5] Drive the four new animations from the same tokens — app bar elevation in `crates/micold-client/src/ui/material/toolbar.rs`, snackbar enter/exit in `snackbar.rs`, indeterminate progress in `progress.rs`, ripple expand/fade in `ripple.rs` — and confirm no fifth animation is introduced (FR-035a, SC-010)
-- [ ] T067 [US5] Confirm 017's `crates/micold-client/tests/idle_requests_no_frames.rs` still passes unchanged with all four new animations in play — its structural half already proves no module outside the motion primitive asks for a frame, so this is a check that the gate was honoured rather than a fresh hand-verification. Add the indeterminate indicator's external settle condition to it: running while an operation is in flight, stopped within one frame of the operation ending (FR-024d, FR-039a, FR-039d, FR-039e)
+- [ ] T067 [US5] Confirm 017's `crates/micold-client/tests/idle_requests_no_frames.rs` still passes unchanged with all four new animations in play — its structural half already proves no module outside the motion primitive asks for a frame, so this is a check that the gate was honoured rather than a fresh hand-verification. Add **one new test case** to that file for the indeterminate indicator's external settle condition — running while an operation is in flight, stopped within one frame of the operation ending. Adding a case is not editing the gate: the `SANCTIONED` constant stays at exactly one entry, which is what FR-039e forbids changing (FR-024d, FR-039a, FR-039d, FR-039e)
 - [ ] T068 [US5] Update `docs/user-guide/` if motion is user-visible enough to warrant a note; otherwise record in the PR that no doc change was needed (Principle VII)
 
 **Checkpoint**: All five stories complete and independently demonstrable.
@@ -310,9 +312,9 @@ Because it landed first, every task below changes appearance in **one place**. I
 - T013, T014 — US2 test files
 - T017–T020 — four type-role assignment tasks, different modules
 - T024–T027 — US3 test files
-- T036–T038 — US3 style application in different concerns
-- T041–T044 — US4 test files
-- T056–T060 — component anatomy tasks, all different files
+- T036–T038a — US3 style application in different concerns
+- T041–T044a — US4 test files
+- T053a, T056–T060 — component anatomy and guard tasks, all different files
 - T069–T071 — polish cleanups
 - **Whole stories**: US1–US5 can be staffed concurrently once **Phase 0** is green (017 alone is
   not enough — every story reads token values)

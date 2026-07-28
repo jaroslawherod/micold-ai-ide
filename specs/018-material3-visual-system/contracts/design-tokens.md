@@ -408,10 +408,11 @@ pairs, not only the resting pair.
 ### 6.3 Assignment
 
 Every animated behavior already in the app keeps its trigger, start state and end state; only
-duration and easing change (FR-035). The last three rows are **new** animations introduced by this
-feature's own new surfaces — the app bar's elevation transition (FR-025a) and the snackbar's
-enter/exit (FR-032), and the indeterminate progress indicator (FR-031f) — not changes to existing
-behavior.
+duration and easing change (FR-035). The last **four** rows are **new** animations introduced by
+this feature's own new surfaces — the app bar's elevation transition (FR-025a), the snackbar's
+enter/exit (FR-032), the indeterminate progress indicator (FR-031f) and the press ripple
+(FR-024a) — not changes to existing behavior. Four is the count FR-035a and SC-010 both carry, and
+no fifth animation is permitted.
 
 | Animation           | Duration           | Easing                  | Set        |
 |---------------------|--------------------|-------------------------|------------|
@@ -567,7 +568,7 @@ the rendering stack (`Radius { top_left, top_right, bottom_right, bottom_left }`
 only a placeholder. The shared text field therefore composes the label as a sibling of the input
 inside the container. The label is rendered persistently in its floating (top) position; Material's
 animated transition between resting and floating is **not** implemented. The result matches
-Material's *populated* field exactly; only the transition is absent. Accepted fidelity gap #3.
+Material's *populated* field exactly; only the transition is absent. Accepted fidelity gap #4.
 
 **Content migration (FR-031a, FR-031b).** Today's placeholders bundle the field name and a hint
 into one string. These split:
@@ -660,8 +661,11 @@ spacing tokens.
   Accepted fidelity gap #1 (FR-042).
 - **Keyboard focus on non-text widgets** — the rendering stack has no focused state for buttons,
   rows, menu items or chips (§5). Accepted fidelity gap #2 (FR-043).
+- **Keyboard focus on the select control** — the stack's select reports only active, hovered and
+  open, with no focus concept to observe, so its active indicator is driven by the **open** state
+  instead (§7.7). Accepted fidelity gap #3 (FR-043a).
 - **The text field label's float transition** — the stack's text input has no label concept, so the
-  label is composed persistently in its floating position (§7.7). Accepted fidelity gap #3 (FR-044).
+  label is composed persistently in its floating position (§7.7). Accepted fidelity gap #4 (FR-044).
 - **Information architecture** — no navigation rail, no floating action button, no responsive
   breakpoints.
 - **Dynamic color** — no Material You extraction from the host environment; the seed is fixed.
