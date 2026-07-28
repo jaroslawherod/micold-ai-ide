@@ -35,24 +35,32 @@ in **one place** instead of at the 119 call sites that styled things before.
 
 **Language/Version**: Rust, stable, MSRV 1.97 (pinned in workspace `Cargo.toml`)
 
-**Primary Dependencies**: `iced 0.13.1` (features: tokio, canvas, advanced, lazy);
+**Primary Dependencies**: `iced 0.14.0` (features: tokio, canvas, advanced, lazy);
 `ttf-parser 0.21` (dev-only, font assertions). **No new runtime dependency is added by this
 feature** — the tonal ramps are baked constants (research R7).
 
 **Storage**: N/A — this feature adds no persisted state. The existing follow-system/light/dark
 preference in `micold-core::settings` is unchanged.
 
-**Testing**: `cargo test --workspace` (`mise run test`). Token invariants live in
-`crates/micold-core/tests/`; GUI wiring is validated by the recorded `quickstart.md` procedure
+**Testing**: `cargo test --workspace` (`mise run test`). Verification splits by what can be
+asserted without a human judging pixels — **not** by the crate boundary. Token invariants live in
+`crates/micold-core/tests/`. Client-level structural gates (source scans over the rendering layer,
+and behavioural tests driving a component directly) are ordinary automated tests, as feature 017
+established with its six of them; SC-005a and SC-008 are verified this way. Only the thin
+token→render conversion and the `view` call sites rely on the recorded `quickstart.md` procedure
 under the constitution's Principle I GUI-wiring exception.
 
 **Target Platform**: Linux, macOS, Windows desktop — parity required (Principle VI)
 
 **Project Type**: Desktop application, three-crate Cargo workspace
 
-**Performance Goals**: No regression in frame time. Shadows and state layers are per-widget style
-values resolved at view time, not new render passes. The animation clock already gates itself at
-rest (`Animator::animating`) and must continue to.
+**Performance Goals**: No regression in frame time, **measured for trend rather than gated**
+(FR-039c) against the reference scene of FR-039b, with the pre-change figure captured before any
+token value lands (T000z, SC-018). Shadows and state layers are per-widget style values resolved at
+view time, not new render passes. The motion primitive already gates frames at rest
+(`Progress::animating()` in `ui/cdk/motion.rs`) and must continue to — 017 holds the rendering layer
+to exactly one frame-request site, and this feature's four new animations route through it rather
+than adding a second (FR-039e).
 
 **Constraints**: No behavior change except the notification surface (FR-036a). Terminal typography
 exempt (FR-012). Tokens must remain nameable from a crate that cannot see `iced`. AA contrast is a
@@ -60,8 +68,10 @@ build-failing gate (FR-004).
 
 **Scale/Scope**: ~15 type roles + 3 sidebar roles, ~36 color roles × 2 schemes, 6 elevation levels,
 7 shape sizes, 7 state layers, 12 motion tokens. Every existing component restyled, two new ones
-(snackbar, form field). Two font binaries added. Four new animations. **No feature module is edited**
-— 017's boundary test fails the build if one is.
+(snackbar, form field). Two font binaries added. Four new animations. **No feature module styles
+anything** — 017's boundary test fails the build if one does. Feature modules are still *edited*
+where a call site must name a type role, pass a density, or migrate a placeholder onto a label
+(T017–T021, T047, T053, T055, T061); what they may not do is decide how something looks.
 
 ## Constitution Check
 
@@ -71,10 +81,13 @@ build-failing gate (FR-004).
   monotonicity check, type-role table and motion token is pure data in `micold-core` and gets a
   failing test first. The thin GUI conversion in `ui/style.rs` and the `view` call sites fall under
   the Principle I GUI-wiring exception — they invoke already-tested pure values and carry no
-  decision logic — and are validated by `quickstart.md`. The two pieces of *new logic* — the snackbar queue discipline (FR-032a/b) and the ripple's
-  geometry and phase progression (FR-024b) — are expressed as pure functions and pure data in
-  `micold-core`, unit-tested with no renderer, while the components hold the transient state
-  itself (feature 017).
+  decision logic — and are validated by `quickstart.md`. The two pieces of *new logic* are tested in the two different ways feature 017
+  established. The snackbar queue discipline (FR-032a/b) is pure decision logic with no rendering in
+  it, so it lives in `micold-core` and is unit-tested with no renderer. The ripple's geometry, phase
+  progression and lifetime (FR-024b, FR-024e) live **inside the component instance** and are tested
+  by driving that component directly from a client-level test — the pattern 017 shipped in
+  `idle_requests_no_frames.rs`. Neither relies on the GUI-wiring exception; only the thin conversion
+  in `ui/material/style.rs` and the `view` call sites do.
 - [x] **II. Multi-Session Support**: PASS. No new session-scoped state. The snackbar queue is
   global view state, exactly as the notification stack it replaces already is.
 - [x] **III. Worktree Integration**: PASS. No file or VCS operation is touched.
@@ -97,7 +110,7 @@ build-failing gate (FR-004).
 
 **Post-Phase-1 re-check**: PASS. Principle VIII moved from "satisfied by convention" to "enforced
 by a test", and components now own their own presentation state rather than the application holding
-it (feature 017–feature 017) — the most significant changes since the first check. Still no new dependency,
+it (feature 017) — the most significant changes since the first check. Still no new dependency,
 no new persisted state, and no platform branch; the ripple draws with the canvas facility already
 enabled and already used by the terminal, and holds its state in the widget tree. Decisions stay
 pure and tested in core; only storage moved into the components. See Complexity Tracking.
@@ -159,7 +172,7 @@ Sequenced so each user story is independently demonstrable, matching the spec's 
 
 | Phase | Delivers | Spec story |
 |-------|----------|------------|
-| A | Token **values** re-authored in the core: baseline palette, tags, scales | prerequisite |
+| A | Token **values** re-authored in the core: baseline palette, tags, scales — `tasks.md` Phase 0 (T000z, T000a–T000i) | prerequisite |
 | B | Surfaces, elevation, shape applied; borders removed | US1 (P1) |
 | C | Roboto shipped; type roles assigned | US2 (P2) |
 | D | State layers + ripple appearance; text-field focus | US3 (P3) |
@@ -178,7 +191,7 @@ parallelised; each ends in a demonstrable state. All of them presuppose 017 is c
 |------|------------|--------------------------------------|
 | Two new shared primitives (`Surface`, `Snackbar`) rather than styling in place | FR-015 puts elevation on seven different surface kinds; without a shared primitive each would re-derive tonal-role + shadow + corner independently, which is exactly the duplication Principle VIII exists to prevent. `Snackbar` replaces an inline layout node with a floating one and owns queue presentation. | Styling each surface at its call site was rejected: it would spread the elevation table across ~7 modules and make a level change a 7-site edit. |
 | Snackbar queue/timeout logic in `micold-core`, not in the UI layer | It is decision logic (which notification is visible, when it expires, how dedup interacts with the queue), so Principle I requires it to be tested — and the GUI-wiring exception explicitly does not cover code with branching of its own. | Putting it in `ui/` was rejected: it would be structurally unreachable from tests, which is the precise situation the constitution's exception carve-out refuses to extend to. |
-| Ripple state in `micold-core` too | Same reasoning: which element is rippling, from where, and when it expires is branching logic, not styling. Only the drawing is rendering-specific. | Holding ripple state in the widget was rejected for the same untestability reason, and because per-element independence (FR-024d) is exactly the kind of invariant that needs a test. |
+| Ripple state held in the component instance rather than centrally | FR-024e requires it: a call site presses a button and never learns a ripple exists. Feature 017's behavior layer provides the per-instance state hooks that make this possible, which is precisely why the ripple was deferred out of 017 (FR-024f). | Holding it in `micold-core` keyed by an animation key was this plan's original design and is now **rejected**: FR-024e forbids registering an animation key, and central state cannot deliver per-element independence (FR-024d) without the application knowing about every rippling element. Testability was the original argument for it, and 017 removed that argument — a client-level test drives the component and asserts its state directly, as `idle_requests_no_frames.rs` already does for the motion primitive. |
 
 ## Risks
 

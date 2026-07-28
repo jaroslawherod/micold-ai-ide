@@ -327,7 +327,10 @@ This feature then changes how the application looks. Because 017 landed first, e
 here is made in **one place** rather than at the 119 call sites that style things today.
 
 **What 017 owns**: the component API contract, the wrapper library, the behavior layer, overlay
-consolidation and its dismissal change, state ownership, the density axis, and the token *move*.
+consolidation and its dismissal change, state ownership, and the token *move*. It does **not** own
+the density axis: 017's own FR-018 and FR-019 were moved here during the 2026-07-27 analysis pass,
+because applying a density scale assigns heights to components that are content-sized today, which
+would break 017's zero-visual-change property. The scale is this feature's (FR-026b, FR-026c).
 
 **What this feature owns**: every token *value* and its application — the baseline palette and tag
 re-derivation, elevation, shape, the typeface and type roles, state layers and ripple appearance,

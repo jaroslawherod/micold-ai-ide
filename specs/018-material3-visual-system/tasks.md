@@ -29,10 +29,79 @@ Three-crate Cargo workspace (see plan.md → Structure Decision):
 - `crates/micold-core/` — render-free. Token **values** and pure decision logic live here.
 - `crates/micold-client/src/ui/cdk/` — behavior layer established by 017. Appearance is never set here.
 - `crates/micold-client/src/ui/material/` — the appearance layer. **Every task in this feature edits here.**
-- `crates/micold-client/src/ui/*.rs` — feature modules. Not edited by this feature; 017's boundary test fails the build if they are styled.
+- `crates/micold-client/src/ui/*.rs` — feature modules. They may be **edited** where a call site must name a type role, pass a density, or migrate a placeholder onto a label (T017–T021, T047, T053, T055, T061). They may not **style** anything; 017's boundary test fails the build if they do.
 - `assets/fonts/` — vendored font binaries, license and provenance.
 
 Test command throughout: `mise run test` (`cargo test --workspace`).
+
+---
+
+## Phase 0: Token values (prerequisite — plan.md Phase A)
+
+**Goal**: The six scale tables exist as tested data in the render-free core. Every later phase reads
+from here; nothing below can start until this is green.
+
+**Why this exists**: plan.md's phase table calls Phase A "the only hard prerequisite within this
+feature — every story reads token values from it", and it had no tasks at all. Added by
+`/speckit-analyze` on 2026-07-28.
+
+### The one task that cannot be deferred ⏱️
+
+- [ ] T000z Before any token value changes, capture the frame-time figure for the **pre-change**
+  build on the reference scene of FR-039b — 20 worktrees in the sidebar, the sidebar expanded, one
+  running terminal session, a context menu open over a dialog, captured while a ripple is
+  mid-animation — and record it in `quickstart.md` alongside the scene definition. Reported for
+  trend, not gating (FR-039c). **This cannot be done after T000f**: once the palette lands the
+  pre-change build is gone, and SC-018 asks for both figures on the same machine (FR-039b, SC-018)
+
+### Tests for Phase 0 (MANDATORY — write first, confirm they FAIL) ⚠️
+
+- [ ] T000a [P] Failing test in `crates/micold-core/tests/tokens_contrast.rs` asserting every
+  foreground/background role pair specified to carry text or icons meets WCAG AA (≥ 4.5:1) in both
+  schemes, covering every pair this feature introduces and not only those carried over from feature
+  003. The test MUST fail the build on any violation (FR-004, FR-005, SC-001)
+- [ ] T000b Failing test in `crates/micold-core/tests/tokens_contrast.rs` — same file as T000a, so
+  not parallel with it — asserting each tonal
+  ramp is monotonic in luminance, so a transcription error in a baked ramp surfaces as a failure
+  rather than as a subtly wrong colour (plan.md risk 1, research R7)
+- [ ] T000c [P] Failing test in `crates/micold-core/tests/tokens_scales.rs` asserting the shape of
+  every scale: 15 type roles plus 3 sidebar-scoped roles, each carrying size, weight, line height
+  and a recorded tracking value; 6 elevation levels, each carrying a tonal role and a shadow;
+  7 shape sizes; 7 state-layer opacities; motion tokens partitioned into the standard and
+  emphasized sets (FR-007, FR-014, FR-018, FR-020, FR-033, FR-042)
+- [ ] T000d [P] Failing test in `crates/micold-core/tests/tokens_density.rs` asserting the density
+  scale has exactly four steps, that each step below 0 subtracts 4dp, and that no component
+  resolves to a fractional height (FR-026b)
+
+### Implementation for Phase 0
+
+- [ ] T000e Expand `crates/micold-core/src/tokens.rs` (216 lines) into the `tokens/` module
+  directory per plan.md's Structure Decision, preserving the existing `spacing` scale unchanged and
+  carrying `Rgb`, `Roles`, `type_scale` and `sidebar` across **without re-valuing them**, so the
+  move is separable from the value change in review
+- [ ] T000f Author `crates/micold-core/src/tokens/palette.rs` — the Material 3 baseline tonal ramps
+  (tones 0–100 per key palette) generated from seed `#6750A4`, and re-author every semantic role in
+  `LIGHT` and `DARK` as a palette-and-tone pair rather than a hand-picked value, so contrast follows
+  from the tone delta (FR-001, FR-005a, FR-005b, D1, D3)
+- [ ] T000g Author the ten conventional-commit tag hues and the issue tag in
+  `crates/micold-core/src/tokens/palette.rs` — one fixed hue per type, read at the accent tone
+  recipe (fill 40 / text 100 light, fill 80 / text 20 dark). No tag may be a hand-tuned value
+  outside the tonal system (FR-006, FR-006a)
+- [ ] T000h [P] Author `crates/micold-core/src/tokens/typography.rs` — the 15 Material 3 type roles
+  plus the 3 sidebar-scoped reduced-density roles, each carrying size, weight, line height, and the
+  Material tracking value recorded but not applied at render time (FR-007, FR-011, FR-042)
+- [ ] T000i [P] Author `crates/micold-core/src/tokens/elevation.rs`, `shape.rs`, `state.rs` and
+  `motion.rs` — 6 elevation levels (tonal shift plus shadow), the 7-size shape scale superseding
+  today's 4 radii, 7 state-layer opacities, and the named duration and easing tokens split into the
+  standard and emphasized sets (FR-014, FR-018, FR-019, FR-020, FR-033)
+
+**Checkpoint**: `mise run test` green with the contrast gate live.
+
+⚠️ **This phase is where the app changes colour.** `roles(scheme)` returns `LIGHT`/`DARK` to every
+call site already, so re-authoring them at T000f turns the accent from today's blue to the baseline
+purple *immediately* — before a single component is restyled. T000g shifts the ten tag colours the
+same way. Both are intended (FR-005b), and `quickstart.md` §B0 exists so this is confirmed rather
+than discovered. Run §B0 at the end of this phase, not after Phase 1.
 
 ---
 
@@ -70,7 +139,7 @@ Test command throughout: `mise run test` (`cargo test --workspace`).
 
 **Independent Test**: Change the OS UI font and relaunch — the app is unchanged. A dialog's title, body and caption are each distinguishable without relying on position. Terminal output is still monospaced.
 
-**Note**: Phase 3 already routed every text site through `material::Text`, so this story assigns *roles* rather than hunting call sites.
+**Note**: Feature 017 already routed every text site through `material::Text`, so this story assigns *roles* rather than hunting call sites.
 
 ### Tests for User Story 2 (MANDATORY — write first, confirm they FAIL) ⚠️
 
@@ -79,6 +148,7 @@ Test command throughout: `mise run test` (`cargo test --workspace`).
 
 ### Implementation for User Story 2
 
+- [ ] T014a [US2] Vendor Roboto Regular (400) and Roboto Medium (500) as static instances into `assets/fonts/`, alongside the Material Symbols font already there, and document them to the same standard: the Apache-2.0 licence text in-repo, and a provenance record naming the upstream source, the exact artifact shipped, and how it was produced. Decide explicitly whether the existing `assets/fonts/LICENSE` and `assets/fonts/PROVENANCE.md` are extended to cover both typefaces or whether Roboto gets its own pair — those files today describe only the icon font, and a licence file that silently grows to cover a second work is the failure mode this requirement exists to prevent (FR-008a, FR-009, SC-012)
 - [ ] T015 [US2] Register both Roboto faces via `.font(...)` and set `.default_font(...)` to Roboto in `crates/micold-client/src/main.rs`, keeping the Material Symbols registration intact (FR-008, research R3)
 - [ ] T016 [US2] Resolve type roles into size, font weight and absolute line height inside `crates/micold-client/src/ui/material/text.rs`, so the role is the only thing a call site names (FR-007, FR-010)
 - [ ] T017 [P] [US2] Assign the correct type roles across `crates/micold-client/src/ui/shell.rs`, `project_selector.rs` and `terminal.rs`
@@ -99,28 +169,29 @@ Test command throughout: `mise run test` (`cargo test --workspace`).
 
 **Independent Test**: Hover every interactive element and confirm a visible change; click each and confirm a ripple from the click point; tab into a text field and confirm a focus indicator.
 
-**Note**: The ripple's state is decision logic, so it lands in tested core before any drawing (Principle I, FR-024e).
+**Note**: The ripple's state lives **inside the component instance**, not in the core and not in the application (FR-024e). Principle I is satisfied by testing the component directly — feature 017 established that a client-level test can drive a component and assert its state, so this is an ordinary automated test rather than a case for the GUI-wiring exception.
 
 ### Tests for User Story 3 (MANDATORY — write first, confirm they FAIL) ⚠️
 
-- [ ] T024 [P] [US3] Failing tests for ripple state in `crates/micold-core/tests/ripple_state.rs`: pressing element B mid-ripple leaves A's progress and origin untouched; a completed ripple removes its entry so nothing is retained at rest; an origin outside the element's bounds is clamped; with no known pointer position the origin is the element's center; the end radius reaches the element's furthest corner (FR-024b, FR-024d, FR-024e)
+- [ ] T024 [P] [US3] Failing tests for ripple state in `crates/micold-client/tests/ripple_state.rs`, driving the component directly the way `idle_requests_no_frames.rs` drives the motion primitive: pressing element B mid-ripple leaves A's progress and origin untouched; a completed ripple releases its state so nothing is retained at rest; an origin outside the element's bounds is clamped; with no known pointer position the origin is the element's center; the end radius reaches the element's furthest corner. State is read from the component instance — no central registry and no animation key (FR-024b, FR-024d, FR-024e)
 - [ ] T025 [P] [US3] Failing test in `crates/micold-client/tests/style_state_layers.rs` asserting each interactive style function returns visibly different output for active, hovered and pressed, with the pressed delta at least the hover delta (FR-021, SC-005)
 - [ ] T026 [P] [US3] Failing test in `crates/micold-client/tests/style_focus.rs` asserting the focused text-input status yields the 3dp `secondary` focus indicator, distinguishable from hovered (FR-022)
 - [ ] T027 [P] [US3] Failing test in `crates/micold-client/tests/style_disabled.rs` asserting disabled content resolves the 0.38 opacity, including the self-coloring icon-glyph path (FR-023)
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Confirm the coordinate space the pointer area reports, against a real widget, before finalising the ripple renderer — an origin in the wrong frame places every ripple incorrectly (FR-024g)
-- [ ] T029 [US3] Build the ripple renderer in `crates/micold-client/src/ui/cdk/ripple.rs` — press capture, geometry and per-instance state, carrying no colour or opacity of its own (FR-024f)
-- [ ] T030 [US3] Implement ripple origin, progress, phase and lifetime in `crates/micold-core/src/ripple.rs`, keyed per element using the existing per-instance animation-key pattern (FR-024b, FR-024d, FR-024e)
-- [ ] T031 [US3] Confirm the coordinate space the pointer-area reports before finalising the wrapper — the terminal canvas works in absolute window coordinates, so element-relative conversion may be required (plan risk: ripple origin coordinate space)
+- [ ] T028 [US3] Confirm the coordinate space the pointer area reports, against a real widget, before finalising the ripple renderer — an origin in the wrong frame places every ripple incorrectly, and the terminal canvas works in absolute window coordinates, so element-relative conversion may be required (FR-024g, plan risk: ripple origin coordinate space)
+- [ ] T029 [US3] Build the ripple renderer in `crates/micold-client/src/ui/cdk/ripple.rs` — press capture, geometry, phase progression and per-instance lifetime, all held **inside the component instance** and carrying no colour or opacity of its own. Frames are requested through the motion primitive, never directly, so 017's single-frame-request gate stays at one entry (FR-024b, FR-024d, FR-024e, FR-024f, FR-039e)
+- [ ] ~~T030~~ — merged into T029. A separate `crates/micold-core/src/ripple.rs` is **not** created: FR-024e places ripple origin, progress and lifetime in the component instance and forbids registering an animation key, so central state would contradict the requirement it claimed to serve. Kept struck rather than deleted so the numbering stays stable.
+- [ ] ~~T031~~ — merged into T028, which said the same thing.
 - [ ] T032 [US3] Create the `Ripple` component in `crates/micold-client/src/ui/material/ripple.rs` per `contracts/component-api.md` §2.1a — expanding circle drawn with the canvas facility, clipped to the element's shape, beneath content and above container (FR-024a, FR-024b)
 - [ ] T033 [US3] Compose `Ripple` inside `crates/micold-client/src/ui/material/button.rs`, `tree_view.rs`, `menu.rs`, `tag.rs`, `toggle_chip.rs` and `icon_button.rs` so every interactive surface ripples without any call site opting in (FR-024c)
 - [ ] T034 [US3] Add the state-layer compositing helper to `crates/micold-client/src/ui/material/style.rs` as the single place any state layer is applied (FR-020)
 - [ ] T035 [US3] Apply the full state-layer set to the shared text-button style in `crates/micold-client/src/ui/material/style.rs`, which brings list rows, tree items and menu items to life (FR-021, research R9)
 - [ ] T036 [P] [US3] Apply the state-layer set to the filled, outlined and icon button styles in `crates/micold-client/src/ui/material/style.rs` (FR-021)
 - [ ] T037 [P] [US3] Apply the state-layer set to chips and tags in `crates/micold-client/src/ui/material/tag.rs` and `toggle_chip.rs`, preserving AA under every state (FR-021, FR-024)
-- [ ] T038 [P] [US3] Apply the state-layer set plus the focus indicator to `crates/micold-client/src/ui/material/text_field.rs` and `select.rs` (FR-021, FR-022)
+- [ ] T038 [P] [US3] Apply the state-layer set plus the **focus** indicator to `crates/micold-client/src/ui/material/text_field.rs` (FR-021, FR-022)
+- [ ] T038a [P] [US3] Apply the state-layer set to `crates/micold-client/src/ui/material/select.rs`, driving the active indicator from the **open** state rather than focus — the rendering stack's select reports only active, hovered and open, and has no focus concept to observe (FR-021, FR-043a)
 - [ ] T039 [US3] Add the persistent `selected` treatment — `secondary_container` fill with `on_secondary_container` text — in `crates/micold-client/src/ui/material/tree_view.rs` and `filter_panel.rs` (FR-020, contract §7.2)
 - [ ] T040 [US3] Update `docs/user-guide/` to describe hover, ripple, selection and focus feedback, recording that keyboard focus indicators exist only on text fields (FR-041, FR-043, Principle VII)
 
@@ -146,12 +217,13 @@ Test command throughout: `mise run test` (`cargo test --workspace`).
 - [ ] T045 [US4] Apply the filled text-field anatomy in `crates/micold-client/src/ui/material/text_field.rs` — 56dp height, filled container role, per-corner radius, bottom active indicator, 16dp padding (FR-031)
 - [ ] T046 [US4] Add the in-container label and the supporting-text slot to `crates/micold-client/src/ui/material/text_field.rs`, rendering the label persistently in its floating position (FR-031a, FR-031b, FR-044)
 - [ ] T047 [US4] Migrate the seven input call sites off placeholder-as-label onto label + supporting text per the contract §7.7 migration table, across `crates/micold-client/src/ui/worktree_form.rs`, `rename.rs`, `worktree_rename.rs` and `settings_form.rs` (FR-031a, FR-031b)
-- [ ] T048 [US4] Rebuild `crates/micold-client/src/ui/material/select.rs` on the `TextField` anatomy and style its dropdown as a menu (FR-031, FR-031d)
+- [ ] T048 [US4] Rebuild `crates/micold-client/src/ui/material/select.rs` on the `TextField` anatomy — including the bottom active indicator, which thickens and takes the accent colour on the **open** state rather than on focus (FR-043a) — and style its dropdown as a menu via the per-instance menu style, which does expose a shadow (FR-031, FR-031d, FR-043a)
 - [ ] T049 [US4] Apply the linear progress anatomy in `crates/micold-client/src/ui/material/progress.rs` — `secondary_container` track, `primary` indicator, 4dp thickness, fully rounded (FR-031e)
 - [ ] T050 [US4] Replace the static 0.4 fill in `crates/micold-client/src/ui/material/progress.rs` with Material's indeterminate presentation, so the bar stops asserting a completion fraction the application cannot know (FR-031f)
 - [ ] T051 [US4] Implement the notification queue in `crates/micold-core/src/notify.rs` — one visible, ordered pending queue, severity-derived duration, dedup and cap preserved (FR-032a, FR-032b)
 - [ ] T052 [US4] Create the `Snackbar` component in `crates/micold-client/src/ui/material/snackbar.rs` per `contracts/component-api.md` §2.2 (FR-032, Principle VIII)
 - [ ] T053 [US4] Replace the inline notification strip in `crates/micold-client/src/ui/mod.rs` with the floating snackbar overlay, above the dialog scrim and not obstructing a dialog's action row (FR-032)
+- [ ] T053a [P] [US4] Assert the connection-status banner stayed a separate component: a test confirming `ConnectionBanner` still renders as a full-width, non-dismissible, non-queued strip and does not route through the snackbar queue. Material treats banners and snackbars as different components, and folding one into the other is the specific mistake this requirement forbids (FR-032c)
 - [ ] T054 [US4] Rework `crates/micold-client/src/ui/material/toolbar.rs` to the small app bar anatomy — 64dp height, 16dp padding, `title_large` title, 48dp icon targets — and add `.elevated(bool)` (FR-025)
 - [ ] T055 [US4] Wire elevate-on-scroll: add the scroll handler to the sidebar's scrollable in `crates/micold-client/src/ui/sidebar.rs`, a message variant and view-state flag in `crates/micold-client/src/app.rs`, and pass it to the toolbar builder (FR-025a, research R10)
 - [ ] T056 [P] [US4] Add the dense (36dp) and standard (48dp) row densities to `crates/micold-client/src/ui/material/tree_view.rs`, defaulting the sidebar to dense (FR-026, FR-026a)
@@ -178,10 +250,10 @@ Test command throughout: `mise run test` (`cargo test --workspace`).
 
 ### Implementation for User Story 5
 
-- [ ] T064 [US5] Rework `crates/micold-client/src/motion.rs` so track speeds derive from the core duration tokens and apply the named easing curves, keeping the existing idle gate so no work runs at rest (FR-033, FR-034)
+- [ ] T064 [US5] Rework the motion primitive in `crates/micold-client/src/ui/cdk/motion.rs` (017 moved it there; `src/motion.rs` no longer exists) so track speeds derive from the core duration tokens and apply the named easing curves, keeping the `animating()` guard and its single frame-request site intact so no work runs at rest (FR-033, FR-034, FR-039a, FR-039e)
 - [ ] T065 [US5] Apply the assigned duration and easing per contract §6.3 in `crates/micold-client/src/ui/material/animation.rs`, `menu.rs`, `tree_view.rs` and `crates/micold-client/src/ui/sidebar.rs`, preserving each animation's existing trigger, start state and end state (FR-034, FR-035)
 - [ ] T066 [US5] Drive the four new animations from the same tokens — app bar elevation in `crates/micold-client/src/ui/material/toolbar.rs`, snackbar enter/exit in `snackbar.rs`, indeterminate progress in `progress.rs`, ripple expand/fade in `ripple.rs` — and confirm no fifth animation is introduced (FR-035a, SC-010)
-- [ ] T067 [US5] Confirm the animation clock still idles at rest with ripples in play — a completed ripple must remove its state so nothing animates (FR-024d)
+- [ ] T067 [US5] Confirm 017's `crates/micold-client/tests/idle_requests_no_frames.rs` still passes unchanged with all four new animations in play — its structural half already proves no module outside the motion primitive asks for a frame, so this is a check that the gate was honoured rather than a fresh hand-verification. Add the indeterminate indicator's external settle condition to it: running while an operation is in flight, stopped within one frame of the operation ending (FR-024d, FR-039a, FR-039d, FR-039e)
 - [ ] T068 [US5] Update `docs/user-guide/` if motion is user-visible enough to warrant a note; otherwise record in the PR that no doc change was needed (Principle VII)
 
 **Checkpoint**: All five stories complete and independently demonstrable.
@@ -211,11 +283,14 @@ Because it landed first, every task below changes appearance in **one place**. I
 
 ### Phase Dependencies
 
-- **US1 (Phase 1)**: depends only on 017. Independent of the other stories
-- **US2 (Phase 2)**: depends only on 017. 017 already routed every text site through the text component, so this assigns *roles* rather than hunting call sites
-- **US3 (Phase 3)**: depends only on 017. Within it, ripple appearance builds on 017's ripple renderer
-- **US4 (Phase 4)**: depends only on 017. Reads type roles from US2 and state layers from US3; lands correctly without them, just unstyled in those respects
-- **US5 (Phase 5)**: depends only on 017. Its final task covers animations introduced in US3 and US4, so run it after those
+- **Phase 0 (token values)**: depends only on 017. **Every other phase depends on it** — each story
+  reads token values from here, so nothing below starts until it is green. T000z runs before T000f
+  and cannot be recovered afterwards
+- **US1 (Phase 1)**: depends on Phase 0. Independent of the other stories
+- **US2 (Phase 2)**: depends on Phase 0. 017 already routed every text site through the text component, so this assigns *roles* rather than hunting call sites
+- **US3 (Phase 3)**: depends on Phase 0. Within it, ripple appearance builds on 017's behavior layer
+- **US4 (Phase 4)**: depends on Phase 0. Reads type roles from US2 and state layers from US3; lands correctly without them, just unstyled in those respects
+- **US5 (Phase 5)**: depends on Phase 0. Its final task covers animations introduced in US3 and US4, so run it after those
 - **Polish (Phase 6)**: depends on all desired stories
 
 ### Within Each Story
@@ -227,16 +302,20 @@ Because it landed first, every task below changes appearance in **one place**. I
 
 ### Parallel Opportunities
 
+- T000a, T000c, T000d — Phase 0 test files (T000b shares T000a's file and follows it)
+- T000h, T000i — Phase 0 scale authoring, different files (T000e–T000g are sequential: the module
+  split, then the palette, then the tags that read it)
 - T001, T002, T003 — US1 test files
 - T007, T008 — US1 shape work in different files
-- T012, T013 — US2 test files
+- T013, T014 — US2 test files
 - T017–T020 — four type-role assignment tasks, different modules
 - T024–T027 — US3 test files
-- T034–T036 — US3 style application in different concerns
-- T039–T042 — US4 test files
-- T053–T058 — component anatomy tasks, all different files
+- T036–T038 — US3 style application in different concerns
+- T041–T044 — US4 test files
+- T056–T060 — component anatomy tasks, all different files
 - T069–T071 — polish cleanups
-- **Whole stories**: US1–US5 can be staffed concurrently once 017 is green
+- **Whole stories**: US1–US5 can be staffed concurrently once **Phase 0** is green (017 alone is
+  not enough — every story reads token values)
 
 ---
 
@@ -245,15 +324,20 @@ Because it landed first, every task below changes appearance in **one place**. I
 ### MVP (User Story 1)
 
 1. Confirm 017 is complete and its parity gate passed
-2. Phase 1 (US1) — surfaces, elevation, shape
-3. **STOP and VALIDATE** — `quickstart.md` §B0 and §B1, both schemes
+2. **T000z** — capture the pre-change frame-time figure. Unrecoverable once T000f lands in step 3
+3. Phase 0 — token values in the core, with the contrast gate live
+4. **STOP and VALIDATE** — `quickstart.md` §B0, both schemes. The app is already purple here
+5. Phase 1 (US1) — surfaces, elevation, shape
+6. **STOP and VALIDATE** — `quickstart.md` §B1, both schemes
 
 US1 alone changes the application's identity: real depth, Material's corners, and the baseline purple accent.
 
 ### Incremental Delivery
 
 1. 017 complete → foundation closed, **nothing looked different yet**
-2. + US1 → depth and shape (**MVP** — the first visible change)
+2. + Phase 0 → token values authored and gated. **The first visible change**: the accent turns
+   purple and the tag colours shift, because `roles(scheme)` already feeds every call site
+3. + US1 → depth and shape (**MVP** — the first *structural* visual change)
 3. + US2 → typographic voice and cross-platform parity
 4. + US3 → ripple and live state feedback
 5. + US4 → correct component anatomy, real text fields, the snackbar
@@ -262,7 +346,7 @@ US1 alone changes the application's identity: real depth, Material's corners, an
 
 ### Risk Notes
 
-- **The first two tasks that touch the palette are the visible break point** — the app turns purple and tag colors shift. Both are intended; `quickstart.md` §B0 exists so this is confirmed rather than discovered
+- **T000f and T000g are the visible break point** — the app turns purple and tag colors shift, in Phase 0, before any component is restyled. Both are intended; `quickstart.md` §B0 exists so this is confirmed rather than discovered
 - **The regression pass is a merge gate, not a formality.** This feature permits exactly one behavioral difference: the snackbar
 - **Do not re-litigate 017's decisions here.** If a wrapper cannot express something this feature needs, extend the wrapper
 

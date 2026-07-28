@@ -33,10 +33,13 @@ mise run test
 |------|------|--------|
 | AA contrast, both schemes, every pair | `micold-core/tests/tokens_contrast.rs` | SC-001, FR-004, FR-005 |
 | Tone ramps monotonic in luminance | `micold-core/tests/tokens_contrast.rs` | catches ramp transcription error |
-| Type/elevation/shape/state/motion invariants | `micold-core/tests/tokens_scales.rs` | SC-009, FR-007/014/018/020/033 |
+| Type/elevation/shape/state/motion invariants | `micold-core/tests/tokens_scales.rs` | FR-007/014/018/020/033, FR-042 |
+| Density scale: four steps, −4dp each, no fractional height | `micold-core/tests/tokens_density.rs` | FR-026b |
 | Snackbar queue: one visible, dedup, cap, severity duration | `micold-core/tests/notify_queue.rs` | FR-032a, FR-032b |
 | Both Roboto faces load at expected weights | `micold-client/tests/roboto_font.rs` | FR-008a, SC-012 |
 | No raw text size literal at any call site | `micold-client/tests/type_role_call_sites.rs` | SC-003, FR-010 |
+| Ripple origin, clipping and per-element independence | `micold-client/tests/ripple_state.rs` | SC-005a, FR-024b/d/e |
+| Component anatomy matches contract §7 | `micold-core/tests/tokens_anatomy.rs` | SC-008, FR-025–FR-032 |
 
 **Expected**: all pass. A failure in the contrast gate must block the change — it is a hard
 invariant carried over from feature 003, not a warning.
@@ -148,6 +151,40 @@ The critical regression pass. Walk **every** screen, dialog and flow:
 
 - [ ] With a dialog, a menu **and** a snackbar simultaneously on screen, switch light ↔ dark. Every
       visible surface re-resolves — roles, elevation, state layers — with **no restart**.
+
+### B8. Performance — the reference scene
+
+Reported for trend. **This does not gate the build** (FR-039c): hosted runners render through
+software rasterization with no stable frame-time floor, so a threshold there would fail on runner
+variance rather than on the change under review. A regression here is a review finding.
+
+**The reference scene** (FR-039b) — set up exactly this, so the two figures are comparable:
+
+1. A repository with **20 worktrees** in the sidebar.
+2. The sidebar **expanded**.
+3. **One running terminal session**.
+4. A **context menu open over a dialog**.
+5. Captured **while a ripple is mid-animation**.
+
+- [ ] **Pre-change figure** — measured on the pre-change build, *before* any token value lands
+      (`tasks.md` T000z). Once the palette changes this is no longer obtainable.
+
+      Machine: ______________  Date: __________  Frame time: __________
+
+- [ ] **Post-change figure** — measured on the same machine, same scene, after the feature is
+      complete.
+
+      Machine: ______________  Date: __________  Frame time: __________
+
+- [ ] Both figures recorded in the PR so the comparison is reviewable (SC-018).
+
+### B9. Idle quiescence
+
+- [ ] With no operation in flight and no pointer over the window, observe for a sustained window:
+      **zero frames requested**, CPU indistinguishable from the pre-change build (SC-017, FR-039a).
+- [ ] Press every interactive element in turn, then idle again: no animation state remains held.
+- [ ] Start an operation that shows the indeterminate indicator. It animates while the operation
+      runs, and **stops within one frame of the operation ending** (FR-039d).
 
 ---
 
