@@ -689,6 +689,15 @@ impl DaemonState {
 
     /// The (non-archived) session summaries for a project, from durable state. Used to build the
     /// `Attached` reply after any attach-time pruning so it reflects the pruned result.
+    ///
+    /// **Not overlaid** — unlike every snapshot path, this does not run
+    /// [`Self::overlay_live_summaries`], so each summary carries the catalog's defaults for the
+    /// runtime-only fields: `activity` is always `Unknown`, `title` is the persisted label rather
+    /// than the live OSC-0 title, and `input_serial` is `0` even for a session the daemon has been
+    /// driving for hours. Correct for what `Attached` is (an acknowledgement naming the project's
+    /// sessions), and harmless because a `CatalogChanged` built from the real snapshot follows every
+    /// `Attached` — but it means a client MUST NOT adopt these values as state. Seeding an input
+    /// counter from one would re-create BUG-006 exactly.
     pub fn sessions_for(&self, project: &Path) -> Vec<SessionSummary> {
         self.lock().catalog.sessions_for(project)
     }

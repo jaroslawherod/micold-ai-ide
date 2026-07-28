@@ -807,7 +807,26 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 } => {
                     app.displaced.insert(project, holder);
                 }
-                // Other control messages (Pong, Attached) are consumed as their flows land.
+                // An attach this window asked for was accepted (FR-024a). This is the fact that
+                // falsifies a recorded displacement: the daemon decides who holds a project, and it
+                // has just confirmed we do. Clearing here — rather than only on a full reconnect or
+                // the banner's "Take over" button — is what lets a window that was once refused go
+                // back to a project after the holder released it and simply type into it. Without
+                // it, `displaced` is a latch: written by every refusal, cleared by almost nothing,
+                // so the window renders a project it owns while suppressing its own input above a
+                // banner naming a window that may have exited (BUG-007).
+                //
+                // `sessions` is deliberately ignored. It is built from `DaemonState::sessions_for`,
+                // the raw durable projection with **no** live overlay, so its `activity` is always
+                // `Unknown`, its labels lag the terminal title, and its `input_serial` is `0` even
+                // for a session the daemon has been driving for hours — adopting it would re-create
+                // BUG-006. The authoritative view arrives immediately after, as the `CatalogChanged`
+                // that `refresh_worktrees_and_send` sends on the heels of every `Attached`, and that
+                // one *is* overlaid.
+                DaemonMsg::Attached { project, .. } => {
+                    app.displaced.remove(&project);
+                }
+                // Other control messages (Pong) are consumed as their flows land.
                 _ => {}
             }
             Task::none()
@@ -2820,6 +2839,161 @@ mod tests {
             next_req: 0,
             pending_ops: HashMap::new(),
         }
+    }
+
+    // --- T117 / FR-024a / SC-021: the read-only state must end when the daemon says we hold the
+    // project (BUG-007) -----------------------------------------------------------------------
+
+    /// An `App` holding `project` as its active project, with nothing else varied.
+    fn app_on_project(project: &Path) -> App {
+        let mut app = base_app();
+        app.core.workspace.active = Some(project.to_path_buf());
+        app
+    }
+
+    fn feed(app: &mut App, msg: DaemonMsg) {
+        let _ = update_inner(app, Message::DaemonEvent(msg));
+    }
+
+    #[test]
+    fn an_accepted_attach_ends_the_read_only_state_a_refusal_started() {
+        // The reported sequence: this window is refused a project another window holds, the holder
+        // later releases it, and the window reaches the project again by an ordinary switch — which
+        // sends a *non-forced* `Attach`. The daemon accepts. Before the fix, `Attached` fell into
+        // the catch-all arm, so the window rendered a project it owned while refusing to type into
+        // it, above a takeover banner naming a window that may have exited.
+        let project = PathBuf::from("/repo/demo");
+        let mut app = app_on_project(&project);
+
+        feed(
+            &mut app,
+            DaemonMsg::Refused {
+                reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
+                    project: project.clone(),
+                    holder: "other-window".into(),
+                    since_secs: 12,
+                },
+            },
+        );
+        assert!(
+            active_project_displaced(&app),
+            "a ProjectBusy refusal must make the window read-only (FR-023)"
+        );
+
+        feed(
+            &mut app,
+            DaemonMsg::Attached {
+                project: project.clone(),
+                sessions: vec![],
+            },
+        );
+
+        assert!(
+            !active_project_displaced(&app),
+            "an accepted attach means the daemon says we hold it — input must flow again (FR-024a)"
+        );
+        assert_eq!(
+            connection_status(&app),
+            micold_client::ui::ConnectionStatus::Connected,
+            "and no takeover affordance may be offered for a project we hold (SC-021)"
+        );
+    }
+
+    #[test]
+    fn an_accepted_attach_ends_the_read_only_state_a_takeover_started() {
+        // The same fix from the other direction: this window *was* displaced by a real takeover
+        // rather than refused up front. Once the taker releases the project and this window's own
+        // attach is accepted, it is writable again — via the ordinary attach path, with no need to
+        // press "Take over" and force a displacement of nobody.
+        let project = PathBuf::from("/repo/demo");
+        let mut app = app_on_project(&project);
+
+        feed(
+            &mut app,
+            DaemonMsg::Displaced {
+                project: project.clone(),
+                by: "other-window".into(),
+            },
+        );
+        assert!(
+            active_project_displaced(&app),
+            "a takeover makes us read-only (FR-024)"
+        );
+
+        feed(
+            &mut app,
+            DaemonMsg::Attached {
+                project: project.clone(),
+                sessions: vec![],
+            },
+        );
+        assert!(!active_project_displaced(&app));
+    }
+
+    #[test]
+    fn an_accepted_attach_clears_only_that_project() {
+        // The map is per-project and must stay that way: being handed back one project says nothing
+        // about another that a different window still holds.
+        let mine = PathBuf::from("/repo/mine");
+        let theirs = PathBuf::from("/repo/theirs");
+        let mut app = app_on_project(&mine);
+
+        for p in [&mine, &theirs] {
+            feed(
+                &mut app,
+                DaemonMsg::Displaced {
+                    project: p.clone(),
+                    by: "other-window".into(),
+                },
+            );
+        }
+
+        feed(
+            &mut app,
+            DaemonMsg::Attached {
+                project: mine.clone(),
+                sessions: vec![],
+            },
+        );
+
+        assert!(
+            !app.displaced.contains_key(&mine),
+            "the attached project is cleared"
+        );
+        assert!(
+            app.displaced.contains_key(&theirs),
+            "a project we did not attach to is untouched"
+        );
+    }
+
+    #[test]
+    fn a_refusal_after_an_attach_makes_the_window_read_only_again() {
+        // The flag must move in both directions, not just the new one. Clearing on `Attached` must
+        // not make the state sticky the other way: if we are later refused — because another window
+        // took the project while we were away — the banner comes back.
+        let project = PathBuf::from("/repo/demo");
+        let mut app = app_on_project(&project);
+
+        feed(
+            &mut app,
+            DaemonMsg::Attached {
+                project: project.clone(),
+                sessions: vec![],
+            },
+        );
+        assert!(!active_project_displaced(&app));
+
+        feed(
+            &mut app,
+            DaemonMsg::Displaced {
+                project: project.clone(),
+                by: "other-window".into(),
+            },
+        );
+        assert!(
+            active_project_displaced(&app),
+            "the flag is a cache of daemon-reported ownership, not a latch in either direction"
+        );
     }
 
     /// T100 (BUG-003 follow-up, FR-012a/FR-012b): saving Settings while connected to a daemon must

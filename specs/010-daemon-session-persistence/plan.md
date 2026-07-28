@@ -395,6 +395,14 @@ pre-split count accounted for.
 client sends zero further input and does not exit; a project held by a crashed client becomes
 attachable without restarting the daemon.
 
+**Bugfix 2026-07-28 (BUG-007)**: every clause above is about *entering* and *holding* the displaced
+state, and all of it is asserted daemon-side — what the daemon sends, never what the client does
+with it. That left the exit condition owned by nobody: the client recorded refusals and ignored
+acceptances, so a window that reacquired a released project stayed read-only. Add the symmetric
+clause — **an accepted attach makes the window writable again**, driven through the client's update
+loop rather than the wire — and note that a client-side flag deciding a user-visible capability
+needs a test on the client side, however well the wire is covered.
+
 ---
 
 ## Spec amendments — RESOLVED 2026-07-21
@@ -548,6 +556,15 @@ control plane you can read by eye is the justification for carrying two encoding
    level; and the T039 extension exercises a genuinely fresh stamper against a surviving receiver.
    *Generalisation*: for any pair of values that must agree across the boundary, name which side is
    authoritative and re-read it on connect — do not assume symmetry of lifetimes.
+   **Widened 2026-07-28 (BUG-007)**: the same shape recurred in a second pair of values —
+   `App.displaced` versus the daemon's per-project holder. The client recorded every refusal and
+   ignored every acceptance, so its shadow of daemon-owned ownership could only ever move toward
+   read-only. Connect-time resync was not the missing piece there (a reconnect *does* clear it);
+   the missing piece was reading the authoritative answer off the reply that carries it. So the
+   generalisation is stronger than first written: **re-read authoritative state on every reply that
+   carries it, not only on connect — and make sure the client's copy can move in both directions.**
+   A shadow that is only ever corrected one way is a latch, not a cache. Two instances in one
+   feature suggests looking for a third rather than waiting for it to be reported.
 
 ---
 
@@ -566,3 +583,9 @@ structure entry, and added Risk 7 (a new indicator stacking on an inherited one)
 the client-restart resync step (the binding boundary is a new client process, not a reconnect), and
 added Risk 8 (mismatched lifetimes across the client/daemon boundary, and a contract test that
 encodes the mismatch as its premise). See `bugs/BUG-006.md`.
+
+**Bugfix**: 2026-07-28 — BUG-007 Updated from bugfix patch: annotated the exclusivity workstream's
+*Tests first* line with the missing symmetric clause (an accepted attach makes the window writable
+again, asserted client-side rather than on the wire), and widened Risk 8's generalisation — re-read
+authoritative state on every reply that carries it, not only on connect, and make sure the client's
+copy can move in both directions. See `bugs/BUG-007.md`.

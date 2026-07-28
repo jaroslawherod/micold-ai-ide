@@ -1103,3 +1103,109 @@ within a client's lifetime, and a new client process starts in step.
   not a regression, but it means SC-020's **package-upgrade** path cannot be observed on this build's
   own install; check it on the next `.deb` that does not move the contract. SC-020's
   **quit-and-reopen** path is checkable immediately once the daemon is running this build.
+
+---
+
+## Phase 21: Bugfix BUG-007 — a window that reacquires a project stays read-only
+
+**Goal**: make the client's read-only state follow current attachment ownership as the daemon reports
+it, so any accepted attach clears it (FR-024a, SC-021, US5 acceptance scenario 5).
+
+**Root cause**: `App.displaced` decides whether a window suppresses its own input
+(`main.rs:1465-1468`) and whether it shows the takeover banner (`connection_status`). It is written
+on `DaemonMsg::Displaced` (`main.rs:796`) and on a `ProjectBusy` refusal (`main.rs:808`), but cleared
+only by a full reconnect (`main.rs:534`) or the banner's explicit "Take over" button
+(`main.rs:869`). `DaemonMsg::Attached` — the daemon confirming this client now holds the project
+(`messages.rs:335`, sent from `server.rs:337`) — falls into the catch-all arm (`main.rs:811`) under
+a comment calling it uninteresting. It is the one event that falsifies the flag, and the only one of
+the three attach outcomes the client ignores. So a window refused project P, that later reacquires P
+by an ordinary project switch (`switch_daemon_attachment` → `Attach { force: false }`) once the
+holder has gone, renders P and refuses to type into it, above a banner naming a window that may no
+longer be running.
+
+**Why it survived**: `crates/micold-daemon/tests/exclusivity.rs` covers US5 with four tests, and all
+four assert what the *daemon* sends. The client's only `displaced` coverage
+(`connection_status_orders_mismatch_over_displaced_over_disconnected`, `main.rs:2952`) pins the
+precedence of connection states given a populated map and never exercises its lifecycle. The daemon
+tests prove the project is freed; nothing proves the client notices.
+
+**No task is reopened**: T069's stated scope was the `ConnectionBanner` primitive, the
+`ConnectionStatus` computation and the read-only input suppression, and it delivered all three.
+Nothing in Phase 8 owned the map's full lifecycle — which is how the gap survived. (Same disposition
+as BUG-005's T048.)
+
+**Design note**: the fix is to stop treating "am I displaced?" as state accumulated from events and
+start treating it as a fact read off the daemon's replies. The daemon already sends the deciding
+answer on every attach; the client need only stop ignoring the positive case. See plan Risk 8, whose
+generalisation this bug widened.
+
+- [X] T116 [US5] Clear the project's `displaced` entry on `DaemonMsg::Attached` in
+  `crates/micold-client/src/main.rs:811` — give it a real arm instead of leaving it to the
+  `_ => {}` catch-all, and update the comment that calls it uninteresting. `Attached` also carries
+  `sessions: Vec<SessionSummary>`, which the client currently discards; decide explicitly whether
+  that is a second omission or is correctly left to the `CatalogChanged` push, and record which.
+  Closes FR-024a.
+  **Done**: `DaemonMsg::Attached { project, .. }` now has a real arm that removes the project's
+  `displaced` entry, and the comment that called it uninteresting is gone. **Decision on `sessions`:
+  correctly ignored, and adopting it would be a bug.** `Attached`'s list is built from
+  `DaemonState::sessions_for`, which is `catalog.sessions_for` — the raw durable projection with
+  **no** `overlay_live_summaries` pass. Every summary in it therefore carries `activity: Unknown`,
+  the persisted label rather than the live OSC-0 title, and `input_serial: 0` even for a session the
+  daemon has been driving for hours; a client seeding from it would re-create BUG-006 exactly. The
+  authoritative view arrives immediately anyway: `refresh_worktrees_and_send` (`server.rs:1014`)
+  sends a `CatalogChanged` built from `catalog_snapshot()` — which *is* overlaid — on the heels of
+  every `Attached`. Recorded as a doc comment on `sessions_for` so the next reader does not
+  "helpfully" start consuming it.
+- [X] T117 [P] [US5] Red-first, in `crates/micold-client/src/main.rs`'s test module (beside the
+  existing `connection_status` test): drive `update_inner` with `Refused { ProjectBusy }` for a
+  project and then `Attached` for the same project, and assert `active_project_displaced` is false
+  and `connection_status` is `Connected`. Assert the pre-fix sequence reproduces the bug so the
+  regression is pinned from both sides (as T112 does for BUG-006). Cover the `Displaced` → released
+  → `Attached` ordering too, since that is the takeover-shaped route to the same state. Depends on
+  T116. Closes SC-021.
+  **Done**: four tests, red confirmed by neutralising the `Attached` arm and re-running — three
+  failed, and the fourth (`a_refusal_after_an_attach_makes_the_window_read_only_again`) passed, which
+  is correct: it guards the direction that already worked, so the fix must not break it.
+  `an_accepted_attach_ends_the_read_only_state_a_refusal_started` is the reported sequence;
+  `..._a_takeover_started` is the same fix reached via a real `Displaced` rather than a refusal;
+  `an_accepted_attach_clears_only_that_project` pins that the map stays per-project, so being handed
+  back one project says nothing about another; and the fourth pins that the flag moves in *both*
+  directions — clearing on `Attached` must not make it sticky the other way. Driven through
+  `update_inner` with real `DaemonMsg` values, so the arm under test is the one the runtime uses.
+- [X] T118 [P] [US5] Resolve the stale holder label: the banner's `by` string is the holder as of the
+  refusal (`main.rs:796`/`808`) and is never refreshed, so a window can be told it is blocked by a
+  window that has since exited. Either re-derive it when shown or state in the type's docs that it is
+  a point-in-time label. Not a correctness bug once T116 lands — a window holding the project no
+  longer shows the banner at all — but it is the same stale-shadow habit and is worth closing while
+  it is in view.
+  **Done — documented, not re-derived.** With T116 in place a window holding the project no longer
+  shows the banner at all, so the only way to see the label is to genuinely be blocked, and then it
+  is accurate as of the event that blocked us. Re-deriving it would mean asking the daemon who holds
+  a project we were just refused — a round trip to restate a refusal we already have. The docs on
+  `ui::ConnectionStatus::Displaced::by` now say plainly that it is a point-in-time label, never
+  refreshed, and must not be read as a claim that the named window is running now.
+- [X] T119 [P] [US5] Decide whether `ClientMsg::Detach` should also drop the project's `displaced`
+  entry: a window that deliberately leaves a project has no live claim to be displaced from it. With
+  T116 in place this is belt-and-braces rather than load-bearing, so the acceptable outcome is a
+  recorded decision either way, not necessarily a code change.
+  **Done — decided against, no code change.** A `displaced` entry for a project that is not the
+  active one is inert: `active_project_displaced` (`main.rs`) reads only the active project, so a
+  stale entry can affect nothing until the window returns to that project — and returning sends an
+  `Attach`, whose outcome now sets the flag correctly either way (accepted → T116 clears it; refused
+  → it is re-inserted with a current holder). Clearing on `Detach` would add a second write path to a
+  value whose correctness now rests on a single rule — *the flag is whatever the last attach outcome
+  said* — and a second path that happens to agree is how the invariant gets blurred. The map is
+  bounded by project count, so there is no leak to argue from either.
+
+**Bugfix**: 2026-07-28 — BUG-007 Added Phase 21 (T116–T119) to make the client's read-only state
+follow attachment ownership rather than the history of refusals. **No task reopened**: T069 built the
+banner, the status computation and the input suppression as specified; nothing owned the `displaced`
+map's exit condition. Same defect shape as BUG-006 in a second pair of values, which is why plan
+Risk 8's generalisation was widened rather than a new risk added. Implemented 2026-07-28: T116–T119
+all done, **no task reopened and none left open**. `DaemonMsg::Attached` clears the project's
+`displaced` entry; its `sessions` payload is deliberately ignored and now documented as unsafe to
+adopt (unoverlaid durable projection — seeding from it would re-create BUG-006); the stale `by` label
+is documented as point-in-time rather than re-derived; and clearing on `Detach` was decided against
+so the flag keeps a single write rule. Four tests, red confirmed by neutralising the arm.
+`mise run test` green (119 groups), `cargo clippy --workspace --all-targets -- -D warnings` and
+`cargo fmt --check` clean. See `bugs/BUG-007.md`.

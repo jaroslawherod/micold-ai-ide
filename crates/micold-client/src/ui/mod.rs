@@ -44,9 +44,16 @@ pub enum ConnectionStatus {
     /// The service connection is down; displayed content may be stale and is auto-reconnecting.
     Disconnected,
     /// Another window took over the active project (`by` = its build/identity). This window is
-    /// read-only until the user takes it back (FR-024).
+    /// read-only until the user takes it back (FR-024), or until an attach of its own is accepted
+    /// (FR-024a) — the service decides who holds a project, so its acceptance ends this state
+    /// whether or not the user pressed the takeover button.
     Displaced {
-        /// The taking-over window's identity string.
+        /// The taking-over window's identity string, **as of the takeover or refusal that raised
+        /// this state**. It is a point-in-time label, not a live one: it is never re-derived, so a
+        /// window that has since exited can still be named here. That is tolerable because the
+        /// label's job is to explain *why* this window is read-only, and the reason is historical
+        /// by nature — but it must not be read as a claim that the named window is running now
+        /// (BUG-007, T118).
         by: String,
     },
     /// The running service speaks a different contract version (US6, FR-021/022). Names both versions
