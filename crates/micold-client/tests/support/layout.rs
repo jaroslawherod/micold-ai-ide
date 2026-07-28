@@ -292,12 +292,40 @@ pub fn anchor_for<'a>(anchors: &'a [Anchor], path: &[usize]) -> Option<&'a Ancho
     anchors.iter().find(|a| a.path == path)
 }
 
-/// Emit the whole fixture: one global header, then one section per covered state (contract §1).
-pub fn emit_fixture(
-    states: &[CoveredState],
+/// Resolve every covered state once per scheme, and remember it.
+///
+/// Six tests need these records and the naive form resolved ~71 full views to get them: three
+/// emitted the whole fixture independently and the scheme check walked every state twice. Text
+/// shaping dominates, so that was the entire cost of the gate — 23s against SC-006's 10s budget.
+/// Resolving once per scheme brings it to 18.
+///
+/// Safe to cache because the records are deterministic by requirement (FR-005), which is asserted
+/// independently in `layout_apparatus.rs`; if that ever stopped holding, caching would be the least
+/// of the problems.
+pub fn cached_records(
+    states: &'static [CoveredState],
     renderer: &iced::Renderer,
     scheme: micold_core::theme::ColorScheme,
-) -> String {
+) -> &'static [Vec<LayoutRecord>] {
+    use std::sync::OnceLock;
+    static LIGHT: OnceLock<Vec<Vec<LayoutRecord>>> = OnceLock::new();
+    static DARK: OnceLock<Vec<Vec<LayoutRecord>>> = OnceLock::new();
+
+    let cell = match scheme {
+        micold_core::theme::ColorScheme::Light => &LIGHT,
+        micold_core::theme::ColorScheme::Dark => &DARK,
+    };
+
+    cell.get_or_init(|| {
+        states
+            .iter()
+            .map(|covered| records_for(covered, renderer, scheme))
+            .collect()
+    })
+}
+
+/// Render the fixture text from records already resolved (contract §1).
+pub fn emit_from(states: &[CoveredState], records: &[Vec<LayoutRecord>]) -> String {
     let mut out = String::new();
     out.push_str("# layout snapshot v1\n");
     out.push_str("# renderer: tiny-skia\n");
@@ -311,7 +339,7 @@ pub fn emit_fixture(
         "# regenerate: UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot\n",
     );
 
-    for covered in states {
+    for (covered, records) in states.iter().zip(records.iter()) {
         out.push('\n');
         out.push_str(&format!("## {}\n", covered.name));
         for anchor in covered.anchors {
@@ -321,13 +349,22 @@ pub fn emit_fixture(
                 path_token(anchor.path)
             ));
         }
-        for record in records_for(covered, renderer, scheme) {
-            out.push_str(&format_record(&record));
+        for record in records {
+            out.push_str(&format_record(record));
             out.push('\n');
         }
     }
 
     out
+}
+
+/// Emit the whole fixture, resolving each covered state once per scheme (contract §1).
+pub fn emit_fixture(
+    states: &'static [CoveredState],
+    renderer: &iced::Renderer,
+    scheme: micold_core::theme::ColorScheme,
+) -> String {
+    emit_from(states, cached_records(states, renderer, scheme))
 }
 
 // --- Text overflow (feature 019, T025 follow-up) ----------------------------------------------

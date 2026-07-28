@@ -167,8 +167,8 @@ fn a_state_that_can_no_longer_be_constructed_fails_naming_it() {
 fn an_anchor_whose_path_does_not_resolve_fails_naming_it() {
     let renderer = lay::renderer();
 
-    for covered in covered_states() {
-        let records = lay::records_for(covered, &renderer, RECORDED_SCHEME);
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+    for (covered, records) in covered_states().iter().zip(all.iter()) {
         for anchor in covered.anchors {
             assert!(
                 records.iter().any(|r| r.path == anchor.path),
@@ -216,9 +216,10 @@ fn the_other_scheme_lays_out_identically() {
     let renderer = lay::renderer();
     let mut exercised: std::collections::BTreeSet<&[usize]> = Default::default();
 
-    for covered in covered_states() {
-        let light = lay::records_for(covered, &renderer, ColorScheme::Light);
-        let dark = lay::records_for(covered, &renderer, ColorScheme::Dark);
+    let lights = lay::cached_records(covered_states(), &renderer, ColorScheme::Light);
+    let darks = lay::cached_records(covered_states(), &renderer, ColorScheme::Dark);
+
+    for ((covered, light), dark) in covered_states().iter().zip(lights.iter()).zip(darks.iter()) {
 
         let shape = |rs: &[lay::LayoutRecord]| rs.iter().map(|r| r.path.clone()).collect::<Vec<_>>();
         assert_eq!(
