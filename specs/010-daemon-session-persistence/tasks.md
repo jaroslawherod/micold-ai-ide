@@ -948,7 +948,7 @@ is incidental: it is the row's fixed-width leading anchor, which the badge is no
   *relies on*, it is not a regression test for the bug. Both new tests live inline
   (`#[cfg(test)] mod tests`) next to the private items they assert, matching `activity_badge.rs`'s
   existing pattern, so no API was widened to make the code testable.
-- [ ] T109 [US2] Verify in the running app (`mise run run`): session rows show exactly one leading
+- [X] T109 [US2] Verify in the running app (`mise run run`): session rows show exactly one leading
   indicator, names in the list all begin at the same horizontal offset, and a row does not shift as
   its signal changes (SC-019). Update `docs/daemon.md`'s activity-dot section only if it describes
   the removed icon. Depends on T106–T107. Expect the same disposition as T104/T084 if driving a real
@@ -974,6 +974,24 @@ is incidental: it is the row's fixed-width leading anchor, which the badge is no
   by T108, which asserts the two properties SC-019 names (one leading indicator; identical slot width
   across all four signals) at the widget level rather than by eye. What remains is purely visual
   confirmation — expand a worktree in a client running this build and look at the session rows.
+  **Closed 2026-07-28 as redundant against T108** (BUG-008 missing-task 1, disposition (c)). Each of
+  this task's three clauses is already asserted deterministically, so performing it would re-check by
+  eye what a test re-checks on every run:
+  - *"exactly one leading indicator"* → `ui::sidebar::tests::a_session_row_has_no_leading_icon`
+    asserts `item.icon.is_none()` **and** `item.badge.is_some()` across all six `SessionLifecycle`
+    variants: no second glyph, and the one indicator present. Confirmed RED pre-fix.
+  - *"a row does not shift as its signal changes"* →
+    `ui::material::activity_badge::tests::the_slot_is_constant_width_in_every_state_including_unknown`
+    asserts `Length::Fixed(sidebar::TAG)` for all four `ActivitySignal` variants. Confirmed RED
+    pre-fix (`left: Shrink, right: Fixed(10.0)`).
+  - *"names all begin at the same horizontal offset"* → holds **by construction** from the two above:
+    with no leading icon and a fixed-width badge slot in every state, the label's offset cannot vary.
+    Stated precisely because this one is a derivation from the assertions rather than a measured
+    offset — if a future row gains another variable-width leading element, that derivation breaks
+    while both tests still pass, and the row shift would return unasserted.
+  The doc clause was already discharged: `grep -rn 'check_circle\|ActiveMarker' docs/` returns
+  nothing, so `docs/daemon.md`'s activity-dot section describes only the dot, which is unchanged
+  (re-confirmed 2026-07-28).
 
 ---
 
