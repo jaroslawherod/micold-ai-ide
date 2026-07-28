@@ -36,6 +36,14 @@ fn worktree(dir_name: &str, branch: &str) -> Worktree {
 fn with_project() -> State {
     let mut state = State::default();
     state.workspace = super::workspace_with(vec![(PROJECT, vec![])]);
+    // `workspace_with` ends by clearing `active`, which every other caller wants. Here it is the
+    // difference between rendering the project surface and rendering "Open a folder to set it as
+    // your working space." — four covered states were byte-identical until this line existed.
+    state.workspace.active = state.workspace.projects.first().map(|p| p.path.clone());
+    assert!(
+        state.workspace.active_project().is_some(),
+        "the covered state must have a project open, or it is not covering what it claims"
+    );
     state.worktrees = vec![
         worktree("feat-short", "feat/short"),
         worktree(LONG_NAME, "feat/long"),

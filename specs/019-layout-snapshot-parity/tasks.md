@@ -76,61 +76,26 @@ Three-crate Cargo workspace. This feature touches **only** `crates/micold-client
 ### Implementation for User Story 1
 
 - [X] T018 [US1] Implement `CoveredState` and `Anchor` in `crates/micold-client/tests/support/layout.rs` per `data-model.md`. Window size and colour scheme are deliberately **not** fields — both are uniform by requirement and declared once in the fixture header (FR-008a, FR-008b)
-- [ ] T019 [US1] Register feature 017's reduced parity set in `crates/micold-client/tests/layout_snapshot.rs`: main shell with the sidebar expanded, main shell with the sidebar collapsed, the add-worktree dialog in each of its two branch-source modes, and one open menu — every one built from the in-memory fixtures in `crates/micold-client/tests/support/mod.rs`, never from the developer's workspace (FR-007, FR-008, SC-004)
-- [ ] T020 [US1] Register the empty and error layouts in `crates/micold-client/tests/layout_snapshot.rs`: no project open, an unavailable project, a disconnected daemon. `State::default()` is already the no-project state (FR-008c, SC-004)
+- [X] T019 [US1] Register feature 017's reduced parity set in `crates/micold-client/tests/layout_snapshot.rs`: main shell with the sidebar expanded, main shell with the sidebar collapsed, the add-worktree dialog in each of its two branch-source modes, and one open menu — every one built from the in-memory fixtures in `crates/micold-client/tests/support/mod.rs`, never from the developer's workspace (FR-007, FR-008, SC-004)
+- [X] T020 [US1] Register the empty and error layouts in `crates/micold-client/tests/layout_snapshot.rs`: no project open, an unavailable project, a disconnected daemon. `State::default()` is already the no-project state (FR-008c, SC-004)
 - [X] T021 [US1] Implement the fixture emitter in `crates/micold-client/tests/support/layout.rs` per `contracts/layout-fixture.md` §1 — header carrying renderer, font, window and scheme **once**, then one section per covered state with its anchor block and records (FR-003, FR-008a, FR-008b)
 - [X] T022 [US1] Implement the byte-for-byte assertion and the failure-message construction in `crates/micold-client/tests/layout_snapshot.rs` (FR-003, FR-004)
 - [X] T023 [US1] Declare the anchors in `crates/micold-client/tests/layout_snapshot.rs` — at minimum the sidebar row's label and its close button, the toolbar title, and the dialog action row. These are what a failure quotes and what T025 asserts against (FR-004, research R3)
 - [X] T024 [US1] Generate the committed fixture `crates/micold-client/tests/fixtures/layout_snapshot.txt`, and confirm `style_snapshot` still passes **with no regeneration** — that is the mechanical proof the application was not touched (FR-003, FR-019)
-> ### ⚠ Coverage finding — T019/T020 reopened, and it explains T025
->
-> **The covered states do not cover what they claim.** Nine registered states collapse to six
-> distinct layouts, and four are byte-identical: `main-shell-sidebar-expanded`,
-> `main-shell-sidebar-collapsed`, `empty-project-without-worktrees` and
-> `error-worktree-creation-failed`. Expanded and collapsed cannot both be right.
->
-> The cause is `with_project()` in `tests/support/covered_states.rs`: it fills `state.workspace` and
-> `state.worktrees`, but the application still renders the no-project surface. The proof is the text
-> actually drawn — `"Open a folder to set it as your working space."` — in states that are supposed
-> to have a project open. `sidebar_hidden` then changes nothing because there is no sidebar.
->
-> **This is why T025 could not be demonstrated.** The over-long worktree label is never rendered in
-> any covered state, so neither gate could have caught a defect in it. The geometry fixture was
-> byte-identical with the defect present for the same reason — not only because `Length::Fill` nodes
-> are stable, but because the widget was never on screen.
->
-> **Consequences**: FR-008's reduced parity set is not in fact covered, so **SC-004 is not met**, and
-> the fixture's 708 lines are worth much less than their size suggests. T019 and T020 are reopened.
->
-> **Next step**: find what `ui::view` requires before it renders the project surface — most likely
-> the workspace's *active* project rather than merely a known one — fix `with_project()`, regenerate
-> the fixture, and expect a large and correct diff. Then retry T025.
+- [X] T025 [US1] **Demonstrated: the gate catches the defect it was built for.** With 017's fix undone in `material/ellipsized.rs`, `tests/layout_text_overflow.rs` fails naming the real label — `"A deliberately long worktree name that crowds its controls" wants 283.5px in 187.6px at node 0/0/0/2/0/0/0/2/0/0/2/0/1`. With the fix restored it passes. The geometry fixture stays green in both runs, confirming the split is structural rather than incidental (FR-018, SC-003)
 
-- [ ] T025 [US1] **Demonstrate the gate against the defect that motivated it. STILL OPEN — an earlier claim that this was done was wrong and is retracted here.** (FR-018, SC-003)
+  > **Two earlier attempts at this task failed, and the reasons are worth keeping.** The first
+  > claimed success on a false positive whose numbers were identical with and without the defect.
+  > The second, after `containing_width` was corrected, could not fire at all — because
+  > `with_project()` never opened a project, so the label was never rendered. Nine covered states
+  > collapsed to six distinct layouts, with sidebar-expanded and sidebar-collapsed byte-identical.
+  >
+  > `workspace_with` ends by clearing `active`, which every other caller wants and this one did not.
+  > One line and an assertion fixed it: 6 distinct layouts became 8, and the fixture went from 708
+  > to 1335 lines. The assertion is there so a covered state that stops covering fails loudly rather
+  > than pinning an empty screen.
 
-  > **What happened.** The geometry fixture was measured blind to the defect: with 017's fix undone
-  > in `material/ellipsized.rs`, `layout_snapshot.txt` came back byte-identical while the label
-  > wanted 362.9px in 260px. That part stands — the label is `Length::Fill`, so its node is the
-  > width its parent allots either way, and the overflow is paint-time.
-  >
-  > A second gate (`tests/layout_text_overflow.rs`) was built to close it, and appeared to work: it
-  > failed with the defect present, naming a 67.8px overflow. **It was not detecting the defect.**
-  > It was reporting a *false positive* that was present with or without the defect — the
-  > empty-state prompt, misattributed by a `containing_width` that took the narrowest node
-  > containing the text's origin instead of the deepest. The numbers were identical in both runs,
-  > which should have been the tell and was not read as one.
-  >
-  > Correcting `containing_width` to use the deepest containing node removed the false positive —
-  > and with it the apparent detection. With the defect reintroduced, the corrected gate **passes**.
-  > So neither gate currently catches the defect this feature exists to catch.
-  >
-  > **Next step**: find why. With the defect present the label's paragraph wants 362.9px; if its
-  > own node is narrower, a deepest-node comparison should fire. It does not, so the node the text
-  > resolves to is wider than expected — most likely the origin lands in an ancestor rather than in
-  > the label's own node. Instrument `text_overflows` to report the resolved node's path alongside
-  > the content, and the answer should be immediate.
-
-**Checkpoint**: **US1 NOT complete.** 919 passing (baseline 893), and the geometry fixture is sound. But T025 is open: neither gate catches the motivating defect, and the earlier claim that one did rested on a false positive. SC-006 also unmet (23s against 10s).
+**Checkpoint**: **US1 complete.** 919 passing (baseline 893). Both gates validated in both directions. One residual coverage gap: `error-worktree-creation-failed` is still byte-identical to `main-shell-sidebar-expanded`, because `worktree_error` surfaces only inside the add-worktree dialog — that state does not yet cover an error surface. SC-006 remains unmet (23s against 10s).
 
 > **917 passing, 0 failing** (baseline 893, +24). `style_snapshot` passes with no regeneration and
 > `git status` over `crates/*/src/` is empty — the FR-019 proof. Fixture is 708 lines over 9 covered
