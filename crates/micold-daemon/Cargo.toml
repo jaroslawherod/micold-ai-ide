@@ -49,6 +49,10 @@ uuid = { workspace = true }
 # Integration tests drive real PTY sessions and read the interpreted grid directly.
 alacritty_terminal = { workspace = true }
 portable-pty = { workspace = true }
+# `client_restart_input.rs` drives the real daemon binary from the real client-side input stamper,
+# so the client-restart boundary is exercised with both ends' actual code rather than a stand-in.
+# Not a cycle: `micold-client` depends only on `micold-core`, never on the daemon.
+micold-client = { path = "../micold-client" }
 
 [lints]
 workspace = true

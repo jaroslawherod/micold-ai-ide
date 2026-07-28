@@ -552,7 +552,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // at 0 would put them behind the daemon, which then discards every keystroke as stale
             // (BUG-006). Part of the same resync as the flags and settings above: the daemon's
             // position is authoritative state, so re-read it rather than assume continuity.
-            seed_input_serials(&mut app.stamper, &catalog);
+            app.stamper.seed_from_catalog(&catalog);
             app.daemon_catalog = Some(catalog);
             // Attach to the active project and view its active session so the daemon starts
             // streaming grid frames for it (FR-011/FR-016).
@@ -576,7 +576,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     // Sessions can appear after connect — created in another window, or resumed —
                     // so seed here too (T111). Absent-only, so this never disturbs a counter this
                     // client is already driving.
-                    seed_input_serials(&mut app.stamper, &catalog);
+                    app.stamper.seed_from_catalog(&catalog);
                     app.daemon_catalog = Some(catalog);
                 }
                 // A settings mutation reached the service — this client's own `SettingsSet` echoed
@@ -1943,22 +1943,6 @@ fn switch_daemon_attachment(app: &App, old: Option<PathBuf>, new: &Path) {
 /// snapshot: existing sessions have their lifecycle + label updated; sessions the daemon reports
 /// but the client lacks are added; sessions the daemon no longer reports (archived/removed) are
 /// dropped. A dangling `active_session` pointer is cleared.
-/// Seed the input stamper from an authoritative catalog snapshot (FR-028a, T111, BUG-006).
-///
-/// Deliberately seed-only, never prune: `reconcile_catalog` does not remove sessions or projects
-/// either, for the same reason — a snapshot that predates an in-flight local mutation, or an
-/// ephemeral daemon reporting an empty catalog, must not be treated as a deletion. Dropping a
-/// counter here on that evidence would rebuild it at `0` on the next keystroke and reintroduce
-/// exactly the bug this seeding fixes. Counters are released explicitly instead, when a session is
-/// actually closed or removed (`SessionInputStamper::forget`, T114).
-fn seed_input_serials(stamper: &mut SessionInputStamper, snapshot: &CatalogSnapshot) {
-    for project in &snapshot.projects {
-        for session in &project.sessions {
-            stamper.seed(session.id, session.input_serial);
-        }
-    }
-}
-
 fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktrees: bool) {
     // Mirror the daemon's project list into the client (T055). Add projects the daemon reports that
     // the client lacks (e.g. opened in another window), and adopt the daemon's display name for known
@@ -2432,7 +2416,7 @@ mod tests {
         let snapshot = snapshot_with("/p", vec![summary_at(id, "s", WireLifecycle::Running, 40)]);
         let mut stamper = SessionInputStamper::new();
 
-        seed_input_serials(&mut stamper, &snapshot);
+        stamper.seed_from_catalog(&snapshot);
 
         let ClientMsg::SessionInput { serial, .. } = stamper.stamp(id, b"x".to_vec()) else {
             panic!("stamp must produce SessionInput");
@@ -2455,7 +2439,7 @@ mod tests {
         }
 
         let snapshot = snapshot_with("/p", vec![summary_at(id, "s", WireLifecycle::Running, 1)]);
-        seed_input_serials(&mut stamper, &snapshot);
+        stamper.seed_from_catalog(&snapshot);
 
         let ClientMsg::SessionInput { serial, .. } = stamper.stamp(id, b"x".to_vec()) else {
             panic!("stamp must produce SessionInput");
@@ -2477,7 +2461,7 @@ mod tests {
         );
         let mut stamper = SessionInputStamper::new();
 
-        seed_input_serials(&mut stamper, &snapshot);
+        stamper.seed_from_catalog(&snapshot);
 
         let ClientMsg::SessionInput { serial, .. } = stamper.stamp(id, b"x".to_vec()) else {
             panic!("stamp must produce SessionInput");

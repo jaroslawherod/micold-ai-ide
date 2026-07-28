@@ -22,7 +22,7 @@
 use std::collections::HashMap;
 
 use micold_core::input::InputSeq;
-use micold_core::protocol::messages::ClientMsg;
+use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg};
 use micold_core::session::SessionId;
 
 /// Per-session monotonic input stamping for the client. Holds one [`InputSeq`] per session and
@@ -54,6 +54,22 @@ impl SessionInputStamper {
         self.seqs
             .entry(session)
             .or_insert_with(|| InputSeq::resume_from(serial));
+    }
+
+    /// Seed every session in an authoritative catalog snapshot (FR-028a, T111).
+    ///
+    /// The bulk form of [`Self::seed`], and the one the client actually calls — on connect and on
+    /// every later catalog push. Seed-only, never pruning: a snapshot that predates an in-flight
+    /// local mutation, or an ephemeral daemon reporting an empty catalog, is not evidence that a
+    /// session ended, and dropping a counter on that evidence would rebuild it at `0` on the next
+    /// keystroke — the very bug this seeding exists to prevent. Counters are released explicitly
+    /// instead, by [`Self::forget`].
+    pub fn seed_from_catalog(&mut self, catalog: &CatalogSnapshot) {
+        for project in &catalog.projects {
+            for session in &project.sessions {
+                self.seed(session.id, session.input_serial);
+            }
+        }
     }
 
     /// Stamp `bytes` as the next input for `session`, advancing that session's serial. The returned
