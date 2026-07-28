@@ -2267,6 +2267,7 @@ dependencies = [
  "interprocess",
  "libc",
  "listenfd",
+ "micold-client",
  "micold-core",
  "portable-pty",
  "serde",

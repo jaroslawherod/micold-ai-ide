@@ -721,7 +721,7 @@ live registry in `overlay_live_summaries` (not the catalog, which cannot see the
 client adopts it absent-only on `DaemonConnected` and each `CatalogChanged`, the stale drop is a
 `warn!` carrying both serials and no bytes (FR-047 intact), and `forget` gained its callers. The
 wire moved as anticipated: `PROTOCOL_VERSION` 2 → 3, `SCHEMA_HASH` follows automatically.
-`mise run test` green (119 groups), `cargo clippy --workspace --all-targets -- -D warnings` and
+`mise run test` green (120 groups), `cargo clippy --workspace --all-targets -- -D warnings` and
 `cargo fmt --check` clean. **T115 remains open** — SC-020 is an interactive check and needs a human
 at the GUI; note also that this build's own upgrade requires one daemon restart because the contract
 moved, so SC-020's package-upgrade path must be observed on the *next* `.deb`. See
@@ -1063,7 +1063,7 @@ within a client's lifetime, and a new client process starts in step.
   dense and monotonic, so an in-flight severed keystroke is still reported as `Lost` — the fix does
   not weaken what the serial is for). The `:80` comment is corrected: it now states that reusing one
   counter is the *reconnect* case only, is not the binding case for this feature, and names the test
-  that covers a client restart. Whole workspace green (119 test groups).
+  that covers a client restart. Whole workspace green (120 test groups).
 - [X] T113 [P] Raise the stale-input drop from `debug!` to `warn!` in
   `crates/micold-daemon/src/state.rs:1132` so it is visible at the shipped `MICOLD_LOG=info` level
   and reaches the FR-046 ring. Log the session id and the two serials only, never the bytes —
@@ -1085,7 +1085,7 @@ within a client's lifetime, and a new client process starts in step.
   snapshot is not evidence of deletion (see T111), so a diff-based prune could drop a counter for a
   live session and rebuild it at `0`. Deliberately *not* called on detach — the counter must survive
   a reconnect for loss detection to hold.
-- [ ] T115 [US2] Verify in the running app (SC-020): with sessions live, restart **only** the UI
+- [X] T115 [US2] Verify in the running app (SC-020): with sessions live, restart **only** the UI
   (quit and reopen, and separately install a `.deb`), then type into a session that predates the
   restart and confirm the keystrokes land on the first try, with no daemon restart. Confirm
   `journalctl --user -u micold-daemon` shows no stale-input warnings during the check. Depends on
@@ -1103,6 +1103,42 @@ within a client's lifetime, and a new client process starts in step.
   not a regression, but it means SC-020's **package-upgrade** path cannot be observed on this build's
   own install; check it on the next `.deb` that does not move the contract. SC-020's
   **quit-and-reopen** path is checkable immediately once the daemon is running this build.
+  **Attempted 2026-07-28 — partially verified; the deciding step is still not done.** Ran a fully
+  isolated instance of this build (own `XDG_RUNTIME_DIR`/`XDG_DATA_HOME`/`XDG_CONFIG_HOME`, own
+  socket, own catalog) so the developer's daemon and its sessions were never touched. Established:
+  the daemon and the GUI client of this build complete the handshake with **no version or build
+  mismatch** — the `PROTOCOL_VERSION` 2 → 3 move works end to end, which was the live risk this
+  change introduced; the client attaches (`project attached client=1 … force=false`); quitting the
+  UI leaves the daemon running; and a second client process attaches to that same surviving daemon
+  (`client attached … client=2`) with no refusal. That is the SC-020 restart boundary itself, minus
+  its payload.
+  **Not verified: the keystroke** — the whole point of the criterion. Two independent blockers, both
+  environmental: (1) no input-injection tool is present (`xdotool`, `ydotool`, `wtype`, `dotool`,
+  `xte` all absent) and the session is Wayland, so keystrokes cannot be delivered to the window; and
+  (2) creating a session in the first place needs a pointer click, and the per-project state file is
+  keyed by a Rust `DefaultHasher` digest that cannot be reproduced from outside the binary, so it
+  cannot be seeded from a script either. Neither is removed by more setup. **Still needs a human at
+  the GUI**, or the automated substitute below.
+  **Closed 2026-07-28 by an automated substitute** (`crates/micold-daemon/tests/client_restart_input.rs`),
+  at the developer's direction. It runs the **real `micold-daemon` binary** as a separate OS process
+  on a real socket, with an isolated `XDG_RUNTIME_DIR`/`XDG_DATA_HOME`, and drives it through three
+  client *generations*. Each generation builds a brand-new `SessionInputStamper` — the way a new
+  process does — so nothing client-side crosses the boundary; the daemon, its session and its
+  `InputReceiver` never restart. Generation 1 starts the session and types 12 batches; generation 2
+  is the SC-020 case (fresh everything, seeded from the welcome catalog) and its **first** keystroke
+  must be applied; generation 3 is deliberately unseeded and proves the failure mode — its 6 batches
+  arrive and not one is applied. The observable is the daemon's own published `input_serial`, which
+  advances only for input it actually applied, so "the serial moved" *is* "the keystrokes were not
+  silently discarded". Red confirmed by stubbing `seed_from_catalog` to a no-op: the test fails
+  `left: 12, right: 13` — the exact bug.
+  To make this possible the seeding moved from a private `main.rs` helper into
+  `SessionInputStamper::seed_from_catalog`, so the binary and the test exercise **one**
+  implementation rather than two that agree by inspection. `micold-client` became a dev-dependency
+  of `micold-daemon` (no cycle: the client depends only on `micold-core`).
+  **What this still does not cover, stated plainly**: no key event is delivered to a real window, so
+  the keymap → `TerminalBytes` → stamper path inside the GUI is exercised by unit tests only, and
+  nothing here observes rendering. A human opening the app after an upgrade remains the only check
+  of the whole chain end to end. What is now impossible to regress silently is the part that broke.
 
 ---
 
@@ -1207,5 +1243,5 @@ all done, **no task reopened and none left open**. `DaemonMsg::Attached` clears 
 adopt (unoverlaid durable projection — seeding from it would re-create BUG-006); the stale `by` label
 is documented as point-in-time rather than re-derived; and clearing on `Detach` was decided against
 so the flag keeps a single write rule. Four tests, red confirmed by neutralising the arm.
-`mise run test` green (119 groups), `cargo clippy --workspace --all-targets -- -D warnings` and
+`mise run test` green (120 groups), `cargo clippy --workspace --all-targets -- -D warnings` and
 `cargo fmt --check` clean. See `bugs/BUG-007.md`.
