@@ -82,9 +82,25 @@ Three-crate Cargo workspace. This feature touches **only** `crates/micold-client
 - [X] T022 [US1] Implement the byte-for-byte assertion and the failure-message construction in `crates/micold-client/tests/layout_snapshot.rs` (FR-003, FR-004)
 - [X] T023 [US1] Declare the anchors in `crates/micold-client/tests/layout_snapshot.rs` — at minimum the sidebar row's label and its close button, the toolbar title, and the dialog action row. These are what a failure quotes and what T025 asserts against (FR-004, research R3)
 - [X] T024 [US1] Generate the committed fixture `crates/micold-client/tests/fixtures/layout_snapshot.txt`, and confirm `style_snapshot` still passes **with no regeneration** — that is the mechanical proof the application was not touched (FR-003, FR-019)
-- [ ] T025 [US1] **Demonstrate the gate against the defect that motivated it.** Reintroduce an over-long sidebar label overlapping its close button — feature 017 fixed this in `crates/micold-client/src/ui/material/ellipsized.rs`, so that is where to undo it temporarily — confirm the check fails naming `sidebar.row.label` and/or `sidebar.row.close_button` with geometry showing the label's `x + width` exceeding the button's `x`, then revert. If this does not fail, the feature has not delivered its purpose regardless of what else passes (FR-018, SC-003)
+- [ ] T025 [US1] **Demonstrate the gate against the defect that motivated it.** **RUN, AND IT FAILED — the gate does not catch it.** Evidence: the fix in `crates/micold-client/src/ui/material/ellipsized.rs` was undone (`fit(&self.content, available, measure)` replaced with the full content), the whole suite re-run, and `layout_snapshot.txt` came back **byte-identical**. The defect was genuinely present, not a no-op edit: the probe label wants **362.9px inside a 260px sidebar**. The application has been restored and `git status` over `crates/*/src/` is empty (FR-018, SC-003 — **unmet**)
 
-**Checkpoint**: T014–T024 done; **T025 open**, so US1 is not yet signed off.
+  > **Why it cannot catch it, and why that is not a bug in the implementation.** The label is
+  > `Length::Fill`, so its layout node is always exactly the width its parent allots — 260px here,
+  > with or without the defect. What overflows is the *paragraph painted inside* that node, which
+  > feature 017's own fix commit described precisely: "only the *node* was bounded, and nothing
+  > clips a paragraph to its node." A record of node geometry is structurally blind to paint-time
+  > overflow. No amount of extra covered states, anchors or precision changes this.
+  >
+  > **What would catch it**, in rough order of cost: (a) assert, per text element, that its natural
+  > paragraph width does not exceed its node width — headless, deterministic, cheap, and a much
+  > closer match to the actual defect class than geometry is; (b) pixel snapshots via
+  > `Headless::screenshot`, which research R1 considered and rejected for good reasons that still
+  > hold.
+  >
+  > This is a finding about FR-018/SC-003, not a task to retry. It is raised rather than worked
+  > around, per FR-019.
+
+**Checkpoint**: T014–T024 done. **T025 ran and failed**, so US1 is NOT signed off and the STOP-and-VALIDATE in the implementation strategy is in force.
 
 > **917 passing, 0 failing** (baseline 893, +24). `style_snapshot` passes with no regeneration and
 > `git status` over `crates/*/src/` is empty — the FR-019 proof. Fixture is 708 lines over 9 covered
