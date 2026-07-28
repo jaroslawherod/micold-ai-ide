@@ -1,6 +1,46 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.4.1 → 1.5.0
+Bump rationale: MINOR — Principle I's GUI/process-spawn exception gains one further covered
+  location: a development-only binary's own render glue (`src/showcase/`), introduced by feature
+  020's component showcase. Its glue (`src/showcase/main.rs`, `src/showcase/gallery.rs`) is
+  structurally unreachable from `tests/` for exactly the reason the exception already names, and
+  its decision logic lives in a render-free reducer (`src/showcase/state.rs`) exactly as `app.rs`
+  does. The rule the exception states is unchanged — thin glue with no decision logic, branching,
+  or business rule of its own MAY be validated by a recorded `quickstart.md` procedure; anything
+  with decision logic MUST still land in tested render-free logic first and MUST still follow
+  Red-Green-Refactor there. Treated as MINOR by the same reasoning as 1.3.0 (Principle III's
+  Default-session exception: one further sanctioned location, explicitly a material expansion) and
+  1.2.0 (Principle VIII's builder-API sub-rule).
+
+  Deliberately NOT a PATCH, though it was first drafted as one on the analogy of 1.4.1. That
+  amendment corrected the exception's *description* of why `src/main.rs` and `src/ui/` are
+  unreachable from `tests/`, and changed the set of exempt code not at all. This one adds a path:
+  before it, code in `src/showcase/gallery.rs` was ordinary production code requiring a covering
+  test; after it, that code may be validated by a manual procedure instead. The path list is
+  constitutive rather than illustrative — it is what a reviewer checks a diff against — so
+  extending it is an expansion, and a NON-NEGOTIABLE principle whose coverage can be widened by an
+  edit filed as "wording" is a principle that erodes quietly.
+
+Modified in 1.5.0:
+  - Principle I — the GUI/process-spawn exception's covered locations now include a
+    development-only binary's own render glue (`src/showcase/`) alongside `src/main.rs` and
+    `src/ui/`, and the exception names `showcase/state.rs` beside `app.rs` as a render-free reducer
+    it does NOT cover.
+  - Templates: no edit required — `.specify/templates/plan-template.md`'s Principle I line asks
+    for a TDD confirmation and names no paths, so it neither widens nor conflicts with this
+    amendment.
+  Follow-up (non-artifact): feature 020's `/speckit-analyze` pass raised this (finding C1). The
+    plan's substantive claim was already sound — every state transition lives in the tested
+    reducer — but the principle's text did not cover the paths it relied on. Because this widens a
+    NON-NEGOTIABLE principle's exemption, it does not stand on the amendment alone:
+    `crates/micold-client/tests/showcase_glue.rs` asserts that the two glue files hold no branch on
+    showcase state, so the exception's precondition ("no decision logic of its own") is checked on
+    every build rather than left to review. Any future extension of this path list SHOULD arrive
+    with the same kind of check.
+
+Prior report (1.4.0 → 1.4.1):
 Version change: 1.4.0 → 1.4.1
 Bump rationale: PATCH — a retrofit/convergence sweep (found via /speckit-converge on feature
   004-material-icons) confirmed Principle I's GUI/process-spawn wiring exception still described
@@ -183,13 +223,14 @@ implementation that satisfies it.
   written; implementation proceeds only until the test passes (Green); refactoring
   follows under a green suite.
 - No feature is considered "done" until its tests exist, are meaningful, and pass.
-- **Exception — GUI/process-spawn wiring.** Thin glue code in `micold-client`'s binary and
-  rendering layer (`src/main.rs`, `src/ui/`) that only invokes already-unit-tested pure/core
+- **Exception — GUI/process-spawn wiring.** Thin glue code in `micold-client`'s binaries and
+  rendering layers (`src/main.rs`, `src/ui/`, and a development-only binary's own render glue such
+  as `src/showcase/`) that only invokes already-unit-tested pure/core
   logic — with no decision logic, branching, or business rule of its own — MAY be validated by a
   recorded `quickstart.md` manual procedure instead of an automated test, because this codebase's
   crate split (the iced-free `micold-core` crate, plus `micold-client`'s own render-free reducer
-  modules such as `app.rs`, versus its `src/main.rs`/`src/ui/` rendering glue) makes such glue
-  structurally unreachable from `tests/`. This exception does NOT cover any code with decision
+  modules such as `app.rs` or `showcase/state.rs`, versus its `src/main.rs`/`src/ui/`/`src/showcase/`
+  rendering glue) makes such glue structurally unreachable from `tests/`. This exception does NOT cover any code with decision
   logic, branching, or a business rule of its own — that MUST still land in tested pure/core logic
   first (`micold-core`, or a render-free module of the crate that needs it), and MUST still follow
   Red-Green-Refactor there.
@@ -389,4 +430,4 @@ convention, or habit conflicts with it, this constitution prevails.
   principles. Complexity that violates a principle MUST be either removed or explicitly
   justified and recorded.
 
-**Version**: 1.4.1 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-27
+**Version**: 1.5.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-28
