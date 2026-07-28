@@ -18,21 +18,17 @@ use support::layout as lay;
 
 /// Overflows that already existed when this gate was built.
 ///
-/// **These are findings, not exemptions granted on merit.** FR-019 forbids quietly fixing a defect
-/// surfaced while building the gate, and it equally forbids tuning the gate until the defect stops
-/// showing. So each is recorded here with what was measured, the suite stays green, and the entry
-/// must keep firing — one that stops is deleted, not left to widen the gate.
-const KNOWN_OVERFLOWS: &[(&str, &str)] = &[(
-    "worktree-menu-open",
-    "\"Open a folder to set it as your working space.\" wants ~279.8px and the narrowest layout \
-     node containing its draw position is ~212.0px. **Not yet confirmed as a defect.** An earlier \
-     note here guessed the menu item label; migrating that label to `Ellipsized` changed the \
-     measurement by nothing at all, which disproved the guess. Two readings remain open: the \
-     empty-state prompt genuinely paints past its box, or `containing_width` misattributes it — \
-     it takes the *narrowest* node containing the text's top-left corner, and centred text that \
-     overhangs its own node can put that corner inside a narrower sibling. Deciding between them \
-     needs the node actually walked, not the narrowest one containing a point.",
-)];
+/// **Empty, and that is a result rather than an oversight.** One entry lived here briefly — the
+/// empty-state prompt, reported as wanting ~279.8px in ~212.0px. It was a false positive from an
+/// earlier `containing_width` that attributed text to the *narrowest* node containing its origin
+/// instead of the deepest, so an overlapping sibling could steal the attribution. Correcting that
+/// made the report disappear, and the staleness assertion below is what forced the entry out
+/// rather than letting it linger as folklore.
+///
+/// If a real one is ever added: FR-019 forbids quietly fixing a defect surfaced while building the
+/// gate, and equally forbids tuning the gate until the defect stops showing. Record what was
+/// measured, keep the suite green, and require the entry to keep firing.
+const KNOWN_OVERFLOWS: &[(&str, &str)] = &[];
 
 fn known(state: &str) -> bool {
     KNOWN_OVERFLOWS.iter().any(|(s, _)| *s == state)

@@ -392,8 +392,18 @@ pub fn text_overflows<'a, M: 'a>(
     };
 
     // The box the text belongs to is its layout node, not whatever clip the widget happened to
-    // pass. A widget that forgets to clip reports the whole viewport — which is precisely the
-    // defect — so comparing against the recorded clip would exonerate the bug it is looking for.
+    // pass. A widget that forgets to clip reports the whole viewport — precisely the defect — so
+    // comparing against the recorded clip would exonerate the bug being looked for.
+    //
+    // "Its node" means the **deepest** node whose bounds contain the text's origin: the innermost
+    // box the text starts inside. An earlier version took the *narrowest* containing node, which
+    // is not the same thing and is wrong in both directions — an overlapping sibling in a stack
+    // can be narrower than the text's own node and steal the attribution, inventing an overflow
+    // that does not exist.
+    //
+    // Text that overhangs so far that its origin falls outside its own node resolves to an
+    // ancestor, which is wider, so this errs toward silence rather than toward crying wolf. That
+    // is the right direction for a gate whose findings are meant to be trusted.
     let boxes = walk(Layout::new(&node), Layer::Base);
     let containing_width = |p: iced::Point| -> f32 {
         boxes
@@ -404,8 +414,9 @@ pub fn text_overflows<'a, M: 'a>(
                     && p.y >= b.y - 0.5
                     && p.y <= b.y + b.height + 0.5
             })
+            .max_by_key(|b| b.path.len())
             .map(|b| b.width)
-            .fold(f32::INFINITY, f32::min)
+            .unwrap_or(f32::INFINITY)
     };
 
     let mut found = Vec::new();
