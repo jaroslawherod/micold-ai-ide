@@ -28,9 +28,9 @@ Three-crate Cargo workspace. This feature touches **only** `crates/micold-client
 
 **Purpose**: The baseline and the assets everything else rests on.
 
-- [ ] T001 Record the pre-change test count from `mise run test` as a note in `specs/019-layout-snapshot-parity/tasks.md`, before any other task runs. A later drop means a test was lost in the change, not that the suite got faster — the same trap feature 017's T001 was written to catch
-- [ ] T002 [P] Add the reference typeface at `crates/micold-client/tests/fixtures/Roboto-Regular.ttf` with `crates/micold-client/tests/fixtures/FONT-PROVENANCE.md` recording source, version and the Apache-2.0 licence. This is the same asset feature 018's T015 must register as the shipped application font — it MUST NOT be committed twice (research R2)
-- [ ] T003 [P] Declare `pub mod layout;` in `crates/micold-client/tests/support/mod.rs` and create the empty `crates/micold-client/tests/support/layout.rs` that the apparatus will fill
+- [X] T001 Record the pre-change test count from `mise run test` as a note in `specs/019-layout-snapshot-parity/tasks.md`, before any other task runs. A later drop means a test was lost in the change, not that the suite got faster — the same trap feature 017's T001 was written to catch. **Baseline: 893 passing, 0 failing** (`mise run test`, 2026-07-28, commit a7105de)
+- [X] T002 [P] Add the reference typeface at `crates/micold-client/tests/fixtures/Roboto-Regular.ttf` with `crates/micold-client/tests/fixtures/FONT-PROVENANCE.md` recording source, version and the Apache-2.0 licence. This is the same asset feature 018's T015 must register as the shipped application font — it MUST NOT be committed twice (research R2)
+- [X] T003 [P] Declare `pub mod layout;` in `crates/micold-client/tests/support/mod.rs` and create the empty `crates/micold-client/tests/support/layout.rs` that the apparatus will fill
 
 ---
 
@@ -40,21 +40,23 @@ Three-crate Cargo workspace. This feature touches **only** `crates/micold-client
 
 ### Tests for Phase 2 (write first, confirm they FAIL) ⚠️
 
-- [ ] T004 [P] Failing test in `crates/micold-client/tests/layout_apparatus.rs` asserting the headless renderer constructs with no display, no GPU and no window manager, and reports the `tiny-skia` backend. Must also pass under `env -u DISPLAY -u WAYLAND_DISPLAY` (FR-001, research R1)
-- [ ] T005 Failing **font guard** test in `crates/micold-client/tests/layout_apparatus.rs`: the committed face parses via `ttf-parser` as the expected family and weight, **and** a pinned reference string measures to a pinned width. The second half is the load-bearing one — the host's fonts are still loaded (391 faces measured on the development machine), so a same-named system font winning the family lookup would shift every measurement at once. Without this the failure would read as a mass layout regression instead of a font problem (FR-006, research R2 residual risk)
-- [ ] T006 [P] Failing tests in `crates/micold-client/tests/layout_record_format.rs` for numeric normalisation per `contracts/layout-fixture.md` §2: rounded to one decimal, **exactly** one fractional digit always present, `-0.0` written `0.0`, fixed-width alignment, and no value formatted through `{:?}` on an `f32` (FR-012)
-- [ ] T007 Failing test in `crates/micold-client/tests/layout_record_format.rs` asserting emission is in depth-first tree order and is **never sorted** — sorting would conceal a structural reordering, which is a change the gate exists to report (FR-002, contract §3)
-- [ ] T008 Failing test in `crates/micold-client/tests/layout_apparatus.rs` asserting determinism: two consecutive walks of the same state, in the same process and on the same commit, produce identical records (FR-005)
-- [ ] T009 Failing test in `crates/micold-client/tests/layout_apparatus.rs` asserting the reproducible sampling point: a freshly built widget tree reports every animation at rest and every scrollable at offset zero, so no frame pumping or timing tolerance is needed. Both come free from a fresh `Tree`, but free is not the same as checked (FR-010, FR-011, research R6/R7)
+- [X] T004 [P] Failing test in `crates/micold-client/tests/layout_apparatus.rs` asserting the headless renderer constructs with no display, no GPU and no window manager, and reports the `tiny-skia` backend. Must also pass under `env -u DISPLAY -u WAYLAND_DISPLAY` (FR-001, research R1)
+- [X] T005 Failing **font guard** test in `crates/micold-client/tests/layout_apparatus.rs`: the committed face parses via `ttf-parser` as the expected family and weight, **and** a pinned reference string measures to a pinned width. The second half is the load-bearing one — the host's fonts are still loaded (391 faces measured on the development machine), so a same-named system font winning the family lookup would shift every measurement at once. Without this the failure would read as a mass layout regression instead of a font problem (FR-006, research R2 residual risk)
+- [X] T006 [P] Failing tests in `crates/micold-client/tests/layout_record_format.rs` for numeric normalisation per `contracts/layout-fixture.md` §2: rounded to one decimal, **exactly** one fractional digit always present, `-0.0` written `0.0`, fixed-width alignment, and no value formatted through `{:?}` on an `f32` (FR-012)
+- [X] T007 Failing test in `crates/micold-client/tests/layout_record_format.rs` asserting emission is in depth-first tree order and is **never sorted** — sorting would conceal a structural reordering, which is a change the gate exists to report (FR-002, contract §3)
+- [X] T008 Failing test in `crates/micold-client/tests/layout_apparatus.rs` asserting determinism: two consecutive walks of the same state, in the same process and on the same commit, produce identical records (FR-005)
+- [X] T009 Failing test in `crates/micold-client/tests/layout_apparatus.rs` asserting the reproducible sampling point: a freshly built widget tree reports every animation at rest and every scrollable at offset zero, so no frame pumping or timing tolerance is needed. Both come free from a fresh `Tree`, but free is not the same as checked (FR-010, FR-011, research R6/R7)
 
 ### Implementation for Phase 2
 
-- [ ] T010 Implement the headless renderer constructor in `crates/micold-client/tests/support/layout.rs`: load the committed face into the global font system, then `<iced::Renderer as Headless>::new(reference_font, 16px, Some("tiny-skia"))`. The backend hint is what makes `iced_wgpu` decline before constructing a `wgpu::Instance` (FR-001, FR-006)
-- [ ] T011 Implement `LayoutRecord` and the normalisation/formatting helpers in `crates/micold-client/tests/support/layout.rs` per `data-model.md` and contract §2 (FR-012)
-- [ ] T012 Implement the depth-first walker in `crates/micold-client/tests/support/layout.rs`, emitting `(path, depth, layer, geometry)` in tree order from a laid-out `layout::Node` (FR-002, FR-005)
-- [ ] T013 Implement the overlay pass in `crates/micold-client/tests/support/layout.rs` — call `Widget::overlay` and lay out the returned element as layer `over`. Dialogs and menus are composed in-tree and need nothing special, but `material::Select` wraps `pick_list`, a genuine `Widget::overlay` implementor whose dropdown the base walk cannot see (FR-009, research R5)
+- [X] T010 Implement the headless renderer constructor in `crates/micold-client/tests/support/layout.rs`: load the committed face into the global font system, then `<iced::Renderer as Headless>::new(reference_font, 16px, Some("tiny-skia"))`. The backend hint is what makes `iced_wgpu` decline before constructing a `wgpu::Instance` (FR-001, FR-006)
+- [X] T011 Implement `LayoutRecord` and the normalisation/formatting helpers in `crates/micold-client/tests/support/layout.rs` per `data-model.md` and contract §2 (FR-012)
+- [X] T012 Implement the depth-first walker in `crates/micold-client/tests/support/layout.rs`, emitting `(path, depth, layer, geometry)` in tree order from a laid-out `layout::Node` (FR-002, FR-005)
+- [X] T013 Implement the overlay pass in `crates/micold-client/tests/support/layout.rs` — call `Widget::overlay` and lay out the returned element as layer `over`. Dialogs and menus are composed in-tree and need nothing special, but `material::Select` wraps `pick_list`, a genuine `Widget::overlay` implementor whose dropdown the base walk cannot see (FR-009, research R5)
 
-**Checkpoint**: a widget tree can be turned into deterministic, normalised records.
+**Checkpoint**: a widget tree can be turned into deterministic, normalised records. **Reached** — 18 tests green across `layout_apparatus.rs` and `layout_record_format.rs`.
+
+> The font guard (T005) was strengthened during implementation. A single pinned width would have proved only that the number had not changed; it now also asserts that every shaped glyph matches the committed face's *own* `hmtx` advance exactly, which ties the measurement to the file rather than to a constant. Measured: Roboto 182.2px vs the host fallback 193.8px for the same string, so the pin is demonstrably doing work.
 
 ---
 

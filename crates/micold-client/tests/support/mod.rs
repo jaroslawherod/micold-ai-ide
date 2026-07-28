@@ -6,6 +6,10 @@
 
 #![allow(dead_code)]
 
+/// Headless layout measurement (feature 019). Kept in its own module because it needs a renderer,
+/// while everything else here is render-free core scaffolding.
+pub mod layout;
+
 use micold_core::fs_scan::FolderScanner;
 use micold_core::project::{canonicalize_best_effort, FolderEntry};
 use micold_core::session::{
