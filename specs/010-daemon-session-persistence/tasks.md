@@ -160,6 +160,19 @@ close UI; cold start attaches in < 3 s (quickstart S2, S3).
 
 - [X] T038 [P] [US2] Test in `crates/micold-client/tests/local_interactions.rs`: scroll, select, resize issue zero round trips (FR-020, SC-004/005). **Done**: 4 tests drive the local interaction stack directly — `GridCache` reads (screen/line/watermarks) for scroll, the pure `Selection` build+extract for select, and a resize generation bump absorbed by the cache — proving each is served from local state with no daemon handle in reach. Includes the FR-018 property (a selection survives new higher-`LineId` output with no re-fetch). Pane resize's single fire-and-forget `SessionResize` (returns `Task::none()`, never awaits) is noted as covered where the outbox is driven, not a round trip.
 - [X] T039 [P] [US2] Test in `crates/micold-core/tests/input_ordering.rs`: `SessionInput.serial` is monotonic and input is never coalesced, dropped, or reordered across a detach/reattach boundary (G2; Edge: clock/ordering). **Done**: the contract is a single shared primitive in `micold-core::input` — the client's `InputSeq` (monotonic per-session stamper, never reset across reattach) and the daemon's `InputReceiver` (`accept(serial) -> Apply | Lost{missing} | Stale`). `input_ordering.rs` pins all of it: dense monotonic serials; every in-order serial applied exactly once; a duplicate/reordered serial is `Stale` and never re-applied (no coalescing); a gap is surfaced as `Lost` loudly then resynced; continuity holds across a simulated detach/reattach (same counter, per-session receiver); and a keystroke severed mid-flight at a drop is detected as loss on reattach, never papered over.
+  **Reopened (BUG-006, 2026-07-27)**: "same counter" is the defect, not a detail of the fixture.
+  `input_ordering.rs:80` states it outright — *"the reconnect touches only the transport: `seq` is the
+  SAME counter (never re-created via …)"* — so the suite models a **transport** reconnect and never a
+  **client-process restart**, which is the case that re-creates the counter and the ordinary one for a
+  daemon designed to outlive its UI. The assumption under test was written into the test's own setup,
+  so it passed while every pre-existing session went silently read-only after each UI restart. No test
+  anywhere constructs a second `SessionInputStamper` against a surviving `InputReceiver`. The
+  properties this task already pins (dense serials, no coalescing, loud `Lost`, in-flight loss at a
+  drop) are correct and unaffected; the missing coverage is the restart boundary, added by T112.
+  **Re-closed (⚠️ was reopened BUG-006, 2026-07-28)**: T112 added the three restart-boundary tests
+  and corrected the `:80` comment, which now says explicitly that the same-counter premise is the
+  *reconnect* case only and names the test that covers a client restart. The suite no longer
+  certifies a boundary it does not exercise.
 - [X] T040 [P] [US2] Test in `crates/micold-daemon/tests/activity_signal.rs`: hooks drive Working/AwaitingInput/Ended; absent hooks yield `Unknown` never AwaitingInput (H1); a spinner-glyph title yields Working only, never a move toward AwaitingInput (H1a). **Done** (as inline tests in `activity.rs` — 9 tests): the happy path (`UserPromptSubmit`/`PreToolUse`→Working, `PostToolUse` no-op, `Stop`/`Notification`→AwaitingInput, `Ended`), **H1** (no hooks → stays Unknown; spinner-only → Working, never AwaitingInput), **H1a** (`SpinnerObserved` acts only from Unknown; a no-op from Working/AwaitingInput/Ended), `Ended` absorbing, and `is_spinner_title` braille detection.
 
 ### Implementation — plan W4 + W5 (activity) + W3 (titles)
@@ -177,6 +190,23 @@ close UI; cold start attaches in < 3 s (quickstart S2, S3).
 - [X] T041 [US2] Retarget `App.terminals` to a daemon handle + per-session wire grid cache; split the ~25 `terminals.get_mut()` sites into fire-and-forget commands vs local-cache queries (FR-020) in `crates/micold-client/src/ui/terminal.rs`. **Daemon-ready** (see the note above): the client needs a connection actor (iced `Subscription` owning the `Framed` `DaemonConnection` + outgoing `mpsc<ClientMsg>`), then on startup `connect_or_spawn` → `Attach` → `SetViewedSession`; drive via the `SessionInputStamper`. **Connection actor landed**: `micold_client::daemon::connection()` is a single long-lived iced `Subscription` that `connect_or_spawn`s the daemon, handshakes, hands the App an `Outbox` (`Message::DaemonConnected`) and pumps both directions — outgoing `ClientMsg`s → socket, incoming `Frame::Control`/`Frame::Grid` → `Message::DaemonEvent`/`DaemonGridFrame`. `Outbox` is `Eq` by `Arc`-token identity so `Message` stays `Eq`. `App` stores `daemon: Option<Outbox>` + `daemon_catalog`; the actor is wired into `subscription()`. Non-breaking/additive — the local PTY still renders until the **render swap** (T042) consumes the grid cache and reroutes input. **Remaining for T041**: retarget `App.terminals` onto the cache, split the `get_mut` sites, and rip out the local PTY together with T042.
 - [X] T042 [US2] Retarget `TerminalPane` from `&RuntimeTerminal` to the wire grid cache, keeping its builder shape (`TerminalPane::new(..).focused(..)`) in `crates/micold-client/src/ui/material/terminal_pane.rs`. **Cache core landed**: `micold_client::grid::{GridCache, CachedLine, CachedExtra}` applies `GridFrame`s (snapshot + `LineId` delta upsert), **resolves per-frame interned styles/hyperlinks at apply-time** into frame-independent lines (a later palette can't corrupt cached lines), honours `generation` reset + `seq` staleness + `oldest_available` eviction, and exposes `screen()` (rows × `viewport_top`, `None` for gaps) + `line(id)`/`cursor()`/`mode()`. 8 tests. **Remaining for T042**: feed frames from `Message::DaemonGridFrame` into a per-session `GridCache`, and rewrite `terminal_pane` to render from it (glyphs, styles via `WireStyle.flags`, cursor, selection highlight via `micold_client::selection`). '"'"'- [X] T043 [US2] Implement the client-side selection model + text extraction (new work, R0.3 — selection was a mutation of the shared `Term`) anchored to `LineId` so new output cannot corrupt it (FR-018; Edge: selection under new output). **Done**: `micold_client::selection` — pure logic (imports only `LineId`). `Selection` holds `Anchor { line: LineId, col }` endpoints + a `SelectGranularity { Char, Word, Line }`; `start`/`update` expand+normalize bounds, `contains(line,col)` drives render highlighting, `text(provider)` extracts (multi-line join, per-line `trim_end`). Text ops take an `impl Fn(LineId) -> Option<String>` line provider so the module never owns the grid. FR-018 invariance is structural (absolute-`LineId` anchors), proven by a test that appends new higher-`LineId` output and asserts `contains`/`text` are unchanged. 14 inline tests. **Wiring into the pane's mouse handlers + render highlight lands with T042.**
 - [X] T044 [US2] Implement client-side keymap → byte translation sending `SessionInput` (FR-019); `Drop for App` sends `Goodbye`/disconnect, never a kill. **Foundation landed early (minimal drive loop)**: the daemon *receive* half is done — `DaemonState` now owns a live-session registry (`register_session`/`remove_session`/`live_session`) with a per-session `InputReceiver`, and `server.rs` routes `ClientMsg::SessionInput { serial, bytes }` through `session_input`, which classifies the serial (Apply→write to PTY; Lost→surface loudly then write; Stale→drop) and writes to the PTY *after* dropping the state lock. `PtySession.master` is now behind a `Mutex` so the session is `Sync` and can live in the shared registry. Covered by `crates/micold-daemon/tests/drive_loop.rs` (input reaches a live `cat` PTY; in-order batches preserve order; unknown-session input is a logged no-op). **Client stamper landed**: `micold_client::input::SessionInputStamper` holds one `InputSeq` per session (in the client's long-lived state, so it is never reset by a detach/reattach) and turns key-encoded bytes into a `ClientMsg::SessionInput` with a dense monotonic per-session serial; `forget(session)` clears a counter on session end. Covered by `crates/micold-client/tests/client_input.rs` incl. the real `keymap::encode` → `stamp` → `SessionInput` pipeline and the no-reset-across-reattach property. **Remaining for T044**: the *live wiring* — a daemon-connection actor (an iced `Subscription` owning the `Framed` `DaemonConnection` + an outgoing `mpsc` channel), rerouting `Message::TerminalBytes` through the stamper→channel instead of the local `RuntimeTerminal` PTY, and `Drop for App` → `Goodbye`. This must land **together with T042** (frame receive/render): switching input to the daemon without also rendering daemon frames would type blind, and keeping the local PTY alongside would violate the single-source-of-truth rule. That combined switch is the load-bearing T041 change.
+  **Reopened (BUG-006, 2026-07-27)**: *"in the client's long-lived state, so it is never reset by a
+  detach/reattach"* — long-lived here means **process**-lived, and against a daemon built to outlive
+  the client process that is not long enough. `App.stamper` is rebuilt by `SessionInputStamper::new()`
+  on every client start (`main.rs:352`), while the daemon's `InputReceiver` is created once per
+  session at `register_session` (`state.rs:768`) and is never reset by `detach` (`state.rs:414`). So a
+  restarted UI stamps serial `0` into a session the daemon expects at `N`, every serial classifies
+  `Ordering::Less → Stale` (`micold-core/src/input.rs:98`), and `session_input` returns without
+  writing to the PTY (`state.rs:1131-1134`) — total, silent input loss until the daemon restarts.
+  The keymap translation, the wire shape, and the `Drop`→`Goodbye` behaviour are correct and
+  unaffected; what is missing is adopting the daemon's position on connect (T111). Corroborating: the
+  `forget(session)` hook this note describes has **no caller anywhere in the client** — the stamper's
+  lifecycle was never tied to session lifecycle at all (T114).
+  **Re-closed (⚠️ was reopened BUG-006, 2026-07-28)**: T111 seeds the stamper from the daemon's
+  authoritative position on connect and on later catalog pushes, so a counter this process never had
+  is adopted rather than invented; T114 gave `forget` its callers. The stamper's doc no longer claims
+  its own lifetime bounds the session's — it now says the daemon's position is authoritative and
+  names why.
 - [X] T045 [US2] Implement the loopback HTTP hook receiver: bind `127.0.0.1`/`::1` only, ephemeral port, per-session bearer token, 403 on mismatch, bounded bodies, no body logging, in `crates/micold-daemon/src/hooks.rs` (contracts/hooks.md). **Done**: `HookReceiver` binds `127.0.0.1:0` (ephemeral, never `0.0.0.0`), holds a per-session token registry, and a hand-rolled bounded HTTP/1.1 handler enforces every listener rule — POST `/hook/<uuid>` only, per-session bearer token with a bare `403` on mismatch (never revealing session existence), `MAX_HEAD`/`MAX_BODY` bounds (431/413), and bodies are never logged. Recognised hooks drive `DaemonState::note_activity` and push one `CatalogChanged`. Pure parsing (`parse_head`/`session_id_from_path`/`classify_hook`/`settings_json`) is unit-tested (9); the bind→POST→activity path incl. 403 is in `tests/hooks_receiver.rs` (3). Bound + served from `server::run`; a bind failure is non-fatal (activity degrades to `Unknown`, H1). **Re-fixed (⚠️ was reopened BUG-001, 2026-07-27)**: `settings_json()` was rejected by `claude`'s settings validator for every event (missing `matcher`/`hooks` wrapper); fixed by T086. The receiver itself (bind, token auth, bounds, no-log) was unaffected throughout.
 - [X] T046 [US2] Implement the activity FSM (hooks + `Event::Title` spinner as Working-only evidence, invariant H1a; transcript JSONL as explicitly-degraded fallback) in `crates/micold-daemon/src/activity.rs`; write the per-session `--settings` file so user config is never modified. **Done**: the FSM core (`Activity`/`ActivityEvent`/`HookKind`/`is_spinner_title`) is now wired end-to-end. Each `LiveSession` owns an `Activity`; hooks feed it via `note_activity` (T045); the `DaemonListener` captures a braille-spinner edge from the *raw* OSC title (before glyph-strip) into `VtSignals`, and `DaemonState::drain_signals` (on the supervisor cadence) applies it as `SpinnerObserved`. Activity is overlaid onto every `SessionSummary` at snapshot time (never persisted, H3), so a change broadcasts one `CatalogChanged`. `spawn_claude` gets a per-session `--settings` file (`HookReceiver::prepare_settings`) so user config is untouched. Covered by `tests/activity_pipeline.rs`. (Transcript-JSONL degraded fallback remains a later refinement.) **Re-fixed (⚠️ was reopened BUG-001, 2026-07-27)**: the settings file was rejected by `claude` before any hook could fire; fixed by T086. The FSM and per-session settings-file wiring were otherwise unaffected throughout.
 - [X] T047 [US2] Adopt `Event::Title` (OSC 0) as the push-based session-title source, stripping the leading status glyph by codepoint range and treating the text as untrusted; retire the 120 ms transcript rescan (`src/main.rs:754`) and the lossy path-slug transform (`src/provider.rs:361-373`). **Done**: the `DaemonListener` captures each OSC-0 title into `VtSignals` (glyph-stripped via `strip_status_glyph`, treated as untrusted); `DaemonState::drain_signals` debounces it and overlays the live title onto each `SessionSummary` (a change → one `CatalogChanged`). The client adopts the daemon-overlaid title in `reconcile_catalog`. The 120 ms client-side transcript rescan and the lossy path-slug transform were already removed in the daemon re-architecture (the client no longer has a `provider.rs`; `main.rs:754` is now diagnostics handling).
@@ -680,6 +710,23 @@ without any FR-022a mismatch or daemon restart, but a fresh client opens with wo
 this environment has no input-injection tool to expand one, so the session rows were never seen. See
 `bugs/BUG-005.md`.
 
+**Bugfix**: 2026-07-27 — BUG-006 Added Phase 20 (T110–T115) to realign the input-ordering counters
+across a client restart, and **reopened T039 and T044**. The client's per-session stamper is
+process-lived while the daemon's receiver is session-lived, so every UI restart left pre-existing
+sessions silently discarding all input as `Stale`; the contract test missed it by reusing one
+counter object across its simulated reattach. Fix makes the daemon's position authoritative
+(FR-028a) and makes any discard visible at the shipped log level (FR-045a). Implemented 2026-07-28:
+T110–T114 done and **T039/T044 re-closed** — `SessionSummary::input_serial` is published from the
+live registry in `overlay_live_summaries` (not the catalog, which cannot see the receiver), the
+client adopts it absent-only on `DaemonConnected` and each `CatalogChanged`, the stale drop is a
+`warn!` carrying both serials and no bytes (FR-047 intact), and `forget` gained its callers. The
+wire moved as anticipated: `PROTOCOL_VERSION` 2 → 3, `SCHEMA_HASH` follows automatically.
+`mise run test` green (119 groups), `cargo clippy --workspace --all-targets -- -D warnings` and
+`cargo fmt --check` clean. **T115 remains open** — SC-020 is an interactive check and needs a human
+at the GUI; note also that this build's own upgrade requires one daemon restart because the contract
+moved, so SC-020's package-upgrade path must be observed on the *next* `.deb`. See
+`bugs/BUG-006.md`.
+
 ---
 
 ## Notes
@@ -912,3 +959,147 @@ is incidental: it is the row's fixed-width leading anchor, which the badge is no
   by T108, which asserts the two properties SC-019 names (one leading indicator; identical slot width
   across all four signals) at the widget level rather than by eye. What remains is purely visual
   confirmation — expand a worktree in a client running this build and look at the session rows.
+
+---
+
+## Phase 20: Bugfix BUG-006 — sessions that predate a client restart go silently read-only
+
+**Goal**: after the UI is restarted while the daemon keeps running — an upgrade, or a plain quit and
+reopen — every pre-existing session stops accepting input. The terminal still renders and streams,
+the session still reports `running`, and keystrokes simply vanish. Sessions created *after* the
+restart are fine. There is no banner, no notification, and no log entry at the shipped verbosity.
+
+**Root cause**: the input-ordering contract (G2, protocol.md §7) is held by two counters that must
+agree, with mismatched lifetimes. The client's `SessionInputStamper` lives in the client **process**
+(`App.stamper`, `main.rs:117`, rebuilt by `SessionInputStamper::new()` at `main.rs:352`); the
+daemon's `InputReceiver` lives in the **`LiveSession`** (`state.rs:99`), created once at
+`register_session` (`state.rs:768`) and never touched by `detach` (`state.rs:414`), because sessions
+are deliberately kept alive with no client attached (G4/FR-002). A restarted UI therefore stamps
+serial `0` into a session the daemon expects at `N`; `0.cmp(&N)` is `Ordering::Less` →
+`InputOutcome::Stale` (`micold-core/src/input.rs:98`) → `session_input` returns without writing to
+the PTY (`state.rs:1131-1134`). Every following serial is also `< N`, so the session stays read-only
+until the client burns through `N` batches or the daemon restarts. Confirmed against
+`journalctl --user -u micold-daemon` for 2026-07-27: the daemon has run since 19:10:48; sessions
+driven by client generation 3 are read-only under generation 9, and only `c946c166` — created by
+generation 9 at 20:43:37 — accepts input.
+
+**Why it was invisible**: `Stale` is the only branch of the classifier that logs below WARN
+(`debug!`, `state.rs:1132`); its three siblings are `warn!` (`state.rs:1117`/`1124`/`1138`). The
+shipped unit sets `Environment=MICOLD_LOG=info` (`packaging/micold-daemon.service:20`), so the one
+branch that silently discards user keystrokes is the one filtered out — and it never reaches the
+FR-046 recent-errors ring either, which captures WARN and above (`logging.rs:89`).
+
+**T039 and T044 are both reopened** (Phase 4, above) — see their notes. T039's fixture reused one
+counter object across the simulated reattach, writing the assumption under test into the test's own
+setup; T044's "long-lived state" is process-lived, which is not long enough here.
+
+**Design note**: the serial exists to prove no input was lost across a reconnect, which is worth
+keeping — so realign the counters rather than removing them. Make the daemon authoritative: publish
+each session's expected serial and have a fresh client resume from it. Loss detection still holds
+within a client's lifetime, and a new client process starts in step.
+
+- [X] T110 [P] [US2] Carry each session's expected input serial in the catalog snapshot: add the
+  field to `SessionSummary` (`crates/micold-core/src/protocol/messages.rs:527`), populated from
+  `InputReceiver::expected()` (`crates/micold-core/src/input.rs:103`) in
+  `DaemonState::overlay_live_summaries` (`crates/micold-daemon/src/state.rs:307`), beside the
+  existing `activity` / `last_title` overlay. **Not in `catalog.rs`**: the catalog is projected from
+  the durable `Workspace` and cannot see the live-session registry — `session_summary`
+  (`catalog.rs:504`) takes a persisted `&Session`, which is why it hardcodes
+  `ActivitySignal::Unknown`. The input position is a runtime-only field and belongs in the overlay
+  that already exists for exactly that class of value. This also settles what sessions the daemon is
+  not hosting report: the overlay's existing rule is unchanged — no live entry means the catalog's
+  default stands, exactly as activity falls back to `Unknown` — so `catalog.rs` supplies a
+  documented default (serial `0`) and the overlay replaces it wherever a receiver exists. T111's
+  seed-only-when-absent rule keeps that default harmless for a session the client has already
+  driven. Additive to the wire contract — note whether `PROTOCOL_VERSION`/`SCHEMA_HASH` must move,
+  and if so that FR-021/FR-022a will make stale peers fail loudly rather than silently (the correct
+  outcome). Closes part of FR-028a.
+  **Done**: `SessionSummary` gained `input_serial: u64`
+  (`crates/micold-core/src/protocol/messages.rs`), overlaid from `live.input.expected()` in
+  `DaemonState::overlay_live_summaries` (`crates/micold-daemon/src/state.rs`) — the one place both
+  snapshot paths (`snapshot_locked` and the per-project projection) already run through, beside
+  `activity` and `last_title`. `catalog.rs`'s `session_summary` supplies the documented default `0`
+  for a session with no live entry, which is the correct answer rather than a placeholder: the
+  daemon has accepted no input for it, so a client starting at `0` is exactly in step. The wire did
+  move, as anticipated: `PROTOCOL_VERSION` 2 → 3, and `SCHEMA_HASH` regenerates automatically since
+  `build.rs` hashes `messages.rs`. Both peers of a mismatched pair now refuse each other loudly per
+  FR-021/FR-022a instead of silently mis-parsing. Covered by
+  `crates/micold-daemon/tests/session_start.rs::the_snapshot_publishes_a_live_sessions_expected_input_serial`
+  (0 before the session is hosted; the receiver's mark after 7 batches; a stale serial does not move
+  the published mark) and by `protocol_roundtrip.rs`, whose fixture carries a non-zero serial so a
+  dropped field cannot round-trip.
+- [X] T111 [US2] Seed `SessionInputStamper` from that value in the `Message::DaemonConnected` arm
+  (`crates/micold-client/src/main.rs:525`), beside the existing resync of `disconnected` /
+  `displaced` / settings, and on every later `CatalogChanged` that introduces a session this client
+  has no counter for. Seed only when the client holds no counter for that session — an existing
+  counter is ahead of the daemon by any input still in flight, and overwriting it would manufacture
+  the duplicate-serial case `Stale` exists to reject. Depends on T110. Closes FR-028a.
+  **Done**: `SessionInputStamper::seed` (`crates/micold-client/src/input.rs`) adopts a serial via
+  `InputSeq::resume_from` through `entry().or_insert_with()` — absent-only by construction, so there
+  is no path that rewinds a live counter. A free `seed_input_serials(&mut stamper, &catalog)` in
+  `main.rs` walks the snapshot and is called from both catalog-adoption sites: the
+  `Message::DaemonConnected` arm (beside the `disconnected`/`displaced`/settings resync) and
+  `DaemonMsg::CatalogChanged`. Deliberately **seed-only, never prune** — `reconcile_catalog` does not
+  remove sessions either, and for the same reason: a snapshot that predates an in-flight local
+  mutation, or an ephemeral daemon reporting an empty catalog, is not evidence of deletion, and
+  dropping a counter on it would rebuild it at `0` on the next keystroke and reintroduce this very
+  bug. Counters are released explicitly instead (T114). Covered by three tests in `main.rs`'s test
+  module: adopting the daemon's mark for a session this client never drove; refusing to rewind a
+  counter already ahead of a stale snapshot; and a non-hosted session seeding at `0`.
+- [X] T112 [P] [US2] Red-first, in `crates/micold-core/tests/input_ordering.rs` (extend, do not add a
+  file — the contract stays in one place): a **fresh** `SessionInputStamper`/`InputSeq` against a
+  **surviving** `InputReceiver` applies input rather than discarding it, once seeded per T110/T111.
+  Assert the unseeded case is the observed bug (a fresh counter at `0` against a receiver at `N`
+  yields `Stale` for `N` consecutive batches) so the regression is pinned from both sides, and
+  correct the `input_ordering.rs:80` comment that asserts the reconnect only touches the transport.
+  Reopens and closes T039.
+  **Done**: red confirmed first — the new tests failed to compile against `InputSeq` until
+  `resume_from` existed (`E0599`), and `protocol_roundtrip.rs` failed on the missing field
+  (`E0063`). Three tests added: `an_unseeded_restarted_client_has_every_keystroke_discarded` (40
+  batches from a fresh counter against a receiver at 40 are all `Stale` and the log does not advance
+  once — then the 41st applies, which is the "read-only until I restart the daemon" symptom exactly);
+  `a_restarted_client_seeded_from_the_daemon_drives_a_session_it_did_not_start` (the contract); and
+  `seeding_preserves_loss_detection_within_the_new_clients_lifetime` (a resumed counter is still
+  dense and monotonic, so an in-flight severed keystroke is still reported as `Lost` — the fix does
+  not weaken what the serial is for). The `:80` comment is corrected: it now states that reusing one
+  counter is the *reconnect* case only, is not the binding case for this feature, and names the test
+  that covers a client restart. Whole workspace green (119 test groups).
+- [X] T113 [P] Raise the stale-input drop from `debug!` to `warn!` in
+  `crates/micold-daemon/src/state.rs:1132` so it is visible at the shipped `MICOLD_LOG=info` level
+  and reaches the FR-046 ring. Log the session id and the two serials only, never the bytes —
+  `crates/micold-daemon/tests/log_redaction.rs` (T081) must stay green. Closes FR-045a.
+  **Done**: now `tracing::warn!` with the session id, the rejected `serial`, and the `expected` one,
+  and a message that says the keystrokes are discarded. `expected` is read *after* `accept` — a
+  stale serial leaves the high-water mark unmoved, so that is the serial the client should have
+  sent, which is the number a reader needs to diagnose a seeding failure. No bytes are logged
+  (FR-047); `log_redaction.rs` stays green. The drop is now visible at the shipped
+  `MICOLD_LOG=info` and reaches the FR-046 recent-errors ring, which captures WARN and above.
+- [X] T114 [P] [US2] Resolve `SessionInputStamper::forget` (`crates/micold-client/src/input.rs:49`):
+  it has no caller anywhere in the client, so a counter is never released when a session ends. Either
+  call it from the session-close/delete path or delete it. An uncalled lifecycle hook is what let the
+  lifecycle mismatch go unnoticed; leaving it uncalled leaves the same trap set.
+  **Done — called, not deleted**: `app.stamper.forget(id)` now runs in both session-teardown arms of
+  `main.rs`, beside the existing `app.grids.remove(&id)` hygiene — `Message::SessionCloseRequested`
+  and `Message::SessionRemoveConfirmed`. Kept rather than deleted because the alternative to an
+  explicit release is pruning against the catalog snapshot, and that is the unsafe option here: a
+  snapshot is not evidence of deletion (see T111), so a diff-based prune could drop a counter for a
+  live session and rebuild it at `0`. Deliberately *not* called on detach — the counter must survive
+  a reconnect for loss detection to hold.
+- [ ] T115 [US2] Verify in the running app (SC-020): with sessions live, restart **only** the UI
+  (quit and reopen, and separately install a `.deb`), then type into a session that predates the
+  restart and confirm the keystrokes land on the first try, with no daemon restart. Confirm
+  `journalctl --user -u micold-daemon` shows no stale-input warnings during the check. Depends on
+  T110–T113. If a human at the GUI is required, say so explicitly rather than implying a walkthrough
+  happened (same disposition as T104/T109).
+  **Open — a human at the GUI is required (2026-07-28).** Nothing here was walked through. The check
+  is by construction interactive (restart the UI, type into a pre-existing session), and the
+  environment has the user's own app and daemon running, which are not ours to stop. What *is*
+  verified automatically: the daemon publishes the mark and a stale serial never moves it
+  (`session_start.rs`), a seeded client resumes at it and an unseeded one loses everything
+  (`input_ordering.rs`), and the client seeds absent-only from both catalog paths (`main.rs` tests).
+  **Caveat for whoever runs this**: T110 moved the wire (`PROTOCOL_VERSION` 2 → 3, and a new
+  `SCHEMA_HASH`), so on *this particular* upgrade the already-running old daemon will refuse the new
+  client — loudly, per FR-021/FR-022a — and must be restarted once. That is the designed behaviour,
+  not a regression, but it means SC-020's **package-upgrade** path cannot be observed on this build's
+  own install; check it on the next `.deb` that does not move the contract. SC-020's
+  **quit-and-reopen** path is checkable immediately once the daemon is running this build.

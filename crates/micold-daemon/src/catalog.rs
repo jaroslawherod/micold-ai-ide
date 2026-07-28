@@ -500,7 +500,14 @@ impl Catalog {
 }
 
 /// Map a persisted [`Session`] to its wire [`SessionSummary`]. Activity is never persisted, so it is
-/// always `Unknown` on load (data-model A4).
+/// always `Unknown` on load (data-model A4); `input_serial` is likewise runtime-only and defaults to
+/// `0` here (FR-028a, BUG-006).
+///
+/// Both defaults are replaced for any session the daemon is actually hosting, by
+/// `DaemonState::overlay_live_summaries` — the catalog is projected from durable state and cannot
+/// see the live-session registry that owns the `InputReceiver`. A session with no live entry keeps
+/// the values set here, which for `input_serial` is correct: the daemon has accepted no input for
+/// it, so a client starting at `0` is exactly in step.
 fn session_summary(session: &Session) -> SessionSummary {
     SessionSummary {
         id: session.id,
@@ -511,6 +518,7 @@ fn session_summary(session: &Session) -> SessionSummary {
         title: session.label.clone(),
         lifecycle: wire_lifecycle(session.lifecycle),
         activity: ActivitySignal::Unknown,
+        input_serial: 0,
     }
 }
 

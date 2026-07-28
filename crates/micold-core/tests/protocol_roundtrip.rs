@@ -196,6 +196,9 @@ fn sample_summary() -> SessionSummary {
             attempts: 3,
         },
         activity: ActivitySignal::AwaitingInput,
+        // Non-zero on purpose: a summary for a session the daemon has already accepted input for is
+        // the case that matters (FR-028a), and a zero here would let a dropped field round-trip.
+        input_serial: 4_096,
     }
 }
 

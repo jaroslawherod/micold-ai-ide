@@ -340,6 +340,15 @@ and takeover affordances as shared builder-API primitives.
 *Tests first*: rendering, scrolling and selection never issue a round trip; `Drop` sends no kill;
 input is never coalesced or reordered across a detach/reattach boundary.
 
+**Bugfix 2026-07-27 (BUG-006)**: "across a detach/reattach boundary" is not the binding case and
+must not be the only one tested. This feature's premise is that the daemon outlives the UI, so the
+ordinary event is a **new client process** attaching to a session it did not start — which destroys
+any client-process-lifetime state the ordering contract leans on, while the daemon's side of that
+contract survives untouched. Client retargeting therefore owns a resync step: on `DaemonConnected`,
+seed the per-session input counters from the daemon's authoritative position (FR-028a) rather than
+starting them empty. Test the *restart* boundary explicitly — a second stamper against a surviving
+receiver — not just a reconnect that reuses the same counter object.
+
 ### W5. Supervision and activity signal
 
 Restart FSM in the daemon with identical attended/unattended behaviour (FR-005); process-tree kill
@@ -527,6 +536,18 @@ control plane you can read by eye is the justification for carrying two encoding
    indicator" an explicit requirement, and T108 asserts the label offset is identical across all
    four `ActivitySignal` variants, so a re-added constant glyph or a variable-width slot fails a
    test rather than waiting to be noticed by eye.
+8. **State split across the client/daemon boundary can have mismatched lifetimes, and the test that
+   should catch it can encode the mismatch as its premise.** The input-ordering contract is held by
+   two counters that must agree: the client's is process-lived, the daemon's is session-lived. The
+   daemon is *designed* to outlive the client, so the two diverge on every UI restart and the daemon
+   then discards the client's input as out-of-order — silently, since only that branch of the
+   classifier logs below the shipped verbosity (BUG-006). The contract test missed it because it
+   simulated a reconnect by reusing the same counter object, making the assumption under test into
+   the test's own setup. *Mitigation*: FR-028a makes the daemon's position authoritative and requires
+   the client to adopt it on connect; FR-045a forces any discard to be visible at the shipped log
+   level; and the T039 extension exercises a genuinely fresh stamper against a surviving receiver.
+   *Generalisation*: for any pair of values that must agree across the boundary, name which side is
+   authoritative and re-read it on connect — do not assume symmetry of lifetimes.
 
 ---
 
@@ -540,3 +561,8 @@ tofu guard's blind spot). See `bugs/BUG-004.md`.
 subsume-what-you-duplicate rule and the constant-width-slot rule, extended the `activity_badge.rs`
 structure entry, and added Risk 7 (a new indicator stacking on an inherited one). See
 `bugs/BUG-005.md`.
+
+**Bugfix**: 2026-07-27 — BUG-006 Updated from bugfix patch: annotated W4's *Tests first* line with
+the client-restart resync step (the binding boundary is a new client process, not a reconnect), and
+added Risk 8 (mismatched lifetimes across the client/daemon boundary, and a contract test that
+encodes the mismatch as its premise). See `bugs/BUG-006.md`.

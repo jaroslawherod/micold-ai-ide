@@ -120,6 +120,63 @@ fn session_start_spawns_and_registers_a_durable_session() {
     live.kill().expect("kill");
 }
 
+/// T110/FR-028a (BUG-006): the catalog snapshot must publish each live session's expected input
+/// serial, so a client process that did not start the session can resume its counter there.
+///
+/// This is the wire half of the fix; `micold-core`'s `input_ordering` tests prove what a client does
+/// with the number once it has it. Before the fix the field did not exist, a restarted UI stamped
+/// `0` into a receiver already at `N`, and every keystroke was discarded as stale.
+#[test]
+fn the_snapshot_publishes_a_live_sessions_expected_input_serial() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    // The id `catalog_with_shell_session` records.
+    let id = SessionId::from_uuid(Uuid::from_u128(0x5E55));
+    let state = DaemonState::new(catalog_with_shell_session(project.path(), store.path()));
+
+    let summary_for = |state: &DaemonState| {
+        state
+            .welcome_payload()
+            .0
+            .projects
+            .into_iter()
+            .flat_map(|p| p.sessions)
+            .find(|s| s.id == id)
+            .expect("the session is in the snapshot")
+    };
+
+    // Not yet hosted: no receiver exists, so the catalog's default stands — and it is the right
+    // answer, since the daemon has accepted no input and a client starting at 0 is in step.
+    assert_eq!(
+        summary_for(&state).input_serial,
+        0,
+        "a session with no live entry reports 0"
+    );
+
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect("start must spawn the shell session");
+    let live = state.live_session(id).expect("registered");
+
+    // Drive some input, exactly as a client would.
+    for serial in 0..7 {
+        state.session_input(id, serial, b"");
+    }
+
+    assert_eq!(
+        summary_for(&state).input_serial,
+        7,
+        "the snapshot reports the receiver's high-water mark, not the durable record's"
+    );
+
+    // A stale serial is dropped and must not move the published mark — otherwise a client would
+    // resume behind the daemon and lose input all over again.
+    state.session_input(id, 2, b"");
+    assert_eq!(summary_for(&state).input_serial, 7);
+
+    live.kill().expect("kill");
+}
+
 /// BUG-003: a session the daemon spawns must see variables sourced from the configured
 /// environment-include script (feature 011) — the same as a `micold-client`-spawned session would.
 /// Before the fix, all three of the daemon's spawn sites (`start_session`, `respawn_primary`,

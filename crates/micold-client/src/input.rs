@@ -11,6 +11,13 @@
 //! object — so a session's serial counter is never reset by a daemon detach/reattach. That is the
 //! whole point of the serial: continuity across a reconnect is provable, and a keystroke lost to a
 //! drop is detected rather than silently swallowed.
+//!
+//! "Long-lived" means *this process*, though, and the daemon is designed to outlive it (FR-002).
+//! A restarted UI therefore has no counter at all for a session that predates it, and starting one
+//! at `0` would put it behind the daemon's per-session expectation — which discards every keystroke
+//! as stale, silently (BUG-006). So the daemon's position is authoritative and travels in the
+//! catalog snapshot as `SessionSummary::input_serial`; [`SessionInputStamper::seed`] adopts it on
+//! connect, for sessions this client has not driven itself.
 
 use std::collections::HashMap;
 
@@ -29,6 +36,24 @@ impl SessionInputStamper {
     /// An empty stamper (no sessions seen yet).
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Adopt the daemon's expected next serial for `session` — **only if this client has no counter
+    /// for it yet** (FR-028a, BUG-006).
+    ///
+    /// Call this for every session in an authoritative catalog snapshot, on connect and on each
+    /// later push. Seeding is what lets a freshly started client drive a session it did not create:
+    /// without it the counter starts at `0`, behind a daemon already expecting `N`, and every
+    /// keystroke is dropped as stale until the client has burned through `N` batches.
+    ///
+    /// The absent-only rule is load-bearing, not an optimisation. A counter this client already
+    /// holds is *ahead* of the snapshot by whatever input is still in flight, so overwriting it
+    /// would rewind the stream and re-mint serials the daemon has already applied — manufacturing
+    /// exactly the duplicate that `Stale` exists to reject.
+    pub fn seed(&mut self, session: SessionId, serial: u64) {
+        self.seqs
+            .entry(session)
+            .or_insert_with(|| InputSeq::resume_from(serial));
     }
 
     /// Stamp `bytes` as the next input for `session`, advancing that session's serial. The returned

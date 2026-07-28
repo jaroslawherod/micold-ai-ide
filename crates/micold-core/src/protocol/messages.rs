@@ -537,6 +537,15 @@ pub struct SessionSummary {
     pub lifecycle: WireLifecycle,
     /// Derived activity signal.
     pub activity: ActivitySignal,
+    /// The input serial the service expects next for this session — its
+    /// [`InputReceiver`](crate::input::InputReceiver) high-water mark (FR-028a, BUG-006).
+    ///
+    /// Authoritative, and runtime-only: the receiver lives with the live session, so a client that
+    /// did not start this session cannot infer it. A client MUST adopt this value when it has no
+    /// counter of its own for the session, or its first keystroke is stamped `0`, classified
+    /// [`Stale`](crate::input::InputOutcome::Stale), and silently dropped — along with every one
+    /// after it. Sessions the service is not hosting have no receiver and report `0`.
+    pub input_serial: u64,
 }
 
 /// The wire form of a session's lifecycle (data-model §SessionLifecycle state machine).

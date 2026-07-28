@@ -546,6 +546,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             let cwd = default_resolution_cwd(&app.core);
             refresh_env_include(app, &cwd);
             reconcile_catalog(&mut app.core, &catalog, false);
+            // Adopt the daemon's per-session input position (FR-028a, T111). This process may be a
+            // *new* client attached to sessions it did not start — after a package upgrade, or a
+            // plain quit-and-reopen — in which case its stamper is empty and starting those counters
+            // at 0 would put them behind the daemon, which then discards every keystroke as stale
+            // (BUG-006). Part of the same resync as the flags and settings above: the daemon's
+            // position is authoritative state, so re-read it rather than assume continuity.
+            seed_input_serials(&mut app.stamper, &catalog);
             app.daemon_catalog = Some(catalog);
             // Attach to the active project and view its active session so the daemon starts
             // streaming grid frames for it (FR-011/FR-016).
@@ -566,6 +573,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             match event {
                 DaemonMsg::CatalogChanged { catalog } => {
                     reconcile_catalog(&mut app.core, &catalog, true);
+                    // Sessions can appear after connect — created in another window, or resumed —
+                    // so seed here too (T111). Absent-only, so this never disturbs a counter this
+                    // client is already driving.
+                    seed_input_serials(&mut app.stamper, &catalog);
                     app.daemon_catalog = Some(catalog);
                 }
                 // A settings mutation reached the service — this client's own `SettingsSet` echoed
@@ -1292,6 +1303,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // archives the record in memory for instant feedback; the daemon reconciles other windows.
         Message::SessionCloseRequested(id) => {
             app.grids.remove(&id);
+            // Release the input counter too (T114): ids are unique UUIDs so it can never be reused,
+            // and a session being archived will take no more input. Never on a mere detach — the
+            // counter must survive a reconnect for loss detection to hold.
+            app.stamper.forget(id);
             send_op(app, PendingOp::DeleteSession, move |req| {
                 ClientMsg::SessionDelete { req, session: id }
             });
@@ -1304,6 +1319,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::SessionRemoveConfirmed => {
             if let Some(id) = app.core.session_remove_target {
                 app.grids.remove(&id);
+                app.stamper.forget(id); // T114, as in the close path above.
                 send_op(app, PendingOp::DeleteSession, move |req| {
                     ClientMsg::SessionDelete { req, session: id }
                 });
@@ -1908,6 +1924,22 @@ fn switch_daemon_attachment(app: &App, old: Option<PathBuf>, new: &Path) {
 /// snapshot: existing sessions have their lifecycle + label updated; sessions the daemon reports
 /// but the client lacks are added; sessions the daemon no longer reports (archived/removed) are
 /// dropped. A dangling `active_session` pointer is cleared.
+/// Seed the input stamper from an authoritative catalog snapshot (FR-028a, T111, BUG-006).
+///
+/// Deliberately seed-only, never prune: `reconcile_catalog` does not remove sessions or projects
+/// either, for the same reason — a snapshot that predates an in-flight local mutation, or an
+/// ephemeral daemon reporting an empty catalog, must not be treated as a deletion. Dropping a
+/// counter here on that evidence would rebuild it at `0` on the next keystroke and reintroduce
+/// exactly the bug this seeding fixes. Counters are released explicitly instead, when a session is
+/// actually closed or removed (`SessionInputStamper::forget`, T114).
+fn seed_input_serials(stamper: &mut SessionInputStamper, snapshot: &CatalogSnapshot) {
+    for project in &snapshot.projects {
+        for session in &project.sessions {
+            stamper.seed(session.id, session.input_serial);
+        }
+    }
+}
+
 fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktrees: bool) {
     // Mirror the daemon's project list into the client (T055). Add projects the daemon reports that
     // the client lacks (e.g. opened in another window), and adopt the daemon's display name for known
@@ -2351,13 +2383,87 @@ mod tests {
     }
 
     fn summary(id: SessionId, title: &str, lifecycle: WireLifecycle) -> SessionSummary {
+        summary_at(id, title, lifecycle, 0)
+    }
+
+    fn summary_at(
+        id: SessionId,
+        title: &str,
+        lifecycle: WireLifecycle,
+        input_serial: u64,
+    ) -> SessionSummary {
         SessionSummary {
             id,
             worktree_dir: None,
             title: SessionLabel::Named(title.into()),
             lifecycle,
             activity: ActivitySignal::Unknown,
+            input_serial,
         }
+    }
+
+    // --- T111 / FR-028a: seeding the stamper from the daemon's authoritative position (BUG-006) ---
+
+    #[test]
+    fn seeding_adopts_the_daemons_position_for_a_session_this_client_never_drove() {
+        // The restarted-UI case: the stamper is empty because the process is new, but the session
+        // has been taking input for a while. Its first keystroke must be stamped where the daemon
+        // expects, not at 0 — which is what made every pre-existing session read-only.
+        let id = SessionId::new();
+        let snapshot = snapshot_with("/p", vec![summary_at(id, "s", WireLifecycle::Running, 40)]);
+        let mut stamper = SessionInputStamper::new();
+
+        seed_input_serials(&mut stamper, &snapshot);
+
+        let ClientMsg::SessionInput { serial, .. } = stamper.stamp(id, b"x".to_vec()) else {
+            panic!("stamp must produce SessionInput");
+        };
+        assert_eq!(
+            serial, 40,
+            "the first keystroke resumes at the daemon's mark"
+        );
+    }
+
+    #[test]
+    fn seeding_never_rewinds_a_counter_this_client_is_already_driving() {
+        // A snapshot is a moment behind: input this client has already stamped may still be in
+        // flight, so its counter is legitimately *ahead*. Adopting the older number would re-mint
+        // serials the daemon has applied — the duplicate `Stale` exists to reject.
+        let id = SessionId::new();
+        let mut stamper = SessionInputStamper::new();
+        for _ in 0..3 {
+            stamper.stamp(id, b"x".to_vec());
+        }
+
+        let snapshot = snapshot_with("/p", vec![summary_at(id, "s", WireLifecycle::Running, 1)]);
+        seed_input_serials(&mut stamper, &snapshot);
+
+        let ClientMsg::SessionInput { serial, .. } = stamper.stamp(id, b"x".to_vec()) else {
+            panic!("stamp must produce SessionInput");
+        };
+        assert_eq!(
+            serial, 3,
+            "the live counter continues; the stale snapshot is ignored"
+        );
+    }
+
+    #[test]
+    fn a_session_the_daemon_is_not_hosting_seeds_at_zero() {
+        // No live entry means no `InputReceiver`, so the catalog's default stands. The client and
+        // the daemon are both at 0, which is exactly in step.
+        let id = SessionId::new();
+        let snapshot = snapshot_with(
+            "/p",
+            vec![summary_at(id, "s", WireLifecycle::InterruptedResumable, 0)],
+        );
+        let mut stamper = SessionInputStamper::new();
+
+        seed_input_serials(&mut stamper, &snapshot);
+
+        let ClientMsg::SessionInput { serial, .. } = stamper.stamp(id, b"x".to_vec()) else {
+            panic!("stamp must produce SessionInput");
+        };
+        assert_eq!(serial, 0);
     }
 
     fn snapshot_with(path: &str, sessions: Vec<SessionSummary>) -> CatalogSnapshot {
