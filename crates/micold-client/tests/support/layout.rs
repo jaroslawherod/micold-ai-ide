@@ -341,6 +341,9 @@ pub struct Overflow {
     pub natural_width: f32,
     /// The width it was clipped to.
     pub allowed_width: f32,
+    /// The layout node the text was attributed to — the deepest one containing its origin.
+    /// Written as a fixture path (`0/2/1`), so it can be looked up in `layout_snapshot.txt`.
+    pub node_path: String,
 }
 
 impl Overflow {
@@ -405,7 +408,7 @@ pub fn text_overflows<'a, M: 'a>(
     // ancestor, which is wider, so this errs toward silence rather than toward crying wolf. That
     // is the right direction for a gate whose findings are meant to be trusted.
     let boxes = walk(Layout::new(&node), Layer::Base);
-    let containing_width = |p: iced::Point| -> f32 {
+    let containing_node = |p: iced::Point| -> Option<&LayoutRecord> {
         boxes
             .iter()
             .filter(|b| {
@@ -415,9 +418,12 @@ pub fn text_overflows<'a, M: 'a>(
                     && p.y <= b.y + b.height + 0.5
             })
             .max_by_key(|b| b.path.len())
-            .map(|b| b.width)
-            .unwrap_or(f32::INFINITY)
     };
+
+    // Set `LAYOUT_OVERFLOW_DEBUG=1` to report every piece of drawn text with its attribution,
+    // not only the ones that overflow. The question "why did this *not* fire?" is otherwise
+    // unanswerable from the outside, which is how a false positive survived once already.
+    let report_everything = std::env::var("LAYOUT_OVERFLOW_DEBUG").is_ok();
 
     let mut found = Vec::new();
     for layer in inner.layers() {
@@ -432,9 +438,18 @@ pub fn text_overflows<'a, M: 'a>(
                     ..
                 } = text
                 {
-                    let allowed = containing_width(*position).min(clip_bounds.width);
+                    let node = containing_node(*position);
+                    let allowed = node
+                        .map(|n| n.width)
+                        .unwrap_or(f32::INFINITY)
+                        .min(clip_bounds.width);
+                    let node_path = node
+                        .map(|n| path_token(&n.path))
+                        .unwrap_or_else(|| "(no containing node)".to_string());
                     // A tenth of a pixel is normalisation noise, not an overflow.
-                    if allowed.is_finite() && paragraph.min_bounds.width > allowed + 0.1 {
+                    if report_everything
+                        || (allowed.is_finite() && paragraph.min_bounds.width > allowed + 0.1)
+                    {
                         // Recover what was drawn, so a failure names the string rather than
                         // leaving the reader to hunt for a widget by its width.
                         let content = paragraph
@@ -453,6 +468,7 @@ pub fn text_overflows<'a, M: 'a>(
                             content,
                             natural_width: paragraph.min_bounds.width,
                             allowed_width: allowed,
+                            node_path,
                         });
                     }
                 }

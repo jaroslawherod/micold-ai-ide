@@ -70,8 +70,8 @@ fn no_text_is_drawn_wider_than_its_clip() {
                 overflows
                     .iter()
                     .map(|o| format!(
-                        "{:?} wants {:.1}px in {:.1}px",
-                        o.content, o.natural_width, o.allowed_width
+                        "{:?} wants {:.1}px in {:.1}px at node {}",
+                        o.content, o.natural_width, o.allowed_width, o.node_path
                     ))
                     .collect::<Vec<_>>()
                     .join("; ")
@@ -102,7 +102,13 @@ fn no_text_is_drawn_wider_than_its_clip() {
                 .max_by(|a, b| a.excess().total_cmp(&b.excess()))
                 .map(|o| o.allowed_width)
                 .unwrap_or_default(),
-            overflows.iter().map(|o| o.content.as_str()).collect::<Vec<_>>(),
+            overflows
+                .iter()
+                .map(|o| format!(
+                    "{:?} wants {:.1}px in {:.1}px at node {}",
+                    o.content, o.natural_width, o.allowed_width, o.node_path
+                ))
+                .collect::<Vec<_>>(),
         );
     }
 
