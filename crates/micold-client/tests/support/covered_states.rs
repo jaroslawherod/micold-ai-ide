@@ -132,15 +132,24 @@ pub fn covered_states() -> &'static [CoveredState] {
             build: || StateUnderTest::new(with_project()).connection(ConnectionStatus::Disconnected),
             anchors: &[Anchor { name: "shell.root", path: &[] }],
         },
+        // `worktree_error` is rendered by the add-worktree modal and nowhere else
+        // (`ui/mod.rs:357`), so setting it on the main shell covered nothing — this state was
+        // byte-identical to `main-shell-sidebar-expanded` until the dialog was opened with it.
         CoveredState {
-            name: "error-worktree-creation-failed",
+            name: "error-add-worktree-failed",
             build: || {
                 let mut state = with_project();
+                state.overlay = Overlay::AddWorktree;
+                state.worktree_form = Some(WorktreeForm {
+                    source: BranchSource::New,
+                    name: "example".to_string(),
+                    ..WorktreeForm::default()
+                });
                 state.worktree_error =
                     Some("could not create the worktree: branch already checked out".to_string());
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor { name: "shell.root", path: &[] }],
+            anchors: &[Anchor { name: "dialog.root", path: &[] }],
         },
     ]
 }

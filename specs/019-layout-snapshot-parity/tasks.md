@@ -77,7 +77,8 @@ Three-crate Cargo workspace. This feature touches **only** `crates/micold-client
 
 - [X] T018 [US1] Implement `CoveredState` and `Anchor` in `crates/micold-client/tests/support/layout.rs` per `data-model.md`. Window size and colour scheme are deliberately **not** fields — both are uniform by requirement and declared once in the fixture header (FR-008a, FR-008b)
 - [X] T019 [US1] Register feature 017's reduced parity set in `crates/micold-client/tests/layout_snapshot.rs`: main shell with the sidebar expanded, main shell with the sidebar collapsed, the add-worktree dialog in each of its two branch-source modes, and one open menu — every one built from the in-memory fixtures in `crates/micold-client/tests/support/mod.rs`, never from the developer's workspace (FR-007, FR-008, SC-004)
-- [X] T020 [US1] Register the empty and error layouts in `crates/micold-client/tests/layout_snapshot.rs`: no project open, an unavailable project, a disconnected daemon. `State::default()` is already the no-project state (FR-008c, SC-004)
+- [X] T020 [US1] Register the empty and error layouts. **`error-add-worktree-failed` had to open the dialog**: `worktree_error` is rendered by the add-worktree modal and nowhere else (`ui/mod.rs:357`), so setting it on the main shell covered nothing and the state was byte-identical to `main-shell-sidebar-expanded`. Distinctness is now checked — 9 states, 9 distinct layouts.
+- [X] ~~T020a~~ (numbering artefact, ignore) Register the empty and error layouts in `crates/micold-client/tests/layout_snapshot.rs`: no project open, an unavailable project, a disconnected daemon. `State::default()` is already the no-project state (FR-008c, SC-004)
 - [X] T021 [US1] Implement the fixture emitter in `crates/micold-client/tests/support/layout.rs` per `contracts/layout-fixture.md` §1 — header carrying renderer, font, window and scheme **once**, then one section per covered state with its anchor block and records (FR-003, FR-008a, FR-008b)
 - [X] T022 [US1] Implement the byte-for-byte assertion and the failure-message construction in `crates/micold-client/tests/layout_snapshot.rs` (FR-003, FR-004)
 - [X] T023 [US1] Declare the anchors in `crates/micold-client/tests/layout_snapshot.rs` — at minimum the sidebar row's label and its close button, the toolbar title, and the dialog action row. These are what a failure quotes and what T025 asserts against (FR-004, research R3)
@@ -95,7 +96,7 @@ Three-crate Cargo workspace. This feature touches **only** `crates/micold-client
   > to 1335 lines. The assertion is there so a covered state that stops covering fails loudly rather
   > than pinning an empty screen.
 
-**Checkpoint**: **US1 complete.** 919 passing (baseline 893). Both gates validated in both directions. One residual coverage gap: `error-worktree-creation-failed` is still byte-identical to `main-shell-sidebar-expanded`, because `worktree_error` surfaces only inside the add-worktree dialog — that state does not yet cover an error surface. SC-006 remains unmet (23s against 10s).
+**Checkpoint**: **US1 complete.** 919 passing (baseline 893). Both gates validated in both directions. **All nine covered states now resolve to nine distinct layouts**, so every registered state covers something no other one does. SC-006 remains unmet (23s against 10s).
 
 > **917 passing, 0 failing** (baseline 893, +24). `style_snapshot` passes with no regeneration and
 > `git status` over `crates/*/src/` is empty — the FR-019 proof. Fixture is 708 lines over 9 covered
