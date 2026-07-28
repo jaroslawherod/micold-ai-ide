@@ -152,31 +152,40 @@ The critical regression pass. Walk **every** screen, dialog and flow:
 - [ ] With a dialog, a menu **and** a snackbar simultaneously on screen, switch light ↔ dark. Every
       visible surface re-resolves — roles, elevation, state layers — with **no restart**.
 
-### B8. Performance — the reference scene
+### B8. Performance — the reference scenes
 
 Reported for trend. **This does not gate the build** (FR-039c): hosted runners render through
 software rasterization with no stable frame-time floor, so a threshold there would fail on runner
 variance rather than on the change under review. A regression here is a review finding.
 
-**The reference scene** (FR-039b) — set up exactly this, so the two figures are comparable:
+**The scenes** (FR-039b). Two of them, because the ripple this feature introduces cannot exist on
+the build you measure first.
+
+*Baseline scene* — capturable on **both** builds:
 
 1. A repository with **20 worktrees** in the sidebar.
 2. The sidebar **expanded**.
 3. **One running terminal session**.
 4. A **context menu open over a dialog**.
-5. Captured **while a ripple is mid-animation**.
 
-- [ ] **Pre-change figure** — measured on the pre-change build, *before* any token value lands
-      (`tasks.md` T000z). Once the palette changes this is no longer obtainable.
+*Full scene* — the baseline scene **plus a ripple mid-animation**. Post-change only.
 
-      Machine: ______________  Date: __________  Frame time: __________
-
-- [ ] **Post-change figure** — measured on the same machine, same scene, after the feature is
-      complete.
+- [ ] **1 — baseline, pre-change** (`tasks.md` T000z). Unobtainable once T000f lands.
 
       Machine: ______________  Date: __________  Frame time: __________
 
-- [ ] Both figures recorded in the PR so the comparison is reviewable (SC-018).
+- [ ] **2 — baseline, post-change** (T076a). Same machine as 1.
+
+      Machine: ______________  Date: __________  Frame time: __________
+
+- [ ] **3 — full scene, post-change** (T076a). Same machine as 1.
+
+      Machine: ______________  Date: __________  Frame time: __________
+
+- [ ] **1 → 2 is the comparison that matters.** Like-for-like: same scene, same machine. A gap here
+      is a regression in rendering this feature did not add. **2 → 3** is this feature's own cost —
+      expected to be non-zero, and worth knowing rather than fearing.
+- [ ] All three figures recorded in the PR so the comparison is reviewable (SC-018).
 
 ### B9. Idle quiescence
 

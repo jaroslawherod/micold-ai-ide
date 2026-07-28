@@ -48,11 +48,12 @@ feature — every story reads token values from it", and it had no tasks at all.
 ### The one task that cannot be deferred ⏱️
 
 - [ ] T000z Before any token value changes, capture the frame-time figure for the **pre-change**
-  build on the reference scene of FR-039b — 20 worktrees in the sidebar, the sidebar expanded, one
-  running terminal session, a context menu open over a dialog, captured while a ripple is
-  mid-animation — and record it in `quickstart.md` alongside the scene definition. Reported for
-  trend, not gating (FR-039c). **This cannot be done after T000f**: once the palette lands the
-  pre-change build is gone, and SC-018 asks for both figures on the same machine (FR-039b, SC-018)
+  build on the **baseline** reference scene of FR-039b — 20 worktrees in the sidebar, the sidebar
+  expanded, one running terminal session, a context menu open over a dialog. **No ripple**: it does
+  not exist yet, which is precisely why the scene is split in two. Record it in `quickstart.md` §B8.
+  Reported for trend, not gating (FR-039c). **This cannot be done after T000f**: once the palette
+  lands the pre-change build is gone, and SC-018 needs all three figures from the same machine
+  (FR-039b, SC-018)
 
 ### Tests for Phase 0 (MANDATORY — write first, confirm they FAIL) ⚠️
 
@@ -272,6 +273,7 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [ ] T074 Complete the no-behavior-change regression pass in `specs/018-material3-visual-system/quickstart.md` §B6. Any unchecked box there blocks merge; exactly one behavioral difference (the snackbar) is permitted (FR-036, FR-036a, SC-007)
 - [ ] T075 Verify build and full test suite pass on Linux, macOS and Windows via the CI workflow in `.github/workflows/` (Principle VI, FR-039)
 - [ ] T076 Confirm the visible-worktree count rendered by `crates/micold-client/src/ui/sidebar.rs` has not dropped materially against the pre-change baseline, per `quickstart.md` §B4 (FR-026a)
+- [ ] T076a On the same machine that produced T000z's figure, capture the two post-change measurements: the **baseline** scene, and the **full** scene with a ripple mid-animation. Record both in `quickstart.md` §B8 alongside the pre-change figure. Compare: baseline-before vs baseline-after is like-for-like, and any gap there is a regression in rendering this feature did not add; baseline-after vs full is this feature's own cost. Neither gates the build; a regression is a review finding (FR-039b, FR-039c, SC-018)
 
 ---
 
