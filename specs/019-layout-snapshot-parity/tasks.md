@@ -1,0 +1,190 @@
+# Tasks: Layout Snapshot Parity Gate
+
+**Input**: Design documents from `specs/019-layout-snapshot-parity/`
+
+**Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/layout-fixture.md](./contracts/layout-fixture.md), [quickstart.md](./quickstart.md)
+
+**Tests**: Per Constitution Principle I (NON-NEGOTIABLE), test tasks are mandatory and precede implementation. This feature is unusual in that its *deliverable* is a test — but the apparatus underneath it (normalisation, path emission, overlay traversal, failure messages) is real logic with real defects available, and it gets tested first like anything else. The Principle I GUI-wiring exception is **not** invoked anywhere here; this feature is that exception's replacement for the layout dimension.
+
+**Documentation**: This feature is not user-facing, so Principle VII's obligation lands on developer documentation (`docs/development/`), per the precedent feature 017 T046 set. FR-015 makes the covered/not-covered boundary a requirement rather than a courtesy.
+
+**Cross-platform**: Principle VI is the central technical risk here, not a checkbox. FR-006 requires byte-identical output on all three platforms; research R2 removes the mechanism that would have broken it, and T005 is the guard that fails loudly if a host font subverts the fix.
+
+**Organization**: Tasks are grouped by user story so each is independently implementable and testable.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: Can run in parallel (different files, no dependencies)
+- **[Story]**: Which user story this task belongs to (US1, US2, US3)
+- Include exact file paths in descriptions
+
+## Path Conventions
+
+Three-crate Cargo workspace. This feature touches **only** `crates/micold-client/tests/` and `docs/`. No file under `crates/micold-client/src/`, `crates/micold-core/src/` or `crates/micold-daemon/src/` is modified — that is FR-019, and T037 checks it mechanically.
+
+---
+
+## Phase 1: Setup (Shared Infrastructure)
+
+**Purpose**: The baseline and the assets everything else rests on.
+
+- [ ] T001 Record the pre-change test count from `mise run test` as a note in `specs/019-layout-snapshot-parity/tasks.md`, before any other task runs. A later drop means a test was lost in the change, not that the suite got faster — the same trap feature 017's T001 was written to catch
+- [ ] T002 [P] Add the reference typeface at `crates/micold-client/tests/fixtures/Roboto-Regular.ttf` with `crates/micold-client/tests/fixtures/FONT-PROVENANCE.md` recording source, version and the Apache-2.0 licence. This is the same asset feature 018's T015 must register as the shipped application font — it MUST NOT be committed twice (research R2)
+- [ ] T003 [P] Declare `pub mod layout;` in `crates/micold-client/tests/support/mod.rs` and create the empty `crates/micold-client/tests/support/layout.rs` that the apparatus will fill
+
+---
+
+## Phase 2: Foundational — the measuring apparatus
+
+**Purpose**: Resolve layout headlessly and turn a widget tree into normalised records. **Blocking**: no user story works without this.
+
+### Tests for Phase 2 (write first, confirm they FAIL) ⚠️
+
+- [ ] T004 [P] Failing test in `crates/micold-client/tests/layout_apparatus.rs` asserting the headless renderer constructs with no display, no GPU and no window manager, and reports the `tiny-skia` backend. Must also pass under `env -u DISPLAY -u WAYLAND_DISPLAY` (FR-001, research R1)
+- [ ] T005 Failing **font guard** test in `crates/micold-client/tests/layout_apparatus.rs`: the committed face parses via `ttf-parser` as the expected family and weight, **and** a pinned reference string measures to a pinned width. The second half is the load-bearing one — the host's fonts are still loaded (391 faces measured on the development machine), so a same-named system font winning the family lookup would shift every measurement at once. Without this the failure would read as a mass layout regression instead of a font problem (FR-006, research R2 residual risk)
+- [ ] T006 [P] Failing tests in `crates/micold-client/tests/layout_record_format.rs` for numeric normalisation per `contracts/layout-fixture.md` §2: rounded to one decimal, **exactly** one fractional digit always present, `-0.0` written `0.0`, fixed-width alignment, and no value formatted through `{:?}` on an `f32` (FR-012)
+- [ ] T007 Failing test in `crates/micold-client/tests/layout_record_format.rs` asserting emission is in depth-first tree order and is **never sorted** — sorting would conceal a structural reordering, which is a change the gate exists to report (FR-002, contract §3)
+- [ ] T008 Failing test in `crates/micold-client/tests/layout_apparatus.rs` asserting determinism: two consecutive walks of the same state, in the same process and on the same commit, produce identical records (FR-005)
+- [ ] T009 Failing test in `crates/micold-client/tests/layout_apparatus.rs` asserting the reproducible sampling point: a freshly built widget tree reports every animation at rest and every scrollable at offset zero, so no frame pumping or timing tolerance is needed. Both come free from a fresh `Tree`, but free is not the same as checked (FR-010, FR-011, research R6/R7)
+
+### Implementation for Phase 2
+
+- [ ] T010 Implement the headless renderer constructor in `crates/micold-client/tests/support/layout.rs`: load the committed face into the global font system, then `<iced::Renderer as Headless>::new(reference_font, 16px, Some("tiny-skia"))`. The backend hint is what makes `iced_wgpu` decline before constructing a `wgpu::Instance` (FR-001, FR-006)
+- [ ] T011 Implement `LayoutRecord` and the normalisation/formatting helpers in `crates/micold-client/tests/support/layout.rs` per `data-model.md` and contract §2 (FR-012)
+- [ ] T012 Implement the depth-first walker in `crates/micold-client/tests/support/layout.rs`, emitting `(path, depth, layer, geometry)` in tree order from a laid-out `layout::Node` (FR-002, FR-005)
+- [ ] T013 Implement the overlay pass in `crates/micold-client/tests/support/layout.rs` — call `Widget::overlay` and lay out the returned element as layer `over`. Dialogs and menus are composed in-tree and need nothing special, but `material::Select` wraps `pick_list`, a genuine `Widget::overlay` implementor whose dropdown the base walk cannot see (FR-009, research R5)
+
+**Checkpoint**: a widget tree can be turned into deterministic, normalised records.
+
+---
+
+## Phase 3: User Story 1 — A layout regression fails the build and names what moved (Priority: P1) 🎯 MVP
+
+**Goal**: Convert the class of defect that reached a person in feature 017 into a build failure that names the element.
+
+**Independent Test**: Introduce a deliberate one-off spacing change in any covered state, run the check, confirm it fails naming that element. Revert; confirm it passes.
+
+### Tests for User Story 1 (write first, confirm they FAIL) ⚠️
+
+- [ ] T014 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting the generated text matches the committed fixture byte-for-byte. Fails initially because no fixture exists yet, which is the correct Red (FR-003, SC-001)
+- [ ] T015 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting a mismatch names the covered state, the element — by anchor name where one covers the path, otherwise by path — and the recorded versus observed geometry side by side. Driven by a synthetic mismatch, not by editing the application. A message reading only "the layout changed" must fail this test (FR-004, SC-001, contract §5)
+- [ ] T016 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting coverage never narrows silently: a covered state that can no longer be constructed fails naming it, and an anchor whose path no longer resolves fails naming it (FR-014, US1 acceptance scenario 4)
+- [ ] T017 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting every covered state resolved in the scheme the fixture does **not** record yields byte-identical geometry, failing and naming the state if it differs. An equality assertion, not a second fixture (FR-008a)
+
+### Implementation for User Story 1
+
+- [ ] T018 [US1] Implement `CoveredState` and `Anchor` in `crates/micold-client/tests/support/layout.rs` per `data-model.md`. Window size and colour scheme are deliberately **not** fields — both are uniform by requirement and declared once in the fixture header (FR-008a, FR-008b)
+- [ ] T019 [US1] Register feature 017's reduced parity set in `crates/micold-client/tests/layout_snapshot.rs`: main shell with the sidebar expanded, main shell with the sidebar collapsed, the add-worktree dialog in each of its two branch-source modes, and one open menu — every one built from the in-memory fixtures in `crates/micold-client/tests/support/mod.rs`, never from the developer's workspace (FR-007, FR-008, SC-004)
+- [ ] T020 [US1] Register the empty and error layouts in `crates/micold-client/tests/layout_snapshot.rs`: no project open, an unavailable project, a disconnected daemon. `State::default()` is already the no-project state (FR-008c, SC-004)
+- [ ] T021 [US1] Implement the fixture emitter in `crates/micold-client/tests/support/layout.rs` per `contracts/layout-fixture.md` §1 — header carrying renderer, font, window and scheme **once**, then one section per covered state with its anchor block and records (FR-003, FR-008a, FR-008b)
+- [ ] T022 [US1] Implement the byte-for-byte assertion and the failure-message construction in `crates/micold-client/tests/layout_snapshot.rs` (FR-003, FR-004)
+- [ ] T023 [US1] Declare the anchors in `crates/micold-client/tests/layout_snapshot.rs` — at minimum the sidebar row's label and its close button, the toolbar title, and the dialog action row. These are what a failure quotes and what T025 asserts against (FR-004, research R3)
+- [ ] T024 [US1] Generate the committed fixture `crates/micold-client/tests/fixtures/layout_snapshot.txt`, and confirm `style_snapshot` still passes **with no regeneration** — that is the mechanical proof the application was not touched (FR-003, FR-019)
+- [ ] T025 [US1] **Demonstrate the gate against the defect that motivated it.** Reintroduce an over-long sidebar label overlapping its close button — feature 017 fixed this in `crates/micold-client/src/ui/material/ellipsized.rs`, so that is where to undo it temporarily — confirm the check fails naming `sidebar.row.label` and/or `sidebar.row.close_button` with geometry showing the label's `x + width` exceeding the button's `x`, then revert. If this does not fail, the feature has not delivered its purpose regardless of what else passes (FR-018, SC-003)
+
+**Checkpoint**: US1 complete and independently deliverable. This alone is the MVP.
+
+---
+
+## Phase 4: User Story 2 — An intended layout change is easy to accept and to review (Priority: P2)
+
+**Goal**: A gate that is painful to satisfy gets bypassed or deleted. Make acceptance one command and the diff review evidence.
+
+**Independent Test**: Make an intentional layout change, run the documented regeneration command, confirm the diff is human-readable and limited to the affected elements.
+
+### Tests for User Story 2 (write first, confirm they FAIL) ⚠️
+
+- [ ] T026 [P] [US2] Failing test in `crates/micold-client/tests/layout_snapshot_regeneration.rs` asserting a normal run **never** writes the fixture — not on success, not on failure, not when the file is missing. The negative case is the one that matters: a gate that silently rewrites its own baseline is not a gate (FR-013)
+
+### Implementation for User Story 2
+
+- [ ] T027 [US2] Implement explicit regeneration in `crates/micold-client/tests/layout_snapshot.rs` behind `UPDATE_LAYOUT_SNAPSHOT=1`, deliberately mirroring feature 017's `UPDATE_STYLE_SNAPSHOT` so the two gates read as one convention rather than two (FR-013, contract §6)
+- [ ] T028 [US2] Confirm review quality against `quickstart.md` Part C: make an intentional layout change, regenerate, and verify the diff is limited to the affected elements and each changed line identifies an element and its state without running the application (SC-005)
+
+**Checkpoint**: intended changes are cheap to accept and legible in review.
+
+---
+
+## Phase 5: User Story 3 — Coverage is visible and cheap to extend (Priority: P3)
+
+**Goal**: Feature 017's real failure was not a missing test — it was an unclear boundary between what CI verified and what a human still had to. Keep this gate from acquiring the same ambiguity.
+
+**Independent Test**: Add a new covered state, confirm it takes a single registration step, and confirm the documented coverage boundaries match reality.
+
+### Tests for User Story 3 (write first, confirm they FAIL) ⚠️
+
+- [ ] T029 [P] [US3] Failing source-scanning test in `crates/micold-client/tests/layout_coverage_registry.rs` asserting covered states are declared in exactly one place, in the shape of feature 017's existing boundary gates. A registry that can be extended from two places is not the one-place extension FR-016 promises (FR-016)
+
+### Implementation for User Story 3
+
+- [ ] T030 [US3] Add `docs/development/layout-snapshot.md` documenting what the gate covers and — explicitly — what it does not: colour and border (owned by `style_snapshot`), pixels, mid-animation geometry, scrolled geometry, production typography until 018 ships, and path stability across structural edits. SC-007 makes this testable: a reader must be able to answer "would this catch X?" from the documentation alone (FR-015, SC-007)
+- [ ] T031 [US3] Link the new page from `docs/README.md` alongside `component-library.md` (Principle VII)
+- [ ] T032 [US3] Prove FR-016 by exercising it: add one further covered state end-to-end, confirm it required a change in one place only and that the fixture gained that state and nothing else, then keep it (US3 acceptance scenario 1)
+
+**Checkpoint**: all three stories complete; the boundary is written down and enforced.
+
+---
+
+## Phase 6: Polish & Cross-Cutting Concerns
+
+- [ ] T033 [P] Measure SC-006: `layout_snapshot` completes in under 10 seconds locally, and adds no more than 10% to `mise run test` runtime. Record **both** numbers — measured with and without the gate — rather than asserting the budget was met
+- [ ] T034 [P] Confirm the total test count is at or above T001's baseline. A decrease means a test was lost, and must be explained rather than absorbed
+- [ ] T035 Verify CI is green on Linux, macOS **and** Windows on the same commit with the same committed fixture. This is FR-006's only real proof — everything before it passes locally by construction (FR-017, Principle VI)
+- [ ] T036 Run `quickstart.md` Parts A–G and record the result, including Part G's documented-boundary check (SC-002, SC-007)
+- [ ] T037 Confirm FR-019 mechanically: `git diff` over `crates/micold-client/src/`, `crates/micold-core/src/` and `crates/micold-daemon/src/` across the whole feature must be **empty**. Any layout defect found while building the gate is recorded as a finding, never fixed silently
+
+---
+
+## Dependencies & Execution Order
+
+### Phase Dependencies
+
+- **Phase 1 Setup**: no dependencies. T001 must run **before any other task** — the baseline cannot be taken afterwards
+- **Phase 2 Foundational**: depends on Phase 1. **Blocks every user story**
+- **Phase 3 (US1)**: depends on Phase 2. Delivers the MVP
+- **Phase 4 (US2)**: depends on Phase 3 — regeneration needs something to regenerate
+- **Phase 5 (US3)**: depends on Phase 3. Independent of Phase 4
+- **Phase 6 Polish**: depends on everything
+
+### Within Phase 3
+
+T018 → T019/T020 (the registry needs the type) → T021 → T022 → T023 → T024 → T025. T014–T017 precede all of them and must be observed failing.
+
+### Parallel Opportunities
+
+Genuinely limited, and worth stating honestly rather than dressing up: this feature concentrates in four files (`tests/support/layout.rs`, `tests/layout_snapshot.rs`, and two smaller test binaries), so most tasks touch a file another task is already in.
+
+Real opportunities:
+
+- T002, T003 — asset and module skeleton, different files
+- T004 and T006 — two different test binaries
+- T026, T029 — each a new standalone test file
+- T033, T034 — independent measurements
+
+Everything in Phase 2's implementation block (T010–T013) lands in one file and is sequential.
+
+---
+
+## Implementation Strategy
+
+### MVP (User Story 1)
+
+1. Phase 1 Setup — **T001 first, always**
+2. Phase 2 Foundational — the apparatus
+3. Phase 3 US1
+4. **STOP and VALIDATE** — T025 is the gate on the gate. If reintroducing the sidebar overlap does not fail the check, nothing downstream is worth building
+
+US1 alone is a complete, deliverable increment: layout regressions fail the build and name what moved. US2 and US3 make it pleasant and honest, respectively; neither is required for it to be useful.
+
+### Incremental Delivery
+
+- US1 → the gate exists and catches regressions
+- \+ US2 → intended changes are cheap to accept and reviewable
+- \+ US3 → coverage is extensible and its limits are documented
+
+### Risk Notes
+
+- **The font family lookup is the one silent failure mode.** T005 exists because a host font named Roboto winning the lookup would shift every measurement at once and read as a mass layout regression. This risk survives feature 018 — Roboto is a common system font name — so T005 is permanent, not scaffolding.
+- **Path churn is expected, not a defect.** Inserting a container near the root renumbers its descendants, so one structural edit can produce a large but entirely correct diff. Anchors are re-pointed by hand as part of that change.
+- **The gate pins what *is*, not what is *correct*.** A layout defect present when T024 generates the fixture is baked in until someone notices it by eye. T037 enforces that finding one is a finding to raise, not an edit to make.
+- **This feature depends on neither 018 nor 020** (spec D1 as resolved in planning, and D2). It can start immediately and blocks nothing.
