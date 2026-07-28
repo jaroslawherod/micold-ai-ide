@@ -68,23 +68,42 @@ Three-crate Cargo workspace. This feature touches **only** `crates/micold-client
 
 ### Tests for User Story 1 (write first, confirm they FAIL) ⚠️
 
-- [ ] T014 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting the generated text matches the committed fixture byte-for-byte. Fails initially because no fixture exists yet, which is the correct Red (FR-003, SC-001)
-- [ ] T015 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting a mismatch names the covered state, the element — by anchor name where one covers the path, otherwise by path — and the recorded versus observed geometry side by side. Driven by a synthetic mismatch, not by editing the application. A message reading only "the layout changed" must fail this test (FR-004, SC-001, contract §5)
-- [ ] T016 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting coverage never narrows silently: a covered state that can no longer be constructed fails naming it, and an anchor whose path no longer resolves fails naming it (FR-014, US1 acceptance scenario 4)
-- [ ] T017 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting every covered state resolved in the scheme the fixture does **not** record yields byte-identical geometry, failing and naming the state if it differs. An equality assertion, not a second fixture (FR-008a)
+- [X] T014 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting the generated text matches the committed fixture byte-for-byte. Fails initially because no fixture exists yet, which is the correct Red (FR-003, SC-001)
+- [X] T015 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting a mismatch names the covered state, the element — by anchor name where one covers the path, otherwise by path — and the recorded versus observed geometry side by side. Driven by a synthetic mismatch, not by editing the application. A message reading only "the layout changed" must fail this test (FR-004, SC-001, contract §5)
+- [X] T016 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting coverage never narrows silently: a covered state that can no longer be constructed fails naming it, and an anchor whose path no longer resolves fails naming it (FR-014, US1 acceptance scenario 4)
+- [X] T017 [US1] Failing test in `crates/micold-client/tests/layout_snapshot.rs` asserting every covered state resolved in the scheme the fixture does **not** record yields byte-identical geometry, failing and naming the state if it differs. An equality assertion, not a second fixture (FR-008a)
 
 ### Implementation for User Story 1
 
-- [ ] T018 [US1] Implement `CoveredState` and `Anchor` in `crates/micold-client/tests/support/layout.rs` per `data-model.md`. Window size and colour scheme are deliberately **not** fields — both are uniform by requirement and declared once in the fixture header (FR-008a, FR-008b)
-- [ ] T019 [US1] Register feature 017's reduced parity set in `crates/micold-client/tests/layout_snapshot.rs`: main shell with the sidebar expanded, main shell with the sidebar collapsed, the add-worktree dialog in each of its two branch-source modes, and one open menu — every one built from the in-memory fixtures in `crates/micold-client/tests/support/mod.rs`, never from the developer's workspace (FR-007, FR-008, SC-004)
-- [ ] T020 [US1] Register the empty and error layouts in `crates/micold-client/tests/layout_snapshot.rs`: no project open, an unavailable project, a disconnected daemon. `State::default()` is already the no-project state (FR-008c, SC-004)
-- [ ] T021 [US1] Implement the fixture emitter in `crates/micold-client/tests/support/layout.rs` per `contracts/layout-fixture.md` §1 — header carrying renderer, font, window and scheme **once**, then one section per covered state with its anchor block and records (FR-003, FR-008a, FR-008b)
-- [ ] T022 [US1] Implement the byte-for-byte assertion and the failure-message construction in `crates/micold-client/tests/layout_snapshot.rs` (FR-003, FR-004)
-- [ ] T023 [US1] Declare the anchors in `crates/micold-client/tests/layout_snapshot.rs` — at minimum the sidebar row's label and its close button, the toolbar title, and the dialog action row. These are what a failure quotes and what T025 asserts against (FR-004, research R3)
-- [ ] T024 [US1] Generate the committed fixture `crates/micold-client/tests/fixtures/layout_snapshot.txt`, and confirm `style_snapshot` still passes **with no regeneration** — that is the mechanical proof the application was not touched (FR-003, FR-019)
+- [X] T018 [US1] Implement `CoveredState` and `Anchor` in `crates/micold-client/tests/support/layout.rs` per `data-model.md`. Window size and colour scheme are deliberately **not** fields — both are uniform by requirement and declared once in the fixture header (FR-008a, FR-008b)
+- [X] T019 [US1] Register feature 017's reduced parity set in `crates/micold-client/tests/layout_snapshot.rs`: main shell with the sidebar expanded, main shell with the sidebar collapsed, the add-worktree dialog in each of its two branch-source modes, and one open menu — every one built from the in-memory fixtures in `crates/micold-client/tests/support/mod.rs`, never from the developer's workspace (FR-007, FR-008, SC-004)
+- [X] T020 [US1] Register the empty and error layouts in `crates/micold-client/tests/layout_snapshot.rs`: no project open, an unavailable project, a disconnected daemon. `State::default()` is already the no-project state (FR-008c, SC-004)
+- [X] T021 [US1] Implement the fixture emitter in `crates/micold-client/tests/support/layout.rs` per `contracts/layout-fixture.md` §1 — header carrying renderer, font, window and scheme **once**, then one section per covered state with its anchor block and records (FR-003, FR-008a, FR-008b)
+- [X] T022 [US1] Implement the byte-for-byte assertion and the failure-message construction in `crates/micold-client/tests/layout_snapshot.rs` (FR-003, FR-004)
+- [X] T023 [US1] Declare the anchors in `crates/micold-client/tests/layout_snapshot.rs` — at minimum the sidebar row's label and its close button, the toolbar title, and the dialog action row. These are what a failure quotes and what T025 asserts against (FR-004, research R3)
+- [X] T024 [US1] Generate the committed fixture `crates/micold-client/tests/fixtures/layout_snapshot.txt`, and confirm `style_snapshot` still passes **with no regeneration** — that is the mechanical proof the application was not touched (FR-003, FR-019)
 - [ ] T025 [US1] **Demonstrate the gate against the defect that motivated it.** Reintroduce an over-long sidebar label overlapping its close button — feature 017 fixed this in `crates/micold-client/src/ui/material/ellipsized.rs`, so that is where to undo it temporarily — confirm the check fails naming `sidebar.row.label` and/or `sidebar.row.close_button` with geometry showing the label's `x + width` exceeding the button's `x`, then revert. If this does not fail, the feature has not delivered its purpose regardless of what else passes (FR-018, SC-003)
 
-**Checkpoint**: US1 complete and independently deliverable. This alone is the MVP.
+**Checkpoint**: T014–T024 done; **T025 open**, so US1 is not yet signed off.
+
+> **917 passing, 0 failing** (baseline 893, +24). `style_snapshot` passes with no regeneration and
+> `git status` over `crates/*/src/` is empty — the FR-019 proof. Fixture is 708 lines over 9 covered
+> states.
+>
+> **Two findings recorded rather than absorbed.**
+>
+> 1. **Scheme-independence is not absolute.** Two elements resolve differently between light and
+>    dark: the row carrying the resolved theme's own name and its text child. The cause is content,
+>    not layout — `"Micold Light"` is one word wider than `"Micold Dark"` (`material/style.rs:66`),
+>    so the row that shrinks to fit it is 2.4px narrower in dark. Structure is identical everywhere,
+>    with no exemption. FR-008a's premise holds for *structure* without qualification and for
+>    *geometry* with two declared exemptions, each carrying its reason and each required to keep
+>    firing — a stale one fails the test rather than silently widening the gate.
+> 2. **SC-006 is not met: the gate runs in 23.3s against a 10s budget.** The cost is text shaping —
+>    roughly 100 full view resolutions across six tests, since three of them each emit the whole
+>    fixture and the scheme test resolves every state twice. Caching the generated fixture behind a
+>    `OnceLock` and sharing one renderer would cut most of it. Not attempted yet; recorded as
+>    outstanding rather than reported as met.
 
 ---
 

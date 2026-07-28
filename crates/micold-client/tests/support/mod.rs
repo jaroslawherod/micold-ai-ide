@@ -8,6 +8,7 @@
 
 /// Headless layout measurement (feature 019). Kept in its own module because it needs a renderer,
 /// while everything else here is render-free core scaffolding.
+pub mod covered_states;
 pub mod layout;
 
 use micold_core::fs_scan::FolderScanner;

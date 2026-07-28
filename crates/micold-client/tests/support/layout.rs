@@ -127,7 +127,7 @@ pub fn format_value(value: f32) -> String {
 }
 
 /// The element's identity: its depth-first index path, with the root written as `0` (research R3).
-fn path_token(path: &[usize]) -> String {
+pub fn path_token(path: &[usize]) -> String {
     let mut out = String::from("0");
     for index in path {
         out.push('/');
@@ -218,4 +218,114 @@ pub fn resolve<'a, M: 'a>(element: Element<'a, M>, renderer: &iced::Renderer) ->
     }
 
     records
+}
+
+// --- Covered states, anchors and the fixture (T018, T021) -------------------------------------
+
+/// A name bound to a path, for the elements a failure should be able to talk about (research R3).
+///
+/// `layout::Node` carries no name, type or id, so a path is the only identity available. Anchors
+/// are advisory for *recording* — every element is recorded whether anchored or not — and
+/// load-bearing for *reporting*.
+#[derive(Debug, Clone)]
+pub struct Anchor {
+    pub name: &'static str,
+    pub path: &'static [usize],
+}
+
+/// A named, reproducible configuration of the application from which a layout can be resolved.
+pub struct CoveredState {
+    pub name: &'static str,
+    /// Constructs the application state from fixed data. Never reads the developer's workspace,
+    /// configuration or session store (FR-007).
+    pub build: fn() -> StateUnderTest,
+    pub anchors: &'static [Anchor],
+}
+
+/// Everything `ui::view` needs, owned so the covered state can hand it over as one value.
+pub struct StateUnderTest {
+    pub state: micold_client::app::State,
+    pub connection: micold_client::ui::ConnectionStatus,
+}
+
+impl StateUnderTest {
+    pub fn new(state: micold_client::app::State) -> Self {
+        Self {
+            state,
+            connection: micold_client::ui::ConnectionStatus::Connected,
+        }
+    }
+
+    pub fn connection(mut self, connection: micold_client::ui::ConnectionStatus) -> Self {
+        self.connection = connection;
+        self
+    }
+}
+
+/// Resolve one covered state in a given colour scheme.
+pub fn records_for(
+    covered: &CoveredState,
+    renderer: &iced::Renderer,
+    scheme: micold_core::theme::ColorScheme,
+) -> Vec<LayoutRecord> {
+    let mut under = (covered.build)();
+    under.state.theme_pref = match scheme {
+        micold_core::theme::ColorScheme::Light => micold_core::theme::ThemePreference::Light,
+        micold_core::theme::ColorScheme::Dark => micold_core::theme::ThemePreference::Dark,
+    };
+
+    let element = micold_client::ui::view(
+        &under.state,
+        None,
+        None,
+        0,
+        None,
+        &micold_core::env_include::EnvIncludeOutcome::Disabled,
+        &under.connection,
+    );
+
+    resolve(element, renderer)
+}
+
+/// Find the anchor covering a path, if any — used to name an element in a failure (FR-004).
+pub fn anchor_for<'a>(anchors: &'a [Anchor], path: &[usize]) -> Option<&'a Anchor> {
+    anchors.iter().find(|a| a.path == path)
+}
+
+/// Emit the whole fixture: one global header, then one section per covered state (contract §1).
+pub fn emit_fixture(
+    states: &[CoveredState],
+    renderer: &iced::Renderer,
+    scheme: micold_core::theme::ColorScheme,
+) -> String {
+    let mut out = String::new();
+    out.push_str("# layout snapshot v1\n");
+    out.push_str("# renderer: tiny-skia\n");
+    out.push_str("# font: Roboto-Regular.ttf\n");
+    out.push_str(&format!(
+        "# window: {:.1}x{:.1}\n",
+        WINDOW.width, WINDOW.height
+    ));
+    out.push_str("# scheme: light (dark asserted byte-identical, not recorded)\n");
+    out.push_str(
+        "# regenerate: UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot\n",
+    );
+
+    for covered in states {
+        out.push('\n');
+        out.push_str(&format!("## {}\n", covered.name));
+        for anchor in covered.anchors {
+            out.push_str(&format!(
+                "@ {} -> {}\n",
+                anchor.name,
+                path_token(anchor.path)
+            ));
+        }
+        for record in records_for(covered, renderer, scheme) {
+            out.push_str(&format_record(&record));
+            out.push('\n');
+        }
+    }
+
+    out
 }
