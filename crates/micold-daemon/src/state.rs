@@ -301,14 +301,21 @@ impl DaemonState {
         snapshot
     }
 
-    /// Overlay each summary's runtime-only fields — `activity` and the live OSC-0 title — from the
-    /// live registry (US2, T046/T047). Durable state (the catalog) never carries activity (H3/A4) and
-    /// the persisted `label` lags the terminal title, so both are projected here at snapshot time. A
-    /// session with no live entry keeps the catalog's values (activity `Unknown`, the persisted label).
+    /// Overlay each summary's runtime-only fields — `activity`, the live OSC-0 title, and the input
+    /// high-water mark — from the live registry (US2, T046/T047; T110/FR-028a). Durable state (the
+    /// catalog) never carries activity (H3/A4), the persisted `label` lags the terminal title, and
+    /// the `InputReceiver` lives with the session rather than the catalog, so all three are projected
+    /// here at snapshot time. A session with no live entry keeps the catalog's values (activity
+    /// `Unknown`, the persisted label, input serial `0`).
+    ///
+    /// `input_serial` is what lets a **new client process** drive a session it did not start: its
+    /// stamper is empty, so without this it would stamp `0` into a receiver already at `N` and have
+    /// every keystroke discarded as `Stale` (BUG-006).
     fn overlay_live_summaries(inner: &Inner, summaries: &mut [SessionSummary]) {
         for summary in summaries {
             if let Some(live) = inner.sessions.get(&summary.id) {
                 summary.activity = live.activity.signal().clone();
+                summary.input_serial = live.input.expected();
                 if let Some(title) = &live.last_title {
                     summary.title = SessionLabel::Named(title.clone());
                 }
@@ -1104,14 +1111,17 @@ impl DaemonState {
                 // Classify against the *session-level* input log (matches the client's per-session
                 // stamper), then write to whichever process is attached.
                 let outcome = live.input.accept(serial);
+                // Read *after* `accept`: a stale serial leaves the high-water mark unmoved, so this
+                // is the serial the client should have sent — the number a diagnostic needs (T113).
+                let expected = live.input.expected();
                 let attached = live.attached;
                 live.procs
                     .get(&attached)
-                    .map(|p| (outcome, Arc::clone(&p.pty)))
+                    .map(|p| (outcome, expected, Arc::clone(&p.pty)))
             })
         };
 
-        let Some((outcome, pty)) = resolved else {
+        let Some((outcome, expected, pty)) = resolved else {
             // Input for a session the daemon is not hosting: nothing to write. Loud, not silent —
             // this means the client's view diverged from the daemon's (a bug or a lost session).
             tracing::warn!(session = %session.0, "dropping input for an unknown session");
@@ -1129,7 +1139,17 @@ impl DaemonState {
                 );
             }
             InputOutcome::Stale => {
-                tracing::debug!(session = %session.0, serial, "dropping stale/duplicate input");
+                // `warn!`, not `debug!` (T113/FR-045a, BUG-006): this branch discards user
+                // keystrokes, and at the shipped `MICOLD_LOG=info` a `debug!` here made a total,
+                // user-visible loss of input produce no diagnostic anywhere — not in the journal,
+                // and not in the FR-046 recent-errors ring, which captures WARN and above. Session
+                // id and serials only, never the bytes (FR-047).
+                tracing::warn!(
+                    session = %session.0,
+                    serial,
+                    expected,
+                    "dropping stale/duplicate input; these keystrokes are discarded"
+                );
                 return;
             }
         }

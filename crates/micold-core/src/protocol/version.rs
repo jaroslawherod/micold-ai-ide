@@ -10,7 +10,8 @@
 /// The wire protocol version. MUST be bumped on any wire-visible change.
 ///
 /// Bumped 1 → 2 for `ClientMsg::Hello::client_package_version` (FR-022a, BUG-002).
-pub const PROTOCOL_VERSION: u32 = 2;
+/// Bumped 2 → 3 for `SessionSummary::input_serial` (FR-028a, BUG-006).
+pub const PROTOCOL_VERSION: u32 = 3;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

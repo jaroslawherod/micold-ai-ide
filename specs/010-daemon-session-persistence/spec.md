@@ -286,6 +286,12 @@ a session survived; confirm it does not survive without the setting.
   file underneath it is unsupported and the outcome is undefined.
 - **Clock/ordering**: input typed immediately before a detach must not be lost or reordered relative
   to input typed after reattach.
+- **A new client process attaching to a session it did not start**: the stronger form of the case
+  above, and the ordinary one — the user interface is restarted (an upgrade, or a plain quit and
+  reopen) while the service and its sessions keep running. Every mechanism the input-ordering
+  contract relies on must survive the loss of the client's process-local state, not merely the loss
+  of a connection. Getting this wrong fails *silently*: the session still renders and streams, so it
+  looks live while discarding every keystroke. *(BUG-006)*
 
 ---
 
@@ -433,6 +439,16 @@ a session survived; confirm it does not survive without the setting.
   stale, MUST disable actions that require the service, and MUST offer reconnection.
 - **FR-028**: On reconnect, the client MUST resynchronize by re-reading current authoritative state
   rather than replaying missed events.
+- **FR-028a**: The authoritative state re-read on connect (FR-028) MUST include every per-session
+  value the input-ordering guarantee depends on. A client process that attaches to a session it did
+  not itself start MUST be able to drive that session from its first keystroke. Accordingly the
+  service MUST expose each session's current input position as part of that state, and the client
+  MUST adopt it rather than assume continuity from a counter held only for its own process lifetime
+  — a client restart destroys that counter while the session, and the service's expectation of it,
+  survive. Input from a freshly started client MUST NOT be classified as out-of-order and discarded.
+  **Bugfix**: 2026-07-27 — BUG-006 added this requirement; after any UI restart every pre-existing
+  session silently dropped all input, because the client's per-session counter restarted at zero
+  while the service kept the previous client's position. See `bugs/BUG-006.md`.
 - **FR-029**: Communication MUST work on Linux, macOS, and Windows using each platform's native local
   IPC mechanism, with the endpoint located by an explicit per-platform policy.
 - **FR-029a**: The endpoint location MUST satisfy the platform's own path-length limit for local IPC
@@ -485,6 +501,11 @@ compatibility), a new Edge Case, a 4th acceptance scenario on User Story 6, and 
   and any failure to bind; client attach, detach, refusal, and takeover with the reason; session start,
   exit, restart attempt, and give-up with the reason; and every mutating operation failure with the
   underlying diagnostic preserved.
+- **FR-045a**: Discarding user input MUST be logged at or above the service's shipped default
+  verbosity and MUST reach the recent-errors surface of FR-046. Dropped keystrokes are a
+  user-visible failure, so a diagnostic emitted below the level the service actually runs at is
+  equivalent to no diagnostic at all. The entry MUST identify the session and the ordering position
+  only, never the input bytes (FR-047). *(BUG-006)*
 - **FR-046**: The client MUST surface the current log destination and the service's recent errors
   within the interface, so a failure that occurred while detached is reachable without leaving the
   application or consulting documentation.
@@ -576,6 +597,11 @@ compatibility), a new Edge Case, a 4th acceptance scenario on User Story 6, and 
 - **SC-019**: A session row shows exactly one leading indicator, and every session name in the list
   begins at the same horizontal offset regardless of activity state (0 rows misaligned, 0 horizontal
   shift as a session moves unknown → working → awaiting input → ended).
+- **SC-020**: After the user interface is restarted while the service keeps running — both the
+  package-upgrade path and a plain quit-and-reopen — 100% of pre-existing sessions accept keyboard
+  input on the very first keystroke, with no service restart and no user action beyond opening the
+  session. Zero keystrokes are discarded, and any discard that does occur is visible in the logs at
+  the service's shipped verbosity.
 
 ---
 
@@ -587,6 +613,11 @@ indicators). See `bugs/BUG-004.md`.
 leading indicator; lifecycle rides the row tint, not a second glyph; the slot is constant-width for
 every state including unknown) and SC-019 (one indicator per row, no horizontal shift as the signal
 changes). See `bugs/BUG-005.md`.
+
+**Bugfix**: 2026-07-27 — BUG-006 Added FR-028a (resync on connect must carry the per-session input
+position, so a client that did not start a session can still drive it), FR-045a (discarding user
+input must be logged at the shipped verbosity and reach the FR-046 surface), a new Edge Case (a new
+client process attaching to a session it did not start), and SC-020. See `bugs/BUG-006.md`.
 
 ---
 

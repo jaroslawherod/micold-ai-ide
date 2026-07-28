@@ -16,6 +16,15 @@
 //! reset, and the daemon's expectation is per-session (not per-connection), so a gap opened by a
 //! reattach is caught loudly instead of silently swallowing the keystrokes typed just before a drop
 //! (spec Edge: clock/ordering).
+//!
+//! **The two counters do not have the same lifetime, and the daemon's is authoritative** (FR-028a,
+//! BUG-006). [`InputReceiver`] lives with the session, which by design outlives the UI; [`InputSeq`]
+//! lives in the client process, which does not. Across a *reconnect* the client counter survives and
+//! continuity is its own; across a **client restart** it is gone, and a counter rebuilt from `0`
+//! would have every keystroke classified [`InputOutcome::Stale`] and silently dropped. A client that
+//! has no counter for a session must therefore adopt the daemon's position — published as
+//! `SessionSummary::input_serial` and resumed via [`InputSeq::resume_from`] — rather than assume its
+//! own process lifetime bounds the session's.
 
 /// The client's monotonic per-session input serial. Construct one per session and **never reset it**
 /// — not on detach, not on reattach — so the daemon can prove across a reconnect that no keystroke
@@ -26,9 +35,26 @@ pub struct InputSeq {
 }
 
 impl InputSeq {
-    /// A fresh counter starting at serial `0`.
+    /// A fresh counter starting at serial `0`. Correct only for a session this client process is
+    /// itself starting; for one that already exists, use [`Self::resume_from`].
     pub fn new() -> Self {
         Self { next: 0 }
+    }
+
+    /// A counter resumed at the daemon's expected next serial, for a session this client process did
+    /// not start (FR-028a, BUG-006).
+    ///
+    /// `next` is the session's authoritative `SessionSummary::input_serial`. Resuming there — rather
+    /// than at `0` — is what lets a restarted UI drive a surviving session from its first keystroke
+    /// instead of having the daemon discard input as [`InputOutcome::Stale`]. Loss detection is
+    /// unaffected: from here on the stream is dense and monotonic exactly as [`Self::new`]'s is, so a
+    /// keystroke severed in flight is still reported as [`InputOutcome::Lost`].
+    ///
+    /// Only ever use this to *seed* a counter the client does not yet have. Overwriting a live
+    /// counter would move it backwards past input still in flight and manufacture the duplicate the
+    /// `Stale` rule exists to reject.
+    pub fn resume_from(next: u64) -> Self {
+        Self { next }
     }
 
     /// Take the next serial for an outgoing keystroke batch, advancing the counter. Serials are
