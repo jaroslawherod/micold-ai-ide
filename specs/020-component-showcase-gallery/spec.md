@@ -8,6 +8,15 @@
 
 **Input**: User description: "A component showcase gallery for the shared UI library, shipped as a second binary in the micold-client crate. Every visual acceptance criterion in this project is verified by a human walking the running IDE, and those walkthroughs get skipped. The showcase renders every component the shared library provides, across every interaction state, variant and density, in both schemes, on one screen — with no daemon, no git repository and no application state required. Completeness must be enforced rather than trusted. Zero change to the IDE binary. Lands before feature 018's implementation begins."
 
+## Clarifications
+
+### Session 2026-07-28
+- Q: FR-003 requires an instance at each density step a component honours, but no density scale exists yet — it is [feature 018](../018-material3-visual-system/spec.md)'s FR-026b, and this feature lands first. What does the clause mean at delivery? → A: **Keep it, marked explicitly dormant.** No component honours a density step today, so the clause is satisfied vacuously at delivery; it is stated now because the gallery is precisely where a density scale gets reviewed once it exists. 018 carries a recorded obligation to add a density row per component when it introduces the axis, and the completeness check can enforce the clause the moment the axis exists. Introducing the axis here was rejected as scope creep against FR-019.
+- Q: The spec never mentions motion, and the completeness check's inherited definition of a component ("converts into an element") structurally excludes the library's animation helpers, which are free functions — so the gallery could omit motion entirely without failing. Is motion covered? → A: **Yes, as a named second category.** The gallery gets a motion section demonstrating each animation helper on a replayable trigger, and the completeness check covers animation helpers under their own two-way rule rather than inheriting a definition that happens to exclude them. A gallery silently missing a whole category is the failure FR-012 exists to prevent, and 018's Motion walkthrough is one of the passes this feature is meant to make cheap.
+- Q: FR-023 requires no frames at rest, but 018 introduces an indeterminate indicator that runs continuously while visible — and 018's FR-039d calls such an indicator a defect when no operation is in flight, which is always true in a gallery. How is it shown? → A: **Behind an explicit run control.** Any component whose appearance runs continuously is stopped at rest and requests no frames; the developer starts it and watches for as long as they want. The developer's request is the operation in flight, so 018's FR-039d holds with no exemption and FR-023 stays literally true. This generalises the replay control FR-007b already establishes for motion, and avoids the static approximation FR-004 refuses elsewhere.
+- Q: SC-008 — that the installable package contains no showcase — was assigned to manual inspection, in a feature whose premise is that manual passes get skipped. Gate or inspection? → A: **Gate it.** A check reads the packaging manifest and the desktop entry and fails if either names the showcase, in the same source-scanning shape as 017's existing gates. SC-008 moves to the automated list. This is the requirement with the worst failure mode in the feature — getting it wrong ships a developer tool to end users — and the artifacts involved are declarative text nobody re-reads, so it is both the cheapest thing to automate and the least safe thing to leave to a human.
+- Q: The Assumptions claim the showcase must compile *and run* on all three platforms, but nothing verifies the running half — CI cannot launch a GUI headlessly — and Principle VI makes this the feature's definition of done. What is actually required? → A: **Compilation on all three, gated; no per-platform appearance claim.** The existing workspace build already enforces the compile, and the feature's checks run on all three. The showcase is a development tool no user installs, so its appearance carries no user-facing parity obligation; parity of the components it displays belongs to the features that own them. Requiring a recorded launch on three machines would add a ritual that protects nothing.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Every component is visible without running the IDE (Priority: P1)
@@ -80,6 +89,7 @@ A developer adds a new component to the shared library and forgets to add it to 
 2. **Given** the gallery lists an entry, **When** the component it names no longer exists in the library, **Then** the build fails and names the stale entry.
 3. **Given** a component exposes named variants, **When** any variant has no instance in the gallery, **Then** the build fails and names the missing variant.
 4. **Given** the shared library is moved or renamed, **When** the completeness check runs, **Then** it fails rather than reporting success over an empty set.
+5. **Given** an animation exists in the shared library, **When** it has no entry in the motion section, **Then** the build fails and names it — and likewise when a motion entry names an animation that no longer exists.
 
 ---
 
@@ -101,11 +111,18 @@ A developer adds a new component to the shared library and forgets to add it to 
 
 - **FR-001**: The showcase MUST present every component the shared UI component library provides, each under a heading naming it.
 - **FR-002**: Each component MUST be rendered as a live, interactive instance — the same component the application renders, resolving the same design tokens — never as a picture, a mock-up, or a gallery-local copy.
-- **FR-003**: For each component, every state that can be **posed** — that is, set through the component's own configuration — MUST be rendered as a separate instance, with all of a component's posed instances visible together. This covers at minimum: each named variant, each density step the component honours, enabled and disabled, and selected and unselected, wherever the component admits that state.
+- **FR-003**: For each component, every state that can be **posed** — that is, set through the component's own configuration — MUST be rendered as a separate instance, with all of a component's posed instances visible together. This covers at minimum: each named variant, enabled and disabled, and selected and unselected, wherever the component admits that state.
+- **FR-003a**: Each density step a component honours MUST likewise be rendered as a separate instance. **This clause is dormant at delivery**: no component honours a density step today, because the density scale is introduced by [feature 018](../018-material3-visual-system/spec.md) (its FR-026b) and this feature lands first. It is stated now because the gallery is where such a scale would be reviewed, and because the completeness check should enforce it from the moment the axis exists rather than waiting for someone to remember. The sidebar's existing reduced-density type roles are a separate, older decision and are not density steps in this sense.
 - **FR-004**: The states that cannot be posed — hover and pressed, which follow the pointer, and focus, which follows the keyboard — MUST be exercisable directly on the rendered instances. The gallery MUST NOT fake them with static approximations, because an approximation that drifts from the real state layer is worse than no swatch at all.
 - **FR-005**: Each component's section MUST state which of its states are posed as separate instances and which must be exercised live, so that a state absent from the page is understood as live rather than missing.
 - **FR-006**: Components that require content the showcase cannot obtain — live session output, real repository data — MUST be rendered with fixed sample content defined inside the gallery. No component may be omitted on the grounds that it needs data.
 - **FR-007**: Floating components — dialogs, menus, popovers, and any other surface that covers what is beneath it — MUST be openable from their own section and dismissible without leaving or reloading the page.
+
+#### Motion
+
+- **FR-007a**: The showcase MUST include a **motion section** presenting every animation the shared library provides — the transition helpers a feature module wraps content in, and any component whose appearance is itself an animation.
+- **FR-007b**: Each animation MUST be **replayable on demand** from its own entry, as many times as the developer wants, without reloading the page or waiting for an unrelated state change. An animation that can only be seen by catching it once is not meaningfully reviewable.
+- **FR-007c**: Each animation's entry MUST name the animation, so that a developer comparing against a motion specification knows which one they are watching.
 
 #### Theming
 
@@ -118,7 +135,8 @@ A developer adds a new component to the shared library and forgets to add it to 
 - **FR-011**: A build-time check MUST fail when a component exists in the shared library and has no instance in the gallery, and the failure MUST name the component.
 - **FR-012**: The same check MUST fail when the gallery names a component that no longer exists in the library, and MUST name the stale entry. A catalogue that outlives its contents misleads in the opposite direction and must fail just as loudly.
 - **FR-013**: The check MUST fail when a component's named variant has no instance in the gallery, and MUST name the missing variant.
-- **FR-014**: The check MUST use the **same definition of "a component"** that the existing component-API gate uses, so the two cannot disagree about what the library contains. A change to that definition MUST take effect in both at once.
+- **FR-013a**: The check MUST cover the library's **animation helpers as a named second category**, under the same two-way rule: an animation with no entry in the motion section fails the build, and a motion entry naming an animation that no longer exists fails the build. This category MUST be enumerated deliberately rather than inherited, because the component definition of FR-014 recognises things that convert into an element and therefore does not see a helper offered as a plain function — leaving motion outside the check by accident, which is the silent omission FR-012 exists to prevent.
+- **FR-014**: For components, the check MUST use the **same definition of "a component"** that the existing component-API gate uses, so the two cannot disagree about what the library contains. A change to that definition MUST take effect in both at once. What that definition does *not* reach is covered by FR-013a rather than left unstated.
 - **FR-015**: Components with no visible appearance of their own MAY be exempted from FR-011 through a recorded exemption list. Each entry MUST carry the reason it cannot be shown. The list MUST fail when an entry names something that no longer exists, on the same reasoning as FR-012.
 - **FR-016**: The check MUST fail rather than pass if it finds no components at all — for example because the library moved — so that a relocation cannot be mistaken for a clean result.
 
@@ -126,6 +144,7 @@ A developer adds a new component to the shared library and forgets to add it to 
 
 - **FR-017**: The showcase MUST be a separate program from the application. Launching one MUST NOT launch the other.
 - **FR-018**: The showcase MUST NOT be included in the installable package, the desktop entry, or the installed launcher. It is a development tool and MUST NOT reach an end user through a normal installation.
+- **FR-018a**: FR-018 MUST be enforced by a build-time check rather than by inspection: the check reads the packaging manifest and the desktop entry and fails when either names the showcase. Both are declarative files that no one re-reads once written, and shipping a development tool to end users is the worst outcome this feature can produce, so it is the last thing that should depend on somebody remembering to look.
 - **FR-019**: The application's appearance and behaviour MUST be unchanged by this feature. Any visible or behavioural difference in the application is a defect.
 - **FR-020**: The showcase MUST run without a session daemon, without a git repository, and without any saved application state, and MUST NOT create, read or modify any of them.
 - **FR-021**: The showcase MUST NOT become a second implementation of anything. It composes existing components and supplies sample content; it MUST NOT contain styling, layout rules, or interaction behaviour that belongs in the component library. Where the gallery reveals that something is missing from the library, the fix is to add it to the library.
@@ -134,6 +153,7 @@ A developer adds a new component to the shared library and forgets to add it to 
 
 - **FR-022**: The gallery's content MUST be fixed: the same components, the same sample data, and the same ordering on every launch. Nothing may vary with the clock, with random values, or with the machine it runs on.
 - **FR-023**: At rest the showcase MUST request no frames and consume no measurable CPU, on the same terms as the application, and MUST honour the same single sanctioned frame-request path. It is not exempt from the guarantees the library already carries.
+- **FR-023a**: A component whose appearance **runs continuously** rather than settling — an indeterminate progress indication being the case this feature will meet first — MUST be posed behind an explicit **run control**. At rest it is stopped and requests no frames; the developer starts it and it runs for as long as they watch. The developer's request is what stands in for the operation such an indication normally reports on, so the component is never displayed running with nothing running, and FR-023 needs no exemption for it. This is the same mechanism as FR-007b's replay trigger, applied to appearance rather than to transitions.
 
 #### Documentation
 
@@ -144,6 +164,7 @@ A developer adds a new component to the shared library and forgets to add it to 
 - **Gallery section**: One component's place in the showcase — its name, its posed instances, the sample content it needs, and the note recording which of its states are live rather than posed.
 - **Posed instance**: One rendering of a component in a specific configuration — a named variant, a density step, disabled, or selected — shown alongside its siblings for comparison.
 - **Sample content**: Fixed, invented data standing in for the real content a component would display in the application. Belongs to the gallery, not to the component.
+- **Motion entry**: One animation's place in the motion section — its name and the trigger that replays it on demand.
 - **Exemption entry**: A recorded statement that a named library component has no gallery instance, together with the reason. Valid only while the component it names exists.
 
 ## Success Criteria *(mandatory)*
@@ -153,12 +174,13 @@ A developer adds a new component to the shared library and forgets to add it to 
 - **SC-001**: A developer with a clean machine — no configuration for this application, no project, no repository — can go from launching the showcase to looking at any named component in under 30 seconds, with one command and no setup steps.
 - **SC-002**: 100% of the components in the shared library appear in the gallery, or appear on the exemption list with a recorded reason. The count is proven by a check that fails the build, not by inspection.
 - **SC-003**: 100% of components' named variants have an instance in the gallery, proven by the same check.
+- **SC-003a**: 100% of the animations the shared library provides have an entry in the motion section, each replayable on demand, proven by the same check under its own category (FR-013a).
 - **SC-004**: Adding a component to the library without adding it to the gallery fails the build, and the failure message names the component. Deleting a component the gallery lists fails the build, and the message names the entry. Both directions are demonstrated by deliberately introducing each failure and observing it.
 - **SC-005**: Every interactive component in the library can be hovered and pressed within one scrolling page, so that confirming a hover and a pressed state across the whole library is a single pass rather than a search.
 - **SC-006**: Switching the scheme re-renders every component on the page with no restart, and the resulting colours match what the same component resolves in the application in that scheme.
 - **SC-007**: The application binary is byte-for-byte unaffected in appearance and behaviour: its existing test suite passes unchanged, and its style parity snapshot is unchanged.
-- **SC-008**: The installable package contains no showcase binary, no showcase desktop entry, and no showcase launcher entry.
-- **SC-009**: With the showcase open and idle, zero frames are requested and CPU use is not measurably above zero over a sustained observation window.
+- **SC-008**: The installable package contains no showcase binary, no showcase desktop entry, and no showcase launcher entry, proven by a check that fails the build when the packaging manifest or the desktop entry names the showcase (FR-018a).
+- **SC-009**: With the showcase open and idle — every replay and run control stopped — zero frames are requested and CPU use is not measurably above zero over a sustained observation window. This holds with a continuously-running component's section on screen, because such a component is stopped until started (FR-023a).
 - **SC-010**: Two consecutive launches of the showcase render the same content in the same order, with no differences attributable to time, randomness, or the host machine.
 
 ## Assumptions
@@ -167,8 +189,8 @@ A developer adds a new component to the shared library and forgets to add it to 
 - The shared component library is already consumable from outside the application's own entry point — the existing test suite drives components directly, which is the same access the showcase needs. No extraction of the library into a separate package is required, and none is in scope.
 - The existing component-API gate already defines what counts as a component in the library. FR-014 reuses that definition rather than introducing a second one that could drift from it.
 - The gallery is built against whatever the component library looks like at the time. It is deliberately built *before* the Material 3 visual system lands, so it renders the pre-change appearance first and becomes a before-and-after reference at no extra cost.
-- Verification splits by what can be asserted without a human judging pixels. **Automated**: SC-002, SC-003, SC-004, SC-007, SC-009 and SC-010, all of which are structural or behavioural checks. **Recorded manual walkthrough**: SC-001, SC-005, SC-006 and SC-008, which are timing, visual comparison, or packaging inspection.
-- Cross-platform parity (Principle VI) applies to the showcase as a build target — it must compile and run on all three platforms — but the showcase is not itself a shipped user-facing capability, so no platform-parity claim about its appearance is made beyond the parity the components already carry.
+- Verification splits by what can be asserted without a human judging pixels. **Automated**: SC-002, SC-003, SC-003a, SC-004, SC-007, SC-008, SC-009 and SC-010 — all structural or behavioural checks, including the packaging exclusion, which is a scan of two declarative files rather than an inspection (FR-018a). **Recorded manual walkthrough**: SC-001, SC-005 and SC-006 — a timing measurement and two visual comparisons, which are the only three that need a person looking at the screen.
+- Cross-platform parity (Principle VI) applies to the showcase **as a build target only**: it MUST compile on Linux, macOS and Windows, which the existing whole-workspace build already enforces in CI, and this feature's own checks run on all three. No claim is made about its *appearance* on any given platform, and no recorded launch on each platform is required to call the feature done — the showcase is a development tool that no user installs, and parity of the components it displays is owned by the features that introduce them.
 - No new dependency is expected. The showcase composes components that already exist using the framework already in use.
 
 ## Relationship to other features
@@ -176,6 +198,8 @@ A developer adds a new component to the shared library and forgets to add it to 
 **[Feature 017 — Material Component Architecture](../017-material-component-architecture/spec.md)** made this feature possible and constrains it. 017 drew the boundary between the component library and the code that uses it, and enforces that boundary with source-scanning gates. The showcase depends on that boundary being real: it consumes the library exactly as a feature module does. FR-014's completeness check is deliberately built in the shape of 017's existing gates, and FR-023 holds the showcase to 017's single sanctioned frame-request path rather than exempting it.
 
 **[Feature 018 — Material 3 Visual System](../018-material3-visual-system/spec.md)** is the reason for the timing. 018 carries a large recorded manual walkthrough — its SC-002, SC-004, SC-005, SC-006 and SC-007 — because visual criteria cannot be asserted automatically. Several of those ask for a property of *every* interactive element, which is exactly the kind of exhaustive manual pass that gets skipped; 017's own convergence pass found that its equivalent check had never been run. This feature should land **before** 018's implementation begins, so that walkthrough is done against one page rather than by navigating the application, and so the pre-change appearance is on record before any token value changes.
+
+That ordering leaves 018 holding one obligation back to this feature: 018 introduces the density scale (its FR-026b), and FR-003a here is dormant until it does. When 018 adds the axis, it MUST add a density row per honouring component to the gallery in the same change, at which point FR-003a stops being vacuous and the completeness check can hold it.
 
 **[Feature 019 — Layout Snapshot Parity](../019-layout-snapshot-parity/spec.md)** is expected to benefit but is not delivered here. 019 pins resolved widget bounds as a committed fixture; the application's layout depends on how many worktrees exist and what is open, whereas the gallery's content is fixed by FR-022. That makes the gallery a better subject for such a fixture. Building that fixture is 019's work, not this feature's — this feature only guarantees the determinism that would make it possible.
 
