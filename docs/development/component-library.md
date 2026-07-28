@@ -87,6 +87,10 @@ fade(dialog, progress)   // ← what this used to look like
    progress in — the ratchet will fail, and it is right to.
 5. If it needs to tell the application something, emit a message describing a **decision** ("the
    edge was dragged to x"), not a mechanism ("a drag started").
+6. Add it to [the component showcase](component-showcase.md) — an `Entry` in
+   `src/showcase/catalogue.rs` plus a render function in `src/showcase/sections/`. This is not
+   optional and not a courtesy: `tests/showcase_completeness.rs` fails the build naming your component
+   until you do, because a catalogue that silently omits things is worse than no catalogue at all.
 
 Point 5 is the one most often got wrong. The resize handle used to emit `SidebarDragStarted` and
 `SidebarDragEnded` so the application could mount a pointer-capture layer on its behalf. Owning the

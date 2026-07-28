@@ -128,10 +128,17 @@ fn ui_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui")
 }
 
+/// Every directory holding render glue, relative to `src/`.
+///
+/// `showcase/` joined this list with feature 020: the component showcase is a second binary with its
+/// own view, and FR-023 states plainly that it is not exempt from the guarantees the library already
+/// carries. A directory outside this scan would be exempt in practice, whatever the spec said.
+const RENDER_DIRS: &[&str] = &["ui", "showcase"];
+
 /// The one file allowed to ask for a frame, relative to `src/`.
 const SANCTIONED: &str = "ui/cdk/motion.rs";
 
-/// Every `.rs` file under `src/ui/`, recursively, as `(path relative to src/, source)`.
+/// Every `.rs` file under the render directories, recursively, as `(path relative to src/, source)`.
 fn ui_sources() -> Vec<(String, String)> {
     fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
         let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
@@ -151,7 +158,10 @@ fn ui_sources() -> Vec<(String, String)> {
         }
     }
     let mut out = Vec::new();
-    walk(&ui_dir(), &mut out);
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    for dir in RENDER_DIRS {
+        walk(&src.join(dir), &mut out);
+    }
     out.sort();
     out
 }
@@ -286,6 +296,17 @@ fn the_scan_actually_finds_the_rendering_layer() {
         sources.iter().any(|(p, _)| p == SANCTIONED),
         "`{SANCTIONED}` not found; if the motion primitive moved, this file's constant must move \
          with it — otherwise the sanctioned call becomes a stray and the real guard goes unchecked"
+    );
+    // Feature 020: the component showcase is a second binary with its own render glue. FR-023 says
+    // it is not exempt from the single sanctioned frame-request path, and a directory this scan does
+    // not know about would be exempt in fact — it could call `shell.request_redraw()` and spin at
+    // 60fps forever with every other test green, which is the failure this file's own module doc
+    // describes.
+    assert!(
+        sources.iter().any(|(p, _)| p.starts_with("showcase/")),
+        "the showcase's sources are not being scanned — FR-023 holds it to the same frame-request \
+         path as the application, and this scan is what makes that true. Found: {:?}",
+        sources.iter().map(|(p, _)| p).collect::<Vec<_>>()
     );
     assert_eq!(
         redraw_call_sites().len(),

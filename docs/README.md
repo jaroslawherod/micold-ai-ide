@@ -31,6 +31,10 @@ verified in CI.
 - [The component library](development/component-library.md) — the two rendering layers, the rule
   that feature modules compose components rather than styling widgets, how that rule is enforced in
   CI, and what to do when adding a component.
+- [The component showcase](development/component-showcase.md) — the development-only gallery of every
+  component in every posed state, in both schemes, on one page (`mise run showcase`): how to launch it,
+  how to add a component to it, what each completeness failure means, and what it deliberately does not
+  cover.
 
 ## The session service (daemon)
 

@@ -13,4 +13,5 @@ pub mod icons;
 pub mod input;
 pub mod keymap;
 pub mod selection;
+pub mod showcase;
 pub mod ui;

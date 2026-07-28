@@ -6,6 +6,10 @@ uv = "latest"
 description = "Run the GUI client (feature 010: spawns/attaches the session daemon)"
 run = "cargo run -p micold-client"
 
+[tasks.showcase]
+description = "Run the component showcase (feature 020): every shared component on one page"
+run = "cargo run -p micold-client --bin micold-showcase"
+
 [tasks.daemon]
 description = "Run the session daemon directly (normally auto-spawned by the client)"
 run = "cargo run -p micold-daemon"

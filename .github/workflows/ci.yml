@@ -54,6 +54,23 @@ jobs:
       # Ensure the full workspace (client GUI binary + daemon) compiles on every platform.
       - name: Build (workspace)
         run: cargo build --workspace
+      # Feature 020's gates plus the 017 gates it widened. These read source text, one `const` slice
+      # and a reducer — they open no window — so they run wherever the crate compiles, and this step is
+      # the authoritative list of them. Path handling (`\` vs `/` in the scanners' display keys) is
+      # exactly the kind of difference a Linux-only run would miss.
+      - name: Test (component library + showcase gates, all platforms)
+        run: |
+          cargo test -p micold-client \
+            --test showcase_completeness \
+            --test showcase_determinism \
+            --test showcase_isolation \
+            --test showcase_captions \
+            --test showcase_state \
+            --test showcase_glue \
+            --test packaging_excludes_showcase \
+            --test material_boundary \
+            --test material_builder_api \
+            --test idle_requests_no_frames
       # Run the client + daemon test suites where the iced system deps are present.
       - name: Test (full workspace)
         if: runner.os == 'Linux'
@@ -73,3 +90,9 @@ jobs:
           test -f docs/user-guide/settings.md
           test -f docs/user-guide/worktrees-and-sessions.md
           test -f docs/user-guide/icons.md
+      # Principle VII for a developer-facing capability: feature 020's showcase is documented for
+      # developers rather than in the user guide (its FR-024), and the doc ships in the same change.
+      - name: Required developer docs exist
+        run: |
+          test -f docs/development/component-library.md
+          test -f docs/development/component-showcase.md
