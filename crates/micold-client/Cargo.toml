@@ -6,6 +6,10 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# With two binaries, `cargo run -p micold-client` would otherwise be ambiguous — and that command is
+# `mise run run`, the documented way to launch the application. The showcase (feature 020) is a
+# development tool; the application stays the default (research R1a).
+default-run = "micold-ai-ide"
 
 # The iced library layer (app state/update, keymap, icons, tokens, motion, ui widgets),
 # exposed so integration tests can drive it (`micold_client::app`, `micold_client::ui`).
@@ -17,6 +21,15 @@ path = "src/lib.rs"
 [[bin]]
 name = "micold-ai-ide"
 path = "src/main.rs"
+
+# The component showcase (feature 020): a development-only gallery of every shared component, in
+# every posed state, in both schemes, on one page. Runs with no daemon, no git repository and no
+# saved state. Deliberately absent from `[package.metadata.deb] assets` below and from the desktop
+# entry — it must never reach an end user (FR-018), which `tests/packaging_excludes_showcase.rs`
+# enforces rather than trusting anyone to remember.
+[[bin]]
+name = "micold-showcase"
+path = "src/showcase/main.rs"
 
 [dependencies]
 micold-core = { workspace = true }

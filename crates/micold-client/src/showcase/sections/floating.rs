@@ -1,0 +1,257 @@
+//! Floating surfaces and the controls that open them (feature 020, T021).
+//!
+//! A dialog, a menu panel, a context menu and the project switcher cover the page when open, so each
+//! is opened from its own section and dismissed without leaving the page (FR-007): press its trigger,
+//! then press Escape or click the scrim. The page stays scrollable underneath, and because
+//! `Showcase::open` holds one surface at a time, no pair of them can trap it (spec, Edge Cases).
+//!
+//! Every surface goes onto the same `cdk::overlay::Overlay` the application uses. That host is what
+//! the two exemptions in the catalogue name: it decides *where* a panel sits and what dismisses it,
+//! and draws nothing itself, so it is exercised by this section rather than posed in it.
+
+use iced::{Element, Length};
+use micold_core::tokens::{spacing, Roles};
+
+use crate::icons::Icon;
+use crate::showcase::catalogue::Layout;
+use crate::showcase::gallery::{arrange, posed};
+use crate::showcase::samples;
+use crate::showcase::state::{Floating, Message, Showcase};
+use crate::ui::cdk;
+use crate::ui::material::{self, SurfaceKind, TypeRole};
+
+/// The items every menu instance in this section shows.
+fn menu_items() -> Vec<material::MenuItem<Message>> {
+    vec![
+        material::MenuItem::new(Icon::Copy, "Copy name", Message::NoOp),
+        material::MenuItem::new(Icon::Rename, "Rename", Message::NoOp),
+        material::MenuItem::new(Icon::Delete, "Delete", Message::NoOp),
+    ]
+}
+
+/// The invented project rows the switcher shows: an active one, one with running sessions, and one
+/// whose folder is gone.
+fn project_rows() -> Vec<material::ProjectRow<Message>> {
+    samples::PROJECTS
+        .iter()
+        .enumerate()
+        .map(|(row, (label, running, available))| material::ProjectRow {
+            label: (*label).to_string(),
+            is_active: row == 0,
+            running_count: *running,
+            available: *available,
+            on_select: Message::NoOp,
+            on_context: Some(Message::NoOp),
+        })
+        .collect()
+}
+
+/// A button that opens `surface`, labelled so the page says what pressing it will do.
+fn opener<'a>(label: &'a str, surface: Floating, roles: Roles) -> Element<'a, Message> {
+    material::Button::with_content(
+        material::Text::new(label, TypeRole::Body, roles),
+        material::ButtonVariant::Outlined,
+        roles,
+    )
+    .on_press(Message::Opened(surface))
+    .into()
+}
+
+/// Every floating surface the gallery can show, in a **stable, non-empty set**.
+///
+/// Non-empty is the load-bearing word. `cdk::overlay::Overlay` returns its base untouched when nothing
+/// is pushed and wraps it in a `stack` when something is — so a set that empties and refills inserts and
+/// removes a level *above* the page, and iced reallocates the state of everything beneath it. The
+/// visible symptom is the page jumping to the top every time a surface opens, because a scrollable's
+/// offset is widget-tree state.
+///
+/// The application never meets this: it pushes its overflow menu unconditionally ("pushed whether or
+/// not it is open: the panel owns its own fade"), so its set is never empty. The gallery now does the
+/// same. A count that changes *after* index 0 is harmless — only the base changing depth resets state.
+///
+/// The comparisons below map a value to an element, which is what a renderer does. The *rule* about
+/// which surfaces may be open at once is not here — it is the reducer's `Option`, where it is tested.
+pub fn surfaces<'a>(
+    showcase: &'a Showcase,
+    roles: Roles,
+) -> Vec<cdk::overlay::Surface<'a, Message>> {
+    let open = showcase.open;
+    let mut out: Vec<cdk::overlay::Surface<'a, Message>> = Vec::new();
+
+    // Always present, exactly as the application pushes it. A closed menu is inert and blocks nothing.
+    out.push(
+        material::MenuOverlay::new(menu_items(), Message::Dismissed, roles)
+            .open(open == Some(Floating::Menu))
+            .into(),
+    );
+
+    if open == Some(Floating::ContextMenu) {
+        out.push(
+            material::ContextMenu::new(menu_items(), (120, 220), Message::Dismissed, roles).into(),
+        );
+    }
+
+    // The switcher converts into `Option<Surface>` — an empty project list has no panel to show. That
+    // asymmetry is the library's, and the gallery honours it rather than unwrapping around it.
+    if open == Some(Floating::ProjectSwitcher) {
+        let panel: Option<cdk::overlay::Surface<'a, Message>> =
+            material::ProjectSwitcherOverlay::new(
+                project_rows(),
+                Message::NoOp,
+                Message::Dismissed,
+                roles,
+            )
+            .open(true)
+            .into();
+        out.extend(panel);
+    }
+
+    if open == Some(Floating::Modal) {
+        out.push(modal_surface(roles));
+    }
+
+    out
+}
+
+/// The dialog the modal entry opens.
+fn modal_surface<'a>(roles: Roles) -> cdk::overlay::Surface<'a, Message> {
+    material::Modal::new(
+        material::Surface::new(
+            iced::widget::column![
+                material::Text::new("A modal dialog", TypeRole::Title, roles),
+                material::Text::new(samples::BODY, TypeRole::Body, roles),
+                material::Button::with_content(
+                    material::Text::new("Close", TypeRole::Body, roles),
+                    material::ButtonVariant::Filled,
+                    roles,
+                )
+                .on_press(Message::Dismissed),
+            ]
+            .spacing(spacing::MD),
+            SurfaceKind::Dialog,
+            roles,
+        )
+        .padding(spacing::LG)
+        .width(Length::Fixed(420.0)),
+        roles,
+    )
+    .on_dismiss(Message::Dismissed)
+    .into()
+}
+
+/// `Modal` — opened from here, dismissed with Escape, the scrim, or its own Close button.
+pub fn modal<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "open it",
+            opener("Open the dialog", Floating::Modal, roles),
+            roles,
+        )],
+        Layout::Inline,
+    )
+}
+
+/// `MenuOverlay` — the toolbar's overflow panel.
+pub fn menu_overlay<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "open it",
+            opener("Open the menu panel", Floating::Menu, roles),
+            roles,
+        )],
+        Layout::Inline,
+    )
+}
+
+/// `ContextMenu` — the cursor-anchored menu a right-click opens.
+pub fn context_menu<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "open it",
+            opener("Open a context menu", Floating::ContextMenu, roles),
+            roles,
+        )],
+        Layout::Inline,
+    )
+}
+
+/// `ProjectSwitcherOverlay` — the known-projects panel, with an active row, a running count and an
+/// unavailable row, all from the invented project list.
+pub fn project_switcher_overlay<'a>(
+    _s: &'a Showcase,
+    roles: Roles,
+    _i: usize,
+) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "open it",
+            opener(
+                "Open the project switcher",
+                Floating::ProjectSwitcher,
+                roles,
+            ),
+            roles,
+        )],
+        Layout::Inline,
+    )
+}
+
+/// `MenuTrigger` — the icon button that opens a menu panel.
+pub fn menu_trigger<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "default",
+            material::MenuTrigger::new(Icon::Menu, Message::Opened(Floating::Menu), roles),
+            roles,
+        )],
+        Layout::Inline,
+    )
+}
+
+/// `ProjectSwitcherTrigger` — the toolbar button naming the active project.
+pub fn project_switcher_trigger<'a>(
+    _s: &'a Showcase,
+    roles: Roles,
+    _i: usize,
+) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "default",
+            material::ProjectSwitcherTrigger::new(
+                samples::PROJECTS[0].0,
+                Message::Opened(Floating::ProjectSwitcher),
+                roles,
+            ),
+            roles,
+        )],
+        Layout::Inline,
+    )
+}
+
+/// `Tooltip` — hover-driven, so it has nothing to pose: point at an instance and wait.
+pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![
+            posed(
+                "below (the default)",
+                material::Tooltip::new(
+                    material::IconButton::new(Icon::Settings, roles).on_press(Message::NoOp),
+                    "Settings",
+                    roles,
+                ),
+                roles,
+            ),
+            posed(
+                "to the left",
+                material::Tooltip::new(
+                    material::IconButton::new(Icon::Menu, roles).on_press(Message::NoOp),
+                    "More actions",
+                    roles,
+                )
+                .position(material::TooltipPosition::Left),
+                roles,
+            ),
+        ],
+        Layout::Inline,
+    )
+}

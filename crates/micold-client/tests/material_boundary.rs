@@ -33,7 +33,20 @@ const LIBRARY: &[&str] = &["material", "cdk"];
 /// The styling module itself, which *is* the layer the rules point at.
 const STYLE_MODULE: &str = "style.rs";
 
+/// The component showcase (feature 020), which composes the library exactly as a feature module does
+/// and is bound by the same rules (FR-021). Keyed with a `showcase/` prefix so a failure says which
+/// side of the crate it came from.
+fn showcase_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("src/showcase")
+}
+
 /// Every feature module's source, keyed by file name.
+///
+/// Two roots: `src/ui/`'s own modules (everything that is not a library layer), and all of
+/// `src/showcase/`, recursively. The showcase is not under `ui/` deliberately — putting it there would
+/// have made it either a library layer, and so exempt from these rules, or a sibling of the layers the
+/// directory assertion below polices. Scanning it from here binds it to the rules without pretending
+/// it is part of the application's view.
 fn feature_modules() -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     for entry in fs::read_dir(ui_dir()).expect("read ui dir") {
@@ -56,7 +69,27 @@ fn feature_modules() -> BTreeMap<String, String> {
         }
         out.insert(name, fs::read_to_string(&path).expect("read source"));
     }
+    collect_showcase(&showcase_dir(), &mut out);
     out
+}
+
+/// Every `.rs` file under `src/showcase/`, recursively, keyed as `showcase/<relative path>`.
+fn collect_showcase(dir: &Path, out: &mut BTreeMap<String, String>) {
+    let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
+    for entry in entries {
+        let path = entry.expect("dir entry").path();
+        if path.is_dir() {
+            collect_showcase(&path, out);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            let key = path
+                .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")).join("src"))
+                .unwrap_or(&path)
+                .display()
+                .to_string()
+                .replace('\\', "/");
+            out.insert(key, fs::read_to_string(&path).expect("read source"));
+        }
+    }
 }
 
 /// Strips `//` line comments and `/* */` blocks, so prose naming a widget is not a violation.
@@ -266,6 +299,20 @@ fn the_scan_actually_finds_the_feature_modules() {
     );
     for expected in ["shell.rs", "sidebar.rs", "worktree_form.rs", "mod.rs"] {
         assert!(modules.contains_key(expected), "missing {expected}");
+    }
+    // Feature 020: the component showcase composes components exactly as a feature module does, and
+    // FR-021 says it must not become a second implementation of anything. A gallery is where the
+    // temptation to hand-style "just this one wrapper so it reads better" is strongest, and where a
+    // styled copy would do the most damage — a developer comparing the showcase's button to the
+    // application's would be comparing two different buttons. A directory this scan cannot see is
+    // exempt in fact, whatever the spec says.
+    for expected in ["showcase/gallery.rs", "showcase/catalogue.rs"] {
+        assert!(
+            modules.contains_key(expected),
+            "the showcase's sources are not being scanned — FR-021 binds them to the same boundary as \
+             the application's feature modules. Found: {:?}",
+            modules.keys().collect::<Vec<_>>()
+        );
     }
 }
 
