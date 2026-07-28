@@ -197,6 +197,13 @@ affordance; take over; confirm the displaced window is visibly disconnected and 
    window holds the project, **Then** it reattaches and shows current state.
 4. **Given** two windows are attached to two *different* projects, **When** both operate normally,
    **Then** neither interferes with the other.
+5. **Given** a window that was refused or displaced from a project, **When** the holder releases it
+   and the window reaches that project again by any ordinary means — switching projects, not only
+   the takeover action — **Then** its attachment is accepted and the window is immediately writable,
+   with no takeover banner and no further user action.
+   *(Bugfix 2026-07-28 — BUG-007: the read-only state has one documented way to begin and only one
+   documented way to end, so reacquiring a project by an ordinary switch left the window rendering a
+   project it owned while refusing to type into it.)*
 
 ---
 
@@ -431,6 +438,15 @@ a session survived; confirm it does not survive without the setting.
 - **FR-024**: On confirmed takeover, the displaced client MUST stop rendering and stop sending input
   for that project, MUST enter a visible disconnected state with a reconnect action, and MUST NOT
   exit.
+- **FR-024a**: A client's read-only state for a project MUST track **current attachment ownership as
+  reported by the service**, not the history of refusals it has received. The service decides who
+  holds a project and says so on every attach, so any accepted attach MUST clear that project's
+  read-only state, whether or not the attach was a user-initiated takeover. A client MUST NOT
+  suppress input on a project the service has confirmed it holds.
+  **Bugfix**: 2026-07-28 — BUG-007 added this requirement; the client recorded refusals but ignored
+  acceptances, so a window that reacquired a released project rendered it while refusing to type
+  into it, above a banner naming a holder that could be gone. Stated as a rule about ownership rather
+  than about takeover events, the defect is unreachable. See `bugs/BUG-007.md`.
 - **FR-025**: A project held by a client that disconnects for any reason (including crash) MUST become
   attachable again without restarting the service.
 - **FR-026**: A client MUST detect a dead or half-open connection within a bounded time and transition
@@ -602,6 +618,9 @@ compatibility), a new Edge Case, a 4th acceptance scenario on User Story 6, and 
   input on the very first keystroke, with no service restart and no user action beyond opening the
   session. Zero keystrokes are discarded, and any discard that does occur is visible in the logs at
   the service's shipped verbosity.
+- **SC-021**: A window whose attach to a project is accepted is writable on the first keystroke, in
+  100% of cases, regardless of whether that project previously refused it or took it away — and
+  shows no takeover affordance while it holds the project.
 
 ---
 
@@ -618,6 +637,12 @@ changes). See `bugs/BUG-005.md`.
 position, so a client that did not start a session can still drive it), FR-045a (discarding user
 input must be logged at the shipped verbosity and reach the FR-046 surface), a new Edge Case (a new
 client process attaching to a session it did not start), and SC-020. See `bugs/BUG-006.md`.
+
+**Bugfix**: 2026-07-28 — BUG-007 Added FR-024a (read-only state tracks current attachment ownership
+as the service reports it, so any accepted attach clears it), a fifth User-Story-5 acceptance
+scenario (reacquiring a released project by an ordinary switch, not only the takeover action), and
+SC-021. Same defect shape as BUG-006 in a second pair of values — a client-side shadow of
+service-owned state corrected in one direction only. See `bugs/BUG-007.md`.
 
 ---
 
