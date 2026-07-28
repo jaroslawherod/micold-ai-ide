@@ -424,8 +424,22 @@ pub fn text_overflows<'a, M: 'a>(
                     let allowed = containing_width(*position).min(clip_bounds.width);
                     // A tenth of a pixel is normalisation noise, not an overflow.
                     if allowed.is_finite() && paragraph.min_bounds.width > allowed + 0.1 {
+                        // Recover what was drawn, so a failure names the string rather than
+                        // leaving the reader to hunt for a widget by its width.
+                        let content = paragraph
+                            .upgrade()
+                            .map(|p| {
+                                p.buffer()
+                                    .lines
+                                    .iter()
+                                    .map(|line| line.text())
+                                    .collect::<Vec<_>>()
+                                    .join(" ")
+                            })
+                            .unwrap_or_else(|| "(paragraph already dropped)".to_string());
+
                         found.push(Overflow {
-                            content: String::new(),
+                            content,
                             natural_width: paragraph.min_bounds.width,
                             allowed_width: allowed,
                         });

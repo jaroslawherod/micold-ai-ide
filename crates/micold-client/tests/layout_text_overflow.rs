@@ -24,10 +24,14 @@ use support::layout as lay;
 /// must keep firing — one that stops is deleted, not left to widen the gate.
 const KNOWN_OVERFLOWS: &[(&str, &str)] = &[(
     "worktree-menu-open",
-    "the open worktree context menu paints its item label at ~279.8px inside ~212.0px of room, a \
-     ~67.8px overflow. Feature 017 fixed exactly this class in the sidebar row (material/\
-     ellipsized.rs) but the menu item was not migrated, so a long worktree name still paints past \
-     the menu's edge. Raised as a finding for a separate change; not fixed here.",
+    "\"Open a folder to set it as your working space.\" wants ~279.8px and the narrowest layout \
+     node containing its draw position is ~212.0px. **Not yet confirmed as a defect.** An earlier \
+     note here guessed the menu item label; migrating that label to `Ellipsized` changed the \
+     measurement by nothing at all, which disproved the guess. Two readings remain open: the \
+     empty-state prompt genuinely paints past its box, or `containing_width` misattributes it — \
+     it takes the *narrowest* node containing the text's top-left corner, and centred text that \
+     overhangs its own node can put that corner inside a narrower sibling. Deciding between them \
+     needs the node actually walked, not the narrowest one containing a point.",
 )];
 
 fn known(state: &str) -> bool {
@@ -64,6 +68,18 @@ fn no_text_is_drawn_wider_than_its_clip() {
                  was fixed, delete the entry — a stale exemption widens the gate silently.",
                 covered.name
             );
+            eprintln!(
+                "KNOWN_OVERFLOWS[{}] still fires: {}",
+                covered.name,
+                overflows
+                    .iter()
+                    .map(|o| format!(
+                        "{:?} wants {:.1}px in {:.1}px",
+                        o.content, o.natural_width, o.allowed_width
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            );
             fired.insert(covered.name);
             continue;
         }
@@ -73,7 +89,7 @@ fn no_text_is_drawn_wider_than_its_clip() {
             "covered state {:?} paints {} piece(s) of text wider than the space allowed. The \
              widest overflows by {:.1}px ({:.1}px wanted, {:.1}px allowed). Text drawn past its \
              clip lands on whatever is beside it — this is the defect class feature 019 exists to \
-             catch, and the geometry fixture cannot see it.",
+             catch, and the geometry fixture cannot see it. Offenders: {:?}",
             covered.name,
             overflows.len(),
             overflows
@@ -90,6 +106,7 @@ fn no_text_is_drawn_wider_than_its_clip() {
                 .max_by(|a, b| a.excess().total_cmp(&b.excess()))
                 .map(|o| o.allowed_width)
                 .unwrap_or_default(),
+            overflows.iter().map(|o| o.content.as_str()).collect::<Vec<_>>(),
         );
     }
 
