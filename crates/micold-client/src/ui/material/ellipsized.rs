@@ -14,6 +14,7 @@
 
 use std::marker::PhantomData;
 
+use super::text::TypeRole;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
 use iced::advanced::widget::{tree, Tree};
@@ -36,6 +37,10 @@ pub struct Ellipsized<M> {
 
 impl<M> Ellipsized<M> {
     /// A label drawn at `size` in `color`, shortened with an ellipsis if it does not fit.
+    ///
+    /// The size is a number because the sidebar's tree passes its own reduced scale through. A call
+    /// site that just wants "body text" should use [`Self::at_role`] instead and let the role supply
+    /// the number.
     pub fn new(content: impl Into<String>, size: f32, color: Rgb) -> Self {
         Self {
             content: content.into(),
@@ -43,6 +48,21 @@ impl<M> Ellipsized<M> {
             color,
             marker: PhantomData,
         }
+    }
+
+    /// A label at a type `role` in `color`, shortened with an ellipsis if it does not fit.
+    ///
+    /// Added by feature 020. The component showcase needs to pose this component, and could not: a
+    /// call site outside the library may not name a text size (the boundary gate closes that at zero),
+    /// but [`Self::new`]'s only constructor demanded one — so the one component whose entire job is
+    /// text was the one component a feature module could not construct at an ordinary role. That is
+    /// the kind of gap a gallery finds, and FR-021's answer is to fix the library rather than let the
+    /// gallery work around it.
+    ///
+    /// Additive: no existing call site changes and no appearance moves, because a role's size is the
+    /// same number the scale was already handing out.
+    pub fn at_role(content: impl Into<String>, role: TypeRole, color: Rgb) -> Self {
+        Self::new(content, role.size(), color)
     }
 }
 
