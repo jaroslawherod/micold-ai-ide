@@ -16,6 +16,15 @@ That asymmetry has already cost something real. A long session name overlapping 
 
 This feature closes the gap in the shape that already works here: record the resolved output, commit it, and let a diff name what changed.
 
+## Clarifications
+
+### Session 2026-07-28
+
+- Q: Should every covered state be recorded in both colour schemes, or is scheme-independence better asserted than duplicated? → A: Record one scheme (light) in the fixture, plus an assertion that the dark-scheme walk produces byte-identical geometry.
+- Q: One canonical window size, a narrow variant for some states, or a full size matrix? → A: One canonical window size for every state; width-sensitivity is exercised through state data instead.
+- Q: Feature 020's showcase gallery claims to be "a better subject for such a fixture" — should 019 cover it? → A: Application states only, as specified. The gallery is recorded as a future extension via FR-016; no dependency and no schedule coupling.
+- Q: Are the empty and error states the Edge Cases name required coverage, or implementer's discretion? → A: Required minimum — no project open, an unavailable project, and a disconnected daemon join FR-008's mandated set.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A layout regression fails the build and names what moved (Priority: P1)
@@ -75,7 +84,7 @@ A developer adds a new screen or dialog. Bringing it under the gate is a small, 
 - **Scrolling.** Content taller than its viewport has geometry that depends on scroll offset.
 - **Sub-pixel values.** Resolved geometry is fractional. Differences in the final decimal places are noise, not regressions, and would make the fixture flap.
 - **Empty and error states.** No project open, an unavailable project, a disconnected daemon — these are layouts too, and are the ones least often looked at by eye.
-- **Window size.** Geometry is a function of the space available, so a record is meaningless without the size it was taken at.
+- **Window size.** Geometry is a function of the space available, so a record is meaningless without the size it was taken at. One canonical size is used throughout (FR-008b); what varies between covered states is their data, not the window.
 - **A defect present when the fixture is generated.** The gate pins what *is*, not what is *correct*. An existing layout bug is baked in silently.
 
 ## Requirements *(mandatory)*
@@ -90,6 +99,9 @@ A developer adds a new screen or dialog. Bringing it under the gate is a small, 
 - **FR-006**: The check MUST produce identical output on Linux, macOS and Windows for all geometry it covers. Any category it cannot cover identically MUST be excluded from the fixture rather than tolerated as a difference.
 - **FR-007**: Covered states MUST be constructed from fixed test data and MUST NOT read the developer's real workspace, configuration, or session store.
 - **FR-008**: Covered states MUST include, at minimum, the reduced parity set feature 017's T001b named: the main shell with the sidebar expanded and collapsed, the add-worktree dialog in both branch-source modes, and one open menu — each at a recorded window size.
+- **FR-008a**: The fixture MUST record a single colour scheme. The system MUST separately assert that resolving every covered state in the other scheme yields byte-identical geometry, and MUST fail naming the state if it does not.
+- **FR-008b**: All covered states MUST be resolved at one canonical window size, recorded in the fixture. Layout behaviour that depends on content exceeding its container MUST be exercised through a covered state's fixed data — a constrained panel width, a deliberately over-long label — rather than by adding window sizes.
+- **FR-008c**: Covered states MUST additionally include the empty and error layouts: no project open, an unavailable project, and a disconnected daemon. These are the screens least often inspected by eye, which is where an automated gate earns most over the human inspection feature 017 closed on.
 - **FR-009**: Coverage MUST extend to overlay surfaces (dialogs, menus, and other floating layers), not the base widget tree alone.
 - **FR-010**: Elements whose geometry depends on an animation MUST be recorded at a defined, reproducible point in that animation.
 - **FR-011**: Elements whose geometry depends on scroll position MUST be recorded at a defined, reproducible scroll offset.
@@ -115,7 +127,7 @@ A developer adds a new screen or dialog. Bringing it under the gate is a small, 
 - **SC-001**: Any change that moves or resizes a covered element is caught automatically, with no human inspection required, and the failure identifies the element.
 - **SC-002**: The check yields identical results across all three supported platforms and across repeated runs, with zero spurious failures over a full release cycle.
 - **SC-003**: The specific defect that motivated this feature — an over-long label overlapping its adjacent control — is reproduced and caught by the check, demonstrated as part of delivery.
-- **SC-004**: Every screen named in feature 017's reduced parity set is covered, so the manual walkthrough that feature could only close by eye becomes automated.
+- **SC-004**: Every screen named in feature 017's reduced parity set is covered, so the manual walkthrough that feature could only close by eye becomes automated — together with the empty and error layouts of FR-008c, which no walkthrough reliably reached at all.
 - **SC-005**: Accepting an intended layout change takes one documented command, and the resulting diff is understandable by a reviewer who has not run the application.
 - **SC-006**: The check completes fast enough to stay in the default suite — under 10 seconds locally, and adding no more than 10% to total suite runtime.
 - **SC-007**: A developer can state, from the documentation alone and without reading the implementation, whether a given category of visual regression would be caught.
@@ -131,11 +143,26 @@ A developer adds a new screen or dialog. Bringing it under the gate is a small, 
 
   What is *not* viable is shipping a fixture containing system-font measurements: it would pass only on the machine that generated it.
 
+  **Resolved in planning** (see `plan.md` and `research.md` R2): neither ordering was taken. The
+  snapshot constructs its own headless renderer and therefore chooses its own default font, and the
+  application's text layer sets no font of its own — so pinning a committed typeface as the
+  measuring basis makes metrics identical everywhere immediately, with text-derived geometry fully
+  in scope. **This feature does not depend on feature 018.**
+
+- **D2 — No dependency on feature 020.** Feature 020 (`020-component-showcase-gallery`) states that
+  its gallery would be "a better subject for such a fixture" because its content is fixed. That
+  advantage does not apply here: FR-007 already requires covered states built from fixed test data,
+  so this feature's determinism does not come from the gallery. Nor could the gallery substitute —
+  FR-008's minimum set is *application screens*, and FR-018's demonstration is a composition defect
+  a component shown in isolation cannot exhibit. Covering the gallery is recorded as a possible
+  future extension through FR-016's one-place path, once 020 exists. **Neither feature blocks the
+  other, and they share no files.**
+
 ## Assumptions
 
 - **This gate is forward-looking, not retroactive.** It cannot recover the pre-017 baseline T001b was meant to capture; that comparison is permanently unavailable. Its value is guarding every change from now on. Feature 017's parity claim stands as recorded — closed on human inspection — and is not reopened here.
 - **The fixture records the application as it is on the day it is generated.** Generating it asserts that the layout is *known*, not that it is *correct*. The gate prevents drift; it does not audit design.
 - **Mirroring the style snapshot is deliberate.** Committed fixture, byte-for-byte assertion, explicit regeneration — already proven in this codebase, and reusing its shape keeps both gates understandable as one idea rather than two.
 - **Coverage is a curated set of states, not every reachable state.** The application's state space is unbounded; the set covers each distinct screen and its meaningful variants, and is expected to grow via FR-016.
-- **Both colour schemes are covered** where layout could differ between them. Layout is expected to be scheme-independent; recording both makes that expectation checkable rather than assumed.
+- **Scheme-independence is asserted, not duplicated.** The fixture records the light scheme only; a separate assertion walks the dark scheme and requires byte-identical geometry. Layout is expected to be scheme-independent, and this makes that expectation *checked* — a scheme-dependent layout fails naming the state — without doubling an artefact a reviewer has to read.
 - **No change to the application's appearance is in scope** (FR-019). This feature adds a check.
