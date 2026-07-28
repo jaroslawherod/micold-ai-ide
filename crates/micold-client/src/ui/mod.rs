@@ -5,7 +5,13 @@ pub mod cdk;
 mod confirm_delete;
 mod confirm_forget;
 mod confirm_session_remove;
-mod material;
+/// The component library. `pub(crate)` rather than private to `ui`, so the component showcase
+/// (feature 020, `crate::showcase`) can compose the very same components the application renders —
+/// which is the whole of FR-002. The crate's *public* API is unchanged: nothing outside
+/// `micold_client` gains access, and `material::style` stays `pub(crate)` and unreachable from a call
+/// site. `tests/material_boundary.rs` scans the showcase at the same zero budgets it holds these
+/// feature modules to, so the wider visibility cannot become a way to style a widget by hand.
+pub(crate) mod material;
 pub use material::target_offset_delta;
 mod project_selector;
 mod rename;
