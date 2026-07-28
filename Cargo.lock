@@ -2228,6 +2228,8 @@ dependencies = [
  "dark-light",
  "directories",
  "iced",
+ "iced_renderer",
+ "iced_tiny_skia",
  "micold-core",
  "serde",
  "serde_json",

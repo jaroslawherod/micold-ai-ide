@@ -329,3 +329,111 @@ pub fn emit_fixture(
 
     out
 }
+
+// --- Text overflow (feature 019, T025 follow-up) ----------------------------------------------
+
+/// One piece of text drawn wider than the space it was given.
+#[derive(Debug, Clone)]
+pub struct Overflow {
+    /// What was drawn.
+    pub content: String,
+    /// The width the shaped paragraph actually wants.
+    pub natural_width: f32,
+    /// The width it was clipped to.
+    pub allowed_width: f32,
+}
+
+impl Overflow {
+    pub fn excess(&self) -> f32 {
+        self.natural_width - self.allowed_width
+    }
+}
+
+/// Draw an element and report every piece of text painted wider than its clip.
+///
+/// **Why this exists, and why the geometry fixture does not replace it.** The defect this feature
+/// was built for — an over-long sidebar label drawn over its close button — is invisible to a
+/// record of layout nodes. The label is `Length::Fill`, so its node is always exactly the width its
+/// parent allots, defect or not. What overflows is the *paragraph painted inside* that node, which
+/// feature 017's own fix put plainly: "only the node was bounded, and nothing clips a paragraph to
+/// its node."
+///
+/// So this asks the renderer what it actually drew. `min_bounds` is what the shaped text wants;
+/// `clip_bounds` is what it was allowed. Wanting more than it was allowed is the defect.
+pub fn text_overflows<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &mut iced::Renderer,
+) -> Vec<Overflow> {
+    use iced::advanced::Renderer as _;
+    use iced::advanced::Widget;
+
+    let mut element = element;
+    let mut tree = Tree::new(element.as_widget());
+    let limits = layout::Limits::new(Size::ZERO, WINDOW);
+    let node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    let viewport = Rectangle::with_size(WINDOW);
+
+    renderer.reset(viewport);
+    element.as_widget().draw(
+        &tree,
+        renderer,
+        &iced::Theme::Light,
+        &iced::advanced::renderer::Style::default(),
+        Layout::new(&node),
+        iced::advanced::mouse::Cursor::Unavailable,
+        &viewport,
+    );
+
+    let inner = match renderer {
+        iced_renderer::fallback::Renderer::Secondary(tiny_skia) => tiny_skia,
+        iced_renderer::fallback::Renderer::Primary(_) => {
+            panic!("the overflow check needs the CPU rasteriser; see support::layout::renderer")
+        }
+    };
+
+    // The box the text belongs to is its layout node, not whatever clip the widget happened to
+    // pass. A widget that forgets to clip reports the whole viewport — which is precisely the
+    // defect — so comparing against the recorded clip would exonerate the bug it is looking for.
+    let boxes = walk(Layout::new(&node), Layer::Base);
+    let containing_width = |p: iced::Point| -> f32 {
+        boxes
+            .iter()
+            .filter(|b| {
+                p.x >= b.x - 0.5
+                    && p.x <= b.x + b.width + 0.5
+                    && p.y >= b.y - 0.5
+                    && p.y <= b.y + b.height + 0.5
+            })
+            .map(|b| b.width)
+            .fold(f32::INFINITY, f32::min)
+    };
+
+    let mut found = Vec::new();
+    for layer in inner.layers() {
+        for item in &layer.text {
+            // `Item` itself is not nameable from outside the crate; `as_slice` reaches its
+            // contents without naming it.
+            for text in item.as_slice() {
+                if let iced::advanced::graphics::text::Text::Paragraph {
+                    paragraph,
+                    position,
+                    clip_bounds,
+                    ..
+                } = text
+                {
+                    let allowed = containing_width(*position).min(clip_bounds.width);
+                    // A tenth of a pixel is normalisation noise, not an overflow.
+                    if allowed.is_finite() && paragraph.min_bounds.width > allowed + 0.1 {
+                        found.push(Overflow {
+                            content: String::new(),
+                            natural_width: paragraph.min_bounds.width,
+                            allowed_width: allowed,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    found
+}

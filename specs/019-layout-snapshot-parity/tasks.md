@@ -82,25 +82,26 @@ Three-crate Cargo workspace. This feature touches **only** `crates/micold-client
 - [X] T022 [US1] Implement the byte-for-byte assertion and the failure-message construction in `crates/micold-client/tests/layout_snapshot.rs` (FR-003, FR-004)
 - [X] T023 [US1] Declare the anchors in `crates/micold-client/tests/layout_snapshot.rs` — at minimum the sidebar row's label and its close button, the toolbar title, and the dialog action row. These are what a failure quotes and what T025 asserts against (FR-004, research R3)
 - [X] T024 [US1] Generate the committed fixture `crates/micold-client/tests/fixtures/layout_snapshot.txt`, and confirm `style_snapshot` still passes **with no regeneration** — that is the mechanical proof the application was not touched (FR-003, FR-019)
-- [ ] T025 [US1] **Demonstrate the gate against the defect that motivated it.** **RUN, AND IT FAILED — the gate does not catch it.** Evidence: the fix in `crates/micold-client/src/ui/material/ellipsized.rs` was undone (`fit(&self.content, available, measure)` replaced with the full content), the whole suite re-run, and `layout_snapshot.txt` came back **byte-identical**. The defect was genuinely present, not a no-op edit: the probe label wants **362.9px inside a 260px sidebar**. The application has been restored and `git status` over `crates/*/src/` is empty (FR-018, SC-003 — **unmet**)
+- [X] T025 [US1] **Demonstrate the gate against the defect that motivated it.** Done — but *not* by the geometry fixture, which was measured to be blind to it. The defect is paint-time: the label is `Length::Fill`, so its node is 260px with or without the bug, and `layout_snapshot.txt` came back byte-identical while the label wanted 362.9px. A second gate, `crates/micold-client/tests/layout_text_overflow.rs`, closes it by asking the renderer what it actually drew. Validated in both directions: with 017's fix undone in `material/ellipsized.rs` it fails naming a **67.8px overflow (279.8px wanted, 212.0px allowed)**; with the fix restored it passes. A self-check test proves the instrument responds to a deliberately cramped layout, so a green run is evidence rather than absence of evidence (FR-018, SC-003)
 
-  > **Why it cannot catch it, and why that is not a bug in the implementation.** The label is
-  > `Length::Fill`, so its layout node is always exactly the width its parent allots — 260px here,
-  > with or without the defect. What overflows is the *paragraph painted inside* that node, which
-  > feature 017's own fix commit described precisely: "only the *node* was bounded, and nothing
-  > clips a paragraph to its node." A record of node geometry is structurally blind to paint-time
-  > overflow. No amount of extra covered states, anchors or precision changes this.
+  > **The comparison is against the layout node, not the recorded clip.** A first attempt compared
+  > the shaped paragraph to the `clip_bounds` the widget passed at draw time, and it missed the
+  > defect entirely — because `Ellipsized::draw` passes the *viewport*, so "clipped to 1280px" is
+  > always true. That is the bug, not an exoneration of it: 017's fix commit says "nothing clips a
+  > paragraph to its node". Comparing against the containing layout node is what makes the check
+  > mean something.
   >
-  > **What would catch it**, in rough order of cost: (a) assert, per text element, that its natural
-  > paragraph width does not exceed its node width — headless, deterministic, cheap, and a much
-  > closer match to the actual defect class than geometry is; (b) pixel snapshots via
-  > `Headless::screenshot`, which research R1 considered and rejected for good reasons that still
-  > hold.
+  > **Two new dev-dependencies**, pinned to `=0.14.0`: `iced_tiny_skia` (to call `layers()`) and
+  > `iced_renderer` (to destructure `iced::Renderer`, which is `fallback::Renderer<wgpu, tiny_skia>`).
+  > These are iced's internal crates and their semver does not track the facade — the exact pin is
+  > deliberate. `plan.md`'s "no new dev-dependency" claim is now wrong and needs amending.
   >
-  > This is a finding about FR-018/SC-003, not a task to retry. It is raised rather than worked
-  > around, per FR-019.
+  > **A pre-existing defect was found and is NOT fixed here** (FR-019). The open worktree context
+  > menu paints its item label ~67.8px past its room — 017 fixed this class in the sidebar row but
+  > the menu item was never migrated. Recorded in `KNOWN_OVERFLOWS` with what was measured, and the
+  > entry must keep firing: one that stops is deleted rather than left to widen the gate silently.
 
-**Checkpoint**: T014–T024 done. **T025 ran and failed**, so US1 is NOT signed off and the STOP-and-VALIDATE in the implementation strategy is in force.
+**Checkpoint**: **US1 complete.** 919 passing (baseline 893). The gate catches the defect it was built for, proven in both directions. SC-006 remains unmet (23s against 10s).
 
 > **917 passing, 0 failing** (baseline 893, +24). `style_snapshot` passes with no regeneration and
 > `git status` over `crates/*/src/` is empty — the FR-019 proof. Fixture is 708 lines over 9 covered

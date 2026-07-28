@@ -49,6 +49,9 @@ tokio = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 ttf-parser = { workspace = true }
+# Feature 019's text-overflow gate only. See the workspace manifest for why these are needed.
+iced_renderer = { workspace = true }
+iced_tiny_skia = { workspace = true }
 
 [lints]
 workspace = true
