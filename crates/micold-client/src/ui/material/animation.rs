@@ -81,6 +81,16 @@ struct Track {
     announced: bool,
 }
 
+/// Whether a wrapper's progress is read by its own `layout` rather than only by `draw`.
+///
+/// Decides whether advancing the track has to make the shell re-lay-out (BUG-001). Named rather
+/// than a bare `bool` so the two call sites say which they are.
+#[derive(Clone, Copy)]
+enum FeedsLayout {
+    Yes,
+    No,
+}
+
 /// Where a wrapper is heading and how long it should take to get there.
 ///
 /// This is the whole of what a caller supplies. Note what is absent: any notion of how far along
@@ -173,11 +183,34 @@ impl<M: Clone> Motion<M> {
     /// Also announces arrival at hidden, once, for a caller that must know when a closing element
     /// has finished closing (the only thing about a transition an application can still need).
     fn advance(&self, tree: &mut Tree, event: &Event, shell: &mut Shell<'_, M>) -> f32 {
+        self.step(tree, event, shell, FeedsLayout::No)
+    }
+
+    /// [`Self::advance`] for a wrapper whose progress is read by its own `layout` rather than only
+    /// by `draw` — the reveal that animates a *size* instead of a paint (BUG-001).
+    fn advance_layout(&self, tree: &mut Tree, event: &Event, shell: &mut Shell<'_, M>) -> f32 {
+        self.step(tree, event, shell, FeedsLayout::Yes)
+    }
+
+    fn step(
+        &self,
+        tree: &mut Tree,
+        event: &Event,
+        shell: &mut Shell<'_, M>,
+        feeds_layout: FeedsLayout,
+    ) -> f32 {
         let target = self.target();
         let track = tree.state.downcast_mut::<Track>();
-        let value = track
-            .progress
-            .on_frame(event, target, self.duration(), shell);
+        let value = match feeds_layout {
+            FeedsLayout::Yes => {
+                track
+                    .progress
+                    .on_layout_frame(event, target, self.duration(), shell)
+            }
+            FeedsLayout::No => track
+                .progress
+                .on_frame(event, target, self.duration(), shell),
+        };
 
         if value > HIDDEN {
             track.announced = false;
@@ -755,7 +788,9 @@ where
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        let progress = self.motion.advance(tree, event, shell);
+        // `advance_layout`, not `advance`: this wrapper's `layout` reads the progress to size its
+        // own node, and iced re-lays-out only when asked (BUG-001).
+        let progress = self.motion.advance_layout(tree, event, shell);
         if progress <= HIDDEN && !reaches_hidden_child(event) {
             return;
         }

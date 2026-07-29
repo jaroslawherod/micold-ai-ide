@@ -19,7 +19,7 @@
 use iced::advanced::Shell;
 use iced::window;
 use iced::Event;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// The frame interval a per-frame step is derived against (~60fps).
 ///
@@ -46,6 +46,13 @@ pub fn step_for(duration: Duration) -> f32 {
 pub struct Progress {
     value: f32,
     target: f32,
+    /// The frame this track last advanced on, so it advances exactly once per frame.
+    ///
+    /// The runtime re-runs `update` with the *same* redraw event when that update invalidated the
+    /// layout — which [`Self::on_layout_frame`] does on every moving frame. Without this, such a
+    /// transition would step three or four times per frame and run at a multiple of its stated
+    /// duration.
+    last_frame: Option<Instant>,
 }
 
 impl Progress {
@@ -55,6 +62,7 @@ impl Progress {
         Self {
             value: initial,
             target: initial,
+            last_frame: None,
         }
     }
 
@@ -120,6 +128,34 @@ impl Progress {
         self.on_event(event, target, step_for(over), shell)
     }
 
+    /// [`Self::on_frame`] for a track whose value feeds `Widget::layout`, not only `draw`.
+    ///
+    /// A redraw re-runs `draw` against the bounds computed by the *last* layout pass. iced
+    /// re-lays-out only when a widget asks it to, so a wrapper that animates its own size — the
+    /// height of an [`Expand`](crate::ui::material::animation::Expand) reveal, the width of the
+    /// navigation drawer's slide — would otherwise report a new size that nothing ever reads: the
+    /// element would sit still and clip against stale bounds, painting over its neighbours
+    /// (BUG-001).
+    ///
+    /// Asks only while the value is actually changing, including the final frame that lands on the
+    /// target. A track resting at its target asks for nothing, so an element that has stopped
+    /// moving does not relayout the window for ever — the layout counterpart of the quiescence
+    /// [`Self::on_event`] keeps for redraws.
+    pub fn on_layout_frame<M>(
+        &mut self,
+        event: &Event,
+        target: f32,
+        over: Duration,
+        shell: &mut Shell<'_, M>,
+    ) -> f32 {
+        let before = self.value;
+        let value = self.on_frame(event, target, over, shell);
+        if value != before {
+            shell.invalidate_layout();
+        }
+        value
+    }
+
     /// Advance on a frame tick, and ask for the next frame while still moving.
     ///
     /// The whole self-animating contract in one call: a widget hands it the event it received and
@@ -134,8 +170,14 @@ impl Progress {
         speed: f32,
         shell: &mut Shell<'_, M>,
     ) -> f32 {
-        if matches!(event, Event::Window(window::Event::RedrawRequested(_))) {
-            self.advance_to(target, speed);
+        if let Event::Window(window::Event::RedrawRequested(now)) = event {
+            // Once per frame, not once per delivery: a track that invalidates the layout gets this
+            // same event handed to it again in the same frame, and stepping again would make the
+            // transition run at a multiple of its stated duration.
+            if self.last_frame != Some(*now) {
+                self.last_frame = Some(*now);
+                self.advance_to(target, speed);
+            }
         } else if (target - self.target).abs() > f32::EPSILON {
             // The destination changed between frames — start moving now rather than waiting for a
             // tick that nothing has asked for yet.

@@ -196,7 +196,9 @@ where
         // drawn in rather than the previous frame's.
         let target = if self.open { 1.0 } else { 0.0 };
         let track = tree.state.downcast_mut::<Track>();
-        let progress = track.progress.on_frame(event, target, SLIDE, shell);
+        // `on_layout_frame`, not `on_frame`: this widget's `layout` reads the progress to size the
+        // revealed panel, and iced re-lays-out only when asked (BUG-001).
+        let progress = track.progress.on_layout_frame(event, target, SLIDE, shell);
         let rail_showing = self.showing_rail(progress);
 
         // Only the child on screen hears about the event. The parked one is not merely invisible —
