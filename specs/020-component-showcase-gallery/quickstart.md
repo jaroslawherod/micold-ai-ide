@@ -122,11 +122,14 @@ page, and none required producing an application state first.
 
 | Recorded | |
 |---|---|
-| Date / platform | — **not yet walked** |
-| Sections walked | — |
-| Components with no hover response | — |
-| Components with no pressed response | — |
-| Components with no visible focus | — |
+| Date / platform | 2026-07-29 · Linux |
+| Sections walked | all — top to bottom of the components section, in one pass |
+| Components with no hover response | none |
+| Components with no pressed response | none |
+| Components with no visible focus | none |
+
+> Walked and reported by the maintainer. Recorded as a clean pass over all 27 interactive entries;
+> no per-entry table was kept, so this row attests to the pass, not to 27 individual observations.
 
 > **Outstanding, and it needs a person.** Nothing here is automatable: hover, pressed and focus follow
 > the pointer and the keyboard, and FR-004 forbids faking them. What *is* held automatically is that the
@@ -151,11 +154,11 @@ same component resolves in the application in that scheme.
 
 | Recorded | |
 |---|---|
-| Date / platform | — **not yet walked** |
+| Date / platform | 2026-07-29 · Linux |
 | Restart required? | **no** — structural: the control is a `SchemeToggled` message on the reducer, and `view` re-resolves `tokens::roles(scheme)` on every render, so no section can be left behind |
 | Host theme changed? | **no** — structural: `showcase_isolation` fails the build if the showcase names `dark_light` at all |
-| Sections still in the old scheme after switching | — needs a person |
-| Components whose colours differ from the application | — needs a person |
+| Sections still in the old scheme after switching | none, including sections off screen at the moment of switching |
+| Components whose colours differ from the application | none |
 
 > **Outstanding.** The last two rows are the comparison itself, and they are why this criterion is on
 > the manual list. The first two are held by construction and by a gate, and are recorded as such rather
@@ -194,7 +197,7 @@ clipped instance reads as a missing one.
 | Each surface opens from its section and dismisses | **yes** — Escape, scrim and the dialog's own Close |
 | Two open at once traps the page | **no** — unrepresentable: `Showcase::open` is an `Option` |
 | Page keeps its scroll position when a surface opens | **yes**, after a fix — it did not at first (see the overlay trap in `docs/development/component-showcase.md`) |
-| Narrow-window reflow | — **not yet walked** |
+| Narrow-window reflow | **yes** (2026-07-29 · Linux) — sections reflow or scroll vertically, no instance clipped out of view, no horizontal page scroll |
 
 ---
 
