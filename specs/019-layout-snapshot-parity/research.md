@@ -239,6 +239,22 @@ the one-time construction of the font system. SC-006's budget is 10 seconds loca
 suite runtime, and there is no evident mechanism by which a few dozen covered states would approach
 it. Left as a measurement to record at delivery, not as a risk to design around.
 
+**Outcome (2026-07-29): the rationale above was wrong, and "verify rather than assume" is what
+caught it.** The dominant cost is not one-time font-system construction but shaping real text,
+repeated per covered state and per scheme — about **2.21s for each covered state**, measured by
+adding a tenth and removing it again. Nine states in two schemes is ~12s, and the gates together
+are ~22.7s of a 35.1s suite.
+
+The spike could not have shown this: it resolved a view twice, so it measured exactly the fixed cost
+this note reasoned from and none of the per-state cost that turned out to dominate. The error was
+not the estimate but generalising a two-pass measurement to "a few dozen covered states" without
+varying the thing that scales.
+
+Two consequences, both recorded rather than absorbed: SC-006 was amended to budget the suite and the
+per-state growth instead of a binary and a share (see spec.md), and the caching in
+`tests/support/layout.rs` exists because six tests were independently paying that per-state cost —
+~71 full-view resolutions where 18 were needed.
+
 ---
 
 ## Summary of decisions

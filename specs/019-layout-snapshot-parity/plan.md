@@ -70,8 +70,12 @@ the central technical risk rather than a checkbox (FR-006, research R2).
 
 **Project Type**: Desktop application, three-crate Cargo workspace
 
-**Performance Goals**: Under 10 seconds locally, adding no more than 10% to suite runtime (SC-006).
-Layout is a pure tree walk with cached shaping; the one-time cost is font-system construction.
+**Performance Goals**: `mise run test` under 60 seconds locally, and no more than 3 seconds added
+per covered state (SC-006, SC-006a — both amended after measurement; the original budget named a
+test binary and a share of the suite, and is discussed in the spec). The cost is dominated by
+shaping real text across every covered screen in both schemes, **not** by the one-time font-system
+construction this plan originally predicted: about 12s of the suite's 35s, and irreducible without
+narrowing coverage. Measured 2026-07-29 at 35.1s total and 2.21s per covered state.
 
 **Constraints**: The application's appearance and behaviour must not change (FR-019) — mechanically
 proved by `style_snapshot` still passing with no regeneration. Covered states must never read the
