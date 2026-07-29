@@ -10,7 +10,9 @@
 
 use std::time::Duration;
 
-use micold_core::frame_probe::{FrameProbe, ProbeConfig, DEFAULT_WARM_UP};
+use micold_core::frame_probe::{
+    FrameProbe, ProbeConfig, Scene, SceneFacts, DEFAULT_WARM_UP, REFERENCE_WORKTREES,
+};
 
 /// Milliseconds, spelled out, because a bare `Duration::from_millis` at every call site buries the
 /// numbers the assertions are actually about.
@@ -378,4 +380,164 @@ fn the_report_line_keeps_sub_millisecond_resolution() {
         line.contains("0.40 ms"),
         "a fast frame must not round away to `0 ms`: {line}"
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The scene: which one, and whether it is actually the one on screen
+// ---------------------------------------------------------------------------------------------
+//
+// SC-018 compares three figures across a change that alters what the sidebar draws, so the scenes
+// have to be the same scene. "A context menu open over a dialog" is not reproducible by hand —
+// opened where, over which dialog? — and the difference between two hand-composed attempts lands in
+// the figure without appearing in it. So the scene is composed by the application and, more
+// importantly, *checked* before any figure is reported.
+
+/// The facts a correctly composed baseline scene satisfies.
+fn baseline_facts() -> SceneFacts {
+    SceneFacts {
+        worktrees: REFERENCE_WORKTREES,
+        running_sessions: 1,
+        dialog_open: true,
+        context_menu_open: true,
+        ripple_animating: false,
+    }
+}
+
+#[test]
+fn an_unset_scene_variable_selects_no_scene() {
+    assert_eq!(Scene::from_env_value(None), Ok(None));
+    assert_eq!(Scene::from_env_value(Some("")), Ok(None));
+}
+
+#[test]
+fn the_two_scenes_are_named() {
+    assert_eq!(
+        Scene::from_env_value(Some("baseline")),
+        Ok(Some(Scene::Baseline))
+    );
+    assert_eq!(Scene::from_env_value(Some("full")), Ok(Some(Scene::Full)));
+}
+
+/// Case and surrounding whitespace are forgiven; the name is a label, not a password.
+#[test]
+fn the_scene_name_is_case_and_whitespace_insensitive() {
+    assert_eq!(
+        Scene::from_env_value(Some("  BaseLine ")),
+        Ok(Some(Scene::Baseline))
+    );
+    assert_eq!(Scene::from_env_value(Some("FULL")), Ok(Some(Scene::Full)));
+}
+
+/// An unrecognised name is refused, and the refusal lists what is valid. Silently falling back to
+/// "no scene" would record an uncomposed window as the reference scene.
+#[test]
+fn an_unknown_scene_name_is_refused_and_lists_the_valid_ones() {
+    let err = Scene::from_env_value(Some("basline")).expect_err("typo must be refused");
+    assert!(err.contains("basline"), "must quote what was given: {err}");
+    assert!(err.contains("baseline"), "must list `baseline`: {err}");
+    assert!(err.contains("full"), "must list `full`: {err}");
+}
+
+/// The happy path: a correctly composed baseline scene passes.
+#[test]
+fn a_correctly_composed_baseline_scene_is_accepted() {
+    assert_eq!(Scene::Baseline.check(&baseline_facts()), Ok(()));
+}
+
+/// The whole point of the check. FR-039b names **20** worktrees, and a run against 19 produces a
+/// figure that looks exactly like a good one — there is nothing in `300 frames — mean 0.30 ms` that
+/// says which sidebar it was measured against.
+#[test]
+fn a_scene_with_the_wrong_worktree_count_is_refused() {
+    let facts = SceneFacts {
+        worktrees: 19,
+        ..baseline_facts()
+    };
+    let err = Scene::Baseline
+        .check(&facts)
+        .expect_err("19 worktrees is not the scene");
+    assert!(err.contains("19"), "must say what was found: {err}");
+    assert!(err.contains("20"), "must say what was expected: {err}");
+}
+
+/// Each remaining element of the scene is individually load-bearing: the session brings the
+/// terminal grid, the dialog brings the scrim and shadow, the menu brings overlay stacking. A
+/// figure missing any of them is measuring a different scene.
+#[test]
+fn each_missing_scene_element_is_refused_by_name() {
+    let cases: [(SceneFacts, &str); 3] = [
+        (
+            SceneFacts {
+                running_sessions: 0,
+                ..baseline_facts()
+            },
+            "session",
+        ),
+        (
+            SceneFacts {
+                dialog_open: false,
+                ..baseline_facts()
+            },
+            "dialog",
+        ),
+        (
+            SceneFacts {
+                context_menu_open: false,
+                ..baseline_facts()
+            },
+            "menu",
+        ),
+    ];
+    for (facts, expected) in cases {
+        let err = Scene::Baseline
+            .check(&facts)
+            .expect_err("an incomplete scene must be refused");
+        assert!(
+            err.to_lowercase().contains(expected),
+            "the refusal must name the missing element `{expected}`: {err}"
+        );
+    }
+}
+
+/// The baseline scene is defined by having **no** ripple — it is the scene capturable on the
+/// pre-change build, where the ripple does not exist. One mid-animation means the operator selected
+/// the wrong scene, and the figure would land in the wrong §B8 slot.
+#[test]
+fn a_baseline_scene_showing_a_ripple_is_refused() {
+    let facts = SceneFacts {
+        ripple_animating: true,
+        ..baseline_facts()
+    };
+    assert!(Scene::Baseline.check(&facts).is_err());
+}
+
+/// The full scene is the baseline plus a ripple mid-animation.
+#[test]
+fn the_full_scene_requires_a_ripple() {
+    let without = baseline_facts();
+    let err = Scene::Full
+        .check(&without)
+        .expect_err("the full scene without a ripple is the baseline scene");
+    assert!(
+        err.to_lowercase().contains("ripple"),
+        "the refusal must name the ripple: {err}"
+    );
+
+    let with = SceneFacts {
+        ripple_animating: true,
+        ..baseline_facts()
+    };
+    assert_eq!(Scene::Full.check(&with), Ok(()));
+}
+
+/// The full scene inherits every baseline requirement rather than checking the ripple alone — a
+/// ripple over an empty window is not the scene either.
+#[test]
+fn the_full_scene_still_requires_the_rest_of_the_baseline() {
+    let facts = SceneFacts {
+        worktrees: 3,
+        ripple_animating: true,
+        ..baseline_facts()
+    };
+    assert!(Scene::Full.check(&facts).is_err());
 }
