@@ -405,7 +405,6 @@ pub fn text_overflows<'a, M: 'a>(
     renderer: &mut iced::Renderer,
 ) -> Vec<Overflow> {
     use iced::advanced::Renderer as _;
-    use iced::advanced::Widget;
 
     let mut element = element;
     let mut tree = Tree::new(element.as_widget());
@@ -510,6 +509,103 @@ pub fn text_overflows<'a, M: 'a>(
                     }
                 }
             }
+        }
+    }
+
+    found
+}
+
+// --- Containment (BUG-001) ---------------------------------------------------------------------
+
+/// A child layout node that extends outside its parent's box.
+#[derive(Debug, Clone)]
+pub struct Escape {
+    pub parent_path: String,
+    pub child_path: String,
+    pub layer: Layer,
+    /// Which edge it escapes past, and by how far in pixels.
+    pub edge: &'static str,
+    pub overhang: f32,
+}
+
+/// Report every layout node laid out beyond the bounds of the node that owns it.
+///
+/// **Why this is a third gate rather than a fixture line.** `layout_snapshot.txt` already records
+/// every one of these boxes, so a violation is present in data the geometry gate holds — but a
+/// byte-compare fixture cannot report it. A fixture records whatever it is shown as correct, so a
+/// defect that predates it is regenerated into the expected value and becomes the baseline. A
+/// snapshot catches *changes*; a violated invariant is a *defect*, and only an assertion about the
+/// numbers can name it.
+///
+/// The motivating case is BUG-001: `material::Expand` reports a shrunken height to its parent while
+/// its child keeps full height, relying on a draw-time clip that does not take effect. The child
+/// paints over whatever moved up into the vacated space. That is invisible to the overflow gate,
+/// which compares widths only, and invisible to the fixture, which would simply record it.
+///
+/// Layers are checked separately: a widget-attached overlay is laid out against the window, not
+/// against the node it hangs off, so comparing across the two would report every overlay.
+///
+/// **Parked nodes are exempt, and the exemption is the invariant's own premise.** A node laid out
+/// entirely off the window cannot paint over anything, because there is nothing where it is.
+/// `material::NavigationDrawer` relies on this: its inactive child is translated by `-f32::MAX / 4`
+/// so the tree, node list and child list stay index-aligned without it occupying space
+/// (`navigation_drawer.rs:97`). Without the exemption that rail is reported in every sidebar state
+/// at an overhang of 8.5e37px, which is a sentinel rather than a measurement.
+///
+/// This does buy silence about content pushed off-screen accidentally, which is a real defect class
+/// — but a different one, and one the geometry fixture does catch as a change.
+pub fn escapes(records: &[LayoutRecord], tolerance: f32) -> Vec<Escape> {
+    let find = |layer: Layer, path: &[usize]| -> Option<&LayoutRecord> {
+        records
+            .iter()
+            .find(|r| r.layer == layer && r.path == path)
+    };
+
+    let window = Rectangle::with_size(WINDOW);
+    let on_window = |r: &LayoutRecord| -> bool {
+        r.x < window.width && r.y < window.height && r.x + r.width > 0.0 && r.y + r.height > 0.0
+    };
+
+    let mut found = Vec::new();
+
+    for child in records {
+        let Some((_, parent_path)) = child.path.split_last() else {
+            continue; // a root has nothing to escape from
+        };
+        let Some(parent) = find(child.layer, parent_path) else {
+            continue;
+        };
+        if !on_window(child) {
+            continue; // parked, not escaping
+        }
+
+        // Worst edge only: one node reported four times says no more than one node reported once,
+        // and the widest overhang is the one worth naming.
+        let edges = [
+            ("left", parent.x - child.x),
+            ("top", parent.y - child.y),
+            (
+                "right",
+                (child.x + child.width) - (parent.x + parent.width),
+            ),
+            (
+                "bottom",
+                (child.y + child.height) - (parent.y + parent.height),
+            ),
+        ];
+
+        if let Some((edge, overhang)) = edges
+            .into_iter()
+            .filter(|(_, over)| *over > tolerance)
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+        {
+            found.push(Escape {
+                parent_path: path_token(parent_path),
+                child_path: path_token(&child.path),
+                layer: child.layer,
+                edge,
+                overhang,
+            });
         }
     }
 
