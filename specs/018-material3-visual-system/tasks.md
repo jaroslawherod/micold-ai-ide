@@ -54,10 +54,18 @@ feature — every story reads token values from it", and it had no tasks at all.
   exist. Tested in `micold-core/tests/frame_probe.rs`; `micold-client/tests/frame_probe_glue.rs`
   keeps the forced-frame subscription unreachable on an ordinary launch, since it would otherwise
   hold the render loop awake and falsify SC-017 with every other gate still green (FR-039b)
+- [X] T000x The 20-worktree fixture the reference scene is built on: `scripts/reference-scene.sh`
+  (`mise run fixture`). Repeatability is the requirement, not convenience — SC-018 compares three
+  figures across a change that alters what the sidebar draws, so a scene hand-built twice is two
+  scenes and the difference lands in the figure without appearing in it. Also the fixture
+  `quickstart.md`'s Prerequisites asks for: all ten conventional types, with and without issue keys,
+  one untyped row, one long enough to ellipsize, one orphaned directory with a health tag. The
+  script verifies its own output and refuses to report success on a wrong row count (FR-039b)
 - [ ] T000z Before any token value changes, capture the frame-time figure for the **pre-change**
   build on the **baseline** reference scene of FR-039b — 20 worktrees in the sidebar, the sidebar
   expanded, one running terminal session, a context menu open over a dialog. **No ripple**: it does
-  not exist yet, which is precisely why the scene is split in two. Take it with
+  not exist yet, which is precisely why the scene is split in two. Build the repository with
+  `mise run fixture`, compose steps 2–4 by hand, then take it with
   `MICOLD_FRAME_PROBE=300 mise run run` and record the printed line in `quickstart.md` §B8, which
   also states what the figure does and does not cover. Reported for trend, not gating (FR-039c).
   **This cannot be done after T000f**: once the palette lands the pre-change build is gone, and

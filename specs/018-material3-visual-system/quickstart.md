@@ -19,7 +19,19 @@ mise run run        # cargo run -p micold-client
 ```
 
 A test repository with **at least a dozen worktrees** across several conventional-commit types
-(`feat/`, `fix/`, `chore/`, `docs/`…) — needed for the tag-color and sidebar-density checks.
+(`feat/`, `fix/`, `chore/`, `docs/`…) — needed for the tag-color and sidebar-density checks. Build
+it with:
+
+```sh
+mise run fixture                        # ~/micold-reference-scene
+mise run fixture -- /path/to/it --force # …or somewhere else, replacing what is there
+```
+
+That is the same 20-row scene §B8 measures against, so the manual checks and the frame-time figures
+are looking at identical rows: all ten types, with and without issue keys, one untyped row, one long
+enough to force ellipsis, and one orphaned directory carrying a health tag. Hand-building it twice
+would produce two different scenes, and the difference would land in the figure without appearing
+in it.
 
 ---
 
@@ -163,10 +175,13 @@ the build you measure first.
 
 *Baseline scene* — capturable on **both** builds:
 
-1. A repository with **20 worktrees** in the sidebar.
+1. A repository with **20 worktrees** in the sidebar. — `mise run fixture` (see Prerequisites).
 2. The sidebar **expanded**.
 3. **One running terminal session**.
 4. A **context menu open over a dialog**.
+
+Step 1 is the only part a script can build; 2–4 are composed in the running application. Compose
+them before starting the probe, and do not touch the window while it counts.
 
 *Full scene* — the baseline scene **plus a ripple mid-animation**. Post-change only.
 
