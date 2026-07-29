@@ -102,11 +102,16 @@ no project, and no git repository in scope.
 | Daemon started? | **no** — verified: daemon count unchanged across a 12s launch |
 | State written? | **no** — verified: launched with an isolated `HOME`/`XDG_CONFIG_HOME`/`XDG_DATA_HOME` in a directory outside any git repository. Nothing application-shaped was created: no `micold*` path, no JSON, no config or data directory. The only files written were `~/.cache/mesa_shader_cache` and `~/.cache/radv_builtin_shaders`, which the **GPU driver** writes for any Vulkan program — not the showcase's doing and not application state. |
 
-> **Still outstanding**: the *timing* half. SC-001's "under 30 seconds, one command, no setup" needs a
-> person naming a component in advance and running a clock on a machine that has never built this
-> project — the launch measured above used an already-compiled binary, so it says nothing about the
-> first-run experience. `showcase_isolation` holds the structural half on every build; this row needs a
-> human on a clean machine.
+> **Still outstanding**: the *timing* half — a person naming a component in advance, starting a clock,
+> and scrolling to it. `showcase_isolation` holds the structural half on every build.
+>
+> **Corrected 2026-07-29.** This note previously required "a machine that has never built this
+> project", and dismissed the measurement above for using an already-compiled binary. That is
+> stricter than SC-001, which starts its clock at *"from launching the showcase"* and defines a clean
+> machine as one with **no configuration** — no project, no repository, no settings — not one with no
+> build. Compiling this workspace takes minutes, so the stricter reading made the criterion
+> unsatisfiable by anyone, which is why this row sat unclosable rather than merely undone. A
+> pre-built binary is exactly what SC-001 intends; what is missing is only the stopwatch.
 
 ### B2 — SC-005: hover and pressed across the whole library, in one pass
 
