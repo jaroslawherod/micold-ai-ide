@@ -61,15 +61,19 @@ feature — every story reads token values from it", and it had no tasks at all.
   `quickstart.md`'s Prerequisites asks for: all ten conventional types, with and without issue keys,
   one untyped row, one long enough to ellipsize, one orphaned directory with a health tag. The
   script verifies its own output and refuses to report success on a wrong row count (FR-039b)
-- [ ] T000z Before any token value changes, capture the frame-time figure for the **pre-change**
+- [X] T000z Before any token value changes, capture the frame-time figure for the **pre-change**
   build on the **baseline** reference scene of FR-039b — 20 worktrees in the sidebar, the sidebar
   expanded, one running terminal session, a context menu open over a dialog. **No ripple**: it does
   not exist yet, which is precisely why the scene is split in two. Build the repository with
   `mise run fixture`, compose steps 2–4 by hand, then take it with
-  `MICOLD_FRAME_PROBE=300 mise run run` and record the printed line in `quickstart.md` §B8, which
-  also states what the figure does and does not cover. Reported for trend, not gating (FR-039c).
-  **This cannot be done after T000f**: once the palette lands the pre-change build is gone, and
-  SC-018 needs all three figures from the same machine (FR-039b, SC-018)
+  `MICOLD_FRAME_PROBE=300 MICOLD_FRAME_PROBE_SCENE=baseline mise run run`, which composes and
+  verifies the scene itself, and record the printed line in `quickstart.md` §B8 — which also states
+  what the figure does and does not cover. Reported for trend, not gating (FR-039c). **This cannot
+  be done after T000f**: once the palette lands the pre-change build is gone, and SC-018 needs all
+  three figures from the same machine (FR-039b, SC-018).
+  **Captured 2026-07-29** — `300 frames — mean 0.84 ms, p95 1.07 ms, max 1.40 ms`, three runs
+  recorded in §B8 with the noise floor (p95 moves < 0.02 ms run to run), so T076a's delta can be
+  told from variance
 
 ### Tests for Phase 0 (MANDATORY — write first, confirm they FAIL) ⚠️
 

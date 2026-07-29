@@ -185,24 +185,45 @@ them before starting the probe, and do not touch the window while it counts.
 
 *Full scene* — the baseline scene **plus a ripple mid-animation**. Post-change only.
 
-**How to take a figure.** Compose the scene, then run:
+**How to take a figure.** Build the repository with `mise run fixture`, then run:
 
 ```sh
-MICOLD_FRAME_PROBE=300 mise run run     # 300 counted frames after a 30-frame warm-up
-MICOLD_FRAME_PROBE=300:120 mise run run # …or state the warm-up explicitly
+MICOLD_FRAME_PROBE=300 MICOLD_FRAME_PROBE_SCENE=baseline mise run run
+MICOLD_FRAME_PROBE=300 MICOLD_FRAME_PROBE_SCENE=full     mise run run   # post-change only
 ```
 
-The probe drives the window continuously, discards the warm-up frames, and prints one line to
-stderr before exiting on its own:
+**The scene composes itself.** Naming a scene makes the application start the session, open the
+dialog and open the context menu at a fixed position, then *verify* the result before a single
+frame is counted. Nothing is clicked, so nothing differs between runs.
+
+That check is the point, not the convenience. "A context menu open over a dialog" is not
+reproducible by hand — opened where, over which dialog? — and a run against 19 worktrees or a
+dismissed dialog yields a figure indistinguishable from a good one. There is nothing in
+`300 frames — mean 0.84 ms` that says what it was measured against, so the mistake would surface
+only as an unexplained gap between slots. A scene that cannot be composed exits non-zero naming
+what is missing, and reports no figure at all:
 
 ```
-frame probe: 300 frames — mean 0.30 ms, p95 0.44 ms, max 0.51 ms
+frame probe: gave up composing the scene after 3000 frames.
+the window is not showing the Baseline reference scene:
+  - no terminal session is running; the scene needs one
+```
+
+The probe discards the warm-up, counts, prints one line to stderr and exits on its own:
+
+```
+frame probe: Baseline scene composed; measuring.
+frame probe: 300 frames — mean 0.84 ms, p95 1.07 ms, max 1.40 ms
 ```
 
 Paste that line whole into the slot below — all three figures must be written to the same
 precision or they cannot be compared at a glance, which is the only reason they are recorded
-together. A malformed value is refused before the window opens rather than starting an ordinary
-session that would be recorded as a measurement.
+together. `baseline` and `full` are each refused if the *other* one is on screen, so a figure
+cannot land in the wrong slot.
+
+**Use the same build profile for all three.** `mise run run` is a debug build, and a release build
+is several times faster — a figure from one is meaningless against a figure from the other. The
+slots below record which was used.
 
 **What the figure covers, and what it does not.** It is the CPU cost of *composing* a frame —
 building the widget tree from state. It is **not** present time: layout, draw and GPU work happen
@@ -215,15 +236,29 @@ elevation and shape resolution, and the extra widgets `FormField` introduces) an
 *draw* cost, which lands after composition. Read 2 → 3 with that in mind: it understates the full
 scene's true cost.
 
-- [ ] **1 — baseline, pre-change** (`tasks.md` T000z). Unobtainable once T000f lands.
+- [X] **1 — baseline, pre-change** (`tasks.md` T000z). Unobtainable once T000f lands. **Captured.**
+
+      Machine: AMD Ryzen 7 260 (16 threads) / Radeon 780M, Ubuntu 26.04, Wayland/GNOME, debug build
+      Date: 2026-07-29
+      Frame time: 300 frames — mean 0.84 ms, p95 1.07 ms, max 1.40 ms
+
+      Taken three times to establish the run-to-run spread, so a later delta can be told from
+      noise. `p95` is the figure to compare on — it barely moves:
+
+      | run | mean | p95 | max |
+      |-----|------|-----|-----|
+      | 1 | 0.80 ms | 1.08 ms | 1.42 ms |
+      | 2 | 0.87 ms | 1.08 ms | 1.24 ms |
+      | 3 | 0.84 ms | 1.07 ms | 1.40 ms |
+
+      **A change in `p95` below ~0.02 ms is noise on this machine.** `mean` varies by ~8% run to
+      run and `max` by ~15%, so neither should be read alone.
+
+- [ ] **2 — baseline, post-change** (T076a). Same machine, same profile, same scene as 1.
 
       Machine: ______________  Date: __________  Frame time: __________
 
-- [ ] **2 — baseline, post-change** (T076a). Same machine as 1.
-
-      Machine: ______________  Date: __________  Frame time: __________
-
-- [ ] **3 — full scene, post-change** (T076a). Same machine as 1.
+- [ ] **3 — full scene, post-change** (T076a). Same machine, same profile as 1.
 
       Machine: ______________  Date: __________  Frame time: __________
 

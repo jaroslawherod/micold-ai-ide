@@ -17,7 +17,10 @@ use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
 use micold_client::selection::{Anchor, SelectGranularity, Selection};
 use micold_core::env_include::{self, EnvIncludeOutcome};
-use micold_core::frame_probe::{FrameProbe, ProbeConfig, ENV_VAR as FRAME_PROBE_ENV};
+use micold_core::frame_probe::{
+    FrameProbe, ProbeConfig, Scene, SceneFacts, ENV_VAR as FRAME_PROBE_ENV,
+    SCENE_ENV_VAR as FRAME_PROBE_SCENE_ENV,
+};
 use micold_core::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
 use micold_core::protocol::grid::LineId;
@@ -196,6 +199,11 @@ struct App {
     ///
     /// `RefCell` because the samples are taken in `view`, which only ever gets `&App`.
     probe: Option<RefCell<FrameProbe>>,
+    /// Whether the reference scene has been composed and verified. Until it is, the probe records
+    /// nothing — frames spent building the scene are not frames of the scene.
+    scene_ready: bool,
+    /// Frames spent so far trying to compose the scene, against [`SCENE_COMPOSE_BUDGET`].
+    scene_frames: usize,
 }
 
 /// The measurement run this process was asked for, or `None` for an ordinary launch.
@@ -219,6 +227,97 @@ fn probe_config() -> Option<ProbeConfig> {
             }
         }
     })
+}
+
+/// The reference scene this process was asked to compose and measure, or `None`.
+///
+/// Parsed once and cached, for the same reason as [`probe_config`]: it is read from several places
+/// and a scene that changed shape between them would be a measurement of nothing in particular.
+fn probe_scene() -> Option<Scene> {
+    static SCENE: OnceLock<Option<Scene>> = OnceLock::new();
+    *SCENE.get_or_init(|| {
+        let raw = std::env::var(FRAME_PROBE_SCENE_ENV).ok();
+        match Scene::from_env_value(raw.as_deref()) {
+            Ok(scene) => scene,
+            Err(message) => {
+                eprintln!("{message}");
+                std::process::exit(2);
+            }
+        }
+    })
+}
+
+/// Where the composed context menu is opened. Fixed, because "a context menu open over a dialog"
+/// has to mean the same thing in all three of §B8's figures — a menu opened by hand lands somewhere
+/// slightly different every time, and the difference is in the figure without being in the record.
+const SCENE_MENU_AT: (u16, u16) = (400, 300);
+
+/// How many frames the scene gets to compose before the run gives up.
+///
+/// Generous: it covers spawning the daemon, connecting, creating a session and letting the process
+/// come up. Bounded because the alternative is a probe that sits forever in front of a half-composed
+/// window with no output at all.
+const SCENE_COMPOSE_BUDGET: usize = 3_000;
+
+/// What the window is currently showing, for [`Scene::check`].
+///
+/// Reads state and counts; decides nothing. Every judgement about whether these add up to the
+/// reference scene lives in `micold_core::frame_probe`, under test.
+fn scene_facts(app: &App) -> SceneFacts {
+    let running_sessions = app
+        .core
+        .workspace
+        .active
+        .as_ref()
+        .map(|p| app.core.workspace.running_session_count(p))
+        .unwrap_or(0);
+    SceneFacts {
+        worktrees: app.core.worktrees.len(),
+        running_sessions,
+        dialog_open: app.core.overlay != Overlay::None,
+        context_menu_open: app.core.terminal_context_menu.is_some(),
+        // No ripple exists yet — it arrives with this feature's own tasks. Until then the `full`
+        // scene cannot be composed, and `Scene::check` refuses it rather than reporting a figure
+        // for a scene that is really the baseline.
+        ripple_animating: false,
+    }
+}
+
+/// Drive the window toward the reference scene (FR-039b).
+///
+/// Called after every update while a scene run is in flight. Each step is idempotent except the
+/// session create, which is guarded on there being neither a running session nor one already in
+/// flight — without that guard this would create a new session on every frame.
+fn compose_scene(app: &mut App) -> Task<Message> {
+    let facts = scene_facts(app);
+    let mut steps = Vec::new();
+
+    // The three elements are composed independently. Sequencing them behind the session — the one
+    // step that needs the daemon, and by far the slowest — meant a daemon that never connected
+    // silently blocked the dialog and the menu too, and the run gave up reporting all three missing
+    // when only one of them was actually stuck.
+    if facts.running_sessions == 0 {
+        let creating = app
+            .pending_ops
+            .values()
+            .any(|op| matches!(op, PendingOp::CreateSession));
+        // Guarded, unlike the other two: a session create is not idempotent, and an unguarded one
+        // here would start a fresh session on every frame.
+        if !creating && app.daemon.is_some() {
+            steps.push(Task::done(Message::SessionStartRequested {
+                location: SessionLocation::Default,
+            }));
+        }
+    }
+    if !facts.dialog_open {
+        steps.push(Task::done(Message::AboutOpened));
+    }
+    if !facts.context_menu_open {
+        let (x, y) = SCENE_MENU_AT;
+        steps.push(Task::done(Message::TerminalContextMenuOpened { x, y }));
+    }
+
+    Task::batch(steps)
 }
 
 /// Report the completed run and end the process (feature 018, FR-039b).
@@ -433,6 +532,8 @@ fn boot() -> (App, Task<Message>) {
             next_req: 0,
             pending_ops: HashMap::new(),
             probe: probe_config().map(|config| RefCell::new(config.probe())),
+            scene_ready: false,
+            scene_frames: 0,
         },
         // Ask for the initial window size up front: `resize_events` only fires on *changes*, so
         // without this the first context menu before any resize would have nothing to clamp
@@ -530,7 +631,31 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
         };
     }
 
-    task
+    let Some(scene) = probe_scene() else {
+        return task;
+    };
+    // A scene run (FR-039b). Drive the window toward the scene, and do not let the probe count a
+    // single frame until the scene it claims to be measuring is actually the one on screen.
+    if app.scene_ready {
+        return task;
+    }
+    app.scene_frames += 1;
+    if scene.check(&scene_facts(app)).is_ok() {
+        app.scene_ready = true;
+        eprintln!("frame probe: {scene:?} scene composed; measuring.");
+        return task;
+    }
+    if app.scene_frames > SCENE_COMPOSE_BUDGET {
+        // Loud, and with the reason: an unattended run that quietly measured a half-composed window
+        // would produce a figure that looks exactly like a good one.
+        let why = scene
+            .check(&scene_facts(app))
+            .expect_err("the budget is only exceeded while the check is failing");
+        eprintln!("frame probe: gave up composing the scene after {SCENE_COMPOSE_BUDGET} frames.");
+        eprintln!("{why}");
+        std::process::exit(3);
+    }
+    Task::batch([task, compose_scene(app)])
 }
 
 /// Snapshot the currently open overlay (and its draft) so it can be rendered while it fades out.
@@ -1827,6 +1952,11 @@ fn view(app: &App) -> iced::Element<'_, Message> {
     let Some(probe) = &app.probe else {
         return render(app);
     };
+    // A scene run does not start counting until the scene is verified composed — frames spent
+    // building it are not frames of it.
+    if probe_scene().is_some() && !app.scene_ready {
+        return render(app);
+    }
     // A measurement run (FR-039b). Time the composition of this frame, and end the process once the
     // run has the frames it asked for.
     let started = Instant::now();
@@ -2835,6 +2965,8 @@ mod tests {
             next_req: 0,
             pending_ops: HashMap::new(),
             probe: None,
+            scene_ready: false,
+            scene_frames: 0,
         };
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
@@ -2875,6 +3007,8 @@ mod tests {
             next_req: 0,
             pending_ops: HashMap::new(),
             probe: None,
+            scene_ready: false,
+            scene_frames: 0,
         };
         assert_eq!(app.last_grid, None);
 
@@ -2925,6 +3059,8 @@ mod tests {
             next_req: 0,
             pending_ops: HashMap::new(),
             probe: None,
+            scene_ready: false,
+            scene_frames: 0,
         }
     }
 
@@ -3240,6 +3376,8 @@ mod tests {
             next_req: 0,
             pending_ops: HashMap::new(),
             probe: None,
+            scene_ready: false,
+            scene_frames: 0,
         };
 
         assert_eq!(connection_status(&app), ConnectionStatus::Connected);

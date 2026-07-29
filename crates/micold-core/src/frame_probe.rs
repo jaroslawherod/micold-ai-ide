@@ -152,6 +152,126 @@ impl ProbeConfig {
     }
 }
 
+/// Worktrees the reference scene is defined over (FR-039b).
+pub const REFERENCE_WORKTREES: usize = 20;
+
+/// The environment variable naming which reference scene to compose and measure.
+pub const SCENE_ENV_VAR: &str = "MICOLD_FRAME_PROBE_SCENE";
+
+/// Which of FR-039b's two reference scenes a run is measuring.
+///
+/// The scenes exist as a pair because the ripple this feature introduces cannot exist on the build
+/// measured first: [`Baseline`](Self::Baseline) is capturable on both builds and is the like-for-like
+/// comparison SC-018 turns on; [`Full`](Self::Full) is the baseline plus a ripple and is post-change
+/// only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scene {
+    /// 20 worktrees, sidebar expanded, one running session, a context menu over a dialog. No ripple.
+    Baseline,
+    /// The baseline scene plus a ripple mid-animation.
+    Full,
+}
+
+/// What the application observes about the scene actually on screen.
+///
+/// Gathered by the binary from live state and handed here to be judged, so the rule for "is this the
+/// reference scene" is testable rather than an `if` buried in render glue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SceneFacts {
+    /// Worktree rows the sidebar is showing.
+    pub worktrees: usize,
+    /// Sessions currently running.
+    pub running_sessions: usize,
+    /// Whether a modal dialog is open.
+    pub dialog_open: bool,
+    /// Whether a context menu is open.
+    pub context_menu_open: bool,
+    /// Whether a ripple is mid-animation.
+    pub ripple_animating: bool,
+}
+
+impl Scene {
+    /// Read the scene from [`SCENE_ENV_VAR`]'s value. `Ok(None)` means no scene was named.
+    ///
+    /// An unrecognised name is refused rather than falling back to "no scene", which would measure
+    /// an uncomposed window and record it as the reference scene.
+    pub fn from_env_value(raw: Option<&str>) -> Result<Option<Self>, String> {
+        let Some(raw) = raw else {
+            return Ok(None);
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Ok(None);
+        }
+        match trimmed.to_ascii_lowercase().as_str() {
+            "baseline" => Ok(Some(Scene::Baseline)),
+            "full" => Ok(Some(Scene::Full)),
+            _ => Err(format!(
+                "{SCENE_ENV_VAR}=\"{raw}\" is not a reference scene. Valid scenes are `baseline` \
+                 (capturable on both builds — this is the comparison SC-018 turns on) and `full` \
+                 (the baseline plus a ripple, post-change only)."
+            )),
+        }
+    }
+
+    /// Whether the scene on screen is the one this run claims to be measuring.
+    ///
+    /// This is the check that makes three figures comparable. Without it a run against 19 worktrees,
+    /// or with the dialog already dismissed, produces a figure indistinguishable from a good one —
+    /// there is nothing in `300 frames — mean 0.30 ms` that says what it was measured against, and
+    /// the error would surface only as an unexplained gap between slots.
+    pub fn check(&self, facts: &SceneFacts) -> Result<(), String> {
+        let mut wrong = Vec::new();
+
+        if facts.worktrees != REFERENCE_WORKTREES {
+            wrong.push(format!(
+                "the sidebar shows {} worktrees, but the reference scene is {REFERENCE_WORKTREES} \
+                 (build it with `mise run fixture`)",
+                facts.worktrees
+            ));
+        }
+        if facts.running_sessions == 0 {
+            wrong.push("no terminal session is running; the scene needs one".to_string());
+        }
+        if !facts.dialog_open {
+            wrong.push("no dialog is open".to_string());
+        }
+        if !facts.context_menu_open {
+            wrong.push("no context menu is open".to_string());
+        }
+
+        match self {
+            // The baseline scene is *defined* by having no ripple — it is what the pre-change build
+            // can produce. One here means the wrong scene was selected, and the figure would be
+            // recorded in the wrong §B8 slot.
+            Scene::Baseline if facts.ripple_animating => {
+                wrong.push(
+                    "a ripple is animating, but the baseline scene has none — did you mean \
+                     `full`?"
+                        .to_string(),
+                );
+            }
+            Scene::Full if !facts.ripple_animating => {
+                wrong.push(
+                    "no ripple is animating; the full scene is the baseline plus a ripple \
+                     mid-animation, and it exists only on the post-change build"
+                        .to_string(),
+                );
+            }
+            _ => {}
+        }
+
+        if wrong.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "the window is not showing the {self:?} reference scene:\n  - {}",
+                wrong.join("\n  - ")
+            ))
+        }
+    }
+}
+
 /// Accumulates per-frame durations and summarises them.
 ///
 /// ```
