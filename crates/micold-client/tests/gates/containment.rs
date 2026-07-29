@@ -12,12 +12,20 @@
 //! its child keeps its full height, relying on a draw-time clip that does not take effect, so the
 //! child paints over whatever moved up. Vertical, structural, and present in the layout tree — one
 //! gate short of being caught by all three.
+//!
+//! **Compiled into the `layout_snapshot` binary rather than its own** (SC-006). Cargo makes one
+//! test binary per file directly under `tests/`, and each binary is its own process — so a
+//! `OnceLock` cache cannot cross between them. Standing alone, this gate re-resolved the same nine
+//! covered states `layout_snapshot` had already resolved, at a cost of ~6s for work that was
+//! already done. Living under `tests/gates/` keeps it a separate file without making it a separate
+//! process, so `cached_records` serves both.
+//!
+//! It remains a distinct gate: separate tests, separate failures, and it asserts about the records
+//! rather than comparing them to the fixture.
 
-mod support;
-
+use crate::support::covered_states::{self, covered_states};
+use crate::support::layout as lay;
 use micold_core::theme::ColorScheme;
-use support::covered_states::{self, covered_states};
-use support::layout as lay;
 
 /// The scheme the geometry fixture is recorded in. Containment is a structural property, so one
 /// scheme establishes it; the dark pass exists for colour, which this test does not read.
@@ -249,7 +257,7 @@ fn the_check_reports_an_escape_when_one_exists() {
 fn the_recorded_escapes_are_the_accordion_reveal() {
     let escaping_nodes = |filter_open: bool| -> Vec<String> {
         let mut state = micold_client::app::State::default();
-        state.workspace = support::workspace_with(vec![("/fixture/project", vec![])]);
+        state.workspace = crate::support::workspace_with(vec![("/fixture/project", vec![])]);
         state.workspace.active = state.workspace.projects.first().map(|p| p.path.clone());
         state.sidebar_width = 260;
         state.sidebar_filter_open = filter_open;

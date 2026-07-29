@@ -33,6 +33,15 @@ const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 // Registered in exactly one place: `tests/support/covered_states.rs` (FR-016).
 use support::covered_states::covered_states;
 
+// --- The containment gate (BUG-001) -------------------------------------------------------------
+
+// A separate gate sharing this binary's process, and therefore its record cache. Cargo builds one
+// binary per file directly under `tests/`, so a file there cannot reach this one's `OnceLock` and
+// would re-resolve all nine covered states — ~6s to recompute what is already in memory. See the
+// module's own documentation for what it asserts.
+#[path = "gates/containment.rs"]
+mod containment;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).
