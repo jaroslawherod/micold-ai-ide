@@ -287,6 +287,153 @@ pub fn records_for(
     resolve(element, renderer)
 }
 
+// --- Mid-reveal resolution (BUG-001) -----------------------------------------------------------
+
+/// A covered state pinned partway through an animation.
+///
+/// Separate from [`CoveredState`] on purpose. The geometry fixture deliberately does not record
+/// mid-animation geometry (T030 names it as an excluded boundary), and it should not start: a
+/// snapshot of a frame partway through a reveal would churn on any change to a duration or an
+/// easing curve, which is motion's business rather than layout's. These states exist to be asserted
+/// *about* — by the containment invariant — not to be recorded.
+pub struct RevealingState {
+    pub name: &'static str,
+    /// The state before the transition begins, with the animated thing closed.
+    pub build: fn() -> StateUnderTest,
+    /// Opens it. Applied after the tree has settled closed, so the track has somewhere to travel.
+    pub toward: fn(&mut micold_client::app::State),
+    /// Redraw frames to pump after the change. See [`resolve_revealing`] for what a frame is worth.
+    pub frames: usize,
+    /// The fixture path of the node doing the revealing — the one whose height is animated.
+    ///
+    /// Named rather than discovered so that "is this pinned mid-reveal?" and "does it escape?" are
+    /// two independent questions. Deriving the first from the second would make a *fixed* `Expand`
+    /// — which escapes nothing — report as a mis-configured pin instead of as a fix.
+    pub node: &'static str,
+    /// What fraction of its *fully open* height the revealing node should stand at, as a check on
+    /// `frames`. Progress is not observable from outside the widget, so this is the proxy.
+    ///
+    /// Measured against the open height rather than against the child's, because the child's height
+    /// is exactly what BUG-001 gets wrong: with the defect the child stays full size, and with it
+    /// fixed the child is clipped to the parent — so that ratio reads 1.0 on fixed code at every
+    /// moment and cannot tell a settled reveal from a running one. The open height is the same
+    /// number either way.
+    pub expect_between: (f32, f32),
+}
+
+/// Resolve a state partway through its reveal.
+///
+/// **Why this is deterministic**, despite sounding like it depends on timing: a `Progress` advances
+/// by a fixed step per redraw rather than by elapsed wall-clock time (`cdk/motion.rs` — "A track
+/// advances by a fixed amount per redraw ... so a transition's real duration is only nominal").
+/// `step_for(90ms)` is `16/90 ≈ 0.1778`, so frame *n* lands at exactly `0.1778n` on every machine.
+/// The `Instant` inside the redraw event is never read — `Progress::on_event` matches only the
+/// variant — so nothing here reads a clock.
+///
+/// The sequence matters. The tree is built from the *closed* element so each track mounts settled
+/// at zero (`Motion::initial`); mounting it open would rest it at one, with nothing to animate.
+/// Then the state is opened, the tree is diffed onto the new element — which preserves the track,
+/// since the tag is unchanged — and only then do frames advance it.
+pub fn resolve_revealing(
+    revealing: &RevealingState,
+    renderer: &iced::Renderer,
+    scheme: micold_core::theme::ColorScheme,
+) -> Vec<LayoutRecord> {
+    use iced::advanced::clipboard;
+    use iced::advanced::mouse;
+    use iced::advanced::Shell;
+
+    let mut under = (revealing.build)();
+    under.state.theme_pref = match scheme {
+        micold_core::theme::ColorScheme::Light => micold_core::theme::ThemePreference::Light,
+        micold_core::theme::ColorScheme::Dark => micold_core::theme::ThemePreference::Dark,
+    };
+
+    let limits = layout::Limits::new(Size::ZERO, WINDOW);
+    let viewport = Rectangle::with_size(WINDOW);
+
+    // Settle closed. The element is dropped before the state is mutated — it borrows it — but the
+    // tree outlives it and carries the tracks.
+    let mut tree = {
+        let element = view_of(&under);
+        Tree::new(element.as_widget())
+    };
+
+    (revealing.toward)(&mut under.state);
+
+    let mut element = view_of(&under);
+    tree.diff(element.as_widget());
+
+    let mut messages = Vec::new();
+    let mut clipboard = clipboard::Null;
+    let event = iced::Event::Window(iced::window::Event::RedrawRequested(
+        std::time::Instant::now(),
+    ));
+
+    let mut node = element
+        .as_widget_mut()
+        .layout(&mut tree, renderer, &limits);
+
+    for _ in 0..revealing.frames {
+        let mut shell = Shell::new(&mut messages);
+        element.as_widget_mut().update(
+            &mut tree,
+            &event,
+            Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            renderer,
+            &mut clipboard,
+            &mut shell,
+            &viewport,
+        );
+        node = element
+            .as_widget_mut()
+            .layout(&mut tree, renderer, &limits);
+    }
+
+    walk(Layout::new(&node), Layer::Base)
+}
+
+/// Resolve the same state with the reveal already finished — the reference [`RevealingState`]'s
+/// `expect_between` is measured against.
+///
+/// No frames are pumped: a track mounted at its target rests there (`Motion::initial`), which is
+/// the same reason a dialog built already-open does not animate into existence.
+pub fn resolve_revealed(
+    revealing: &RevealingState,
+    renderer: &iced::Renderer,
+    scheme: micold_core::theme::ColorScheme,
+) -> Vec<LayoutRecord> {
+    let mut under = (revealing.build)();
+    under.state.theme_pref = match scheme {
+        micold_core::theme::ColorScheme::Light => micold_core::theme::ThemePreference::Light,
+        micold_core::theme::ColorScheme::Dark => micold_core::theme::ThemePreference::Dark,
+    };
+    (revealing.toward)(&mut under.state);
+
+    let mut element = view_of(&under);
+    let mut tree = Tree::new(element.as_widget());
+    let limits = layout::Limits::new(Size::ZERO, WINDOW);
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, renderer, &limits);
+
+    walk(Layout::new(&node), Layer::Base)
+}
+
+/// `ui::view` with the arguments every covered state passes.
+fn view_of(under: &StateUnderTest) -> Element<'_, micold_client::app::Message> {
+    micold_client::ui::view(
+        &under.state,
+        None,
+        None,
+        0,
+        None,
+        &micold_core::env_include::EnvIncludeOutcome::Disabled,
+        &under.connection,
+    )
+}
+
 /// Find the anchor covering a path, if any — used to name an element in a failure (FR-004).
 pub fn anchor_for<'a>(anchors: &'a [Anchor], path: &[usize]) -> Option<&'a Anchor> {
     anchors.iter().find(|a| a.path == path)

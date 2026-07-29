@@ -16,7 +16,7 @@
 mod support;
 
 use micold_core::theme::ColorScheme;
-use support::covered_states::covered_states;
+use support::covered_states::{self, covered_states};
 use support::layout as lay;
 
 /// The scheme the geometry fixture is recorded in. Containment is a structural property, so one
@@ -45,11 +45,10 @@ const TOLERANCE: f32 = 0.5;
 /// defect stops showing. The staleness assertion below requires every entry to keep firing, so the
 /// fix deletes these rather than leaving them as folklore.
 ///
-/// **What this does not cover.** At `progress` 0 the reveal does not paint at all (`Expand::draw`
-/// returns early below `HIDDEN`), so what is caught here is the defect's structural cause at rest,
-/// not the overlap a user sees mid-reveal. Catching that needs a covered state pinned at
-/// `0 < progress < 1`, which means pumping redraw events through the tree — the apparatus resolves
-/// one settled frame and cannot currently do it.
+/// **These seven are the cause at rest, not the visible defect.** At `progress` 0 the reveal does
+/// not paint at all (`Expand::draw` returns early below `HIDDEN`), so nothing overlaps yet. The
+/// overlap a user actually meets is covered separately by `the_reveal_paints_over_what_moved_up`,
+/// which pins the panel mid-reveal.
 const KNOWN_ESCAPES: &[(&str, &str)] = &[
     ("main-shell-sidebar-expanded", "0/0/0/2/0/0/0/1/0"),
     ("add-worktree-dialog-new-branch", "0/0/0/2/0/0/0/1/0"),
@@ -111,6 +110,95 @@ fn no_layout_node_escapes_its_parent() {
         unexpected.len(),
         unexpected.join("\n  "),
     );
+}
+
+/// BUG-001 as a user meets it: partway through the reveal, where it actually paints.
+///
+/// The settled states catch the defect's *cause* — a full-height child inside a zero-height
+/// `Expand` — but at `progress` 0 nothing is drawn, so no one sees it. This pins the sidebar's
+/// filter panel two frames into its 90ms reveal, which is past `Expand::draw`'s early return and
+/// still well short of the end. Here the child is both oversized *and* painting, which is the
+/// defect as reported.
+///
+/// Deterministic despite pinning an animation: a track steps a fixed amount per redraw rather than
+/// by elapsed time, so frame 2 is frame 2 on every machine (`cdk/motion.rs`).
+///
+/// **This is expected to fail once `Expand` is fixed, and that is the point.** The registered
+/// state is itself the record — there is no exemption list to keep in step — so the fix deletes the
+/// entry in `revealing_states` and this test with it.
+///
+/// Both of its assertions were checked against a failing run before being trusted: pinning at frame
+/// 0 fails the first ("at 0.000 of its open height"), and applying BUG-001's own candidate fix to
+/// `Expand::layout` fails the second ("no longer lays its child outside itself") while the pin
+/// still reads 0.356. That second probe is why `expect_between` is measured against the fully open
+/// height rather than against the child — with the defect fixed the child is clipped to its parent,
+/// so the child-relative ratio reads 1.0 at every moment and cannot tell a settled reveal from a
+/// running one. It would have misreported a fix as a broken pin.
+#[test]
+fn the_reveal_paints_over_what_moved_up() {
+    let renderer = lay::renderer();
+
+    for revealing in covered_states::revealing_states() {
+        let records = lay::resolve_revealing(revealing, &renderer, RECORDED_SCHEME);
+        let escapes = lay::escapes(&records, TOLERANCE);
+
+        // Asked of the named node, not of whatever escaped — so a fixed `Expand`, which escapes
+        // nothing, still answers this and fails the *next* assertion rather than this one.
+        let at = |path: &str| records.iter().find(|r| lay::path_token(&r.path) == path);
+        let node = at(revealing.node).unwrap_or_else(|| {
+            panic!(
+                "{:?} names {} as its revealing node, and no such node was resolved. The tree \
+                 changed shape; re-point it against layout_snapshot.txt.",
+                revealing.name, revealing.node,
+            )
+        });
+        let revealed = lay::resolve_revealed(revealing, &renderer, RECORDED_SCHEME);
+        let open = revealed
+            .iter()
+            .find(|r| lay::path_token(&r.path) == revealing.node)
+            .unwrap_or_else(|| {
+                panic!(
+                    "{:?}: {} is not present once the reveal has finished",
+                    revealing.name, revealing.node,
+                )
+            });
+
+        let (low, high) = revealing.expect_between;
+        let fraction = node.height / open.height;
+        assert!(
+            fraction > low && fraction < high,
+            "{:?} resolved with {} at {:.3} of its fully open height, outside the expected {:.2}..{:.2}. \
+             not pinned mid-reveal, so whatever this test reports is about some other moment. \
+             Check `frames` against the reveal's duration.",
+            revealing.name,
+            revealing.node,
+            fraction,
+            low,
+            high,
+        );
+
+        assert!(
+            escapes.iter().any(|e| e.parent_path == revealing.node),
+            "{:?} is pinned mid-reveal at {:.3} of its open height, and {} no longer lays its child \
+             outside itself. That is BUG-001 fixed — delete this state and its KNOWN_ESCAPES \
+             entries. (Escapes seen elsewhere: {:?})",
+            revealing.name,
+            fraction,
+            revealing.node,
+            escapes.iter().map(|e| e.child_path.clone()).collect::<Vec<_>>(),
+        );
+
+        for escape in &escapes {
+            eprintln!(
+                "KNOWN_REVEAL_ESCAPES still fires: {}: {} escapes {} by {:.1}px past its {} edge",
+                revealing.name,
+                escape.child_path,
+                escape.parent_path,
+                escape.overhang,
+                escape.edge,
+            );
+        }
+    }
 }
 
 /// The check must be able to *see* an escape, or its silence means nothing.

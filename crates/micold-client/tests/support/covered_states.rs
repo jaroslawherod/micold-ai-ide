@@ -4,6 +4,10 @@
 //! second registration site would make FR-016's "one place" claim false, which is why
 //! `tests/layout_coverage_registry.rs` scans for one.
 //!
+//! [`revealing_states`] is a second *list*, not a second *site*: states pinned partway through an
+//! animation, which the geometry fixture deliberately does not record. Both live in this file, and
+//! the requirement is that this file is the only one either kind is declared in.
+//!
 //! Every state is built from fixed, invented data (FR-007). Nothing here reads the developer's
 //! worktrees, configuration or session store — a fixture that recorded the author's own workspace
 //! would be unreproducible anywhere else, including on the same machine tomorrow.
@@ -14,7 +18,7 @@ use micold_client::app::{BranchSource, Overlay, State, WorktreeForm};
 use micold_client::ui::ConnectionStatus;
 use micold_core::worktree::{Worktree, WorktreeStatus};
 
-use super::layout::{Anchor, CoveredState, StateUnderTest};
+use super::layout::{Anchor, CoveredState, RevealingState, StateUnderTest};
 
 /// A fixed project path. Never canonicalised against a real directory.
 const PROJECT: &str = "/fixture/project";
@@ -150,6 +154,32 @@ pub fn covered_states() -> &'static [CoveredState] {
                 StateUnderTest::new(state)
             },
             anchors: &[Anchor { name: "dialog.root", path: &[] }],
+        },
+    ]
+}
+
+/// States pinned partway through a reveal. **The second registration site, and deliberately so.**
+///
+/// These are not covered states and must not become them: the geometry fixture excludes
+/// mid-animation geometry (T030), and recording a frame partway through a reveal would churn the
+/// fixture on any change to a duration or an easing curve — motion's business, not layout's. They
+/// exist to be asserted *about*, by the containment invariant, and are recorded nowhere.
+///
+/// FR-016's "one place" is about where a *covered state* is declared, and this file is still that
+/// place. A registry scan (T029) should expect both lists here and neither elsewhere.
+pub fn revealing_states() -> &'static [RevealingState] {
+    &[
+        // BUG-001: the reveal that paints over what moved up. Two frames of a 90ms reveal at
+        // ~0.178 per frame lands at ~0.356 — far enough in that `Expand::draw` is past its
+        // early-return, and far enough from the end that the parent is still visibly short of
+        // its child.
+        RevealingState {
+            name: "sidebar-filter-panel-mid-reveal",
+            build: || StateUnderTest::new(with_project()),
+            toward: |state| state.sidebar_filter_open = true,
+            frames: 2,
+            node: "0/0/0/2/0/0/0/1",
+            expect_between: (0.2, 0.5),
         },
     ]
 }
