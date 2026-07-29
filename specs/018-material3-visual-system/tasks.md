@@ -47,13 +47,21 @@ feature — every story reads token values from it", and it had no tasks at all.
 
 ### The one task that cannot be deferred ⏱️
 
+- [X] T000y Frame-time instrumentation, so T000z has something to measure with. `micold-core`'s
+  `frame_probe` module (warm-up discard, nearest-rank p95, the reported line) driven by
+  `MICOLD_FRAME_PROBE=<frames>[:<warm_up>]` in the client. Nothing in the workspace could produce a
+  frame-time figure before this, so FR-039b/FR-039c/SC-018 rested on a capability that did not
+  exist. Tested in `micold-core/tests/frame_probe.rs`; `micold-client/tests/frame_probe_glue.rs`
+  keeps the forced-frame subscription unreachable on an ordinary launch, since it would otherwise
+  hold the render loop awake and falsify SC-017 with every other gate still green (FR-039b)
 - [ ] T000z Before any token value changes, capture the frame-time figure for the **pre-change**
   build on the **baseline** reference scene of FR-039b — 20 worktrees in the sidebar, the sidebar
   expanded, one running terminal session, a context menu open over a dialog. **No ripple**: it does
-  not exist yet, which is precisely why the scene is split in two. Record it in `quickstart.md` §B8.
-  Reported for trend, not gating (FR-039c). **This cannot be done after T000f**: once the palette
-  lands the pre-change build is gone, and SC-018 needs all three figures from the same machine
-  (FR-039b, SC-018)
+  not exist yet, which is precisely why the scene is split in two. Take it with
+  `MICOLD_FRAME_PROBE=300 mise run run` and record the printed line in `quickstart.md` §B8, which
+  also states what the figure does and does not cover. Reported for trend, not gating (FR-039c).
+  **This cannot be done after T000f**: once the palette lands the pre-change build is gone, and
+  SC-018 needs all three figures from the same machine (FR-039b, SC-018)
 
 ### Tests for Phase 0 (MANDATORY — write first, confirm they FAIL) ⚠️
 

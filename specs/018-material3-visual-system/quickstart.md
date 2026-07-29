@@ -170,6 +170,36 @@ the build you measure first.
 
 *Full scene* — the baseline scene **plus a ripple mid-animation**. Post-change only.
 
+**How to take a figure.** Compose the scene, then run:
+
+```sh
+MICOLD_FRAME_PROBE=300 mise run run     # 300 counted frames after a 30-frame warm-up
+MICOLD_FRAME_PROBE=300:120 mise run run # …or state the warm-up explicitly
+```
+
+The probe drives the window continuously, discards the warm-up frames, and prints one line to
+stderr before exiting on its own:
+
+```
+frame probe: 300 frames — mean 0.30 ms, p95 0.44 ms, max 0.51 ms
+```
+
+Paste that line whole into the slot below — all three figures must be written to the same
+precision or they cannot be compared at a glance, which is the only reason they are recorded
+together. A malformed value is refused before the window opens rather than starting an ordinary
+session that would be recorded as a measurement.
+
+**What the figure covers, and what it does not.** It is the CPU cost of *composing* a frame —
+building the widget tree from state. It is **not** present time: layout, draw and GPU work happen
+after the measured span and are not in the number. The alternative — timing the interval between
+presented frames — measures the display's refresh rate rather than the scene for anything that
+renders faster than one vsync, which is every scene worth comparing here.
+
+So this figure is sensitive to what this feature mostly changes (token lookups, type roles,
+elevation and shape resolution, and the extra widgets `FormField` introduces) and blind to ripple
+*draw* cost, which lands after composition. Read 2 → 3 with that in mind: it understates the full
+scene's true cost.
+
 - [ ] **1 — baseline, pre-change** (`tasks.md` T000z). Unobtainable once T000f lands.
 
       Machine: ______________  Date: __________  Frame time: __________

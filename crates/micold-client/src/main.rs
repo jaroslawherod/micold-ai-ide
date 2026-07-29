@@ -17,6 +17,7 @@ use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
 use micold_client::selection::{Anchor, SelectGranularity, Selection};
 use micold_core::env_include::{self, EnvIncludeOutcome};
+use micold_core::frame_probe::{FrameProbe, ProbeConfig, ENV_VAR as FRAME_PROBE_ENV};
 use micold_core::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
 use micold_core::protocol::grid::LineId;
@@ -34,9 +35,11 @@ use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::theme::{observe_system_scheme, SystemScheme};
 use micold_core::worktree::Worktree;
 use micold_core::worktree::{BranchOrigin, CreateMode};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 /// How often the OS light/dark preference is polled while the window has input focus
 /// (research R4).
@@ -186,6 +189,58 @@ struct App {
     /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
     /// submission suppressed, and an in-flight op resolved as *unknown* if the connection drops.
     pending_ops: HashMap<u64, PendingOp>,
+    /// The frame-time measurement run, when one was asked for (feature 018, FR-039b — T000z/T076a).
+    /// `None` for every ordinary launch, which is what keeps this out of the way of the running
+    /// application: with no run configured, [`view`] does not read the clock and [`subscription`]
+    /// does not ask for frames.
+    ///
+    /// `RefCell` because the samples are taken in `view`, which only ever gets `&App`.
+    probe: Option<RefCell<FrameProbe>>,
+}
+
+/// The measurement run this process was asked for, or `None` for an ordinary launch.
+///
+/// Parsed once and cached — the value is read from `main`, `boot` and `subscription`, and a run
+/// that changed shape between them would be a measurement of nothing in particular. Every decision
+/// about what the environment means lives in [`ProbeConfig::from_env_value`], under test in
+/// `micold-core/tests/frame_probe.rs`; this only reads the variable and reports a refusal.
+fn probe_config() -> Option<ProbeConfig> {
+    static CONFIG: OnceLock<Option<ProbeConfig>> = OnceLock::new();
+    *CONFIG.get_or_init(|| {
+        let raw = std::env::var(FRAME_PROBE_ENV).ok();
+        match ProbeConfig::from_env_value(raw.as_deref()) {
+            Ok(config) => config,
+            // Refused rather than ignored: a typo here would otherwise record an ordinary session
+            // as a measurement run, and the resulting figure would be wrong in a way nothing in
+            // the recorded procedure could catch.
+            Err(message) => {
+                eprintln!("{message}");
+                std::process::exit(2);
+            }
+        }
+    })
+}
+
+/// Report the completed run and end the process (feature 018, FR-039b).
+///
+/// Exiting is the point: the run has the frames it asked for, and every further frame is the
+/// operator reading the summary rather than the scene being measured. The figure goes to stderr so
+/// it survives being piped, and is shaped by [`micold_core::frame_probe::Summary::report_line`] so
+/// all three of §B8's slots are written to the same precision.
+fn report_probe_and_exit(probe: &FrameProbe) -> ! {
+    match probe.summary() {
+        Some(summary) => {
+            eprintln!("frame probe: {}", summary.report_line());
+            std::process::exit(0)
+        }
+        // Unreachable while the run only ends on `is_complete`, which requires at least one counted
+        // frame. Stated rather than unwrapped so a future change to that rule cannot turn an empty
+        // run into a panic on the way out.
+        None => {
+            eprintln!("frame probe: no frames were counted; nothing to report.");
+            std::process::exit(1)
+        }
+    }
 }
 
 /// The result of a single resolution attempt for one directory (feature 011, data-model.md).
@@ -296,6 +351,14 @@ fn window_settings() -> iced::window::Settings {
 }
 
 pub fn main() -> iced::Result {
+    // Resolve the measurement run before opening a window, so a malformed `MICOLD_FRAME_PROBE`
+    // is refused at the terminal the operator is looking at rather than after the UI is up.
+    if let Some(config) = probe_config() {
+        eprintln!(
+            "frame probe: measuring {} frames after {} warm-up, then exiting.",
+            config.frames, config.warm_up
+        );
+    }
     iced::application(boot, update, view)
         .title("Micold AI IDE")
         .theme(theme)
@@ -369,6 +432,7 @@ fn boot() -> (App, Task<Message>) {
             build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
+            probe: probe_config().map(|config| RefCell::new(config.probe())),
         },
         // Ask for the initial window size up front: `resize_events` only fires on *changes*, so
         // without this the first context menu before any resize would have nothing to clamp
@@ -1760,6 +1824,31 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
 }
 
 fn view(app: &App) -> iced::Element<'_, Message> {
+    let Some(probe) = &app.probe else {
+        return render(app);
+    };
+    // A measurement run (FR-039b). Time the composition of this frame, and end the process once the
+    // run has the frames it asked for.
+    let started = Instant::now();
+    let element = render(app);
+    let mut probe = probe.borrow_mut();
+    probe.record(started.elapsed());
+    if probe_config().is_some_and(|config| config.is_complete(&probe)) {
+        report_probe_and_exit(&probe);
+    }
+    element
+}
+
+/// Compose the frame. Separated from [`view`] so the measurement run times exactly this and nothing
+/// of its own bookkeeping.
+///
+/// **What the figure covers.** This is the cost of *composing* the frame — building the widget tree
+/// from state — on the CPU. It is not the cost of presenting it: layout, draw and GPU work all
+/// happen after this returns, and are not in the number. The alternative, timing the interval
+/// between presented frames, measures the display's refresh rate rather than the scene for any
+/// scene that renders faster than one vsync, which is every scene worth comparing here. §B8 records
+/// this limitation alongside the figures.
+fn render(app: &App) -> iced::Element<'_, Message> {
     // Render the displayed session from its daemon-streamed grid cache + the client-side selection
     // and scroll offset (feature 010). The daemon is the single source of screen state.
     micold_client::ui::view(
@@ -2152,6 +2241,17 @@ fn subscription(app: &App) -> Subscription<Message> {
     // window free of per-mouse-move redraws — the switcher is a brief, deliberate interaction.
     if app.core.project_switcher_open {
         subs.push(cursor_move_events());
+    }
+    // A measurement run, and only a measurement run, drives the window continuously (FR-039b): the
+    // scene has to be re-composed for there to be anything to time. `window::frames()` yields once
+    // per presented frame, and the `NoOp` it maps to is enough to make the runtime compose the next
+    // one — so this needs no `request_redraw` of its own, and 017's single sanctioned frame-request
+    // path (`ui/cdk/motion.rs`) stays the only one.
+    //
+    // Idle quiescence (SC-017, FR-039a) is unaffected because the branch is unreachable without the
+    // environment variable; `tests/frame_probe_glue.rs` is what keeps that true.
+    if probe_config().is_some() {
+        subs.push(iced::window::frames().map(|_| Message::NoOp));
     }
     Subscription::batch(subs)
 }
@@ -2734,6 +2834,7 @@ mod tests {
             build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
+            probe: None,
         };
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
@@ -2773,6 +2874,7 @@ mod tests {
             build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
+            probe: None,
         };
         assert_eq!(app.last_grid, None);
 
@@ -2822,6 +2924,7 @@ mod tests {
             build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
+            probe: None,
         }
     }
 
@@ -3136,6 +3239,7 @@ mod tests {
             build_mismatch: None,
             next_req: 0,
             pending_ops: HashMap::new(),
+            probe: None,
         };
 
         assert_eq!(connection_status(&app), ConnectionStatus::Connected);
