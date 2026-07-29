@@ -52,6 +52,23 @@ fn terminate(pid: u32) {
         .status();
 }
 
+/// Terminates the daemon this test started, on the way out of the test **however** it leaves.
+///
+/// The cleanup used to be the last statements of the test body, which meant it ran only when every
+/// assertion passed. A failing run therefore left its daemon alive, holding a tempdir socket, for
+/// as long as the machine stayed up — and since each leaked daemon is one more process competing
+/// for the CPU, a run that failed made the *next* run likelier to fail too. Six were still resident
+/// from the failures that prompted this fix.
+struct DaemonGuard(micold_core::endpoint::Endpoint);
+
+impl Drop for DaemonGuard {
+    fn drop(&mut self) {
+        if let Some(pid) = daemon_pid_holding(&self.0.socket_path) {
+            terminate(pid);
+        }
+    }
+}
+
 fn daemon_pid_holding(socket: &Path) -> Option<u32> {
     let out = std::process::Command::new("fuser")
         .arg(socket)
@@ -95,13 +112,77 @@ fn seed_catalog(project_dir: &Path) {
 /// The daemon's published expectation for our session, read from a catalog snapshot. This is the
 /// value a restarting client is supposed to resume from (FR-028a).
 fn published_serial(catalog: &CatalogSnapshot) -> u64 {
+    summary(catalog).input_serial
+}
+
+/// Our session's published summary.
+fn summary(catalog: &CatalogSnapshot) -> &micold_core::protocol::messages::SessionSummary {
     catalog
         .projects
         .iter()
         .flat_map(|p| &p.sessions)
         .find(|s| s.id.0 == Uuid::from_u128(SESSION))
         .expect("the seeded session is in the snapshot")
-        .input_serial
+}
+
+/// How long any "wait until the daemon has caught up" step may take before the test fails.
+///
+/// Generous, and that costs nothing: every wait below polls and returns the moment the condition
+/// holds, so this bound is only ever reached when the daemon genuinely never gets there. A fixed
+/// sleep has the opposite shape — it always costs its full duration and still fails under load,
+/// which is what made this test flaky (observed serials of 9, 7 and 1 against an expected 12 on a
+/// busy machine, because 300ms was not enough for the daemon to apply twelve batches).
+const CATCH_UP: Duration = Duration::from_secs(20);
+
+/// Poll the daemon's published view until `done` accepts it, or fail after [`CATCH_UP`].
+///
+/// Polling rather than sleeping is the whole fix. The daemon applies input asynchronously, so every
+/// "has it landed yet" question here is a race against a machine whose speed the test does not
+/// control; the only sound answer is to ask repeatedly and give up loudly.
+async fn wait_until(
+    endpoint: &micold_core::endpoint::Endpoint,
+    what: &str,
+    done: impl Fn(&CatalogSnapshot) -> bool,
+) {
+    let deadline = std::time::Instant::now() + CATCH_UP;
+    loop {
+        let (conn, welcome) = new_generation(endpoint).await;
+        drop(conn);
+        if done(&welcome.catalog) {
+            return;
+        }
+        if std::time::Instant::now() >= deadline {
+            let s = summary(&welcome.catalog);
+            panic!(
+                "timed out after {CATCH_UP:?} waiting for {what}; the session was last seen as \
+                 {:?} with input_serial {}",
+                s.lifecycle, s.input_serial
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}
+
+/// Wait until the daemon's high-water mark reaches `expected`.
+///
+/// This subsumes the old fixed sleep after `SessionStart` as well, so there is no separate "wait for
+/// the spawn" step. A serial beyond the expected next is [`InputOutcome::Lost`], which still applies
+/// the bytes and resyncs the mark — so batches that arrive before the session is hosted are dropped
+/// without stranding the ones after them, and the mark still reaches `expected` as soon as any later
+/// batch lands. A session that never comes up therefore fails here, loudly and with its last
+/// observed state, instead of as a bare serial mismatch.
+///
+/// Waiting on the daemon's *published* state rather than the session's lifecycle is deliberate:
+/// `overlay_live_summaries` projects `activity`, `input_serial` and the live title onto each summary
+/// but **not** `lifecycle`, so a hosted session still reports `Idle` and polling that would hang
+/// forever.
+async fn wait_for_serial(endpoint: &micold_core::endpoint::Endpoint, expected: u64) {
+    wait_until(
+        endpoint,
+        &format!("the input serial to reach {expected}"),
+        |catalog| published_serial(catalog) >= expected,
+    )
+    .await;
 }
 
 /// One client *process generation*: a fresh connection **and** a fresh stamper, exactly what
@@ -116,7 +197,11 @@ async fn new_generation(endpoint: &micold_core::endpoint::Endpoint) -> (DaemonCo
     }
 }
 
-/// Send `count` input batches for the session, stamped by `stamper`, and let the daemon apply them.
+/// Send `count` input batches for the session, stamped by `stamper`.
+///
+/// Sending only — the caller decides what it is waiting for. There is no sleep here: "the daemon has
+/// probably caught up by now" is exactly the assumption that made this test flaky, and the callers
+/// below each have something better to wait *on*.
 async fn type_into_session(
     conn: &mut DaemonConnection,
     stamper: &mut SessionInputStamper,
@@ -127,8 +212,6 @@ async fn type_into_session(
         let msg = stamper.stamp(session, b"x".to_vec());
         conn.send(Frame::Control(msg)).await.expect("send input");
     }
-    // The daemon applies input asynchronously; give it a moment before observing the result.
-    tokio::time::sleep(Duration::from_millis(300)).await;
 }
 
 /// Read the daemon's current view by opening a throwaway connection — the welcome payload is built
@@ -154,6 +237,8 @@ async fn a_restarted_client_drives_a_session_it_did_not_start() {
 
     seed_catalog(project.path());
     let endpoint = micold_core::endpoint::resolve().expect("resolve isolated endpoint");
+    // Armed before the daemon is spawned, so no exit path can leave it behind.
+    let _daemon = DaemonGuard(endpoint.clone());
 
     // --- client generation 1: start the session and drive it -------------------------------------
     let (mut conn1, welcome1) = new_generation(&endpoint).await;
@@ -168,12 +253,10 @@ async fn a_restarted_client_drives_a_session_it_did_not_start() {
         .send(Frame::Control(ClientMsg::SessionStart { session }))
         .await
         .expect("start the session");
-    // Wait for the spawn to land before typing, so generation 1's input is genuinely applied.
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
     let mut stamper1 = SessionInputStamper::new();
     stamper1.seed_from_catalog(&welcome1.catalog);
     type_into_session(&mut conn1, &mut stamper1, 12).await;
+    wait_for_serial(&endpoint, 12).await;
 
     // --- the UI quits: everything client-side goes away, the daemon does not ----------------------
     drop(conn1);
@@ -192,6 +275,7 @@ async fn a_restarted_client_drives_a_session_it_did_not_start() {
     stamper2.seed_from_catalog(&welcome2.catalog);
 
     type_into_session(&mut conn2, &mut stamper2, 1).await;
+    wait_for_serial(&endpoint, 13).await;
     assert_eq!(
         observed_serial(&endpoint).await,
         13,
@@ -199,6 +283,7 @@ async fn a_restarted_client_drives_a_session_it_did_not_start() {
     );
 
     type_into_session(&mut conn2, &mut stamper2, 5).await;
+    wait_for_serial(&endpoint, 18).await;
     assert_eq!(
         observed_serial(&endpoint).await,
         18,
@@ -211,21 +296,35 @@ async fn a_restarted_client_drives_a_session_it_did_not_start() {
     // every batch is classified `Stale` and dropped. If seeding ever silently stops happening, the
     // assertion above fails — and this one proves the failure mode it would fail *into*, so the
     // test names the bug rather than just its absence.
-    let (mut conn3, _welcome3) = new_generation(&endpoint).await;
-    let mut unseeded = SessionInputStamper::new();
+    let (mut conn3, welcome3) = new_generation(&endpoint).await;
     let before = observed_serial(&endpoint).await;
+
+    let mut unseeded = SessionInputStamper::new();
     type_into_session(&mut conn3, &mut unseeded, 6).await;
+
+    // This assertion is that *nothing* happens, which no amount of polling can establish — waiting
+    // for a value to stay put only ever proves the daemon has not caught up yet, and the old fixed
+    // sleep could pass simply by observing too early.
+    //
+    // So: a barrier. One correctly-seeded batch on the SAME connection, sent after the six stale
+    // ones. Frames on one connection are processed in order, so once this batch has been applied the
+    // six ahead of it have necessarily been processed too — and rejected, or the mark would have
+    // moved further than one.
+    let mut seeded = SessionInputStamper::new();
+    seeded.seed_from_catalog(&welcome3.catalog);
+    type_into_session(&mut conn3, &mut seeded, 1).await;
+    wait_for_serial(&endpoint, before + 1).await;
+
     assert_eq!(
         observed_serial(&endpoint).await,
-        before,
-        "an unseeded restarted client is behind the daemon: 6 batches arrive and not one is applied"
+        before + 1,
+        "an unseeded restarted client is behind the daemon: of the 7 batches sent on this \
+         connection, only the correctly-seeded one may be applied — the 6 stale ones must every one \
+         be dropped"
     );
     drop(conn3);
 
-    // Clean up the process this test started.
-    if let Some(pid) = daemon_pid_holding(&endpoint.socket_path) {
-        terminate(pid);
-    }
+    // The daemon is stopped by `_daemon`'s `Drop`, which also covers the panicking paths above.
     std::env::remove_var(DAEMON_BIN_ENV);
     std::env::remove_var("XDG_RUNTIME_DIR");
     std::env::remove_var("XDG_DATA_HOME");
