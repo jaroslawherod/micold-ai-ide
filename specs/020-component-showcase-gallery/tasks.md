@@ -424,10 +424,20 @@ this feature worth having.
   > continuations, which Windows' default `pwsh` does not honour, so it died at parse time before
   > cargo started (fixed in `f630cea`). A platform check that never executed on the platform is the
   > exact failure this task exists to catch.
-- [ ] T053 Run [quickstart.md](./quickstart.md) §B end to end and fill in the recorded tables: B1
+- [X] T053 Run [quickstart.md](./quickstart.md) §B end to end and fill in the recorded tables: B1
   (SC-001 timing on a clean machine), B2 (SC-005 hover/press pass), B3 (SC-006 scheme comparison), B4
   (motion replay, then idle with nothing moving — SC-009), B5 (floating surfaces and the narrow
   window).
+
+  > Closed 2026-07-29, all five sections walked on Linux and recorded in `quickstart.md` §B.
+  > B1: 12 s against a 30 s budget. B2: no interactive entry failed to hover, press or take focus.
+  > B3: both schemes without restart, including sections off screen at the switch, and no colour
+  > differing from the application's. B4: motion replayed on demand, idle afterwards. B5: surfaces
+  > dismiss, and the narrow window reflows without clipping or horizontal scroll.
+  >
+  > B1's row sat open longer than it needed to, against a note requiring a machine that had "never
+  > built this project" — stricter than SC-001, which starts its clock at launch. The note was
+  > corrected before the measurement was taken; see the correction recorded under B1.
 
 ---
 

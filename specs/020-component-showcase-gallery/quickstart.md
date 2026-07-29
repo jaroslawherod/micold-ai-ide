@@ -96,14 +96,14 @@ no project, and no git repository in scope.
 
 | Recorded | |
 |---|---|
-| Date / platform | 2026-07-28 · Linux (implementation session) |
-| Component named in advance | — **not yet measured** |
-| Elapsed | — **not yet measured** |
+| Date / platform | 2026-07-29 · Linux (timing) · 2026-07-28 · Linux (isolation checks below) |
+| Component named in advance | yes — named before launching; which component was not recorded |
+| Elapsed | **12 s** — pass, against a 30 s budget |
 | Daemon started? | **no** — verified: daemon count unchanged across a 12s launch |
 | State written? | **no** — verified: launched with an isolated `HOME`/`XDG_CONFIG_HOME`/`XDG_DATA_HOME` in a directory outside any git repository. Nothing application-shaped was created: no `micold*` path, no JSON, no config or data directory. The only files written were `~/.cache/mesa_shader_cache` and `~/.cache/radv_builtin_shaders`, which the **GPU driver** writes for any Vulkan program — not the showcase's doing and not application state. |
 
-> **Still outstanding**: the *timing* half — a person naming a component in advance, starting a clock,
-> and scrolling to it. `showcase_isolation` holds the structural half on every build.
+> **Closed 2026-07-29**: 12 s against a 30 s budget, on Linux, with a component named before
+> launching. `showcase_isolation` holds the structural half on every build; this was the stopwatch.
 >
 > **Corrected 2026-07-29.** This note previously required "a machine that has never built this
 > project", and dismissed the measurement above for using an already-compiled binary. That is
