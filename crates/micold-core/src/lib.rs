@@ -14,6 +14,7 @@
 pub mod connect;
 pub mod endpoint;
 pub mod env_include;
+pub mod frame_probe;
 pub mod fs_scan;
 pub mod git;
 pub mod input;
