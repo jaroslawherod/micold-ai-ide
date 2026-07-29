@@ -350,3 +350,55 @@ not against the previous build.
 a stray `shell.request_redraw()` in a component turns T054 red; an unsanctioned `tooltip(` turns
 T056 red; striking a live entry off the sanctioned list turns its staleness half red. A gate that
 cannot fail is decoration.
+
+## Phase 9: Bugfix — BUG-001
+
+Appended by `/speckit-bugfix-patch`. `Expand`'s reveal did not clip: revealed content painted over
+the widgets below it. See `bugs/BUG-001.md`.
+
+**No false completions.** No task in this feature or in 009 claimed to verify a reveal's clipping,
+so nothing was marked done that should not have been. The gap is that the property was never
+required (FR-025a) and never checked (SC-010), not that a check was skipped.
+
+- [X] T058 Advance a size-animating component's track so the new size is actually laid out per FR-025a
+
+  > The root cause is not the clip. `renderer.with_layer` does clip — the rendering stack documents
+  > it as such — but it was being handed the *previous* frame's bounds. Layout re-runs only when a
+  > widget sets `Shell::invalidate_layout`, and nothing in this codebase ever did, so `Expand`'s
+  > animated height was recomputed by nobody: the reveal did not move, and it clipped to whatever
+  > bounds the last real layout pass produced. `Progress::on_layout_frame` asks for the re-layout,
+  > and only while the value is changing, so a settled component stops asking (FR-025's obligation
+  > carried over to layout).
+
+- [X] T059 Advance a track at most once per frame, so inviting a re-layout does not multiply the transition's speed
+
+  > Required by T058, not incidental to it. The runtime re-runs `update` with the *same* redraw
+  > event when that update invalidated the layout, up to three times before it logs a warning.
+  > Without a per-frame guard, every size-animating transition would step four times per frame —
+  > measured, not predicted: a 100ms transition advanced 0.64 in one frame instead of 0.16.
+
+- [X] T060 [P] Apply the layout-aware advance to the navigation drawer, whose slide animates a width the same way per FR-025a
+
+  > Found by the same scan rather than by symptom. Its reveal is horizontal and its `layout` derives
+  > the panel width from the same kind of track, so it had the same defect; its own comment ("so the
+  > children are updated against the arrangement they are about to be drawn in rather than the
+  > previous frame's") shows the staleness was already suspected and could not be acted on.
+
+- [X] T061 Gate it: a component whose `layout` reads an animated value must advance it as layout per SC-010
+
+  > Scoped per `impl Widget for X` block rather than per file. The first version scanned per file
+  > and passed with `Expand` deliberately regressed, because a sibling wrapper in the same file used
+  > the correct call — a gate that cannot fail is decoration. The rewritten version names the
+  > offending widget, and was confirmed by the same sabotage.
+
+- [ ] T062 Confirm the reveal in the showcase: `mise run showcase`, the motion section's `expand` entry, and the `Accordion` entry's third instance
+
+  > The manual half, and the reason feature 020 exists. Not automatable: the assertion is that the
+  > revealed content no longer paints over the controls beneath it.
+
+- [ ] T063 Confirm the sidebar tag-filter panel in the running application, where this is user-visible per 009
+
+  > `Accordion` is `expand(...)`, so this is the same defect in shipped UI. Its 90ms reveal makes it
+  > read as a flicker rather than an overlap, which is why it survived two features' manual passes.
+
+**Bugfix**: 2026-07-29 — BUG-001 Updated from bugfix patch: added T058–T063.

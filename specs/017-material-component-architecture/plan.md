@@ -144,6 +144,7 @@ per component.
 |------|------------|--------------------------------------|
 | A separate `cdk` behavior layer for a single primitive | The overlay is used by five components today, each with its own copy — the exact failure this feature exists to fix. Establishing the layer now also gives 018's ripple and density resolver a defined home rather than inventing one under pressure. | Behavior inside each component was rejected: it is the status quo and it produced the divergence. |
 | Decision logic (dismissal rules, density arithmetic, ripple geometry) in the render-free core rather than the widget | Principle I requires branching logic to be testable, and the GUI-wiring exception explicitly does not cover it. Keeping *storage* in the widget while *decisions* stay pure satisfies both rules. | Putting it in the widget was rejected: it would be unreachable from tests. Putting the state in the core was rejected separately: it would force callers to allocate identities, which FR-013 forbids. |
+| Two ways to advance a presentation track — one for a component that animates its *drawing*, one for a component that animates its *size* (FR-025a) | The rendering stack re-runs drawing every frame but re-runs layout only when a widget asks it to. A component whose size is animated must therefore ask, and one whose paint is animated must not — asking on every frame of every fade would re-lay-out the window continuously. The distinction is real, so it is named at the call site rather than inferred. | A single "advance" that always asks for a re-layout was rejected: it makes the cheap case pay the expensive one's cost. Inferring it from whether `layout` reads the track was rejected: nothing can check that at run time, so it would be silent when wrong — which is how BUG-001 shipped. |
 
 ## Risks
 
@@ -153,3 +154,6 @@ per component.
 | A wrapper subtly changes appearance | FR-005 makes parity the requirement, and `quickstart.md` walks every surface in both schemes against the pre-change build. |
 | Unified dismissal surprises users on a surface that behaved differently | Sanctioned and scoped by FR-024 to dismissal only. Called out explicitly in the quickstart so it is confirmed rather than discovered. |
 | Extracting presentation state changes persistence | None of the moved fields is serialized — application state is not a persisted type. Verified before planning; SC-006 asserts it anyway. |
+| A component is structurally correct and still visually wrong | Every gate this feature built reads source *structure* — who names what, which signature exposes what, where a frame is requested — and the style snapshot excludes layout. BUG-001 passed all of them. SC-010 adds the first gate that asks what a component does with an animated value rather than where it keeps it. |
+
+**Bugfix**: 2026-07-29 — BUG-001 Updated from bugfix patch: recorded the drawing-vs-size distinction in animating a track, and the gate class that missed it.

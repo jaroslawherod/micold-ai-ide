@@ -127,6 +127,9 @@ A developer opens a menu, a context menu, the project-switcher popover, the sele
 - **FR-023**: The application MUST look **exactly** the same after this feature as before it. Any visible difference is a defect.
 - **FR-024**: Every user-visible behavior MUST be unchanged, with a single exception: floating-surface dismissal (FR-009), where unifying five implementations necessarily changes those that differ today. That exception covers only *how* a surface is dismissed — not what it contains, what opening it does, or what any action inside it does.
 - **FR-025**: At rest the application MUST request no frames and consume no measurable CPU. Every animation MUST provably settle and release what it held.
+- **FR-025a**: A component that animates its own **size** — one whose laid-out width or height is derived from its presentation state, rather than only what it paints — MUST cause that size to be re-laid-out on every frame it changes on. Asking only for a redraw is insufficient: the rendering stack re-runs drawing against the previously computed layout, so an animated size that nothing re-reads leaves the component motionless and clipping against stale bounds. Like FR-025, this MUST stop when the transition does: a settled component MUST ask for no further layout work. *(Added by BUG-001.)*
+
+  This is a distinct obligation from FR-011. A component can own its presentation state correctly (FR-011), expose no animation key (FR-004/SC-004), and request no frames at rest (FR-025), and still be broken this way — which is exactly how `Expand` shipped.
 - **FR-026**: The result MUST behave the same on Linux, macOS and Windows.
 - **FR-027**: The component API contract MUST be published at `contracts/component-api.md` and MUST remain the durable reference the implementation is checked against.
 - **FR-028**: Developer-facing documentation MUST be updated in the same change to describe the two layers and the rule that feature modules compose components rather than styling widgets.
@@ -151,6 +154,9 @@ A developer opens a menu, a context menu, the project-switcher popover, the sele
 - **SC-007**: Every user action available before the change is available after it and produces the same result — with the single exception of floating-surface dismissal.
 - **SC-008**: With the application idle, zero frames are requested and CPU use is indistinguishable from the pre-change build over a sustained window; after pressing every interactive element, no animation state remains held.
 - **SC-009**: Token values are asserted from the render-free core, which has no rendering dependency, in the standard whole-workspace test run.
+- **SC-010**: Every component whose layout is derived from an animated value re-lays-out while that value changes and stops when it settles, proven by a test that fails the build when such a component advances its state without asking for a re-layout. The baseline being fixed is two: the `Expand` reveal and the navigation drawer's slide. *(Added by BUG-001.)*
+
+**Bugfix**: 2026-07-29 — BUG-001 added FR-025a and SC-010: animating a *size* obliges a component to have that size re-laid-out, which no requirement previously stated.
 
 ## Assumptions
 
