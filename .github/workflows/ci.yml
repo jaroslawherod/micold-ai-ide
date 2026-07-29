@@ -59,6 +59,9 @@ jobs:
       # the authoritative list of them. Path handling (`\` vs `/` in the scanners' display keys) is
       # exactly the kind of difference a Linux-only run would miss.
       - name: Test (component library + showcase gates, all platforms)
+        # Windows defaults to `pwsh`, which does not treat `\` as a line continuation; pin bash so the
+        # one readable multi-line invocation below parses identically on all three runners.
+        shell: bash
         run: |
           cargo test -p micold-client \
             --test showcase_completeness \
