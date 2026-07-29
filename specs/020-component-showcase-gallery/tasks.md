@@ -229,7 +229,7 @@ state was written. Scroll the page and find every component under a heading nami
   nothing in the library runs continuously yet (`StageProgress`'s fill is a fixed non-animated value).
   Record that in the code comment, so 018's indeterminate indicator plugs in without the catalogue
   changing shape.
-- [ ] T026 [US1] Confirm the narrow-window and oversized-component Edge Cases against
+- [X] T026 [US1] Confirm the narrow-window and oversized-component Edge Cases against
   `crates/micold-client/src/showcase/gallery.rs`'s chunked layout (quickstart §B5): resize very narrow,
   and check no instance is clipped out of view and the page never scrolls horizontally.
 - [X] T027 [US1] Confirm US1's independent test per [quickstart.md](./quickstart.md) §B1's structural
@@ -273,7 +273,7 @@ hold — each responds more strongly.
 - [X] T031 [US2] Render each section's caption from `live` in `gallery.rs`, naming hover, pressed and
   focus as exercised rather than posed (FR-005). Greens T028. Do **not** fake any of the three with a
   static approximation (FR-004).
-- [ ] T032 [US2] Run quickstart §B2 and record it: hover, press and tab through every interactive
+- [X] T032 [US2] Run quickstart §B2 and record it: hover, press and tab through every interactive
   component in one scrolling pass. Anything with no hover, no pressed or no visible focus is a defect
   in the **component** — record it; do not paper over it in the gallery.
 
@@ -307,7 +307,7 @@ when you switched.
   `crates/micold-client/src/showcase/main.rs` so the renderer's own theme follows the control. Confirm
   the showcase reads neither the OS preference nor the settings file (FR-009, FR-020) — the isolation
   gate (T017) already forbids `dark_light`.
-- [ ] T037 [US3] Run quickstart §B3 and record it, including the sharp row: any component whose
+- [X] T037 [US3] Run quickstart §B3 and record it, including the sharp row: any component whose
   colours differ from the application's in the same scheme is a defect in the **showcase**, never a
   licence to style the gallery's copy differently.
 

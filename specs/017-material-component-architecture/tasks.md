@@ -401,7 +401,7 @@ required (FR-025a) and never checked (SC-010), not that a check was skipped.
   > the same track, the same reveal. Recorded as the `Accordion` instance specifically rather than
   > as a blanket pass over the motion section, because that is what was looked at.
 
-- [ ] T063 Confirm the sidebar tag-filter panel in the running application, where this is user-visible per 009
+- [X] T063 Confirm the sidebar tag-filter panel in the running application, where this is user-visible per 009
 
   > `Accordion` is `expand(...)`, so this is the same defect in shipped UI. Its 90ms reveal makes it
   > read as a flicker rather than an overlap, which is why it survived two features' manual passes.
