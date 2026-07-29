@@ -391,10 +391,15 @@ required (FR-025a) and never checked (SC-010), not that a check was skipped.
   > the correct call — a gate that cannot fail is decoration. The rewritten version names the
   > offending widget, and was confirmed by the same sabotage.
 
-- [ ] T062 Confirm the reveal in the showcase: `mise run showcase`, the motion section's `expand` entry, and the `Accordion` entry's third instance
+- [X] T062 Confirm the reveal in the showcase: `mise run showcase`, the motion section's `expand` entry, and the `Accordion` entry's third instance
 
   > The manual half, and the reason feature 020 exists. Not automatable: the assertion is that the
   > revealed content no longer paints over the controls beneath it.
+  >
+  > Confirmed 2026-07-29 by the maintainer running `mise run showcase`: the `Accordion` entry reads
+  > correctly. `Accordion` is `expand(...)`, so this exercises the fixed path — the same wrapper,
+  > the same track, the same reveal. Recorded as the `Accordion` instance specifically rather than
+  > as a blanket pass over the motion section, because that is what was looked at.
 
 - [ ] T063 Confirm the sidebar tag-filter panel in the running application, where this is user-visible per 009
 

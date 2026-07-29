@@ -413,9 +413,17 @@ this feature worth having.
 - [X] T051 [P] Confirm no dependency was added: `git diff` on `Cargo.toml`, `crates/*/Cargo.toml` and
   `Cargo.lock` shows only the `[[bin]]`, `default-run` and version-independent changes
   ([research R16](./research.md#r16--no-new-dependency)).
-- [ ] T052 Confirm cross-platform compilation: `cargo build --workspace` builds both binaries on
+- [X] T052 Confirm cross-platform compilation: `cargo build --workspace` builds both binaries on
   Linux, macOS and Windows in CI, and every gate in T049's step passes on all three. No per-platform
   appearance claim is made or required (spec, Assumptions).
+
+  > Closed 2026-07-29 by CI on PR #50 and #51: `build + test` green on ubuntu-latest, macos-latest
+  > and windows-latest, and all gates in the step executed on each. Verified by reading the Windows
+  > job log rather than by trusting the green tick — the first attempt at this step *looked* like a
+  > partial pass while the gates were in fact never running there: the step used `\` line
+  > continuations, which Windows' default `pwsh` does not honour, so it died at parse time before
+  > cargo started (fixed in `f630cea`). A platform check that never executed on the platform is the
+  > exact failure this task exists to catch.
 - [ ] T053 Run [quickstart.md](./quickstart.md) §B end to end and fill in the recorded tables: B1
   (SC-001 timing on a clean machine), B2 (SC-005 hover/press pass), B3 (SC-006 scheme comparison), B4
   (motion replay, then idle with nothing moving — SC-009), B5 (floating surfaces and the narrow
