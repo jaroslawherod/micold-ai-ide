@@ -14,6 +14,10 @@ run = "cargo run -p micold-client --bin micold-showcase"
 description = "Run the session daemon directly (normally auto-spawned by the client)"
 run = "cargo run -p micold-daemon"
 
+[tasks.fixture]
+description = "Build the 20-worktree reference scene for the frame-time measurement (018 §B8)"
+run = "scripts/reference-scene.sh"
+
 [tasks.test]
 description = "Test the whole workspace (core + client + daemon), matching CI"
 run = "cargo test --workspace"
