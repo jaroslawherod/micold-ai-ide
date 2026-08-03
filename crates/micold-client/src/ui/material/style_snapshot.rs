@@ -94,7 +94,7 @@ fn render_all() -> String {
         writeln!(
             s,
             "container.chip[issue] = {:?}",
-            style::chip(r.tag_issue)(&theme)
+            style::chip(r.issue_tag().0)(&theme)
         )
         .unwrap();
 

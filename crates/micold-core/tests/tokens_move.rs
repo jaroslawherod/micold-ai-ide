@@ -1,106 +1,45 @@
-//! Token relocation guard (feature 017, T004 — FR-021).
+//! Token relocation guard (feature 017, T004 — FR-021), as amended by feature 018's Phase 0.
 //!
-//! This feature moves the design tokens into the render-free core. The move must be **mechanical**:
-//! the same values, a new home. Re-valuing them is feature 018's work, and doing it here would
-//! forfeit this feature's zero-visual-change property — the thing that makes it reviewable.
+//! Feature 017 moved the design tokens into the render-free core, and this file pinned every value
+//! so the move stayed **mechanical**: the same values, a new home. It said in as many words that
+//! re-valuing them was feature 018's work.
 //!
-//! Every value below is transcribed from the pre-move token module. If a value changes, this test
-//! fails and names it. It is deliberately dumb: it asserts digits, not derivations, because the
-//! whole point is that nothing was recomputed on the way across.
+//! **That has now happened, and the colour half of this guard has been retired.** 018's Phase 0
+//! re-authored every role as a palette-and-tone pair on the Material 3 baseline ramps (FR-005a,
+//! FR-005b), which is precisely the change this file existed to prevent happening *by accident*.
+//! Keeping the old assertions would not protect anything — it would only assert that the deliberate
+//! change had not been made. `tests/tokens_contrast.rs` is the guard that replaces them, and it is a
+//! stronger one: it checks the property the values are supposed to have (AA in both schemes,
+//! monotonic ramps, the seed at tone 40) rather than the digits themselves.
+//!
+//! What survives is the half 018 Phase 0 does **not** touch. T000e carries the spacing, type and
+//! shape scales across the module split without re-valuing them, so those assertions still guard a
+//! live promise, and they now guard the split as well as the move.
 
-use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, shape, spacing, type_scale, Rgb};
 
-/// Every semantic role, both schemes, exactly as it was before the move.
+/// The colour values did change, and that is the point.
+///
+/// Replaces the two retired guards (`every_role_value_survives_the_move_unchanged` and
+/// `every_tag_value_survives_the_move_unchanged`). Rather than assert the old digits — which would
+/// now be asserting that a deliberate change had not been made — this asserts the change actually
+/// landed, so a botched merge that restored feature 003's palette fails here instead of shipping.
 #[test]
-fn every_role_value_survives_the_move_unchanged() {
+fn the_palette_is_no_longer_feature_003s() {
     let light = tokens::roles(ColorScheme::Light);
-    assert_eq!(light.background, Rgb::hex(0xFDFCFF), "light.background");
-    assert_eq!(
-        light.on_background,
-        Rgb::hex(0x1A1C1E),
-        "light.on_background"
+    assert_ne!(
+        light.primary,
+        Rgb::hex(0x005DB8),
+        "the light accent is still feature 003's brand blue — Phase 0 re-authors it as the \
+         Material 3 baseline purple (FR-005b)"
     );
-    assert_eq!(light.surface, Rgb::hex(0xFFFFFF), "light.surface");
-    assert_eq!(light.on_surface, Rgb::hex(0x1A1C1E), "light.on_surface");
-    assert_eq!(
-        light.surface_variant,
-        Rgb::hex(0xEEF0F4),
-        "light.surface_variant"
-    );
-    assert_eq!(
-        light.on_surface_variant,
-        Rgb::hex(0x43474E),
-        "light.on_surface_variant"
-    );
-    assert_eq!(light.primary, Rgb::hex(0x005DB8), "light.primary");
-    assert_eq!(light.on_primary, Rgb::hex(0xFFFFFF), "light.on_primary");
-    assert_eq!(light.outline, Rgb::hex(0x73777F), "light.outline");
-    assert_eq!(light.error, Rgb::hex(0xBA1A1A), "light.error");
-    assert_eq!(light.on_error, Rgb::hex(0xFFFFFF), "light.on_error");
-
     let dark = tokens::roles(ColorScheme::Dark);
-    assert_eq!(dark.background, Rgb::hex(0x1A1C1E), "dark.background");
-    assert_eq!(dark.on_background, Rgb::hex(0xE2E2E6), "dark.on_background");
-    assert_eq!(dark.surface, Rgb::hex(0x212426), "dark.surface");
-    assert_eq!(dark.on_surface, Rgb::hex(0xE2E2E6), "dark.on_surface");
-    assert_eq!(
-        dark.surface_variant,
-        Rgb::hex(0x2B2F31),
-        "dark.surface_variant"
+    assert_ne!(
+        dark.primary,
+        Rgb::hex(0xA6C8FF),
+        "the dark accent is still feature 003's blue"
     );
-    assert_eq!(
-        dark.on_surface_variant,
-        Rgb::hex(0xC3C7CF),
-        "dark.on_surface_variant"
-    );
-    assert_eq!(dark.primary, Rgb::hex(0xA6C8FF), "dark.primary");
-    assert_eq!(dark.on_primary, Rgb::hex(0x00325B), "dark.on_primary");
-    assert_eq!(dark.outline, Rgb::hex(0x8D9199), "dark.outline");
-    assert_eq!(dark.error, Rgb::hex(0xFFB4AB), "dark.error");
-    assert_eq!(dark.on_error, Rgb::hex(0x690005), "dark.on_error");
-}
-
-/// The per-type worktree tags and the issue tag. Feature 018 re-derives these from tonal ramps;
-/// until then they must not move.
-#[test]
-fn every_tag_value_survives_the_move_unchanged() {
-    let light = tokens::roles(ColorScheme::Light);
-    for (t, expected) in [
-        (ConventionalType::Feat, 0x1B5E20),
-        (ConventionalType::Fix, 0xB71C1C),
-        (ConventionalType::Chore, 0x4E342E),
-        (ConventionalType::Docs, 0x004D40),
-        (ConventionalType::Refactor, 0x4A148C),
-        (ConventionalType::Test, 0x0D47A1),
-        (ConventionalType::Build, 0x7A2600),
-        (ConventionalType::Ci, 0x1A237E),
-        (ConventionalType::Perf, 0x880E4F),
-        (ConventionalType::Style, 0x33691E),
-    ] {
-        assert_eq!(light.tag_fill(t), Rgb::hex(expected), "light tag {t:?}");
-    }
-    assert_eq!(light.tag_issue, Rgb::hex(0x37474F), "light.tag_issue");
-    assert_eq!(light.on_tag, Rgb::hex(0xFFFFFF), "light.on_tag");
-
-    let dark = tokens::roles(ColorScheme::Dark);
-    for (t, expected) in [
-        (ConventionalType::Feat, 0xA5D6A7),
-        (ConventionalType::Fix, 0xEF9A9A),
-        (ConventionalType::Chore, 0xBCAAA4),
-        (ConventionalType::Docs, 0x80CBC4),
-        (ConventionalType::Refactor, 0xCE93D8),
-        (ConventionalType::Test, 0x90CAF9),
-        (ConventionalType::Build, 0xFFAB91),
-        (ConventionalType::Ci, 0x9FA8DA),
-        (ConventionalType::Perf, 0xF48FB1),
-        (ConventionalType::Style, 0xE6EE9C),
-    ] {
-        assert_eq!(dark.tag_fill(t), Rgb::hex(expected), "dark tag {t:?}");
-    }
-    assert_eq!(dark.tag_issue, Rgb::hex(0xB0BEC5), "dark.tag_issue");
-    assert_eq!(dark.on_tag, Rgb::hex(0x1A1C1E), "dark.on_tag");
 }
 
 /// The scales. Feature 018 replaces the type scale with roles carrying weight and line height;
@@ -153,11 +92,13 @@ fn the_sidebar_density_decision_stays_auditable() {
 #[test]
 fn tokens_are_reachable_with_no_renderer_present() {
     let r = tokens::roles(ColorScheme::Light);
-    // Plain data: no conversion, no theme, no widget.
-    assert_eq!(r.primary, Rgb::hex(0x005DB8));
+    // Plain data: no conversion, no theme, no widget. The value is the Material 3 baseline seed
+    // since Phase 0 (it was feature 003's #005DB8 before); what this test is really about is that
+    // the channels are reachable as plain integers from a crate that cannot see a renderer.
+    assert_eq!(r.primary, Rgb::hex(0x6750A4));
     assert_eq!(
         (r.primary.r, r.primary.g, r.primary.b),
-        (0x00, 0x5D, 0xB8),
+        (0x67, 0x50, 0xA4),
         "Rgb must stay a plain 8-bit-per-channel value"
     );
 }

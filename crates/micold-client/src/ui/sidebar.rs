@@ -279,7 +279,7 @@ fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
 fn tag_chip(tag: &Tag, r: Roles) -> (String, Rgb) {
     match tag {
         Tag::Type(t) => (t.as_str().to_string(), r.tag_fill(*t)),
-        Tag::Issue(key) => (key.clone(), r.tag_issue),
+        Tag::Issue(key) => (key.clone(), r.issue_tag().0),
         Tag::Status(status) => {
             let label = match status {
                 WorktreeStatus::Missing => "missing",
