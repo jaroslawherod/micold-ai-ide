@@ -9,6 +9,7 @@
 //! instance genuinely interactive without the gallery inventing behaviour the application owns.
 
 use iced::Element;
+use micold_core::naming::ConventionalType;
 use micold_core::tokens::Roles;
 
 use crate::icons::Icon;
@@ -141,7 +142,10 @@ pub fn toggle_chip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
                 "accented, active",
                 material::ToggleChip::new("fix", Message::NoOp, roles)
                     .active(true)
-                    .accent(roles.tag_fix, roles.on_tag),
+                    .accent(
+                        roles.tag(ConventionalType::Fix).0,
+                        roles.tag(ConventionalType::Fix).1,
+                    ),
                 roles,
             ),
         ],

@@ -6,6 +6,7 @@
 //! push the chip off screen (spec, Edge Cases).
 
 use iced::{Element, Length};
+use micold_core::naming::ConventionalType;
 use micold_core::tokens::{spacing, Roles};
 
 use crate::app::NoticeLevel;
@@ -35,7 +36,10 @@ fn kinds(roles: Roles) -> Vec<(&'static str, SurfaceKind)> {
             "Notification(Error)",
             SurfaceKind::Notification(NoticeLevel::Error),
         ),
-        ("Chip", SurfaceKind::Chip(roles.tag_feat)),
+        (
+            "Chip",
+            SurfaceKind::Chip(roles.tag_fill(ConventionalType::Feat)),
+        ),
     ]
 }
 
@@ -202,9 +206,10 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
                 .with_icon(Icon::Git)
                 .on_press(Message::NoOp);
             if row == 1 {
-                item = item
-                    .selected(true)
-                    .tags(vec![(samples::TAG.to_string(), roles.tag_feat)]);
+                item = item.selected(true).tags(vec![(
+                    samples::TAG.to_string(),
+                    roles.tag_fill(ConventionalType::Feat),
+                )]);
             }
             if row == 0 {
                 item = item.expandable(true, Message::NoOp);

@@ -9,6 +9,7 @@
 //! application's feature modules.
 
 use iced::Element;
+use micold_core::naming::ConventionalType;
 use micold_core::protocol::messages::ActivitySignal;
 use micold_core::tokens::Roles;
 
@@ -144,17 +145,17 @@ pub fn tag<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message
         vec![
             posed(
                 "feat accent",
-                material::Tag::<Message>::new(samples::TAG, roles.tag_feat),
+                material::Tag::<Message>::new(samples::TAG, roles.tag_fill(ConventionalType::Feat)),
                 roles,
             ),
             posed(
                 "fix accent",
-                material::Tag::<Message>::new("fix", roles.tag_fix),
+                material::Tag::<Message>::new("fix", roles.tag_fill(ConventionalType::Fix)),
                 roles,
             ),
             posed(
                 "at the label size",
-                material::Tag::<Message>::new(samples::TAG, roles.tag_feat)
+                material::Tag::<Message>::new(samples::TAG, roles.tag_fill(ConventionalType::Feat))
                     .size(TypeRole::Label.size()),
                 roles,
             ),

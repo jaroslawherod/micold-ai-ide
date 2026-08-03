@@ -106,7 +106,9 @@ fn tonal_tag_chips_meet_aa_contrast() {
             .iter()
             .map(|&t| (t.as_str(), r.tag_fill(t)))
             .collect();
-        accents.push(("issue", r.tag_issue));
+        // `tag_issue` was a bare field until Phase 0 gave every tag its own text tone; the fill now
+        // comes from the same accessor as the typed tags (contract §1.4).
+        accents.push(("issue", r.issue_tag().0));
         for (name, accent) in accents {
             let bg = composite(accent, r.surface, CHIP_TINT_ALPHA);
             let ratio = contrast(accent, bg);

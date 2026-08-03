@@ -77,11 +77,11 @@ feature — every story reads token values from it", and it had no tasks at all.
 
 ### Tests for Phase 0 (MANDATORY — write first, confirm they FAIL) ⚠️
 
-- [ ] T000a [P] Failing test in `crates/micold-core/tests/tokens_contrast.rs` asserting every
+- [X] T000a [P] Failing test in `crates/micold-core/tests/tokens_contrast.rs` asserting every
   foreground/background role pair specified to carry text or icons meets WCAG AA (≥ 4.5:1) in both
   schemes, covering every pair this feature introduces and not only those carried over from feature
   003. The test MUST fail the build on any violation (FR-004, FR-005, SC-001)
-- [ ] T000b Failing test in `crates/micold-core/tests/tokens_contrast.rs` — same file as T000a, so
+- [X] T000b Failing test in `crates/micold-core/tests/tokens_contrast.rs` — same file as T000a, so
   not parallel with it — asserting each tonal
   ramp is monotonic in luminance, so a transcription error in a baked ramp surfaces as a failure
   rather than as a subtly wrong colour (plan.md risk 1, research R7)
@@ -96,15 +96,15 @@ feature — every story reads token values from it", and it had no tasks at all.
 
 ### Implementation for Phase 0
 
-- [ ] T000e Expand `crates/micold-core/src/tokens.rs` (216 lines) into the `tokens/` module
+- [X] T000e Expand `crates/micold-core/src/tokens.rs` (216 lines) into the `tokens/` module
   directory per plan.md's Structure Decision, preserving the existing `spacing` scale unchanged and
   carrying `Rgb`, `Roles`, `type_scale` and `sidebar` across **without re-valuing them**, so the
   move is separable from the value change in review
-- [ ] T000f Author `crates/micold-core/src/tokens/palette.rs` — the Material 3 baseline tonal ramps
+- [X] T000f Author `crates/micold-core/src/tokens/palette.rs` — the Material 3 baseline tonal ramps
   (tones 0–100 per key palette) generated from seed `#6750A4`, and re-author every semantic role in
   `LIGHT` and `DARK` as a palette-and-tone pair rather than a hand-picked value, so contrast follows
   from the tone delta (FR-001, FR-005a, FR-005b, D1, D3)
-- [ ] T000g Author the ten conventional-commit tag hues and the issue tag in
+- [X] T000g Author the ten conventional-commit tag hues and the issue tag in
   `crates/micold-core/src/tokens/palette.rs` — one fixed hue per type, read at the accent tone
   recipe (fill 40 / text 100 light, fill 80 / text 20 dark). No tag may be a hand-tuned value
   outside the tonal system (FR-006, FR-006a)
