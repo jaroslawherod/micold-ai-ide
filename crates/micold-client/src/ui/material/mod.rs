@@ -43,6 +43,8 @@ mod style_outline_discipline;
 mod style_shape;
 #[cfg(test)]
 mod style_snapshot;
+#[cfg(test)]
+mod style_states;
 mod surface;
 mod tag;
 mod terminal_pane;

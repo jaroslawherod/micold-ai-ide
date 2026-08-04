@@ -272,17 +272,25 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 body
             };
 
-            // Selected rows get a subtle surface-variant background.
+            // The selection pill (contract §7.2): `secondary_container` fill, its own text colour,
+            // and the `full` corner.
+            //
+            // This replaces a half-alpha `surface_variant` wash. Two things were wrong with that.
+            // A translucent neutral over whatever the row sat on produced a different colour in
+            // each place it was used, so "selected" had no single appearance; and it was close
+            // enough to the hover layer that a hovered row and a selected one were hard to tell
+            // apart — which is the distinction FR-020 exists to make, since selection persists and
+            // hover does not.
             let styled: Element<'a, M> = if item.selected {
                 container(row_el)
                     .width(Length::Fill)
                     .style(move |_t: &iced::Theme| iced::widget::container::Style {
-                        background: Some(iced::Background::Color(iced::Color {
-                            a: 0.5,
-                            ..style::color(r.surface_variant)
-                        })),
+                        background: Some(iced::Background::Color(style::color(
+                            r.secondary_container,
+                        ))),
+                        text_color: Some(style::color(r.on_secondary_container)),
                         border: iced::Border {
-                            radius: shape::SMALL.into(),
+                            radius: shape::FULL.into(),
                             ..Default::default()
                         },
                         ..Default::default()

@@ -195,9 +195,9 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 ### Tests for User Story 3 (MANDATORY — write first, confirm they FAIL) ⚠️
 
 - [ ] T024 [P] [US3] Failing tests for ripple state in `crates/micold-client/tests/ripple_state.rs`, driving the component directly the way `idle_requests_no_frames.rs` drives the motion primitive: pressing element B mid-ripple leaves A's progress and origin untouched; a completed ripple releases its state so nothing is retained at rest; an origin outside the element's bounds is clamped; with no known pointer position the origin is the element's center; the end radius reaches the element's furthest corner. State is read from the component instance — no central registry and no animation key (FR-024b, FR-024d, FR-024e)
-- [ ] T025 [P] [US3] Failing test in `crates/micold-client/tests/style_state_layers.rs` asserting each interactive style function returns visibly different output for active, hovered and pressed, with the pressed delta at least the hover delta (FR-021, SC-005)
-- [ ] T026 [P] [US3] Failing test in `crates/micold-client/tests/style_focus.rs` asserting the focused text-input status yields the 3dp `secondary` focus indicator, distinguishable from hovered (FR-022)
-- [ ] T027 [P] [US3] Failing test in `crates/micold-client/tests/style_disabled.rs` asserting disabled content resolves the 0.38 opacity, including the self-coloring icon-glyph path (FR-023)
+- [X] T025 [P] [US3] Failing test in `crates/micold-client/src/ui/material/style_states.rs` (inside the crate with the other style gates — the style layer is `pub(crate)` by 017 FR-002, so `tests/` cannot reach it; T025/T026/T027 share the file) asserting each interactive style function returns visibly different output for active, hovered and pressed, with the pressed delta at least the hover delta (FR-021, SC-005)
+- [X] T026 [P] [US3] Failing test in `crates/micold-client/src/ui/material/style_states.rs` (see T025) asserting the focused text-input status yields the 3dp `secondary` focus indicator, distinguishable from hovered (FR-022)
+- [X] T027 [P] [US3] Failing test in `crates/micold-client/src/ui/material/style_states.rs` (see T025) asserting disabled content resolves the 0.38 opacity, including the self-coloring icon-glyph path (FR-023)
 
 ### Implementation for User Story 3
 
@@ -207,14 +207,14 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [ ] ~~T031~~ — merged into T028, which said the same thing.
 - [ ] T032 [US3] Create the `Ripple` component in `crates/micold-client/src/ui/material/ripple.rs` per `contracts/component-api.md` §2.1a — expanding circle drawn with the canvas facility, clipped to the element's shape, beneath content and above container (FR-024a, FR-024b)
 - [ ] T033 [US3] Compose `Ripple` inside `crates/micold-client/src/ui/material/button.rs`, `tree_view.rs`, `menu.rs`, `tag.rs`, `toggle_chip.rs` and `icon_button.rs` so every interactive surface ripples without any call site opting in (FR-024c)
-- [ ] T034 [US3] Add the state-layer compositing helper to `crates/micold-client/src/ui/material/style.rs` as the single place any state layer is applied (FR-020)
-- [ ] T035 [US3] Apply the full state-layer set to the shared text-button style in `crates/micold-client/src/ui/material/style.rs`, which brings list rows, tree items and menu items to life (FR-021, research R9)
-- [ ] T036 [P] [US3] Apply the state-layer set to the filled, outlined and icon button styles in `crates/micold-client/src/ui/material/style.rs` (FR-021)
-- [ ] T037 [P] [US3] Apply the state-layer set to chips and tags in `crates/micold-client/src/ui/material/tag.rs` and `toggle_chip.rs`, preserving AA under every state (FR-021, FR-024)
-- [ ] T038 [P] [US3] Apply the state-layer set plus the **focus** indicator to `crates/micold-client/src/ui/material/text_field.rs` (FR-021, FR-022)
-- [ ] T038a [P] [US3] Apply the state-layer set to `crates/micold-client/src/ui/material/select.rs`, driving the active indicator from the **open** state rather than focus — the rendering stack's select reports only active, hovered and open, and has no focus concept to observe (FR-021, FR-043a)
-- [ ] T039 [US3] Add the persistent `selected` treatment — `secondary_container` fill with `on_secondary_container` text — in `crates/micold-client/src/ui/material/tree_view.rs` and `filter_panel.rs` (FR-020, contract §7.2)
-- [ ] T040 [US3] Update `docs/user-guide/` to describe hover, ripple, selection and focus feedback, recording that keyboard focus indicators exist only on text fields (FR-041, FR-043, Principle VII)
+- [X] T034 [US3] Add the state-layer compositing helper to `crates/micold-client/src/ui/material/style.rs` as the single place any state layer is applied (FR-020)
+- [X] T035 [US3] Apply the full state-layer set to the shared text-button style in `crates/micold-client/src/ui/material/style.rs`, which brings list rows, tree items and menu items to life (FR-021, research R9)
+- [X] T036 [P] [US3] Apply the state-layer set to the filled, outlined and icon button styles in `crates/micold-client/src/ui/material/style.rs` (FR-021)
+- [X] T037 [P] [US3] Apply the state-layer set to chips and tags in `crates/micold-client/src/ui/material/tag.rs` and `toggle_chip.rs`, preserving AA under every state (FR-021, FR-024)
+- [X] T038 [P] [US3] Apply the state-layer set plus the **focus** indicator to `crates/micold-client/src/ui/material/text_field.rs` (FR-021, FR-022)
+- [X] T038a [P] [US3] Apply the state-layer set to `crates/micold-client/src/ui/material/select.rs`, driving the active indicator from the **open** state rather than focus — the rendering stack's select reports only active, hovered and open, and has no focus concept to observe (FR-021, FR-043a)
+- [X] T039 [US3] Add the persistent `selected` treatment — `secondary_container` fill with `on_secondary_container` text — in `crates/micold-client/src/ui/material/tree_view.rs` and `filter_panel.rs` (FR-020, contract §7.2)
+- [X] T040 [US3] Update `docs/user-guide/` to describe hover, ripple, selection and focus feedback, recording that keyboard focus indicators exist only on text fields (FR-041, FR-043, Principle VII)
 
 **Checkpoint**: The UI responds under the pointer everywhere. Demonstrable via quickstart §B3.
 

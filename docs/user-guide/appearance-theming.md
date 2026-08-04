@@ -71,6 +71,31 @@ stay in step and guarantees text contrast everywhere. The accent is simply what 
 produces. The worktree tag colours shifted for the same reason; each type still has its own
 distinct, consistent colour.
 
+## How the interface responds to you
+
+Every control reacts when you point at it and when you press it, and the two are deliberately
+different strengths — a press reads as stronger than a hover, so you can tell them apart without
+thinking about it. This applies to everything you can interact with: list rows, tree items, menu
+items, chips and tags, and every kind of button.
+
+**Selection is distinct from hover.** A selected worktree or an active filter chip keeps a
+persistent, pill-shaped highlight that does not go away when you move the pointer elsewhere. It is
+a different colour from the hover effect, so "the thing I am pointing at" and "the thing that is
+selected" are never confused.
+
+**Disabled controls are dimmed**, including their icons.
+
+### Keyboard focus
+
+Text fields and dropdowns show a distinct outline when they hold keyboard focus, so you can see
+where typing will go after tabbing. The outline stays visible even if the pointer is also resting
+over the field.
+
+Buttons, rows, menu items and chips do **not** show a focus outline. This is a known limitation
+rather than an oversight: the underlying toolkit does not report keyboard focus for those controls,
+so there is nothing to draw an indicator from. Keyboard navigation between them is not available
+either, so in practice there is no focus to lose track of.
+
 ## Automatic light/dark
 
 By default the application follows your operating system's light or dark setting:
