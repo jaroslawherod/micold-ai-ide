@@ -494,13 +494,30 @@ where
             }
             // --- Feature 011: shell instances + which process is attached ---
             ClientMsg::SessionAttachProcess { session, process } => {
-                if let Some((pty, framer)) = state.attach_process(session, process) {
-                    restart_view(state, id, &mut view_stream, pty, framer);
+                match state.attach_process(session, process) {
+                    Some((pty, framer)) => restart_view(state, id, &mut view_stream, pty, framer),
+                    // The client asked to display a process the daemon does not have, so the two
+                    // now disagree about what is attached — the client will show its new mode while
+                    // the pane keeps streaming whatever it streamed before (FR-007). Silently
+                    // ignoring this is what let a Regular Terminal toggle do nothing at all with no
+                    // trace anywhere (BUG-001, feature 010-regular-terminal-mode).
+                    None => tracing::warn!(
+                        session = %session.0,
+                        ?process,
+                        "attach requested for a process the session does not have"
+                    ),
                 }
             }
             ClientMsg::SessionOpenShell { session, instance } => {
-                if let Err(err) = state.open_shell(session, instance) {
-                    tracing::warn!(session = %session.0, instance = instance.0, %err, "open shell failed");
+                match state.open_shell(session, instance) {
+                    // Fire-and-forget: the client gets no reply, so this log is the only place a
+                    // failed shell open is visible at all.
+                    Err(err) => {
+                        tracing::warn!(session = %session.0, instance = instance.0, %err, "open shell failed")
+                    }
+                    Ok(()) => {
+                        tracing::info!(session = %session.0, instance = instance.0, "shell instance opened")
+                    }
                 }
             }
             ClientMsg::SessionCloseShell { session, instance } => {
@@ -553,7 +570,7 @@ where
                 // Stop the session's processes and drop it from the live registry (kill happens
                 // outside the state lock inside remove_session). TODO(T053): archive the durable
                 // record so reconciliation can't resurrect it, and broadcast the catalog.
-                if let Some(pty) = state.remove_session(session) {
+                for pty in state.remove_session(session) {
                     let _ = pty.kill();
                 }
             }
@@ -1035,8 +1052,8 @@ where
                 ),
             },
             ClientMsg::SessionDelete { req, session } => match state.delete_session(session) {
-                Ok((owner, pty)) => {
-                    if let Some(pty) = pty {
+                Ok((owner, ptys)) => {
+                    for pty in ptys {
                         let _ = pty.kill();
                     }
                     match owner {

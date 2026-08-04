@@ -576,16 +576,20 @@ impl DaemonState {
         Ok(Self::remove_live_by_ids(&mut inner, ids))
     }
 
-    /// Remove the given session ids from the live registry, returning each removed primary handle so
-    /// the caller can `kill()` them **outside** the lock (module invariant). Shared by the worktree-,
-    /// project-, and session-delete paths.
+    /// Remove the given session ids from the live registry, returning **every** removed process
+    /// handle so the caller can `kill()` them **outside** the lock (module invariant). Shared by the
+    /// worktree-, project-, and session-delete paths.
+    ///
+    /// All of them, not just each primary (BUG-001): dropping the `LiveSession` only reclaims a
+    /// process when its `Arc` refcount reaches zero, and a view-stream task holds a clone of
+    /// whichever process it is streaming. The explicit `kill()` is what makes teardown prompt rather
+    /// than dependent on when some other task happens to let go — the primary always got one, and
+    /// shell instances silently did not.
     fn remove_live_by_ids(inner: &mut Inner, ids: Vec<SessionId>) -> Vec<Arc<PtySession>> {
         let mut removed = Vec::new();
         for id in ids {
             if let Some(live) = inner.sessions.remove(&id) {
-                if let Some(primary) = live.procs.get(&SessionProcess::Primary) {
-                    removed.push(Arc::clone(&primary.pty));
-                }
+                removed.extend(live.procs.values().map(|p| Arc::clone(&p.pty)));
             }
         }
         removed
@@ -613,19 +617,17 @@ impl DaemonState {
         self.lock().catalog.rename_project(path, name)
     }
 
-    /// Delete (archive) a session and stop its live process (T053). Returns the owning project path
-    /// (if the session was known) and the removed primary handle for the caller to `kill()` outside
-    /// the lock. A `None` project means the id was unknown — the handler replies `NotFound`.
+    /// Delete (archive) a session and stop its live processes (T053). Returns the owning project
+    /// path (if the session was known) and every removed process handle for the caller to `kill()`
+    /// outside the lock. A `None` project means the id was unknown — the handler replies `NotFound`.
     pub fn delete_session(
         &self,
         session: SessionId,
-    ) -> io::Result<(Option<PathBuf>, Option<Arc<PtySession>>)> {
+    ) -> io::Result<(Option<PathBuf>, Vec<Arc<PtySession>>)> {
         let mut inner = self.lock();
         let owner = inner.catalog.archive_session(session)?;
-        let pty = Self::remove_live_by_ids(&mut inner, vec![session])
-            .into_iter()
-            .next();
-        Ok((owner, pty))
+        let ptys = Self::remove_live_by_ids(&mut inner, vec![session]);
+        Ok((owner, ptys))
     }
 
     /// Prune (archive) empty sessions of `project` — those the AI CLI never recorded a conversation
@@ -789,17 +791,20 @@ impl DaemonState {
         pty
     }
 
-    /// Remove a session (all its processes) from the live registry. Returns the primary handle.
-    /// The removed [`LiveSession`] — whose `Proc` drops each kill+reader-join the PTYs — is dropped
-    /// **outside** the state lock so that blocking teardown never stalls other clients (module
-    /// invariant; mirrors `close_shell`).
-    pub fn remove_session(&self, session: SessionId) -> Option<Arc<PtySession>> {
+    /// Remove a session (all its processes) from the live registry, returning **every** removed
+    /// process handle so the caller can `kill()` them outside the lock. The removed [`LiveSession`]
+    /// — whose `Proc` drops each kill+reader-join the PTYs — is dropped **outside** the state lock
+    /// so that blocking teardown never stalls other clients (module invariant; mirrors
+    /// `close_shell`).
+    ///
+    /// Returns all processes rather than just the primary (BUG-001) — see `remove_live_by_ids` for
+    /// why `Drop` alone is not enough, and note that a session opened straight into Regular Terminal
+    /// mode has no primary at all, so the old signature returned nothing for it.
+    pub fn remove_session(&self, session: SessionId) -> Vec<Arc<PtySession>> {
         let removed = self.lock().sessions.remove(&session);
-        removed.and_then(|s| {
-            s.procs
-                .get(&SessionProcess::Primary)
-                .map(|p| Arc::clone(&p.pty))
-        })
+        removed
+            .map(|s| s.procs.values().map(|p| Arc::clone(&p.pty)).collect())
+            .unwrap_or_default()
     }
 
     /// Supervise every live session whose primary process has exited (US4, FR-005): apply the
@@ -1071,8 +1076,38 @@ impl DaemonState {
             session, &cwd, &env, scrollback, None,
         )?);
         let mut inner = self.lock();
-        if let Some(live) = inner.sessions.get_mut(&session) {
-            live.procs.insert(key, new_proc(pty, session));
+        match inner.sessions.get_mut(&session) {
+            Some(live) => {
+                live.procs.insert(key, new_proc(pty, session));
+            }
+            // The session has no live entry — its AI CLI exited, failed to start, or has not been
+            // relaunched since the service restarted. Create one around this shell rather than
+            // dropping it: registering conditionally meant the spawned `pty` fell out of scope
+            // here, its `Drop` killed the child that had just started, and this still returned
+            // `Ok(())` — so switching such a session to Regular Terminal mode silently did nothing
+            // at all (BUG-001, feature 010-regular-terminal-mode).
+            //
+            // The AI CLI is deliberately NOT started as a side effect: FR-003 makes the shell
+            // depend only on there not already being one, and resuming a conversation the user did
+            // not ask for is what switching *to* AI CLI mode is for (FR-005).
+            //
+            // A `LiveSession` with no `Primary` is sound: teardown removes the whole entry and each
+            // `Proc`'s `Drop` kills its child, so nothing leaks, and supervision (which only ever
+            // restarts a primary) skips it — shell instances never auto-restart anyway.
+            None => {
+                let mut procs = HashMap::new();
+                procs.insert(key, new_proc(pty, session));
+                inner.sessions.insert(
+                    session,
+                    LiveSession {
+                        procs,
+                        attached: key,
+                        input: InputReceiver::new(),
+                        activity: Activity::new(),
+                        last_title: None,
+                    },
+                );
+            }
         }
         Ok(())
     }

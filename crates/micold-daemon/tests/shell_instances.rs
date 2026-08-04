@@ -124,7 +124,7 @@ fn a_shell_instance_can_be_opened_attached_and_driven_independently_of_the_prima
     );
 
     // Test-owned processes: stop them.
-    if let Some(p) = state.remove_session(sid) {
+    for p in state.remove_session(sid) {
         let _ = p.kill();
     }
 }
@@ -168,5 +168,48 @@ fn opening_a_shell_on_a_session_whose_primary_is_not_running_still_attaches_a_sh
     assert!(
         attached.unwrap().0.is_alive(),
         "the spawned shell must still be running, not killed by being dropped on the floor"
+    );
+}
+
+/// T032 (BUG-001) — a shell opened for a session that never had a primary is still torn down with
+/// the session, so the new "create a live entry around the shell" path cannot leak a process.
+///
+/// `remove_session` returns only the *primary* handle for the caller to `kill()`, and there is no
+/// primary here. What actually reclaims the shell is the removal of the whole `LiveSession`: each
+/// `Proc`'s `Drop` kills and joins its child. This pins that, since a future refactor that leaned
+/// on the returned handle instead would leak a shell per toggle.
+#[test]
+fn a_shell_opened_without_a_primary_is_reclaimed_when_the_session_is_removed() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::new();
+    let state = DaemonState::new(catalog_with_session(project.path(), store.path(), id));
+
+    let instance = ShellInstanceId(1);
+    state.open_shell(id, instance).unwrap();
+    let shell = state
+        .attach_process(id, SessionProcess::Shell(instance))
+        .expect("the shell instance is live")
+        .0;
+    assert!(shell.is_alive(), "precondition: the shell is running");
+
+    // Teardown must hand back the shell even though the session has no primary — `Drop` alone is
+    // not enough while another `Arc` (in production, a view-stream task) still holds the process.
+    let removed = state.remove_session(id);
+    assert_eq!(
+        removed.len(),
+        1,
+        "the shell handle must come back for an explicit kill"
+    );
+    for pty in removed {
+        let _ = pty.kill();
+    }
+    assert!(
+        state.live_session(id).is_none(),
+        "the live entry is gone from the registry"
+    );
+    assert!(
+        wait_until(Duration::from_secs(5), || !shell.is_alive()),
+        "the shell process must be reclaimed with the session, not leaked"
     );
 }

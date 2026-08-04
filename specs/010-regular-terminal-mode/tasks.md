@@ -389,19 +389,21 @@ Regular Terminal mode spawned a shell, killed it via `Drop`, and reported succes
 ### Tests
 
 - [X] T031 [P] [US1] In `crates/micold-daemon/tests/shell_instances.rs`: opening a shell instance for a session with no live entry attaches a **running** shell, rather than returning `Ok(())` having done nothing (FR-003, FR-007). **Done**: `opening_a_shell_on_a_session_whose_primary_is_not_running_still_attaches_a_shell`, which fails against the pre-fix daemon exactly as reported.
-- [ ] T032 [P] [US1] In `crates/micold-daemon/tests/shell_instances.rs`: a shell instance opened for a not-live session is torn down with the session (`SessionKill`/`SessionStop` and the worktree/project delete paths remove the whole live entry), so a session that never had a primary cannot leak its shell.
+- [X] T032 [P] [US1] In `crates/micold-daemon/tests/shell_instances.rs`: a shell instance opened for a not-live session is torn down with the session (`SessionKill`/`SessionStop` and the worktree/project delete paths remove the whole live entry), so a session that never had a primary cannot leak its shell. **Done**: `a_shell_opened_without_a_primary_is_reclaimed_when_the_session_is_removed`. It failed on first run and found a real gap — `remove_session` returned only the *primary* for the caller to `kill()`, so a shell was reclaimed only by `Drop`, which does not run while a view-stream task still holds an `Arc`. Teardown now returns every process handle.
 
 ### Implementation
 
-- [ ] T033 [US1] In `DaemonState::open_shell` (`crates/micold-daemon/src/state.rs`), register the spawned instance whether or not the session already has a live entry — creating one, attached to that instance, when it does not. Do **not** start the AI CLI as a side effect (FR-003 as clarified). Makes T031 green.
-- [ ] T034 [US1] Give `SessionAttachProcess` an observable failure in `crates/micold-daemon/src/server.rs`: a request naming a process the daemon does not have MUST be logged rather than silently no-opped, so a future divergence between the client's mode and the daemon's processes leaves a trace (FR-007).
-- [ ] T035 [P] [US1] Log shell-instance open failures in the daemon, matching the diagnostics precedent set for the worktree-delete path. `open_shell` returning `Ok(())` having done nothing is precisely what made this bug invisible.
+- [X] T033 [US1] In `DaemonState::open_shell` (`crates/micold-daemon/src/state.rs`), register the spawned instance whether or not the session already has a live entry — creating one, attached to that instance, when it does not. Do **not** start the AI CLI as a side effect (FR-003 as clarified). Makes T031 green. **Done**: `open_shell` creates a `LiveSession` around the instance when the session has none, attached to it. The AI CLI is not started as a side effect.
+- [X] T034 [US1] Give `SessionAttachProcess` an observable failure in `crates/micold-daemon/src/server.rs`: a request naming a process the daemon does not have MUST be logged rather than silently no-opped, so a future divergence between the client's mode and the daemon's processes leaves a trace (FR-007). **Done**: an attach for a process the session does not have logs at WARN with the session and process instead of no-opping.
+- [X] T035 [P] [US1] Log shell-instance open failures in the daemon, matching the diagnostics precedent set for the worktree-delete path. `open_shell` returning `Ok(())` having done nothing is precisely what made this bug invisible. **Done**: a successful shell open logs at INFO; a failure keeps its WARN. The command is fire-and-forget, so the log is the only place either is visible.
 
 **Checkpoint**: Toggling any session to Regular Terminal mode produces a shell, or says why not.
 
 ---
 
-**Bugfix**: 2026-08-04 — BUG-001 Updated from bugfix patch. Phase 8 added (T031-T035). No task
+**Bugfix**: 2026-08-04 — BUG-001 Updated from bugfix patch. Phase 8 added (T031-T035), all
+complete. T032 additionally uncovered that teardown returned only each session's primary handle,
+leaving shell instances to `Drop` alone — corrected in the same phase. No task
 reopened: feature 012's T009 met its acceptance in the client, where spawn and registration were
 one act; the behaviour regressed in the daemon port, which this phase corrects. See
 `specs/010-regular-terminal-mode/bugs/BUG-001.md`.
