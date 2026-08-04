@@ -11,7 +11,7 @@ use iced::widget::{
 };
 use iced::{Background, Border, Color, Shadow, Theme};
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, elevation, shape, Rgb, Roles};
+use micold_core::tokens::{self, elevation, shape, state, Rgb, Roles};
 
 /// Convert a token color into an iced color.
 pub fn color(c: Rgb) -> Color {
@@ -52,6 +52,28 @@ fn blend(base: Color, over: Color, t: f32) -> Color {
         b: base.b + (over.b - base.b) * t,
         a: 1.0,
     }
+}
+
+/// A state layer over an opaque container (FR-020).
+///
+/// A state layer is the *content* colour composited over the container at the state's opacity.
+/// This is the only place that composition happens, so "what does a hover look like" has one
+/// answer for list rows, menu items, chips, tags and every button variant alike — the breadth is
+/// the requirement, and it is what feature 003 lacked when only buttons responded.
+///
+/// Opacities come from `tokens::state`, never from a literal. Feature 003 used 0.12 for pressed,
+/// which is the *selected* opacity: close enough to look reasonable, and wrong enough that a
+/// selected row and a pressed one were indistinguishable.
+pub fn state_layer(container: Color, content: Color, opacity: f32) -> Color {
+    blend(container, content, opacity)
+}
+
+/// The same layer as a standalone fill, for a surface that paints nothing at rest.
+///
+/// Left semi-transparent rather than composited, so it works over whatever it happens to sit on —
+/// a text button in a dialog and the same button on a card get a layer that suits each.
+pub fn state_fill(content: Color, opacity: f32) -> Color {
+    alpha(content, opacity)
 }
 
 fn radius(px: f32) -> Border {
@@ -180,9 +202,15 @@ pub fn menu_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
 /// [`input`]'s look, with the outline switching to `primary` while hovered or open.
 pub fn select_field(r: Roles) -> impl Fn(&Theme, pick_list::Status) -> pick_list::Style {
     move |_theme, status| {
-        let border_color = match status {
-            pick_list::Status::Hovered | pick_list::Status::Opened { .. } => color(r.primary),
-            pick_list::Status::Active => color(r.outline),
+        // The select's active indicator is driven by **open**, not focus (FR-043a). The rendering
+        // stack's `pick_list` reports only active, hovered and opened — it has no focused status to
+        // observe — so "the control the keyboard is on" is not a question this widget can answer.
+        // Open is the nearest honest signal, and it is accepted fidelity gap #3 rather than an
+        // approximation of focus that would sometimes be wrong.
+        let (border_color, border_width) = match status {
+            pick_list::Status::Opened { .. } => (color(r.secondary), state::FOCUS_RING_WIDTH),
+            pick_list::Status::Hovered => (color(r.on_surface_variant), 1.0),
+            pick_list::Status::Active => (color(r.outline), 1.0),
         };
         pick_list::Style {
             text_color: color(r.on_surface),
@@ -191,7 +219,7 @@ pub fn select_field(r: Roles) -> impl Fn(&Theme, pick_list::Status) -> pick_list
             background: Background::Color(color(r.surface)),
             border: Border {
                 color: border_color,
-                width: 1.0,
+                width: border_width,
                 radius: shape::SMALL.into(),
             },
         }
@@ -309,8 +337,8 @@ pub fn filled(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
         let on = color(r.on_primary);
         let bg = match status {
             button::Status::Active => base,
-            button::Status::Hovered => blend(base, on, 0.08),
-            button::Status::Pressed => blend(base, on, 0.12),
+            button::Status::Hovered => state_layer(base, on, state::HOVER),
+            button::Status::Pressed => state_layer(base, on, state::PRESSED),
             button::Status::Disabled => alpha(base, 0.38),
         };
         let text = if matches!(status, button::Status::Disabled) {
@@ -332,8 +360,8 @@ pub fn outlined(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_theme, status| {
         let prim = color(r.primary);
         let fill = match status {
-            button::Status::Hovered => Some(Background::Color(alpha(prim, 0.08))),
-            button::Status::Pressed => Some(Background::Color(alpha(prim, 0.12))),
+            button::Status::Hovered => Some(Background::Color(state_fill(prim, state::HOVER))),
+            button::Status::Pressed => Some(Background::Color(state_fill(prim, state::PRESSED))),
             _ => None,
         };
         let (text, border_color) = if matches!(status, button::Status::Disabled) {
@@ -359,8 +387,8 @@ pub fn text_button(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style
     move |_theme, status| {
         let prim = color(r.primary);
         let fill = match status {
-            button::Status::Hovered => Some(Background::Color(alpha(prim, 0.08))),
-            button::Status::Pressed => Some(Background::Color(alpha(prim, 0.12))),
+            button::Status::Hovered => Some(Background::Color(state_fill(prim, state::HOVER))),
+            button::Status::Pressed => Some(Background::Color(state_fill(prim, state::PRESSED))),
             _ => None,
         };
         let text = if matches!(status, button::Status::Disabled) {
@@ -385,8 +413,8 @@ pub fn circular_icon_button(r: Roles) -> impl Fn(&Theme, button::Status) -> butt
     move |_theme, status| {
         let prim = color(r.primary);
         let fill = match status {
-            button::Status::Hovered => Some(Background::Color(alpha(prim, 0.08))),
-            button::Status::Pressed => Some(Background::Color(alpha(prim, 0.12))),
+            button::Status::Hovered => Some(Background::Color(state_fill(prim, state::HOVER))),
+            button::Status::Pressed => Some(Background::Color(state_fill(prim, state::PRESSED))),
             _ => None,
         };
         let text = if matches!(status, button::Status::Disabled) {
@@ -442,15 +470,26 @@ pub fn checkbox(r: Roles) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbo
 /// A text input styled to the design system.
 pub fn input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
     move |_theme, status| {
-        let border_color = match status {
-            text_input::Status::Focused { .. } => color(r.primary),
-            _ => color(r.outline),
+        // The focus indicator (FR-022): a 3dp `secondary` outline, drawn *in addition to* the focus
+        // state layer rather than instead of it. It has to remain distinguishable while the element
+        // is also hovered — tabbing to a field the mouse happens to rest on is the ordinary case,
+        // and losing the indicator there makes keyboard navigation vanish exactly when the user is
+        // also touching the mouse.
+        //
+        // Text fields and the select control are the only elements that can hold focus in this
+        // rendering stack; buttons, rows, menu items and chips have no focused status to observe.
+        // That is accepted fidelity gap #2 (FR-043), and it is why this lives here rather than in a
+        // shared helper every interactive style would call.
+        let (border_color, border_width) = match status {
+            text_input::Status::Focused { .. } => (color(r.secondary), state::FOCUS_RING_WIDTH),
+            text_input::Status::Hovered => (color(r.on_surface_variant), 1.0),
+            _ => (color(r.outline), 1.0),
         };
         text_input::Style {
             background: Background::Color(color(r.surface)),
             border: Border {
                 color: border_color,
-                width: 1.0,
+                width: border_width,
                 radius: shape::SMALL.into(),
             },
             icon: color(r.on_surface_variant),
