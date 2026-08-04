@@ -23,9 +23,12 @@ use iced::{Color, Element};
 use micold_core::overlay::Layer;
 use micold_core::tokens::Roles;
 
-/// The scrim's alpha at full progress (matches the prior static backdrop dimming so the modal
-/// looks unchanged at rest — only the transition is new).
-const SCRIM_ALPHA: f32 = 0.6;
+/// The scrim's alpha at full progress — Material's 32% (contract §4).
+///
+/// Down from feature 003's 0.6, which was chosen to match an older static backdrop. The dialog now
+/// separates from what is behind it by elevation 3's tone and shadow rather than by drowning the
+/// background, so a lighter scrim keeps the context beneath legible instead of hiding it.
+const SCRIM_ALPHA: f32 = 0.32;
 
 /// Dialog entrance — Material Design 3 "medium" duration; clearly perceptible (the ~90ms this
 /// replaced was not).

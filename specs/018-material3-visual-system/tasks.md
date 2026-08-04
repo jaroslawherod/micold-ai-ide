@@ -134,21 +134,21 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 
 ### Tests for User Story 1 (MANDATORY — write first, confirm they FAIL) ⚠️
 
-- [ ] T001 [P] [US1] Failing test in `crates/micold-client/tests/style_elevation.rs` asserting each elevated style function returns a style whose shadow blur is non-zero and whose background matches the level's tonal role, and that an elevation-0 surface returns no shadow, in both schemes (FR-015, FR-016, SC-002)
-- [ ] T002 [P] [US1] Failing test in `crates/micold-client/tests/style_outline_discipline.rs` asserting no style function carrying an elevation also sets a non-transparent border (FR-002, FR-003)
-- [ ] T003 [P] [US1] Failing test in `crates/micold-client/tests/style_shape.rs` asserting buttons and chips resolve `full`, cards resolve `medium`, dialogs resolve `extra_large` (FR-019)
+- [X] T001 [P] [US1] Failing test in `crates/micold-client/src/ui/material/style_elevation.rs` (inside the crate, not `tests/` — the style layer is `pub(crate)` by 017 FR-002 and `material_boundary.rs` treats that as the enforcement, so an integration test cannot reach it; same resolution `style_snapshot` already uses) asserting each elevated style function returns a style whose shadow blur is non-zero and whose background matches the level's tonal role, and that an elevation-0 surface returns no shadow, in both schemes (FR-015, FR-016, SC-002)
+- [X] T002 [P] [US1] Failing test in `crates/micold-client/src/ui/material/style_outline_discipline.rs` (inside the crate — see T001) asserting no style function carrying an elevation also sets a non-transparent border (FR-002, FR-003)
+- [X] T003 [P] [US1] Failing test in `crates/micold-client/src/ui/material/style_shape.rs` (inside the crate — see T001) asserting buttons and chips resolve `full`, cards resolve `medium`, dialogs resolve `extra_large` (FR-019)
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] Add the elevation→shadow conversion in `crates/micold-client/src/ui/material/style.rs`, folding Material's key and ambient shadows into the single shadow the renderer exposes per widget (research R1)
-- [ ] T005 [US1] Wire the elevation scale into `crates/micold-client/src/ui/material/surface.rs` via `.elevation()` and `.shape()` (FR-015)
-- [ ] T006 [US1] Rewrite the surface, dialog, menu, sidebar and toolbar style functions in `crates/micold-client/src/ui/material/style.rs` to draw from the elevation scale and graded surface-container roles, removing the 1px outline each uses to fake depth (FR-002, FR-015)
-- [ ] T007 [P] [US1] Apply the `full` pill radius to every button variant in `crates/micold-client/src/ui/material/button.rs` and `icon_button.rs` (FR-019)
-- [ ] T008 [P] [US1] Apply the `extra_large` (28) corner and the dialog surface role in `crates/micold-client/src/ui/material/modal.rs` (FR-019, FR-028)
-- [ ] T009 [US1] Remove decorative borders in `crates/micold-client/src/ui/material/tree_view.rs`, `toolbar.rs`, `terminal_pane.rs`, `progress.rs` and `toggle_chip.rs`, retaining only genuine dividers in `outline_variant` (FR-002, FR-003, SC-002)
-- [ ] T010 [US1] Draw the modal scrim at 32% `scrim` in `crates/micold-client/src/ui/material/modal.rs` (FR-028, contract §4)
-- [ ] T011 [US1] Verify overlapping elevated surfaces render in elevation order with independent shadows in `crates/micold-client/src/ui/material/modal.rs` and `menu.rs` — a context menu over a dialog must not flatten into it (FR-017)
-- [ ] T012 [US1] Update `docs/user-guide/` to describe the new surface hierarchy and the accent-color change from blue to baseline purple (FR-041, FR-005b, Principle VII)
+- [X] T004 [US1] Add the elevation→shadow conversion in `crates/micold-client/src/ui/material/style.rs`, folding Material's key and ambient shadows into the single shadow the renderer exposes per widget (research R1)
+- [X] T005 [US1] Wire the elevation scale into `crates/micold-client/src/ui/material/surface.rs` via `.elevation()` and `.shape()` (FR-015)
+- [X] T006 [US1] Rewrite the surface, dialog, menu, sidebar and toolbar style functions in `crates/micold-client/src/ui/material/style.rs` to draw from the elevation scale and graded surface-container roles, removing the 1px outline each uses to fake depth (FR-002, FR-015)
+- [X] T007 [P] [US1] Apply the `full` pill radius to every button variant in `crates/micold-client/src/ui/material/button.rs` and `icon_button.rs` (FR-019)
+- [X] T008 [P] [US1] Apply the `extra_large` (28) corner and the dialog surface role in `crates/micold-client/src/ui/material/modal.rs` (FR-019, FR-028)
+- [X] T009 [US1] Remove decorative borders in `crates/micold-client/src/ui/material/tree_view.rs`, `toolbar.rs`, `terminal_pane.rs`, `progress.rs` and `toggle_chip.rs`, retaining only genuine dividers in `outline_variant` (FR-002, FR-003, SC-002)
+- [X] T010 [US1] Draw the modal scrim at 32% `scrim` in `crates/micold-client/src/ui/material/modal.rs` (FR-028, contract §4)
+- [X] T011 [US1] Verify overlapping elevated surfaces render in elevation order with independent shadows in `crates/micold-client/src/ui/material/modal.rs` and `menu.rs` — a context menu over a dialog must not flatten into it (FR-017)
+- [X] T012 [US1] Update `docs/user-guide/` to describe the new surface hierarchy and the accent-color change from blue to baseline purple (FR-041, FR-005b, Principle VII)
 
 **Checkpoint**: The app reads as Material at a glance. Demonstrable via quickstart §B1.
 

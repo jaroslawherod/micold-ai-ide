@@ -282,7 +282,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                             ..style::color(r.surface_variant)
                         })),
                         border: iced::Border {
-                            radius: shape::SM.into(),
+                            radius: shape::SMALL.into(),
                             ..Default::default()
                         },
                         ..Default::default()

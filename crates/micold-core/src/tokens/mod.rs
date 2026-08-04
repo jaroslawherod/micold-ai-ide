@@ -104,6 +104,29 @@ pub struct Roles {
 }
 
 impl Roles {
+    /// Which scheme this role set is.
+    ///
+    /// Needed because a few values depend on the scheme without being a colour role — notably the
+    /// elevation shadow's alpha, which is stronger in dark so the shadow is not lost entirely
+    /// against a dark background (contract §4).
+    pub fn scheme(&self) -> ColorScheme {
+        self.scheme
+    }
+
+    /// The surface tone for an elevation level (contract §4).
+    ///
+    /// Lives here rather than in the styling layer because it is a statement about the token
+    /// system — which role a level names — not about rendering.
+    pub fn elevation_surface(&self, level: u8) -> Rgb {
+        match elevation::LEVELS[level as usize].surface {
+            elevation::SurfaceRole::Surface => self.surface,
+            elevation::SurfaceRole::SurfaceContainerLow => self.surface_container_low,
+            elevation::SurfaceRole::SurfaceContainer => self.surface_container,
+            elevation::SurfaceRole::SurfaceContainerHigh => self.surface_container_high,
+            elevation::SurfaceRole::SurfaceContainerHighest => self.surface_container_highest,
+        }
+    }
+
     /// `(fill, text)` for a worktree type tag chip (contract §1.4).
     ///
     /// Unlike feature 003, the text color is **per tag** rather than one shared `on_tag`: each tag
