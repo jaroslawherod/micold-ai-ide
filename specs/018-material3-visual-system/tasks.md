@@ -213,8 +213,12 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T029 [US3] Build the ripple renderer in `crates/micold-client/src/ui/cdk/ripple.rs` — press capture, geometry, phase progression and per-instance lifetime, all held **inside the component instance** and carrying no colour or opacity of its own. Frames are requested through the motion primitive, never directly, so 017's single-frame-request gate stays at one entry (FR-024b, FR-024d, FR-024e, FR-024f, FR-039e)
 - [ ] ~~T030~~ — merged into T029. A separate `crates/micold-core/src/ripple.rs` is **not** created: FR-024e places ripple origin, progress and lifetime in the component instance and forbids registering an animation key, so central state would contradict the requirement it claimed to serve. Kept struck rather than deleted so the numbering stays stable.
 - [ ] ~~T031~~ — merged into T028, which said the same thing.
-- [ ] T032 [US3] Create the `Ripple` component in `crates/micold-client/src/ui/material/ripple.rs` per `contracts/component-api.md` §2.1a — expanding circle drawn with the canvas facility, clipped to the element's shape, beneath content and above container (FR-024a, FR-024b)
-- [ ] T033 [US3] Compose `Ripple` inside `crates/micold-client/src/ui/material/button.rs`, `tree_view.rs`, `menu.rs`, `tag.rs`, `toggle_chip.rs` and `icon_button.rs` so every interactive surface ripples without any call site opting in (FR-024c)
+- [X] T032 [US3] Create the `Ripple` component in `crates/micold-client/src/ui/material/ripple.rs` per `contracts/component-api.md` §2.1a — expanding circle drawn with the canvas facility, clipped to the element's shape, beneath content and above container (FR-024a, FR-024b)
+- [X] T033 [US3] Compose `Ripple` inside `crates/micold-client/src/ui/material/button.rs`, `tree_view.rs`, `menu.rs`, `tag.rs`, `toggle_chip.rs` and `icon_button.rs` so every interactive surface ripples without any call site opting in (FR-024c).
+  **`tag.rs` deliberately excluded**: `Tag` is a static display chip with no `on_press`, so wrapping
+  it would ripple a surface the user cannot press. `ToggleChip` — the *interactive* chip — does
+  ripple. Buttons with no `on_press` are likewise left unwrapped, since a ripple on a disabled
+  control reports a press that will never happen and contradicts its own disabled styling
 - [X] T034 [US3] Add the state-layer compositing helper to `crates/micold-client/src/ui/material/style.rs` as the single place any state layer is applied (FR-020)
 - [X] T035 [US3] Apply the full state-layer set to the shared text-button style in `crates/micold-client/src/ui/material/style.rs`, which brings list rows, tree items and menu items to life (FR-021, research R9)
 - [X] T036 [P] [US3] Apply the state-layer set to the filled, outlined and icon button styles in `crates/micold-client/src/ui/material/style.rs` (FR-021)

@@ -25,6 +25,7 @@ mod navigation_drawer;
 mod progress;
 mod project_switcher;
 mod resize_handle;
+mod ripple;
 mod scrollable;
 mod select;
 /// The one place design tokens become rendering types. Internal by intent (FR-002): a feature
@@ -71,6 +72,7 @@ pub use navigation_drawer::NavigationDrawer;
 pub use progress::StageProgress;
 pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};
 pub use resize_handle::ResizeHandle;
+pub use ripple::Ripple;
 pub use scrollable::Scrollable;
 pub use select::Select;
 pub use surface::{Kind as SurfaceKind, Surface};

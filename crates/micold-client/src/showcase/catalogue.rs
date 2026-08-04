@@ -543,6 +543,18 @@ application, so in this page it opens away from the trigger",
     },
     // ---- components whose appearance IS an animation (rendered in the motion section) -------
     Entry {
+        module: "material/ripple.rs",
+        component: "Ripple",
+        variants: &[],
+        density: &[],
+        posed: &["at rest"],
+        live: &["press anywhere on the surface"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::controls::ripple_component,
+    },
+    Entry {
         module: "material/animation.rs",
         component: "Fade",
         variants: &[],
