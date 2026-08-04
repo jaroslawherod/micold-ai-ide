@@ -461,7 +461,17 @@ pub fn main() -> iced::Result {
     iced::application(boot, update, view)
         .title("Micold AI IDE")
         .theme(theme)
-        .default_font(iced::Font::DEFAULT)
+        // Roboto is the application's typeface, so the interface looks the same on every platform
+        // instead of inheriting whatever UI font the OS provides (FR-008). Both weights are
+        // registered because the type scale uses 400 and 500 and the matcher can only choose from
+        // what it has been given.
+        .default_font(micold_client::ui::ROBOTO)
+        .font(micold_client::ui::ROBOTO_REGULAR_BYTES)
+        .font(micold_client::ui::ROBOTO_MEDIUM_BYTES)
+        // Registering fonts does not disable fallback: text outside a registered font's coverage —
+        // a worktree named in Japanese, say — still resolves through the system's own font list
+        // rather than rendering missing-glyph boxes (FR-013). Roboto covers Latin and the symbols
+        // the interface composes its own strings from; user data is not so constrained.
         .font(micold_client::ui::MATERIAL_SYMBOLS_BYTES)
         .window(window_settings())
         .subscription(subscription)

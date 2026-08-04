@@ -41,6 +41,25 @@ The known-projects list keeps everything it had before — the active-project ma
 "git" badge on repositories, and the "unavailable" state for folders that have moved or
 been deleted — now presented as Material list items.
 
+## The typeface
+
+The application ships its own copy of **Roboto** and uses it everywhere except the terminal.
+
+This means the interface looks the same on every machine. It no longer borrows whatever UI font
+your operating system happens to provide, so a window on Linux, macOS and Windows renders text at
+the same sizes and weights, and changing your OS font setting does not change the app.
+
+Text is set at named sizes drawn from Material Design 3's type scale — a title, body text and a
+caption differ in size, weight and line spacing together, so they are told apart by how they look
+rather than by where they sit on screen.
+
+Two exceptions, both deliberate:
+
+- **The terminal keeps its monospaced font** and its own character grid. Column alignment in
+  command output is unaffected.
+- **Text Roboto cannot draw falls back** to a font that can. A worktree named in Japanese, or any
+  text using characters outside Roboto's coverage, renders normally rather than as empty boxes.
+
 ## The accent colour
 
 The accent colour — used for filled buttons, links, selection and focus — is Material

@@ -140,11 +140,25 @@ fn type_tag_fills_are_distinct() {
     }
 }
 
-/// Sidebar sizes are exactly 80% of the app-wide scale, rounded (FR-012).
+/// The sidebar stays denser than the text it nests under (FR-011).
+///
+/// It used to be "exactly 80% of the app-wide scale, rounded". Feature 018 §2.4 replaces that
+/// derivation: each sidebar role now maps to the *nearest smaller role in the Material scale*
+/// rather than to a computed size, which is what keeps it inside the scale instead of beside it.
+/// `body_small` is 12 against `body_medium`'s 14 — a reduction, but not 80% of it.
+///
+/// So what is asserted is the decision that must survive, not the arithmetic that used to express
+/// it: sidebar text is smaller than body text, and a session line shares its worktree name's role.
+/// `micold-core/tests/tokens_scales.rs` pins which roles those are.
 #[test]
-fn sidebar_sizes_are_eighty_percent() {
-    let round80 = |base: f32| (f64::from(base) * 0.8).round() as f32;
-    assert_eq!(sidebar::NAME, round80(type_scale::BODY));
-    assert_eq!(sidebar::TAG, round80(type_scale::LABEL));
-    assert_eq!(sidebar::SESSION, round80(type_scale::BODY));
+#[allow(clippy::assertions_on_constants)] // the point is to guard the values; clippy can see the answer
+fn the_sidebar_stays_denser_than_the_text_it_nests_under() {
+    assert!(
+        sidebar::NAME < type_scale::BODY,
+        "sidebar name {} is not smaller than body {}",
+        sidebar::NAME,
+        type_scale::BODY
+    );
+    assert!(sidebar::TAG < type_scale::LABEL);
+    assert_eq!(sidebar::SESSION, sidebar::NAME);
 }

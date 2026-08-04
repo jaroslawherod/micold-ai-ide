@@ -39,6 +39,7 @@ use micold_core::tokens::{self, spacing, Roles};
 // everything else that decides an appearance (FR-001). Re-exported here for `main`, which
 // registers the font at startup, and for the tests that assert what the font file advertises.
 pub use material::glyph::{icon, icon_colored, MATERIAL_SYMBOLS, MATERIAL_SYMBOLS_BYTES};
+pub use material::{ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES};
 
 /// The daemon-connection state, as it concerns the *active* project (US5, FR-024/027). Computed by
 /// the binary (the connection is binary-owned runtime state) and passed to [`view`] so the shell can

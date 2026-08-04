@@ -271,33 +271,47 @@ pub fn roles(scheme: ColorScheme) -> Roles {
     }
 }
 
-/// Typography size scale, in logical pixels (contracts/design-tokens.md). Weights are
-/// applied in the GUI via `iced::Font`.
+/// Feature 003's flat size scale, **superseded** by [`typography`]'s roles.
 ///
-/// Carried across the module split unchanged (T000e). The Material 3 type roles that supersede
-/// these arrive with T000h; until then every existing call site keeps its current size.
+/// Each constant now reads its replacement's size from the Material scale (contract §2.5), so the
+/// call sites that still name one of these get the same value as the equivalent role rather than a
+/// second, drifting answer. Before this they were independent numbers, and `TITLE` in particular
+/// disagreed with `title_large` by 4dp — which would have shipped as two sizes for the same kind of
+/// text depending on which name a call site happened to use.
+///
+/// They go when the last call site names a role instead (T017–T021).
 pub mod type_scale {
-    /// Large empty-state / dialog headline.
-    pub const DISPLAY: f32 = 32.0;
-    /// Active-project name, section headers.
-    pub const HEADLINE: f32 = 24.0;
-    /// App-bar title, list-item primary text.
-    pub const TITLE: f32 = 18.0;
-    /// Default body text, descriptions.
-    pub const BODY: f32 = 14.0;
-    /// Paths, captions, badges.
-    pub const LABEL: f32 = 12.0;
+    use super::typography;
+
+    /// Superseded by `headline_large`. Feature 003's `DISPLAY` was a headline in Material's
+    /// vocabulary, not a display — Material's true display roles are larger than anything this
+    /// application renders.
+    pub const DISPLAY: f32 = typography::HEADLINE_LARGE.size;
+    /// Superseded by `headline_small`.
+    pub const HEADLINE: f32 = typography::HEADLINE_SMALL.size;
+    /// Superseded by `title_large`. **This value changes**: 18 → 22.
+    pub const TITLE: f32 = typography::TITLE_LARGE.size;
+    /// Superseded by `body_medium`.
+    pub const BODY: f32 = typography::BODY_MEDIUM.size;
+    /// Superseded by `label_medium`.
+    pub const LABEL: f32 = typography::LABEL_MEDIUM.size;
 }
 
-/// Sidebar-scoped type sizes — 80% of the app-wide scale (FR-012). Applied ONLY within the
-/// worktree sidebar; the rest of the app keeps [`type_scale`].
+/// The sidebar's reduced-density sizes, **superseded** by [`typography`]'s sidebar-scoped roles.
+///
+/// Same reasoning as [`type_scale`]: these now read the roles that replace them, so a sidebar row
+/// is one size whichever name its call site uses. **The values change**: name 11 → 12 and tag
+/// 10 → 11, because §2.4 maps each to the nearest smaller role in the scale rather than keeping an
+/// invented size.
 pub mod sidebar {
-    /// Worktree display name — 80% of `type_scale::BODY` (14 → 11).
-    pub const NAME: f32 = 11.0;
-    /// Tag chip text — 80% of `type_scale::LABEL` (12 → 10).
-    pub const TAG: f32 = 10.0;
-    /// Session label — 80% of `type_scale::BODY` (14 → 11).
-    pub const SESSION: f32 = 11.0;
+    use super::typography;
+
+    /// Superseded by `sidebar_name` (`body_small`).
+    pub const NAME: f32 = typography::SIDEBAR_NAME.size;
+    /// Superseded by `sidebar_tag` (`label_small`).
+    pub const TAG: f32 = typography::SIDEBAR_TAG.size;
+    /// Superseded by `sidebar_session` (`body_small`).
+    pub const SESSION: f32 = typography::SIDEBAR_SESSION.size;
 }
 
 /// Spacing scale, in logical pixels. All padding/gaps use these steps (SC-007).
