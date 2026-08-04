@@ -17,7 +17,13 @@
 use crate::naming::ConventionalType;
 use crate::theme::ColorScheme;
 
+pub mod density;
+pub mod elevation;
+pub mod motion;
 pub mod palette;
+pub mod shape;
+pub mod state;
+pub mod typography;
 
 /// A plain 8-bit-per-channel sRGB color. The GUI maps this to `iced::Color`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -278,19 +284,4 @@ pub mod spacing {
     pub const MD: f32 = 16.0;
     pub const LG: f32 = 24.0;
     pub const XL: f32 = 32.0;
-}
-
-/// Corner radii, in logical pixels.
-///
-/// Carried across the module split unchanged (T000e); the seven-size Material shape scale that
-/// supersedes it arrives with T000i.
-pub mod shape {
-    /// Buttons, badges.
-    pub const SM: f32 = 8.0;
-    /// Cards / list items / surfaces.
-    pub const MD: f32 = 12.0;
-    /// Dialogs.
-    pub const LG: f32 = 16.0;
-    /// Pills.
-    pub const FULL: f32 = 9999.0;
 }
