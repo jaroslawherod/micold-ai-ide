@@ -82,6 +82,17 @@ handful of sessions. Touches ~10 source files plus tests and user-guide docs.
   - **BUG-001 note**: `GitCli::worktree_remove` currently discards every git failure and always
     returns `Ok(())`, which makes FR-023's real error path unreachable in the shipped app (it
     is exercised only by `FakeGit`). Genuine step failures must propagate (FR-023b).
+  - **BUG-002 note**: "best-effort" above was only ever acted on for `ErrorKind::NotFound`; the
+    daemon port then wired the step as `remove_worktree_dir(&target)?`, making every *other*
+    errno fail the whole operation — the opposite of best-effort. It must not: by the time this
+    step runs, `worktree_remove` has already deregistered the worktree, so the delete has
+    happened and cannot be undone by failing here. A surviving directory is **partial success**
+    (FR-023c) — the sessions are still archived and the row still leaves the sidebar — and its
+    surviving paths are carried to the user as a non-fatal notice naming each path and its owner
+    (FR-023d). Only a failure of the *git* steps is a hard failure that leaves sessions intact.
+  - **BUG-002 note**: `std::fs::remove_dir_all` reports the first errno and never the path that
+    produced it, so it cannot satisfy FR-023d on its own. Identifying the blockers needs a walk
+    of what survived, which is observation only — the removal is never retried during reporting.
 - [x] **IV. Local-First Storage (NON-NEGOTIABLE)**: The display-name override persists to the
   existing local `projects.json`; nothing is transmitted off-device; the feature works fully
   offline.
@@ -175,4 +186,12 @@ cover the git layer only (`FakeGit` never touches disk), so the interaction betw
 layers is invisible to the existing test suite. Any test for the "already gone" path must
 assert on *notification output* rather than on `Git` call records.
 
+**Edge case (BUG-002)**: The same two-layer overlap has a second, opposite failure mode. `FakeGit`
+never touches disk, so no existing test can produce a directory that *survives* removal for a
+reason other than "it was never there". Covering FR-023c/FR-023d needs a real temporary directory
+the test process cannot fully remove — achievable without privilege by clearing write permission on
+a parent directory, which reproduces `EACCES` on unlink exactly as a foreign-owned file does.
+
 **Bugfix**: 2026-07-20 — BUG-001 Updated from bugfix patch
+
+**Bugfix**: 2026-08-04 — BUG-002 Updated from bugfix patch

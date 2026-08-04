@@ -231,6 +231,31 @@ reaches the user (FR-023b). Satisfies SC-004a and closes reopened T018/T024.
 
 ---
 
+## Phase 10 (BUG-002): a delete blocked by foreign-owned files
+
+The mirror image of Phase 9. That phase fixed "already gone" being treated as failure; this one
+fixes every *other* errno being treated as total failure, when by that point git has already
+deregistered the worktree. Depends only on US2. Implemented in the daemon, not `src/main.rs` —
+the delete moved there with feature 010's T053.
+
+### Tests
+
+- [ ] T057 [P] [US2] In `crates/micold-core/tests/` (new `worktree_leftovers.rs`): `remove_worktree_dir` returns no leftovers when the target is already absent (guards the BUG-001 regression), and returns the surviving paths when the directory cannot be emptied. Build the unremovable case without privilege by clearing write permission on a parent directory (`0o555`), which yields `EACCES` on unlink exactly as a foreign-owned file does; restore the mode in the test's teardown so the temp dir can be cleaned up (FR-023c, FR-023d).
+- [ ] T058 [P] [US2] In `crates/micold-daemon/tests/mutation_semantics.rs`: a `WorktreeDelete` whose directory cannot be fully removed still resolves to `OperationOk`, still archives the worktree's sessions, and carries the surviving paths in its reply — while a delete whose *git* step fails still resolves to `OperationError` with the sessions untouched (FR-023c cases 2 and 3).
+
+### Implementation
+
+- [ ] T059 [US2] Change `remove_worktree_dir` in `crates/micold-core/src/worktree.rs` to report what survived instead of propagating a bare errno: return the surviving paths (with the owning uid where the platform exposes it) rather than `io::Result<()>`. Observation only — never retry the removal while reporting. Walk shallowest-first and cap the list, since a blocked `build/` tree can hold tens of thousands of entries; do not descend into an entry already identified as foreign-owned, as its whole subtree shares one cause. Makes T057 green (FR-023d).
+- [ ] T060 [US2] In `crates/micold-daemon/src/server.rs`'s `WorktreeDelete` handler, stop `remove_worktree_dir` failing the operation. A surviving directory is partial success: archive the worktree's sessions, refresh the catalog, and reply `OperationOk` carrying the leftovers. Keep a git-step failure a hard `OperationError` with sessions untouched, preserving T053's original intent. Makes T058 green (FR-023c).
+- [ ] T061 [US2] Carry the leftovers on the wire: add them to `OperationResult::WorktreeDeleted` (`crates/micold-core/src/protocol/messages.rs`) alongside `branch_delete_failed`, which is the existing precedent for a non-fatal secondary outcome. Wire-visible, so bump `PROTOCOL_VERSION` (`crates/micold-core/src/protocol/version.rs`) and record the reason beside the existing bump log.
+- [ ] T062 [US2] Surface the notice in `crates/micold-client/src/main.rs` where `WorktreeDeleted`'s `branch_delete_failed` is already handled: name the surviving paths and their owner, and say the worktree itself was removed, so a partial success does not read as a failed delete (FR-023d).
+- [ ] T063 [P] [US2] Log the partial-success case in the daemon at WARN with the leftover paths and owners, matching the delete diagnostics added alongside BUG-002's investigation. A silent partial success is what made this bug invisible for as long as it was.
+
+**Checkpoint**: A delete blocked by foreign-owned files removes the worktree, archives its
+sessions, drops the row, and tells the user exactly which paths were left and who owns them.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -307,9 +332,19 @@ story is a shippable increment; run its tests + `quickstart.md` slice before mov
   (T033, override-preferred) — expect T033 to edit the T012 code path.
 - Phase 9 (BUG-001) depends only on US2 being implemented; T051–T053 must fail before T054/T055.
   T055 changes shared `Git` behaviour — re-run the full suite, not just `worktree_delete.rs`.
+- Phase 10 (BUG-002) depends only on US2. T057/T058 must fail before T059–T063. T059 changes a
+  shared `micold-core` signature and T061 changes the wire contract — both ripple into the client
+  and daemon, so re-run the whole workspace, and rebuild *both* binaries before any manual check
+  (a `PROTOCOL_VERSION` bump makes a stale client refuse the handshake outright).
 
 **Bugfix**: 2026-07-20 — BUG-001 Updated from bugfix patch
 
 **Bugfix**: 2026-07-27 — BUG-005 (feature 010) Cross-feature note added to T044 recording that
 FR-010's icon removal covered worktree rows only; session rows kept theirs. No task reopened. See
 `specs/010-daemon-session-persistence/bugs/BUG-005.md`.
+
+**Bugfix**: 2026-08-04 — BUG-002 Updated from bugfix patch. Phase 10 added (T057–T063). No task
+reopened: Phase 9's tasks met their stated acceptance, and the behaviour that regressed was
+introduced by feature 010's daemon port of the delete, whose own T053 is annotated rather than
+reopened (its gating requirement was right for the case it was written for). See
+`specs/008-worktree-sidebar-refinement/bugs/BUG-002.md`.
