@@ -19,7 +19,7 @@ that is quietly narrower than it looks is the exact failure this feature exists 
 | A padding change | **Yes** | the fixture — every box moves or resizes |
 | A font-size change that widens a label | **Yes** | the fixture, and the overflow gate if it now exceeds its box |
 | A margin that pushes a control off its row | **Yes** | the fixture |
-| A dropdown that opens in the wrong place | **Yes** | the fixture's overlay pass |
+| A dropdown that opens in the wrong place | **Yes** | the fixture's overlay pass — one state opens one |
 | Text painted past the box it was given | **Yes** | the text-overflow gate |
 | A child laid out beyond a parent that will not clip it | **Yes** | the containment invariant |
 | A child laid out beyond a parent that *does* clip it | **No** | nothing reads `draw`; see [the containment invariant](#3-the-containment-invariant--testsgatescontainmentrs) |
@@ -87,9 +87,9 @@ Cargo makes one binary per file directly under `tests/`, and a cache cannot cros
 
 ## What is covered
 
-Ten states, listed in one place: `crates/micold-client/tests/support/covered_states.rs`. Feature
+Eleven states, listed in one place: `crates/micold-client/tests/support/covered_states.rs`. Feature
 017's reduced parity set, plus the empty and error layouts no manual walkthrough reliably reached,
-plus the Settings dialog.
+the Settings dialog, and the add-worktree dialog with its type dropdown open.
 
 Every state resolves at one canonical window size, 1280×800, from fixed invented data. Nothing reads
 your workspace, configuration or session store — a fixture recording the author's own machine would
@@ -101,6 +101,19 @@ rather than duplicated, with two declared geometric exemptions that must each ke
 Both the base widget tree and widget-attached overlays are walked. The second pass matters: dialogs
 and menus are composed in-tree and the base walk already sees them, but `material::Select` wraps a
 `pick_list`, whose dropdown is laid out separately and is invisible to the base walk.
+
+**That pass ran over every state and recorded nothing for most of this feature's life.** The only
+widget reached through `Widget::overlay` is that dropdown, and no covered state opened one, so the
+fixture held zero `over` records while the pass was documented as covering them — a check quietly
+narrower than it looked, which is the failure this whole feature exists to correct, arrived at from
+the opposite direction. `add-worktree-dialog-type-menu-open` now opens one, and
+`the_overlay_pass_records_something_somewhere` fails if no state does.
+
+Opening it is not a state you can set. `pick_list`'s open flag is private widget-tree state with no
+accessor, so `StateUnderTest::pressing` *causes* it: a left press at the control's centre, the way a
+person opens it. That press has to be preceded by settling the dialog's entrance transition — a
+modal mounts at progress zero on purpose and swallows every event that is not a redraw until it has
+appeared, so a press into a freshly built tree reaches nothing at all.
 
 ## What is not covered
 
@@ -199,8 +212,10 @@ fails loudly rather than being recreated.
 One entry in `tests/support/covered_states.rs`, and nothing else. That promise is enforced:
 `tests/layout_coverage_registry.rs` scans for a second registration site and fails if it finds one.
 
-Then regenerate the fixture. A new state costs about 2.4 seconds of suite time — measured by adding
-the tenth state and timing the suite with and without it, not derived from a resolution count.
+Then regenerate the fixture. A new state costs roughly 2 seconds of suite time — the tenth measured
+at 2.4s and the eleventh at 2.1s, each by timing the suite with and without it rather than deriving
+it from a resolution count. Measure warm: a first run after any edit rebuilds the test binaries, and
+that compile lands inside the timing. Doing it cold once put a state at 6.2s that is actually 2.1s.
 
 One caveat the tenth state exposed. If the screen renders a sidebar, its collapsed filter accordion
 is a clip-revealing wrapper, and the containment check used to need a second entry naming that
@@ -217,10 +232,10 @@ path: look it up directly in `layout_snapshot.txt`.
 
 ## Cost
 
-The gates are about 32 seconds of a 37.5 second suite — `layout_snapshot` 17.0s (the fixture, the
+The gates are about 32 seconds of a 37 second suite — `layout_snapshot` 17.0s (the fixture, the
 containment invariant and the mid-reveal pin, sharing one process), `layout_text_overflow` 8.5s,
 `layout_apparatus` 3.5s, and under 3s for the record-format, registry and regeneration checks.
-Dominated by shaping real text across ten screens in two schemes. Records are resolved once per
+Dominated by shaping real text across eleven screens in two schemes. Records are resolved once per
 scheme and shared between checks; the naive form resolved the same views about 71 times.
 
 Those binaries run in parallel with the rest of the suite, so their share of the total is smaller

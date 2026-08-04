@@ -155,6 +155,34 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: &[Anchor { name: "dialog.root", path: &[] }],
         },
+        // --- The one state that exercises the overlay pass (FR-009) -----------------------------
+        // Until this existed the fixture contained **zero** `over` records. The overlay pass was
+        // written for `material::Select`, which wraps `pick_list` and lays its dropdown out through
+        // `Widget::overlay` where the base walk cannot see it — and then no covered state ever
+        // opened one. A pass that runs on every state and records nothing looks exactly like a pass
+        // that found nothing, which is the failure this feature exists to correct.
+        //
+        // `pick_list`'s open flag is private widget state with no accessor, so it is *caused*
+        // rather than set: `pressing` dispatches a left press at the control's centre, the way a
+        // person opens it. See `resolve_pressing` for why the entrance transition has to be settled
+        // first.
+        CoveredState {
+            name: "add-worktree-dialog-type-menu-open",
+            build: || {
+                let mut state = with_project();
+                state.overlay = Overlay::AddWorktree;
+                state.worktree_form = Some(WorktreeForm {
+                    source: BranchSource::New,
+                    name: "example".to_string(),
+                    ..WorktreeForm::default()
+                });
+                StateUnderTest::new(state).pressing(&[3, 0, 0, 3])
+            },
+            anchors: &[
+                Anchor { name: "dialog.root", path: &[] },
+                Anchor { name: "dialog.type-select", path: &[3, 0, 0, 3] },
+            ],
+        },
         // --- Added to exercise FR-016 end-to-end (T032) ------------------------------------------
         // The Settings dialog: the tallest form the application shows, and the only covered state
         // with a checkbox, a text field carrying a validation error, and a control row that has to

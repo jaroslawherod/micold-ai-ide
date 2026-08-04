@@ -181,6 +181,70 @@ fn an_anchor_whose_path_does_not_resolve_fails_naming_it() {
     }
 }
 
+// --- The overlay pass is exercised, not merely present (FR-009) ---------------------------------
+
+/// Some covered state must actually produce overlay records.
+///
+/// This was added after the fixture was found to contain **zero** `over` lines. The overlay pass
+/// had been implemented, documented and shipped, and every covered state ran through it — and none
+/// of them opened anything laid out that way, because the only widget in this application that uses
+/// `Widget::overlay` is `material::Select`'s dropdown and no covered state had one open.
+///
+/// Nothing failed. A pass that records nothing is indistinguishable from a pass that found nothing,
+/// so the coverage claim in FR-009 was true about the code and false about the fixture. That is the
+/// same shape as the defect this whole feature exists to correct — a gate quietly narrower than it
+/// looks — arrived at from the opposite direction.
+#[test]
+fn the_overlay_pass_records_something_somewhere() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+
+    let with_overlays: Vec<&str> = covered_states()
+        .iter()
+        .zip(all.iter())
+        .filter(|(_, records)| records.iter().any(|r| r.layer == lay::Layer::Overlay))
+        .map(|(covered, _)| covered.name)
+        .collect();
+
+    assert!(
+        !with_overlays.is_empty(),
+        "no covered state produces a single overlay record, so the overlay pass is running over \
+         every state and recording nothing. It is the only thing that can see a `pick_list` \
+         dropdown — `material::Select`'s menu is laid out through `Widget::overlay` and is \
+         invisible to the base walk — so this reads as coverage while covering nothing. Register a \
+         state that opens one (`StateUnderTest::pressing`), or, if no such widget is left in the \
+         application, delete the pass rather than leaving it as evidence of something it no longer \
+         does."
+    );
+}
+
+/// A state that presses a control must end up with that control open.
+///
+/// The press is dispatched into the widget tree and can silently do nothing — a modal that has not
+/// finished appearing swallows it, a path can drift onto a node that ignores clicks — and the state
+/// would still resolve, record a perfectly valid base layout, and cover exactly what it did before.
+/// The overlay records are the only evidence the press landed.
+#[test]
+fn a_state_that_presses_a_control_records_the_control_it_opened() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+
+    for (covered, records) in covered_states().iter().zip(all.iter()) {
+        let Some(pressed) = (covered.build)().press_at else {
+            continue;
+        };
+        assert!(
+            records.iter().any(|r| r.layer == lay::Layer::Overlay),
+            "covered state {:?} presses {} and no overlay was laid out. The press landed on \
+             nothing, so this state covers the same thing it would have covered without it. Either \
+             the node moved — re-point the path against layout_snapshot.txt — or the control it \
+             opens no longer uses Widget::overlay.",
+            covered.name,
+            lay::path_token(pressed),
+        );
+    }
+}
+
 // --- T017 — scheme independence (FR-008a) -------------------------------------------------------
 
 /// Paths whose geometry legitimately differs between the two schemes, with the reason.

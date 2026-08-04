@@ -206,11 +206,98 @@ pub fn walk(layout: Layout<'_>, layer: Layer) -> Vec<LayoutRecord> {
 /// `Widget::overlay` implementor whose dropdown is laid out separately and is invisible to the base
 /// walk (research R5).
 pub fn resolve<'a, M: 'a>(element: Element<'a, M>, renderer: &iced::Renderer) -> Vec<LayoutRecord> {
+    resolve_pressing(element, renderer, None)
+}
+
+/// As [`resolve`], but pressing the node at `press_at` first (see [`StateUnderTest::pressing`]).
+///
+/// The press is dispatched, then the tree is laid out **again** before either walk. A widget that
+/// opens on press changes its own size — that is the whole reason the second layout exists — and
+/// recording the pre-press node while walking the post-press overlay would produce a fixture whose
+/// two halves describe different moments.
+pub fn resolve_pressing<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &iced::Renderer,
+    press_at: Option<&[usize]>,
+) -> Vec<LayoutRecord> {
+    use iced::advanced::{clipboard, mouse, Shell};
+
     let mut element = element;
     let mut tree = Tree::new(element.as_widget());
     let limits = layout::Limits::new(Size::ZERO, WINDOW);
 
-    let node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    let mut node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+
+    if let Some(path) = press_at {
+        // Settle the entrance transition before pressing anything.
+        //
+        // A dialog mounts at progress 0 on purpose — `Motion::enter`, "a dialog is mounted
+        // precisely because it is opening" — and `Fade::update` returns early below `HIDDEN` for
+        // every event that is not a `Window` event. A press dispatched into a freshly built tree is
+        // therefore swallowed before it reaches anything. That is not a defect; it is a modal
+        // refusing clicks it has not finished appearing for. It cost a probe over all 128 nodes of
+        // the add-worktree dialog, every one of which changed nothing, to notice.
+        //
+        // Redraws are pumped without re-laying out between them. `Fade` is layout-neutral, so
+        // there is nothing to recompute, and eight full layouts per state per scheme would cost
+        // more than the state is worth. The assumption is not load-bearing: if the settle were
+        // insufficient the control would stay shut, and the covered state would produce no overlay
+        // records — which `every_overlay_state_records_an_overlay` fails on.
+        const SETTLE_FRAMES: u32 = 8;
+        let origin = std::time::Instant::now();
+        let mut settle_messages: Vec<M> = Vec::new();
+        for frame in 0..SETTLE_FRAMES {
+            let mut shell = Shell::new(&mut settle_messages);
+            element.as_widget_mut().update(
+                &mut tree,
+                &iced::Event::Window(iced::window::Event::RedrawRequested(
+                    origin + FRAME * frame,
+                )),
+                Layout::new(&node),
+                mouse::Cursor::Unavailable,
+                renderer,
+                &mut clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(WINDOW),
+            );
+        }
+
+        let target = walk(Layout::new(&node), Layer::Base)
+            .into_iter()
+            .find(|r| r.path == path)
+            .unwrap_or_else(|| {
+                panic!(
+                    "no node at {} to press — the tree changed shape, so re-point the path \
+                     against layout_snapshot.txt",
+                    path_token(path),
+                )
+            });
+        assert!(
+            target.width > 0.0 && target.height > 0.0,
+            "the node at {} has no area, so a press lands on nothing and the control this covered \
+             state means to open will stay shut while every assertion still passes",
+            path_token(path),
+        );
+
+        let mut messages: Vec<M> = Vec::new();
+        let mut shell = Shell::new(&mut messages);
+        element.as_widget_mut().update(
+            &mut tree,
+            &iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            Layout::new(&node),
+            mouse::Cursor::Available(iced::Point::new(
+                target.x + target.width / 2.0,
+                target.y + target.height / 2.0,
+            )),
+            renderer,
+            &mut clipboard::Null,
+            &mut shell,
+            &Rectangle::with_size(WINDOW),
+        );
+
+        node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    }
+
     let mut records = walk(Layout::new(&node), Layer::Base);
 
     if let Some(mut overlay) = element.as_widget_mut().overlay(
@@ -253,6 +340,8 @@ pub struct CoveredState {
 pub struct StateUnderTest {
     pub state: micold_client::app::State,
     pub connection: micold_client::ui::ConnectionStatus,
+    /// A node to press before recording. See [`StateUnderTest::pressing`].
+    pub press_at: Option<&'static [usize]>,
 }
 
 impl StateUnderTest {
@@ -260,11 +349,27 @@ impl StateUnderTest {
         Self {
             state,
             connection: micold_client::ui::ConnectionStatus::Connected,
+            press_at: None,
         }
     }
 
     pub fn connection(mut self, connection: micold_client::ui::ConnectionStatus) -> Self {
         self.connection = connection;
+        self
+    }
+
+    /// Press the node at `path` before recording, to open a dropdown that lives in widget state.
+    ///
+    /// `material::Select` wraps `pick_list`, whose open/closed flag is private widget-tree state
+    /// with no public accessor — it cannot be set, only *caused*. A left press with the cursor
+    /// inside the control's bounds is the documented way in (`pick_list.rs`, `ButtonPressed`), so
+    /// the covered state drives the widget the way a person would rather than reaching into it.
+    ///
+    /// This is what makes the overlay pass produce anything. Dialogs and menus elsewhere in this
+    /// application are composed in-tree and the base walk already sees them; a `pick_list` dropdown
+    /// is laid out through `Widget::overlay` and is invisible until it is open.
+    pub fn pressing(mut self, path: &'static [usize]) -> Self {
+        self.press_at = Some(path);
         self
     }
 }
@@ -291,7 +396,7 @@ pub fn records_for(
         &under.connection,
     );
 
-    resolve(element, renderer)
+    resolve_pressing(element, renderer, under.press_at)
 }
 
 // --- Mid-reveal resolution (BUG-001) -----------------------------------------------------------
