@@ -49,18 +49,31 @@ const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 /// layout, far below anything a person could see.
 const TOLERANCE: f32 = 0.5;
 
-/// Children that a clip-revealing wrapper deliberately lays out oversized, as
-/// `(covered state, child node path)`.
+/// Children that a clip-revealing wrapper deliberately lays out oversized, by node path.
 ///
-/// **All seven are one widget: `material::Expand`**, holding the sidebar's collapsed filter
-/// accordion in every state that renders a sidebar. `Expand::layout` reports `full.height *
-/// progress` to its parent while the child node keeps its full height, so at rest the child is a
-/// 40–42px node inside a 0px one. It then reveals the child top-down by clipping to its own bounds
-/// in `draw` — the overhang is how the reveal works, not a mistake.
-/// `error-daemon-disconnected` differs only in its path — the disconnection banner shifts the shell
-/// index from 2 to 3 — which is the invariant following structure rather than a hardcoded path.
-/// `main-shell-sidebar-collapsed` and `empty-no-project-open` are absent because neither renders
-/// the panel.
+/// **Keyed by path alone, not by `(covered state, path)`.** Being a clip-revealing wrapper's child
+/// is a property of the widget, not of the screen it appears on — the state dimension was never
+/// meaningful, it was just how the list first got written, once per state that happened to render a
+/// sidebar. It cost seven entries for two nodes, and it made FR-016 false in practice: T032 added a
+/// tenth covered state, and because that state renders a sidebar the gate demanded a second edit
+/// here before it would go green. Registering a covered state is supposed to take one change in one
+/// place.
+///
+/// What this trades away: a *different* node arriving at one of these paths in some future state
+/// would be exempted without anyone noticing. The paths are structural rather than named, so that
+/// is a real risk and worth stating. It is bounded by the staleness assertion below — every listed
+/// path must still fire somewhere — and by `the_recorded_escapes_are_the_accordion_reveal`, which
+/// re-derives the attribution from behaviour rather than trusting the list.
+///
+/// **Both are one widget: `material::Expand`**, holding the sidebar's collapsed filter accordion.
+/// `Expand::layout` reports `full.height * progress` to its parent while the child node keeps its
+/// full height, so at rest the child is a 40–42px node inside a 0px one. It then reveals the child
+/// top-down by clipping to its own bounds in `draw` — the overhang is how the reveal works, not a
+/// mistake.
+///
+/// The two paths are the same accordion under two shell arrangements: the disconnection banner
+/// shifts the shell index from 2 to 3. That the invariant follows the structure rather than a
+/// hardcoded path is the reason there are two and not one.
 ///
 /// Attribution is not inferred from the shape: `the_recorded_escapes_are_the_accordion_reveal`
 /// drives the panel open and shows the same nodes come clean.
@@ -68,27 +81,17 @@ const TOLERANCE: f32 = 0.5;
 /// **These were once recorded as BUG-001 and they are not.** The list was written while that bug
 /// was open, in the belief that the overhang was the defect. The fix left `Expand::layout`
 /// unchanged — the real cause was `layout` not re-running, so the clip received stale bounds — and
-/// all seven survived it untouched. The correction is worth keeping visible: this gate reported the
-/// right nodes for the wrong reason, and would have reported them just as loudly had nothing been
-/// wrong at all.
+/// every entry survived it untouched. The correction is worth keeping visible: this gate reported
+/// the right nodes for the wrong reason, and would have reported them just as loudly had nothing
+/// been wrong at all.
 ///
 /// So, unlike a defect exemption, this list **does not expire**. What the assertion below still
 /// buys is that it cannot quietly grow: a new entry means either a new clip-revealing wrapper, to
 /// be named here with its reason, or a child escaping a parent that does not clip, which is a bug.
-const CLIP_REVEALED: &[(&str, &str)] = &[
-    ("main-shell-sidebar-expanded", "0/0/0/2/0/0/0/1/0"),
-    ("add-worktree-dialog-new-branch", "0/0/0/2/0/0/0/1/0"),
-    ("add-worktree-dialog-existing-branch", "0/0/0/2/0/0/0/1/0"),
-    ("worktree-menu-open", "0/0/0/2/0/0/0/1/0"),
-    ("empty-project-without-worktrees", "0/0/0/2/0/0/0/1/0"),
-    ("error-daemon-disconnected", "0/0/0/3/0/0/0/1/0"),
-    ("error-add-worktree-failed", "0/0/0/2/0/0/0/1/0"),
-];
+const CLIP_REVEALED: &[&str] = &["0/0/0/2/0/0/0/1/0", "0/0/0/3/0/0/0/1/0"];
 
-fn clip_revealed(state: &str, child_path: &str) -> bool {
-    CLIP_REVEALED
-        .iter()
-        .any(|(s, p)| *s == state && *p == child_path)
+fn clip_revealed(child_path: &str) -> bool {
+    CLIP_REVEALED.contains(&child_path)
 }
 
 /// No covered state lays a node outside a parent that will not clip it.
@@ -97,7 +100,7 @@ fn no_layout_node_escapes_its_parent() {
     let renderer = lay::renderer();
     let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
     let mut unexpected: Vec<String> = Vec::new();
-    let mut fired: std::collections::BTreeSet<(&str, String)> = Default::default();
+    let mut fired: std::collections::BTreeSet<String> = Default::default();
 
     for (covered, records) in covered_states().iter().zip(all.iter()) {
         for escape in lay::escapes(records, TOLERANCE) {
@@ -110,24 +113,25 @@ fn no_layout_node_escapes_its_parent() {
                 escape.edge,
                 escape.layer.token()
             );
-            if clip_revealed(covered.name, &escape.child_path) {
+            if clip_revealed(&escape.child_path) {
                 eprintln!("CLIP_REVEALED still fires: {line}");
-                fired.insert((covered.name, escape.child_path));
+                fired.insert(escape.child_path);
             } else {
                 unexpected.push(line);
             }
         }
     }
 
-    assert_eq!(
-        fired.len(),
-        CLIP_REVEALED.len(),
-        "every exempted overhang must still be observable, or the exemption is widening the gate \
-         silently; {} of {} fired. An entry that has stopped firing means the wrapper no longer \
-         reveals by clipping — delete it, and check that whatever replaced the mechanism is \
-         covered by something.",
-        fired.len(),
-        CLIP_REVEALED.len(),
+    let silent: Vec<&&str> = CLIP_REVEALED
+        .iter()
+        .filter(|path| !fired.contains(**path))
+        .collect();
+    assert!(
+        silent.is_empty(),
+        "every exempted overhang must still be observable somewhere, or the exemption is widening \
+         the gate silently. These fired in no covered state: {silent:?}. A path that has gone quiet \
+         means the wrapper no longer reveals by clipping, or the tree renumbered around it — either \
+         way, delete it and check that whatever replaced the mechanism is covered by something.",
     );
 
     assert!(

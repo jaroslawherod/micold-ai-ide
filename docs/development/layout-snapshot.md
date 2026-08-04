@@ -87,8 +87,9 @@ Cargo makes one binary per file directly under `tests/`, and a cache cannot cros
 
 ## What is covered
 
-Nine states, listed in one place: `crates/micold-client/tests/support/covered_states.rs`. Feature
-017's reduced parity set, plus the empty and error layouts no manual walkthrough reliably reached.
+Ten states, listed in one place: `crates/micold-client/tests/support/covered_states.rs`. Feature
+017's reduced parity set, plus the empty and error layouts no manual walkthrough reliably reached,
+plus the Settings dialog.
 
 Every state resolves at one canonical window size, 1280×800, from fixed invented data. Nothing reads
 your workspace, configuration or session store — a fixture recording the author's own machine would
@@ -198,7 +199,15 @@ fails loudly rather than being recreated.
 One entry in `tests/support/covered_states.rs`, and nothing else. That promise is enforced:
 `tests/layout_coverage_registry.rs` scans for a second registration site and fails if it finds one.
 
-Then regenerate the fixture. A new state costs about 2.2 seconds of suite time.
+Then regenerate the fixture. A new state costs about 2.4 seconds of suite time — measured by adding
+the tenth state and timing the suite with and without it, not derived from a resolution count.
+
+One caveat the tenth state exposed. If the screen renders a sidebar, its collapsed filter accordion
+is a clip-revealing wrapper, and the containment check used to need a second entry naming that
+state. It is now keyed by node path alone, since being a clip-reveal is a property of the widget and
+not of the screen — so registering really is one edit. Had that not been fixed, FR-016 would have
+been false in exactly the way nobody notices: the claim held for the first nine states because they
+were all added at once.
 
 ### Reading a failure
 
@@ -208,9 +217,14 @@ path: look it up directly in `layout_snapshot.txt`.
 
 ## Cost
 
-The gates are about 22 seconds of a 35 second suite, dominated by shaping real text across nine
-screens in two schemes. Records are resolved once per scheme and shared between checks; the naive
-form resolved the same views about 71 times.
+The gates are about 32 seconds of a 37.5 second suite — `layout_snapshot` 17.0s (the fixture, the
+containment invariant and the mid-reveal pin, sharing one process), `layout_text_overflow` 8.5s,
+`layout_apparatus` 3.5s, and under 3s for the record-format, registry and regeneration checks.
+Dominated by shaping real text across ten screens in two schemes. Records are resolved once per
+scheme and shared between checks; the naive form resolved the same views about 71 times.
+
+Those binaries run in parallel with the rest of the suite, so their share of the total is smaller
+than their sum — which is exactly why SC-006 budgets the suite rather than any one binary.
 
 The budget is stated on the suite rather than on any one test binary — the checks share binaries, so
 which binary a check lives in is an implementation detail. See SC-006 in

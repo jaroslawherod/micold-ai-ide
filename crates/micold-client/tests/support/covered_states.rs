@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use micold_client::app::{BranchSource, Overlay, State, WorktreeForm};
+use micold_client::app::{BranchSource, Overlay, SettingsDraft, State, WorktreeForm};
 use micold_client::ui::ConnectionStatus;
 use micold_core::worktree::{Worktree, WorktreeStatus};
 
@@ -155,10 +155,35 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: &[Anchor { name: "dialog.root", path: &[] }],
         },
+        // --- Added to exercise FR-016 end-to-end (T032) ------------------------------------------
+        // The Settings dialog: the tallest form the application shows, and the only covered state
+        // with a checkbox, a text field carrying a validation error, and a control row that has to
+        // fit four labelled inputs into a modal. Nothing about registering it needed a change
+        // outside this file, which is the point of adding it.
+        //
+        // Every value is invented and fixed (FR-007) rather than taken from `SettingsDraft::
+        // default()`, whose fields track the shipped defaults and would silently re-record the
+        // fixture the day one of them changes.
+        CoveredState {
+            name: "settings-dialog-with-validation-error",
+            build: || {
+                let mut state = with_project();
+                state.overlay = Overlay::Settings;
+                state.settings_draft = Some(SettingsDraft {
+                    scrollback_lines: "12000".to_string(),
+                    env_include_enabled: true,
+                    env_include_script_path: "~/.config/micold/session-env.sh".to_string(),
+                    env_include_timeout: "5".to_string(),
+                    error: Some("the scrollback limit must be between 100 and 100000".to_string()),
+                });
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor { name: "dialog.root", path: &[] }],
+        },
     ]
 }
 
-/// States pinned partway through a reveal. **The second registration site, and deliberately so.**
+/// States pinned partway through a reveal. **A second list in this file, not a second site.**
 ///
 /// These are not covered states and must not become them: the geometry fixture excludes
 /// mid-animation geometry (T030), and recording a frame partway through a reveal would churn the
