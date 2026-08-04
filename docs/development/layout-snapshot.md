@@ -29,7 +29,7 @@ that is quietly narrower than it looks is the exact failure this feature exists 
 | A change visible only mid-animation | **Almost never** — see [Animation](#animation) |
 | A change visible only when scrolled | **No** | everything resolves at offset zero |
 | A change in rasterised pixels — anti-aliasing, hinting, subpixel placement | **No** | no image is compared |
-| A change to the typography a user actually sees | **No** — see [Typography](#typography) |
+| A change to the typography a user actually sees | **Yes** — measured against the shipped faces |
 
 If a change you care about is not in this table, it is probably not covered. Say so in review rather
 than assuming; adding a row is cheap, and a wrong assumption here is what feature 017 paid for.
@@ -152,14 +152,18 @@ covered by any of the three.
 
 ### Typography
 
-**This is the largest gap, and it is temporary.** The checks measure against a committed Roboto
-pinned as the snapshot's default font, not against the typeface the application actually requests.
-Until feature 018 ships Roboto as the application typeface, text-derived geometry here is a
-*consistent* measurement rather than a *faithful* one: it will catch a layout change, but the
-absolute numbers are not the ones a user's machine produces.
+**This was the largest gap and it is now closed** — feature 018 ships Roboto as the application
+typeface, and these checks measure against the very files it ships (`assets/fonts/`), both Regular
+and Medium, rather than a private copy.
 
-The pinned font is also why these checks can claim identical results on Linux, macOS and Windows at
-all. `tests/layout_apparatus.rs` guards it: if a system font named Roboto ever wins the family
+It did not close by itself, and the way it nearly failed is worth keeping. When 018 landed, the gate
+still pointed at its own `tests/fixtures/Roboto-Regular.ttf`. The two files were **different builds
+of Roboto with different bytes** — a tenth of a pixel apart over the guard's reference string — so
+the gate was measuring text against a face the application does not draw with: reproducible, stable,
+and wrong. It also loaded only Regular, while `TypeRole` resolves weight >= 500 to Medium, so every
+Medium label was measured with Regular metrics. Both are fixed; the duplicate file is deleted.
+
+`tests/layout_apparatus.rs` still guards this: if a system font named Roboto ever wins the family
 lookup, every measurement shifts at once. Read a mass geometry difference on one platform as a font
 problem, not as a layout regression.
 
@@ -189,6 +193,12 @@ fix for the bug it was written against.
   list and child list stay index-aligned without it occupying space. The exemption follows from the
   invariant's own premise — a node that is nowhere paints on nothing — but it does buy silence about
   content pushed off-screen *accidentally*, which is a real defect class and a different one.
+- **`KNOWN_OVERFLOWS` — one chip, two paths.** The tag chip labelled `"Short"` inside the sidebar's
+  collapsed filter panel wants 28.9px in the 19.2px the collapsed layout allows. Nothing paints
+  there — the same collapsed `Expand` the entry above describes — and opening the panel makes it fit
+  exactly. Proven rather than argued: `the_recorded_overflow_is_the_collapsed_filter_panel` reports
+  one overflow closed and none open. Surfaced by feature 018's typography change, which widened the
+  label past what the collapsed chip allows.
 - **Two geometric differences between the schemes.** Structure is identical everywhere; two boxes
   differ in size because a string differs in length between schemes. Each carries its reason and
   each must keep firing.

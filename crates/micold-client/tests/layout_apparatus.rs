@@ -184,12 +184,18 @@ fn the_reference_font_differs_from_the_host_fallback() {
 /// `tests/fixtures/FONT-PROVENANCE.md`. If this fails alongside the layout snapshot, believe this
 /// one — it is a font problem, not a layout problem, and regenerating the fixture would bake the
 /// wrong measurements in.
+///
+/// **182.2 to 182.1 on 2026-08-04**, when the gate stopped measuring against its own copy of
+/// Roboto and started measuring against the faces the application ships (feature 018). The two
+/// files were different builds with different bytes; a tenth of a pixel over this string is the
+/// whole visible difference between them, which is precisely why this pin exists rather than a
+/// trust that "it is Roboto either way".
 #[test]
 fn the_reference_string_measures_to_a_pinned_width() {
     let _ = lay::renderer();
     let measured = measure(REFERENCE_STRING, lay::reference_font());
 
-    const EXPECTED_WIDTH: f32 = 182.2;
+    const EXPECTED_WIDTH: f32 = 182.1;
     assert!(
         (measured - EXPECTED_WIDTH).abs() <= 0.1,
         "the reference string measured {measured:.1}px, expected {EXPECTED_WIDTH:.1}px"

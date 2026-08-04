@@ -28,7 +28,31 @@ use support::layout as lay;
 /// If a real one is ever added: FR-019 forbids quietly fixing a defect surfaced while building the
 /// gate, and equally forbids tuning the gate until the defect stops showing. Record what was
 /// measured, keep the suite green, and require the entry to keep firing.
-const KNOWN_OVERFLOWS: &[(&str, &str)] = &[];
+/// **One entry as of 2026-08-04**, and it is a collapsed clip-reveal rather than a defect.
+///
+/// The sidebar's filter panel is `material::Expand`. Collapsed, it reports zero height while its
+/// children keep theirs, and the tag chips inside are laid out in a space that squeezes them — the
+/// chip labelled `"Short"` wants 28.9px in the 19.2px it is allowed. Nothing paints there:
+/// `Expand::draw` returns early below `HIDDEN`, which is the same reason `CLIP_REVEALED` exists in
+/// the containment gate.
+///
+/// **Attribution is proven, not argued** — `the_recorded_overflow_is_the_collapsed_filter_panel`
+/// opens the panel and shows the same text comes clean. Closed: one overflow. Open: none. A real
+/// clipping defect would not care whether its container was expanded.
+///
+/// Surfaced by upstream's typography change (feature 018 shipping Roboto with per-role weight and
+/// line height), which widened the label past what the collapsed chip allows. Recorded rather than
+/// fixed: FR-019 forbids this feature changing application source.
+/// **Keyed by node path, not by `(state, path)`.** Being inside a collapsed clip-reveal is a
+/// property of the widget, not of the screen it appears on — the same lesson T032 taught the
+/// containment gate, which had made FR-016 false in practice by demanding a second entry per new
+/// sidebar-bearing state.
+const KNOWN_OVERFLOWS: &[&str] = &[
+    "0/0/0/2/0/0/0/1/0/0/1/0/0/0",
+    // The same chip with the disconnection banner in the shell, which shifts the index from 2 to
+    // 3 — the check following structure rather than a hardcoded path, as in `CLIP_REVEALED`.
+    "0/0/0/3/0/0/0/1/0/0/1/0/0/0",
+];
 
 /// Name an offending node by its anchor where one covers it, otherwise by its path (FR-004).
 ///
@@ -45,14 +69,14 @@ fn named(covered: &lay::CoveredState, node_path: &str) -> String {
         .unwrap_or_else(|| format!("node {node_path}"))
 }
 
-fn known(state: &str) -> bool {
-    KNOWN_OVERFLOWS.iter().any(|(s, _)| *s == state)
+fn known(node_path: &str) -> bool {
+    KNOWN_OVERFLOWS.contains(&node_path)
 }
 
 /// No covered state paints text outside its clip, except the ones recorded above.
 #[test]
 fn no_text_is_drawn_wider_than_its_clip() {
-    let mut fired: std::collections::BTreeSet<&str> = Default::default();
+    let mut fired: std::collections::BTreeSet<String> = Default::default();
     let mut renderer = lay::renderer();
 
     for covered in covered_states() {
@@ -72,31 +96,22 @@ fn no_text_is_drawn_wider_than_its_clip() {
 
         let overflows = lay::text_overflows(element, &mut renderer);
 
-        if known(covered.name) {
-            assert!(
-                !overflows.is_empty(),
-                "covered state {:?} is recorded in KNOWN_OVERFLOWS but no longer overflows. If it \
-                 was fixed, delete the entry — a stale exemption widens the gate silently.",
-                covered.name
-            );
+        let (exempt, unexpected): (Vec<_>, Vec<_>) =
+            overflows.iter().partition(|o| known(&o.node_path));
+
+        for o in &exempt {
             eprintln!(
-                "KNOWN_OVERFLOWS[{}] still fires: {}",
+                "KNOWN_OVERFLOWS still fires in {}: {:?} wants {:.1}px in {:.1}px at {}",
                 covered.name,
-                overflows
-                    .iter()
-                    .map(|o| format!(
-                        "{:?} wants {:.1}px in {:.1}px at {}",
-                        o.content,
-                        o.natural_width,
-                        o.allowed_width,
-                        named(covered, &o.node_path)
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("; ")
+                o.content,
+                o.natural_width,
+                o.allowed_width,
+                named(covered, &o.node_path)
             );
-            fired.insert(covered.name);
-            continue;
+            fired.insert(o.node_path.clone());
         }
+
+        let overflows: Vec<_> = unexpected.into_iter().cloned().collect();
 
         assert!(
             overflows.is_empty(),
@@ -133,11 +148,16 @@ fn no_text_is_drawn_wider_than_its_clip() {
         );
     }
 
-    assert_eq!(
-        fired.len(),
-        KNOWN_OVERFLOWS.len(),
-        "every recorded overflow must still be observable; {:?} fired",
-        fired
+    let silent: Vec<&&str> = KNOWN_OVERFLOWS
+        .iter()
+        .filter(|path| !fired.contains(**path))
+        .collect();
+    assert!(
+        silent.is_empty(),
+        "every recorded overflow must still be observable somewhere, or the exemption is widening \
+         the gate silently. These fired in no covered state: {silent:?}. If the defect was fixed, \
+         delete the entry — a stale exemption is exactly the failure this feature exists to \
+         prevent."
     );
 }
 
@@ -170,5 +190,44 @@ fn the_check_reports_an_overflow_when_one_exists() {
         !overflows.is_empty(),
         "the overflow check found nothing in a deliberately cramped layout — the instrument is \
          broken, and every passing run of the test above is meaningless"
+    );
+}
+
+
+/// The recorded overflow is the collapsed filter panel, and this is what proves it.
+///
+/// A zero-height container squeezing its children is inference from a shape; the same shape could
+/// come from a genuinely too-narrow chip. So drive the one input that changes it and nothing else.
+/// Closed, the overflow is there; open, the same text fits. That is the difference between an
+/// artifact of a collapsed clip-reveal and a defect a user would meet.
+#[test]
+fn the_recorded_overflow_is_the_collapsed_filter_panel() {
+    let mut renderer = lay::renderer();
+
+    let mut overflow_count = |filter_open: bool| -> usize {
+        let mut state = (covered_states()[0].build)().state;
+        state.sidebar_filter_open = filter_open;
+        let element = micold_client::ui::view(
+            &state,
+            None,
+            None,
+            0,
+            None,
+            &micold_core::env_include::EnvIncludeOutcome::Disabled,
+            &micold_client::ui::ConnectionStatus::Connected,
+        );
+        lay::text_overflows(element, &mut renderer).len()
+    };
+
+    assert!(
+        overflow_count(false) > 0,
+        "the sidebar with its filter panel closed reports no overflow, so the KNOWN_OVERFLOWS \
+         entry cannot be attributed to the collapsed panel at all"
+    );
+    assert_eq!(
+        overflow_count(true),
+        0,
+        "text still overflows with the filter panel open, so this is a real clipping defect rather \
+         than an artifact of the collapsed reveal — it must be reported as a bug, not exempted"
     );
 }
