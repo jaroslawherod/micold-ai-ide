@@ -304,9 +304,17 @@ fn filter_recomputes_after_delete(/* FR-028 / C1 */) {
         ConventionalType::Fix,
     )));
     assert_eq!(state.filtered_worktree_tree().len(), 2);
-    // Remove one fix worktree via the delete reducer path.
+    // Delete one fix worktree. Confirming only dismisses the dialog — the daemon performs the
+    // removal and pushes git's refreshed truth, which the client adopts via `set_worktrees`.
     state.update(Message::WorktreeDeleteRequested("fix-crash".to_string()));
     state.update(Message::WorktreeDeleteConfirmed);
+    let surviving: Vec<_> = state
+        .worktrees
+        .iter()
+        .filter(|w| w.dir_name != "fix-crash")
+        .cloned()
+        .collect();
+    state.set_worktrees(surviving);
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
         vec!["fix-def-9-thing"]
