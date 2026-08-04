@@ -283,11 +283,11 @@ fn the_other_scheme_lays_out_identically() {
     let darks = lay::cached_records(covered_states(), &renderer, ColorScheme::Dark);
 
     for ((covered, light), dark) in covered_states().iter().zip(lights.iter()).zip(darks.iter()) {
-
-        let shape = |rs: &[lay::LayoutRecord]| rs.iter().map(|r| r.path.clone()).collect::<Vec<_>>();
+        let shape =
+            |rs: &[lay::LayoutRecord]| rs.iter().map(|r| r.path.clone()).collect::<Vec<_>>();
         assert_eq!(
-            shape(&light),
-            shape(&dark),
+            shape(light),
+            shape(dark),
             "covered state {:?} produced a different widget tree in the dark scheme. Structure \
              must never depend on the colour scheme, and there is no exemption for this.",
             covered.name

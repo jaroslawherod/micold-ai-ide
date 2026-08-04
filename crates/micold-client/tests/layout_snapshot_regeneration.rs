@@ -56,14 +56,18 @@ fn describe(recorded: &str, observed: &str) -> String {
 fn a_passing_run_does_not_write_the_fixture() {
     let path = scratch("passing");
     fs::write(&path, "same\n").expect("seed the fixture");
-    let before = fs::metadata(&path).and_then(|m| m.modified()).expect("mtime");
+    let before = fs::metadata(&path)
+        .and_then(|m| m.modified())
+        .expect("mtime");
 
     let outcome = lay::compare_or_regenerate(&path, "same\n", false, describe);
 
     assert_eq!(outcome, Outcome::Matched);
     assert_eq!(fs::read_to_string(&path).expect("read back"), "same\n");
     assert_eq!(
-        fs::metadata(&path).and_then(|m| m.modified()).expect("mtime"),
+        fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .expect("mtime"),
         before,
         "the fixture was rewritten on a passing run, even though its content did not change. \
          Identical bytes make this invisible in review and in git, and the same code path would \
@@ -160,10 +164,9 @@ fn an_explicit_regeneration_does_write_the_fixture() {
 /// `cfg!(test)` — while every test above stays green.
 #[test]
 fn only_the_documented_variable_triggers_regeneration() {
-    let gate = fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/layout_snapshot.rs"),
-    )
-    .expect("read the gate's source");
+    let gate =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/layout_snapshot.rs"))
+            .expect("read the gate's source");
 
     let call = gate
         .split_once("compare_or_regenerate(")

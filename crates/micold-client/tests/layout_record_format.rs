@@ -98,7 +98,7 @@ fn formatting_does_not_fall_back_to_debug() {
 /// Records must be emitted in the tree's own depth-first order, never sorted.
 #[test]
 fn records_are_emitted_depth_first_and_never_sorted() {
-    let records = vec![
+    let records = [
         record(&[], 0.0, 0.0, 1280.0, 800.0),
         record(&[1], 0.0, 0.0, 640.0, 800.0),
         record(&[1, 0], 0.0, 0.0, 320.0, 800.0),
@@ -137,7 +137,7 @@ fn depth_is_visible_as_indentation_of_the_path_column() {
     let shallow = lay::format_record(&record(&[0], 0.0, 0.0, 1.0, 1.0));
     let deep = lay::format_record(&record(&[0, 0, 0], 0.0, 0.0, 1.0, 1.0));
 
-    let indent = |s: &str| s.len() - s.trim_start_matches(|c| c == ' ').len();
+    let indent = |s: &str| s.len() - s.trim_start_matches(' ').len();
     let after_layer = |s: &str| s.strip_prefix("base").unwrap().to_string();
 
     assert!(

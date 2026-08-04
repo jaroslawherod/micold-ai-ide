@@ -299,11 +299,14 @@ fn the_check_reports_an_escape_when_one_exists() {
 #[test]
 fn the_recorded_escapes_are_the_accordion_reveal() {
     let escaping_nodes = |filter_open: bool| -> Vec<String> {
-        let mut state = micold_client::app::State::default();
-        state.workspace = crate::support::workspace_with(vec![("/fixture/project", vec![])]);
-        state.workspace.active = state.workspace.projects.first().map(|p| p.path.clone());
-        state.sidebar_width = 260;
-        state.sidebar_filter_open = filter_open;
+        let mut workspace = crate::support::workspace_with(vec![("/fixture/project", vec![])]);
+        workspace.active = workspace.projects.first().map(|p| p.path.clone());
+        let state = micold_client::app::State {
+            workspace,
+            sidebar_width: 260,
+            sidebar_filter_open: filter_open,
+            ..micold_client::app::State::default()
+        };
 
         let element = micold_client::ui::view(
             &state,

@@ -13,9 +13,9 @@
 
 mod support;
 
+use iced::advanced::layout;
 use iced::advanced::renderer::Headless;
 use iced::advanced::widget::Tree;
-use iced::advanced::layout;
 use iced::{Element, Size};
 
 use micold_client::app::State;
@@ -94,7 +94,11 @@ fn a_real_view_resolves_to_a_non_trivial_tree() {
     );
 
     let root = &records[0];
-    assert_eq!(root.path, Vec::<usize>::new(), "the first record is the root");
+    assert_eq!(
+        root.path,
+        Vec::<usize>::new(),
+        "the first record is the root"
+    );
     assert!(
         root.width > 0.0 && root.height > 0.0,
         "the root must have real geometry, got {}x{}",
@@ -123,6 +127,51 @@ fn the_reference_face_parses_as_roboto_regular() {
     assert_eq!(family, lay::REFERENCE_FONT_FAMILY);
     assert_eq!(face.weight(), ttf_parser::Weight::Normal);
     assert!(!face.is_italic());
+}
+
+/// The icon face is the one we think it is, and it is actually loaded.
+///
+/// Added after CI caught what local runs could not: icons are glyphs, shaped and measured like any
+/// other text, and the apparatus was loading only the Roboto faces. Every icon therefore resolved
+/// through the host's fallback and was whatever width that machine happened to offer — on the
+/// Ubuntu runner, 8.4px where 6.3px had been recorded, shifting every adjacent label by 2.1px.
+///
+/// Two halves, for the same reason the Roboto guard has two: parsing proves the committed file is
+/// the right face, and measuring proves that face is what the renderer actually used. A glyph
+/// resolved from a fallback would still measure *something*.
+#[test]
+fn the_icon_face_parses_and_is_the_face_that_measures() {
+    let face = ttf_parser::Face::parse(lay::REFERENCE_ICON_FONT_BYTES, 0)
+        .expect("the committed icon font must parse");
+
+    let family = face
+        .names()
+        .into_iter()
+        .filter(|n| n.name_id == ttf_parser::name_id::FAMILY)
+        .find_map(|n| n.to_string())
+        .expect("the icon face must carry a decodable family name");
+    assert_eq!(family, lay::REFERENCE_ICON_FONT_FAMILY);
+
+    let _ = lay::renderer();
+    let icon_font = iced::Font::with_name(lay::REFERENCE_ICON_FONT_FAMILY);
+
+    // A glyph the application actually draws. Its width must come from the committed face rather
+    // than from a fallback, so compare against the face's own advance rather than a constant.
+    const GLYPH: char = '\u{e5cd}'; // "close"
+    let measured = measure(&GLYPH.to_string(), icon_font);
+    let expected = face
+        .glyph_index(GLYPH)
+        .and_then(|id| face.glyph_hor_advance(id))
+        .map(|adv| adv as f32 / face.units_per_em() as f32 * 16.0)
+        .expect("the committed icon face must contain the glyph");
+
+    assert!(
+        (measured - expected).abs() <= 0.5,
+        "the icon glyph measured {measured:.1}px but the committed face advances {expected:.1}px. \
+         The renderer is shaping it with some other font — the icon face is not loaded, or a host \
+         font has won the family lookup. Read a mass geometry difference as this, not as a layout \
+         regression."
+    );
 }
 
 /// **The load-bearing half of the guard.**

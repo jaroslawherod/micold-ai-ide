@@ -133,9 +133,7 @@ fn code_only(src: &str) -> String {
                     if i >= chars.len() {
                         break;
                     }
-                    if chars[i] == '"'
-                        && (0..hashes).all(|h| chars.get(i + 1 + h) == Some(&'#'))
-                    {
+                    if chars[i] == '"' && (0..hashes).all(|h| chars.get(i + 1 + h) == Some(&'#')) {
                         i += 1 + hashes;
                         break;
                     }
@@ -293,13 +291,13 @@ fn the_registry_still_registers_every_kind() {
 #[test]
 fn defining_or_naming_the_type_is_not_registering_a_state() {
     assert!(constructs("        CoveredState {", "CoveredState"));
-    assert!(constructs("    &[CoveredState { name: \"x\" }]", "CoveredState"));
-
-    assert!(!constructs("pub struct CoveredState {", "CoveredState"));
-    assert!(!constructs(
-        "impl Debug for CoveredState {",
+    assert!(constructs(
+        "    &[CoveredState { name: \"x\" }]",
         "CoveredState"
     ));
+
+    assert!(!constructs("pub struct CoveredState {", "CoveredState"));
+    assert!(!constructs("impl Debug for CoveredState {", "CoveredState"));
     assert!(!constructs("    covered: &CoveredState,", "CoveredState"));
     assert!(!constructs(
         "    states: &'static [CoveredState],",

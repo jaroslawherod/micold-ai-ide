@@ -34,6 +34,23 @@ pub const REFERENCE_FONT_BYTES: &[u8] =
 pub const REFERENCE_FONT_MEDIUM_BYTES: &[u8] =
     include_bytes!("../../../../assets/fonts/Roboto-Medium.ttf");
 
+/// The icon face. **Every bit as load-bearing as the text faces**, and it was missing.
+///
+/// Icons are text: a glyph from `Material Symbols Outlined`, shaped and measured like any other,
+/// and sized into the layout accordingly. Loading only the Roboto faces left every icon resolving
+/// through the host's fallback, so an icon's width was whatever the machine happened to offer.
+///
+/// Caught by CI and by nothing else. Local runs were green, and so were the macOS and Windows
+/// runners — the fixture recorded on this machine happened to match what those resolved. The Ubuntu
+/// runner did not: icon nodes came out 8.4px where 6.3px was recorded, shifting every label beside
+/// them 2.1px. Exactly the class of defect FR-006 exists to prevent, found only by running on three
+/// platforms, which is why that requirement is not a formality.
+pub const REFERENCE_ICON_FONT_BYTES: &[u8] =
+    include_bytes!("../../../../assets/fonts/MaterialSymbolsOutlined.ttf");
+
+/// The family the icon face reports, as the application names it (`material/glyph.rs`).
+pub const REFERENCE_ICON_FONT_FAMILY: &str = "Material Symbols Outlined";
+
 /// The family name the pinned face reports (name ID 1).
 pub const REFERENCE_FONT_FAMILY: &str = "Roboto";
 
@@ -118,6 +135,10 @@ pub fn renderer() -> iced::Renderer {
             .write()
             .expect("the global font system lock was poisoned")
             .load_font(Cow::Borrowed(REFERENCE_FONT_MEDIUM_BYTES));
+        iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("the global font system lock was poisoned")
+            .load_font(Cow::Borrowed(REFERENCE_ICON_FONT_BYTES));
     });
 
     block_on(<iced::Renderer as Headless>::new(
@@ -267,9 +288,7 @@ pub fn resolve_pressing<'a, M: 'a>(
             let mut shell = Shell::new(&mut settle_messages);
             element.as_widget_mut().update(
                 &mut tree,
-                &iced::Event::Window(iced::window::Event::RedrawRequested(
-                    origin + FRAME * frame,
-                )),
+                &iced::Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * frame)),
                 Layout::new(&node),
                 mouse::Cursor::Unavailable,
                 renderer,
@@ -504,9 +523,7 @@ pub fn resolve_revealing(
     // 0.356. The step size is still not derived from these values — only their inequality is.
     let origin = std::time::Instant::now();
 
-    let mut node = element
-        .as_widget_mut()
-        .layout(&mut tree, renderer, &limits);
+    let mut node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
 
     for frame in 0..revealing.frames {
         let event = iced::Event::Window(iced::window::Event::RedrawRequested(
@@ -523,9 +540,7 @@ pub fn resolve_revealing(
             &mut shell,
             &viewport,
         );
-        node = element
-            .as_widget_mut()
-            .layout(&mut tree, renderer, &limits);
+        node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
     }
 
     walk(Layout::new(&node), Layer::Base)
@@ -551,9 +566,7 @@ pub fn resolve_revealed(
     let mut element = view_of(&under);
     let mut tree = Tree::new(element.as_widget());
     let limits = layout::Limits::new(Size::ZERO, WINDOW);
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, renderer, &limits);
+    let node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
 
     walk(Layout::new(&node), Layer::Base)
 }
@@ -886,9 +899,7 @@ pub struct Escape {
 /// — but a different one, and one the geometry fixture does catch as a change.
 pub fn escapes(records: &[LayoutRecord], tolerance: f32) -> Vec<Escape> {
     let find = |layer: Layer, path: &[usize]| -> Option<&LayoutRecord> {
-        records
-            .iter()
-            .find(|r| r.layer == layer && r.path == path)
+        records.iter().find(|r| r.layer == layer && r.path == path)
     };
 
     let window = Rectangle::with_size(WINDOW);
@@ -914,10 +925,7 @@ pub fn escapes(records: &[LayoutRecord], tolerance: f32) -> Vec<Escape> {
         let edges = [
             ("left", parent.x - child.x),
             ("top", parent.y - child.y),
-            (
-                "right",
-                (child.x + child.width) - (parent.x + parent.width),
-            ),
+            ("right", (child.x + child.width) - (parent.x + parent.width)),
             (
                 "bottom",
                 (child.y + child.height) - (parent.y + parent.height),

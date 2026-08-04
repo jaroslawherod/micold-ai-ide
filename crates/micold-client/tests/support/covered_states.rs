@@ -30,7 +30,9 @@ const LONG_NAME: &str = "feat-a-deliberately-long-worktree-name-that-crowds-its-
 fn worktree(dir_name: &str, branch: &str) -> Worktree {
     Worktree {
         dir_name: dir_name.to_string(),
-        path: PathBuf::from(PROJECT).join(".claude/worktrees").join(dir_name),
+        path: PathBuf::from(PROJECT)
+            .join(".claude/worktrees")
+            .join(dir_name),
         branch: Some(branch.to_string()),
         status: WorktreeStatus::Valid,
     }
@@ -38,22 +40,26 @@ fn worktree(dir_name: &str, branch: &str) -> Worktree {
 
 /// A project open, with a stable set of worktrees — the base every non-empty state builds on.
 fn with_project() -> State {
-    let mut state = State::default();
-    state.workspace = super::workspace_with(vec![(PROJECT, vec![])]);
+    let mut workspace = super::workspace_with(vec![(PROJECT, vec![])]);
     // `workspace_with` ends by clearing `active`, which every other caller wants. Here it is the
     // difference between rendering the project surface and rendering "Open a folder to set it as
     // your working space." — four covered states were byte-identical until this line existed.
-    state.workspace.active = state.workspace.projects.first().map(|p| p.path.clone());
+    workspace.active = workspace.projects.first().map(|p| p.path.clone());
+
+    let state = State {
+        workspace,
+        worktrees: vec![
+            worktree("feat-short", "feat/short"),
+            worktree(LONG_NAME, "feat/long"),
+            worktree("fix-a-bug", "fix/a-bug"),
+        ],
+        sidebar_width: 260,
+        ..State::default()
+    };
     assert!(
         state.workspace.active_project().is_some(),
         "the covered state must have a project open, or it is not covering what it claims"
     );
-    state.worktrees = vec![
-        worktree("feat-short", "feat/short"),
-        worktree(LONG_NAME, "feat/long"),
-        worktree("fix-a-bug", "fix/a-bug"),
-    ];
-    state.sidebar_width = 260;
     state
 }
 
@@ -65,8 +71,14 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "main-shell-sidebar-expanded",
             build: || StateUnderTest::new(with_project()),
             anchors: &[
-                Anchor { name: "shell.root", path: &[] },
-                Anchor { name: "shell.body", path: &[0] },
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "shell.body",
+                    path: &[0],
+                },
                 // The two elements feature 017's defect was *between* — a name drawn across the
                 // control beside it. T023 asked for these and they were missing until quickstart
                 // Part B4 was run against a reintroduced defect and reported a bare path.
@@ -92,7 +104,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                 state.sidebar_hidden = true;
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor { name: "shell.root", path: &[] }],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         CoveredState {
             name: "add-worktree-dialog-new-branch",
@@ -106,7 +121,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                 });
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor { name: "dialog.root", path: &[] }],
+            anchors: &[Anchor {
+                name: "dialog.root",
+                path: &[],
+            }],
         },
         CoveredState {
             name: "add-worktree-dialog-existing-branch",
@@ -119,7 +137,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                 });
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor { name: "dialog.root", path: &[] }],
+            anchors: &[Anchor {
+                name: "dialog.root",
+                path: &[],
+            }],
         },
         CoveredState {
             name: "worktree-menu-open",
@@ -128,7 +149,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                 state.worktree_menu_open = Some(LONG_NAME.to_string());
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor { name: "shell.root", path: &[] }],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // --- The empty and error layouts (FR-008c) ----------------------------------------------
         // The screens least often looked at by eye, which is exactly where a gate earns most over
@@ -136,7 +160,10 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "empty-no-project-open",
             build: || StateUnderTest::new(State::default()),
-            anchors: &[Anchor { name: "shell.root", path: &[] }],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         CoveredState {
             name: "empty-project-without-worktrees",
@@ -145,12 +172,20 @@ pub fn covered_states() -> &'static [CoveredState] {
                 state.worktrees.clear();
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor { name: "shell.root", path: &[] }],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         CoveredState {
             name: "error-daemon-disconnected",
-            build: || StateUnderTest::new(with_project()).connection(ConnectionStatus::Disconnected),
-            anchors: &[Anchor { name: "shell.root", path: &[] }],
+            build: || {
+                StateUnderTest::new(with_project()).connection(ConnectionStatus::Disconnected)
+            },
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // `worktree_error` is rendered by the add-worktree modal and nowhere else
         // (`ui/mod.rs:357`), so setting it on the main shell covered nothing — this state was
@@ -169,7 +204,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                     Some("could not create the worktree: branch already checked out".to_string());
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor { name: "dialog.root", path: &[] }],
+            anchors: &[Anchor {
+                name: "dialog.root",
+                path: &[],
+            }],
         },
         // --- The one state that exercises the overlay pass (FR-009) -----------------------------
         // Until this existed the fixture contained **zero** `over` records. The overlay pass was
@@ -195,8 +233,14 @@ pub fn covered_states() -> &'static [CoveredState] {
                 StateUnderTest::new(state).pressing(&[3, 0, 0, 3])
             },
             anchors: &[
-                Anchor { name: "dialog.root", path: &[] },
-                Anchor { name: "dialog.type-select", path: &[3, 0, 0, 3] },
+                Anchor {
+                    name: "dialog.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "dialog.type-select",
+                    path: &[3, 0, 0, 3],
+                },
             ],
         },
         // --- Added to exercise FR-016 end-to-end (T032) ------------------------------------------
@@ -222,7 +266,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                 });
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor { name: "dialog.root", path: &[] }],
+            anchors: &[Anchor {
+                name: "dialog.root",
+                path: &[],
+            }],
         },
     ]
 }

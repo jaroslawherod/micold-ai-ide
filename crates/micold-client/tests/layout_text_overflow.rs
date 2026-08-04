@@ -121,10 +121,7 @@ fn no_text_is_drawn_wider_than_its_clip() {
              catch, and the geometry fixture cannot see it. Offenders: {:?}",
             covered.name,
             overflows.len(),
-            overflows
-                .iter()
-                .map(|o| o.excess())
-                .fold(0.0_f32, f32::max),
+            overflows.iter().map(|o| o.excess()).fold(0.0_f32, f32::max),
             overflows
                 .iter()
                 .max_by(|a, b| a.excess().total_cmp(&b.excess()))
@@ -192,7 +189,6 @@ fn the_check_reports_an_overflow_when_one_exists() {
          broken, and every passing run of the test above is meaningless"
     );
 }
-
 
 /// The recorded overflow is the collapsed filter panel, and this is what proves it.
 ///
