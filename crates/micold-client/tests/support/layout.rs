@@ -520,6 +520,52 @@ pub fn emit_from(states: &[CoveredState], records: &[Vec<LayoutRecord>]) -> Stri
     out
 }
 
+/// What [`compare_or_regenerate`] did.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Outcome {
+    /// The fixture was rewritten, because regeneration was asked for explicitly.
+    Regenerated,
+    /// The fixture matched. Nothing was written.
+    Matched,
+}
+
+/// Compare `generated` against the committed fixture, or rewrite it when explicitly asked
+/// (FR-013, contract §6).
+///
+/// This lives here, rather than inline in the gate, so `layout_snapshot_regeneration.rs` can assert
+/// the write behaviour against the *same code the gate runs* instead of against a restatement of
+/// it. A test that reimplements the branch it is checking passes whatever the gate does.
+///
+/// Panics on a mismatch and on a missing fixture — both are the gate failing, and both must leave
+/// the file exactly as they found it. A gate that rewrites its own baseline when it fails is not a
+/// gate; it is a recorder that reports success.
+pub fn compare_or_regenerate(
+    fixture_path: &std::path::Path,
+    generated: &str,
+    regenerate: bool,
+    describe: impl Fn(&str, &str) -> String,
+) -> Outcome {
+    if regenerate {
+        std::fs::write(fixture_path, generated).expect("could not write the fixture");
+        eprintln!("layout snapshot regenerated at {}", fixture_path.display());
+        return Outcome::Regenerated;
+    }
+
+    let committed = std::fs::read_to_string(fixture_path).unwrap_or_else(|_| {
+        panic!(
+            "{} is missing. It is never written by a normal run — regenerate it deliberately with \
+             UPDATE_LAYOUT_SNAPSHOT=1",
+            fixture_path.display(),
+        )
+    });
+
+    if generated != committed {
+        panic!("{}", describe(&committed, generated));
+    }
+
+    Outcome::Matched
+}
+
 /// Emit the whole fixture, resolving each covered state once per scheme (contract §1).
 pub fn emit_fixture(
     states: &'static [CoveredState],

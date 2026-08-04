@@ -50,22 +50,12 @@ fn the_layout_matches_the_committed_fixture() {
     let renderer = lay::renderer();
     let generated = lay::emit_fixture(covered_states(), &renderer, RECORDED_SCHEME);
 
-    if std::env::var("UPDATE_LAYOUT_SNAPSHOT").is_ok() {
-        std::fs::write(FIXTURE_PATH, &generated).expect("could not write the fixture");
-        eprintln!("layout snapshot regenerated at {FIXTURE_PATH}");
-        return;
-    }
-
-    let committed = std::fs::read_to_string(FIXTURE_PATH).unwrap_or_else(|_| {
-        panic!(
-            "{FIXTURE_PATH} is missing. It is never written by a normal run — regenerate it \
-             deliberately with UPDATE_LAYOUT_SNAPSHOT=1"
-        )
-    });
-
-    if generated != committed {
-        panic!("{}", describe_difference(&committed, &generated));
-    }
+    lay::compare_or_regenerate(
+        std::path::Path::new(FIXTURE_PATH),
+        &generated,
+        std::env::var("UPDATE_LAYOUT_SNAPSHOT").is_ok(),
+        describe_difference,
+    );
 }
 
 // --- T015 — a failure names the element ---------------------------------------------------------
