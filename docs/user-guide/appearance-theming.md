@@ -16,11 +16,41 @@ The window is organised as a Material Design layout:
 - Content sits on distinct **surfaces** (cards) with consistent spacing and rounded corners.
 - Buttons follow Material emphasis levels: a **filled** button for the single primary
   action, **outlined** and **text** buttons for secondary and low-emphasis actions. Buttons
-  visibly respond to hover, focus, and press, and appear dimmed when disabled.
+  visibly respond to hover, focus, and press, and appear dimmed when disabled. They are
+  **fully rounded** (pill-shaped), as Material specifies.
+
+### Depth: how surfaces are separated
+
+Surfaces are told apart by **shade and shadow**, not by outlines.
+
+Each kind of surface sits at its own level, and the higher it is the lighter its shade (in
+the dark theme) and the softer and larger its shadow. The window background is flat; cards
+and the sidebar sit just above it; menus and popovers float higher; dialogs are the
+frontmost thing on screen and take a notably larger rounded corner.
+
+Outlines are now used for only three things: a divider separating content, the border of an
+outlined button or text field, and the focus indicator. If you are used to seeing a thin
+line around cards and menus, that line is gone deliberately — the shade difference and the
+shadow do that job, which is what makes the interface read as layered rather than as a set
+of boxed-off regions.
+
+Opening a dialog dims what is behind it. That dimming is now **lighter** than before, so the
+content behind stays readable instead of being hidden.
 
 The known-projects list keeps everything it had before — the active-project marker, the
 "git" badge on repositories, and the "unavailable" state for folders that have moved or
 been deleted — now presented as Material list items.
+
+## The accent colour
+
+The accent colour — used for filled buttons, links, selection and focus — is Material
+Design 3's own baseline **purple**. Earlier versions used a blue.
+
+This changed when the whole palette moved onto Material's tonal system: every colour is now
+derived from one seed colour rather than picked by hand, which is what lets light and dark
+stay in step and guarantees text contrast everywhere. The accent is simply what that system
+produces. The worktree tag colours shifted for the same reason; each type still has its own
+distinct, consistent colour.
 
 ## Automatic light/dark
 

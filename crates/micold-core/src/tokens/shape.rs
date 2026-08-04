@@ -4,13 +4,9 @@
 //! `large`) and two existing assignments move: buttons go from `small` (8) to `full`, and dialogs
 //! from 16 to `extra_large` (28).
 //!
-//! # Why the old names are still here
-//!
-//! Phase 0 authors token *values*; retargeting call sites onto them is Phase 1's work. Removing
-//! [`SM`]/[`MD`]/[`LG`] now would force every call site to move in the same change that introduced
-//! the scale, which is exactly the coupling feature 017 separated out — a value change and a call-site
-//! change reviewed together are a change nobody can review. They are retained, marked superseded,
-//! and removed once the last call site has moved.
+//! Feature 003's `SM`/`MD`/`LG` were carried alongside this scale through Phase 0 so that authoring
+//! the values and retargeting the call sites stayed two reviewable changes. Phase 1 moved the last
+//! call site, so they are gone.
 
 // --- the Material 3 shape scale (contract §3) --------------------------------------------------
 
@@ -31,12 +27,3 @@ pub const FULL: f32 = 9999.0;
 
 /// The whole scale, ascending. Asserted complete and ordered by `tests/tokens_scales.rs`.
 pub const ALL: [f32; 7] = [NONE, EXTRA_SMALL, SMALL, MEDIUM, LARGE, EXTRA_LARGE, FULL];
-
-// --- superseded (feature 003) ------------------------------------------------------------------
-
-/// Superseded by [`SMALL`]; buttons move to [`FULL`] in Phase 1 (FR-019).
-pub const SM: f32 = 8.0;
-/// Superseded by [`MEDIUM`].
-pub const MD: f32 = 12.0;
-/// Superseded by [`LARGE`]; dialogs move to [`EXTRA_LARGE`] in Phase 1 (FR-018).
-pub const LG: f32 = 16.0;

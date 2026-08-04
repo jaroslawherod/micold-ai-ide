@@ -9,9 +9,9 @@ use iced::overlay::menu;
 use iced::widget::{
     button, checkbox as checkbox_widget, container, pick_list, scrollable, text, text_input,
 };
-use iced::{Background, Border, Color, Theme};
+use iced::{Background, Border, Color, Shadow, Theme};
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, shape, Rgb, Roles};
+use micold_core::tokens::{self, elevation, shape, Rgb, Roles};
 
 /// Convert a token color into an iced color.
 pub fn color(c: Rgb) -> Color {
@@ -34,11 +34,14 @@ pub fn disabled_color(c: Rgb) -> Color {
     alpha(color(c), DISABLED_OPACITY)
 }
 
-/// A low-contrast divider color (thin 1px separator lines, e.g. under a toolbar or beside the
-/// sidebar): the `outline` role softened with reduced alpha so it reads as a subtle line, not
-/// a hard rule.
+/// A divider: a hairline separating content *within* a surface.
+///
+/// Drawn in `outline_variant`, which is the role Material defines for exactly this and one of the
+/// only three legitimate uses of a line at all (contract §1.5). It replaces feature 003's
+/// `outline`-at-40%: that was a full-strength role dimmed by hand to stop it reading as a hard
+/// rule, which is the job `outline_variant` already does at full alpha.
 pub fn separator(r: Roles) -> Color {
-    alpha(color(r.outline), 0.4)
+    color(r.outline_variant)
 }
 
 /// Linearly blend `over` on top of `base` by factor `t` (0 = base, 1 = over).
@@ -55,6 +58,48 @@ fn radius(px: f32) -> Border {
     Border {
         radius: px.into(),
         ..Border::default()
+    }
+}
+
+/// The drop shadow for an elevation level, in this scheme (contract §4, research R1).
+///
+/// **Material's key and ambient shadows folded into one.** The renderer exposes a single shadow per
+/// widget, so the key shadow's offset is kept and its blur widened to stand in for the ambient
+/// spread. Two overlapping shadows cannot be expressed here, and approximating them with one is
+/// closer than dropping either.
+///
+/// Level 0 returns the default (fully transparent, zero-blur) shadow: a resting surface casts
+/// nothing.
+pub fn elevation_shadow(r: Roles, level: u8) -> Shadow {
+    let Some(spec) = elevation::LEVELS[level as usize].shadow else {
+        return Shadow::default();
+    };
+    let strength = match r.scheme() {
+        ColorScheme::Light => spec.alpha_light,
+        // Stronger in dark, and only so the shadow is not lost entirely — the tonal shift remains
+        // the primary depth cue there (FR-016).
+        ColorScheme::Dark => spec.alpha_dark,
+    };
+    Shadow {
+        color: alpha(color(r.shadow), strength),
+        offset: iced::Vector::new(0.0, spec.offset_y),
+        blur_radius: spec.blur,
+    }
+}
+
+/// A container at an elevation level, with the given corner size.
+///
+/// The single place a surface's depth is expressed, so "which containers are elevated, and how" is
+/// answerable by reading one function rather than every style below. **No border**: depth comes from
+/// the level's tone and its shadow, and adding an outline on top reads as a sticker rather than a
+/// raised plane (contract §1.5, asserted by `style_outline_discipline`).
+pub fn elevated(r: Roles, level: u8, corner: f32) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.elevation_surface(level)))),
+        text_color: Some(color(r.on_surface)),
+        border: radius(corner),
+        shadow: elevation_shadow(r, level),
+        ..container::Style::default()
     }
 }
 
@@ -91,69 +136,44 @@ pub fn window_bg(r: Roles) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-/// A raised Material surface (card/dialog): `surface` fill, subtle outline, rounded.
+/// A raised Material surface (a card, or grouped content). Elevation 1: the `surface_container_low`
+/// tone plus a shadow, and **no outline** — feature 003 drew a 1px border here to fake an edge, and
+/// that is exactly what depth replaces (FR-002, FR-015).
 pub fn surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
-    move |_theme| container::Style {
-        background: Some(Background::Color(color(r.surface))),
-        text_color: Some(color(r.on_surface)),
-        border: Border {
-            color: alpha(color(r.outline), 0.4),
-            width: 1.0,
-            radius: shape::MD.into(),
-        },
-        ..container::Style::default()
-    }
+    elevated(r, elevation::CARD, shape::MEDIUM)
 }
 
-/// A dialog surface: like [`surface`] but with the larger dialog radius.
+/// A dialog surface. Elevation 3 and the extra-large 28dp corner — both a step up from feature
+/// 003's 16dp and borrowed outline, and both what makes a dialog read as the frontmost thing on
+/// screen (FR-018, FR-028).
 pub fn dialog(r: Roles) -> impl Fn(&Theme) -> container::Style {
-    move |_theme| container::Style {
-        background: Some(Background::Color(color(r.surface))),
-        text_color: Some(color(r.on_surface)),
-        border: Border {
-            color: alpha(color(r.outline), 0.4),
-            width: 1.0,
-            radius: shape::LG.into(),
-        },
-        ..container::Style::default()
-    }
+    elevated(r, elevation::DIALOG, shape::EXTRA_LARGE)
 }
 
-/// The sidebar surface — flat `surface` fill with **no border and no rounded corners**. The
-/// sidebar's right edge is drawn by the resize handle's 1px boundary line instead.
+/// The sidebar panel. Elevation 1's tone, and **square corners**.
+///
+/// A deliberate departure from §3's `large` (16) assignment for "the sidebar panel": that size
+/// suits an inset panel, and this sidebar is docked flush to the window edge and full height, where
+/// a rounded corner would cut a notch out of the window rather than round a floating card. The tone
+/// is the part that carries the hierarchy, and it is applied.
 pub fn sidebar_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
-    move |_theme| container::Style {
-        background: Some(Background::Color(color(r.surface))),
-        text_color: Some(color(r.on_surface)),
-        border: Border::default(),
-        ..container::Style::default()
-    }
+    elevated(r, elevation::CARD, shape::NONE)
 }
 
-/// The Material toolbar surface — flat `surface` fill, **no border** (the toolbar's bottom
-/// border is a separate 1px line composed alongside this surface, same idiom as
-/// [`sidebar_surface`]'s resize-handle boundary).
+/// The app bar at rest — elevation 0, so the `surface` tone and no shadow (§4).
+///
+/// It gains elevation 2 when content scrolls under it (FR-025a); that transition is US4's work.
 pub fn toolbar_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
-    move |_theme| container::Style {
-        background: Some(Background::Color(color(r.surface))),
-        text_color: Some(color(r.on_surface)),
-        border: Border::default(),
-        ..container::Style::default()
-    }
+    elevated(r, elevation::APP_BAR_REST, shape::NONE)
 }
 
-/// A raised menu/dropdown surface: `surface` fill, subtle outline, rounded (for popup menus).
+/// A floating menu, context menu or popover. Elevation 2 and the extra-small 4dp corner (§3).
+///
+/// Level 2 sits below a dialog's 3 on purpose: a menu opened *over* a dialog must still read as
+/// above it, which it does because the menu is drawn later in the overlay order while keeping its
+/// own shadow (FR-017) — elevation grades the resting hierarchy, not the stacking order.
 pub fn menu_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
-    move |_theme| container::Style {
-        background: Some(Background::Color(color(r.surface))),
-        text_color: Some(color(r.on_surface)),
-        border: Border {
-            color: alpha(color(r.outline), 0.4),
-            width: 1.0,
-            radius: shape::SM.into(),
-        },
-        ..container::Style::default()
-    }
+    elevated(r, elevation::MENU, shape::EXTRA_SMALL)
 }
 
 /// The closed field of a `pick_list`-backed `Select` (feature 013): an outlined box matching
@@ -172,7 +192,7 @@ pub fn select_field(r: Roles) -> impl Fn(&Theme, pick_list::Status) -> pick_list
             border: Border {
                 color: border_color,
                 width: 1.0,
-                radius: shape::SM.into(),
+                radius: shape::SMALL.into(),
             },
         }
     }
@@ -188,7 +208,7 @@ pub fn select_menu(r: Roles) -> impl Fn(&Theme) -> menu::Style {
         border: Border {
             color: alpha(color(r.outline), 0.4),
             width: 1.0,
-            radius: shape::SM.into(),
+            radius: shape::EXTRA_SMALL.into(),
         },
         text_color: color(r.on_surface),
         selected_text_color: color(r.on_primary),
@@ -260,7 +280,7 @@ pub fn list_item(r: Roles) -> impl Fn(&Theme) -> container::Style {
     move |_theme| container::Style {
         background: Some(Background::Color(color(r.surface_variant))),
         text_color: Some(color(r.on_surface)),
-        border: radius(shape::MD),
+        border: radius(shape::MEDIUM),
         ..container::Style::default()
     }
 }
@@ -276,7 +296,7 @@ pub fn notification(r: Roles, level: NoticeLevel) -> impl Fn(&Theme) -> containe
         container::Style {
             background: Some(Background::Color(color(bg))),
             text_color: Some(color(fg)),
-            border: radius(shape::MD),
+            border: radius(shape::MEDIUM),
             ..container::Style::default()
         }
     }
@@ -301,7 +321,7 @@ pub fn filled(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
         button::Style {
             background: Some(Background::Color(bg)),
             text_color: text,
-            border: radius(shape::SM),
+            border: radius(shape::FULL),
             ..button::Style::default()
         }
     }
@@ -327,7 +347,7 @@ pub fn outlined(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
             border: Border {
                 color: border_color,
                 width: 1.0,
-                radius: shape::SM.into(),
+                radius: shape::FULL.into(),
             },
             ..button::Style::default()
         }
@@ -351,7 +371,7 @@ pub fn text_button(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style
         button::Style {
             background: fill,
             text_color: text,
-            border: radius(shape::SM),
+            border: radius(shape::FULL),
             ..button::Style::default()
         }
     }
@@ -412,7 +432,7 @@ pub fn checkbox(r: Roles) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbo
             border: Border {
                 color: border_color,
                 width: 1.0,
-                radius: shape::SM.into(),
+                radius: shape::SMALL.into(),
             },
             text_color: Some(color(r.on_surface)),
         }
@@ -431,7 +451,7 @@ pub fn input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_input::Sty
             border: Border {
                 color: border_color,
                 width: 1.0,
-                radius: shape::SM.into(),
+                radius: shape::SMALL.into(),
             },
             icon: color(r.on_surface_variant),
             placeholder: color(r.on_surface_variant),

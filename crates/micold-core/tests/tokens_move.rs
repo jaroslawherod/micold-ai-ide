@@ -63,9 +63,9 @@ fn every_scale_value_survives_the_move_unchanged() {
     assert_eq!(spacing::LG, 24.0);
     assert_eq!(spacing::XL, 32.0);
 
-    assert_eq!(shape::SM, 8.0);
-    assert_eq!(shape::MD, 12.0);
-    assert_eq!(shape::LG, 16.0);
+    // The shape scale is *replaced* by feature 018 rather than moved, so it is no longer guarded
+    // here — `tokens_scales.rs` pins all seven sizes. `FULL` survives the replacement unchanged and
+    // stays, since it is the one value both scales share.
     assert_eq!(shape::FULL, 9999.0);
 }
 

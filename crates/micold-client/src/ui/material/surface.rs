@@ -15,7 +15,7 @@ use crate::app::NoticeLevel;
 use crate::ui::material::style;
 use iced::widget::container;
 use iced::{Element, Length, Padding};
-use micold_core::tokens::{Rgb, Roles};
+use micold_core::tokens::{elevation, shape, Rgb, Roles};
 
 /// A boxed container style function — each `impl Fn` from the style layer is a distinct opaque
 /// type, so the kinds are boxed behind one signature to be chosen at runtime.
@@ -46,6 +46,38 @@ pub enum Kind {
 }
 
 impl Kind {
+    /// The elevation level this kind sits at, from contract §4's assignment table.
+    ///
+    /// A property of *what the surface is*, not of the call site — a dialog is at level 3 because
+    /// it is a dialog. `.elevation()` exists for the rare surface that needs to differ, not so each
+    /// call site can pick its own depth.
+    fn elevation(self) -> Option<u8> {
+        match self {
+            Kind::Window => Some(elevation::PAGE),
+            Kind::Plain => Some(elevation::CARD),
+            Kind::Dialog => Some(elevation::DIALOG),
+            Kind::Sidebar => Some(elevation::CARD),
+            Kind::Toolbar => Some(elevation::APP_BAR_REST),
+            Kind::Menu => Some(elevation::MENU),
+            // Colour-driven rather than elevation-driven: a list row is distinguished by its own
+            // fill, a notification by severity and a chip by its accent. Overriding elevation on
+            // these would replace the fill that identifies them, so they have no default level and
+            // `.elevation()` is refused for them below.
+            Kind::ListItem | Kind::Notification(_) | Kind::Chip(_) => None,
+        }
+    }
+
+    /// The corner size this kind takes, from contract §3.
+    fn shape(self) -> f32 {
+        match self {
+            Kind::Window | Kind::Sidebar | Kind::Toolbar => shape::NONE,
+            Kind::Plain | Kind::ListItem | Kind::Notification(_) => shape::MEDIUM,
+            Kind::Dialog => shape::EXTRA_LARGE,
+            Kind::Menu => shape::EXTRA_SMALL,
+            Kind::Chip(_) => shape::FULL,
+        }
+    }
+
     fn style(self, roles: Roles) -> ContainerStyleFn {
         match self {
             Kind::Window => Box::new(style::window_bg(roles)),
@@ -67,6 +99,8 @@ pub struct Surface<'a, M> {
     content: Element<'a, M>,
     kind: Kind,
     roles: Roles,
+    elevation: Option<u8>,
+    corner: Option<f32>,
     padding: Option<Padding>,
     width: Option<Length>,
     height: Option<Length>,
@@ -81,12 +115,45 @@ impl<'a, M: 'a> Surface<'a, M> {
             content: content.into(),
             kind,
             roles,
+            elevation: None,
+            corner: None,
             padding: None,
             width: None,
             height: None,
             center_x: false,
             center_y: false,
         }
+    }
+
+    /// Raise this surface to an explicit elevation level, overriding its kind's own.
+    ///
+    /// For the surface whose depth genuinely differs from its kind — an app bar that elevates once
+    /// content scrolls under it (FR-025a) is the motivating case. Not a per-call-site depth dial:
+    /// a kind that always sits at a level states it in [`Kind::elevation`] instead.
+    ///
+    /// # Panics
+    ///
+    /// On a colour-driven kind (`ListItem`, `Notification`, `Chip`), whose fill identifies it —
+    /// applying an elevation tone would replace exactly the colour the call site asked for. Failing
+    /// loudly beats silently discarding it.
+    pub fn elevation(mut self, level: u8) -> Self {
+        assert!(
+            self.kind.elevation().is_some(),
+            "{:?} is a colour-driven surface: its fill is what identifies it, so an elevation tone \
+             would overwrite the very thing the call site chose",
+            self.kind
+        );
+        self.elevation = Some(level);
+        self
+    }
+
+    /// Give this surface an explicit corner size, overriding its kind's own.
+    ///
+    /// The argument is a value from the shape scale (`tokens::shape`), never a literal — the scale
+    /// is what makes "one size larger" mean something.
+    pub fn shape(mut self, corner: f32) -> Self {
+        self.corner = Some(corner);
+        self
     }
 
     /// Inset the content from the surface's edge.
@@ -126,7 +193,17 @@ impl<'a, M: 'a> Surface<'a, M> {
 
 impl<'a, M: 'a> From<Surface<'a, M>> for Element<'a, M> {
     fn from(s: Surface<'a, M>) -> Self {
-        let mut widget = container(s.content).style(s.kind.style(s.roles));
+        // An override composes the elevation scale directly; otherwise the kind's own style
+        // function applies, which is what keeps every existing call site byte-identical.
+        let style: ContainerStyleFn = match (s.elevation, s.corner) {
+            (None, None) => s.kind.style(s.roles),
+            (level, corner) => Box::new(style::elevated(
+                s.roles,
+                level.or_else(|| s.kind.elevation()).unwrap_or(0),
+                corner.unwrap_or_else(|| s.kind.shape()),
+            )),
+        };
+        let mut widget = container(s.content).style(style);
         if let Some(padding) = s.padding {
             widget = widget.padding(padding);
         }

@@ -36,6 +36,12 @@ pub(crate) mod style;
 /// The style layer's parity snapshot. Lives inside the crate rather than in `tests/` because the
 /// layer it asserts is no longer reachable from outside it — which is the point.
 #[cfg(test)]
+mod style_elevation;
+#[cfg(test)]
+mod style_outline_discipline;
+#[cfg(test)]
+mod style_shape;
+#[cfg(test)]
 mod style_snapshot;
 mod surface;
 mod tag;
