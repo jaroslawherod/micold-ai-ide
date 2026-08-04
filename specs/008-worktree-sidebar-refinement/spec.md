@@ -90,6 +90,12 @@ updates. Repeat and cancel at the confirmation step; verify nothing is removed.
 6. **Given** a deletion that fully completes, **When** the sidebar updates, **Then** no error,
    warning, or leftover-path notice is shown — the absence of the working directory after
    removal is the success case, not a failure. *(Added by BUG-001.)*
+7. **Given** a worktree whose directory contains files the app has no permission to remove
+   (for example build output a container wrote as another user), **When** the user confirms
+   Delete, **Then** the worktree is released from git, its sessions are archived, and its row
+   leaves the sidebar — and a non-fatal notice names the surviving paths and their owner. The
+   worktree MUST NOT reappear in the sidebar as an unregistered orphan on the next refresh.
+   *(Added by BUG-002.)*
 
 ---
 
@@ -203,6 +209,12 @@ smaller (80%), while remaining legible in light and dark themes.
   working directory, so the follow-up directory cleanup normally finds nothing left. This is
   the ordinary success path and MUST be silent; only a directory that genuinely survives
   removal is worth reporting (see FR-023a).
+- **Worktree directory holds files the app cannot remove**: build output written by a container
+  as another user (root, typically) cannot be unlinked by the app at any privilege it holds.
+  `git worktree remove --force` still succeeds and deregisters the worktree, so the delete has
+  genuinely happened; only the directory residue remains. This is partial success, not failure —
+  the sessions are still archived and the row still leaves the sidebar, and the surviving paths
+  are reported so the user can clear them (see FR-023c, FR-023d).
 
 ## Requirements *(mandatory)*
 
@@ -272,13 +284,33 @@ smaller (80%), while remaining legible in light and dark themes.
   silent, so an unconditional error on a fully-successful delete did not violate the letter of
   this requirement.)* Removal reporting MUST be exact in **both** directions: if removal
   cannot fully complete, the system MUST surface a clear error and leave the system in a
-  consistent state (no partially-removed worktree lingering); and if removal **does** fully
-  complete, the system MUST surface **no** error, warning, or leftover-path notice.
+  consistent state (~~no partially-removed worktree lingering~~ *(further superseded by
+  BUG-002: when the obstruction is a file the app has no permission to unlink, a partially-
+  removed worktree lingering is the only reachable outcome — no retry or rollback available to
+  the app can reach the state this clause demanded)*); and if removal **does** fully complete,
+  the system MUST surface **no** error, warning, or leftover-path notice.
 - **FR-023a**: A cleanup step that finds its target already absent MUST be treated as success,
   not as a failure. Specifically, removing the working directory after git has already removed
   it is the expected outcome, not an error condition.
 - **FR-023b**: A genuine failure of any removal step MUST NOT be silently swallowed — it MUST
   reach the user via FR-023's error path.
+- **FR-023c**: Removal has **three** outcomes, not two (added by BUG-002). Releasing the
+  worktree from git and removing its directory are separately-failing steps, so:
+  1. **Success** — git released the worktree and its directory is gone. Reported silently
+     (FR-023).
+  2. **Partial success** — git released the worktree, but part of its directory could not be
+     removed. This MUST NOT be reported as a failed delete: the worktree is gone as far as git
+     is concerned, so the system MUST still archive the worktree's sessions and MUST still
+     remove the row from the sidebar, exactly as in case 1. The surviving paths MUST be
+     reported to the user as a distinct, non-fatal notice.
+  3. **Failure** — git did not release the worktree; nothing was removed. The system MUST
+     surface a clear error and MUST leave the worktree's sessions untouched (neither stopped
+     nor archived), so a later retry can still recover them.
+- **FR-023d**: A partial-success or failure notice MUST identify *what* blocked the removal —
+  the specific surviving paths, and (where the platform exposes it) the owning user of each.
+  A notice carrying only an error code is not a "clear error" under FR-023: the ordinary cause
+  is a file owned by another user, which the user can only resolve once they know which path
+  and which owner (added by BUG-002).
 
 **Filtering**
 
@@ -321,6 +353,12 @@ smaller (80%), while remaining legible in light and dark themes.
 - **SC-004a**: 0% of fully-successful deletions produce an error, warning, or leftover-path
   notice, and 100% of deletions that genuinely leave something behind produce one.
   *(Added by BUG-001.)*
+- **SC-004b**: 100% of deletions in which git released the worktree archive the worktree's
+  sessions and drop its sidebar row, whether or not the directory was fully removed; 0% of them
+  leave the worktree to reappear as an unregistered orphan. *(Added by BUG-002.)*
+- **SC-004c**: 100% of leftover-path notices name at least one specific surviving path, and
+  name the owning user wherever the platform exposes it; 0% report an error code alone.
+  *(Added by BUG-002.)*
 - **SC-005**: Renaming a worktree changes only its displayed name in 100% of cases — the
   on-disk directory, the git branch, and the derived tags are unchanged — and the new name
   survives an application restart.
@@ -357,6 +395,10 @@ smaller (80%), while remaining legible in light and dark themes.
 - **Git removes the working directory**: `git worktree remove` deletes the worktree's working
   directory itself. Any follow-up directory cleanup is therefore best-effort belt-and-braces
   for the case where something survives; finding the directory already absent is success.
+- **The app does not own every file in a worktree**: a worktree is a working directory for real
+  builds, and tooling run inside it — a container writing through a bind mount, most commonly —
+  can leave files owned by another user. The app therefore cannot assume it is able to remove
+  everything under a worktree it created, at any privilege it holds. *(Added by BUG-002.)*
 
 **Bugfix**: 2026-07-20 — BUG-001 Every worktree delete reported a folder-removal error despite
 fully succeeding, because the post-removal directory cleanup treated "already gone" as a
@@ -364,3 +406,13 @@ failure. FR-023 amended to require exact reporting in both directions (success M
 FR-023a added (an absent cleanup target is success), FR-023b added (a genuine failure MUST NOT
 be swallowed), US2 acceptance scenario 6 added, SC-004a added, plus an edge case and an
 assumption recording that `git worktree remove` deletes the directory itself.
+
+**Bugfix**: 2026-08-04 — BUG-002 A delete blocked by foreign-owned files reported a bare errno,
+left its sessions un-archived, and let the worktree return to the sidebar as an unregistered
+orphan. The spec modelled removal as one atomic act with two outcomes; releasing the worktree
+from git and removing its directory fail independently, and FR-023's "no partially-removed
+worktree lingering" is unreachable when the app cannot unlink the blocking files at all.
+FR-023's consistent-state clause further superseded, FR-023c added (three outcomes, with partial
+success still archiving sessions and dropping the row), FR-023d added (a notice MUST name the
+surviving paths and their owner), US2 acceptance scenario 7 added, SC-004b/SC-004c added, plus
+an edge case and an assumption recording that the app does not own every file in a worktree.

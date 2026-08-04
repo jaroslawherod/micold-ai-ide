@@ -21,7 +21,7 @@ use micold_core::protocol::messages::{
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     branch_candidates, create_worktree, preflight, remove_worktree, remove_worktree_dir,
-    BlockReason, CreateError, CreateProgressEvent, CreateStage,
+    BlockReason, CreateError, CreateProgressEvent, CreateStage, Leftover,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
@@ -862,12 +862,19 @@ where
                         &target,
                         branch_to_delete.as_deref(),
                     )?;
-                    remove_worktree_dir(&target)?;
-                    Ok::<bool, std::io::Error>(outcome.branch_delete_failed)
+                    // Leftovers are NOT an error: git has already deregistered the worktree above,
+                    // so the delete did partly succeed. Failing the whole operation here skipped
+                    // the session cleanup and left the directory to come back as an unregistered
+                    // orphan — the "I deleted it and it reappeared" report.
+                    let leftovers = remove_worktree_dir(&target);
+                    Ok::<(bool, Vec<Leftover>), std::io::Error>((
+                        outcome.branch_delete_failed,
+                        leftovers,
+                    ))
                 })
                 .await;
                 match result {
-                    Ok(Ok(branch_delete_failed)) => {
+                    Ok(Ok((branch_delete_failed, leftovers))) => {
                         // Gated on the git delete having succeeded (main `d88c7a1`): only now archive
                         // the worktree's sessions durably and kill their live procs (outside the lock).
                         match state.archive_and_remove_worktree_sessions(&project, &dir_name) {
@@ -881,12 +888,27 @@ where
                             }
                         }
                         state.invalidate_env_include(&cache_path);
-                        tracing::info!(
-                            project = %project.display(),
-                            worktree = %dir_name,
-                            branch_delete_failed,
-                            "worktree deleted"
-                        );
+                        if leftovers.is_empty() {
+                            tracing::info!(
+                                project = %project.display(),
+                                worktree = %dir_name,
+                                branch_delete_failed,
+                                "worktree deleted"
+                            );
+                        } else {
+                            // WARN, not ERROR: git released the worktree and the sessions are
+                            // archived, so this is a partial success. Naming the blockers and their
+                            // owner is the whole point — `remove_dir_all` reports only the first
+                            // errno, which reached the user as a bare "Permission denied (os error
+                            // 13)" for a tree they had no way to identify (FR-023).
+                            tracing::warn!(
+                                project = %project.display(),
+                                worktree = %dir_name,
+                                branch_delete_failed,
+                                leftovers = %describe_leftovers(&leftovers),
+                                "worktree deregistered, but its directory could not be fully removed"
+                            );
+                        }
                         refresh_worktrees_and_broadcast(state, project).await;
                         state.send(
                             id,
@@ -894,6 +916,7 @@ where
                                 req,
                                 result: OperationResult::WorktreeDeleted {
                                     branch_delete_failed,
+                                    leftovers,
                                 },
                             },
                         );
@@ -1042,6 +1065,22 @@ where
         stream.abort();
     }
     Ok(())
+}
+
+/// Render leftover paths for one log field: `path (uid N)`, comma-separated.
+///
+/// The owner is what makes the line actionable — a foreign uid means the daemon cannot unlink the
+/// entry no matter how often the user retries, and points straight at the cause (typically a
+/// container that wrote build output through a bind mount as root).
+fn describe_leftovers(leftovers: &[Leftover]) -> String {
+    leftovers
+        .iter()
+        .map(|l| match l.foreign_uid {
+            Some(uid) => format!("{} (uid {uid})", l.path.display()),
+            None => l.path.display().to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Re-discover a project's worktrees from git (off the async runtime, never under the state lock) and

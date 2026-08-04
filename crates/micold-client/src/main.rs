@@ -909,13 +909,29 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     // (e.g. unreachable commits) doesn't look like it silently kept the branch.
                     Some(PendingOp::WorktreeDelete(dir)) => {
                         if let OperationResult::WorktreeDeleted {
-                            branch_delete_failed: true,
+                            branch_delete_failed,
+                            leftovers,
                         } = result
                         {
-                            app.core.notify_error(format!(
-                                "The worktree \"{dir}\" was removed, but its branch could not be \
-                                 deleted (it may hold commits not present elsewhere)."
-                            ));
+                            if branch_delete_failed {
+                                app.core.notify_error(format!(
+                                    "The worktree \"{dir}\" was removed, but its branch could not \
+                                     be deleted (it may hold commits not present elsewhere)."
+                                ));
+                            }
+                            // FR-023c/FR-023d: partial success. Lead with what *did* happen —
+                            // the worktree is gone — so this does not read as a failed delete,
+                            // then name the paths and their owner, which is the only part the
+                            // user can act on. A bare error code named nothing and left them
+                            // with a tree of tens of thousands of files to search (BUG-002).
+                            if !leftovers.is_empty() {
+                                app.core.notify_error(format!(
+                                    "The worktree \"{dir}\" was removed, but {}. You can delete \
+                                     {} yourself once you have permission to.",
+                                    describe_leftovers(&leftovers),
+                                    if leftovers.len() == 1 { "it" } else { "them" },
+                                ));
+                            }
                         }
                     }
                     _ => {}
@@ -2162,6 +2178,30 @@ fn switch_daemon_attachment(app: &App, old: Option<PathBuf>, new: &Path) {
         project: new.to_path_buf(),
         session: app.core.active_session,
     });
+}
+
+/// Phrase the surviving paths for a partial-success delete notice (FR-023d, BUG-002).
+///
+/// Names the owner when the platform reported one, because that is what tells the user *why* the
+/// app could not remove it and what they need in order to: "owned by another user (uid 0)" points
+/// straight at a container that wrote build output as root, where a bare path alone would read as
+/// an unexplained failure. Long lists are truncated — the report is already capped, and naming a
+/// couple of blockers plus a count is what a person can act on.
+fn describe_leftovers(leftovers: &[micold_core::worktree::Leftover]) -> String {
+    const NAMED: usize = 2;
+    let named = leftovers
+        .iter()
+        .take(NAMED)
+        .map(|l| match l.foreign_uid {
+            Some(uid) => format!("{} (owned by another user, uid {uid})", l.path.display()),
+            None => l.path.display().to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    match leftovers.len().saturating_sub(NAMED) {
+        0 => format!("these paths could not be removed: {named}"),
+        rest => format!("these paths could not be removed: {named}, and {rest} more"),
+    }
 }
 
 /// Reconcile the client's core session state from the daemon's authoritative catalog snapshot

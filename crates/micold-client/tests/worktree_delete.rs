@@ -11,7 +11,9 @@ use micold_core::project::{Availability, Project};
 use micold_core::provider::{AiCliProvider, ClaudeProvider};
 use micold_core::session::{Session, SessionLocation};
 use micold_core::terminal::{FakeHandle, TerminalHandle};
-use micold_core::worktree::{remove_worktree, remove_worktree_dir, Worktree, WorktreeStatus};
+use micold_core::worktree::{
+    remove_worktree, remove_worktree_dir, Leftover, Worktree, WorktreeStatus,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -318,13 +320,19 @@ fn branch_delete_failure_is_reported_without_failing_the_whole_removal() {
 // These cover both directions: silent on success, still loud on a genuine leftover.
 // ---------------------------------------------------------------------------
 
-/// The message the binary builds when the directory genuinely survives removal. Kept here so
-/// the tests assert on the same shape the user sees.
-fn leftover_notice(name: &str, path: &Path, err: &std::io::Error) -> String {
-    format!(
-        "Deleted worktree \"{name}\", but its folder could not be removed: {err}. Left at {}",
-        path.display()
-    )
+/// The message the binary builds when part of the directory genuinely survives removal. Kept here
+/// so the tests assert on the same shape the user sees.
+///
+/// Updated by BUG-002: the notice now leads with the worktree having been removed (git released it,
+/// so this is partial success, not a failed delete) and names the surviving paths rather than an
+/// errno that identified nothing.
+fn leftover_notice(name: &str, leftovers: &[Leftover]) -> String {
+    let paths = leftovers
+        .iter()
+        .map(|l| l.path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("The worktree \"{name}\" was removed, but these paths could not be removed: {paths}")
 }
 
 /// T051 / FR-023a: the ordinary success path is silent.
@@ -350,8 +358,9 @@ fn fr_023a_successful_delete_is_silent_when_git_already_removed_the_dir() {
     // Mirror the binary's confirmed-delete flow. `target` is deliberately never created on
     // disk — that is precisely the state git leaves behind after removing the worktree.
     remove_worktree(&git, &repo, &target, Some(branch)).unwrap();
-    if let Err(err) = remove_worktree_dir(&target) {
-        state.notify_error(leftover_notice("feat-gone", &target, &err));
+    let leftovers = remove_worktree_dir(&target);
+    if !leftovers.is_empty() {
+        state.notify_error(leftover_notice("feat-gone", &leftovers));
     }
 
     assert!(
@@ -373,8 +382,9 @@ fn fr_023_leftover_directory_is_still_reported() {
     std::fs::write(&target, b"not a directory").unwrap();
 
     let mut state = State::default();
-    if let Err(err) = remove_worktree_dir(&target) {
-        state.notify_error(leftover_notice("feat-leftover", &target, &err));
+    let leftovers = remove_worktree_dir(&target);
+    if !leftovers.is_empty() {
+        state.notify_error(leftover_notice("feat-leftover", &leftovers));
     }
 
     assert_eq!(
