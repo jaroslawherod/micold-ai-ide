@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.6.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.5.0...micold-ai-ide-v0.6.0) (2026-08-04)
+
+
+### Features
+
+* **fixture:** script the 20-worktree reference scene ([61e0183](https://github.com/jaroslawherod/micold-ai-ide/commit/61e01833e32e99d898b60420e65f25308840f053))
+* **material:** add Ellipsized::at_role, and open the library to the crate ([31bffc4](https://github.com/jaroslawherod/micold-ai-ide/commit/31bffc49fcc6873342c5ba269d671e5b97b96b10))
+* **perf:** add the frame-time probe T000z measures with ([b4a31b9](https://github.com/jaroslawherod/micold-ai-ide/commit/b4a31b90a3408eb40d3a2f61d561817b0ac2833b))
+* **perf:** compose and verify the reference scene, and capture T000z ([a66274e](https://github.com/jaroslawherod/micold-ai-ide/commit/a66274efc07bac397f754932efc506957621bf34))
+* **showcase:** add the component showcase gallery ([be06341](https://github.com/jaroslawherod/micold-ai-ide/commit/be06341ca116279cf6051d1be07db4491709da3b))
+* **tokens:** author the type, elevation, shape, state, motion and density scales ([ac8c5d9](https://github.com/jaroslawherod/micold-ai-ide/commit/ac8c5d9aae0cdfc9b465bf95d29bbbf028bd6562))
+* **tokens:** re-author the palette on the Material 3 baseline ramps ([02c873d](https://github.com/jaroslawherod/micold-ai-ide/commit/02c873d4aa278557938ffb7e4ddedba9a79e03ed))
+* **type:** ship Roboto and give type roles weight and line height ([471bda5](https://github.com/jaroslawherod/micold-ai-ide/commit/471bda58ab325d4e43bf1efac4550401acfcf49d))
+* **ui:** components own the transitions they play (feature 017, phase 6) ([84eb133](https://github.com/jaroslawherod/micold-ai-ide/commit/84eb1330663f608fd9cba7b74f6bb248d516b54b))
+* **ui:** give each row its own hover reveal ([a9e4de1](https://github.com/jaroslawherod/micold-ai-ide/commit/a9e4de17d5ab6974355dce4b264a809cd4f36a5f))
+* **ui:** give surfaces real depth — tone and shadow instead of outlines ([709aaed](https://github.com/jaroslawherod/micold-ai-ide/commit/709aaed3c5db626b5cce69d606ea0186c4fe2059))
+* **ui:** let components own the transitions they play ([f84c960](https://github.com/jaroslawherod/micold-ai-ide/commit/f84c960145632a2c9aecec8f191acbda40ab7ecd))
+* **ui:** let the sidebar own its drawer and its edge ([4eb4ab5](https://github.com/jaroslawherod/micold-ai-ide/commit/4eb4ab51aa89294bbefbb24bccd7ec77b69ecff8))
+* **ui:** let the sidebar own its drawer and its edge (feature 017, T039b/T041/T042) ([fc274be](https://github.com/jaroslawherod/micold-ai-ide/commit/fc274be43ad0b3206c0f1d1146821905c7218c2f))
+* **ui:** make every control respond to the pointer and the keyboard ([82ebfca](https://github.com/jaroslawherod/micold-ai-ide/commit/82ebfca0b15cf786d4e2c6e02cdddd4e9e0d7e2f))
+
+
+### Bug Fixes
+
+* **ci:** pin the showcase-gate step to bash so Windows parses it ([f630cea](https://github.com/jaroslawherod/micold-ai-ide/commit/f630cea20db4deeecb083c91e59f6d4bf978c03b))
+* **client:** end the read-only state when the daemon says we hold the project ([b34592d](https://github.com/jaroslawherod/micold-ai-ide/commit/b34592dcce4475fcbac5978b37de2b12904b8bda))
+* **input:** let a restarted client drive the sessions it did not start ([3590594](https://github.com/jaroslawherod/micold-ai-ide/commit/3590594075636630a86aca6daa151ad7feb83019))
+* **material:** lay out an animated size, so Expand's reveal clips (BUG-001) ([7401f5d](https://github.com/jaroslawherod/micold-ai-ide/commit/7401f5dba7d837794a07e5ac338c7a196421cc66))
+* **test:** wait on the daemon instead of sleeping at it ([cfe2174](https://github.com/jaroslawherod/micold-ai-ide/commit/cfe2174354a78562de258fa3a42745c337ed3362))
+* **ui:** end an over-long sidebar name in an ellipsis ([fbc0a06](https://github.com/jaroslawherod/micold-ai-ide/commit/fbc0a06e93a33f9c0b7229948a590489cd05471b))
+* **ui:** end an over-long sidebar name in an ellipsis ([cb7f126](https://github.com/jaroslawherod/micold-ai-ide/commit/cb7f126eecc51079e1e30dab687e5e01f2307890))
+* **ui:** remove the obsolete check_circle icon from session rows ([#32](https://github.com/jaroslawherod/micold-ai-ide/issues/32)) ([18f1603](https://github.com/jaroslawherod/micold-ai-ide/commit/18f160334c9f1ab01899d2b09dc694d28c39f3c8))
+* worktree session stuck as a plain terminal, and deletes that fake success ([#57](https://github.com/jaroslawherod/micold-ai-ide/issues/57)) ([6fa392a](https://github.com/jaroslawherod/micold-ai-ide/commit/6fa392afcf93234328d2932b125c1ff97eec6111))
+* **worktree:** a delete blocked by foreign-owned files is partial success, not failure ([#61](https://github.com/jaroslawherod/micold-ai-ide/issues/61)) ([eaaf216](https://github.com/jaroslawherod/micold-ai-ide/commit/eaaf21624b2339ecc01fb4b3f15140af16fa83a2))
+
 ## [0.5.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.4.0...micold-ai-ide-v0.5.0) (2026-07-27)
 
 
