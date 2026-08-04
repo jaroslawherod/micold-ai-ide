@@ -85,12 +85,12 @@ feature — every story reads token values from it", and it had no tasks at all.
   not parallel with it — asserting each tonal
   ramp is monotonic in luminance, so a transcription error in a baked ramp surfaces as a failure
   rather than as a subtly wrong colour (plan.md risk 1, research R7)
-- [ ] T000c [P] Failing test in `crates/micold-core/tests/tokens_scales.rs` asserting the shape of
+- [X] T000c [P] Failing test in `crates/micold-core/tests/tokens_scales.rs` asserting the shape of
   every scale: 15 type roles plus 3 sidebar-scoped roles, each carrying size, weight, line height
   and a recorded tracking value; 6 elevation levels, each carrying a tonal role and a shadow;
   7 shape sizes; 7 state-layer opacities; motion tokens partitioned into the standard and
   emphasized sets (FR-007, FR-014, FR-018, FR-020, FR-033, FR-042)
-- [ ] T000d [P] Failing test in `crates/micold-core/tests/tokens_density.rs` asserting the density
+- [X] T000d [P] Failing test in `crates/micold-core/tests/tokens_density.rs` asserting the density
   scale has exactly four steps, that each step below 0 subtracts 4dp, and that no component
   resolves to a fractional height (FR-026b)
 
@@ -108,10 +108,10 @@ feature — every story reads token values from it", and it had no tasks at all.
   `crates/micold-core/src/tokens/palette.rs` — one fixed hue per type, read at the accent tone
   recipe (fill 40 / text 100 light, fill 80 / text 20 dark). No tag may be a hand-tuned value
   outside the tonal system (FR-006, FR-006a)
-- [ ] T000h [P] Author `crates/micold-core/src/tokens/typography.rs` — the 15 Material 3 type roles
+- [X] T000h [P] Author `crates/micold-core/src/tokens/typography.rs` — the 15 Material 3 type roles
   plus the 3 sidebar-scoped reduced-density roles, each carrying size, weight, line height, and the
   Material tracking value recorded but not applied at render time (FR-007, FR-011, FR-042)
-- [ ] T000i [P] Author `crates/micold-core/src/tokens/elevation.rs`, `shape.rs`, `state.rs` and
+- [X] T000i [P] Author `crates/micold-core/src/tokens/elevation.rs`, `shape.rs`, `state.rs` and
   `motion.rs` — 6 elevation levels (tonal shift plus shadow), the 7-size shape scale superseding
   today's 4 radii, 7 state-layer opacities, and the named duration and easing tokens split into the
   standard and emphasized sets (FR-014, FR-018, FR-019, FR-020, FR-033)
