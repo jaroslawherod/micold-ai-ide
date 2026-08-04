@@ -128,3 +128,45 @@ fn a_shell_instance_can_be_opened_attached_and_driven_independently_of_the_prima
         let _ = p.kill();
     }
 }
+
+/// BUG-001 (feature 010-regular-terminal-mode, FR-003) — opening a shell instance for a session
+/// whose primary process is not running must still produce a shell.
+///
+/// `open_shell` spawned the PTY and then inserted it only `if let Some(live)` — so for a session
+/// with no live entry the `Arc<PtySession>` fell out of scope and `Drop` killed the child it had
+/// just started, while the call still returned `Ok(())`. `attach_process` then returned `None` for
+/// the same reason and its handler treated that as "nothing to do". Every layer reported success,
+/// so switching a session to Regular Terminal mode did nothing at all, silently.
+///
+/// A session is not live after its primary exits, after a failed start, or after a daemon restart
+/// leaves it `InterruptedResumable` — the state most durable sessions are in right after a restart.
+#[test]
+fn opening_a_shell_on_a_session_whose_primary_is_not_running_still_attaches_a_shell() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::new();
+    let state = DaemonState::new(catalog_with_session(project.path(), store.path(), id));
+
+    // Deliberately never started: this is a durable record with no live process, exactly as after
+    // a daemon restart.
+    assert!(
+        state.live_session(id).is_none(),
+        "precondition: the session has no live process"
+    );
+
+    let instance = ShellInstanceId(1);
+    state
+        .open_shell(id, instance)
+        .expect("opening a shell instance must not fail for a not-live session");
+
+    let attached = state.attach_process(id, SessionProcess::Shell(instance));
+    assert!(
+        attached.is_some(),
+        "the shell instance must exist and be attachable — otherwise the mode toggle silently \
+         does nothing (FR-003, FR-007)"
+    );
+    assert!(
+        attached.unwrap().0.is_alive(),
+        "the spawned shell must still be running, not killed by being dropped on the floor"
+    );
+}

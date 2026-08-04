@@ -377,3 +377,31 @@ Task: "Write failing pure tests in tests/app_state.rs (extend)"
   reducers, the icon/tooltip mapping, lifecycle independence) IS tested first per Constitution
   Principle I.
 - Commit after each task or logical group; verify tests fail before implementing, then pass after.
+
+---
+
+## Phase 8 (BUG-001): a shell for a session whose primary is not running
+
+The daemon port of the mode toggle (feature 010-daemon-session-persistence) split "spawn the shell"
+from "register the shell" and made the second conditional, so switching a not-live session to
+Regular Terminal mode spawned a shell, killed it via `Drop`, and reported success.
+
+### Tests
+
+- [X] T031 [P] [US1] In `crates/micold-daemon/tests/shell_instances.rs`: opening a shell instance for a session with no live entry attaches a **running** shell, rather than returning `Ok(())` having done nothing (FR-003, FR-007). **Done**: `opening_a_shell_on_a_session_whose_primary_is_not_running_still_attaches_a_shell`, which fails against the pre-fix daemon exactly as reported.
+- [ ] T032 [P] [US1] In `crates/micold-daemon/tests/shell_instances.rs`: a shell instance opened for a not-live session is torn down with the session (`SessionKill`/`SessionStop` and the worktree/project delete paths remove the whole live entry), so a session that never had a primary cannot leak its shell.
+
+### Implementation
+
+- [ ] T033 [US1] In `DaemonState::open_shell` (`crates/micold-daemon/src/state.rs`), register the spawned instance whether or not the session already has a live entry — creating one, attached to that instance, when it does not. Do **not** start the AI CLI as a side effect (FR-003 as clarified). Makes T031 green.
+- [ ] T034 [US1] Give `SessionAttachProcess` an observable failure in `crates/micold-daemon/src/server.rs`: a request naming a process the daemon does not have MUST be logged rather than silently no-opped, so a future divergence between the client's mode and the daemon's processes leaves a trace (FR-007).
+- [ ] T035 [P] [US1] Log shell-instance open failures in the daemon, matching the diagnostics precedent set for the worktree-delete path. `open_shell` returning `Ok(())` having done nothing is precisely what made this bug invisible.
+
+**Checkpoint**: Toggling any session to Regular Terminal mode produces a shell, or says why not.
+
+---
+
+**Bugfix**: 2026-08-04 — BUG-001 Updated from bugfix patch. Phase 8 added (T031-T035). No task
+reopened: feature 012's T009 met its acceptance in the client, where spawn and registration were
+one act; the behaviour regressed in the daemon port, which this phase corrects. See
+`specs/010-regular-terminal-mode/bugs/BUG-001.md`.

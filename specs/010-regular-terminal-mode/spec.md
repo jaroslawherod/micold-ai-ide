@@ -30,6 +30,7 @@ A developer is mid-conversation with `claude` in a session and needs to run an o
 1. **Given** a session displaying its AI CLI terminal, **When** the user activates the Regular Terminal toggle, **Then** the pane now shows a plain shell process whose working directory is the session's worktree directory.
 2. **Given** the terminal is in Regular Terminal mode, **When** the user types a shell command and presses Enter, **Then** the command executes and its output is rendered exactly as it would be in a standalone terminal (colors, live input, scrollback all apply, per feature 006).
 3. **Given** the terminal is in Regular Terminal mode, **When** the user activates the AI CLI toggle, **Then** the pane shows the `claude` process again.
+4. **Given** a session whose AI CLI process is not running (it exited, or the session has not been relaunched since the service restarted), **When** the user activates the Regular Terminal toggle, **Then** a plain shell starts and is shown, exactly as it would be for a session whose `claude` is running — and the AI CLI is not started as a side effect. *(Added by BUG-001.)*
 
 ---
 
@@ -81,12 +82,26 @@ A developer glances at the terminal pane and can immediately tell, without typin
 - **FR-001**: The system MUST let the user switch a session's embedded terminal between AI CLI mode (running `claude`) and Regular Terminal mode (running a plain shell) via a single icon button in the terminal's bottom status bar (the bar that already shows the session name and lifecycle status).
 - **FR-002**: The mode toggle button MUST be reachable whenever a session's terminal is displayed, in either mode.
 - **FR-003**: Switching to Regular Terminal mode MUST start a plain shell process, scoped to the session's worktree directory, if one is not already running for that session.
+  - **Clarified by BUG-002 (this feature's BUG-001)**: "if one is not already running" is the only
+    precondition. In particular this MUST NOT depend on the session's *AI CLI* process running —
+    a session whose `claude` has exited, failed to start, or has not been relaunched since a
+    service restart still gets a shell on the toggle. Nor may switching to Regular Terminal mode
+    start the AI CLI as a side effect: resuming a conversation is what switching to *AI CLI* mode
+    does (FR-005), and doing it unasked would resume a conversation the user did not ask for.
 - **FR-004**: If a shell process was already started for the session during a prior switch, switching back to Regular Terminal mode MUST reattach to that same running process rather than starting a new one, preserving whatever shell state (working directory, in-shell environment, scrollback) it had accumulated.
 - **FR-005**: Switching to AI CLI mode MUST reattach to the session's existing `claude` process if it is still running, or resume the same `claude` conversation (using the session's own id) if the process had exited, rather than ever starting a new conversation for that session.
 - **FR-006**: Switching modes MUST NOT terminate either the AI CLI process or the shell process as a side effect; whichever one is not currently attached to the visible pane keeps running in the background.
 - **FR-007**: At any given time, exactly one of the two processes (AI CLI or shell) MUST be attached to the visible terminal pane, receiving keystrokes and rendering output; the other MUST NOT receive input and MUST NOT be rendered.
+  - **Clarified by BUG-001**: this is a statement about the *system*, not about either half of it.
+    A mode switch that the display accepts but the process host does not — the indicator showing
+    Regular Terminal mode while no shell exists — violates this requirement just as much as two
+    processes being attached at once. A switch that cannot be honoured MUST fail visibly rather
+    than leave the two halves disagreeing.
 - **FR-008**: All real-terminal behavior defined for the embedded terminal (colored/styled output, live per-keystroke input, scrollback, mouse/selection handling, copy/paste, focus gating) MUST apply identically in Regular Terminal mode as it does in AI CLI mode.
 - **FR-009**: The mode toggle button's icon (and accessible label/tooltip) MUST always reflect which mode is currently active, updated immediately on every switch, so it also serves as the pane's mode indicator.
+  - **Clarified by BUG-001**: "which mode is currently active" means the mode the session is
+    actually in, not the mode that was last requested. The indicator MUST NOT advance on a switch
+    that did not take effect.
 - **FR-010**: Each session's mode MUST be tracked independently; switching one session's mode MUST NOT affect any other session's mode or processes.
 - **FR-011**: A session's current mode MUST be persisted and restored — reopening a session, including after an application restart, MUST show its terminal in the mode it was last in.
 - **FR-012**: Closing a session, or the AI CLI process's own crash-triggered auto-restart, MUST act on whichever of a session's processes (AI CLI, shell, or both) are currently running — closing stops both if both are running; a crash-triggered auto-restart of the AI CLI process never touches the shell process. (This is existing session-close/crash-restart behavior extended to cover two processes, distinct from FR-013's new manual shell-restart affordance below.)
@@ -109,6 +124,8 @@ A developer glances at the terminal pane and can immediately tell, without typin
 - **SC-003**: Users can identify the active mode correctly from the visual indicator alone, without issuing any command, in every observed case.
 - **SC-004**: Shell state changes made before switching away (e.g., a `cd` into a subdirectory) are still in effect when the user returns to Regular Terminal mode later in the same application run.
 - **SC-005**: Switching modes on one session produces zero observable effect (process state, output, or indicator) on any other concurrently open session, on Linux, macOS, and Windows alike.
+- **SC-006**: 100% of Regular Terminal toggles either show a running shell or report why they could
+  not; 0% leave the mode indicator claiming a mode the session is not in. *(Added by BUG-001.)*
 
 ## Assumptions
 
@@ -118,3 +135,11 @@ A developer glances at the terminal pane and can immediately tell, without typin
 - The mode toggle is a manual, explicit user action; there is no automatic/heuristic switching between modes.
 - Because operating-system processes cannot survive an application restart, "restoring the last-used mode" (FR-011) means the terminal reopens in that same mode with a freshly (re)started process of the appropriate kind — consistent with how the AI CLI process is already restored today via `--resume`.
 - Regular Terminal mode is available under the same conditions AI CLI mode is available today (an active session with a live worktree); it is not offered for archived or already-deleted sessions.
+
+**Bugfix**: 2026-08-04 — BUG-001 Switching a session to Regular Terminal mode did nothing at all,
+silently, whenever the session's primary process was not running: the daemon spawned the shell and
+then dropped it on the floor without registering it, returning success, and the attach that followed
+no-opped for the same reason — while the client advanced its own mode indicator regardless. FR-003
+clarified (a shell does not depend on the AI CLI running, and must not start it), FR-007 clarified
+(the requirement binds the system, not each half separately), FR-009 clarified (the indicator
+follows the actual mode, not the requested one), US1 acceptance scenario 4 added, SC-006 added.
