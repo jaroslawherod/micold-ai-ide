@@ -454,14 +454,25 @@ impl Catalog {
 
     /// Present interrupted-but-resumable sessions after a service restart (FR-006a/b).
     ///
-    /// Every durable session loads `Idle`. This walks the non-archived AI-CLI sessions and, for each
-    /// one `is_resumable` reports a recorded conversation for, flips `Idle → InterruptedResumable` —
+    /// Every durable session loads `Idle`. This walks the non-archived sessions and, for each one
+    /// `is_resumable` reports a recorded conversation for, flips `Idle → InterruptedResumable` —
     /// the "was running when the service last stopped, resumable, never auto-relaunched" state. A
     /// session with no conversation (created but never started) stays `Idle`, which is what makes the
     /// two visibly distinct (FR-006a). `is_resumable` is injected so the daemon can back it with the
     /// real provider while tests drive it deterministically. Lifecycle is not persisted (S3), so this
-    /// mutates in memory only — no write. Regular (shell) sessions have no conversation to resume and
-    /// are skipped. Returns the count marked (diagnostics).
+    /// mutates in memory only — no write. Regular (shell) sessions have no conversation to resume, so
+    /// they are never marked. Returns the count marked (diagnostics).
+    ///
+    /// A recorded conversation is also the evidence that repairs a mis-persisted `mode` (BUG:
+    /// "a worktree session starts with a plain terminal instead of its claude session"). `mode`
+    /// selects what [`crate::state::DaemonState::start_session`] spawns as the session's **Primary**
+    /// process, so a `Regular` record makes a plain shell that session's only process — the AI CLI
+    /// never starts, and toggling back to AI CLI re-attaches `Primary`, i.e. the same shell. A
+    /// genuine shell session has no AI-CLI conversation; one that *does* was an AI-CLI session whose
+    /// mode was written by something other than this catalog (a client writing the store directly,
+    /// violating C1 — one writer), so it is restored to `AiCli` here. The repair rides the durable
+    /// evidence rather than the mode field, which is exactly why it cannot mistake a real shell
+    /// session for a damaged one.
     pub fn present_interrupted_resumable(
         &mut self,
         is_resumable: impl Fn(SessionId, &Path, TerminalMode) -> bool,
@@ -469,17 +480,27 @@ impl Catalog {
         let mut marked = 0;
         for (project, sessions) in self.workspace.sessions.iter_mut() {
             for session in sessions.iter_mut() {
-                if session.archived
-                    || session.mode != TerminalMode::AiCli
-                    || !matches!(session.lifecycle, SessionLifecycle::Idle)
-                {
+                if session.archived || !matches!(session.lifecycle, SessionLifecycle::Idle) {
                     continue;
                 }
                 let cwd = session.location.cwd(project);
-                if is_resumable(session.id, &cwd, session.mode) {
-                    session.mark_interrupted_resumable();
-                    marked += 1;
+                // Asked with `AiCli`: the question is "does an AI-CLI conversation exist for this
+                // session?", which is what decides *both* the lifecycle and the mode repair below.
+                // Passing the record's own (possibly damaged) mode would let the damage suppress its
+                // own detection.
+                if !is_resumable(session.id, &cwd, TerminalMode::AiCli) {
+                    continue;
                 }
+                if session.mode != TerminalMode::AiCli {
+                    tracing::warn!(
+                        session = %session.id.0,
+                        "durable session had a non-AI-CLI mode but a recorded AI-CLI conversation; \
+                         restoring it to the AI CLI"
+                    );
+                    session.set_mode(TerminalMode::AiCli);
+                }
+                session.mark_interrupted_resumable();
+                marked += 1;
             }
         }
         marked

@@ -547,20 +547,20 @@ fn boot() -> (App, Task<Message>) {
     )
 }
 
-/// Persist the catalog. Empty sessions — those `claude` never recorded a conversation for —
-/// are NOT preserved, so a restart never tries to resume a nonexistent session (bug fix; see
-/// spec Clarifications 2026-07-16). A save failure is non-fatal (Principle IV) but is surfaced
-/// to the user rather than silently discarded (FR-012b, bugfix 002/BUG-001) — the mutation that
-/// triggered this persist stays in memory regardless; only the next restart is at risk.
-fn persist(core: &mut State) {
-    if let Some(store) = JsonFileStore::default_location() {
-        let mut to_save = core.workspace.clone();
-        prune_empty_sessions(&mut to_save);
-        if let Err(err) = store.save(&to_save) {
-            core.notify_error(format!("Couldn't save your changes: {err}"));
-        }
-    }
-}
+// The client does NOT write `projects.json`. The daemon's Catalog is its single writer (data-model
+// C1) and `store.rs` has no locking, so a client-side save silently clobbers whatever the daemon
+// wrote since this process loaded — with the client's own copy, in which `mode` means something
+// different.
+//
+// That was the "worktree session starts with a plain terminal" bug: the client's `mode` records
+// which *pane* is displayed, while the daemon's records which *process* it spawns as the session's
+// Primary. Persisting a client-side `Regular` toggle into the daemon's slot made `start_session`
+// launch a plain shell as an AI-CLI session's only process. There is no `SetMode` RPC, so the mode
+// simply does not persist across restarts — every session comes back attached to its AI CLI, which
+// is also what `reconcile_catalog` already assumes when it adopts a daemon-reported session.
+//
+// The remaining local writes are settings (`persist_settings`), a separate file the daemon reads
+// but this client still owns.
 
 /// Remove sessions that have no `claude` conversation on disk (empty sessions).
 fn prune_empty_sessions(workspace: &mut micold_core::workspace::Workspace) {
@@ -1563,7 +1563,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                     }
                 }
                 attach_current_process(app, id);
-                persist(&mut app.core);
             }
             Task::none()
         }
@@ -1630,7 +1629,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         });
                     }
                     attach_current_process(app, id);
-                    persist(&mut app.core);
                 }
             }
             Task::none()
@@ -1654,7 +1652,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 .update(Message::ShellInstanceCloseRequested(id, shell_id));
             // Re-attach whatever process the session now shows (a sibling instance, or the primary).
             attach_current_process(app, id);
-            persist(&mut app.core);
             Task::none()
         }
         // Switch which Regular-terminal instance is shown (feature 011 FR-004): select it in the

@@ -58,6 +58,17 @@ fn loaded_catalog(project: &Path, sessions: Vec<Session>, settings_path: &Path) 
     )
 }
 
+fn mode_of(catalog: &Catalog, id: SessionId) -> TerminalMode {
+    catalog
+        .workspace()
+        .sessions
+        .values()
+        .flatten()
+        .find(|s| s.id == id)
+        .expect("session present")
+        .mode
+}
+
 fn lifecycle_of(catalog: &Catalog, id: SessionId) -> SessionLifecycle {
     catalog
         .workspace()
@@ -173,4 +184,53 @@ fn session_start_is_the_single_explicit_resume_of_an_interrupted_session() {
         "the explicit start resumes it"
     );
     assert!(session.is_active());
+}
+
+/// A session's `mode` selects what `DaemonState::start_session` spawns as its **Primary** process,
+/// so a durable AI-CLI session carrying `mode: Regular` comes back as a plain shell — the only
+/// process it ever gets, since toggling back to AI CLI just re-attaches `Primary`. That is the
+/// "worktree session starts with a plain terminal instead of its claude session" bug, and the record
+/// reaches disk when something other than the catalog writes `mode` (a client writing the store
+/// directly, violating C1).
+///
+/// The repair rides the durable evidence, not the mode field: a recorded AI-CLI conversation means
+/// the session *is* an AI-CLI session, whatever its mode claims.
+#[test]
+fn a_session_with_a_conversation_is_restored_to_the_ai_cli_despite_a_regular_mode() {
+    let project = tempfile::tempdir().unwrap();
+    let settings = tempfile::tempdir().unwrap();
+
+    let damaged = SessionId::new();
+    let real_shell = SessionId::new();
+    let mut catalog = loaded_catalog(
+        project.path(),
+        vec![
+            restored(damaged, TerminalMode::Regular),
+            restored(real_shell, TerminalMode::Regular),
+        ],
+        &settings.path().join("settings.json"),
+    );
+
+    // Only the damaged one has an AI-CLI conversation on disk.
+    let with_conversation: BTreeSet<SessionId> = [damaged].into_iter().collect();
+    let marked =
+        catalog.present_interrupted_resumable(|id, _cwd, _mode| with_conversation.contains(&id));
+
+    assert_eq!(marked, 1, "only the session with a conversation is marked");
+    assert_eq!(
+        mode_of(&catalog, damaged),
+        TerminalMode::AiCli,
+        "a mis-persisted mode is repaired, so the session's primary is `claude` again"
+    );
+    assert_eq!(
+        lifecycle_of(&catalog, damaged),
+        SessionLifecycle::InterruptedResumable,
+        "and it is offered as resumable like any other interrupted AI-CLI session"
+    );
+    assert_eq!(
+        mode_of(&catalog, real_shell),
+        TerminalMode::Regular,
+        "a genuine shell session has no conversation, so it is left exactly as it was"
+    );
+    assert_eq!(lifecycle_of(&catalog, real_shell), SessionLifecycle::Idle);
 }
