@@ -663,18 +663,101 @@ pub fn remove_worktree(
     })
 }
 
-/// Remove the worktree's working directory once git has released it (feature 008, FR-023a).
+/// How many surviving paths [`remove_worktree_dir`] names before the list stops informing anyone.
+/// A blocked `build/` tree can hold tens of thousands of entries; the first few blockers say
+/// everything the rest would.
+pub const LEFTOVER_REPORT_CAP: usize = 10;
+
+/// One filesystem entry that survived [`remove_worktree_dir`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Leftover {
+    /// The surviving path.
+    pub path: PathBuf,
+    /// The uid owning it, when that is **not** the removing process's own — the ordinary cause of
+    /// an unremovable worktree, and the one thing that makes the failure actionable (a container
+    /// wrote build output through a bind mount as root, so the daemon's own uid cannot unlink it).
+    /// `None` when the owner matches, or on platforms without uids.
+    pub foreign_uid: Option<u32>,
+}
+
+/// Remove the worktree's working directory once git has released it (feature 008, FR-023a),
+/// reporting what survived.
 ///
 /// `git worktree remove` deletes the working directory itself, so this normally finds nothing
 /// left — that is the ordinary success path, not a failure. Reporting `NotFound` made every
 /// successful delete raise "its folder could not be removed: No such file or directory"
-/// naming a path that no longer existed (BUG-001). Any other error kind means the directory
-/// really did survive and is still worth telling the user about (FR-023).
-pub fn remove_worktree_dir(path: &Path) -> io::Result<()> {
-    match std::fs::remove_dir_all(path) {
-        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
-        other => other,
+/// naming a path that no longer existed (BUG-001).
+///
+/// An empty return means the directory is gone. A non-empty one means it is not, and names the
+/// entries that blocked it — `std::fs::remove_dir_all` reports only the first errno and never the
+/// path, which left the user with a bare "Permission denied (os error 13)" for a tree they had no
+/// way to identify. Removal is **not** retried here: the walk only observes what is still there.
+///
+/// This is deliberately not an `Err`. Reaching this point means git already deregistered the
+/// worktree, so the operation did partly succeed; treating leftovers as total failure skipped the
+/// session cleanup and left the directory to reappear as an unregistered orphan.
+pub fn remove_worktree_dir(path: &Path) -> Vec<Leftover> {
+    if let Err(err) = std::fs::remove_dir_all(path) {
+        if err.kind() != io::ErrorKind::NotFound {
+            let mut leftovers = Vec::new();
+            collect_leftovers(path, &mut leftovers);
+            return leftovers;
+        }
     }
+    Vec::new()
+}
+
+/// Name the shallowest entries still present under `dir`, up to [`LEFTOVER_REPORT_CAP`].
+///
+/// A foreign-owned entry is not descended into: its whole subtree shares that one cause, so
+/// listing it would crowd out the *other* blockers, which is exactly the information the user
+/// needs. Directory recursion uses the entry's own file type (`lstat`, no symlink following), so a
+/// symlink inside the worktree can never walk the reporter out of the tree.
+fn collect_leftovers(dir: &Path, out: &mut Vec<Leftover>) {
+    if out.len() >= LEFTOVER_REPORT_CAP {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        // Not listable (or not a directory at all) — `dir` itself is what survived.
+        out.push(leftover(dir));
+        return;
+    };
+    for entry in entries.flatten() {
+        if out.len() >= LEFTOVER_REPORT_CAP {
+            return;
+        }
+        let path = entry.path();
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        let found = leftover(&path);
+        if is_dir && found.foreign_uid.is_none() {
+            collect_leftovers(&path, out);
+        } else {
+            out.push(found);
+        }
+    }
+}
+
+/// Describe one surviving path, recording its owner only when it differs from this process's.
+fn leftover(path: &Path) -> Leftover {
+    Leftover {
+        path: path.to_path_buf(),
+        foreign_uid: foreign_uid(path),
+    }
+}
+
+#[cfg(unix)]
+fn foreign_uid(path: &Path) -> Option<u32> {
+    use std::os::unix::fs::MetadataExt;
+    // `symlink_metadata`: unlinking is governed by the link's own owner, not its target's.
+    let uid = std::fs::symlink_metadata(path).ok()?.uid();
+    // SAFETY: `geteuid` is always safe — it takes no arguments and cannot fail.
+    let euid = unsafe { libc::geteuid() };
+    (uid != euid).then_some(uid)
+}
+
+#[cfg(not(unix))]
+fn foreign_uid(_path: &Path) -> Option<u32> {
+    None
 }
 
 /// The named stage a worktree creation is (or was, on failure) currently in (feature 013,

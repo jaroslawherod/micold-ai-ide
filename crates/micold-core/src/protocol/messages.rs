@@ -677,13 +677,17 @@ pub enum OperationResult {
         /// The new worktree's directory name.
         dir_name: String,
     },
-    /// A worktree was deleted (feature 013, FR-011/FR-015). The worktree directory and its
-    /// sessions are always gone by this point; `branch_delete_failed` reports the separate,
-    /// non-fatal outcome of the (optional) branch-deletion step.
+    /// A worktree was deleted (feature 013, FR-011/FR-015). git has released the worktree and its
+    /// sessions are archived by this point; `branch_delete_failed` and `leftovers` report the two
+    /// separate, non-fatal parts that can still come up short.
     WorktreeDeleted {
         /// `true` when branch deletion was requested but git could not delete it (e.g. it holds
         /// commits unreachable from elsewhere). Always `false` when the branch was kept.
         branch_delete_failed: bool,
+        /// Paths of the worktree directory that could not be removed — empty on the ordinary
+        /// path. Non-empty means the directory survives and will reappear as an unregistered
+        /// orphan, so the client must say which paths blocked it and why (usually another uid).
+        leftovers: Vec<crate::worktree::Leftover>,
     },
     /// The classification of a branch name (feature 016, FR-001).
     BranchPreflight {

@@ -312,6 +312,130 @@ async fn worktree_create_succeeds_and_propagates() {
     );
 }
 
+/// T058 (BUG-002, FR-023c case 2) — a delete whose directory cannot be fully removed is a
+/// **partial success**, not a failure.
+///
+/// `git worktree remove --force` has already deregistered the worktree by the time the directory
+/// removal runs, so failing the whole operation there stranded the worktree's sessions (the archive
+/// is gated on success) and left the surviving directory to come back as an unregistered orphan.
+///
+/// The unremovable case is built without privilege by clearing write permission on a subdirectory:
+/// unlinking an entry requires write on the *containing* directory, so this reproduces the `EACCES`
+/// a root-owned file produces.
+#[cfg(unix)]
+#[tokio::test]
+async fn worktree_delete_blocked_by_an_unremovable_path_still_archives_and_reports() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let sid = SessionId::from_uuid(Uuid::from_u128(0x79));
+    let session = Session::restored(
+        sid,
+        SessionLocation::Worktree("wt3".into()),
+        SessionLabel::Named("Shell".into()),
+        TerminalMode::Regular,
+    );
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![session],
+    )));
+    let ok = Command::new("git")
+        .arg("-C")
+        .arg(project.path())
+        .args([
+            "worktree",
+            "add",
+            "-b",
+            "wt3",
+            ".claude/worktrees/wt3",
+            "HEAD",
+        ])
+        .output()
+        .unwrap()
+        .status
+        .success();
+    assert!(ok, "git worktree add for the fixture failed");
+
+    // Build output the daemon cannot unlink, exactly as a container running as root leaves behind.
+    let blocked = project.path().join(".claude/worktrees/wt3/build");
+    std::fs::create_dir_all(&blocked).unwrap();
+    std::fs::write(blocked.join("artifact.jar"), b"binary").unwrap();
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    let mut client = connect_and_attach(&state, project.path()).await;
+    client
+        .send(Frame::Control(ClientMsg::WorktreeDelete {
+            req: 9,
+            project: project.path().to_path_buf(),
+            dir_name: "wt3".into(),
+            stop_sessions: true,
+            delete_branch: false,
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(
+            m,
+            DaemonMsg::OperationOk { req: 9, .. } | DaemonMsg::OperationError { req: 9, .. }
+        )
+    })
+    .await;
+
+    // Restore before asserting so the temp dir can always be cleaned up.
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let leftovers = match reply {
+        DaemonMsg::OperationOk {
+            result: OperationResult::WorktreeDeleted { leftovers, .. },
+            ..
+        } => leftovers,
+        other => panic!("a blocked directory is partial success, not a failed delete: {other:?}"),
+    };
+    assert!(
+        !leftovers.is_empty(),
+        "the surviving paths must be reported (FR-023d)"
+    );
+
+    // git released the worktree even though its directory did not fully go.
+    let registered = String::from_utf8(
+        Command::new("git")
+            .arg("-C")
+            .arg(project.path())
+            .args(["worktree", "list", "--porcelain"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    assert!(
+        !registered.contains("worktrees/wt3"),
+        "git no longer registers the worktree, so the delete did happen"
+    );
+
+    // The whole point of FR-023c: the session is archived anyway, so it cannot be resurrected and
+    // the row does not come back.
+    assert!(
+        state.live_session(sid).is_none(),
+        "the worktree's session was stopped despite the leftover directory"
+    );
+    let (snapshot, _) = state.welcome_payload();
+    let has_session = snapshot
+        .projects
+        .iter()
+        .find(|p| p.path == project.path())
+        .map(|p| p.sessions.iter().any(|s| s.id == sid))
+        .unwrap_or(false);
+    assert!(
+        !has_session,
+        "the session was archived, not left behind for a retry that can never succeed"
+    );
+}
+
 #[tokio::test]
 async fn worktree_delete_with_live_session_and_no_stop_is_refused() {
     let project = tempfile::tempdir().unwrap();
@@ -444,7 +568,8 @@ async fn worktree_delete_with_stop_sessions_archives_and_removes() {
         ok,
         DaemonMsg::OperationOk {
             result: OperationResult::WorktreeDeleted {
-                branch_delete_failed: false
+                branch_delete_failed: false,
+                ..
             },
             ..
         }
@@ -526,7 +651,8 @@ async fn worktree_delete_with_delete_branch_false_keeps_the_branch() {
         ok,
         DaemonMsg::OperationOk {
             result: OperationResult::WorktreeDeleted {
-                branch_delete_failed: false
+                branch_delete_failed: false,
+                ..
             },
             ..
         }
