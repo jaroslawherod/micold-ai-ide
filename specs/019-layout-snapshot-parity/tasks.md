@@ -135,7 +135,14 @@ Three-crate Cargo workspace. This feature touches **only** `crates/micold-client
 ### Implementation for User Story 2
 
 - [x] T027 [US2] **Done, and it had been done since T024 without a checkbox** — the fixture could not have been generated otherwise. Recorded here because "already true" is exactly how an unverified claim survives: nothing asserted it until T026, and the branch it guards is the one that quietly rewrites the baseline. Now behind `UPDATE_LAYOUT_SNAPSHOT=1` in `support::layout::compare_or_regenerate`, called from `layout_snapshot.rs`, mirroring 017's `UPDATE_STYLE_SNAPSHOT` (FR-013, contract §6)
-- [ ] T028 [US2] Confirm review quality against `quickstart.md` Part C: make an intentional layout change, regenerate, and verify the diff is limited to the affected elements and each changed line identifies an element and its state without running the application (SC-005)
+- [x] T028 [US2] **Done — quickstart Part C run in full, 2026-08-04.** The intentional change: the sidebar content column's left/right padding, `spacing::XS` to `spacing::SM` (`ui/sidebar.rs`). Applied temporarily as a probe and reverted; app source is byte-identical after (FR-019).
+
+  - **The fixture updates and the check passes.** Yes. `UPDATE_LAYOUT_SNAPSHOT=1` regenerated; a re-run was green.
+  - **The diff is limited to the affected elements.** Yes, and demonstrably so rather than by assertion: **610 changed lines, 610 removed — exactly balanced**, so nothing was added or dropped, only moved. Ten of eleven states churned, and the one that did not is `empty-no-project-open`, the only state with no sidebar. Churn tracked sidebar content: 71 lines in each state rendering a full sidebar, 26 in `empty-project-without-worktrees`, and 16 in `main-shell-sidebar-collapsed`, whose drawer is parked. A sidebar change touching every sidebar is the correct blast radius, not churn.
+  - **Each changed line identifies an element and its state without running the application.** Yes. The fixture carries `## state` headers and each record leads with its path; the failure message names the covered state, the element and both geometries side by side — e.g. `main-shell-sidebar-expanded`, path `0/0/0/2/0/0/0/0`, recorded `4.0 43.2 252.0 26.2` versus observed `8.0 43.2 244.0 26.2`. The 4px shift and the 8px narrowing are both legible as the padding change that caused them.
+  - **A run without the variable never rewrites the file.** Verified the way Part C asks rather than by trusting T026: fixture restored with `git checkout`, gate re-run against the still-modified source, gate failed, and `git status --short` reported the fixture **unmodified**.
+
+  (SC-005)
 
 **Checkpoint**: intended changes are cheap to accept and legible in review.
 
