@@ -21,7 +21,8 @@ that is quietly narrower than it looks is the exact failure this feature exists 
 | A margin that pushes a control off its row | **Yes** | the fixture |
 | A dropdown that opens in the wrong place | **Yes** | the fixture's overlay pass |
 | Text painted past the box it was given | **Yes** | the text-overflow gate |
-| A child laid out beyond its parent | **Yes** | the containment invariant |
+| A child laid out beyond a parent that will not clip it | **Yes** | the containment invariant |
+| A child laid out beyond a parent that *does* clip it | **No** | nothing reads `draw`; see [the containment invariant](#3-the-containment-invariant--testsgatescontainmentrs) |
 | A screen quietly dropped from coverage | **Yes** | coverage-narrowing check |
 | A colour, border, radius or shadow change | **No** | `style_snapshot` owns these |
 | A widget swapped for a differently-drawn one of identical size | **No** | nothing reads what is painted, only where |
@@ -58,13 +59,28 @@ gets painted, so this gate asks the renderer instead of the layout tree.
 
 ### 3. The containment invariant — `tests/gates/containment.rs`
 
-Asserts that no layout node is laid out beyond the node that owns it.
+Asserts that no layout node is laid out beyond the node that owns it, except where a wrapper is
+known to reveal its child by clipping.
 
 Every box it reads is already in the fixture, so why a second check? Because **a byte-compare
 fixture can only catch changes, never pre-existing defects.** It records whatever it is shown as
 correct; a defect older than the fixture is regenerated into the expected value and becomes the
 baseline. Catching a defect that is already there needs an assertion about the numbers, not a
 comparison against a file.
+
+**Its limit is worth stating before its value.** A child laid outside its parent is not by itself
+wrong: a widget may lay the child out at full size and clip it when drawing, and the layout tree
+looks identical either way. Whether the overhang reaches the screen is decided in `draw`, which this
+check does not read. So it catches an escape from a parent that does *not* clip, and is blind to the
+distinction otherwise — which is why `CLIP_REVEALED` exists and why it does not expire.
+
+That limit was found the hard way. The check was built against BUG-001, on the belief that
+`Expand`'s oversized child *was* the defect. It was not: `Expand::layout` is unchanged by the fix,
+the child is still laid out oversized on purpose, and the real cause was that `layout` never re-ran,
+so the clip was handed stale bounds. Every escape this check reported survived the fix. It named the
+right nodes for the wrong reason — and would have named them just as loudly with nothing wrong at
+all. The mechanism BUG-001 broke is covered by `tests/animated_layout_relayouts.rs`, which asserts
+on relayout requests rather than on boxes.
 
 It runs inside the `layout_snapshot` test binary so it can reuse that binary's resolved records —
 Cargo makes one binary per file directly under `tests/`, and a cache cannot cross processes.
@@ -104,10 +120,15 @@ easing curve, which is motion's business rather than layout's.
 
 **One exception, and it is narrow.** `revealing_states()` pins the sidebar's filter panel two frames
 into its 90ms reveal, and the containment invariant — *only* that invariant — is asserted against it.
-It is not recorded in the fixture and nothing checks its geometry. It exists to hold one defect
-class: a wrapper that animates its own layout and paints outside the bounds it reports.
+It is not recorded in the fixture and nothing checks its geometry. An invariant can be asked at a
+moment no fixture would want to hold, and this one asks whether the reveal pushes any *neighbour*
+out of the box that owns it — a defect visible only while the animation runs.
 
-So: a change visible only mid-animation is not caught, unless it makes a child escape its parent
+Pumping frames requires each redraw to carry a distinct `Instant`: a track ignores a repeat of the
+frame it last advanced on, so N identical events advance it once. The pinned fraction is asserted
+for exactly this reason, and it caught the apparatus reading 0.178 where it meant 0.356.
+
+So: a change visible only mid-animation is not caught, unless it makes a node escape its parent
 during that one pinned reveal.
 
 ### Scrolling
@@ -137,15 +158,18 @@ re-pointed by hand as part of such a change.
 
 ## Exemptions currently in force
 
-Each is required to keep firing: if the underlying defect is fixed, the exemption fails and must be
-struck off. A stale exemption widens a gate silently, which is the failure mode these checks exist
-to prevent.
+Each is required to keep firing. An exemption that has stopped being needed fails and must be struck
+off, because a stale exemption widens a check silently — which is the failure mode these checks
+exist to prevent. Note what that does and does not mean: a firing exemption proves the *shape* is
+still there, not that it is still a defect. The first one below stayed green straight through the
+fix for the bug it was written against.
 
-- **`KNOWN_ESCAPES` — seven entries, one defect.** The sidebar's collapsed filter accordion, in
+- **`CLIP_REVEALED` — seven entries, one widget.** The sidebar's collapsed filter accordion, in
   every state that renders a sidebar. `material::Expand` reports a shrunken height to its parent
-  while its child keeps full height, so at rest a 42px child sits inside a 0px parent. Reported as
-  BUG-001 against feature 017 and deliberately not fixed here: fixing it changes the sidebar's
-  motion, and this feature is forbidden from changing the application's behaviour.
+  while its child keeps full height, so at rest a 42px child sits inside a 0px parent — then reveals
+  it top-down by clipping to its own bounds. The overhang is the mechanism, not a defect. Unlike the
+  other two this one **does not expire**; what the assertion buys is that the list cannot grow
+  quietly, since a new entry is either a new clip-revealing wrapper or a real escape.
 - **Nodes parked entirely off-window are not checked for containment.**
   `material::NavigationDrawer` translates its inactive child by `-f32::MAX / 4` so the tree, node
   list and child list stay index-aligned without it occupying space. The exemption follows from the

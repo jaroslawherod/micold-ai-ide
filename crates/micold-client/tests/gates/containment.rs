@@ -1,4 +1,4 @@
-//! No layout node is laid out beyond the node that owns it (feature 019, BUG-001).
+//! No layout node is laid out beyond the node that owns it (feature 019).
 //!
 //! The third gate, and the one that answers a question neither of the others can.
 //!
@@ -8,10 +8,24 @@
 //! becomes the baseline; snapshots catch changes, not defects. `layout_text_overflow` compares
 //! widths only, and asks the renderer rather than the layout tree.
 //!
-//! BUG-001 is the motivating case: `material::Expand` reports a shrunken height to its parent while
-//! its child keeps its full height, relying on a draw-time clip that does not take effect, so the
-//! child paints over whatever moved up. Vertical, structural, and present in the layout tree — one
-//! gate short of being caught by all three.
+//! # What this gate does not decide, and why it matters here
+//!
+//! **A child laid outside its parent is not by itself a defect.** A widget may lay its child out at
+//! full size and clip it at draw time; the layout tree records the overhang either way. Whether the
+//! overhang is *painted* is decided in `draw`, which this gate does not read. So the invariant
+//! catches a child that escapes a parent which does **not** clip, and is structurally blind to the
+//! difference otherwise.
+//!
+//! That limit was learned rather than designed. This gate was built against BUG-001 — `Expand`
+//! reporting a shrunken height while its child kept full height — on the belief that the escape
+//! *was* the defect. It was not. The fix (`7401f5d`) left `Expand::layout` byte-for-byte unchanged:
+//! the child is still laid out oversized and still escapes, deliberately, and what was wrong was
+//! that `layout` never re-ran, so the clip was applied to stale bounds. Every escape this gate
+//! reported survived the fix, and this gate stayed green across it.
+//!
+//! The exemption list below is therefore a list of **clip-revealing wrappers**, not of open
+//! defects, and it does not expire. What still has value is everything it does *not* exempt: a
+//! child escaping a parent that has no clip at all.
 //!
 //! **Compiled into the `layout_snapshot` binary rather than its own** (SC-006). Cargo makes one
 //! test binary per file directly under `tests/`, and each binary is its own process — so a
@@ -35,11 +49,14 @@ const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 /// layout, far below anything a person could see.
 const TOLERANCE: f32 = 0.5;
 
-/// Escapes that already existed when this gate was built, as `(covered state, child node path)`.
+/// Children that a clip-revealing wrapper deliberately lays out oversized, as
+/// `(covered state, child node path)`.
 ///
-/// **All seven are one defect: BUG-001**, the sidebar's collapsed filter accordion, in every state
-/// that renders a sidebar. `Expand::layout` reports `full.height * progress` to its parent while
-/// the child node keeps its full height, so at rest the child is a 40–42px node inside a 0px one.
+/// **All seven are one widget: `material::Expand`**, holding the sidebar's collapsed filter
+/// accordion in every state that renders a sidebar. `Expand::layout` reports `full.height *
+/// progress` to its parent while the child node keeps its full height, so at rest the child is a
+/// 40–42px node inside a 0px one. It then reveals the child top-down by clipping to its own bounds
+/// in `draw` — the overhang is how the reveal works, not a mistake.
 /// `error-daemon-disconnected` differs only in its path — the disconnection banner shifts the shell
 /// index from 2 to 3 — which is the invariant following structure rather than a hardcoded path.
 /// `main-shell-sidebar-collapsed` and `empty-no-project-open` are absent because neither renders
@@ -48,16 +65,17 @@ const TOLERANCE: f32 = 0.5;
 /// Attribution is not inferred from the shape: `the_recorded_escapes_are_the_accordion_reveal`
 /// drives the panel open and shows the same nodes come clean.
 ///
-/// **Recorded, not fixed.** FR-019 forbids this feature changing application source, and fixing
-/// `Expand`'s clip changes the sidebar's motion. It equally forbids tuning the gate until the
-/// defect stops showing. The staleness assertion below requires every entry to keep firing, so the
-/// fix deletes these rather than leaving them as folklore.
+/// **These were once recorded as BUG-001 and they are not.** The list was written while that bug
+/// was open, in the belief that the overhang was the defect. The fix left `Expand::layout`
+/// unchanged — the real cause was `layout` not re-running, so the clip received stale bounds — and
+/// all seven survived it untouched. The correction is worth keeping visible: this gate reported the
+/// right nodes for the wrong reason, and would have reported them just as loudly had nothing been
+/// wrong at all.
 ///
-/// **These seven are the cause at rest, not the visible defect.** At `progress` 0 the reveal does
-/// not paint at all (`Expand::draw` returns early below `HIDDEN`), so nothing overlaps yet. The
-/// overlap a user actually meets is covered separately by `the_reveal_paints_over_what_moved_up`,
-/// which pins the panel mid-reveal.
-const KNOWN_ESCAPES: &[(&str, &str)] = &[
+/// So, unlike a defect exemption, this list **does not expire**. What the assertion below still
+/// buys is that it cannot quietly grow: a new entry means either a new clip-revealing wrapper, to
+/// be named here with its reason, or a child escaping a parent that does not clip, which is a bug.
+const CLIP_REVEALED: &[(&str, &str)] = &[
     ("main-shell-sidebar-expanded", "0/0/0/2/0/0/0/1/0"),
     ("add-worktree-dialog-new-branch", "0/0/0/2/0/0/0/1/0"),
     ("add-worktree-dialog-existing-branch", "0/0/0/2/0/0/0/1/0"),
@@ -67,13 +85,13 @@ const KNOWN_ESCAPES: &[(&str, &str)] = &[
     ("error-add-worktree-failed", "0/0/0/2/0/0/0/1/0"),
 ];
 
-fn known(state: &str, child_path: &str) -> bool {
-    KNOWN_ESCAPES
+fn clip_revealed(state: &str, child_path: &str) -> bool {
+    CLIP_REVEALED
         .iter()
         .any(|(s, p)| *s == state && *p == child_path)
 }
 
-/// No covered state lays a node outside its parent.
+/// No covered state lays a node outside a parent that will not clip it.
 #[test]
 fn no_layout_node_escapes_its_parent() {
     let renderer = lay::renderer();
@@ -92,8 +110,8 @@ fn no_layout_node_escapes_its_parent() {
                 escape.edge,
                 escape.layer.token()
             );
-            if known(covered.name, &escape.child_path) {
-                eprintln!("KNOWN_ESCAPES still fires: {line}");
+            if clip_revealed(covered.name, &escape.child_path) {
+                eprintln!("CLIP_REVEALED still fires: {line}");
                 fired.insert((covered.name, escape.child_path));
             } else {
                 unexpected.push(line);
@@ -103,47 +121,52 @@ fn no_layout_node_escapes_its_parent() {
 
     assert_eq!(
         fired.len(),
-        KNOWN_ESCAPES.len(),
-        "every recorded escape must still be observable, or the exemption is widening the gate \
-         silently; {} of {} fired. If BUG-001 was fixed, delete the entries it accounted for.",
+        CLIP_REVEALED.len(),
+        "every exempted overhang must still be observable, or the exemption is widening the gate \
+         silently; {} of {} fired. An entry that has stopped firing means the wrapper no longer \
+         reveals by clipping — delete it, and check that whatever replaced the mechanism is \
+         covered by something.",
         fired.len(),
-        KNOWN_ESCAPES.len(),
+        CLIP_REVEALED.len(),
     );
 
     assert!(
         unexpected.is_empty(),
-        "{} layout node(s) are laid outside the parent that owns them. A child bigger than its \
-         parent paints over whatever sits beside it, and the geometry fixture cannot report this — \
-         it would record the overlap as the expected value.\n  {}",
+        "{} layout node(s) are laid outside the parent that owns them, and that parent is not a \
+         known clip-revealing wrapper. Either it clips at draw time — in which case name it in \
+         CLIP_REVEALED with the reason — or it paints over whatever sits beside it, which the \
+         geometry fixture cannot report because it would record the overlap as the expected \
+         value.\n  {}",
         unexpected.len(),
         unexpected.join("\n  "),
     );
 }
 
-/// BUG-001 as a user meets it: partway through the reveal, where it actually paints.
+/// Containment holds *during* a reveal too, for everything the reveal is not itself clipping.
 ///
-/// The settled states catch the defect's *cause* — a full-height child inside a zero-height
-/// `Expand` — but at `progress` 0 nothing is drawn, so no one sees it. This pins the sidebar's
-/// filter panel two frames into its 90ms reveal, which is past `Expand::draw`'s early return and
-/// still well short of the end. Here the child is both oversized *and* painting, which is the
-/// defect as reported.
+/// Every other check here resolves a settled frame. That is deliberate — mid-animation geometry is
+/// excluded from the fixture (T030) because it would churn on any change to a duration or an easing
+/// curve. But an invariant is not a recording, and it can be asked at a moment no fixture would
+/// want to hold: this pins the sidebar's filter panel partway into its 90ms reveal and requires
+/// that the *only* node escaping its parent is the one the wrapper is deliberately clipping.
+///
+/// What that buys, concretely: a reveal that grows into its siblings, or reflows a neighbour out of
+/// the shell, shows up here and nowhere else. The settled states cannot see it — at rest the panel
+/// is closed and the geometry is the closed geometry.
+///
+/// What it does **not** buy is any statement about BUG-001. That bug was a stale-bounds defect in
+/// `update`, invisible to the layout tree at every progress value; this test passed against the
+/// defective code and passes against the fix. It was originally written as `the_reveal_paints_over_
+/// what_moved_up`, asserting that the child escapes mid-reveal — which is true, and is the reveal
+/// working. The mechanism BUG-001 broke is covered by `tests/animated_layout_relayouts.rs`, which
+/// asserts on relayout requests rather than on boxes.
 ///
 /// Deterministic despite pinning an animation: a track steps a fixed amount per redraw rather than
-/// by elapsed time, so frame 2 is frame 2 on every machine (`cdk/motion.rs`).
-///
-/// **This is expected to fail once `Expand` is fixed, and that is the point.** The registered
-/// state is itself the record — there is no exemption list to keep in step — so the fix deletes the
-/// entry in `revealing_states` and this test with it.
-///
-/// Both of its assertions were checked against a failing run before being trusted: pinning at frame
-/// 0 fails the first ("at 0.000 of its open height"), and applying BUG-001's own candidate fix to
-/// `Expand::layout` fails the second ("no longer lays its child outside itself") while the pin
-/// still reads 0.356. That second probe is why `expect_between` is measured against the fully open
-/// height rather than against the child — with the defect fixed the child is clipped to its parent,
-/// so the child-relative ratio reads 1.0 at every moment and cannot tell a settled reveal from a
-/// running one. It would have misreported a fix as a broken pin.
+/// by elapsed time, so frame *n* is frame *n* on every machine (`cdk/motion.rs`). Each pumped frame
+/// must carry a distinct `Instant`, or the track's re-delivery guard collapses them into one — see
+/// `resolve_revealing`, which read 0.178 instead of 0.356 until that was fixed.
 #[test]
-fn the_reveal_paints_over_what_moved_up() {
+fn only_the_clip_revealed_child_escapes_mid_reveal() {
     let renderer = lay::renderer();
 
     for revealing in covered_states::revealing_states() {
@@ -185,27 +208,42 @@ fn the_reveal_paints_over_what_moved_up() {
             high,
         );
 
+        // The revealing node's own child is expected to overhang — that is the clip. Anything else
+        // escaping is a node the reveal has pushed out of the parent that owns it.
+        let (revealing_child, elsewhere): (Vec<_>, Vec<_>) = escapes
+            .iter()
+            .partition(|e| e.parent_path == revealing.node);
+
         assert!(
-            escapes.iter().any(|e| e.parent_path == revealing.node),
-            "{:?} is pinned mid-reveal at {:.3} of its open height, and {} no longer lays its child \
-             outside itself. That is BUG-001 fixed — delete this state and its KNOWN_ESCAPES \
-             entries. (Escapes seen elsewhere: {:?})",
+            !revealing_child.is_empty(),
+            "{:?} is pinned mid-reveal at {:.3} of its open height, and {} does not lay its child \
+             outside itself — so it is no longer revealing by clipping. This test then proves \
+             nothing about the reveal it is named for: re-point it, or delete it along with the \
+             CLIP_REVEALED entries that must also have stopped firing.",
             revealing.name,
             fraction,
             revealing.node,
-            escapes.iter().map(|e| e.child_path.clone()).collect::<Vec<_>>(),
         );
 
-        for escape in &escapes {
-            eprintln!(
-                "KNOWN_REVEAL_ESCAPES still fires: {}: {} escapes {} by {:.1}px past its {} edge",
-                revealing.name,
-                escape.child_path,
-                escape.parent_path,
-                escape.overhang,
-                escape.edge,
-            );
-        }
+        assert!(
+            elsewhere.is_empty(),
+            "{:?}, pinned at {:.3} of its open height, lays {} node(s) outside their parents \
+             besides the one {} is clipping. A reveal that pushes a neighbour out of the box that \
+             owns it is visible only while it runs, so no settled state and no fixture will report \
+             it.\n  {}",
+            revealing.name,
+            fraction,
+            elsewhere.len(),
+            revealing.node,
+            elsewhere
+                .iter()
+                .map(|e| format!(
+                    "{} escapes {} by {:.1}px past its {} edge",
+                    e.child_path, e.parent_path, e.overhang, e.edge
+                ))
+                .collect::<Vec<_>>()
+                .join("\n  "),
+        );
     }
 }
 
@@ -222,7 +260,8 @@ fn the_check_reports_an_escape_when_one_exists() {
         width: 100.0,
         height: 40.0,
     };
-    // Exactly BUG-001's shape: a child at full height inside a parent shrunk to a third of it.
+    // The shape this gate exists to notice: a child at full height inside a parent shrunk to a
+    // third of it.
     let child = lay::LayoutRecord {
         path: vec![0],
         layer: lay::Layer::Base,
@@ -252,7 +291,7 @@ fn the_check_reports_an_escape_when_one_exists() {
 /// nothing else: the sidebar's filter panel is `Accordion`, which *is* `expand(...)`. Closed, the
 /// escape is there; open, the same node is clean. Nothing else about the state differs.
 ///
-/// Without this, `KNOWN_ESCAPES` would be a list of paths whose cause was guessed.
+/// Without this, `CLIP_REVEALED` would be a list of paths whose cause was guessed.
 #[test]
 fn the_recorded_escapes_are_the_accordion_reveal() {
     let escaping_nodes = |filter_open: bool| -> Vec<String> {
@@ -285,13 +324,13 @@ fn the_recorded_escapes_are_the_accordion_reveal() {
     assert!(
         !closed.is_empty(),
         "the sidebar with its filter panel closed reports no escape, so the entries in \
-         KNOWN_ESCAPES cannot be attributed to the accordion at all"
+         CLIP_REVEALED cannot be attributed to the accordion at all"
     );
     for node in &closed {
         assert!(
             !opened.contains(node),
             "node {node} escapes whether the filter panel is open or closed, so it is not the \
-             accordion's reveal and the attribution recorded in KNOWN_ESCAPES is wrong"
+             accordion's reveal and the attribution recorded in CLIP_REVEALED is wrong"
         );
     }
 }

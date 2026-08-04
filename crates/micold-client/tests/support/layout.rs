@@ -30,6 +30,13 @@ pub const WINDOW: Size = Size::new(1280.0, 800.0);
 /// The renderer's default text size.
 pub const DEFAULT_TEXT_SIZE: f32 = 16.0;
 
+/// The spacing between pumped redraw frames in [`resolve_revealing`].
+///
+/// Only its *non-zero-ness* matters. A track steps a fixed amount per redraw rather than by
+/// elapsed time, and reads the event's `Instant` solely to tell one frame from a re-delivery of
+/// the same one — so this sets how many steps get taken, never how large a step is.
+pub const FRAME: std::time::Duration = std::time::Duration::from_millis(16);
+
 /// Which pass produced a record (FR-009, research R5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Layer {
@@ -366,15 +373,23 @@ pub fn resolve_revealing(
 
     let mut messages = Vec::new();
     let mut clipboard = clipboard::Null;
-    let event = iced::Event::Window(iced::window::Event::RedrawRequested(
-        std::time::Instant::now(),
-    ));
+
+    // Each frame carries a *distinct* `Instant`, and that is load-bearing rather than cosmetic.
+    // `Progress` guards against the runtime re-delivering one redraw event several times by
+    // recording the last `Instant` it advanced on and ignoring a repeat (`cdk/motion.rs` —
+    // `last_frame`). Pumping the same instant `frames` times therefore advances the track *once*;
+    // this apparatus did exactly that until the guard landed, and read 0.178 where it expected
+    // 0.356. The step size is still not derived from these values — only their inequality is.
+    let origin = std::time::Instant::now();
 
     let mut node = element
         .as_widget_mut()
         .layout(&mut tree, renderer, &limits);
 
-    for _ in 0..revealing.frames {
+    for frame in 0..revealing.frames {
+        let event = iced::Event::Window(iced::window::Event::RedrawRequested(
+            origin + FRAME * frame as u32,
+        ));
         let mut shell = Shell::new(&mut messages);
         element.as_widget_mut().update(
             &mut tree,
