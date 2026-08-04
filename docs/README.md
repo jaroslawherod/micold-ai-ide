@@ -31,6 +31,10 @@ verified in CI.
 - [The component library](development/component-library.md) — the two rendering layers, the rule
   that feature modules compose components rather than styling widgets, how that rule is enforced in
   CI, and what to do when adding a component.
+- [The layout snapshot](development/layout-snapshot.md) — the three checks that pin *where things
+  are*: the geometry fixture, the text-overflow gate and the containment invariant. What each one
+  catches, what none of them do (colour, pixels, scrolling, mid-animation, and the typeface until
+  018 ships), the exemptions currently in force, and how to accept an intended layout change.
 - [The component showcase](development/component-showcase.md) — the development-only gallery of every
   component in every posed state, in both schemes, on one page (`mise run showcase`): how to launch it,
   how to add a component to it, what each completeness failure means, and what it deliberately does not

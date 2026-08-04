@@ -55,6 +55,12 @@ alacritty_terminal = "0.26"
 # --- shared dev deps ---
 tempfile = "3.27.0"
 ttf-parser = "0.25.1"
+# Feature 019 only, and dev-only. Reading back *drawn* text needs the concrete CPU renderer:
+# `iced::Renderer` is `fallback::Renderer<wgpu, tiny_skia>`, so naming its variants needs
+# `iced_renderer` and calling `layers()` needs `iced_tiny_skia`. These are iced's internal crates
+# and their semver does not track the `iced` facade — pinned to the exact version `iced` uses.
+iced_renderer = "=0.14.0"
+iced_tiny_skia = "=0.14.0"
 # Internal crate, referenced by path so client & daemon share the one core.
 micold-core = { path = "crates/micold-core" }
 
