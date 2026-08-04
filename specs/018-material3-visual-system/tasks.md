@@ -164,21 +164,21 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 
 ### Tests for User Story 2 (MANDATORY — write first, confirm they FAIL) ⚠️
 
-- [ ] T013 [P] [US2] Failing test in `crates/micold-client/tests/roboto_font.rs` asserting both shipped faces parse via `ttf-parser` and report weight 400 and 500 (FR-008a, SC-012)
-- [ ] T014 [P] [US2] Failing test in `crates/micold-client/tests/type_role_call_sites.rs` asserting no source file passes a raw numeric literal as a text size, weight or line height — every site resolves a named role (FR-010, SC-003)
+- [X] T013 [P] [US2] Failing test in `crates/micold-client/tests/roboto_font.rs` asserting both shipped faces parse via `ttf-parser` and report weight 400 and 500 (FR-008a, SC-012)
+- [X] T014 [P] [US2] Failing test in `crates/micold-client/tests/type_role_call_sites.rs` asserting no source file passes a raw numeric literal as a text size, weight or line height — every site resolves a named role (FR-010, SC-003)
 
 ### Implementation for User Story 2
 
-- [ ] T014a [US2] Vendor Roboto Regular (400) and Roboto Medium (500) as static instances into `assets/fonts/`, alongside the Material Symbols font already there, and document them to the same standard: the Apache-2.0 licence text in-repo, and a provenance record naming the upstream source, the exact artifact shipped, and how it was produced. Decide explicitly whether the existing `assets/fonts/LICENSE` and `assets/fonts/PROVENANCE.md` are extended to cover both typefaces or whether Roboto gets its own pair — those files today describe only the icon font, and a licence file that silently grows to cover a second work is the failure mode this requirement exists to prevent (FR-008a, FR-009, SC-012)
-- [ ] T015 [US2] Register both Roboto faces via `.font(...)` and set `.default_font(...)` to Roboto in `crates/micold-client/src/main.rs`, keeping the Material Symbols registration intact (FR-008, research R3)
-- [ ] T016 [US2] Resolve type roles into size, font weight and absolute line height inside `crates/micold-client/src/ui/material/text.rs`, so the role is the only thing a call site names (FR-007, FR-010)
-- [ ] T017 [P] [US2] Assign the correct type roles across `crates/micold-client/src/ui/shell.rs`, `project_selector.rs` and `terminal.rs`
+- [X] T014a [US2] Vendor Roboto Regular (400) and Roboto Medium (500) as static instances into `assets/fonts/`, alongside the Material Symbols font already there, and document them to the same standard: the Apache-2.0 licence text in-repo, and a provenance record naming the upstream source, the exact artifact shipped, and how it was produced. Decide explicitly whether the existing `assets/fonts/LICENSE` and `assets/fonts/PROVENANCE.md` are extended to cover both typefaces or whether Roboto gets its own pair — those files today describe only the icon font, and a licence file that silently grows to cover a second work is the failure mode this requirement exists to prevent (FR-008a, FR-009, SC-012)
+- [X] T015 [US2] Register both Roboto faces via `.font(...)` and set `.default_font(...)` to Roboto in `crates/micold-client/src/main.rs`, keeping the Material Symbols registration intact (FR-008, research R3)
+- [X] T016 [US2] Resolve type roles into size, font weight and absolute line height inside `crates/micold-client/src/ui/material/text.rs`, so the role is the only thing a call site names (FR-007, FR-010)
+- [ ] T017 [P] [US2] (call sites already name roles via 017's `TypeRole`; this is the refinement pass — pick a *more specific* role where the current one is coarse) Assign the correct type roles across `crates/micold-client/src/ui/shell.rs`, `project_selector.rs` and `terminal.rs`
 - [ ] T018 [P] [US2] Assign the correct type roles across `crates/micold-client/src/ui/worktree_form.rs`, `worktree_rename.rs`, `rename.rs` and `settings_form.rs`
 - [ ] T019 [P] [US2] Assign the correct type roles across `crates/micold-client/src/ui/about.rs`, `confirm_delete.rs`, `confirm_forget.rs`, `confirm_session_remove.rs` and `mod.rs`
 - [ ] T020 [P] [US2] Assign the correct type roles inside `crates/micold-client/src/ui/material/` — `tree_view.rs`, `menu.rs`, `toolbar.rs`, `select.rs`, `progress.rs`, `project_switcher.rs`, `icon_button.rs`, `tag.rs`
 - [ ] T021 [US2] Apply the sidebar-scoped roles in `crates/micold-client/src/ui/sidebar.rs` so the 80% density decision is one auditable mapping (FR-011)
-- [ ] T022 [US2] Confirm glyph fallback for characters outside Roboto's coverage at the font registration in `crates/micold-client/src/main.rs` (FR-013)
-- [ ] T023 [US2] Update `docs/user-guide/` to note the shipped typeface and resulting cross-platform consistency (FR-041, Principle VII)
+- [X] T022 [US2] Confirm glyph fallback for characters outside Roboto's coverage at the font registration in `crates/micold-client/src/main.rs` (FR-013)
+- [X] T023 [US2] Update `docs/user-guide/` to note the shipped typeface and resulting cross-platform consistency (FR-041, Principle VII)
 
 **Checkpoint**: Typography is role-driven and platform-independent. Demonstrable via quickstart §B2.
 

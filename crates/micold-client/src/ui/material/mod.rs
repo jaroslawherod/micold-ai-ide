@@ -77,7 +77,7 @@ pub use tag::Tag;
 pub(crate) use terminal_pane::scrollbar_metrics;
 pub use terminal_pane::target_offset_delta;
 pub use terminal_pane::TerminalPane;
-pub use text::{Text, TypeRole};
+pub use text::{Text, TypeRole, ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES};
 pub use text_field::TextField;
 pub use toggle_chip::ToggleChip;
 pub use toolbar::Toolbar;

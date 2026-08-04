@@ -15,8 +15,9 @@ use std::marker::PhantomData;
 
 use crate::ui::material::style;
 use iced::widget::text;
-use iced::{Element, Length};
-use micold_core::tokens::{sidebar, type_scale, Rgb, Roles};
+use iced::widget::text::LineHeight;
+use iced::{Element, Font, Length};
+use micold_core::tokens::{typography, Rgb, Roles};
 
 /// What a piece of text *is*, rather than how big it is.
 ///
@@ -43,22 +44,67 @@ pub enum TypeRole {
     SidebarSession,
 }
 
+/// The embedded Roboto faces. Registered once at startup in `main` so the application looks the
+/// same on every platform rather than inheriting the OS UI font (FR-008); see
+/// `assets/fonts/PROVENANCE.md`. Weight 400 and 500 are the only weights the Material 3 type scale
+/// specifies, which is why exactly two static instances ship.
+pub const ROBOTO_REGULAR_BYTES: &[u8] =
+    include_bytes!("../../../../../assets/fonts/Roboto-Regular.ttf");
+pub const ROBOTO_MEDIUM_BYTES: &[u8] =
+    include_bytes!("../../../../../assets/fonts/Roboto-Medium.ttf");
+
+/// The family both shipped faces belong to (asserted by `tests/roboto_font.rs`). The Medium face
+/// advertises `Roboto Medium` in its legacy family name and `Roboto` as its typographic family, so
+/// both resolve here and are told apart by weight.
+pub const ROBOTO: Font = Font::with_name("Roboto");
+
 impl TypeRole {
-    /// The role's size in the current type scale.
+    /// The Material 3 role this resolves to (contract §2.4, §2.5).
     ///
-    /// Feature 018 replaces these with roles carrying weight and line height as well; until then a
-    /// role is a size, and this is the only place that mapping exists.
-    pub fn size(self) -> f32 {
+    /// The mapping is deliberately a *narrowing*: the scale has fifteen roles and this enum names
+    /// the eight the application actually distinguishes. The others exist in the scale and are
+    /// reachable, but no call site is required to use one — Material's true display sizes (36–57)
+    /// are larger than anything this app renders.
+    pub fn resolved(self) -> typography::TypeRole {
         match self {
-            TypeRole::Display => type_scale::DISPLAY,
-            TypeRole::Headline => type_scale::HEADLINE,
-            TypeRole::Title => type_scale::TITLE,
-            TypeRole::Body => type_scale::BODY,
-            TypeRole::Label => type_scale::LABEL,
-            TypeRole::SidebarName => sidebar::NAME,
-            TypeRole::SidebarTag => sidebar::TAG,
-            TypeRole::SidebarSession => sidebar::SESSION,
+            // Feature 003's `DISPLAY` (32) was a headline in Material's vocabulary, not a display.
+            TypeRole::Display => typography::HEADLINE_LARGE,
+            TypeRole::Headline => typography::HEADLINE_SMALL,
+            TypeRole::Title => typography::TITLE_LARGE,
+            TypeRole::Body => typography::BODY_MEDIUM,
+            TypeRole::Label => typography::LABEL_MEDIUM,
+            TypeRole::SidebarName => typography::SIDEBAR_NAME,
+            TypeRole::SidebarTag => typography::SIDEBAR_TAG,
+            TypeRole::SidebarSession => typography::SIDEBAR_SESSION,
         }
+    }
+
+    /// The role's size in dp.
+    pub fn size(self) -> f32 {
+        self.resolved().size
+    }
+
+    /// The font this role is set in — Roboto at the role's weight.
+    ///
+    /// Only 400 and 500 occur, and they are the two faces that ship. Anything else would silently
+    /// resolve to whichever face the matcher considered closest.
+    pub fn font(self) -> Font {
+        Font {
+            weight: match self.resolved().weight {
+                w if w >= 500 => iced::font::Weight::Medium,
+                _ => iced::font::Weight::Normal,
+            },
+            ..ROBOTO
+        }
+    }
+
+    /// The role's line height, as an absolute dp value rather than a multiple of the size.
+    ///
+    /// Absolute because that is how Material states it, and because a ratio drifts: `20/14` is not
+    /// a number anyone would write down, and rounding it per role reintroduces exactly the
+    /// per-call-site variation the scale removes (FR-007).
+    pub fn line_height(self) -> LineHeight {
+        LineHeight::Absolute(self.resolved().line_height.into())
     }
 }
 
@@ -138,7 +184,10 @@ impl<'a, M: 'a> Text<'a, M> {
 
 impl<'a, M: 'a> From<Text<'a, M>> for Element<'a, M> {
     fn from(t: Text<'a, M>) -> Self {
-        let mut widget = text(t.content).size(t.role.size());
+        let mut widget = text(t.content)
+            .size(t.role.size())
+            .font(t.role.font())
+            .line_height(t.role.line_height());
         match t.emphasis {
             // No style call at all, so the text inherits — which is what an unstyled call site
             // does today. Setting an explicit colour here would silently override a container's

@@ -17,7 +17,7 @@
 //! live promise, and they now guard the split as well as the move.
 
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, shape, spacing, type_scale, Rgb};
+use micold_core::tokens::{self, spacing, type_scale, Rgb};
 
 /// The colour values did change, and that is the point.
 ///
@@ -42,48 +42,51 @@ fn the_palette_is_no_longer_feature_003s() {
     );
 }
 
-/// The scales. Feature 018 replaces the type scale with roles carrying weight and line height;
-/// this feature carries the raw sizes across untouched — including their retyping to `f32`, which
-/// landed on main while this branch was in flight and changed no value.
+/// What feature 018 does **not** touch: the spacing scale.
+///
+/// The type and shape scales that this test also used to guard are gone from it. Both are
+/// *replaced* by 018 rather than moved — the type scale onto Material's fifteen roles (§2.5, which
+/// changes `TITLE` 18 → 22 and the sidebar sizes 11 → 12 and 10 → 11), the shape scale onto seven
+/// sizes — and `tokens_scales.rs` pins each of them properly, by role, rather than as loose
+/// integers. Asserting the old numbers here would only assert that a deliberate change had not
+/// happened.
+///
+/// Spacing is untouched by 018, so it still guards a live promise, and it now guards the module
+/// split as well as the original move.
 #[test]
-fn every_scale_value_survives_the_move_unchanged() {
-    assert_eq!(type_scale::DISPLAY, 32.0);
-    assert_eq!(type_scale::HEADLINE, 24.0);
-    assert_eq!(type_scale::TITLE, 18.0);
-    assert_eq!(type_scale::BODY, 14.0);
-    assert_eq!(type_scale::LABEL, 12.0);
-
-    assert_eq!(tokens::sidebar::NAME, 11.0);
-    assert_eq!(tokens::sidebar::TAG, 10.0);
-    assert_eq!(tokens::sidebar::SESSION, 11.0);
-
+fn the_spacing_scale_survives_unchanged() {
     assert_eq!(spacing::XS, 4.0);
     assert_eq!(spacing::SM, 8.0);
     assert_eq!(spacing::MD, 16.0);
     assert_eq!(spacing::LG, 24.0);
     assert_eq!(spacing::XL, 32.0);
-
-    // The shape scale is *replaced* by feature 018 rather than moved, so it is no longer guarded
-    // here — `tokens_scales.rs` pins all seven sizes. `FULL` survives the replacement unchanged and
-    // stays, since it is the one value both scales share.
-    assert_eq!(shape::FULL, 9999.0);
 }
 
-/// The sidebar's 80% density decision is an explicit, auditable mapping, not a re-derivation at
-/// call sites. It must survive the move as such.
+/// The sidebar's deliberate density reduction survives the move onto the Material scale.
+///
+/// It is no longer "80% of body, rounded" — §2.4 maps each sidebar role to the *nearest smaller
+/// role* rather than to an invented size, which is what keeps it inside the scale instead of
+/// beside it. What must not happen is the reduction being lost: the sidebar's text stays smaller
+/// than the body text it nests under, and that is the property worth asserting.
 #[test]
-fn the_sidebar_density_decision_stays_auditable() {
-    assert_eq!(
+#[allow(clippy::assertions_on_constants)] // the point is to guard the values; clippy can see the answer
+fn the_sidebar_stays_denser_than_the_body_text() {
+    assert!(
+        tokens::sidebar::NAME < type_scale::BODY,
+        "the sidebar name ({}) is no longer smaller than body text ({}) — feature 009's density \
+         decision has been lost in the move onto the Material scale (FR-011)",
         tokens::sidebar::NAME,
-        (type_scale::BODY * 0.8).round(),
-        "sidebar name should remain 80% of body"
+        type_scale::BODY
+    );
+    assert!(
+        tokens::sidebar::TAG < type_scale::LABEL,
+        "the sidebar tag is no longer smaller than the label role"
     );
     assert_eq!(
-        tokens::sidebar::TAG,
-        (type_scale::LABEL * 0.8).round(),
-        "sidebar tag should remain 80% of label"
+        tokens::sidebar::SESSION,
+        tokens::sidebar::NAME,
+        "a session line and the worktree name it nests under share a role (§2.4)"
     );
-    assert_eq!(tokens::sidebar::SESSION, tokens::sidebar::NAME);
 }
 
 /// The move's whole justification: tokens become nameable from a crate that cannot see a renderer.

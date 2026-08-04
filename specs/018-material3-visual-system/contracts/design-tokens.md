@@ -171,7 +171,7 @@ elevation (§4).
 
 ### 2.1 Shipped typeface (FR-008, FR-008a, FR-009, D2)
 
-**Roboto**, Apache-2.0, shipped as two static instances:
+**Roboto**, **SIL Open Font License 1.1**, shipped as two static instances:
 
 | File                | Weight | Used by                                   |
 |---------------------|-------:|-------------------------------------------|
@@ -182,8 +182,16 @@ No variable font ships. Weights 400 and 500 are the only weights the Material 3 
 specifies, so two static instances express every role faithfully at the smallest binary cost.
 
 The typeface ships alongside the existing `MaterialSymbolsOutlined.ttf` under the same provenance
-standard: an in-repo `LICENSE` and a `PROVENANCE.md` recording upstream source, the exact artifact,
-and how it was produced.
+standard: an in-repo licence text and a `PROVENANCE.md` recording upstream source, the exact
+artifact, and how it was produced.
+
+It does **not** share the icon font's licence file. Material Symbols is Apache-2.0; Roboto is under
+the OFL, which carries obligations Apache-2.0 does not, so it ships its own verbatim
+`assets/fonts/LICENSE-Roboto-OFL.txt`. `PROVENANCE.md` holds the font→licence mapping.
+
+> This section previously said Apache-2.0, which was true historically. Google relicensed Roboto to
+> the SIL OFL — `google/fonts`'s `METADATA.pb` for the family records `license: "OFL"` — and the
+> shipped licence follows the font. Corrected when the font was vendored (T014a).
 
 The embedded terminal is exempt (FR-012): it keeps its monospaced font and its own grid metrics.
 Text whose characters fall outside Roboto's coverage falls back rather than rendering
