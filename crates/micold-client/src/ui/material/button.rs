@@ -32,6 +32,15 @@ pub enum Variant {
 }
 
 impl Variant {
+    /// The content colour this variant draws its label in — and therefore the colour its ripple
+    /// takes, since a state layer is the content colour over the container (contract §5).
+    fn content(self, roles: Roles) -> micold_core::tokens::Rgb {
+        match self {
+            Variant::Filled => roles.on_primary,
+            Variant::Outlined | Variant::Text => roles.primary,
+        }
+    }
+
     fn style(self, roles: Roles) -> ButtonStyleFn {
         match self {
             Variant::Filled => Box::new(style::filled(roles)),
@@ -134,9 +143,19 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         if let Some(width) = b.width {
             widget = widget.width(width);
         }
+        let pressable = b.on_press.is_some();
         if let Some(message) = b.on_press {
             widget = widget.on_press(message);
         }
-        widget.into()
+        // Wrapping is the opt-in: every `Button` ripples without any call site asking (FR-024c).
+        //
+        // Except a disabled one. A button with no `on_press` cannot be pressed, and a ripple on it
+        // would report a press that will never happen — worse than no feedback, because it says the
+        // opposite of what the disabled styling says.
+        if pressable {
+            super::Ripple::new(widget, b.variant.content(b.roles)).into()
+        } else {
+            widget.into()
+        }
     }
 }

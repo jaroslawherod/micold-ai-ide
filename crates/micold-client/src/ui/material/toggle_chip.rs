@@ -58,11 +58,18 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         let (fill, on) = chip
             .accent
             .unwrap_or((r.surface_variant, r.on_surface_variant));
+        // The ripple takes a token role rather than a resolved colour, so keep the `Rgb` before
+        // these are shadowed by their `Color` forms.
+        let ripple_tint = if chip.active {
+            on
+        } else {
+            r.on_surface_variant
+        };
         let (fill, on) = (style::color(fill), style::color(on));
         let muted = style::color(r.on_surface_variant);
         let outline = style::color(r.outline);
         let active = chip.active;
-        button(text(chip.label).size(sidebar::TAG))
+        let chip_button = button(text(chip.label).size(sidebar::TAG))
             .padding(iced::Padding {
                 top: 1.0,
                 bottom: 1.0,
@@ -101,7 +108,9 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
                     },
                     ..Default::default()
                 }
-            })
-            .into()
+            });
+        // A filter chip is pressed like anything else, so it ripples like anything else (FR-024c),
+        // in its own text colour: the accent when on, the muted role when off.
+        super::Ripple::new(chip_button, ripple_tint).into()
     }
 }

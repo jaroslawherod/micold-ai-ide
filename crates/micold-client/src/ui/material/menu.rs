@@ -76,13 +76,17 @@ fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) -> Element<
             content = content.push(icon(glyph, type_scale::BODY, r.on_surface));
         }
         content = content.push(text(item.label).size(type_scale::BODY));
-        list = list.push(
+        // Menu items are buttons built here rather than through `material::Button`, so the ripple
+        // is composed explicitly — FR-024c wants every interactive surface to ripple, and "it is
+        // not a `Button` type" is not a reason a user would accept for one row not responding.
+        list = list.push(super::Ripple::new(
             button(content)
                 .width(Length::Fill)
                 .padding(spacing::SM)
                 .style(style::text_button(r))
                 .on_press(item.message),
-        );
+            r.on_surface,
+        ));
     }
     list.into()
 }

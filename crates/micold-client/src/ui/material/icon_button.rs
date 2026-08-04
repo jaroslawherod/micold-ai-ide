@@ -107,10 +107,17 @@ impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
         } else {
             Box::new(style::text_button(b.roles))
         };
+        let pressable = b.on_press.is_some();
         let mut btn = button(content).padding(b.padding).style(style_fn);
         if let Some(message) = b.on_press {
             btn = btn.on_press(message);
         }
-        btn.into()
+        // Ripples in the glyph's own tint, and only when it can be pressed — a disabled icon
+        // button already grades its glyph down, and a ripple would contradict that.
+        if pressable {
+            super::Ripple::new(btn, tint).into()
+        } else {
+            btn.into()
+        }
     }
 }

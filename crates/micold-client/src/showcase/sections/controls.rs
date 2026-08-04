@@ -8,9 +8,9 @@
 //! Where a control needs a message it has nowhere to send, it sends [`Message::NoOp`]. That keeps the
 //! instance genuinely interactive without the gallery inventing behaviour the application owns.
 
-use iced::Element;
+use iced::{Element, Length};
 use micold_core::naming::ConventionalType;
-use micold_core::tokens::Roles;
+use micold_core::tokens::{spacing, Roles};
 
 use crate::icons::Icon;
 use crate::showcase::catalogue::Layout;
@@ -241,5 +241,45 @@ pub fn resize_handle<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
             roles,
         )],
         Layout::Inline,
+    )
+}
+
+/// `Ripple` — the press indication.
+///
+/// Lives among the interactive components rather than in the motion section, even though what it
+/// shows is an animation: that section is for `animation.rs`'s replayable helpers, and a ripple has
+/// nothing to replay. It is driven by pressing it, which is also the only way to show the thing
+/// that matters — that it starts from *where* you pressed.
+pub fn ripple<'a>(_showcase: &'a Showcase, roles: Roles, _index: usize) -> Element<'a, Message> {
+    material::Ripple::new(
+        material::Surface::new(
+            material::Text::<Message>::new(
+                "press anywhere on this surface",
+                material::TypeRole::Body,
+                roles,
+            ),
+            material::SurfaceKind::Plain,
+            roles,
+        )
+        .padding(spacing::LG)
+        .width(Length::Fill)
+        .center_x(),
+        roles.on_surface,
+    )
+    .into()
+}
+
+pub fn ripple_component<'a>(
+    showcase: &'a Showcase,
+    roles: Roles,
+    index: usize,
+) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "press it, anywhere",
+            ripple(showcase, roles, index),
+            roles,
+        )],
+        Layout::FullWidth,
     )
 }

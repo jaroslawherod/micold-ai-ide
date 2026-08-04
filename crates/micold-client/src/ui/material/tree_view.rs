@@ -262,12 +262,18 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // The whole row is a low-emphasis button when it has a press action, so selection
             // and hover feedback are consistent.
             let row_el: Element<'a, M> = if let Some(msg) = item.on_press.clone() {
-                button(body)
-                    .padding(spacing::XS)
-                    .width(Length::Fill)
-                    .style(style::text_button(r))
-                    .on_press(msg)
-                    .into()
+                // Ripples from wherever the row was clicked. A row is the most-pressed surface in
+                // this application, so it is the one where a flat colour swap is most obviously not
+                // Material (FR-024c).
+                super::Ripple::new(
+                    button(body)
+                        .padding(spacing::XS)
+                        .width(Length::Fill)
+                        .style(style::text_button(r))
+                        .on_press(msg),
+                    r.on_surface,
+                )
+                .into()
             } else {
                 body
             };
