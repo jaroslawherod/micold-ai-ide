@@ -15,3 +15,4 @@
 
 pub mod motion;
 pub mod overlay;
+pub mod ripple;

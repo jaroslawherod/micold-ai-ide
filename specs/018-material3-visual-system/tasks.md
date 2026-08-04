@@ -194,15 +194,23 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 
 ### Tests for User Story 3 (MANDATORY — write first, confirm they FAIL) ⚠️
 
-- [ ] T024 [P] [US3] Failing tests for ripple state in `crates/micold-client/tests/ripple_state.rs`, driving the component directly the way `idle_requests_no_frames.rs` drives the motion primitive: pressing element B mid-ripple leaves A's progress and origin untouched; a completed ripple releases its state so nothing is retained at rest; an origin outside the element's bounds is clamped; with no known pointer position the origin is the element's center; the end radius reaches the element's furthest corner. State is read from the component instance — no central registry and no animation key (FR-024b, FR-024d, FR-024e)
+- [X] T024 [P] [US3] Failing tests for ripple state in `crates/micold-client/tests/ripple_state.rs`, driving the component directly the way `idle_requests_no_frames.rs` drives the motion primitive: pressing element B mid-ripple leaves A's progress and origin untouched; a completed ripple releases its state so nothing is retained at rest; an origin outside the element's bounds is clamped; with no known pointer position the origin is the element's center; the end radius reaches the element's furthest corner. State is read from the component instance — no central registry and no animation key (FR-024b, FR-024d, FR-024e)
 - [X] T025 [P] [US3] Failing test in `crates/micold-client/src/ui/material/style_states.rs` (inside the crate with the other style gates — the style layer is `pub(crate)` by 017 FR-002, so `tests/` cannot reach it; T025/T026/T027 share the file) asserting each interactive style function returns visibly different output for active, hovered and pressed, with the pressed delta at least the hover delta (FR-021, SC-005)
 - [X] T026 [P] [US3] Failing test in `crates/micold-client/src/ui/material/style_states.rs` (see T025) asserting the focused text-input status yields the 3dp `secondary` focus indicator, distinguishable from hovered (FR-022)
 - [X] T027 [P] [US3] Failing test in `crates/micold-client/src/ui/material/style_states.rs` (see T025) asserting disabled content resolves the 0.38 opacity, including the self-coloring icon-glyph path (FR-023)
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Confirm the coordinate space the pointer area reports, against a real widget, before finalising the ripple renderer — an origin in the wrong frame places every ripple incorrectly, and the terminal canvas works in absolute window coordinates, so element-relative conversion may be required (FR-024g, plan risk: ripple origin coordinate space)
-- [ ] T029 [US3] Build the ripple renderer in `crates/micold-client/src/ui/cdk/ripple.rs` — press capture, geometry, phase progression and per-instance lifetime, all held **inside the component instance** and carrying no colour or opacity of its own. Frames are requested through the motion primitive, never directly, so 017's single-frame-request gate stays at one entry (FR-024b, FR-024d, FR-024e, FR-024f, FR-039e)
+- [X] T028 [US3] Confirm the coordinate space the pointer area reports, against a real widget, before finalising the ripple renderer — an origin in the wrong frame places every ripple incorrectly, and the terminal canvas works in absolute window coordinates, so element-relative conversion may be required (FR-024g, plan risk: ripple origin coordinate space).
+  **Answered**: `iced::mouse::Cursor` exposes three accessors and they are in *different frames* —
+  `position()` is absolute window coordinates, `position_over(bounds)` is absolute but `None`
+  outside, and `position_in(bounds)` is **element-relative** and `None` outside. The ripple takes
+  `position_in`: the canvas draws in the element's own local frame, so element-relative is what the
+  geometry needs, and its `None` maps exactly onto FR-024b's "no known position → centre". The risk
+  was real — `terminal_pane.rs` uses `position()` and converts by hand against `bounds`, so the
+  absolute convention is already present in this codebase and would have been the easy wrong
+  choice. `Ripple::press` documents which frame it expects
+- [X] T029 [US3] Build the ripple renderer in `crates/micold-client/src/ui/cdk/ripple.rs` — press capture, geometry, phase progression and per-instance lifetime, all held **inside the component instance** and carrying no colour or opacity of its own. Frames are requested through the motion primitive, never directly, so 017's single-frame-request gate stays at one entry (FR-024b, FR-024d, FR-024e, FR-024f, FR-039e)
 - [ ] ~~T030~~ — merged into T029. A separate `crates/micold-core/src/ripple.rs` is **not** created: FR-024e places ripple origin, progress and lifetime in the component instance and forbids registering an animation key, so central state would contradict the requirement it claimed to serve. Kept struck rather than deleted so the numbering stays stable.
 - [ ] ~~T031~~ — merged into T028, which said the same thing.
 - [ ] T032 [US3] Create the `Ripple` component in `crates/micold-client/src/ui/material/ripple.rs` per `contracts/component-api.md` §2.1a — expanding circle drawn with the canvas facility, clipped to the element's shape, beneath content and above container (FR-024a, FR-024b)
