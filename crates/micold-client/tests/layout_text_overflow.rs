@@ -30,6 +30,21 @@ use support::layout as lay;
 /// measured, keep the suite green, and require the entry to keep firing.
 const KNOWN_OVERFLOWS: &[(&str, &str)] = &[];
 
+/// Name an offending node by its anchor where one covers it, otherwise by its path (FR-004).
+///
+/// Added after quickstart Part B4 reported the motivating defect as a bare
+/// `0/0/0/2/0/0/0/2/0/0/2/0/1`. Anchors exist so a failure can say *what* moved rather than
+/// *where* it is in a tree the reader would have to reconstruct, and this gate was not consulting
+/// them — so the one message the whole feature is justified by was the least legible one it emits.
+fn named(covered: &lay::CoveredState, node_path: &str) -> String {
+    covered
+        .anchors
+        .iter()
+        .find(|a| lay::path_token(a.path) == node_path)
+        .map(|a| format!("{} ({node_path})", a.name))
+        .unwrap_or_else(|| format!("node {node_path}"))
+}
+
 fn known(state: &str) -> bool {
     KNOWN_OVERFLOWS.iter().any(|(s, _)| *s == state)
 }
@@ -70,8 +85,11 @@ fn no_text_is_drawn_wider_than_its_clip() {
                 overflows
                     .iter()
                     .map(|o| format!(
-                        "{:?} wants {:.1}px in {:.1}px at node {}",
-                        o.content, o.natural_width, o.allowed_width, o.node_path
+                        "{:?} wants {:.1}px in {:.1}px at {}",
+                        o.content,
+                        o.natural_width,
+                        o.allowed_width,
+                        named(covered, &o.node_path)
                     ))
                     .collect::<Vec<_>>()
                     .join("; ")
@@ -105,8 +123,11 @@ fn no_text_is_drawn_wider_than_its_clip() {
             overflows
                 .iter()
                 .map(|o| format!(
-                    "{:?} wants {:.1}px in {:.1}px at node {}",
-                    o.content, o.natural_width, o.allowed_width, o.node_path
+                    "{:?} wants {:.1}px in {:.1}px at {}",
+                    o.content,
+                    o.natural_width,
+                    o.allowed_width,
+                    named(covered, &o.node_path)
                 ))
                 .collect::<Vec<_>>(),
         );

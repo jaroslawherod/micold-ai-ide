@@ -67,6 +67,22 @@ pub fn covered_states() -> &'static [CoveredState] {
             anchors: &[
                 Anchor { name: "shell.root", path: &[] },
                 Anchor { name: "shell.body", path: &[0] },
+                // The two elements feature 017's defect was *between* — a name drawn across the
+                // control beside it. T023 asked for these and they were missing until quickstart
+                // Part B4 was run against a reintroduced defect and reported a bare path.
+                //
+                // Both are identified from the running gate rather than by reading the tree:
+                // the label is the node B4's overflow names (187.6px allowed), and the cluster
+                // beside it is `row_actions_cluster`, whose destructive control is Delete, not a
+                // close — named for what it is.
+                Anchor {
+                    name: "sidebar.row.label",
+                    path: &[0, 0, 2, 0, 0, 0, 2, 0, 0, 2, 0, 1],
+                },
+                Anchor {
+                    name: "sidebar.row.delete_button",
+                    path: &[0, 0, 2, 0, 0, 0, 2, 0, 0, 2, 0, 2, 1],
+                },
             ],
         },
         CoveredState {
