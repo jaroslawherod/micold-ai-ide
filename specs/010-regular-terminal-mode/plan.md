@@ -177,3 +177,26 @@ no new workspace member.
 ## Complexity Tracking
 
 *No constitution violations — no entries.*
+
+---
+
+## Bugfix notes
+
+**BUG-001 note (2026-08-04)**: this plan predates the daemon. When the mode toggle ran in the
+client, it owned the terminal map, so "spawn the shell" and "register the shell" could not come
+apart — feature 012's T009 could reasonably treat them as one act. The daemon port split them
+across a lock acquisition and made the registration conditional on the session already having a
+live entry (`if let Some(live) = inner.sessions.get_mut(&session)`), which silently discarded the
+just-spawned PTY for any session whose primary was not running.
+
+Two consequences the plan should carry forward for anything else moved across the client/daemon
+seam:
+
+- **A spawn and its registration must not be separable.** If the registration can fail, the spawn
+  must be undone or reported; dropping the handle kills the child through `Drop` and looks exactly
+  like success from every call site.
+- **A fire-and-forget command must not be able to fail meaningfully.** `SessionOpenShell` has no
+  reply, so `open_shell` returning `Ok(())` having done nothing was unobservable to the client, the
+  logs, and the tests alike. Either the operation is infallible once accepted, or it needs a reply.
+
+**Bugfix**: 2026-08-04 — BUG-001 Updated from bugfix patch
