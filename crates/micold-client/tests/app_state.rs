@@ -263,8 +263,14 @@ fn state_with_worktree_and_session(dir: &str) -> State {
     state
 }
 
+/// Confirming a delete only dismisses the dialog: the daemon performs the removal and reports it,
+/// and the `CatalogChanged` that follows carries git's refreshed truth.
+///
+/// Dropping the records here instead would make a delete git *refuses* still look like it worked —
+/// the worktree would vanish from the sidebar and then silently return on the next catalog push,
+/// which reads as the app resurrecting a deleted worktree rather than as the refusal it is.
 #[test]
-fn delete_requested_opens_confirm_then_confirmed_drops_records() {
+fn delete_requested_opens_confirm_then_confirmed_only_dismisses_the_dialog() {
     let mut state = state_with_worktree_and_session("feat-x");
     assert_eq!(state.active_sessions().len(), 1);
 
@@ -274,11 +280,17 @@ fn delete_requested_opens_confirm_then_confirmed_drops_records() {
     assert!(state.worktree_menu_open.is_none());
 
     state.update(Message::WorktreeDeleteConfirmed);
-    assert!(state.active_sessions().is_empty(), "sessions dropped");
-    assert!(state.active_session.is_none(), "active cleared");
-    assert!(!state.worktrees.iter().any(|w| w.dir_name == "feat-x"));
     assert_eq!(state.overlay, Overlay::None);
     assert!(state.worktree_delete_target.is_none());
+    assert_eq!(
+        state.active_sessions().len(),
+        1,
+        "records stand until the daemon confirms the removal"
+    );
+    assert!(
+        state.worktrees.iter().any(|w| w.dir_name == "feat-x"),
+        "the row stands until the daemon confirms the removal"
+    );
 }
 
 #[test]

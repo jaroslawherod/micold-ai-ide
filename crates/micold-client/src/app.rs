@@ -1230,31 +1230,17 @@ impl State {
                 self.worktree_delete_keep_branch = false;
                 self.open_overlay(Overlay::ConfirmWorktreeDelete);
             }
+            // Confirming *requests* the delete; it does not perform it. The daemon owns the git
+            // removal and the session records, and answers with `OperationOk` (which is followed by
+            // a `CatalogChanged` carrying git's refreshed truth) or `OperationError`.
+            //
+            // So this only dismisses the dialog. Dropping the row here instead — the previous
+            // behaviour — made every delete *look* like it succeeded: a delete git refused showed
+            // the worktree vanishing, then silently reappearing when the next catalog push restored
+            // it, which reads as the app resurrecting something the user deleted rather than as the
+            // failure it is. Leaving the row alone means a refusal simply leaves it in place, next
+            // to the error notification explaining why.
             Message::WorktreeDeleteConfirmed => {
-                // Drop the worktree's session records and clear the active session if it was
-                // one of them (the binary has already terminated the processes + git/fs).
-                if let Some(dir) = self.worktree_delete_target.clone() {
-                    if let Some(path) = self.workspace.active.clone() {
-                        if let Some(list) = self.workspace.sessions.get_mut(&path) {
-                            let removed: Vec<SessionId> = list
-                                .iter()
-                                .filter(|s| s.location.is_worktree(&dir))
-                                .map(|s| s.id)
-                                .collect();
-                            list.retain(|s| !s.location.is_worktree(&dir));
-                            if self
-                                .active_session
-                                .is_some_and(|a| removed.contains(&a))
-                            {
-                                self.active_session = None;
-                            }
-                        }
-                    }
-                    self.worktrees.retain(|w| w.dir_name != dir);
-                    self.expanded.remove(&dir);
-                    // Drop any display-name override so it does not linger (FR-015 cleanup).
-                    self.workspace.clear_worktree_name(&dir);
-                }
                 self.worktree_delete_target = None;
                 self.overlay = Overlay::None;
             }

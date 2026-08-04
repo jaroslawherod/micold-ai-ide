@@ -805,8 +805,27 @@ where
                 };
                 // Never orphan a live process: a delete with a live session and `stop_sessions:false`
                 // fails specifically instead (W2, T052). No mutation has happened yet.
+                // FR-045: a worktree delete is a destructive, frequently-failing operation whose
+                // reason lives entirely in git's stderr. It used to log nothing at all — not the
+                // attempt, not the refusal, not the failure — so a user watching a delete fail had
+                // no way to find out why: the reason reached the client's transient notification
+                // and nowhere else. Both outcomes are logged below. Worktree/branch names and git's
+                // own message are identity and error text, never terminal content (FR-047).
+                tracing::info!(
+                    project = %project.display(),
+                    worktree = %dir_name,
+                    stop_sessions,
+                    delete_branch,
+                    "worktree delete requested"
+                );
                 let live = state.worktree_live_sessions(&project, &dir_name);
                 if !live.is_empty() && !stop_sessions {
+                    tracing::warn!(
+                        project = %project.display(),
+                        worktree = %dir_name,
+                        live_sessions = live.len(),
+                        "worktree delete refused: live sessions and stop_sessions not set"
+                    );
                     state.send(
                         id,
                         DaemonMsg::OperationError {
@@ -862,6 +881,12 @@ where
                             }
                         }
                         state.invalidate_env_include(&cache_path);
+                        tracing::info!(
+                            project = %project.display(),
+                            worktree = %dir_name,
+                            branch_delete_failed,
+                            "worktree deleted"
+                        );
                         refresh_worktrees_and_broadcast(state, project).await;
                         state.send(
                             id,
@@ -875,16 +900,34 @@ where
                     }
                     // Failed delete: sessions are left untouched (not killed, not archived) so an
                     // FR-023-recoverable failure never becomes permanent loss. git's stderr rides along.
-                    Ok(Err(e)) => state.send(
-                        id,
-                        DaemonMsg::OperationError {
-                            req,
-                            kind: ErrorKind::GitFailed,
-                            message: "failed to remove the worktree".into(),
-                            detail: Some(e.to_string()),
-                        },
-                    ),
-                    Err(join) => state.send(id, task_failed(req, "worktree delete", &join)),
+                    // Logged at ERROR so it also lands in the recent-errors ring (FR-046) — this is
+                    // the only durable record of *why* a delete the user watched fail did fail.
+                    Ok(Err(e)) => {
+                        tracing::error!(
+                            project = %project.display(),
+                            worktree = %dir_name,
+                            error = %e,
+                            "worktree delete failed"
+                        );
+                        state.send(
+                            id,
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::GitFailed,
+                                message: "failed to remove the worktree".into(),
+                                detail: Some(e.to_string()),
+                            },
+                        )
+                    }
+                    Err(join) => {
+                        tracing::error!(
+                            project = %project.display(),
+                            worktree = %dir_name,
+                            error = %join,
+                            "worktree delete task failed"
+                        );
+                        state.send(id, task_failed(req, "worktree delete", &join))
+                    }
                 }
             }
             ClientMsg::WorktreeRename {
