@@ -15,9 +15,10 @@
 //! asserted here rather than assumed, because "they are separate objects" is only true until
 //! someone adds a cache.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use iced::{Point, Size};
+use iced::advanced::Shell;
+use iced::{window, Event, Point, Size};
 use micold_client::ui::cdk::ripple::Ripple;
 use micold_core::tokens::motion::duration;
 
@@ -227,6 +228,49 @@ fn it_expands_before_it_fades() {
         saw_full_expansion_at_full_strength,
         "the ripple began fading before it finished expanding, so it disappears mid-growth"
     );
+}
+
+/// It asks for the *next* frame on every frame that is not its last (FR-024f, FR-039e).
+///
+/// The tests above drive `advance`, which needs no `Shell` and therefore cannot see this: the
+/// application does not step the ripple on a timer, it steps it on a redraw it asked for, so a
+/// frame the ripple forgets to ask for is a frame that never happens. The gap was between the two
+/// phases — a `Progress` that has arrived asks for nothing, so the frame on which the expansion
+/// landed requested nothing and the frame that would have started the fade never came. The ripple
+/// stopped there: fully grown, at the full pressed opacity, until an unrelated event happened to
+/// wake the render loop. Every other test still passed, because every other test drives the clock
+/// itself.
+#[test]
+fn it_asks_for_a_frame_on_every_frame_but_its_last() {
+    let mut r = pressed_at(30.0, 10.0);
+    let start = Instant::now();
+
+    for frame in 0..1_000u32 {
+        if r.is_idle() {
+            assert!(frame > 5, "the ripple finished in {frame} frames");
+            return;
+        }
+        // A distinct instant per frame: `Progress` advances once per frame and tells frames apart
+        // by the timestamp the redraw carries.
+        let now = start + Duration::from_millis(16 * u64::from(frame) + 16);
+        let mut messages: Vec<()> = Vec::new();
+        let mut shell = Shell::new(&mut messages);
+        r.on_frame(
+            &Event::Window(window::Event::RedrawRequested(now)),
+            EXPAND,
+            FADE,
+            &mut shell,
+        );
+        // The frame that finishes the ripple owes nothing; every other frame owes the next one.
+        assert!(
+            r.is_idle() || matches!(shell.redraw_request(), window::RedrawRequest::NextFrame),
+            "frame {frame} asked for no successor while the ripple was still running \
+             (expansion {}, strength {}) — it is stuck there until something unrelated redraws",
+            r.expansion(),
+            r.strength()
+        );
+    }
+    panic!("the ripple never settled");
 }
 
 // ---------------------------------------------------------------------------------------------

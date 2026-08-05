@@ -38,7 +38,7 @@
 //! tiling. It is pure geometry and tested as such, because "does this rectangle lie inside a
 //! rounded rectangle" is checkable arithmetic and not something to confirm by looking at it.
 
-use iced::advanced::widget::{tree, Tree, Widget};
+use iced::advanced::widget::{tree, Operation, Tree, Widget};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell};
 use iced::{Border, Color, Element, Event, Length, Rectangle, Size, Vector};
 use micold_core::tokens::{motion::duration, state};
@@ -243,6 +243,25 @@ where
         );
     }
 
+    /// Forwarded, or the wrapper would swallow every widget operation aimed at what it wraps.
+    ///
+    /// The default implementation does nothing, so focus traversal, `text_input::focus(id)` and
+    /// `scrollable::scroll_to` would all stop at this wrapper and silently skip the subtree beneath
+    /// it — no error, no warning, just a control that cannot be reached. `animation.rs`'s wrappers
+    /// each forward for the same reason (`operate_direct_child!`), and this one returns its child's
+    /// layout node unchanged, so it forwards its own layout too.
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        self.content
+            .as_widget_mut()
+            .operate(&mut tree.children[0], layout, renderer, operation);
+    }
+
     fn mouse_interaction(
         &self,
         tree: &Tree,
@@ -319,8 +338,17 @@ where
         // The same circle under each disjoint scissor rectangle. Layer clipping does not blend, so
         // the bands tile into exactly the circle intersected with the element's rounded shape —
         // no seam where they meet, and nothing painted outside the shape.
+        //
+        // Each band is cut to `viewport` first. A pushed clip *replaces* the enclosing one rather
+        // than intersecting with it, so a band that reaches outside the visible region escapes
+        // whatever was clipping this element: press a sidebar row that is half-scrolled out of its
+        // list and the ripple would paint the row's hidden half over the elements beyond the
+        // scrollable's edge. Every iced widget that clips does this same intersection first.
         for band in shape_bands(bounds, self.radius) {
-            renderer.with_layer(band, |renderer| {
+            let Some(visible) = band.intersection(viewport) else {
+                continue;
+            };
+            renderer.with_layer(visible, |renderer| {
                 renderer.fill_quad(quad, background);
             });
         }
