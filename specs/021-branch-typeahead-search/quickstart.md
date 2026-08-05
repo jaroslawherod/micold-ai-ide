@@ -82,9 +82,14 @@ Open it as a project, press **New worktree**, choose **Existing branch**.
 
 ### B1 — Narrowing and emphasis (US1)
 
-1. Click into the field. It shows its placeholder, and **focusing alone opens the list** with every
-   branch, in the picker's usual order — before anything is typed (FR-001b). Click elsewhere in the
-   dialog and the list closes.
+1. Choosing **Existing branch** shows the field with its placeholder and **the list already open**,
+   holding every branch in the picker's usual order — before anything is typed, and without a click
+   (FR-001b). Click elsewhere in the dialog and the list closes; click back into the field and it
+   returns, with the search text untouched.
+
+   > Opening it *with the picker* rather than on a focus event is deliberate: the rendering stack's
+   > text input reports neither focus nor blur, so a focus-triggered list was reachable by pointer
+   > only — a developer arriving with Tab saw an empty field and no list until they typed.
 2. Type `log`. Only `feat/login`, `feat/logout` and `chore/dialog-cleanup` remain.
 3. **The `log` inside each name is emphasised** and the rest of the name is not.
 4. `feat/login` and `feat/logout` sit above `chore/dialog-cleanup` — earlier match position first.
@@ -99,7 +104,9 @@ Open it as a project, press **New worktree**, choose **Existing branch**.
    characters.
 3. Clear and type `fl` (two characters). Only literal `fl` matches appear — `feat/login` does **not**.
    Type a third character and approximate results appear. ✅ FR-006a.
-4. Type `zzq`. The list says no branches match; the text stays in the field, editable. ✅ FR-015.
+4. Type `lagi` (four characters, one wrong). `feat/login` is listed with `logi` emphasised as one
+   run — single-typo tolerance holds at short lengths, not only long ones. ✅ SC-004.
+5. Type `zzq`. The list says no branches match; the text stays in the field, editable. ✅ FR-015.
 
 ### B3 — Long names (FR-011d)
 
@@ -120,6 +127,10 @@ visible.
 With the list open: Down/Up moves the highlight without the caret leaving the field; it stops at the
 ends rather than wrapping. Enter picks the highlighted row. Escape closes the list and picks nothing.
 Ordinary characters keep reaching the field throughout.
+
+**Tab** closes the list *and* moves focus on, which is the pair that matters: tab to **Create** and
+press Enter, and it presses the button. An open list claims Enter, so one that outlived the focus
+that opened it would pick a branch instead.
 
 ### B5a — Step count and reach (SC-001, SC-006)
 
