@@ -268,6 +268,18 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::controls::toggle_chip,
     },
     Entry {
+        module: "material/form_field.rs",
+        component: "FormField",
+        variants: &[],
+        density: &[],
+        posed: &["label + supporting", "active", "error", "no label"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::controls::form_field,
+    },
+    Entry {
         module: "material/text_field.rs",
         component: "TextField",
         variants: &[],

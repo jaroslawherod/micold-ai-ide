@@ -17,6 +17,11 @@ mod connection_banner;
 mod divider;
 mod ellipsized;
 mod filter_panel;
+mod form_field;
+/// `FormField`'s composition and chrome, checked in-crate because `material` is `pub(crate)` and a
+/// `FormField` cannot be constructed from `tests/` at all.
+#[cfg(test)]
+mod form_field_anatomy;
 pub mod glyph;
 mod icon_button;
 mod menu;
@@ -53,8 +58,14 @@ mod style_states;
 mod surface;
 mod tag;
 mod terminal_pane;
+/// The headless renderer the in-crate component tests share.
+#[cfg(test)]
+mod test_support;
 mod text;
 mod text_field;
+/// The filled field's anatomy, checked in-crate — `material` is `pub(crate)`.
+#[cfg(test)]
+mod text_field_anatomy;
 mod toggle_chip;
 mod toolbar;
 mod tree_view;
@@ -73,6 +84,7 @@ pub use connection_banner::ConnectionBanner;
 pub use divider::Divider;
 pub use ellipsized::Ellipsized;
 pub use filter_panel::FilterTrigger;
+pub use form_field::FormField;
 pub use glyph::Glyph;
 pub use icon_button::IconButton;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};

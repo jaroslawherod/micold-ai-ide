@@ -179,6 +179,53 @@ pub fn text_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
     )
 }
 
+/// `FormField` — the shared chrome, posed through every state that changes it.
+///
+/// Wrapped around a **`Select`** rather than a text input, and deliberately: `TextField` composes
+/// itself inside a `FormField` (T046), so posing one inside another would draw two containers and
+/// two indicators — the gallery would be demonstrating a mistake. The select is the control that
+/// still arrives bare, and it is also the one that cannot report focus, which is why the wrapper
+/// takes its active state as a parameter rather than asking.
+///
+/// The states are side by side because the differences between them are the whole component: at
+/// rest a muted hairline, active a thicker accent line, invalid the error role in *both* the
+/// indicator and the text beneath. Seeing them apart, each looks plausible.
+pub fn form_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let control = || material::Select::new(samples::CHOICES, None, |_| Message::NoOp, roles);
+    arrange(
+        vec![
+            posed(
+                "label + supporting",
+                material::FormField::new(control(), roles)
+                    .label("Theme")
+                    .supporting("Applies immediately"),
+                roles,
+            ),
+            posed(
+                "active",
+                material::FormField::new(control(), roles)
+                    .label("Theme")
+                    .supporting("Applies immediately")
+                    .active(true),
+                roles,
+            ),
+            posed(
+                "error",
+                material::FormField::new(control(), roles)
+                    .label("Theme")
+                    .error(Some("Pick one to continue")),
+                roles,
+            ),
+            posed(
+                "no label",
+                material::FormField::new(control(), roles),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
 /// `Select` — nothing selected (so the placeholder shows) and a choice made.
 ///
 /// Its dropdown panel is opened by the rendering stack rather than by the gallery, so it is exercised
