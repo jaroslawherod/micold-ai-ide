@@ -33,5 +33,6 @@ pub mod store;
 pub mod terminal;
 pub mod theme;
 pub mod tokens;
+pub mod typeahead;
 pub mod workspace;
 pub mod worktree;

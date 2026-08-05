@@ -17,7 +17,8 @@ verified in CI.
   licensing, and how to add a new icon.
 - [Worktrees & Sessions](user-guide/worktrees-and-sessions.md) — opening a git project, the
   worktree sidebar (including how agent-created worktrees are hidden and how to reveal them),
-  creating worktrees (on a new branch, or on one that already exists locally or on a remote),
+  creating worktrees (on a new branch, or by searching for one that already exists locally or on
+  a remote),
   and running `claude` sessions in the embedded terminal
   (colored real-terminal rendering, interactive keyboard/mouse input, focus, resize, scrollback,
   and toggling a session's terminal to one or more independent plain-shell instances scoped to
@@ -30,7 +31,8 @@ verified in CI.
 
 - [The component library](development/component-library.md) — the two rendering layers, the rule
   that feature modules compose components rather than styling widgets, how that rule is enforced in
-  CI, and what to do when adding a component.
+  CI, what to do when adding a component, and how to build a searchable picker on the shared
+  `Typeahead`.
 - [The layout snapshot](development/layout-snapshot.md) — the three checks that pin *where things
   are*: the geometry fixture, the text-overflow gate and the containment invariant. What each one
   catches, what none of them do (colour, pixels, scrolling, mid-animation, and the typeface until

@@ -97,6 +97,49 @@ Point 5 is the one most often got wrong. The resize handle used to emit `Sidebar
 drag itself let all of that be deleted; what remained was the single message that carried a
 decision.
 
+## Searching a long list: `Typeahead`
+
+Any picker over more entries than fit on screen consumes `material::Typeahead` rather than building
+a second one. It is the branch picker's control, but nothing about it is branch-shaped — a check
+(`tests/typeahead_is_generic.rs`) fails the build if either half of it names a branch, a worktree or
+git.
+
+```rust
+material::Typeahead::new(&self.query, rows, Message::QueryChanged, roles)
+    .placeholder("Search branches…")
+    .open(self.list_open)
+    .highlighted(self.highlight)
+    .selected(selected_index)
+    .empty_message("No branches match that search.")
+    .on_focus(Message::Focused)
+    .on_move(Message::HighlightMoved)
+    .on_dismiss(Message::Dismissed)
+    .on_pick(|i| Message::Chosen(i))
+    .into()
+```
+
+What it does **not** do is as important as what it does:
+
+- **It does not match.** Rows arrive already matched, already ranked and already carrying the byte
+  ranges to emphasise. The matcher is `micold_core::typeahead` — render-free, so the tiers, the
+  ranking rules and the keyboard rule are all unit-tested rather than clicked at.
+- **It holds no state.** Whether the list is open, where the keyboard is, and what is selected are
+  all the caller's, passed in and echoed back as messages. That is what lets an open list with no
+  rows exist at all — the state that shows the no-match message.
+- **It knows nothing about your domain.** Its row is `{ label, spans, enabled }`. Whatever explains
+  an unavailable row must already be inside `label`; there is no second text slot, because a
+  component that had one would need to know what to put in it.
+
+So a new picker's work is a mapping — your candidate type to a `Row`, and a row index back to your
+candidate — plus the four messages. The branch picker's version of that mapping is about twenty
+lines in `ui/worktree_form.rs`, and it is the only place branch vocabulary and component vocabulary
+meet.
+
+The behaviour half, `cdk::typeahead`, is the third module allowed to write its own
+`Widget::overlay()`, and `tests/one_overlay_implementation.rs` holds it to saying why: the result
+list anchors to the field's own on-screen bounds so it works inside a content-sized dialog, and it
+draws rows that emphasise individual characters, which the rendering stack's own menu cannot.
+
 ## Where the boundary genuinely bends
 
 Two things sit outside the library on purpose, and both are documented at their call sites:

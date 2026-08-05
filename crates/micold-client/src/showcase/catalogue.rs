@@ -292,6 +292,26 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::controls::select,
     },
     Entry {
+        module: "material/typeahead.rs",
+        component: "Typeahead",
+        variants: &[],
+        density: &[],
+        // Nothing is posed. Every state this component has — which characters are emphasised, where
+        // the keyboard is, which row is chosen, what an unavailable row looks like — is a function of
+        // what has just been typed, so all of it is exercised rather than staged.
+        posed: &[],
+        live: &[
+            "type to narrow the list and see the matched characters picked out",
+            "clear the search with the ✕",
+            "↑ / ↓ move the highlight, Enter takes the row it is on",
+            "press a row to choose it; the dimmed one cannot be chosen",
+        ],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::controls::typeahead,
+    },
+    Entry {
         module: "material/filter_panel.rs",
         component: "FilterTrigger",
         variants: &[],
@@ -653,5 +673,14 @@ pub const EXEMPTIONS: &[Exemption] = &[
         reason: "a behaviour-layer wrapper: it carries a panel's layer, anchor and dismissal, and \
                  has no appearance. What it wraps — a menu panel, a dialog — is what the floating \
                  section poses.",
+    },
+    Exemption {
+        module: "cdk/typeahead.rs",
+        component: "Typeahead",
+        reason: "a behaviour-layer wrapper, for the same reason as the two above: it anchors a \
+                 result list to a field's own bounds, applies the keyboard rule and decides when \
+                 the list closes, and names no colour, size or spacing. Its field and its list \
+                 arrive already drawn — what they look like is `material/typeahead.rs`, which the \
+                 controls section poses.",
     },
 ];

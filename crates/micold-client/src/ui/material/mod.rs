@@ -62,6 +62,7 @@ mod tree_view;
 /// snapshots above: `TypeRole` is not reachable from `tests/`.
 #[cfg(test)]
 mod type_role_mapping;
+mod typeahead;
 
 pub use accordion::Accordion;
 pub use activity_badge::ActivityBadge;
@@ -94,6 +95,7 @@ pub use text_field::TextField;
 pub use toggle_chip::ToggleChip;
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
+pub use typeahead::{Row as TypeaheadRow, Typeahead};
 
 /// The application's theme, derived from the active colour scheme.
 ///

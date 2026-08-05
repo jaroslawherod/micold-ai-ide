@@ -16,8 +16,10 @@
 //! rather than approximately true.
 
 use micold_core::theme::ColorScheme;
+use micold_core::typeahead::{move_highlight, rank, Direction, Query};
 
 use crate::grid::GridCache;
+use crate::ui::material::TypeaheadRow;
 
 /// Which floating surface is open.
 ///
@@ -36,7 +38,12 @@ pub enum Floating {
 }
 
 /// Everything a developer can ask the showcase to do.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// `Clone` but **not** `Copy`: feature 021's type-ahead example is genuinely typeable, and what was
+/// typed is a `String`. The alternative — an index, a key code, anything `Copy` — would mean the
+/// gallery holding its own text model beside the component's, which is exactly the divergence a live
+/// example exists to rule out.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message {
     /// Switch between the light and the dark scheme, applying to every component on the page
     /// (FR-008).
@@ -56,6 +63,12 @@ pub enum Message {
     /// they go nowhere. Swallowing them is what keeps the instance genuinely live without the gallery
     /// inventing behaviour the application owns.
     NoOp,
+    /// The type-ahead example's search text changed (feature 021, FR-020).
+    TypeaheadQueryChanged(String),
+    /// Its keyboard highlight should move.
+    TypeaheadHighlightMoved(Direction),
+    /// Row `i` of its current results was chosen.
+    TypeaheadPicked(usize),
 }
 
 /// The showcase's whole state.
@@ -85,6 +98,18 @@ pub struct Showcase {
     /// The fabricated terminal grid `TerminalPane` renders from, so a component that would otherwise
     /// need a live session is present rather than omitted (FR-006).
     grid: GridCache,
+    /// The type-ahead example's own search text (feature 021, FR-020). Empty at rest, so the page
+    /// looks the same on every launch (FR-022).
+    typeahead_query: String,
+    /// Where its keyboard is, as an index into the *current* results — re-seated whenever they
+    /// change, by the same rule the branch picker uses.
+    typeahead_highlight: Option<usize>,
+    /// Which row was last chosen, held by **label** rather than by index. An index means "the third
+    /// row of whatever is showing now", so the marker would jump to an unrelated branch the moment
+    /// the query narrowed the list under it. The real picker keys its marker off the candidate's
+    /// identity for the same reason, and a gallery that demonstrated the other behaviour would be
+    /// demonstrating something the application does not do.
+    typeahead_selected: Option<String>,
 }
 
 impl Showcase {
@@ -103,6 +128,9 @@ impl Showcase {
             running: vec![false; entries],
             shown: vec![true; entries],
             grid: super::samples::grid(),
+            typeahead_query: String::new(),
+            typeahead_highlight: None,
+            typeahead_selected: None,
         }
     }
 
@@ -136,6 +164,47 @@ impl Showcase {
     /// The fabricated terminal grid (FR-006).
     pub fn grid(&self) -> &GridCache {
         &self.grid
+    }
+
+    /// The type-ahead example's search text.
+    pub fn typeahead_query(&self) -> &str {
+        &self.typeahead_query
+    }
+
+    /// Its keyboard position among the current results.
+    pub fn typeahead_highlight(&self) -> Option<usize> {
+        self.typeahead_highlight
+    }
+
+    /// Where the chosen row sits among the results showing right now, if it is among them at all.
+    ///
+    /// Resolved on demand rather than stored: the component wants an index into the rows it was
+    /// handed, and that index is a different number after every keystroke.
+    pub fn typeahead_selected(&self) -> Option<usize> {
+        let chosen = self.typeahead_selected.as_deref()?;
+        self.typeahead_rows().iter().position(|r| r.label == chosen)
+    }
+
+    /// The rows the type-ahead example shows right now — the fixed sample results, run through the
+    /// **real** matching logic against the current query.
+    ///
+    /// Derived rather than stored, so the rows and the query cannot disagree. It goes through
+    /// `micold_core::typeahead::rank` and not a simplified stand-in: a gallery example matching by
+    /// its own rules would demonstrate something the application does not do (FR-020).
+    pub fn typeahead_rows(&self) -> Vec<TypeaheadRow> {
+        let query = Query::new(&self.typeahead_query);
+        rank(super::samples::SEARCH_RESULTS, |(label, _)| *label, &query)
+            .into_iter()
+            .map(|(index, matched)| {
+                let (label, available) = super::samples::SEARCH_RESULTS[index];
+                let row = TypeaheadRow::new(label, matched.spans);
+                if available {
+                    row
+                } else {
+                    row.disabled()
+                }
+            })
+            .collect()
     }
 
     /// What the scheme control says it will do, which is the opposite of the scheme in force.
@@ -187,6 +256,37 @@ impl Showcase {
             Message::Opened(surface) => self.open = Some(surface),
             Message::Dismissed => self.open = None,
             Message::NoOp => {}
+            Message::TypeaheadQueryChanged(text) => {
+                self.typeahead_query = text;
+                // The results have just changed under the highlight, so it is re-seated rather than
+                // left pointing into a list that may be shorter — the same rule the branch picker's
+                // reducer follows, because it is the same bug either would otherwise have.
+                let rows = self.typeahead_rows().len();
+                self.typeahead_highlight = match self.typeahead_highlight {
+                    None => None,
+                    Some(_) if rows == 0 => None,
+                    Some(i) if i >= rows => Some(0),
+                    Some(i) => Some(i),
+                };
+            }
+            Message::TypeaheadHighlightMoved(direction) => {
+                // The same rule the picker applies, because it is the *same function* — a gallery
+                // whose keyboard behaved differently from the application's would be worth less
+                // than no gallery, and two hand-written copies of "saturating, and the first move
+                // enters the list" had already drifted apart at the `Up`-from-nowhere case.
+                let rows = self.typeahead_rows().len();
+                if let Some(next) = move_highlight(self.typeahead_highlight, direction, rows) {
+                    self.typeahead_highlight = Some(next);
+                }
+            }
+            Message::TypeaheadPicked(index) => {
+                // The index is into the rows the component was just showing, so it is resolved back
+                // to a label here, while those rows are still the current ones.
+                self.typeahead_selected = self
+                    .typeahead_rows()
+                    .get(index)
+                    .map(|row| row.label.clone());
+            }
         }
     }
 }

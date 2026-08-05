@@ -56,6 +56,10 @@ pub enum Icon {
     Copy,
     /// Toggle the sidebar tag-filter panel (feature 009).
     Filter,
+    /// The leading affordance of a search field (feature 021, FR-016) — a magnifier. Distinct
+    /// from [`Icon::Filter`]'s funnel: filtering narrows a list by a property you pick from,
+    /// searching narrows it by text you type.
+    Search,
     /// The AI CLI (`claude`) terminal mode (feature 010).
     AiCli,
     /// The regular/plain shell terminal mode (feature 010).
@@ -104,6 +108,7 @@ impl Icon {
         Icon::Delete,
         Icon::Copy,
         Icon::Filter,
+        Icon::Search,
         Icon::AiCli,
         Icon::RegularTerminal,
         Icon::ReleaseFocus,
@@ -138,6 +143,7 @@ impl Icon {
             Icon::Delete => '\u{e872}',
             Icon::Copy => '\u{e14d}',
             Icon::Filter => '\u{e152}',
+            Icon::Search => '\u{e8b6}',
             Icon::AiCli => '\u{e65f}',
             Icon::RegularTerminal => '\u{eb8e}',
             Icon::ReleaseFocus => '\u{e31a}',

@@ -676,11 +676,11 @@ fn capture_overlay(app: &App) -> Option<ClosingOverlay> {
         Overlay::About => Some(ClosingOverlay::About),
         Overlay::ProjectSelector => app.core.selector.clone().map(ClosingOverlay::Selector),
         Overlay::RenameProject => app.core.rename_draft.clone().map(ClosingOverlay::Rename),
-        Overlay::AddWorktree => app
-            .core
-            .worktree_form
-            .clone()
-            .map(|form| ClosingOverlay::Worktree(form, app.core.worktree_error.clone())),
+        Overlay::AddWorktree => {
+            app.core.worktree_form.clone().map(|form| {
+                ClosingOverlay::Worktree(Box::new(form), app.core.worktree_error.clone())
+            })
+        }
         Overlay::Settings => app
             .core
             .settings_draft

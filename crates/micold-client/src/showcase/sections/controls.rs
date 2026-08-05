@@ -207,6 +207,42 @@ pub fn select<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mess
     )
 }
 
+/// `Typeahead` — a live, typeable search over fixed sample results (FR-020).
+///
+/// The one entry on this page that cannot be posed: what a type-ahead looks like *is* what it does
+/// as you type, and a still of a closed field would be a picture of the frame around the component
+/// rather than of the component. So the gallery owns a query of its own, runs the sample rows
+/// through the same matching logic the branch picker uses, and hands the result over — emphasis,
+/// keyboard highlight, selection marker, disabled row and all.
+///
+/// One instance rather than several: its list floats over the page, and two open lists would sit on
+/// top of each other.
+pub fn typeahead<'a>(s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let rows = s.typeahead_rows();
+    arrange(
+        vec![posed(
+            "type to narrow it",
+            material::Typeahead::new(
+                s.typeahead_query(),
+                rows,
+                Message::TypeaheadQueryChanged,
+                roles,
+            )
+            .placeholder("Search branches…")
+            // Always open, because the list is the half worth looking at and this page exists to be
+            // looked at. In the application the caller opens it on focus instead.
+            .open(true)
+            .highlighted(s.typeahead_highlight())
+            .selected(s.typeahead_selected())
+            .empty_message("Nothing matches that search.")
+            .on_move(Message::TypeaheadHighlightMoved)
+            .on_pick(Message::TypeaheadPicked),
+            roles,
+        )],
+        Layout::FullWidth,
+    )
+}
+
 /// `FilterTrigger` — the sidebar's filter button, active and inactive.
 pub fn filter_trigger<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(

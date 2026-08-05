@@ -52,6 +52,21 @@ fn pairs(r: &Roles) -> Vec<(&'static str, Rgb, Rgb)> {
     }
     let (issue_fill, issue_on) = r.issue_tag();
     out.push(("tag_issue", issue_on, issue_fill));
+
+    // The type-ahead's match emphasis (feature 021, FR-011). Emphasis is a colour role rather than
+    // a fill, so it is *only* legible if it clears AA against whatever the row is drawn on — and a
+    // row can be drawn on two different things: the menu surface, or the selected row's tonal
+    // fill. Both are checked, in both schemes, because "the emphasis is legible" is a promise the
+    // feature makes and nothing else here would catch a palette change that broke it.
+    out.push(("emphasis/menu_surface", r.primary, r.surface));
+    out.push(("emphasis/selected_row", r.primary, r.secondary_container));
+    // An unavailable row is muted, and muted is not the same as unreadable: its reason has to stay
+    // readable or FR-012 loses the point of listing it at all.
+    out.push((
+        "unavailable_row/menu_surface",
+        r.on_surface_variant,
+        r.surface,
+    ));
     out
 }
 
