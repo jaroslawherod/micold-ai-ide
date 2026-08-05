@@ -202,10 +202,15 @@ fn the_toolbar_title_anchor_measures_the_application_name() {
     let renderer = lay::renderer();
     let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
 
+    // The role the toolbar sets its title in, measured at that role's own size *and weight*.
+    // Feature 018's T017–T021 moved the title from the body role to `title_medium`, which is both
+    // larger and heavier; measuring it against the Regular face at 14dp would report a width the
+    // application never draws.
+    let role = micold_core::tokens::typography::TITLE_MEDIUM;
     let expected = lay::measure(
         micold_core::metadata::APP_NAME,
-        lay::reference_font(),
-        micold_core::tokens::type_scale::BODY,
+        lay::reference_font_at(role.weight),
+        role.size,
     );
 
     let mut checked = 0;
