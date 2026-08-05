@@ -23,7 +23,7 @@ pub fn modal<'a>(draft: &'a WorktreeRenameDraft, scheme: ColorScheme) -> Element
         Text::new("Rename worktree", TypeRole::Headline, r),
         Text::new(
             "Changes only the name shown in the sidebar — not the branch or folder.",
-            TypeRole::Label,
+            TypeRole::Caption,
             r
         )
         .muted(),
@@ -36,7 +36,7 @@ pub fn modal<'a>(draft: &'a WorktreeRenameDraft, scheme: ColorScheme) -> Element
             RenameError::Empty => "Name cannot be empty.",
             RenameError::Whitespace => "Name cannot be only whitespace.",
         };
-        fields = fields.push(Text::new(message, TypeRole::Label, r).tint(r.error));
+        fields = fields.push(Text::new(message, TypeRole::Caption, r).tint(r.error));
     }
 
     let actions = row![

@@ -13,9 +13,10 @@
 //! marks the current selection (FR-003) with no bespoke state of this app's own.
 
 use crate::ui::material::style;
+use crate::ui::material::TypeRole;
 use iced::widget::pick_list;
 use iced::{Element, Length};
-use micold_core::tokens::{spacing, type_scale, Roles};
+use micold_core::tokens::{spacing, Roles};
 
 /// A Material-styled select control. Builder form (Principle VIII):
 /// `Select::new(options, selected, on_selected, roles).placeholder("...").into()`.
@@ -66,7 +67,10 @@ where
             .placeholder(s.placeholder)
             .width(Length::Fill)
             .padding(spacing::SM)
-            .text_size(type_scale::BODY)
+            // A `pick_list` takes a size and a font separately rather than a role, so the role is
+            // named here and taken apart — the call site still never states a number.
+            .text_size(TypeRole::Body.size())
+            .font(TypeRole::Body.font())
             .style(style::select_field(r))
             .menu_style(style::select_menu(r))
             .into()

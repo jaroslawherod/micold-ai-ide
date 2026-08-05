@@ -172,13 +172,41 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T014a [US2] Vendor Roboto Regular (400) and Roboto Medium (500) as static instances into `assets/fonts/`, alongside the Material Symbols font already there, and document them to the same standard: the Apache-2.0 licence text in-repo, and a provenance record naming the upstream source, the exact artifact shipped, and how it was produced. Decide explicitly whether the existing `assets/fonts/LICENSE` and `assets/fonts/PROVENANCE.md` are extended to cover both typefaces or whether Roboto gets its own pair — those files today describe only the icon font, and a licence file that silently grows to cover a second work is the failure mode this requirement exists to prevent (FR-008a, FR-009, SC-012)
 - [X] T015 [US2] Register both Roboto faces via `.font(...)` and set `.default_font(...)` to Roboto in `crates/micold-client/src/main.rs`, keeping the Material Symbols registration intact (FR-008, research R3)
 - [X] T016 [US2] Resolve type roles into size, font weight and absolute line height inside `crates/micold-client/src/ui/material/text.rs`, so the role is the only thing a call site names (FR-007, FR-010)
-- [ ] T017 [P] [US2] (call sites already name roles via 017's `TypeRole`; this is the refinement pass — pick a *more specific* role where the current one is coarse) Assign the correct type roles across `crates/micold-client/src/ui/shell.rs`, `project_selector.rs` and `terminal.rs`
-- [ ] T018 [P] [US2] Assign the correct type roles across `crates/micold-client/src/ui/worktree_form.rs`, `worktree_rename.rs`, `rename.rs` and `settings_form.rs`
-- [ ] T019 [P] [US2] Assign the correct type roles across `crates/micold-client/src/ui/about.rs`, `confirm_delete.rs`, `confirm_forget.rs`, `confirm_session_remove.rs` and `mod.rs`
-- [ ] T020 [P] [US2] Assign the correct type roles inside `crates/micold-client/src/ui/material/` — `tree_view.rs`, `menu.rs`, `toolbar.rs`, `select.rs`, `progress.rs`, `project_switcher.rs`, `icon_button.rs`, `tag.rs`
-- [ ] T021 [US2] Apply the sidebar-scoped roles in `crates/micold-client/src/ui/sidebar.rs` so the 80% density decision is one auditable mapping (FR-011)
+- [X] T017 [P] [US2] (call sites already name roles via 017's `TypeRole`; this is the refinement pass — pick a *more specific* role where the current one is coarse) Assign the correct type roles across `crates/micold-client/src/ui/shell.rs`, `project_selector.rs` and `terminal.rs`
+- [X] T018 [P] [US2] Assign the correct type roles across `crates/micold-client/src/ui/worktree_form.rs`, `worktree_rename.rs`, `rename.rs` and `settings_form.rs`
+- [X] T019 [P] [US2] Assign the correct type roles across `crates/micold-client/src/ui/about.rs`, `confirm_delete.rs`, `confirm_forget.rs`, `confirm_session_remove.rs` and `mod.rs`
+- [X] T020 [P] [US2] Assign the correct type roles inside `crates/micold-client/src/ui/material/` — `tree_view.rs`, `menu.rs`, `toolbar.rs`, `select.rs`, `progress.rs`, `project_switcher.rs`, `icon_button.rs`, `tag.rs`
+- [X] T021 [US2] Apply the sidebar-scoped roles in `crates/micold-client/src/ui/sidebar.rs` so the 80% density decision is one auditable mapping (FR-011)
 - [X] T022 [US2] Confirm glyph fallback for characters outside Roboto's coverage at the font registration in `crates/micold-client/src/main.rs` (FR-013)
 - [X] T023 [US2] Update `docs/user-guide/` to note the shipped typeface and resulting cross-platform consistency (FR-041, Principle VII)
+
+> **What T017–T021 turned out to be.** The tasks read as a taste pass — swap a coarse role for a
+> finer one. Two things made them larger, and both are recorded here because the task text no longer
+> describes the work done:
+>
+> 1. **Eleven shared components were never on the scale at all.** `menu`, `toolbar`, `select`,
+>    `progress`, `project_switcher`, `tag`, `tree_view`, `connection_banner`, `toggle_chip`,
+>    `activity_badge` and the tooltip still named feature 003's `type_scale::BODY`/`sidebar::TAG`
+>    constants. Those are *named* values, so `type_role_call_sites.rs` — which scanned for numeric
+>    literals — passed them. They got the right size and, because a bare number carries neither, the
+>    renderer's default weight and line spacing: no menu item, chip or toolbar title had ever
+>    rendered in Roboto Medium. T020 is therefore a migration, not a reassignment, and the gate
+>    gained a second rule that is structural rather than a blocklist (the scale is named in exactly
+>    one file). `tokens::type_scale` and `tokens::sidebar` are deleted, as `tokens/mod.rs` said they
+>    would be "when the last call site names a role instead (T017–T021)".
+>
+> 2. **`TypeRole` had nowhere finer to go.** Its eight variants narrowed Material's fifteen, so
+>    "pick a more specific role" was not expressible. Three were added — `Section` (`title_medium`),
+>    `Caption` (`body_small`) and `Action` (`label_large`) — and the refinement is mostly one
+>    distinction: **prose was being set in label roles.** Every explanatory paragraph in
+>    `worktree_form.rs`, every error line and diagnostic, the connection banner's detail and the
+>    tooltip were at weight 500, which is the voice Material reserves for things you scan, not
+>    things you read. `Caption` and `Label` are deliberately the same size and differ only in
+>    weight; `src/ui/material/type_role_mapping.rs` pins that, because a mapping that collapsed the
+>    pair would leave every size in the application correct.
+>
+> One latent bug surfaced: the overflow menu's longest label fit its 220dp panel by about a pixel,
+> and only at the body weight. `layout_snapshot.rs` caught it wrapping. `PANEL_WIDTH` is now 240.
 
 **Checkpoint**: Typography is role-driven and platform-independent. Demonstrable via quickstart §B2.
 

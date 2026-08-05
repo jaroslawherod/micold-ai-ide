@@ -73,8 +73,12 @@ pub fn modal<'a>(
         if form.source == BranchSource::Existing {
             if let Some(reason) = &candidate.blocked_by {
                 fields = fields.push(
-                    Text::new(block_sentence(&candidate.name, reason), TypeRole::Label, r)
-                        .tint(r.error),
+                    Text::new(
+                        block_sentence(&candidate.name, reason),
+                        TypeRole::Caption,
+                        r,
+                    )
+                    .tint(r.error),
                 );
             }
         }
@@ -86,7 +90,7 @@ pub fn modal<'a>(
         .map(|e| e.to_string())
         .or_else(|| error.map(str::to_string));
     if let Some(message) = message {
-        fields = fields.push(Text::new(message, TypeRole::Label, r).tint(r.error));
+        fields = fields.push(Text::new(message, TypeRole::Caption, r).tint(r.error));
     }
 
     // In-progress state while the daemon runs the create (T055). Git now runs on the daemon, which
@@ -144,7 +148,14 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
     if form.candidates.is_empty() {
         // Never an empty control with no explanation (FR-013).
         return col
-            .push(Text::new("This repository has no other branches.", TypeRole::Label, r).muted())
+            .push(
+                Text::new(
+                    "This repository has no other branches.",
+                    TypeRole::Caption,
+                    r,
+                )
+                .muted(),
+            )
             .into();
     }
 
@@ -153,7 +164,7 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
         col = col.push(
             Text::new(
                 "No branches are available to reuse — every branch is already checked out.",
-                TypeRole::Label,
+                TypeRole::Caption,
                 r,
             )
             .muted(),
@@ -180,7 +191,7 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
         col = col.push(
             Text::new(
                 "Remote branches reflect your last fetch. Nothing is downloaded here.",
-                TypeRole::Label,
+                TypeRole::Caption,
                 r,
             )
             .muted(),
@@ -237,7 +248,7 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
                 Text::new(
                     "Its commits will be discarded and the branch recreated from the current \
                      checkout. This cannot be undone from the app.",
-                    TypeRole::Label,
+                    TypeRole::Caption,
                     r
                 )
                 .muted(),
@@ -264,7 +275,7 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
                 Text::new(
                     "Reuse it to continue that work with its history intact, or overwrite it to \
                      start again from the current checkout and discard its commits.",
-                    TypeRole::Label,
+                    TypeRole::Caption,
                     r
                 )
                 .muted(),
@@ -315,7 +326,7 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
                         "Continuing picks that work up where it was left, tracking the remote \
                          branch. Starting fresh instead creates a different branch of the same \
                          name, which will diverge from the remote one.",
-                        TypeRole::Label,
+                        TypeRole::Caption,
                         r
                     )
                     .muted(),
@@ -331,7 +342,7 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
                 Text::new(
                     "A branch can only be checked out in one place at a time. Open that \
                      location to continue there, or choose a different name.",
-                    TypeRole::Label,
+                    TypeRole::Caption,
                     r
                 )
                 .muted(),
@@ -355,7 +366,7 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
                     .tint(r.error),
                     Text::new(
                         "Choose a different name, or remove the existing folder first.",
-                        TypeRole::Label,
+                        TypeRole::Caption,
                         r
                     )
                     .muted(),

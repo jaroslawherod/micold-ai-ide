@@ -10,12 +10,13 @@
 
 use std::marker::PhantomData;
 
-use iced::widget::{button, column, container, row, text};
+use crate::ui::material::{Text, TypeRole};
+use iced::widget::{button, column, container, row};
 use iced::{Alignment, Element, Length};
 
 use crate::app::NoticeLevel;
 use crate::ui::material::style;
-use micold_core::tokens::{spacing, type_scale, Roles};
+use micold_core::tokens::{spacing, Roles};
 
 /// A persistent connection-status banner. Construct with a title + detail, optionally add an action.
 pub struct ConnectionBanner<'a, M> {
@@ -56,9 +57,12 @@ impl<'a, M: 'a + Clone> ConnectionBanner<'a, M> {
 
 impl<'a, M: 'a + Clone> From<ConnectionBanner<'a, M>> for Element<'a, M> {
     fn from(b: ConnectionBanner<'a, M>) -> Self {
+        // Title and detail are both prose — `body_medium` over `body_small`, which is how Material
+        // sets a banner. The detail was `label_medium`: the same 12dp at the label weight, so a
+        // sentence explaining a dropped connection was set in the voice reserved for UI labels.
         let text_block = column![
-            text(b.title).size(type_scale::BODY),
-            text(b.detail).size(type_scale::LABEL),
+            Text::new(b.title, TypeRole::Body, b.roles),
+            Text::new(b.detail, TypeRole::Caption, b.roles),
         ]
         .spacing(spacing::XS)
         .width(Length::Fill);
@@ -69,7 +73,7 @@ impl<'a, M: 'a + Clone> From<ConnectionBanner<'a, M>> for Element<'a, M> {
 
         if let Some((label, on_press)) = b.action {
             line = line.push(
-                button(text(label).size(type_scale::LABEL))
+                button(Text::new(label, TypeRole::Action, b.roles))
                     .on_press(on_press)
                     .style(style::outlined(b.roles)),
             );

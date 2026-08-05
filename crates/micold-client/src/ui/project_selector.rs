@@ -24,8 +24,8 @@ pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Mes
     let header = row![
         Button::with_content(
             row![
-                Glyph::new(Icon::NavigateUp, TypeRole::Body, r).tint(on_surface_tint),
-                Text::new("Up", TypeRole::Body, r),
+                Glyph::new(Icon::NavigateUp, TypeRole::Action, r).tint(on_surface_tint),
+                Text::new("Up", TypeRole::Action, r),
             ]
             .spacing(spacing::XS)
             .align_y(Alignment::Center),
@@ -35,7 +35,7 @@ pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Mes
         .on_press(Message::SelectorNavigatedUp),
         Text::new(
             selector.current_dir.display().to_string(),
-            TypeRole::Label,
+            TypeRole::Caption,
             r
         )
         .muted(),
@@ -87,8 +87,8 @@ pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Mes
     let actions = row![
         Button::with_content(
             row![
-                Glyph::new(Icon::OpenProject, TypeRole::Body, r).tint(on_primary_tint),
-                Text::new("Open this folder", TypeRole::Body, r),
+                Glyph::new(Icon::OpenProject, TypeRole::Action, r).tint(on_primary_tint),
+                Text::new("Open this folder", TypeRole::Action, r),
             ]
             .spacing(spacing::XS)
             .align_y(Alignment::Center),

@@ -7,18 +7,19 @@
 //! reused rather than each feature forking a bespoke chip.
 
 use crate::ui::material::style;
+use crate::ui::material::TypeRole;
 use iced::widget::{container, text};
 use iced::{Element, Padding};
-use micold_core::tokens::{sidebar, spacing, Rgb};
+use micold_core::tokens::{spacing, Rgb};
 use std::marker::PhantomData;
 
 /// A pill-shaped tag chip. Construct with a label + `accent` color (rendered as a dimmed tonal
-/// chip — accent text on a faint accent tint); optionally set the text size (defaults to the
-/// sidebar tag size).
+/// chip — accent text on a faint accent tint); optionally set the type role (defaults to the
+/// sidebar tag role).
 pub struct Tag<'a, M> {
     label: String,
     accent: Rgb,
-    size: f32,
+    role: TypeRole,
     _marker: PhantomData<&'a M>,
 }
 
@@ -28,28 +29,39 @@ impl<'a, M: 'a> Tag<'a, M> {
         Self {
             label: label.into(),
             accent,
-            size: sidebar::TAG,
+            role: TypeRole::SidebarTag,
             _marker: PhantomData,
         }
     }
 
-    /// Override the label text size.
-    pub fn size(mut self, size: f32) -> Self {
-        self.size = size;
+    /// Override the label's type role.
+    ///
+    /// A role rather than a size, so a tag outside the sidebar cannot end up at a size that is not
+    /// in the scale — which is what a bare `f32` here allowed.
+    pub fn role(mut self, role: TypeRole) -> Self {
+        self.role = role;
         self
     }
 }
 
 impl<'a, M: 'a> From<Tag<'a, M>> for Element<'a, M> {
     fn from(t: Tag<'a, M>) -> Self {
-        container(text(t.label).size(t.size))
-            .padding(Padding {
-                top: 0.0,
-                bottom: 0.0,
-                left: spacing::XS,
-                right: spacing::XS,
-            })
-            .style(style::chip(t.accent))
-            .into()
+        // Taken apart rather than built with `Text`, because a tag carries an accent colour instead
+        // of a `Roles` set and `Text` needs one. Still a role, so the weight and line height come
+        // from the scale rather than from the renderer's defaults.
+        container(
+            text(t.label)
+                .size(t.role.size())
+                .font(t.role.font())
+                .line_height(t.role.line_height()),
+        )
+        .padding(Padding {
+            top: 0.0,
+            bottom: 0.0,
+            left: spacing::XS,
+            right: spacing::XS,
+        })
+        .style(style::chip(t.accent))
+        .into()
     }
 }

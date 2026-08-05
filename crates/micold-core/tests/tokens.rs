@@ -8,7 +8,7 @@
 
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{roles, sidebar, type_scale, Rgb, Roles};
+use micold_core::tokens::{roles, typography, Rgb, Roles};
 
 /// Linearize a single 0..=255 sRGB channel per the WCAG definition.
 fn linearize(channel: u8) -> f64 {
@@ -154,11 +154,11 @@ fn type_tag_fills_are_distinct() {
 #[allow(clippy::assertions_on_constants)] // the point is to guard the values; clippy can see the answer
 fn the_sidebar_stays_denser_than_the_text_it_nests_under() {
     assert!(
-        sidebar::NAME < type_scale::BODY,
+        typography::SIDEBAR_NAME.size < typography::BODY_MEDIUM.size,
         "sidebar name {} is not smaller than body {}",
-        sidebar::NAME,
-        type_scale::BODY
+        typography::SIDEBAR_NAME.size,
+        typography::BODY_MEDIUM.size
     );
-    assert!(sidebar::TAG < type_scale::LABEL);
-    assert_eq!(sidebar::SESSION, sidebar::NAME);
+    assert!(typography::SIDEBAR_TAG.size < typography::LABEL_MEDIUM.size);
+    assert_eq!(typography::SIDEBAR_SESSION, typography::SIDEBAR_NAME);
 }

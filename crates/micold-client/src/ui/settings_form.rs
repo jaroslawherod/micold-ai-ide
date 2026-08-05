@@ -61,14 +61,14 @@ pub fn modal<'a>(
     .spacing(spacing::MD);
 
     if let Some((label, diagnostic)) = failure_label_and_diagnostic(env_include_outcome) {
-        fields = fields.push(Text::new(label, TypeRole::Label, r).tint(r.error));
+        fields = fields.push(Text::new(label, TypeRole::Caption, r).tint(r.error));
         if !diagnostic.is_empty() {
-            fields = fields.push(Text::new(diagnostic, TypeRole::Label, r).muted());
+            fields = fields.push(Text::new(diagnostic, TypeRole::Caption, r).muted());
         }
     }
 
     if let Some(error) = &draft.error {
-        fields = fields.push(Text::new(error.clone(), TypeRole::Label, r).tint(r.error));
+        fields = fields.push(Text::new(error.clone(), TypeRole::Caption, r).tint(r.error));
     }
 
     let actions = row![

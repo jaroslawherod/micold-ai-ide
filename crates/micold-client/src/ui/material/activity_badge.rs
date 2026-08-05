@@ -11,11 +11,21 @@
 
 use crate::icons::Icon;
 use crate::ui::icon;
+use crate::ui::material::TypeRole;
 use iced::widget::{container, Space};
 use iced::{Element, Length};
 use micold_core::protocol::messages::ActivitySignal;
-use micold_core::tokens::{sidebar, Roles};
+use micold_core::tokens::Roles;
 use std::marker::PhantomData;
+
+/// The dot's diameter, and the width of the slot reserved for it whether or not one is drawn.
+///
+/// Deliberately the sidebar tag role's size: the badge sits in the same row as the tag chips and
+/// has to line up with them optically, so it follows the role rather than restating a number that
+/// would drift the moment the sidebar's density is re-valued (FR-011).
+fn dot_size() -> f32 {
+    TypeRole::SidebarTag.size()
+}
 
 /// The visual emphasis a signal deserves in the list. `None` from [`emphasis`] means "render nothing"
 /// — the ambient `Unknown` state (H2).
@@ -58,7 +68,7 @@ impl<'a, M: 'a> ActivityBadge<'a, M> {
         Self {
             signal,
             roles,
-            size: sidebar::TAG,
+            size: dot_size(),
             _marker: PhantomData,
         }
     }
@@ -145,7 +155,7 @@ mod tests {
             let element: Element<'_, ()> = ActivityBadge::new(signal.clone(), r).into();
             assert_eq!(
                 element.as_widget().size().width,
-                Length::Fixed(sidebar::TAG),
+                Length::Fixed(dot_size()),
                 "the badge slot for {signal:?} is not the reserved width"
             );
         }

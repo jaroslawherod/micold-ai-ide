@@ -155,7 +155,7 @@ fn notifications<'a>(state: &'a State, r: Roles) -> Element<'a, Message> {
             material::Text::new(notification.message.clone(), material::TypeRole::Body, r)
                 .width(Length::Fill),
             material::Button::with_content(
-                material::Text::new("Dismiss", material::TypeRole::Label, r),
+                material::Text::new("Dismiss", material::TypeRole::Action, r),
                 material::ButtonVariant::Outlined,
                 r
             )

@@ -27,25 +27,22 @@ use crate::ui::material::{self, TypeRole};
 const SWATCH_HEIGHT: f32 = 48.0;
 
 /// Every type role the scale offers, so a change to one is visible against the others.
-const ROLES: &[(&str, TypeRole)] = &[
-    ("Display", TypeRole::Display),
-    ("Headline", TypeRole::Headline),
-    ("Title", TypeRole::Title),
-    ("Body", TypeRole::Body),
-    ("Label", TypeRole::Label),
-    ("SidebarName", TypeRole::SidebarName),
-    ("SidebarTag", TypeRole::SidebarTag),
-    ("SidebarSession", TypeRole::SidebarSession),
-];
+///
+/// Read from `TypeRole::ALL` rather than restated here: a hand-written list is one more place to
+/// forget, and the roles that differ only in *weight* — `Caption` against `Label`, `Body` against
+/// `Action` — are exactly the ones a missing gallery entry would hide.
+fn roles_in_the_scale() -> Vec<(&'static str, TypeRole)> {
+    TypeRole::ALL.iter().map(|r| (r.name(), *r)).collect()
+}
 
 /// `Text` — one instance per type role, plus the muted emphasis.
 pub fn text<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
-    let mut instances: Vec<Element<'a, Message>> = ROLES
-        .iter()
+    let mut instances: Vec<Element<'a, Message>> = roles_in_the_scale()
+        .into_iter()
         .map(|(label, role)| {
             posed(
                 label,
-                material::Text::new(samples::LABEL, *role, roles),
+                material::Text::new(samples::LABEL, role, roles),
                 roles,
             )
         })
@@ -154,9 +151,9 @@ pub fn tag<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message
                 roles,
             ),
             posed(
-                "at the label size",
+                "at the label role",
                 material::Tag::<Message>::new(samples::TAG, roles.tag_fill(ConventionalType::Feat))
-                    .size(TypeRole::Label.size()),
+                    .role(TypeRole::Label),
                 roles,
             ),
         ],

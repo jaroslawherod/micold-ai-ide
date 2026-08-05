@@ -15,10 +15,11 @@ use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
-use iced::widget::{button, column, mouse_area, row, text};
+use crate::ui::material::{Text, TypeRole};
+use iced::widget::{button, column, mouse_area, row};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
-use micold_core::tokens::{spacing, type_scale, Roles};
+use micold_core::tokens::{spacing, Roles};
 
 /// The width of the switcher panel.
 const PANEL_WIDTH: f32 = 260.0;
@@ -66,8 +67,8 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherTrigger<M>> for Element<'a, M> {
     fn from(t: ProjectSwitcherTrigger<M>) -> Self {
         let tint = icon_role(IconSurface::AppBarAction, t.roles);
         let content = row![
-            icon(Icon::OpenProject, type_scale::BODY, tint),
-            text(t.label).size(type_scale::BODY),
+            icon(Icon::OpenProject, TypeRole::Action.size(), tint),
+            Text::new(t.label, TypeRole::Action, t.roles),
         ]
         .spacing(spacing::XS)
         .align_y(Alignment::Center);
@@ -135,18 +136,20 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Option<Surface<'
         for pr in rows {
             let mut content = row![].spacing(spacing::SM).align_y(Alignment::Center);
             if pr.is_active {
-                content = content.push(icon(Icon::ActiveMarker, type_scale::LABEL, active_tint));
+                content = content.push(icon(
+                    Icon::ActiveMarker,
+                    TypeRole::Label.size(),
+                    active_tint,
+                ));
             }
-            content = content.push(text(pr.label).size(type_scale::BODY).width(Length::Fill));
+            content = content.push(Text::new(pr.label, TypeRole::Action, r).width(Length::Fill));
             if pr.running_count > 0 {
                 content = content.push(
-                    text(format!("{} running", pr.running_count))
-                        .size(type_scale::LABEL)
-                        .style(style::muted(r)),
+                    Text::new(format!("{} running", pr.running_count), TypeRole::Label, r).muted(),
                 );
             }
             if !pr.available {
-                content = content.push(icon(Icon::Unavailable, type_scale::LABEL, error_tint));
+                content = content.push(icon(Icon::Unavailable, TypeRole::Label.size(), error_tint));
             }
             let mut entry = button(content)
                 .width(Length::Fill)
@@ -169,8 +172,8 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Option<Surface<'
         list = list.push(
             button(
                 row![
-                    icon(Icon::OpenProject, type_scale::BODY, add_tint),
-                    text("Add project…").size(type_scale::BODY),
+                    icon(Icon::OpenProject, TypeRole::Action.size(), add_tint),
+                    Text::new("Add project…", TypeRole::Action, r),
                 ]
                 .spacing(spacing::SM)
                 .align_y(Alignment::Center),

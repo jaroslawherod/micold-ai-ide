@@ -186,7 +186,10 @@ fn style_references(code: &str) -> usize {
 fn raw_size_references(code: &str) -> usize {
     code.lines()
         .filter(|line| {
-            if line.contains("type_scale::") {
+            // A *named* scale constant is still reaching for the number. `type_scale` was
+            // feature 003's and is gone; `typography` is the Material scale, resolved in exactly
+            // one file that is not a feature module.
+            if line.contains("type_scale::") || line.contains("typography::") {
                 return true;
             }
             match line.split_once(".size(") {

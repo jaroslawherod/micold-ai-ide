@@ -54,6 +54,10 @@ mod text_field;
 mod toggle_chip;
 mod toolbar;
 mod tree_view;
+/// The application's typographic vocabulary, pinned. In-crate for the same reason as the style
+/// snapshots above: `TypeRole` is not reachable from `tests/`.
+#[cfg(test)]
+mod type_role_mapping;
 
 pub use accordion::Accordion;
 pub use activity_badge::ActivityBadge;
@@ -97,9 +101,9 @@ pub fn theme(scheme: micold_core::theme::ColorScheme) -> iced::Theme {
     style::theme(scheme)
 }
 
-use iced::widget::{container, text as text_widget, tooltip};
+use iced::widget::{container, tooltip};
 use iced::Element;
-use micold_core::tokens::{spacing, type_scale, Roles};
+use micold_core::tokens::{spacing, Roles};
 
 /// Re-exported so call sites can pick a `Tooltip::position(...)` without reaching into `iced`
 /// directly.
@@ -139,7 +143,8 @@ impl<'a, M: 'a> Tooltip<'a, M> {
 
 impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
     fn from(t: Tooltip<'a, M>) -> Self {
-        let tip = container(text_widget(t.label).size(type_scale::LABEL))
+        // A tooltip explains, so it is prose at `Caption` — Material's `body_small`.
+        let tip = container(Text::new(t.label, TypeRole::Caption, t.roles))
             .padding(spacing::XS)
             .style(style::surface(t.roles));
         tooltip(t.content, tip, t.position).gap(spacing::XS).into()

@@ -22,8 +22,8 @@ pub fn modal<'a>(scheme: ColorScheme) -> Element<'a, Message> {
     let dialog = crate::ui::material::Surface::new(
         column![
             Text::new(meta.name, TypeRole::Headline, r),
-            Text::new(format!("Version {}", meta.version), TypeRole::Label, r).muted(),
-            Text::new(format!("License: {}", meta.license), TypeRole::Label, r).muted(),
+            Text::new(format!("Version {}", meta.version), TypeRole::Caption, r).muted(),
+            Text::new(format!("License: {}", meta.license), TypeRole::Caption, r).muted(),
             Text::new(meta.description, TypeRole::Body, r),
             Button::filled("Close", r).on_press(Message::AboutClosed),
         ]
