@@ -174,6 +174,14 @@ impl Ripple {
         }
         if self.expand.value() < 1.0 {
             self.expand.on_frame(event, 1.0, expand_over, shell);
+            if self.expand.value() >= 1.0 {
+                // The expansion *arrived* on this frame, and an arrived `Progress` asks for
+                // nothing — so nothing would ask for the frame that starts the fade, and the
+                // ripple would stop here: fully grown, at the full pressed opacity, until some
+                // unrelated event happened to wake the render loop. Aiming the fade rather than
+                // stepping it hands the sequence over without eating a frame of the fade.
+                self.fade.aim(0.0, shell);
+            }
         } else {
             self.fade.on_frame(event, 0.0, fade_over, shell);
         }

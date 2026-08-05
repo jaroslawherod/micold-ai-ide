@@ -206,6 +206,9 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
             FADE,
             r.surface,
         )
+        // Rounded to the panel it covers, or the veil squares off the panel's corners for the
+        // length of the fade.
+        .rounded(super::SurfaceKind::Menu.shape())
         .animate_in();
 
         let (layer, anchor) = match anchor {

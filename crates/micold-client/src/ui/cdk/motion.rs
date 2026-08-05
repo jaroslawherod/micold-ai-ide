@@ -115,6 +115,31 @@ impl Progress {
         self.target = value;
     }
 
+    /// Point the track at `target` without stepping it, and ask for the frame that will.
+    ///
+    /// For a caller that runs two tracks in sequence: the frame on which the first *arrives* is the
+    /// frame on which the second becomes due, and an arrived track asks for nothing — so nobody
+    /// would ask for the frame that starts the second one, and the pair would stop mid-sequence
+    /// until an unrelated event happened to wake the render loop. Handing the second track its
+    /// destination here starts it asking without advancing it, so its full duration is still ahead
+    /// of it.
+    pub fn aim<M>(&mut self, target: f32, shell: &mut Shell<'_, M>) {
+        self.target = target;
+        self.request_frame(shell);
+    }
+
+    /// Ask for another frame while — and only while — this track is still moving.
+    ///
+    /// The single sanctioned frame request for the whole rendering layer (FR-025, SC-008), which is
+    /// why it is one function rather than a line repeated at each call site:
+    /// `tests/idle_requests_no_frames.rs` asserts there is exactly one, and that the guard is on
+    /// the line above it.
+    fn request_frame<M>(&self, shell: &mut Shell<'_, M>) {
+        if self.animating() {
+            shell.request_redraw();
+        }
+    }
+
     /// [`Self::on_event`], with the step stated as the duration of a full `0.0 → 1.0` traversal.
     ///
     /// The form components use: a motion spec says "90ms", not "0.18 per frame".
@@ -183,9 +208,7 @@ impl Progress {
             // tick that nothing has asked for yet.
             self.target = target;
         }
-        if self.animating() {
-            shell.request_redraw();
-        }
+        self.request_frame(shell);
         self.value
     }
 }

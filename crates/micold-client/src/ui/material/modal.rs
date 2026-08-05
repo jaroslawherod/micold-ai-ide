@@ -104,6 +104,11 @@ impl<'a, M: Clone + 'a> From<Modal<'a, M>> for Surface<'a, M> {
         // its centre). Together with the scrim this reads as a Material dialog enter/exit.
         let dialog = super::scale(
             super::fade(dialog, shown, ENTER, roles.surface)
+                // The veil takes the dialog's own corners. Left square it paints four opaque
+                // surface-coloured corners outside the dialog's `EXTRA_LARGE` radius — over the
+                // scrim, where there is nothing for them to hide against — for the whole of every
+                // entrance and exit.
+                .rounded(super::SurfaceKind::Dialog.shape())
                 .exiting_over(EXIT)
                 .animate_in()
                 .restart_on(key),
