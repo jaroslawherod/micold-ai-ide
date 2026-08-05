@@ -142,6 +142,22 @@ pub fn reference_font() -> Font {
     Font::with_name(REFERENCE_FONT_FAMILY)
 }
 
+/// The reference font at a type role's own weight.
+///
+/// Both shipped faces are loaded, and they are told apart by weight — so measuring a role set in
+/// Medium against the Regular face reports a width the application never draws. Takes the CSS
+/// numeric weight the type scale states, so a caller passes `role.weight` rather than deciding.
+pub fn reference_font_at(weight: u16) -> Font {
+    Font {
+        weight: if weight >= 500 {
+            iced::font::Weight::Medium
+        } else {
+            iced::font::Weight::Normal
+        },
+        ..reference_font()
+    }
+}
+
 /// Build the headless renderer: CPU rasteriser, real text shaping, no GPU and no window (FR-001).
 ///
 /// `Some("tiny-skia")` is load-bearing rather than cosmetic. `iced_wgpu`'s `Headless::new` returns
