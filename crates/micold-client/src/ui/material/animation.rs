@@ -358,6 +358,7 @@ pub fn fade<'a, M: Clone + 'a>(
         content: content.into(),
         motion: Motion::new(shown, over),
         backdrop: super::style::color(backdrop),
+        radius: 0.0,
     }
 }
 
@@ -366,10 +367,22 @@ pub struct Fade<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
     content: Element<'a, M, Theme, Renderer>,
     motion: Motion<M>,
     backdrop: Color,
+    /// The corner radius of the content being faded, so the compositing veil matches its shape.
+    radius: f32,
 }
 
 impl<M: Clone> Fade<'_, M> {
     motion_builder!();
+
+    /// Match the corner radius of the thing being covered.
+    ///
+    /// A wrapper draws over its child's `layout.bounds()`, which is a rectangle — so over a rounded
+    /// card the veil has square corners hanging past the shape. Defaults to square, which is right
+    /// for the full-bleed regions this covers in the application; anything rounded says so.
+    pub fn rounded(mut self, radius: f32) -> Self {
+        self.radius = radius;
+        self
+    }
 }
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
@@ -472,6 +485,10 @@ where
             renderer.fill_quad(
                 renderer::Quad {
                     bounds: layout.bounds(),
+                    border: iced::Border {
+                        radius: self.radius.into(),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 iced::Background::Color(Color {
@@ -615,6 +632,7 @@ impl<'a, M: Clone + 'a> From<HoverReveal<'a, M>> for Element<'a, M> {
 pub fn scrim<M: Clone>(color: Color, shown: bool, over: Duration) -> Scrim<M> {
     Scrim {
         color,
+        radius: 0.0,
         motion: Motion::new(shown, over),
     }
 }
@@ -622,11 +640,23 @@ pub fn scrim<M: Clone>(color: Color, shown: bool, over: Duration) -> Scrim<M> {
 /// A dimming layer. Build it with [`scrim`].
 pub struct Scrim<M> {
     color: Color,
+    /// The corner radius of whatever is being dimmed, so the veil matches its shape.
+    radius: f32,
     motion: Motion<M>,
 }
 
 impl<M: Clone> Scrim<M> {
     motion_builder!();
+
+    /// Match the corner radius of the thing being dimmed.
+    ///
+    /// A scrim draws over `layout.bounds()`, which is a rectangle — so over a rounded card the veil
+    /// has square corners hanging past the shape. Defaults to square, which is right for the
+    /// whole-window dim behind a dialog; anything rounded says so.
+    pub fn rounded(mut self, radius: f32) -> Self {
+        self.radius = radius;
+        self
+    }
 }
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Scrim<Message>
@@ -692,6 +722,10 @@ where
         renderer.fill_quad(
             renderer::Quad {
                 bounds: layout.bounds(),
+                border: iced::Border {
+                    radius: self.radius.into(),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             iced::Background::Color(Color {
