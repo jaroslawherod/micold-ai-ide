@@ -283,17 +283,45 @@ const PAIRS: &[(&str, &str, &str)] = &[
     ("brnchclnp", "ci/abc-204-branch-cleanup", "subsequence"),
     ("passwrd-reset", "fix/abc-101-password-reset", "single-edit"),
     ("oauht-callback", "refactor/oauth-callback", "single-edit"),
-    ("reportng-dashboard", "test/ops-9-reporting-dashboard", "single-edit"),
-    ("keyboad-shortcuts", "docs/keyboard-shortcuts", "single-edit"),
-    ("scrollbak", "test/dev-77-terminal-scrollback", "single-edit"),
-    ("hearbeat-interval", "docs/heartbeat-interval", "single-edit"),
+    (
+        "reportng-dashboard",
+        "test/ops-9-reporting-dashboard",
+        "single-edit",
+    ),
+    (
+        "keyboad-shortcuts",
+        "docs/keyboard-shortcuts",
+        "single-edit",
+    ),
+    (
+        "scrollbak",
+        "test/dev-77-terminal-scrollback",
+        "single-edit",
+    ),
+    (
+        "hearbeat-interval",
+        "docs/heartbeat-interval",
+        "single-edit",
+    ),
     ("paragrph-cache", "build/paragraph-cache", "single-edit"),
-    ("elevatoin-levels", "docs/dev-312-elevation-levels", "single-edit"),
-    ("notifcation-banner", "build/ops-9-notification-banner", "single-edit"),
+    (
+        "elevatoin-levels",
+        "docs/dev-312-elevation-levels",
+        "single-edit",
+    ),
+    (
+        "notifcation-banner",
+        "build/ops-9-notification-banner",
+        "single-edit",
+    ),
     ("projct-switcher", "feat/project-switcher", "single-edit"),
     ("changlog-viewer", "ci/changelog-viewer", "single-edit"),
     ("snapsht-tests", "fix/snapshot-tests", "single-edit"),
-    ("dependecy-audit", "refactor/dev-77-dependency-audit", "single-edit"),
+    (
+        "dependecy-audit",
+        "refactor/dev-77-dependency-audit",
+        "single-edit",
+    ),
     ("worktre-prune", "build/worktree-prune", "single-edit"),
 ];
 
@@ -311,8 +339,13 @@ fn the_intended_branch_reaches_the_top_five_for_at_least_the_required_share_of_s
     for (query, intended, tier) in PAIRS {
         match position(query, intended) {
             Some(at) if at < TOP_N => {}
-            Some(at) => missed.push(format!("{query:?} → {intended:?} ({tier}) ranked {}", at + 1)),
-            None => missed.push(format!("{query:?} → {intended:?} ({tier}) did not match at all")),
+            Some(at) => missed.push(format!(
+                "{query:?} → {intended:?} ({tier}) ranked {}",
+                at + 1
+            )),
+            None => missed.push(format!(
+                "{query:?} → {intended:?} ({tier}) did not match at all"
+            )),
         }
     }
 
@@ -410,6 +443,9 @@ fn every_pair_names_a_branch_that_is_actually_in_the_corpus() {
 fn the_pairs_cover_every_tier() {
     for tier in ["literal", "subsequence", "single-edit"] {
         let n = PAIRS.iter().filter(|(_, _, t)| *t == tier).count();
-        assert!(n >= 10, "only {n} {tier} pairs; the tier needs enough to move the rate");
+        assert!(
+            n >= 10,
+            "only {n} {tier} pairs; the tier needs enough to move the rate"
+        );
     }
 }

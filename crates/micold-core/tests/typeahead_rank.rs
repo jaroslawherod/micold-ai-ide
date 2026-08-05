@@ -21,8 +21,14 @@ fn ranked<'a>(names: &[&'a str], query: &str) -> Vec<&'a str> {
 #[test]
 fn an_empty_query_returns_every_item_in_input_order() {
     let names = ["feat/login", "chore/deps", "docs/api"];
-    assert_eq!(ranked(&names, ""), vec!["feat/login", "chore/deps", "docs/api"]);
-    assert_eq!(ranked(&names, "   "), vec!["feat/login", "chore/deps", "docs/api"]);
+    assert_eq!(
+        ranked(&names, ""),
+        vec!["feat/login", "chore/deps", "docs/api"]
+    );
+    assert_eq!(
+        ranked(&names, "   "),
+        vec!["feat/login", "chore/deps", "docs/api"]
+    );
 }
 
 /// Non-matching items are absent, not merely last (FR-004).
@@ -37,7 +43,10 @@ fn items_that_do_not_match_are_left_out() {
 #[test]
 fn an_earlier_match_position_ranks_higher() {
     let names = ["feat/dialog-cleanup", "feat/log"];
-    assert_eq!(ranked(&names, "log"), vec!["feat/log", "feat/dialog-cleanup"]);
+    assert_eq!(
+        ranked(&names, "log"),
+        vec!["feat/log", "feat/dialog-cleanup"]
+    );
 }
 
 /// Q3.2 — the rule that keeps approximate matching from being a nuisance: a name containing the
@@ -49,7 +58,11 @@ fn a_literal_match_precedes_an_approximate_one_regardless_of_position() {
     let names = ["feat/reporting", "chore/repot"];
     let out = rank(&names, |n| *n, &Query::new("repot"));
 
-    assert_eq!(out.len(), 2, "both should match: one literally, one by one edit");
+    assert_eq!(
+        out.len(),
+        2,
+        "both should match: one literally, one by one edit"
+    );
     assert_eq!(names[out[0].0], "chore/repot");
     assert_eq!(out[0].1.kind, MatchKind::Literal);
     assert_eq!(names[out[1].0], "feat/reporting");
@@ -94,12 +107,21 @@ fn results_are_indices_into_the_callers_own_slice() {
         payload: u32,
     }
     let rows = vec![
-        Row { label: "chore/deps".into(), payload: 7 },
-        Row { label: "feat/login".into(), payload: 42 },
+        Row {
+            label: "chore/deps".into(),
+            payload: 7,
+        },
+        Row {
+            label: "feat/login".into(),
+            payload: 42,
+        },
     ];
 
     let out = rank(&rows, |r| r.label.as_str(), &Query::new("login"));
 
     assert_eq!(out.len(), 1);
-    assert_eq!(rows[out[0].0].payload, 42, "the index must address the caller's own item");
+    assert_eq!(
+        rows[out[0].0].payload, 42,
+        "the index must address the caller's own item"
+    );
 }

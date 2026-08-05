@@ -14,7 +14,7 @@
 use std::path::PathBuf;
 
 use micold_client::app::{
-    ClosingOverlay, Overlay, RenameDraft, SettingsDraft, WorktreeForm, WorktreeRenameDraft,
+    ClosingOverlay, Overlay, RenameDraft, SettingsDraft, WorktreeRenameDraft,
 };
 use micold_core::selector::Selector;
 
@@ -38,7 +38,7 @@ fn every_snapshot() -> Vec<(ClosingOverlay, Overlay)> {
             Overlay::RenameProject,
         ),
         (
-            ClosingOverlay::Worktree(WorktreeForm::default(), None),
+            ClosingOverlay::Worktree(Box::default(), None),
             Overlay::AddWorktree,
         ),
         (

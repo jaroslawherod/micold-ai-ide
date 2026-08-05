@@ -135,7 +135,11 @@ fn an_unrelated_name_does_not_match() {
 fn a_literal_match_is_never_reported_as_an_approximate_one() {
     let m = hit("feat/log", "log");
     assert_eq!(m.kind, MatchKind::Literal);
-    assert_eq!(m.spans, vec![5..8], "a literal hit emphasises one run, not three characters");
+    assert_eq!(
+        m.spans,
+        vec![5..8],
+        "a literal hit emphasises one run, not three characters"
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -294,5 +298,8 @@ fn a_short_search_whose_ends_disagree_is_not_read_as_a_typo() {
     // Still an abbreviation, not a one-substitution match of `/rep` (contract Q2.2.4, Q2.3.1).
     assert_eq!(hit("feat/reporting", "frep").kind, MatchKind::Subsequence);
     // And a two-character window still cannot answer a three-character search.
-    assert_eq!(hit("release/local-login", "llo").kind, MatchKind::Subsequence);
+    assert_eq!(
+        hit("release/local-login", "llo").kind,
+        MatchKind::Subsequence
+    );
 }

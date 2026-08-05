@@ -68,7 +68,12 @@ impl<'a, M: Clone + 'a, Theme, Renderer> Typeahead<'a, M, Theme, Renderer> {
 
     /// Where the keyboard is, how many rows it can reach, and whether the one it is on can be
     /// chosen — the three inputs the keyboard rule reads.
-    pub fn keyboard(mut self, highlight: Option<usize>, rows: usize, highlighted_enabled: bool) -> Self {
+    pub fn keyboard(
+        mut self,
+        highlight: Option<usize>,
+        rows: usize,
+        highlighted_enabled: bool,
+    ) -> Self {
         self.highlight = highlight;
         self.rows = rows;
         self.highlighted_enabled = highlighted_enabled;
@@ -121,7 +126,12 @@ where
 
     /// Only the field is laid out. The menu never occupies space in the form — that is the whole
     /// point of anchoring it in an overlay (FR-001a).
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &mut self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         self.field
             .as_widget_mut()
             .layout(&mut tree.children[0], renderer, limits)
@@ -172,9 +182,15 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        self.field
-            .as_widget()
-            .draw(&tree.children[0], renderer, theme, style, layout, cursor, viewport);
+        self.field.as_widget().draw(
+            &tree.children[0],
+            renderer,
+            theme,
+            style,
+            layout,
+            cursor,
+            viewport,
+        );
     }
 
     fn mouse_interaction(
@@ -185,9 +201,13 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.field
-            .as_widget()
-            .mouse_interaction(&tree.children[0], layout, cursor, viewport, renderer)
+        self.field.as_widget().mouse_interaction(
+            &tree.children[0],
+            layout,
+            cursor,
+            viewport,
+            renderer,
+        )
     }
 
     fn operate(
@@ -420,12 +440,7 @@ where
         )
     }
 
-    fn operate(
-        &mut self,
-        layout: Layout<'_>,
-        renderer: &Renderer,
-        operation: &mut dyn Operation,
-    ) {
+    fn operate(&mut self, layout: Layout<'_>, renderer: &Renderer, operation: &mut dyn Operation) {
         self.content
             .as_widget_mut()
             .operate(self.state, layout, renderer, operation);

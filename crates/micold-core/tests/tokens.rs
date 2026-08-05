@@ -59,14 +59,14 @@ fn pairs(r: &Roles) -> Vec<(&'static str, Rgb, Rgb)> {
     // fill. Both are checked, in both schemes, because "the emphasis is legible" is a promise the
     // feature makes and nothing else here would catch a palette change that broke it.
     out.push(("emphasis/menu_surface", r.primary, r.surface));
-    out.push((
-        "emphasis/selected_row",
-        r.primary,
-        r.secondary_container,
-    ));
+    out.push(("emphasis/selected_row", r.primary, r.secondary_container));
     // An unavailable row is muted, and muted is not the same as unreadable: its reason has to stay
     // readable or FR-012 loses the point of listing it at all.
-    out.push(("unavailable_row/menu_surface", r.on_surface_variant, r.surface));
+    out.push((
+        "unavailable_row/menu_surface",
+        r.on_surface_variant,
+        r.surface,
+    ));
     out
 }
 

@@ -17,24 +17,44 @@ fn mid() -> (Option<usize>, usize, bool) {
 #[test]
 fn the_arrows_move_the_highlight() {
     let (h, n, ok) = mid();
-    assert_eq!(intent_for(Key::Down, h, n, ok), Some(Intent::Move(Direction::Next)));
-    assert_eq!(intent_for(Key::Up, h, n, ok), Some(Intent::Move(Direction::Prev)));
+    assert_eq!(
+        intent_for(Key::Down, h, n, ok),
+        Some(Intent::Move(Direction::Next))
+    );
+    assert_eq!(
+        intent_for(Key::Up, h, n, ok),
+        Some(Intent::Move(Direction::Prev))
+    );
 }
 
 /// Q4b.1 — the end of the list is the end. Wrapping around is disorienting in a list whose length
 /// changes on every keystroke: the developer would have no idea where they had arrived.
 #[test]
 fn moving_stops_at_the_ends_rather_than_wrapping() {
-    assert_eq!(intent_for(Key::Down, Some(4), 5, true), None, "already at the last row");
-    assert_eq!(intent_for(Key::Up, Some(0), 5, true), None, "already at the first row");
+    assert_eq!(
+        intent_for(Key::Down, Some(4), 5, true),
+        None,
+        "already at the last row"
+    );
+    assert_eq!(
+        intent_for(Key::Up, Some(0), 5, true),
+        None,
+        "already at the first row"
+    );
 }
 
 /// With nothing highlighted yet, the first press has somewhere to go — that is how the keyboard
 /// enters a list it has not touched.
 #[test]
 fn moving_with_no_highlight_enters_the_list() {
-    assert_eq!(intent_for(Key::Down, None, 5, false), Some(Intent::Move(Direction::Next)));
-    assert_eq!(intent_for(Key::Up, None, 5, false), Some(Intent::Move(Direction::Prev)));
+    assert_eq!(
+        intent_for(Key::Down, None, 5, false),
+        Some(Intent::Move(Direction::Next))
+    );
+    assert_eq!(
+        intent_for(Key::Up, None, 5, false),
+        Some(Intent::Move(Direction::Prev))
+    );
 }
 
 /// Q4b.4 — an empty list has nowhere to move to. Returning a move here would leave the caller
@@ -74,8 +94,14 @@ fn enter_with_no_highlight_does_nothing() {
 /// Escape closes the list, whatever the highlight is doing.
 #[test]
 fn escape_dismisses() {
-    assert_eq!(intent_for(Key::Escape, Some(2), 5, true), Some(Intent::Dismiss));
-    assert_eq!(intent_for(Key::Escape, None, 0, false), Some(Intent::Dismiss));
+    assert_eq!(
+        intent_for(Key::Escape, Some(2), 5, true),
+        Some(Intent::Dismiss)
+    );
+    assert_eq!(
+        intent_for(Key::Escape, None, 0, false),
+        Some(Intent::Dismiss)
+    );
 }
 
 /// Q4b.5 — everything else belongs to the field. This is what "the developer never has to leave

@@ -22,6 +22,14 @@ const RETRY: Range<usize> = 28..33;
 /// Roughly the width a result row leaves a branch name inside the add-worktree dialog.
 const ROW_WIDTH: f32 = 180.0;
 
+/// One span, as a slice.
+///
+/// Spelled out rather than written `&[0..4]`, which reads ambiguously enough that the linter asks
+/// whether a one-element array of ranges or the range's own contents was meant.
+fn one(span: Range<usize>) -> [Range<usize>; 1] {
+    [span]
+}
+
 /// The width `content` really shapes to at the body type size.
 fn shaped(content: &str) -> f32 {
     use iced::advanced::graphics::text::Paragraph;
@@ -86,7 +94,7 @@ fn real_shaping_uses_the_room_it_has() {
 /// A name that fits must be left exactly as it is: no ellipsis, no rebasing, nothing.
 #[test]
 fn real_shaping_leaves_a_short_name_untouched() {
-    let (out, spans) = fit_around("main", &[0..4], ROW_WIDTH, shaped);
+    let (out, spans) = fit_around("main", &one(0..4), ROW_WIDTH, shaped);
 
     assert_eq!(out, "main");
     assert_eq!(spans, vec![0..4]);

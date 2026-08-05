@@ -954,7 +954,10 @@ fn a_blocked_candidate_cannot_even_become_the_selection() {
     assert!(!form(&state).can_submit());
 
     state.update(Message::AddWorktreeBranchSelected(candidate("feat/free")));
-    assert_eq!(form(&state).selected_branch.as_ref().unwrap().name, "feat/free");
+    assert_eq!(
+        form(&state).selected_branch.as_ref().unwrap().name,
+        "feat/free"
+    );
     assert!(form(&state).can_submit());
 }
 

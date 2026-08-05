@@ -134,9 +134,12 @@ fn the_highlight_never_dangles_when_the_results_shrink() {
 
     let f = form(&state);
     assert_eq!(f.branch_matches.len(), 2);
-    match f.branch_highlight {
-        Some(i) => assert!(i < 2, "highlight {i} points past the {} rows left", f.branch_matches.len()),
-        None => {}
+    if let Some(i) = f.branch_highlight {
+        assert!(
+            i < 2,
+            "highlight {i} points past the {} rows left",
+            f.branch_matches.len()
+        );
     }
 }
 
@@ -147,7 +150,11 @@ fn moving_the_highlight_stops_at_both_ends() {
     for _ in 0..10 {
         state.update(Message::AddWorktreeBranchHighlightMoved(Direction::Next));
     }
-    assert_eq!(form(&state).branch_highlight, Some(3), "four rows, so the last is index 3");
+    assert_eq!(
+        form(&state).branch_highlight,
+        Some(3),
+        "four rows, so the last is index 3"
+    );
 
     for _ in 0..10 {
         state.update(Message::AddWorktreeBranchHighlightMoved(Direction::Prev));
@@ -161,10 +168,16 @@ fn the_selection_survives_the_query_changing_and_being_cleared() {
     let mut state = picker();
     type_(&mut state, "log");
     state.update(Message::AddWorktreeBranchSelected(candidate("feat/login")));
-    assert_eq!(form(&state).selected_branch.as_ref().unwrap().name, "feat/login");
+    assert_eq!(
+        form(&state).selected_branch.as_ref().unwrap().name,
+        "feat/login"
+    );
 
     type_(&mut state, "zzq");
-    assert!(form(&state).branch_matches.is_empty(), "nothing matches now");
+    assert!(
+        form(&state).branch_matches.is_empty(),
+        "nothing matches now"
+    );
     assert_eq!(
         form(&state).selected_branch.as_ref().unwrap().name,
         "feat/login",
@@ -172,7 +185,10 @@ fn the_selection_survives_the_query_changing_and_being_cleared() {
     );
 
     type_(&mut state, "");
-    assert_eq!(form(&state).selected_branch.as_ref().unwrap().name, "feat/login");
+    assert_eq!(
+        form(&state).selected_branch.as_ref().unwrap().name,
+        "feat/login"
+    );
 }
 
 /// FR-014a — the field holds the search text and nothing else. Picking a branch must not write its
@@ -269,9 +285,15 @@ fn a_query_matching_nothing_leaves_the_list_open_and_the_text_editable() {
     type_(&mut state, "zzq");
 
     let f = form(&state);
-    assert!(f.branch_list_open, "the list stays open to say that nothing matched");
+    assert!(
+        f.branch_list_open,
+        "the list stays open to say that nothing matched"
+    );
     assert!(f.branch_matches.is_empty());
-    assert_eq!(f.branch_query, "zzq", "the text stays put so it can be corrected");
+    assert_eq!(
+        f.branch_query, "zzq",
+        "the text stays put so it can be corrected"
+    );
 }
 
 // --- T016: a blocked branch cannot be chosen --------------------------------------------------
@@ -296,8 +318,14 @@ fn picking_a_blocked_branch_does_nothing_at_all() {
     state.update(Message::AddWorktreeBranchSelected(blocked("main")));
 
     let f = form(&state);
-    assert!(f.selected_branch.is_none(), "a blocked branch must not become the selection");
-    assert!(f.branch_list_open, "and the list must not close on a press that did nothing");
+    assert!(
+        f.selected_branch.is_none(),
+        "a blocked branch must not become the selection"
+    );
+    assert!(
+        f.branch_list_open,
+        "and the list must not close on a press that did nothing"
+    );
 }
 
 /// An earlier, legitimate choice is not disturbed by pressing an unavailable row.
@@ -308,7 +336,10 @@ fn a_blocked_press_does_not_disturb_an_existing_selection() {
 
     state.update(Message::AddWorktreeBranchSelected(blocked("main")));
 
-    assert_eq!(form(&state).selected_branch.as_ref().unwrap().name, "feat/login");
+    assert_eq!(
+        form(&state).selected_branch.as_ref().unwrap().name,
+        "feat/login"
+    );
 }
 
 /// The guard at the point of action stays, unreachable through the picker but still the invariant's
@@ -321,7 +352,10 @@ fn the_submit_guard_still_refuses_a_blocked_selection() {
         selected_branch: Some(blocked("main")),
         ..WorktreeForm::default()
     };
-    assert!(!form.can_submit(), "the last line of defence must still hold");
+    assert!(
+        !form.can_submit(),
+        "the last line of defence must still hold"
+    );
 
     form.selected_branch = Some(candidate("feat/free"));
     assert!(form.can_submit());
@@ -353,7 +387,9 @@ fn picking_an_available_branch_from_the_results_behaves_as_it_always_did() {
 #[test]
 fn the_preview_follows_the_selection_not_the_search_text() {
     let mut state = picker();
-    state.update(Message::AddWorktreeBranchSelected(candidate("release/v1.2")));
+    state.update(Message::AddWorktreeBranchSelected(candidate(
+        "release/v1.2",
+    )));
     type_(&mut state, "log");
 
     let derived = form(&state).preview().unwrap();
@@ -388,7 +424,10 @@ fn a_no_match_query_leaves_an_existing_selection_alone() {
     let f = form(&state);
     assert!(f.branch_matches.is_empty());
     assert_eq!(f.selected_branch.as_ref().unwrap().name, "feat/login");
-    assert!(f.can_submit(), "the form is still submittable on the branch already chosen");
+    assert!(
+        f.can_submit(),
+        "the form is still submittable on the branch already chosen"
+    );
 }
 
 /// FR-001b / US1/AC1 — the list is open from the outset, before anything is typed, so the branches

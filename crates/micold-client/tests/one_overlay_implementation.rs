@@ -345,7 +345,9 @@ fn a_helper_ending_in_the_widget_name_is_not_a_use_of_it() {
 /// whole file exists to avoid.
 #[test]
 fn the_overlay_detector_separates_building_one_from_forwarding_one() {
-    assert!(constructs_an_overlay("Some(overlay::Element::new(Box::new(Menu {"));
+    assert!(constructs_an_overlay(
+        "Some(overlay::Element::new(Box::new(Menu {"
+    ));
 
     // Four wrapper components in `material/` do exactly this, and none of them is a floating
     // surface: they hand their child's overlay upward so it is not lost inside the wrapper.

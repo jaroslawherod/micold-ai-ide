@@ -11,8 +11,8 @@
 //! stale index is the shape a reordered catalogue would take.
 
 use micold_client::showcase::state::{Floating, Message, Showcase};
-use micold_core::typeahead::Direction;
 use micold_core::theme::ColorScheme;
+use micold_core::typeahead::Direction;
 
 /// A gallery with a handful of entries — enough that "only entry `i` moved" means something.
 const ENTRIES: usize = 4;
@@ -242,16 +242,28 @@ fn typing_into_the_typeahead_narrows_the_sample_rows() {
 #[test]
 fn the_typeahead_highlight_moves_and_stops_at_the_ends() {
     let mut s = showcase();
-    assert_eq!(s.typeahead_highlight(), None, "nothing is highlighted at rest");
+    assert_eq!(
+        s.typeahead_highlight(),
+        None,
+        "nothing is highlighted at rest"
+    );
 
     s.update(Message::TypeaheadHighlightMoved(Direction::Next));
-    assert_eq!(s.typeahead_highlight(), Some(0), "the first move enters the list");
+    assert_eq!(
+        s.typeahead_highlight(),
+        Some(0),
+        "the first move enters the list"
+    );
 
     let last = s.typeahead_rows().len() - 1;
     for _ in 0..s.typeahead_rows().len() + 3 {
         s.update(Message::TypeaheadHighlightMoved(Direction::Next));
     }
-    assert_eq!(s.typeahead_highlight(), Some(last), "it stops at the end rather than wrapping");
+    assert_eq!(
+        s.typeahead_highlight(),
+        Some(last),
+        "it stops at the end rather than wrapping"
+    );
 
     for _ in 0..last + 3 {
         s.update(Message::TypeaheadHighlightMoved(Direction::Prev));
@@ -272,13 +284,12 @@ fn narrowing_the_typeahead_reseats_a_dangling_highlight() {
     s.update(Message::TypeaheadQueryChanged("log".into()));
 
     let highlight = s.typeahead_highlight();
-    match highlight {
-        Some(i) => assert!(
+    if let Some(i) = highlight {
+        assert!(
             i < s.typeahead_rows().len(),
             "the highlight was left at {was} and now points past the {} remaining rows",
             s.typeahead_rows().len()
-        ),
-        None => {}
+        );
     }
 }
 
@@ -294,7 +305,10 @@ fn picking_a_typeahead_row_registers_the_selection() {
 
     // And a pick is the only thing that writes it: typing does not clear it.
     s.update(Message::TypeaheadQueryChanged("log".into()));
-    assert!(s.typeahead_selected().is_some(), "the choice survives the search");
+    assert!(
+        s.typeahead_selected().is_some(),
+        "the choice survives the search"
+    );
     assert_eq!(
         s.typeahead_rows()[s.typeahead_selected().unwrap()].label,
         chosen,
@@ -322,7 +336,10 @@ fn the_typeahead_marker_stays_on_the_row_that_was_chosen() {
 
     // Widen again and it comes back on the same row.
     s.update(Message::TypeaheadQueryChanged(String::new()));
-    assert_eq!(s.typeahead_rows()[s.typeahead_selected().unwrap()].label, chosen);
+    assert_eq!(
+        s.typeahead_rows()[s.typeahead_selected().unwrap()].label,
+        chosen
+    );
 }
 
 /// Everything about the showcase a message could change.

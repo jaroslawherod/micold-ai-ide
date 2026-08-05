@@ -18,7 +18,9 @@ const BUDGET_MS: f64 = 16.0;
 
 /// A repository far larger than most: 500 branches, with realistic shapes and lengths.
 fn corpus() -> Vec<String> {
-    let types = ["feat", "fix", "chore", "docs", "refactor", "test", "perf", "ci"];
+    let types = [
+        "feat", "fix", "chore", "docs", "refactor", "test", "perf", "ci",
+    ];
     let words = [
         "login",
         "logout",
@@ -106,9 +108,16 @@ fn ranking_a_long_query_fits_in_a_frame() {
 fn the_corpus_is_the_size_and_shape_it_claims() {
     let corpus = corpus();
     assert_eq!(corpus.len(), 500);
-    assert!(corpus.iter().all(|n| n.len() >= 20), "names should be realistically long");
     assert!(
-        corpus.iter().collect::<std::collections::HashSet<_>>().len() == 500,
+        corpus.iter().all(|n| n.len() >= 20),
+        "names should be realistically long"
+    );
+    assert!(
+        corpus
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            == 500,
         "duplicate names would make the ranking work smaller than it looks"
     );
 }
@@ -145,7 +154,10 @@ fn the_worst_case_query_really_does_reach_every_tier() {
 
     let corpus = corpus();
     let query = Query::new("rtaeiov");
-    assert!(query.char_len() >= 5, "below the single-edit floor, one tier never runs at all");
+    assert!(
+        query.char_len() >= 5,
+        "below the single-edit floor, one tier never runs at all"
+    );
 
     let kinds: Vec<MatchKind> = corpus
         .iter()
@@ -158,7 +170,7 @@ fn the_worst_case_query_really_does_reach_every_tier() {
         "a literal hit would answer on the first tier and skip the expensive two"
     );
     assert!(
-        kinds.iter().any(|k| *k == MatchKind::Subsequence),
+        kinds.contains(&MatchKind::Subsequence),
         "no candidate reached the subsequence tier, so the scan is bailing out early and the \
          measurement is of something cheaper than the worst case"
     );

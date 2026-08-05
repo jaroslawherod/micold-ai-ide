@@ -16,11 +16,11 @@ use micold_core::naming::{
 };
 use micold_core::project::{canonicalize_best_effort, Availability, FolderEntry, RenameError};
 use micold_core::selector::Selector;
-use micold_core::typeahead::{move_highlight, rank, Direction, Match, Query};
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
 use micold_core::theme::{
     observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference,
 };
+use micold_core::typeahead::{move_highlight, rank, Direction, Match, Query};
 use micold_core::worktree::{
     BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree, WorktreeStatus,
 };
@@ -2312,7 +2312,11 @@ pub enum ClosingOverlay {
     About,
     Selector(Selector),
     Rename(RenameDraft),
-    Worktree(WorktreeForm, Option<String>),
+    /// Boxed, unlike its siblings: `WorktreeForm` carries the branch list, the search text and the
+    /// match results, which makes it several times the size of every other variant — and an enum is
+    /// as large as its largest arm, so an unboxed one would make *every* closing overlay pay for
+    /// this one.
+    Worktree(Box<WorktreeForm>, Option<String>),
     Settings(SettingsDraft),
     ConfirmDelete(String),
     WorktreeRename(WorktreeRenameDraft),

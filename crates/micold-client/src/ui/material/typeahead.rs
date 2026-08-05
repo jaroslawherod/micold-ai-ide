@@ -179,7 +179,6 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
         self.on_dismiss = Some(message);
         self
     }
-
 }
 
 /// One result row.
@@ -250,10 +249,7 @@ fn menu_element<'a, M: Clone + 'a>(
     for (index, item) in rows.into_iter().enumerate() {
         // A disabled row is present and readable but has nowhere to send a press, so it renders
         // unpressable rather than carrying a flag that could disagree with one (FR-012a).
-        let press = item
-            .enabled
-            .then(|| on_pick.map(|f| f(index)))
-            .flatten();
+        let press = item.enabled.then(|| on_pick.map(|f| f(index))).flatten();
         list = list.push(row_element(
             item,
             highlighted == Some(index),
@@ -337,8 +333,7 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
             .spacing(spacing::XS)
             .align_y(alignment::Vertical::Center);
         if !query.is_empty() {
-            field_row =
-                field_row.push(super::IconButton::new(Icon::Close, r).on_press(cleared));
+            field_row = field_row.push(super::IconButton::new(Icon::Close, r).on_press(cleared));
         }
         let field: Element<'a, M> = field_row.into();
 
@@ -382,7 +377,9 @@ impl Text {
                 })
                 .into()
         } else {
-            Space::new().width(Length::Fixed(TypeRole::Body.size() * 0.6)).into()
+            Space::new()
+                .width(Length::Fixed(TypeRole::Body.size() * 0.6))
+                .into()
         }
     }
 }
@@ -405,7 +402,13 @@ struct EmphasisedLabel<M> {
 }
 
 impl<M> EmphasisedLabel<M> {
-    fn new(content: String, spans: Vec<Range<usize>>, role: TypeRole, base: Rgb, accent: Rgb) -> Self {
+    fn new(
+        content: String,
+        spans: Vec<Range<usize>>,
+        role: TypeRole,
+        base: Rgb,
+        accent: Rgb,
+    ) -> Self {
         Self {
             content,
             spans,
@@ -513,7 +516,12 @@ where
         Size::new(Length::Fill, Length::Shrink)
     }
 
-    fn layout(&mut self, tree: &mut Tree, _renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &mut self,
+        tree: &mut Tree,
+        _renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
         let available = limits.max().width;
 
@@ -623,11 +631,19 @@ where
 mod tests {
     use super::*;
 
+    /// One span, as a slice.
+    ///
+    /// Spelled out rather than written `&[5..8]`, which reads ambiguously enough that the linter
+    /// asks whether a one-element array of ranges or the range's own contents was meant.
+    fn one(span: Range<usize>) -> [Range<usize>; 1] {
+        [span]
+    }
+
     /// The split has to cover the whole label with no gaps and no overlaps, or the row silently
     /// loses characters.
     #[test]
     fn segments_cover_the_whole_label_in_order() {
-        let out = segments("feat/login", &[5..8]);
+        let out = segments("feat/login", &one(5..8));
         assert_eq!(
             out,
             vec![
@@ -662,7 +678,7 @@ mod tests {
     /// A span pointing outside the label degrades to no emphasis rather than panicking.
     #[test]
     fn a_malformed_span_is_ignored() {
-        let out = segments("main", &[2..99]);
+        let out = segments("main", &one(2..99));
         let rejoined: String = out.iter().map(|(s, _)| s.as_str()).collect();
         assert_eq!(rejoined, "main");
     }

@@ -13,6 +13,14 @@
 use micold_core::typeahead::fit_around;
 use std::ops::Range;
 
+/// One span, as a slice.
+///
+/// Spelled out rather than written `&[5..8]`, which reads ambiguously enough that the linter asks
+/// whether a one-element array of ranges or the range's own contents was meant.
+fn one(span: Range<usize>) -> [Range<usize>; 1] {
+    [span]
+}
+
 /// One unit per character.
 fn mono(s: &str) -> f32 {
     s.chars().count() as f32
@@ -33,7 +41,7 @@ const JIRA: Range<usize> = 5..9;
 /// Q4.3 — a name that fits is not to be touched. No ellipsis, no rebasing, nothing.
 #[test]
 fn a_name_that_fits_comes_back_untouched() {
-    let (out, spans) = fit_around("feat/login", &[5..8], 20.0, mono);
+    let (out, spans) = fit_around("feat/login", &one(5..8), 20.0, mono);
 
     assert_eq!(out, "feat/login");
     assert_eq!(spans, vec![5..8]);
@@ -42,7 +50,7 @@ fn a_name_that_fits_comes_back_untouched() {
 /// Exactly filling the space is fitting, not overflowing.
 #[test]
 fn a_name_that_exactly_fits_comes_back_untouched() {
-    let (out, _) = fit_around("feat/login", &[5..8], 10.0, mono);
+    let (out, _) = fit_around("feat/login", &one(5..8), 10.0, mono);
     assert_eq!(out, "feat/login");
 }
 
@@ -52,9 +60,20 @@ fn a_name_that_exactly_fits_comes_back_untouched() {
 fn a_match_near_the_end_keeps_its_text_and_cuts_the_front() {
     let (out, spans) = fit_around(LONG, &[RETRY], 20.0, mono);
 
-    assert!(out.starts_with(ELLIPSIS), "expected a leading ellipsis, got {out:?}");
-    assert_eq!(emphasised(&out, &spans), "retry", "the match must survive the cut");
-    assert!(mono(&out) <= 20.0, "{out:?} is {} wide, over the 20 available", mono(&out));
+    assert!(
+        out.starts_with(ELLIPSIS),
+        "expected a leading ellipsis, got {out:?}"
+    );
+    assert_eq!(
+        emphasised(&out, &spans),
+        "retry",
+        "the match must survive the cut"
+    );
+    assert!(
+        mono(&out) <= 20.0,
+        "{out:?} is {} wide, over the 20 available",
+        mono(&out)
+    );
 }
 
 /// Q4.2 — and the mirror image: a match near the start cuts the tail instead.
@@ -62,8 +81,14 @@ fn a_match_near_the_end_keeps_its_text_and_cuts_the_front() {
 fn a_match_near_the_start_keeps_its_text_and_cuts_the_tail() {
     let (out, spans) = fit_around(LONG, &[JIRA], 20.0, mono);
 
-    assert!(out.ends_with(ELLIPSIS), "expected a trailing ellipsis, got {out:?}");
-    assert!(!out.starts_with(ELLIPSIS), "nothing was cut from the front, so nothing marks it");
+    assert!(
+        out.ends_with(ELLIPSIS),
+        "expected a trailing ellipsis, got {out:?}"
+    );
+    assert!(
+        !out.starts_with(ELLIPSIS),
+        "nothing was cut from the front, so nothing marks it"
+    );
     assert_eq!(emphasised(&out, &spans), "JIRA");
     assert!(mono(&out) <= 20.0);
 }
@@ -73,9 +98,12 @@ fn a_match_near_the_start_keeps_its_text_and_cuts_the_tail() {
 #[test]
 fn a_match_in_the_middle_of_a_long_name_cuts_both_ends() {
     let name = "aaaaaaaaaaaaaaaaaaaaretryaaaaaaaaaaaaaaaaaaaa";
-    let (out, spans) = fit_around(name, &[20..25], 15.0, mono);
+    let (out, spans) = fit_around(name, &one(20..25), 15.0, mono);
 
-    assert!(out.starts_with(ELLIPSIS) && out.ends_with(ELLIPSIS), "got {out:?}");
+    assert!(
+        out.starts_with(ELLIPSIS) && out.ends_with(ELLIPSIS),
+        "got {out:?}"
+    );
     assert_eq!(emphasised(&out, &spans), "retry");
     assert!(mono(&out) <= 15.0);
 }
@@ -105,12 +133,16 @@ fn returned_spans_are_valid_ranges_of_the_returned_string() {
 #[test]
 fn multibyte_names_are_cut_at_character_boundaries() {
     let name = "機能/日本語のブランチ名前";
-    let spans = [name.find("ブランチ").unwrap()..name.find("ブランチ").unwrap() + "ブランチ".len()];
+    let spans =
+        one(name.find("ブランチ").unwrap()..name.find("ブランチ").unwrap() + "ブランチ".len());
 
     let (out, spans) = fit_around(name, &spans, 6.0, mono);
 
     assert!(out.chars().count() <= 6);
-    assert!(emphasised(&out, &spans).contains('ブ'), "the match must still be visible: {out:?}");
+    assert!(
+        emphasised(&out, &spans).contains('ブ'),
+        "the match must still be visible: {out:?}"
+    );
 }
 
 /// Several scattered spans — a subsequence match — must all be kept when they fit, and rebased
@@ -129,7 +161,10 @@ fn scattered_spans_are_all_rebased() {
 #[test]
 fn degenerate_widths_still_terminate() {
     let (out, _) = fit_around(LONG, &[RETRY], 0.0, mono);
-    assert!(out.chars().count() <= 2, "expected almost nothing, got {out:?}");
+    assert!(
+        out.chars().count() <= 2,
+        "expected almost nothing, got {out:?}"
+    );
 
     let (out, spans) = fit_around("", &[], 10.0, mono);
     assert_eq!(out, "");
@@ -149,8 +184,15 @@ fn a_match_wider_than_the_row_keeps_the_part_that_fits_emphasised() {
 
     let (out, spans) = fit_around(name, &[matched], 10.0, mono);
 
-    assert!(mono(&out) <= 10.0, "{out:?} is {} wide, over the 10 available", mono(&out));
-    assert!(!spans.is_empty(), "{out:?} came back with nothing emphasised at all");
+    assert!(
+        mono(&out) <= 10.0,
+        "{out:?} is {} wide, over the 10 available",
+        mono(&out)
+    );
+    assert!(
+        !spans.is_empty(),
+        "{out:?} came back with nothing emphasised at all"
+    );
     let shown = emphasised(&out, &spans);
     assert!(
         !shown.is_empty() && shown.chars().all(|c| c == 'a'),
@@ -164,7 +206,10 @@ fn a_name_with_no_emphasis_truncates_from_the_end() {
     let (out, spans) = fit_around(LONG, &[], 12.0, mono);
 
     assert!(out.ends_with(ELLIPSIS));
-    assert!(out.starts_with("feat/"), "with nothing to keep in view, keep the beginning");
+    assert!(
+        out.starts_with("feat/"),
+        "with nothing to keep in view, keep the beginning"
+    );
     assert!(spans.is_empty());
 }
 

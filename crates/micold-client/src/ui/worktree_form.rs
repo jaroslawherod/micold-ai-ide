@@ -9,8 +9,8 @@
 
 use crate::app::{BranchSource, Message, ResolutionState, WorktreeForm, WorktreeFormStatus};
 use crate::ui::material::{
-    self, Button, Select, StageProgress, SurfaceKind, Text, TextField, ToggleChip,
-    TypeaheadRow, TypeRole,
+    self, Button, Select, StageProgress, SurfaceKind, Text, TextField, ToggleChip, TypeRole,
+    TypeaheadRow,
 };
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
