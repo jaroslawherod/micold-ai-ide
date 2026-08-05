@@ -194,7 +194,7 @@ User Story 2 — the gallery example works with literal matching alone.
 - [X] T057 Verify the architecture gates in `crates/micold-client/tests/` all pass together — `material_boundary.rs`, `cdk_no_appearance.rs`, `material_builder_api.rs`, `component_api_opacity.rs`, `one_overlay_implementation.rs`, `typeahead_is_generic.rs`, `idle_requests_no_frames.rs`, `logical_state_ownership.rs`, `showcase_completeness.rs`, `showcase_captions.rs` — with no budget raised and no exception added beyond T023's and T027's
 - [X] T058 [P] Run the frame-probe half of SC-002 via `crates/micold-client/tests/frame_probe_glue.rs` and confirm typing requests no frames beyond those the input itself causes
 - [X] T059 [P] Cross-cutting documentation review — links, navigation and index entries across `docs/`, including `docs/README.md`
-- [ ] T060 Confirm `mise run test` passes on Linux, macOS and Windows via `.github/workflows/ci.yml` (Principle VI)
+- [X] T060 Confirm `mise run test` passes on Linux, macOS and Windows via `.github/workflows/ci.yml` (Principle VI)
 - [ ] T061 Run [quickstart.md](./quickstart.md) end to end and record the full pass, including its date and platform
 
 ---
@@ -243,10 +243,9 @@ them is code:
 - **T034, T048, T056, T061** — the quickstart's §B manual passes. They need a person at the running
   GUI in a repository with many branches; Principle I's exception for render glue is only valid
   *because* someone walks them, so they cannot be marked from a test run.
-- **T060** — the three-platform confirmation. `.github/workflows/ci.yml` already runs
-  `mise run test` on `ubuntu-latest`, `macos-latest` and `windows-latest`; nothing in this feature is
-  platform-conditional, but the macOS and Windows legs only run on push, so the task closes when CI
-  does.
+- **T060 is done.** CI ran `mise run test` green on `ubuntu-latest`, `macos-latest` and
+  `windows-latest` (run 30984445064), alongside `fmt + clippy` and the docs check. Nothing in this
+  feature is platform-conditional and nothing needed to be.
 
 ---
 
