@@ -10,9 +10,15 @@
 //!
 //! **What it does not cover**, stated here because a gate that is quietly narrower than it looks is
 //! the exact failure this exists to correct: colour, border, radius and shadow (owned by
-//! `style_snapshot`), rasterised pixels, geometry that exists only mid-animation, geometry that
-//! depends on scroll position, and — until feature 018 ships Roboto as the application typeface —
-//! the typography a user actually sees. See `docs/development/layout-snapshot.md`.
+//! `style_snapshot`), rasterised pixels, and geometry that exists only mid-animation. See
+//! `docs/development/layout-snapshot.md`.
+//!
+//! Two exclusions were lifted and are recorded because an out-of-date boundary is the same defect
+//! as an unclear one, pointing the other way. **Typography is covered**: this measured a private
+//! copy of Roboto until feature 018 shipped the typeface, and now measures the very files the
+//! application draws with (`assets/fonts/`, all three faces). **Scroll position is covered at a
+//! defined offset**: `main-shell-sidebar-scrolled-to-top` overflows the sidebar's list, so the
+//! at-rest sampling point is asserted about a tree in which something actually scrolls.
 //!
 //! Regenerate deliberately, only when a layout change is *intended*:
 //! `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot`
@@ -373,6 +379,98 @@ fn the_overlay_pass_records_something_somewhere() {
          state that opens one (`StateUnderTest::pressing`), or, if no such widget is left in the \
          application, delete the pass rather than leaving it as evidence of something it no longer \
          does."
+    );
+}
+
+// --- FR-008c's third layout, and FR-011's sampling point, are reached (T042, T043) --------------
+
+/// Some covered state must hold a project the application considers unavailable.
+///
+/// FR-008c names three required layouts — no project open, **an unavailable project**, and a
+/// disconnected daemon — and for the whole of this feature only two of them existed. `shell.rs`
+/// branches on availability and renders `Button::filled("Unavailable")` where the available path
+/// renders an icon-plus-label composite, so the two are different geometry; the unavailable one was
+/// never laid out.
+///
+/// Two things hid it. `empty-project-without-worktrees` reads like the missing case and is not it —
+/// it is a project that is present and simply has nothing in it. And `FakeScanner::default()`
+/// answers `is_available: true`, so every covered state built through `workspace_with` takes the
+/// available branch by construction; there was no state anywhere that could have taken the other.
+#[test]
+fn a_covered_state_holds_an_unavailable_project() {
+    use micold_core::project::Availability;
+
+    let named: Vec<&str> = covered_states()
+        .iter()
+        .filter(|covered| {
+            (covered.build)()
+                .state
+                .workspace
+                .projects
+                .iter()
+                .any(|p| p.availability == Availability::Unavailable)
+        })
+        .map(|covered| covered.name)
+        .collect();
+
+    assert!(
+        !named.is_empty(),
+        "no covered state holds a project marked Unavailable, so FR-008c's second required layout \
+         is not covered. `ui/shell.rs` renders that branch differently from the available one, and \
+         nothing resolves it. Note that `FakeScanner::default()` reports every folder available, so \
+         a covered state has to set availability rather than expect it"
+    );
+}
+
+/// Some covered state must have scroll content taller than the viewport showing it.
+///
+/// FR-011 requires scroll-dependent geometry to be recorded at a defined, reproducible offset, and
+/// `a_fresh_tree_samples_at_rest` proves a fresh tree reports every scrollable at the top. It proves
+/// it against `State::default()`, in which nothing overflows — so the guarantee held over a tree
+/// where no element's geometry depends on scroll position at all.
+///
+/// That is the same shape as the overlay-pass gap above: a property asserted everywhere, about
+/// nothing. The sidebar's list is the one scrollable in the application whose content is driven by
+/// state, so a covered state with enough worktrees to overflow it is what makes the sampling point
+/// mean something.
+///
+/// Detected by geometry rather than by widget type, since a layout node carries no type: a
+/// scrollable that is scrolling is a **viewport with exactly one child, taller than itself**. That
+/// is how `Scrollable` lays out — one content wrapper measured against an unbounded height, then
+/// clipped — and the single-child requirement is what makes the shape specific. Two looser
+/// formulations were tried and both matched things that are not scrolling: "any child taller than
+/// its parent" catches the collapsed accordion whose child overhangs a zero-height `Expand`
+/// (`CLIP_REVEALED`), and dropping the child count catches the overlay pass shrinking a root below
+/// the body beneath it.
+#[test]
+fn a_covered_state_scrolls() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+
+    let overflowing: Vec<&str> = covered_states()
+        .iter()
+        .zip(all.iter())
+        .filter(|(_, records)| {
+            records.iter().any(|parent| {
+                let children: Vec<_> = records
+                    .iter()
+                    .filter(|c| {
+                        c.path.len() == parent.path.len() + 1 && c.path.starts_with(&parent.path)
+                    })
+                    .collect();
+                parent.height > 0.0
+                    && children.len() == 1
+                    && children[0].height > parent.height + 1.0
+            })
+        })
+        .map(|(covered, _)| covered.name)
+        .collect();
+
+    assert!(
+        !overflowing.is_empty(),
+        "no covered state has content taller than the viewport showing it, so nothing in the \
+         fixture scrolls and FR-011's sampling point is asserted about a tree in which no geometry \
+         depends on scroll position. Register a state whose sidebar list overflows"
     );
 }
 

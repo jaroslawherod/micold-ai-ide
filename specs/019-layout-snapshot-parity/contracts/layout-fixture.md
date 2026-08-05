@@ -118,8 +118,14 @@ narrower than it looks is the exact failure this feature exists to correct.
 | Not guaranteed | Consequence |
 |----------------|-------------|
 | Path stability across structural edits | Inserting a container near the root renumbers its descendants; one small change can produce a large, correct diff. Anchors are re-pointed by hand as part of that change. |
-| Production typography | Until feature 018 ships Roboto as the application font, the fixture measures a typeface users do not yet see. It detects drift; it does not certify what the user's screen shows. |
 | Mid-animation geometry | Records are taken at rest (R6). Both endpoints of a transition are covered as resting states; the interpolation between them is not. |
-| Scrolled geometry | Records are taken at scroll offset zero (R7). |
+| Scrolled geometry at other offsets | Records are taken at scroll offset zero (R7). A covered state overflows the sidebar's list, so that offset is a sampled point rather than an assumption — but only the top is recorded, and geometry that appears only part-way down a scroll is not. |
 | Colour, border, radius, shadow | Owned by `style_snapshot` (feature 017). This fixture records geometry only. |
 | Pixels | No rasterisation is compared. Two different-looking widgets occupying identical boxes are identical to this gate. |
+
+**Production typography was on this list and is not any more.** It read: *"Until feature 018 ships
+Roboto as the application font, the fixture measures a typeface users do not yet see."* 018 shipped,
+and the fixture now measures the files the application draws with (`assets/fonts/`), all three faces.
+The correction is recorded rather than deleted because a stale exclusion is the same defect as an
+unclear one — it tells a reader the gate is narrower than it is, and the cost is that nobody looks
+for the coverage they already have.
