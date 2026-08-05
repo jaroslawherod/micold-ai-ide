@@ -181,6 +181,159 @@ fn an_anchor_whose_path_does_not_resolve_fails_naming_it() {
     }
 }
 
+// --- The anchors are the elements they claim to be (T023) ---------------------------------------
+//
+// `an_anchor_whose_path_does_not_resolve_fails_naming_it` proves an anchor points at *something*.
+// It cannot prove it points at the right thing, and T023 is on record as a false completion for
+// exactly that gap: anchors that were never declared at all, in a feature whose value is that a
+// failure says "sidebar.row.label" instead of "0/0/0/2/0/0/0/2/0/0/2/0/1". A misnamed anchor is
+// worse than a bare path — it is a bare path that lies. So each name added here is held to a
+// property only the element it names satisfies.
+
+/// The node called `toolbar.title` measures the application name.
+///
+/// Two independent halves, because either alone is weak. The width proves it is *that* string
+/// rather than some other leaf: the toolbar's other text lives in its trailing actions and is a
+/// different length. The sibling shape proves the parent is a `Toolbar` and not some other row that
+/// happens to lead with a label — `material/toolbar.rs` builds `row![text(title), Space::Fill]` and
+/// nothing else in the shell has a zero-height full-width spacer as its second child.
+#[test]
+fn the_toolbar_title_anchor_measures_the_application_name() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+
+    let expected = lay::measure(
+        micold_core::metadata::APP_NAME,
+        lay::reference_font(),
+        micold_core::tokens::type_scale::BODY,
+    );
+
+    let mut checked = 0;
+    for (covered, records) in covered_states().iter().zip(all.iter()) {
+        for anchor in covered.anchors.iter().filter(|a| a.name == "toolbar.title") {
+            let title = records
+                .iter()
+                .find(|r| r.path == anchor.path)
+                .expect("resolution is asserted separately");
+
+            assert!(
+                (title.width - expected).abs() <= 0.5,
+                "in {:?}, toolbar.title is {:.1}px wide but {:?} measures {expected:.1}px. The \
+                 anchor is pointing at some other element, and every failure it names is mislabelled",
+                covered.name,
+                title.width,
+                micold_core::metadata::APP_NAME
+            );
+
+            assert_eq!(
+                anchor.path.last(),
+                Some(&0),
+                "in {:?}, toolbar.title is not the leading child of its row",
+                covered.name
+            );
+            let mut spacer_path = anchor.path.to_vec();
+            *spacer_path.last_mut().expect("checked above") = 1;
+            let spacer = records
+                .iter()
+                .find(|r| r.path == spacer_path)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "in {:?}, toolbar.title has no sibling at index 1 — its parent is not a \
+                         Toolbar row",
+                        covered.name
+                    )
+                });
+            assert!(
+                spacer.height == 0.0 && spacer.width > title.width,
+                "in {:?}, the sibling after toolbar.title is {:.1}x{:.1}, not the full-width \
+                 zero-height spacer a Toolbar puts there",
+                covered.name,
+                spacer.width,
+                spacer.height
+            );
+
+            checked += 1;
+        }
+    }
+
+    assert!(
+        checked >= 2,
+        "expected the toolbar title to be anchored on both shell states, found {checked}"
+    );
+}
+
+/// Every node called `dialog.actions` has the shape of an action row.
+///
+/// The index differs per state — it is the last child of a column whose length depends on which
+/// fields the form shows — so there is no path to assert against. Assert the signature instead:
+/// last in its column, two or more controls, laid out side by side on one line. A form field would
+/// fail the second and third; a field *label* would fail all three.
+#[test]
+fn the_action_row_anchors_are_action_rows() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+
+    let mut checked = 0;
+    for (covered, records) in covered_states().iter().zip(all.iter()) {
+        for anchor in covered
+            .anchors
+            .iter()
+            .filter(|a| a.name == "dialog.actions")
+        {
+            let (parent, index) = anchor.path.split_at(anchor.path.len() - 1);
+            let index = index[0];
+
+            assert!(
+                !records.iter().any(|r| r.path.len() == anchor.path.len()
+                    && r.path.starts_with(parent)
+                    && r.path[parent.len()] > index),
+                "in {:?}, dialog.actions is not the last child of its column — a field was added \
+                 below it, or the anchor is pointing at a field",
+                covered.name
+            );
+
+            let mut controls: Vec<_> = records
+                .iter()
+                .filter(|r| {
+                    r.path.len() == anchor.path.len() + 1 && r.path.starts_with(anchor.path)
+                })
+                .collect();
+            controls.sort_by(|a, b| a.x.total_cmp(&b.x));
+
+            assert!(
+                controls.len() >= 2,
+                "in {:?}, dialog.actions has {} child control(s); an action row has at least two",
+                covered.name,
+                controls.len()
+            );
+
+            for pair in controls.windows(2) {
+                let (left, right) = (pair[0], pair[1]);
+                assert!(
+                    left.y == right.y && left.x + left.width <= right.x,
+                    "in {:?}, dialog.actions' controls are not side by side on one line: \
+                     {:?} at ({:.1}, {:.1}) {:.1} wide, then {:?} at ({:.1}, {:.1})",
+                    covered.name,
+                    lay::path_token(&left.path),
+                    left.x,
+                    left.y,
+                    left.width,
+                    lay::path_token(&right.path),
+                    right.x,
+                    right.y
+                );
+            }
+
+            checked += 1;
+        }
+    }
+
+    assert!(
+        checked >= 5,
+        "expected an action row anchored on every dialog state, found {checked}"
+    );
+}
+
 // --- The overlay pass is exercised, not merely present (FR-009) ---------------------------------
 
 /// Some covered state must actually produce overlay records.

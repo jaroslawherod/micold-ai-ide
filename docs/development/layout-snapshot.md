@@ -174,6 +174,30 @@ name, type or id. Inserting a container near the root renumbers every descendant
 structural edit can produce a large diff**. That is expected, not a defect. Named anchors are
 re-pointed by hand as part of such a change.
 
+### Anchors
+
+An anchor is a name for a path, so a failure reads `sidebar.row.label` instead of
+`0/0/0/2/0/0/0/2/0/0/2/0/1`. Declared per covered state in `tests/support/covered_states.rs`.
+
+**Take the path from the resolved geometry, not from the source.** Reading the widget tree and
+counting children is how anchors go wrong: `worktree_form.rs` pushes a `preview` element between
+the fields and the action row, so by the source the actions are child 7 of the dialog column — but
+`preview` returns a zero-height `Space` when there is nothing to preview and that produces no layout
+node, so they are child 6. Other zero-sized elements in the same fixture *are* recorded, so there is
+no rule to apply here; only the resolved tree is authoritative.
+
+Two checks run on every suite. `an_anchor_whose_path_does_not_resolve_fails_naming_it` catches an
+anchor pointing at nothing. That is not enough on its own — an anchor can resolve and still name the
+wrong element, which is a bare path that lies — so each name is additionally held to a property only
+its own element satisfies: `toolbar.title` must measure the width of `APP_NAME` at `type_scale::BODY`
+and sit before `Toolbar`'s full-width zero-height spacer, and every `dialog.actions` must be the last
+child of its column with two or more controls side by side on one line. Add an anchor, add its
+property.
+
+`dialog.actions` deliberately has a different path in each of the five dialog states: it is the last
+child of a column whose length depends on which inputs the form shows. There is no single path that
+means "the actions", which is why the check asserts the shape rather than the index.
+
 ## Exemptions currently in force
 
 Each is required to keep firing. An exemption that has stopped being needed fails and must be struck

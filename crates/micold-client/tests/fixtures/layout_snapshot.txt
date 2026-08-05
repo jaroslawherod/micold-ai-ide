@@ -10,6 +10,7 @@
 @ shell.body -> 0/0
 @ sidebar.row.label -> 0/0/0/2/0/0/0/2/0/0/2/0/1
 @ sidebar.row.delete_button -> 0/0/0/2/0/0/0/2/0/0/2/0/2/1
+@ toolbar.title -> 0/0/0/0/0/0/0
 base 0                                    0.0     0.0  1280.0   800.0
 base   0/0                                0.0     0.0  1280.0   800.0
 base     0/0/0                            0.0     0.0  1280.0   800.0
@@ -167,6 +168,7 @@ base             0/1/0/0/4/0/1         1086.0   216.8    37.3    18.2
 
 ## main-shell-sidebar-collapsed
 @ shell.root -> 0
+@ toolbar.title -> 0/0/0/0/0/0/0
 base 0                                    0.0     0.0  1280.0   800.0
 base   0/0                                0.0     0.0  1280.0   800.0
 base     0/0/0                            0.0     0.0  1280.0   800.0
@@ -324,6 +326,7 @@ base             0/1/0/0/4/0/1         1086.0   216.8    37.3    18.2
 
 ## add-worktree-dialog-new-branch
 @ dialog.root -> 0
+@ dialog.actions -> 0/3/0/0/6
 base 0                                    0.0     0.0  1280.0   800.0
 base   0/0                                0.0     0.0  1280.0   800.0
 base     0/0/0                            0.0     0.0  1280.0   800.0
@@ -503,6 +506,7 @@ base             0/3/0/0/6/1/0          482.9   524.1    42.6    20.0
 
 ## add-worktree-dialog-existing-branch
 @ dialog.root -> 0
+@ dialog.actions -> 0/3/0/0/3
 base 0                                    0.0     0.0  1280.0   800.0
 base   0/0                                0.0     0.0  1280.0   800.0
 base     0/0/0                            0.0     0.0  1280.0   800.0
@@ -1181,6 +1185,7 @@ base             0/1/0/0/4/0/1         1086.0   216.8    37.3    18.2
 
 ## error-add-worktree-failed
 @ dialog.root -> 0
+@ dialog.actions -> 0/3/0/0/7
 base 0                                    0.0     0.0  1280.0   800.0
 base   0/0                                0.0     0.0  1280.0   800.0
 base     0/0/0                            0.0     0.0  1280.0   800.0
@@ -1362,6 +1367,7 @@ base             0/3/0/0/7/1/0          482.9   540.1    42.6    20.0
 ## add-worktree-dialog-type-menu-open
 @ dialog.root -> 0
 @ dialog.type-select -> 0/3/0/0/3
+@ dialog.actions -> 0/3/0/0/6
 base 0                                    0.0     0.0  1280.0   800.0
 base   0/0                                0.0     0.0  1280.0   800.0
 base     0/0/0                            0.0     0.0  1280.0   800.0
@@ -1545,6 +1551,7 @@ over       0/0/0/0                      404.0   397.5   472.0   342.0
 
 ## settings-dialog-with-validation-error
 @ dialog.root -> 0
+@ dialog.actions -> 0/3/0/0/8
 base 0                                    0.0     0.0  1280.0   800.0
 base   0/0                                0.0     0.0  1280.0   800.0
 base     0/0/0                            0.0     0.0  1280.0   800.0
