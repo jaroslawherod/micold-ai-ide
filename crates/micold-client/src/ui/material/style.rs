@@ -306,13 +306,19 @@ pub fn chip(accent: Rgb) -> impl Fn(&Theme) -> container::Style {
 /// A result row inside a type-ahead menu (feature 021, contracts/typeahead-component.md §4.7).
 ///
 /// Three things can be true of one row at the same time, so each gets its own channel and none can
-/// hide another: the current *selection* is a tonal fill, the *keyboard's* row is a state layer at
-/// the focus strength over whatever fill it already has, and the *pointer's* row is the same layer
-/// at the lighter hover strength. Which characters *matched* is not here — the label colors those
-/// itself, so emphasis survives on a filled row.
+/// hide another: the current *selection* is a tonal fill — Material's `secondary_container`, the
+/// same treatment a selected list item carries — the *keyboard's* row is a state layer at the focus
+/// opacity over whatever fill it already has, and the *pointer's* row is the same layer at hover or
+/// pressed strength. Which characters *matched* is not here: the label colours those itself, so
+/// emphasis survives on a filled row.
 ///
-/// A row with nothing to press arrives here as `Disabled`; it keeps a flat background so it still
-/// reads as a line of the list rather than disappearing from it.
+/// Every opacity comes from `tokens::state`, never from a literal. That is not tidiness — the first
+/// draft of this function hardcoded `0.12` for pressed, which is the *selected* opacity, so a
+/// pressed row and a selected one were indistinguishable. Feature 019 had already fixed exactly that
+/// bug everywhere else; this function was written before those tokens existed and reintroduced it.
+///
+/// A row with nothing to press arrives here as `Disabled`. It keeps its fill and mutes only its
+/// label, so it still reads as a line of the list rather than disappearing from it (FR-012).
 pub fn menu_row(
     r: Roles,
     highlighted: bool,
@@ -328,25 +334,28 @@ pub fn menu_row(
             (None, color(r.on_surface))
         };
 
-        let layer = match status {
-            button::Status::Pressed => 0.12,
-            button::Status::Hovered => 0.08,
-            // The keyboard's row reads at the focus strength even with the pointer elsewhere.
-            _ if highlighted => 0.12,
+        let opacity = match status {
+            button::Status::Pressed => state::PRESSED,
+            button::Status::Hovered => state::HOVER,
+            // The keyboard's row reads at the focus opacity even with the pointer elsewhere — it is
+            // where the keyboard is, which is what focus means.
+            _ if highlighted => state::FOCUS,
             _ => 0.0,
         };
 
-        let background = match (fill, layer) {
-            (Some(fill), 0.0) => Some(Background::Color(fill)),
-            (Some(fill), l) => Some(Background::Color(blend(fill, on, l))),
-            (None, 0.0) => None,
-            (None, l) => Some(Background::Color(alpha(on, l))),
+        let background = match fill {
+            // Over an opaque fill the layer is composited, so the result stays opaque.
+            Some(fill) if opacity > 0.0 => Some(Background::Color(state_layer(fill, on, opacity))),
+            Some(fill) => Some(Background::Color(fill)),
+            // Over nothing it stays translucent, so it works on whatever the menu surface is.
+            None if opacity > 0.0 => Some(Background::Color(state_fill(on, opacity))),
+            None => None,
         };
 
         button::Style {
             background,
             text_color: if matches!(status, button::Status::Disabled) {
-                alpha(on, DISABLED_OPACITY)
+                alpha(on, state::DISABLED_CONTENT)
             } else {
                 on
             },

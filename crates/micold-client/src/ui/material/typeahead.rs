@@ -25,9 +25,9 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
 use iced::advanced::widget::{tree, Tree};
 use iced::advanced::{mouse, renderer, Widget};
-use iced::widget::{button, column, container, row, scrollable, text as text_widget, Space};
+use iced::widget::{button, column, row, Space};
 use iced::{alignment, Element, Length, Pixels, Rectangle, Size};
-use micold_core::tokens::{spacing, Rgb, Roles};
+use micold_core::tokens::{density, shape, spacing, Rgb, Roles};
 use micold_core::typeahead::{fit_around, Direction};
 
 /// One row of results: what it says, which of its characters matched, and whether it can be chosen.
@@ -69,8 +69,12 @@ const ROW_ROLE: TypeRole = TypeRole::Body;
 
 /// The distance between the field and its list.
 const GAP: f32 = spacing::XS;
-/// How tall the list may grow before it scrolls, in pixels — roughly eight rows.
-const MAX_MENU_HEIGHT: f32 = 320.0;
+/// How many rows the list shows before it scrolls.
+///
+/// Expressed in rows and multiplied by the density scale's menu-item height, rather than as a pixel
+/// number that happens to be about eight rows today — a density step that changed the row height
+/// would otherwise silently change how many rows fit.
+const MAX_ROWS_BEFORE_SCROLL: f32 = 8.0;
 
 /// A search field with a floating list of matched results.
 ///
@@ -181,7 +185,14 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
     }
 }
 
-/// One result row.
+/// One result row — Material's menu item, in the library's own assembly of it.
+///
+/// The same three parts `material::menu`'s items are built from, in the same order: a leading slot,
+/// a label, and a pressable container carrying the state layer. It differs in exactly two places,
+/// both forced by what this row has to say. Its label is an [`EmphasisedLabel`] rather than a
+/// [`Text`](super::Text), because part of it is emphasised; and it is set at `Body` rather than at
+/// `Action`, because `Action` is already the medium weight and emphasis would then have nowhere to
+/// step up to.
 fn row_element<'a, M: Clone + 'a>(
     item: Row,
     highlighted: bool,
@@ -190,10 +201,10 @@ fn row_element<'a, M: Clone + 'a>(
     r: Roles,
 ) -> Element<'a, M> {
     // Four channels, deliberately distinct (contract §4.3, §4.5, §4.7, FR-011, FR-012b):
-    //   emphasis  → the text's own colour
+    //   emphasis  → the label's own colour and weight
     //   highlight → the row's state layer
     //   selection → the row's tonal fill, plus a leading marker
-    //   disabled  → the whole label muted, and no emphasis accent to pick it back out
+    //   disabled  → the label muted, and no emphasis accent to pick it back out
     let base = if item.enabled {
         r.on_surface
     } else {
@@ -202,21 +213,53 @@ fn row_element<'a, M: Clone + 'a>(
     let accent = if item.enabled { r.primary } else { base };
 
     let label = EmphasisedLabel::<M>::new(item.label, item.spans, ROW_ROLE, base, accent);
-    let marker = Text::marker(selected, r);
 
-    let content = row![marker, label]
-        .spacing(spacing::XS)
+    let content = row![marker(selected, r), label]
+        .spacing(spacing::SM)
         .align_y(alignment::Vertical::Center);
 
-    button(content)
-        .padding([spacing::SM, spacing::SM])
+    let pressable = button(content)
         .width(Length::Fill)
+        // Material's menu-item height, from the density scale rather than from whatever the padding
+        // happened to add up to — so a row keeps its touch target when its label is short.
+        .height(Length::Fixed(density::MENU_ITEM_BASE))
+        .padding([0.0, spacing::SM])
         .style(style::menu_row(r, highlighted, selected))
-        .on_press_maybe(press)
-        .into()
+        .on_press_maybe(press.clone());
+
+    match press {
+        // Every pressable surface ripples (feature 019, FR-024c), and a menu row is one — built
+        // here rather than through `material::Button`, exactly as `material::menu`'s items are, so
+        // the ripple is composed explicitly.
+        Some(_) => super::Ripple::new(pressable, r.on_surface, shape::SMALL).into(),
+        // A row with nothing to press must not ripple. The ripple's whole message is "that did
+        // something", and pressing an unavailable branch does nothing at all (FR-012a) — so the
+        // wrapper is absent rather than present and lying.
+        None => pressable.into(),
+    }
 }
 
-/// The list: a menu surface anchored to the field, scrolling once it outgrows its height.
+/// The leading slot of a result row: Material's selected-item check, or the space it would occupy.
+///
+/// The space is kept when nothing is selected so every label in the list starts at the same x —
+/// a marker that shifted the text sideways would make the selection the loudest thing on the row
+/// rather than the quietest.
+fn marker<'a, M: 'a>(selected: bool, r: Roles) -> Element<'a, M> {
+    let size = TypeRole::Action.size();
+    if selected {
+        super::Glyph::new(Icon::ActiveMarker, TypeRole::Action, r)
+            .tint(r.primary)
+            .into()
+    } else {
+        Space::new().width(Length::Fixed(size)).into()
+    }
+}
+
+/// The list: the library's own menu panel, anchored to the field, scrolling once it outgrows its
+/// height.
+///
+/// [`menu_panel`](super::menu_panel) is what every floating popover in the application sits on, so
+/// the elevation, the corner and the padding are the menu surface's rather than this component's.
 fn menu_element<'a, M: Clone + 'a>(
     rows: Vec<Row>,
     highlighted: Option<usize>,
@@ -234,15 +277,14 @@ fn menu_element<'a, M: Clone + 'a>(
                 .height(Length::Fixed(0.0))
                 .into();
         };
-        return container(
-            text_widget(message)
-                .size(TypeRole::Caption.size())
-                .style(style::muted(r)),
-        )
-        .padding(spacing::SM)
-        .width(Length::Fill)
-        .style(style::menu_surface(r))
-        .into();
+        // Prose about the search rather than a row of it, so it is `Caption` and muted — it must
+        // not read as a result that can be picked.
+        return super::menu_panel(
+            super::Text::new(message, TypeRole::Caption, r).muted(),
+            Length::Fill,
+            r,
+            true,
+        );
     }
 
     let mut list = column![].width(Length::Fill);
@@ -259,16 +301,13 @@ fn menu_element<'a, M: Clone + 'a>(
         ));
     }
 
-    container(
-        scrollable(list)
-            .style(style::scrollbar(r))
-            .height(Length::Shrink),
-    )
-    .max_height(MAX_MENU_HEIGHT)
-    .padding(spacing::XS)
-    .width(Length::Fill)
-    .style(style::menu_surface(r))
-    .into()
+    // The cap is a layout constraint rather than a treatment, so it is a plain container: the
+    // overlay already refuses to grow past the room on screen, and this stops a repository with two
+    // hundred branches from taking all of it.
+    let capped = iced::widget::container(super::Scrollable::new(list, r).height(Length::Shrink))
+        .max_height(density::MENU_ITEM_BASE * MAX_ROWS_BEFORE_SCROLL);
+
+    super::menu_panel(capped, Length::Fill, r, true)
 }
 
 impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
@@ -305,37 +344,22 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
 
         // Clearing is emptying the query, so it goes through the caller's own input handler
         // rather than a message of its own — resolved here, before the handler moves into the
-        // input (FR-016).
+        // field (FR-016).
         let cleared = on_input(String::new());
 
-        // The field: the design system's text input, with the search affordance in the input's own
-        // leading slot and the clear affordance beside it. The clear appears only when there is
-        // something to clear, so an empty field carries no action that would do nothing.
-        let input = iced::widget::text_input(&placeholder, query)
-            .padding(spacing::SM)
-            .size(TypeRole::Body.size())
-            .on_input(on_input)
-            .icon(iced::widget::text_input::Icon {
-                font: super::glyph::MATERIAL_SYMBOLS,
-                code_point: Icon::Search.glyph(),
-                size: Some(Pixels(TypeRole::Body.size())),
-                spacing: spacing::XS,
-                side: iced::widget::text_input::Side::Left,
-            })
-            .style(style::input(r));
-
-        // Always a row, even with nothing in the trailing slot. Swapping the field between a bare
-        // input and a row would change the *type* of the widget at that position, and the rendering
-        // stack rebuilds a subtree whose tag changed — throwing away the input's own state, focus
-        // included. The field would lose focus on the first keystroke and again on the last
-        // backspace, so nothing after the first character would ever reach it.
-        let mut field_row = row![input]
-            .spacing(spacing::XS)
-            .align_y(alignment::Vertical::Center);
+        // The field is the library's own text field, with Material's two affordances in their
+        // named slots: the search icon leading, the clear action trailing. Neither is assembled
+        // here — `TextField` grew both, so the next searchable picker gets them by asking.
+        //
+        // The clear action appears only when there is something to clear, so an empty field
+        // carries no action that would do nothing.
+        let mut input = super::TextField::new(placeholder, query, r)
+            .leading_icon(Icon::Search)
+            .on_input(on_input);
         if !query.is_empty() {
-            field_row = field_row.push(super::IconButton::new(Icon::Close, r).on_press(cleared));
+            input = input.trailing_action(Icon::Close, cleared);
         }
-        let field: Element<'a, M> = field_row.into();
+        let field: Element<'a, M> = input.into();
 
         let mut behaviour = Behaviour::new(field, menu, open, GAP).keyboard(
             highlighted,
@@ -361,26 +385,6 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
         }
 
         behaviour.into()
-    }
-}
-
-/// A leading marker for the selected row, and nothing at all for the rest.
-struct Text;
-
-impl Text {
-    fn marker<'a, M: 'a>(selected: bool, r: Roles) -> Element<'a, M> {
-        if selected {
-            text_widget("•")
-                .size(TypeRole::Body.size())
-                .style(move |_: &iced::Theme| iced::widget::text::Style {
-                    color: Some(style::color(r.primary)),
-                })
-                .into()
-        } else {
-            Space::new()
-                .width(Length::Fixed(TypeRole::Body.size() * 0.6))
-                .into()
-        }
     }
 }
 

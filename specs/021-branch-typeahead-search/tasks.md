@@ -251,6 +251,20 @@ signed off rather than watched by the author of this record.
 
 ---
 
+## Phase 8: Material conformance
+
+Raised in review: *is the type-ahead a valid Material Design 3 component?* Strictly it cannot be —
+MD3 defines no type-ahead. What it defines is **a text field with an attached menu**, and the audit
+found the assembly was reaching for raw widgets where the library already had the Material component.
+
+- [X] T067 Extend `material::TextField` with Material's leading-icon and trailing-action slots, and make it always resolve to one shape so a caller that starts offering a trailing action cannot destroy the input's focus, in `crates/micold-client/src/ui/material/text_field.rs` (contract C4.1)
+- [X] T068 Put `style::menu_row`'s state layers on `tokens::state` — it hardcoded `0.12` for pressed, which is the *selected* opacity, so a pressed row and a selected one rendered identically — in `crates/micold-client/src/ui/material/style.rs` (contract C4.2)
+- [X] T069 Compose every part of the component from its library counterpart — `TextField`, `menu_panel`, `Scrollable`, `Ripple`, `Glyph`, `Text` — instead of raw widgets styled in place, in `crates/micold-client/src/ui/material/typeahead.rs` (contract C4.1a)
+- [X] T070 Give rows Material's menu-item height from `density::MENU_ITEM_BASE`, and ripple only the ones that can be pressed, in `crates/micold-client/src/ui/material/typeahead.rs` (contract C4.1a, C4.1b)
+- [X] T071 Accept the layout snapshot: the extra `Row` per text field adds a node without moving anything, verified by diffing the geometry columns — no recorded box was removed or displaced
+
+---
+
 ## Deviations recorded during implementation
 
 Four, each with the reason it was better than what was planned:
