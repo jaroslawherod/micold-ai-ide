@@ -265,6 +265,9 @@ pub fn ripple<'a>(_showcase: &'a Showcase, roles: Roles, _index: usize) -> Eleme
         .width(Length::Fill)
         .center_x(),
         roles.on_surface,
+        // Asked of the surface rather than restated, so the gallery cannot drift from the shape it
+        // is demonstrating — the exact drift that let the ripple overhang a pill in the first place.
+        material::SurfaceKind::Plain.shape(),
     )
     .into()
 }

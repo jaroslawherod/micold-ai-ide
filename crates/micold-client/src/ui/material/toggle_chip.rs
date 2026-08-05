@@ -114,6 +114,6 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
             });
         // A filter chip is pressed like anything else, so it ripples like anything else (FR-024c),
         // in its own text colour: the accent when on, the muted role when off.
-        super::Ripple::new(chip_button, ripple_tint).into()
+        super::Ripple::new(chip_button, ripple_tint, shape::FULL).into()
     }
 }
