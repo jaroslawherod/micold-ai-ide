@@ -20,7 +20,7 @@ use crate::ui::material::{menu_panel, IconButton, Text, TypeRole};
 use iced::widget::{button, column, row};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
-use micold_core::tokens::{spacing, Roles};
+use micold_core::tokens::{shape, spacing, Roles};
 
 /// One entry in a menu. Generic over the message type for reuse.
 pub struct MenuItem<M> {
@@ -103,6 +103,7 @@ fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) -> Element<
                 .style(style::text_button(r))
                 .on_press(item.message),
             r.on_surface,
+            shape::FULL,
         ));
     }
     list.into()

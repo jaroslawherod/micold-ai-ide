@@ -68,7 +68,12 @@ impl Kind {
     }
 
     /// The corner size this kind takes, from contract §3.
-    fn shape(self) -> f32 {
+    ///
+    /// Public so a wrapper that has to match this surface's shape can ask instead of restating it.
+    /// `Ripple` is the case: it clips its circle to the shape of whatever it wraps, and a wrapper
+    /// cannot see the radius its child draws with — asking is the difference between the two
+    /// staying in step and drifting the moment a kind is re-shaped.
+    pub fn shape(self) -> f32 {
         match self {
             Kind::Window | Kind::Sidebar | Kind::Toolbar => shape::NONE,
             Kind::Plain | Kind::ListItem | Kind::Notification(_) => shape::MEDIUM,

@@ -281,6 +281,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                         .style(style::text_button(r))
                         .on_press(msg),
                     r.on_surface,
+                    shape::FULL,
                 )
                 .into()
             } else {

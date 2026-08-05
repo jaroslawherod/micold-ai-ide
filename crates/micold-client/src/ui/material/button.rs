@@ -14,7 +14,7 @@ use crate::ui::material::style;
 use crate::ui::material::text::{Text, TypeRole};
 use iced::widget::button;
 use iced::{Element, Length, Padding};
-use micold_core::tokens::Roles;
+use micold_core::tokens::{shape, Roles};
 
 /// Each `impl Fn` returned by the style layer is a distinct opaque type, so the variants are boxed
 /// behind one signature to be chosen at runtime.
@@ -153,7 +153,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         // would report a press that will never happen — worse than no feedback, because it says the
         // opposite of what the disabled styling says.
         if pressable {
-            super::Ripple::new(widget, b.variant.content(b.roles)).into()
+            super::Ripple::new(widget, b.variant.content(b.roles), shape::FULL).into()
         } else {
             widget.into()
         }

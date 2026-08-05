@@ -7,7 +7,7 @@
 //! A call site does not opt in per press. Wrapping is the opt-in, so every instance of a wrapped
 //! component ripples and none of them carries a flag for it (FR-024c).
 //!
-//! # Two deliberate departures from the contract, both about what the renderer can express
+//! # One deliberate departure from the contract
 //!
 //! **Drawn above the content, not beneath it.** Contract §5.1 places the ripple above the container
 //! and below the content. A wrapper can only draw before its child (which the child's own
@@ -17,14 +17,26 @@
 //! drawn at the pressed opacity (0.10), so text under it stays fully legible and is tinted only
 //! while the circle passes.
 //!
-//! **Clipped to the element's rectangle, not its shape.** `start_layer` clips to a rectangle; the
-//! renderer has no rounded-rectangle clip. On a pill-shaped button the circle can therefore reach a
-//! few pixels into the corner outside the fill. At 10% opacity over the surface behind it this is
-//! very hard to see, and the alternative — drawing the ripple as a rounded quad the size of the
-//! element — would stop it being a circle at all.
+//! # Clipping to the shape, and why the obvious way is wrong
 //!
-//! Both are recorded here rather than in a note somewhere, because the next person to look will be
-//! asking exactly why it is not what §5.1 says.
+//! This originally clipped the ripple to the element's **bounding rectangle**, on the reasoning
+//! that the renderer offers no rounded-rectangle clip and the overhang would be a few corner pixels
+//! nobody would notice at 10% opacity. That was wrong, and a screen recording of the worktree
+//! sidebar settled it: every rippling surface here is `shape::FULL`, so on a 40dp row the corner
+//! radius is 20dp and the "few pixels" are two 20×20 square caps sitting outside a pill. The ripple
+//! read as a rectangle sliding across a rounded row — the single most visible thing about it.
+//!
+//! The fix cannot be a rounded quad. The ripple *is* a circle, and rounding its own corners does
+//! not make a circle stop at a pill's edge. Nor can it be a gradient: iced 0.14 has `Linear` only,
+//! so there is no radial stop to cut the circle with.
+//!
+//! What works is that layer clipping is a **scissor** — a hard, per-pixel yes/no, with no
+//! antialiasing and no blending. So the same circle can be drawn many times under a set of
+//! *disjoint* scissor rectangles that tile the rounded shape, and the union is exactly the circle
+//! clipped to that shape: every pixel is covered at most once, so there is no double-blended seam,
+//! and the circle's own edge stays antialiased inside each band. [`shape_bands`] computes the
+//! tiling. It is pure geometry and tested as such, because "does this rectangle lie inside a
+//! rounded rectangle" is checkable arithmetic and not something to confirm by looking at it.
 
 use iced::advanced::widget::{tree, Tree, Widget};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell};
@@ -41,24 +53,109 @@ use crate::ui::cdk::ripple::Ripple as RippleState;
 const EXPAND: Duration = Duration::from_millis(duration::MEDIUM_2);
 const FADE: Duration = Duration::from_millis(duration::SHORT_4);
 
+/// How finely the rounded corners are approximated, as bands per corner.
+///
+/// Each band is one scissor rectangle, so this is the cost knob: the tiling is at most
+/// `2 * BANDS_PER_CORNER + 1` rectangles, and only while a ripple is actually animating on one
+/// element. At 8, a 20dp corner is stepped every 2.5dp with a worst-case deviation under half a
+/// pixel — below what a 10%-opacity overlay can show.
+const BANDS_PER_CORNER: usize = 8;
+
+/// Disjoint rectangles tiling `bounds` rounded by `radius`, every one of them inside the shape.
+///
+/// The tiling is **conservative**: each band is inset by the widest inset anywhere in its own
+/// vertical span, so a band never protrudes past the curve. It can fall a fraction of a pixel short
+/// of it instead, which is the right way round — an overhang is the bug this exists to fix, and a
+/// sliver of un-tinted pixel at a corner is invisible.
+///
+/// Bands with the same inset are merged, so a square element collapses to one rectangle and the
+/// straight middle of a pill costs one rectangle rather than a dozen.
+fn shape_bands(bounds: Rectangle, radius: f32) -> Vec<Rectangle> {
+    // A radius over half the shorter side is not expressible — `shape::FULL` is deliberately a huge
+    // number meaning "as round as this can be", so it arrives here needing exactly this clamp.
+    let limit = (bounds.width.min(bounds.height) / 2.0).max(0.0);
+    let r = radius.clamp(0.0, limit);
+    if r <= 0.5 || !bounds.width.is_finite() || !bounds.height.is_finite() {
+        return vec![bounds];
+    }
+
+    // How far the shape's edge sits inside `bounds` at height `y`. Zero along the straight middle.
+    let inset_at = |y: f32| {
+        let into_top = (bounds.y + r) - y;
+        let into_bottom = y - (bounds.y + bounds.height - r);
+        let d = into_top.max(into_bottom);
+        if d <= 0.0 {
+            0.0
+        } else {
+            // The corner is a quarter circle: at `d` above its centre the edge has moved in by
+            // `r - sqrt(r² - d²)`. Clamped because `d` can reach `r` exactly at the very top row.
+            r - (r * r - d * d).max(0.0).sqrt()
+        }
+    };
+
+    let bands = BANDS_PER_CORNER * 2 + BANDS_PER_CORNER.max(1);
+    let step = bounds.height / bands as f32;
+    let mut out: Vec<Rectangle> = Vec::with_capacity(bands);
+    for i in 0..bands {
+        let top = bounds.y + i as f32 * step;
+        let bottom = if i + 1 == bands {
+            bounds.y + bounds.height
+        } else {
+            top + step
+        };
+        // The widest inset over the band's whole span, so no part of it leaves the shape. The
+        // extremes are at the ends: the inset is monotone within each corner and flat between them.
+        let inset = inset_at(top).max(inset_at(bottom));
+        let width = bounds.width - inset * 2.0;
+        if width <= 0.0 {
+            continue;
+        }
+        // Merge with the previous band when the inset matches, so the straight middle is one rect.
+        match out.last_mut() {
+            Some(prev) if (prev.width - width).abs() < f32::EPSILON => {
+                prev.height = bottom - prev.y;
+            }
+            _ => out.push(Rectangle {
+                x: bounds.x + inset,
+                y: top,
+                width,
+                height: bottom - top,
+            }),
+        }
+    }
+    out
+}
+
 /// `content` with Material's press indication.
 ///
 /// ```ignore
-/// Ripple::new(button, roles.on_surface).into()
+/// Ripple::new(button, roles.on_surface, shape::FULL).into()
 /// ```
 pub struct Ripple<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
     content: Element<'a, M, Theme, Renderer>,
     /// The element's own content colour — the ripple is that colour at the pressed opacity, which
     /// is what makes it read as a state layer rather than as a decoration.
     tint: Color,
+    /// The corner radius of the surface being wrapped, so the ripple can be clipped to its shape.
+    radius: f32,
 }
 
 impl<'a, M> Ripple<'a, M> {
     /// Wrap `content`, rippling in `tint` — the content colour of the surface being pressed.
-    pub fn new(content: impl Into<Element<'a, M>>, tint: micold_core::tokens::Rgb) -> Self {
+    ///
+    /// `radius` is the wrapped surface's own corner radius, and is required rather than defaulted
+    /// because a wrapper cannot see the shape its child draws: getting it wrong is precisely the
+    /// bug this argument exists to prevent, and a default would let a new call site inherit it
+    /// silently. Pass the same `shape::*` token the child's style uses.
+    pub fn new(
+        content: impl Into<Element<'a, M>>,
+        tint: micold_core::tokens::Rgb,
+        radius: f32,
+    ) -> Self {
         Self {
             content: content.into(),
             tint: super::style::color(tint),
+            radius,
         }
     }
 }
@@ -207,22 +304,26 @@ where
             width: radius * 2.0,
             height: radius * 2.0,
         };
-        renderer.with_layer(bounds, |renderer| {
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: circle,
-                    border: Border {
-                        radius: radius.into(),
-                        ..Border::default()
-                    },
-                    ..Default::default()
-                },
-                iced::Background::Color(Color {
-                    a: alpha,
-                    ..self.tint
-                }),
-            );
+        let quad = renderer::Quad {
+            bounds: circle,
+            border: Border {
+                radius: radius.into(),
+                ..Border::default()
+            },
+            ..Default::default()
+        };
+        let background = iced::Background::Color(Color {
+            a: alpha,
+            ..self.tint
         });
+        // The same circle under each disjoint scissor rectangle. Layer clipping does not blend, so
+        // the bands tile into exactly the circle intersected with the element's rounded shape —
+        // no seam where they meet, and nothing painted outside the shape.
+        for band in shape_bands(bounds, self.radius) {
+            renderer.with_layer(band, |renderer| {
+                renderer.fill_quad(quad, background);
+            });
+        }
     }
 
     fn overlay<'b>(
@@ -246,5 +347,201 @@ where
 impl<'a, M: 'a> From<Ripple<'a, M>> for Element<'a, M> {
     fn from(r: Ripple<'a, M>) -> Self {
         Element::new(r)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The reference case: a sidebar row. 40dp tall at `shape::FULL`, which is where the original
+    /// rectangular clip put two 20×20 square caps outside a pill.
+    const ROW: Rectangle = Rectangle {
+        x: 10.0,
+        y: 20.0,
+        width: 400.0,
+        height: 40.0,
+    };
+
+    /// `shape::FULL` as the tokens spell it — a number far larger than any element, meaning "as
+    /// round as this shape can be".
+    const FULL: f32 = 9999.0;
+
+    /// Is `(x, y)` inside `bounds` rounded by `radius`? The predicate the tiling must respect.
+    fn inside(bounds: Rectangle, radius: f32, x: f32, y: f32) -> bool {
+        let r = radius.clamp(0.0, bounds.width.min(bounds.height) / 2.0);
+        if x < bounds.x || y < bounds.y {
+            return false;
+        }
+        if x > bounds.x + bounds.width || y > bounds.y + bounds.height {
+            return false;
+        }
+        let cx = if x < bounds.x + r {
+            bounds.x + r
+        } else if x > bounds.x + bounds.width - r {
+            bounds.x + bounds.width - r
+        } else {
+            return true;
+        };
+        let cy = if y < bounds.y + r {
+            bounds.y + r
+        } else if y > bounds.y + bounds.height - r {
+            bounds.y + bounds.height - r
+        } else {
+            return true;
+        };
+        // Half a pixel of slack: this checks the tiling did not *overhang*, not that it landed on
+        // the curve to the last bit of float precision.
+        (x - cx).hypot(y - cy) <= r + 0.5
+    }
+
+    /// The whole point. Every rectangle the tiling produces lies inside the rounded shape, so
+    /// nothing the ripple draws can appear outside the surface being pressed.
+    #[test]
+    fn no_band_reaches_outside_the_rounded_shape() {
+        for radius in [FULL, 20.0, 12.0, 4.0] {
+            for band in shape_bands(ROW, radius) {
+                for (x, y) in [
+                    (band.x, band.y),
+                    (band.x + band.width, band.y),
+                    (band.x, band.y + band.height),
+                    (band.x + band.width, band.y + band.height),
+                ] {
+                    assert!(
+                        inside(ROW, radius, x, y),
+                        "at radius {radius} a band corner ({x}, {y}) is outside the shape — this \
+                         is the overhang that made the ripple read as a rectangle on a pill"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Disjoint, or overlapping bands would blend the ripple with itself and draw a seam at every
+    /// join — brighter lines across the element, a worse artefact than the one being fixed.
+    #[test]
+    fn the_bands_do_not_overlap() {
+        let bands = shape_bands(ROW, FULL);
+        for (i, a) in bands.iter().enumerate() {
+            for b in &bands[i + 1..] {
+                // A tolerance, because abutting bands are computed from different expressions
+                // — one from the band index, the merged one from a running top — and can land an
+                // ulp apart. An ulp of overlap is not a seam; a pixel of it would be.
+                let overlap = a.y.max(b.y) + 1e-3 < (a.y + a.height).min(b.y + b.height);
+                assert!(!overlap, "bands {a:?} and {b:?} overlap vertically");
+            }
+        }
+    }
+
+    /// …and contiguous, or the gaps between them would show as unpainted stripes.
+    #[test]
+    fn the_bands_tile_the_full_height() {
+        let bands = shape_bands(ROW, FULL);
+        assert_eq!(bands.first().map(|b| b.y), Some(ROW.y));
+        assert_eq!(
+            bands.last().map(|b| b.y + b.height),
+            Some(ROW.y + ROW.height),
+            "the tiling stops short of the bottom edge"
+        );
+        for pair in bands.windows(2) {
+            assert!(
+                (pair[0].y + pair[0].height - pair[1].y).abs() < 0.001,
+                "a gap between {:?} and {:?}",
+                pair[0],
+                pair[1]
+            );
+        }
+    }
+
+    /// The tiling covers nearly all of the shape. A conservative tiling that clipped away half the
+    /// element would satisfy every rule above and show the ripple as a thin stripe.
+    #[test]
+    fn the_bands_cover_almost_all_of_the_shape() {
+        let covered: f32 = shape_bands(ROW, FULL)
+            .iter()
+            .map(|b| b.width * b.height)
+            .sum();
+        // A pill's area: the middle rectangle plus the two semicircular caps.
+        let r = ROW.height / 2.0;
+        let shape = (ROW.width - 2.0 * r) * ROW.height + std::f32::consts::PI * r * r;
+        assert!(
+            covered / shape > 0.97,
+            "the tiling covers {:.1}% of the pill — the ripple would visibly stop short of its \
+             own element",
+            100.0 * covered / shape
+        );
+    }
+
+    /// A square element costs one rectangle. Banding a shape with no corners to follow would be
+    /// pure overhead on every frame of every ripple.
+    #[test]
+    fn a_square_element_is_a_single_band() {
+        assert_eq!(shape_bands(ROW, 0.0), vec![ROW]);
+        assert_eq!(shape_bands(ROW, 0.4), vec![ROW]);
+    }
+
+    /// A shape with a genuine straight middle spends one rectangle on it, not one per band.
+    ///
+    /// A *pill* has no straight middle — at `shape::FULL` the two corner arcs meet, so every band
+    /// differs and none can merge. That is the worst case, and it is bounded below. The merge earns
+    /// its keep on everything gentler: a 12dp corner on a 40dp row is mostly straight edge.
+    #[test]
+    fn a_straight_edge_costs_one_band() {
+        let gentle = shape_bands(ROW, 12.0);
+        assert!(
+            gentle.iter().any(|b| b.height > ROW.height / 4.0),
+            "no tall middle band at a 12dp radius, so the straight edge was banded needlessly: \
+             {gentle:#?}"
+        );
+        assert!(
+            gentle.len() < shape_bands(ROW, FULL).len(),
+            "a gentler corner did not cost fewer bands than a pill"
+        );
+    }
+
+    /// The cost is bounded, and paid per frame while a ripple animates. A tiling proportional to
+    /// the element's height would make a tall surface arbitrarily expensive to press.
+    #[test]
+    fn the_band_count_is_bounded_by_the_configured_resolution() {
+        for height in [24.0, 40.0, 200.0, 800.0] {
+            let tall = Rectangle { height, ..ROW };
+            let bands = shape_bands(tall, FULL);
+            assert!(
+                bands.len() <= BANDS_PER_CORNER * 3,
+                "{} bands for a {height}dp element — the count follows the element, not the \
+                 configured resolution",
+                bands.len()
+            );
+        }
+    }
+
+    /// Degenerate geometry occurs for a frame during layout. A zero-sized element must produce
+    /// nothing drawable rather than a `NaN` rectangle, which would poison the clip.
+    #[test]
+    fn degenerate_bounds_do_not_produce_nonsense() {
+        for bounds in [
+            Rectangle {
+                x: 0.0,
+                y: 0.0,
+                width: 0.0,
+                height: 0.0,
+            },
+            Rectangle {
+                x: 5.0,
+                y: 5.0,
+                width: 30.0,
+                height: 0.0,
+            },
+        ] {
+            for band in shape_bands(bounds, FULL) {
+                assert!(
+                    band.x.is_finite()
+                        && band.y.is_finite()
+                        && band.width.is_finite()
+                        && band.height.is_finite(),
+                    "{band:?} is not a drawable rectangle"
+                );
+            }
+        }
     }
 }

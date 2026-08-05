@@ -34,6 +34,10 @@ mod select;
 /// application's own theme function lives behind it — see [`crate::ui::theme`].
 pub(crate) mod style;
 
+/// The ripple's clipping, checked in rasterised pixels rather than in geometry. In-crate for the
+/// same reason as the snapshots above.
+#[cfg(test)]
+mod ripple_clipping;
 /// The style layer's parity snapshot. Lives inside the crate rather than in `tests/` because the
 /// layer it asserts is no longer reachable from outside it — which is the point.
 #[cfg(test)]

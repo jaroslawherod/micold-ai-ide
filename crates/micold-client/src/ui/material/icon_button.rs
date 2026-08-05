@@ -11,7 +11,7 @@ use crate::ui::material::style;
 use crate::ui::material::text::TypeRole;
 use iced::widget::button;
 use iced::Element;
-use micold_core::tokens::{spacing, Rgb, Roles};
+use micold_core::tokens::{shape, spacing, Rgb, Roles};
 use std::marker::PhantomData;
 
 /// A boxed button style function — lets [`From::from`] pick between [`style::text_button`] and
@@ -115,7 +115,7 @@ impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
         // Ripples in the glyph's own tint, and only when it can be pressed — a disabled icon
         // button already grades its glyph down, and a ripple would contradict that.
         if pressable {
-            super::Ripple::new(btn, tint).into()
+            super::Ripple::new(btn, tint, shape::FULL).into()
         } else {
             btn.into()
         }
