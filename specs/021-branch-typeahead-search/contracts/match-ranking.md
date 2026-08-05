@@ -48,7 +48,7 @@ occurrence. `spans` is the single range covering it.
 > is exactly the broken word the clarification session rejected. The single-edit tier is therefore
 > tried **first**, and ranks above subsequence: it is the closer reading of what was typed.
 
-### §2.2 Single edit — active from 5 query characters
+### §2.2 Single edit — active from 3 query characters, anchored below 5
 
 Hits when some window of `name` of length `q-1`, `q` or `q+1` (where `q` is the query's character
 length) is within Levenshtein distance 1 of the query. `at` is the window's start; `spans` is the
@@ -59,18 +59,31 @@ substitution beats an insertion that also happens to work.
 `reporting`.
 **Q2.2.2** query `repot`, name `feat/reporting` → `SingleEdit` over the window `repor`.
 **Q2.2.3** query `xyz`, name `feat/reporting` → `None` (FR-008).
-**Q2.2.4** query `frep`, name `feat/reporting` → **not** `SingleEdit`: four characters is below this
-tier's own floor. It falls to §2.3.
+Below **5** characters the tier is **anchored**: only same-length windows are considered, and the
+window's first and last characters must equal the query's. Above it, unrestricted.
 
-> **A floor of its own, found during implementation.** This tier was originally gated at the same
-> three characters as §2.3, and the first abbreviation test caught what that costs. One edit reaches
-> a window of length `q-1`, so at `q = 3` a **two-character** window answers a three-character
-> search — `llo` matched `lo` — and at `q = 4` the punctuation-for-letter substitution `/rep`
-> claimed `frep` before the subsequence tier could read it as `f` … `rep`. Since §2.4 makes the
-> first hit final, that put every short abbreviation into the wrong tier and the wrong emphasis.
-> The rule: a single edit is a plausible reading of what you typed only once one wrong character is
-> a *minority* of the query. At four characters it is a quarter; at five it is a fifth, and the two
-> committed typo cases (`reportng`, `repot`) both sit at five or above.
+**Q2.2.4** query `frep`, name `feat/reporting` → **not** `SingleEdit`: the same-length window
+`/rep` disagrees with the query at its first character, so it is not read as a typo. It falls to
+§2.3.
+**Q2.2.5** query `lagi`, name `feat/login` → `SingleEdit` over `logi`: four characters, but the ends
+agree, so one wrong character between them is a slip (SC-004).
+
+> **Anchored below five, arrived at in two steps.** This tier was originally gated at the same three
+> characters as §2.3, and the first abbreviation test caught what that costs. One edit reaches a
+> window of length `q-1`, so at `q = 3` a **two-character** window answered a three-character search
+> — `llo` matched `lo` — and at `q = 4` the punctuation-for-letter substitution `/rep` claimed
+> `frep` before the subsequence tier could read it as `f` … `rep`. Since §2.4 makes the first hit
+> final, that put every short abbreviation into the wrong tier and the wrong emphasis.
+>
+> The first fix was a flat floor of five characters, and `/speckit-converge` caught what *that*
+> cost: SC-004 promises that one wrong character still finds the branch and says nothing about
+> length, but `lagi` — one substitution from `logi` — then found nothing at all.
+>
+> Both original failures disagree with the query at an **end**, which is the narrower cause. The
+> first character of a search is the one the developer is surest of, and the last is what they have
+> just typed; a wrong character *between* them is a slip, while a different first letter is a
+> different word. So the tier now runs from three characters, anchored below five — which keeps
+> `frep` and `llo` out and lets `lagi` in.
 
 ### §2.3 Subsequence — active from 3 query characters
 

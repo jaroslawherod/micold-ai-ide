@@ -263,3 +263,36 @@ fn single_edit_starts_at_five_characters_and_subsequence_covers_below_it() {
     // Five: the tier is live, and a substituted letter reads as the whole word again.
     assert_eq!(hit("feat/login", "lagin").kind, MatchKind::SingleEdit);
 }
+
+/// SC-004 promises that *one* wrong character still finds the branch, and says nothing about how
+/// much was typed. A blanket five-character floor on the single-edit tier broke that promise for
+/// short searches: `lagi` is one substitution from `logi`, and it found nothing at all.
+///
+/// The floor was fixing two real failures, and both have a narrower cause than "the query is
+/// short" — see the tier's own note. What survives at three and four characters is the case where
+/// the developer got the first and last characters right, which is the shape of a genuine typo.
+#[test]
+fn a_single_typo_is_forgiven_even_in_a_short_search() {
+    let m = hit("feat/login", "lagi");
+    assert_eq!(m.kind, MatchKind::SingleEdit);
+    assert_eq!(
+        emphasised("feat/login", &m.spans),
+        "logi",
+        "the whole window reads as the word that was meant"
+    );
+
+    // Three characters is the floor for approximation of any kind, and a typo there is forgiven too.
+    assert_eq!(hit("feat/login", "lgn").kind, MatchKind::Subsequence);
+    assert_eq!(hit("chore/deps", "dops").kind, MatchKind::SingleEdit);
+}
+
+/// The narrower rule must not undo what the floor was there for. Both failures it fixed are
+/// characterised by the query and the window disagreeing at an *end*: `frep` against `/rep`
+/// differs at the first character, which is what makes it an abbreviation rather than a typo.
+#[test]
+fn a_short_search_whose_ends_disagree_is_not_read_as_a_typo() {
+    // Still an abbreviation, not a one-substitution match of `/rep` (contract Q2.2.4, Q2.3.1).
+    assert_eq!(hit("feat/reporting", "frep").kind, MatchKind::Subsequence);
+    // And a two-character window still cannot answer a three-character search.
+    assert_eq!(hit("release/local-login", "llo").kind, MatchKind::Subsequence);
+}

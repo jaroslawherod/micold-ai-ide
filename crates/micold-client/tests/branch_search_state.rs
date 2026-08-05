@@ -204,12 +204,17 @@ fn switching_away_from_the_picker_resets_the_search() {
 
 // --- T015: focus opens the list ---------------------------------------------------------------
 
-/// FR-001b — focusing shows what is on offer, before anything is typed. Without this the picker
-/// opens as a bare field with no sign that it has anything in it.
+/// FR-001b — returning to the field shows what is on offer again, without filtering anything.
+///
+/// The list is already open when the picker appears, so this is the way *back*: a developer who
+/// dismissed it and then reached for the field gets it back exactly as it was, rather than having
+/// to type a character to see the branches again. Focusing is not typing, so the query and the
+/// selection are untouched.
 #[test]
-fn focusing_the_field_opens_the_list_without_filtering_anything() {
+fn returning_to_the_field_reopens_the_list_without_filtering_anything() {
     let mut state = picker();
-    assert!(!form(&state).branch_list_open, "closed until the field is focused");
+    state.update(Message::AddWorktreeBranchDismissed);
+    assert!(!form(&state).branch_list_open, "put away by the developer");
 
     state.update(Message::AddWorktreeBranchFocused);
 
@@ -384,4 +389,58 @@ fn a_no_match_query_leaves_an_existing_selection_alone() {
     assert!(f.branch_matches.is_empty());
     assert_eq!(f.selected_branch.as_ref().unwrap().name, "feat/login");
     assert!(f.can_submit(), "the form is still submittable on the branch already chosen");
+}
+
+/// FR-001b / US1/AC1 — the list is open from the outset, before anything is typed, so the branches
+/// on offer are visible the moment the picker is.
+///
+/// It used to open on a press inside the field, which meant a developer who reached the field with
+/// Tab saw nothing until they typed — and "before anything is typed" is precisely what that rules
+/// out. Opening it when the picker appears is the same guarantee for every route in, and does not
+/// depend on the rendering stack reporting a focus event it does not report.
+#[test]
+fn choosing_the_existing_branch_source_opens_the_list_straight_away() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::AddWorktreeBranchesListed(branches()));
+    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+
+    let f = form(&state);
+    assert!(
+        f.branch_list_open,
+        "the branches on offer are visible from the outset, with no keystroke and no click"
+    );
+    assert_eq!(f.branch_query, "", "and nothing has been typed");
+    assert_eq!(
+        f.branch_matches.len(),
+        branches().len(),
+        "so every candidate is on offer"
+    );
+}
+
+/// Candidates usually arrive after the form opens — the daemon lists them asynchronously — so the
+/// list must be open when they land, not only when the source was switched.
+#[test]
+fn branches_arriving_after_the_picker_is_shown_open_the_list_too() {
+    let mut state = State::default();
+    state.update(Message::AddWorktreeOpened);
+    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+    state.update(Message::AddWorktreeBranchesListed(branches()));
+
+    assert!(form(&state).branch_list_open);
+}
+
+/// Dismissing still closes it, and it stays closed — otherwise the next candidate list or a
+/// re-render would reopen what the developer just put away.
+#[test]
+fn a_dismissal_is_not_undone_by_candidates_arriving() {
+    let mut state = picker();
+    state.update(Message::AddWorktreeBranchDismissed);
+    assert!(!form(&state).branch_list_open);
+
+    state.update(Message::AddWorktreeBranchesListed(branches()));
+    assert!(
+        !form(&state).branch_list_open,
+        "a refreshed candidate list must not reopen a list the developer dismissed"
+    );
 }

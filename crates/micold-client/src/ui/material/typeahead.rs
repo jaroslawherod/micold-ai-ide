@@ -453,6 +453,18 @@ impl<P> Default for State<P> {
     }
 }
 
+/// The emphasised weight: the base font, one step heavier.
+///
+/// Derived from whatever font the row is already drawn in rather than named outright, so a change
+/// of typeface carries the emphasis with it and this never becomes a second place the font is
+/// chosen.
+fn emphasis_font(base: iced::Font) -> iced::Font {
+    iced::Font {
+        weight: iced::font::Weight::Bold,
+        ..base
+    }
+}
+
 /// Splits `text` at `spans` into `(piece, emphasised)` runs, in order and with no gaps.
 fn segments(text: &str, spans: &[Range<usize>]) -> Vec<(String, bool)> {
     let mut out = Vec::new();
@@ -484,9 +496,9 @@ fn segments(text: &str, spans: &[Range<usize>]) -> Vec<(String, bool)> {
 impl<M, Theme, Renderer> Widget<M, Theme, Renderer> for EmphasisedLabel<M>
 where
     // Bound to the concrete font so emphasis can name a weight, and so the row can be set in its
-    // type role's own face. The library already draws every label through `iced::Font`, so this
-    // rules out no renderer the application can have — it only makes the existing assumption
-    // checkable.
+    // type role's own face. The library already draws every glyph and every label through
+    // `iced::Font` (see `glyph.rs` and `text.rs`), so this rules out no renderer the application
+    // can actually have — it only makes the existing assumption checkable.
     Renderer: text::Renderer<Font = iced::Font>,
 {
     fn tag(&self) -> tree::Tag {
@@ -535,7 +547,15 @@ where
             state.segments = segments(&fitted, &spans)
                 .into_iter()
                 .map(|(piece, emphasised)| {
-                    let paragraph = Renderer::Paragraph::with_text(template.with_content(&piece));
+                    // Colour *and* weight (contract §4.3). Two channels rather than one, because a
+                    // colour alone is the channel a developer with a colour-vision deficiency is
+                    // least likely to have — and it is also the channel the selected row's tonal
+                    // fill sits closest to. Weight survives both.
+                    let mut text = template.with_content(piece.as_str());
+                    if emphasised {
+                        text.font = emphasis_font(text.font);
+                    }
+                    let paragraph = Renderer::Paragraph::with_text(text);
                     let bounds = paragraph.min_bounds();
                     let segment = Segment {
                         paragraph,

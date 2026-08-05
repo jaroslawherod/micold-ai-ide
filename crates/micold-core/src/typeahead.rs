@@ -170,14 +170,9 @@ pub fn match_one(name: &str, query: &Query) -> Option<Match> {
     }
 
     // Single edit is tried first — a typo read as the word it meant beats the same typo read as
-    // scattered characters — but only once one wrong character is a *minority* of what was typed.
-    // Below five, "one edit away" is a quarter or more of the query, and one edit reaches so far
-    // that a two-character window would answer a three-character search; "these characters, in
-    // this order" is the stronger claim at that length. See the tier-order note in contract §2.
-    if q.len() >= MIN_SINGLE_EDIT_CHARS {
-        if let Some(m) = single_edit(&folded, q) {
-            return Some(m);
-        }
+    // scattered characters. Below five it is tried in a narrowed form; see `single_edit`.
+    if let Some(m) = single_edit(&folded, q) {
+        return Some(m);
     }
 
     subsequence(&folded, q)
@@ -186,8 +181,12 @@ pub fn match_one(name: &str, query: &Query) -> Option<Match> {
 /// The query length at which the approximate tiers switch on (FR-006a).
 const MIN_APPROXIMATE_CHARS: usize = 3;
 
-/// The query length at which the single-edit tier switches on (contract §2.2).
-const MIN_SINGLE_EDIT_CHARS: usize = 5;
+/// The query length at or above which the single-edit tier runs unrestricted (contract §2.2).
+///
+/// Below it the tier still runs, but only over windows that are *anchored*: see
+/// [`anchored_single_edit`] for what that means and why the restriction is shaped that way rather
+/// than as a flat floor.
+const UNRESTRICTED_SINGLE_EDIT_CHARS: usize = 5;
 
 /// Tier 1 — the name contains the query verbatim, at its leftmost occurrence.
 fn literal(name: &Folded, query: &[char]) -> Option<Match> {
@@ -236,6 +235,7 @@ fn subsequence(name: &Folded, query: &[char]) -> Option<Match> {
 /// at all.
 fn single_edit(name: &Folded, query: &[char]) -> Option<Match> {
     let q = query.len();
+    let anchored = q < UNRESTRICTED_SINGLE_EDIT_CHARS;
     // A window is at most one character longer than the query, so a name shorter than that cannot
     // hold one. Checked first because it is the cheapest way to dismiss a long query outright.
     if name.len() + 1 < q {
@@ -247,13 +247,22 @@ fn single_edit(name: &Folded, query: &[char]) -> Option<Match> {
 
     // Same length first, so a substitution is preferred over an insertion that happens to work —
     // the closest reading of the query wins, and the choice is fixed rather than incidental.
-    let widths: [usize; 3] = [q, q + 1, q.saturating_sub(1)];
+    //
+    // A short query gets same-length windows only. The other two widths are what let a
+    // *two*-character window answer a three-character search, which is a coincidence rather than a
+    // typo; at four characters and below there is not enough query left for the difference to mean
+    // anything.
+    let widths: &[usize] = if anchored { &[q] } else { &[q, q + 1, q - 1] };
     for start in 0..=name.len() {
-        for width in widths {
+        for &width in widths {
             if width == 0 || start + width > name.len() {
                 continue;
             }
-            if edit_distance_at_most_one(&name.chars[start..start + width], query) {
+            let window = &name.chars[start..start + width];
+            if anchored && !anchored_single_edit(window, query) {
+                continue;
+            }
+            if edit_distance_at_most_one(window, query) {
                 let span = name.span(start, start + width);
                 return Some(Match {
                     kind: MatchKind::SingleEdit,
@@ -282,6 +291,31 @@ fn within_one_edit_is_possible(name: &Folded, query: &[char]) -> bool {
         }
     }
     true
+}
+
+/// Whether a short query may be read as a typo of `window` at all.
+///
+/// The rule: the first and last characters must agree. Below five characters the tier had to be
+/// narrowed — two searches were being read as typos when they were plainly not — and both had the
+/// same shape. `frep` against `feat/reporting` is one substitution from the window `/rep`, so the
+/// tier claimed it and emphasised a slash; but a developer who types `frep` has abbreviated
+/// `f`…`rep`, not mistyped `/rep`. `llo` against `release/local-login` matched the two-character
+/// window `lo`, which is a coincidence at that length rather than a typo.
+///
+/// What both have in common is disagreement at an **end**. The first character of a search is the
+/// one the developer is surest of — it is the letter the branch starts with, or the initial they
+/// are abbreviating from — and the last is what they have just typed. A wrong character *between*
+/// them is a slip; a different first letter is a different word. So `lagi` still finds `logi`, and
+/// `frep` is left to the tier that reads it correctly.
+///
+/// Above five characters none of this is needed: one wrong character in five or more is a small
+/// enough share that the window cannot be a coincidence, and anchoring would then refuse the
+/// perfectly ordinary typo of getting the first letter wrong.
+fn anchored_single_edit(window: &[char], query: &[char]) -> bool {
+    match (window.first(), query.first(), window.last(), query.last()) {
+        (Some(wf), Some(qf), Some(wl), Some(ql)) => wf == qf && wl == ql,
+        _ => false,
+    }
 }
 
 /// Whether two character slices are within Levenshtein distance 1.

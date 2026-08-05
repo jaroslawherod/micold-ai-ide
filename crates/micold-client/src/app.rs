@@ -205,7 +205,16 @@ impl WorktreeForm {
     fn reset_branch_search(&mut self) {
         self.branch_query.clear();
         self.branch_highlight = None;
-        self.branch_list_open = false;
+        // Open as soon as the picker is the picker, and closed whenever it is not (invariant 5).
+        //
+        // FR-001b asks for the list to open "when the search field takes focus — before anything is
+        // typed", and the point of that is the second half: the branches on offer are visible from
+        // the outset. Hanging it on focus alone cannot deliver it, because the rendering stack's
+        // text input publishes nothing when it gains focus — so it was reachable only by a press,
+        // and a developer arriving with Tab saw an empty field and no list until they typed.
+        // Opening it with the picker is the same guarantee by every route in. A dismissal still
+        // closes it, and nothing reopens it until the developer returns to the field.
+        self.branch_list_open = self.source == BranchSource::Existing;
         self.rematch_branches();
     }
 

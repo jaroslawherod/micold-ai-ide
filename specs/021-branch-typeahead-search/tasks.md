@@ -275,6 +275,12 @@ Four, each with the reason it was better than what was planned:
   tabbed to — the next Enter would have picked a branch instead of pressing Create. Found by review;
   the rule is in `micold-core` with the rest of the keyboard rule, and the contract's C3.2 records
   what "focus" and "blur" actually resolve to.
+- **Emphasis is drawn with a custom `EmphasisedLabel` widget, not `rich_text`/`span`.** The plan's
+  Technical Context and T024 both name `rich_text`; it cannot be used, because truncation has to
+  happen at layout time — that is when the renderer can shape text and the available width is known
+  — and `fit_around` decides which characters survive before any span exists. `ellipsized.rs` is a
+  widget for the same reason. The widget binds its renderer's font to `iced::Font` so emphasis can
+  name a weight (T065).
 - **`Icon::Search` was added to the icon vocabulary** for T024's leading search affordance —
   a magnifier, distinct from `Icon::Filter`'s funnel. Not anticipated by the plan, which assumed
   the affordance could come from the existing set.
@@ -358,3 +364,16 @@ applies rather than decides.
   closed list, and this feature ends stricter than it started — two gates wider, in fact.
 - Do not tune the SC-003 corpus to make T045 pass. The corpus is the specification of ranking quality;
   changing it is a visible diff to a named file and needs the same argument any other spec change does.
+
+---
+
+## Phase 7: Convergence
+
+Appended by `/speckit-converge`. Each item is remaining work found by assessing the code against
+`spec.md`, `plan.md` and the contracts — not a change to any of them.
+
+- [X] T062 Open the result list when the search field takes focus by any route, not only a left press inside its bounds — a developer who reaches the field with Tab currently sees nothing until they type, which is precisely what "before anything is typed" rules out — in `crates/micold-client/src/ui/cdk/typeahead.rs`, per FR-001b and US1/AC1 (partial)
+- [X] T063 Reconcile the 5-character single-edit floor with the spec: a 3- or 4-character substitution typo now surfaces nothing (`lagi` finds no `feat/login`), while SC-004 promises single-typo tolerance with no length qualifier and FR-006a puts the approximate floor at 3. Either narrow the claim in `spec.md` or widen the tier in `crates/micold-core/src/typeahead.rs`; the reasoning behind the floor is in [contracts/match-ranking.md §2.2](./contracts/match-ranking.md), per SC-004 and FR-006a (contradicts)
+- [X] T064 Add this feature's emphasis pairings to the AA-contrast gate — `primary` on `surface`, `primary` on `secondary_container` (emphasis on the selected row's tonal fill), and `on_surface_variant` on `surface` (a disabled row) — in `crates/micold-core/tests/tokens.rs`, so "legible in both appearances" is measured rather than assumed, per FR-011 (missing)
+- [X] T065 Settle emphasis weight: `EmphasisedLabel` shapes every segment with the renderer's default font, so emphasis is colour alone. FR-011c permits "colour role and/or type weight", but [contracts/typeahead-component.md §4.3](./contracts/typeahead-component.md) says "plus type weight" — either add the weight step in `crates/micold-client/src/ui/material/typeahead.rs` or amend C4.3 to what shipped, per plan: contract C4.3 (partial)
+- [X] T066 [P] Record the `rich_text` → custom-widget deviation in the Deviations section of this file: the plan's Technical Context and T024 both name `rich_text`/`span` as the emphasis mechanism, and a custom `EmphasisedLabel` was built instead because truncation has to happen at layout time. The reason already sits at `crates/micold-client/src/ui/material/typeahead.rs`; the other five deviations are recorded here and this one is not, per plan: Technical Context (partial)
