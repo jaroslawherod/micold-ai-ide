@@ -125,12 +125,42 @@ argued for in a diff.
 
 ## §4 Appearance (the `material` half)
 
-**C4.1** The field uses the library's existing text-field treatment, with a leading search affordance
-and a trailing clear affordance that empties the query in one action (FR-016, FR-011a).
+**C4.1** The field **is** `material::TextField`, with Material's two named slots filled: a leading
+icon saying what the field is for, and a trailing action that empties the query in one press
+(FR-016, FR-011a). Both slots were added to `TextField` rather than assembled here — the spec's own
+assumption is that a gap in the shared library is closed by extending it, and a search field is not
+the last thing that will want a clear button.
+
+**C4.1a — Every part is a library component.** Material Design 3 has no type-ahead: the pattern it
+sanctions is *a text field with an attached menu*, and this component is that assembly. So each part
+is the library's existing Material component rather than a widget styled here:
+
+| Part | Component |
+|---|---|
+| the field | `material::TextField` (+ leading icon, trailing action) |
+| the surface the list sits on | `material::menu_panel` — the same panel every popover uses |
+| the scroll behaviour | `material::Scrollable` |
+| a row's press feedback | `material::Ripple`, as `material::menu`'s own items do |
+| the selected row's marker | `material::Glyph` |
+| the no-match message | `material::Text` at `Caption`, muted |
+
+A row is Material's **menu item**, assembled exactly as `material::menu` assembles its own, and
+differing in two places that its content forces: the label is an `EmphasisedLabel` rather than a
+`Text`, because part of it is emphasised; and it is set at `Body` rather than `Action`, because
+`Action` is already the medium weight and emphasis would have nowhere to step up to. Row height is
+`density::MENU_ITEM_BASE`, so a short label keeps its touch target.
+
+**C4.1b — A row ripples only when it can be pressed.** The ripple's message is "that did something",
+and pressing an unavailable branch does nothing (FR-012a), so the wrapper is absent rather than
+present and lying.
 
 **C4.2** The list is a menu surface anchored to the field: elevation, corner shape, row height,
 padding and separators all come from the token set. No literal colour, size or spacing appears in
-either half (FR-011b, `tests/material_boundary.rs`).
+either half (FR-011b, `tests/material_boundary.rs`). **State-layer opacities come from
+`tokens::state`** — never from a number chosen here. The first draft of `style::menu_row` hardcoded
+`0.12` for pressed, which is the *selected* opacity, so a pressed row and a selected one rendered
+identically; that is the same bug feature 019 had already fixed everywhere else, reintroduced by a
+function written before those tokens existed.
 
 **C4.3** Emphasis is a token-backed colour role plus type weight — not a filled background, which is
 where the row's own hover / keyboard-highlight / selected states already live (FR-011c, research R7).
