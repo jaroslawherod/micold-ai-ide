@@ -931,8 +931,16 @@ fn the_preview_follows_the_active_source() {
     assert_eq!(derived.dir_name, "release-v1-2");
 }
 
+/// A branch checked out elsewhere cannot be used — and since feature 021 that is settled one layer
+/// earlier than it used to be.
+///
+/// Feature 016 let such a branch be *selected* and refused it at the point of creating, because
+/// `pick_list` could not disable an individual row. The type-ahead can, so FR-012a moved the
+/// refusal to the point of choosing: the press is ignored outright. The old assertion
+/// (`!can_submit()` after selecting a blocked branch) still passes, but now only because nothing
+/// was selected at all — a vacuous pass. This asserts what actually holds.
 #[test]
-fn a_blocked_candidate_cannot_be_submitted_but_an_available_one_can() {
+fn a_blocked_candidate_cannot_even_become_the_selection() {
     let mut state = form_state();
     state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
 
@@ -940,12 +948,27 @@ fn a_blocked_candidate_cannot_be_submitted_but_an_available_one_can() {
         "main",
     )));
     assert!(
-        !form(&state).can_submit(),
-        "a branch that is checked out elsewhere must not be creatable (FR-012)"
+        form(&state).selected_branch.is_none(),
+        "a branch that is checked out elsewhere must not be choosable at all (FR-012a)"
     );
+    assert!(!form(&state).can_submit());
 
     state.update(Message::AddWorktreeBranchSelected(candidate("feat/free")));
+    assert_eq!(form(&state).selected_branch.as_ref().unwrap().name, "feat/free");
     assert!(form(&state).can_submit());
+}
+
+/// …and the guard at the point of action stays, unreachable through the picker but still the
+/// invariant's last line of defence. Driven directly, because nothing routes a blocked branch into
+/// the form any more.
+#[test]
+fn the_submit_guard_still_refuses_a_blocked_selection_if_one_ever_reached_it() {
+    let form = WorktreeForm {
+        source: BranchSource::Existing,
+        selected_branch: Some(blocked_candidate("main")),
+        ..WorktreeForm::default()
+    };
+    assert!(!form.can_submit());
 }
 
 #[test]

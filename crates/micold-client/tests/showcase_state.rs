@@ -11,6 +11,7 @@
 //! stale index is the shape a reordered catalogue would take.
 
 use micold_client::showcase::state::{Floating, Message, Showcase};
+use micold_core::typeahead::Direction;
 use micold_core::theme::ColorScheme;
 
 /// A gallery with a handful of entries — enough that "only entry `i` moved" means something.
@@ -206,6 +207,122 @@ fn no_op_changes_nothing() {
     let before = snapshot(&s);
     s.update(Message::NoOp);
     assert_eq!(snapshot(&s), before);
+}
+
+// --- the type-ahead example (feature 021, US3) -------------------------------------------------
+
+/// The gallery's type-ahead is a *live* example, not a picture of one (FR-020), so it owns a query
+/// of its own — and that makes typing into it a state transition like any other, which is why it is
+/// tested here rather than left to whoever clicks on it.
+#[test]
+fn typing_into_the_typeahead_narrows_the_sample_rows() {
+    let mut s = showcase();
+    assert_eq!(
+        s.typeahead_rows().len(),
+        micold_client::showcase::samples::SEARCH_RESULTS.len(),
+        "an empty query offers everything"
+    );
+
+    s.update(Message::TypeaheadQueryChanged("log".into()));
+
+    assert_eq!(s.typeahead_query(), "log");
+    let rows = s.typeahead_rows();
+    assert!(
+        rows.len() < micold_client::showcase::samples::SEARCH_RESULTS.len(),
+        "the query narrows the list"
+    );
+    assert!(
+        rows.iter().all(|r| !r.spans.is_empty()),
+        "every surviving row says which characters put it there"
+    );
+}
+
+/// The highlight moves the same way the picker's does, because it is the same rule — the gallery
+/// example would be worth little if its keyboard behaved differently from the real one.
+#[test]
+fn the_typeahead_highlight_moves_and_stops_at_the_ends() {
+    let mut s = showcase();
+    assert_eq!(s.typeahead_highlight(), None, "nothing is highlighted at rest");
+
+    s.update(Message::TypeaheadHighlightMoved(Direction::Next));
+    assert_eq!(s.typeahead_highlight(), Some(0), "the first move enters the list");
+
+    let last = s.typeahead_rows().len() - 1;
+    for _ in 0..s.typeahead_rows().len() + 3 {
+        s.update(Message::TypeaheadHighlightMoved(Direction::Next));
+    }
+    assert_eq!(s.typeahead_highlight(), Some(last), "it stops at the end rather than wrapping");
+
+    for _ in 0..last + 3 {
+        s.update(Message::TypeaheadHighlightMoved(Direction::Prev));
+    }
+    assert_eq!(s.typeahead_highlight(), Some(0), "and at the start");
+}
+
+/// A highlight left pointing past the end of a shrinking list is the bug the picker's reducer also
+/// guards against; the gallery re-seats it the same way.
+#[test]
+fn narrowing_the_typeahead_reseats_a_dangling_highlight() {
+    let mut s = showcase();
+    for _ in 0..s.typeahead_rows().len() {
+        s.update(Message::TypeaheadHighlightMoved(Direction::Next));
+    }
+    let was = s.typeahead_highlight().expect("a highlight to strand");
+
+    s.update(Message::TypeaheadQueryChanged("log".into()));
+
+    let highlight = s.typeahead_highlight();
+    match highlight {
+        Some(i) => assert!(
+            i < s.typeahead_rows().len(),
+            "the highlight was left at {was} and now points past the {} remaining rows",
+            s.typeahead_rows().len()
+        ),
+        None => {}
+    }
+}
+
+/// A pick registers, so the example can show a selection marker — the third thing a row says at
+/// once, and the one that needs somewhere to be remembered.
+#[test]
+fn picking_a_typeahead_row_registers_the_selection() {
+    let mut s = showcase();
+    let chosen = s.typeahead_rows()[1].label.clone();
+
+    s.update(Message::TypeaheadPicked(1));
+    assert_eq!(s.typeahead_selected(), Some(1));
+
+    // And a pick is the only thing that writes it: typing does not clear it.
+    s.update(Message::TypeaheadQueryChanged("log".into()));
+    assert!(s.typeahead_selected().is_some(), "the choice survives the search");
+    assert_eq!(
+        s.typeahead_rows()[s.typeahead_selected().unwrap()].label,
+        chosen,
+        "and the marker is still on the row that was chosen, not on whatever is third now"
+    );
+}
+
+/// The marker follows the row it was put on, rather than the position that row happened to occupy.
+/// Stored as an index it would slide onto an unrelated branch the moment a search reordered the
+/// list — the failure a developer reading this page would take to be how the real picker behaves.
+#[test]
+fn the_typeahead_marker_stays_on_the_row_that_was_chosen() {
+    let mut s = showcase();
+    let last = s.typeahead_rows().len() - 1;
+    let chosen = s.typeahead_rows()[last].label.clone();
+    s.update(Message::TypeaheadPicked(last));
+
+    // Narrow to a list the chosen row is not in: the marker has nowhere to sit and says so, rather
+    // than marking whatever now occupies that position.
+    s.update(Message::TypeaheadQueryChanged("logout".into()));
+    let rows = s.typeahead_rows();
+    if !rows.iter().any(|r| r.label == chosen) {
+        assert_eq!(s.typeahead_selected(), None, "no row is the chosen one");
+    }
+
+    // Widen again and it comes back on the same row.
+    s.update(Message::TypeaheadQueryChanged(String::new()));
+    assert_eq!(s.typeahead_rows()[s.typeahead_selected().unwrap()].label, chosen);
 }
 
 /// Everything about the showcase a message could change.

@@ -28,6 +28,7 @@ fn expected(icon: Icon) -> char {
         Icon::Delete => '\u{e872}',
         Icon::Copy => '\u{e14d}',
         Icon::Filter => '\u{e152}',
+        Icon::Search => '\u{e8b6}',
         Icon::AiCli => '\u{e65f}',
         Icon::RegularTerminal => '\u{eb8e}',
         Icon::ReleaseFocus => '\u{e31a}',
@@ -58,8 +59,9 @@ fn all_covers_every_variant_without_duplicates() {
     // (all feature 010), +1 for Close (session row's trailing action, shared with feature 011's
     // terminal-instance close action rather than double-counted), +1 for AddTerminalInstance
     // (feature 011), +2 for ActivityWorking/ActivityEnded (feature 010's session activity dots,
-    // moved into the vocabulary by BUG-004).
-    assert_eq!(Icon::ALL.len(), 28, "curated set size");
+    // moved into the vocabulary by BUG-004), +1 for Search (feature 021's type-ahead field —
+    // a magnifier, distinct from Filter's funnel).
+    assert_eq!(Icon::ALL.len(), 29, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

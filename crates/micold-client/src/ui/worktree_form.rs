@@ -9,7 +9,8 @@
 
 use crate::app::{BranchSource, Message, ResolutionState, WorktreeForm, WorktreeFormStatus};
 use crate::ui::material::{
-    self, Button, Select, StageProgress, SurfaceKind, Text, TextField, ToggleChip, TypeRole,
+    self, Button, Select, StageProgress, SurfaceKind, Text, TextField, ToggleChip,
+    TypeaheadRow, TypeRole,
 };
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
@@ -66,9 +67,11 @@ pub fn modal<'a>(
 
     fields = fields.push(preview(form, r));
 
-    // Why a selected branch can't be used (FR-012). Shown here rather than as a disabled list
-    // row because `Select` wraps `pick_list`, which has no per-item disabling — the refusal
-    // happens at the point of action instead (research R8).
+    // Why a selected branch can't be used (FR-012). Feature 021 moved the refusal to the point of
+    // choice — a blocked branch is a disabled row and can no longer become the selection — so this
+    // is now unreachable through the picker. Kept as the invariant's last line of defence, for the
+    // same reason `can_submit()`'s guard is (contract §5): it costs one comparison, and its absence
+    // would let a blocked branch pass silently if any future path ever set `selected_branch`.
     if let Some(candidate) = &form.selected_branch {
         if form.source == BranchSource::Existing {
             if let Some(reason) = &candidate.blocked_by {
@@ -171,14 +174,56 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
         );
     }
 
+    // The mapping — the one place branch vocabulary and component vocabulary meet (contract §5).
+    // The label is `BranchCandidate`'s own `Display`, so the origin and in-use suffixes survive
+    // verbatim; the emphasis spans index the branch name, which that `Display` writes first, so
+    // they land on the same characters in the longer string.
+    let rows: Vec<TypeaheadRow> = form
+        .branch_matches
+        .iter()
+        .filter_map(|(index, matched)| {
+            let candidate = form.candidates.get(*index)?;
+            let row = TypeaheadRow::new(candidate.to_string(), matched.spans.clone());
+            Some(if candidate.is_available() {
+                row
+            } else {
+                row.disabled()
+            })
+        })
+        .collect();
+
+    // Where the current selection sits among the rows on screen, so the marker follows it as the
+    // search narrows — and disappears while it is filtered out, rather than marking the wrong row.
+    let selected = form.selected_branch.as_ref().and_then(|chosen| {
+        form.branch_matches
+            .iter()
+            .position(|(index, _)| form.candidates.get(*index) == Some(chosen))
+    });
+
     col = col.push(
-        Select::new(
-            &form.candidates,
-            form.selected_branch.clone(),
-            Message::AddWorktreeBranchSelected,
+        material::Typeahead::new(
+            &form.branch_query,
+            rows,
+            Message::AddWorktreeBranchQueryChanged,
             r,
         )
-        .placeholder("Select a branch…"),
+        .placeholder("Search branches…")
+        .open(form.branch_list_open)
+        .highlighted(form.branch_highlight)
+        .selected(selected)
+        .empty_message("No branches match that search.")
+        .on_focus(Message::AddWorktreeBranchFocused)
+        .on_move(Message::AddWorktreeBranchHighlightMoved)
+        .on_dismiss(Message::AddWorktreeBranchDismissed)
+        .on_pick(|index| {
+            // The index is into the rows the component was handed, which are exactly
+            // `branch_matches` — so it resolves back to a candidate here, where both are in hand.
+            form.branch_matches
+                .get(index)
+                .and_then(|(candidate, _)| form.candidates.get(*candidate))
+                .map(|c| Message::AddWorktreeBranchSelected(c.clone()))
+                .unwrap_or(Message::NoOp)
+        }),
     );
 
     // FR-020 / Constitution Principle IV: this list is read from local ref storage. Say so,

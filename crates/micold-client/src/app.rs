@@ -16,6 +16,7 @@ use micold_core::naming::{
 };
 use micold_core::project::{canonicalize_best_effort, Availability, FolderEntry, RenameError};
 use micold_core::selector::Selector;
+use micold_core::typeahead::{move_highlight, rank, Direction, Match, Query};
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
 use micold_core::theme::{
     observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference,
@@ -150,8 +151,25 @@ pub struct WorktreeForm {
     /// Branches that already exist, listed when `source` becomes `Existing` (FR-011). Empty
     /// until then — the listing is not run on every keystroke.
     pub candidates: Vec<BranchCandidate>,
-    /// The picked existing branch, if any (FR-014).
+    /// The picked existing branch, if any (FR-014). Written by exactly one message, and only for a
+    /// candidate that is available — which is what makes "a blocked branch can never be the
+    /// selection" a property rather than a promise (feature 021, FR-012a).
     pub selected_branch: Option<BranchCandidate>,
+    /// The branch search text, exactly as typed (feature 021, FR-001). Never holds a branch name:
+    /// the selection lives in `selected_branch` and is shown by the preview, so clearing the field
+    /// means one thing only (FR-014a).
+    pub branch_query: String,
+    /// Which candidates match `branch_query`, in the order they should be shown — derived on every
+    /// keystroke and never edited in place (FR-005). Indices address `candidates`.
+    pub branch_matches: Vec<(usize, Match)>,
+    /// Whether the result list is showing. Set by focus, typing, a pick, a dismissal or a source
+    /// change — never inferred from whether `branch_matches` is empty, because an open list with no
+    /// matches is exactly the state that shows the no-match message (FR-015).
+    pub branch_list_open: bool,
+    /// Where the keyboard is, as an index into `branch_matches` rather than into `candidates`: a
+    /// highlight that indexed the unfiltered list could name a row the developer cannot see
+    /// (feature 021, research R15).
+    pub branch_highlight: Option<usize>,
     /// The conflict prompt's state (feature 016, FR-001/FR-005).
     pub resolution: ResolutionState,
     /// The mode the in-flight create is running under. Set when the create is sent, and read
@@ -163,6 +181,40 @@ pub struct WorktreeForm {
 }
 
 impl WorktreeForm {
+    /// Recompute the search results from `candidates` and `branch_query`, and re-seat the keyboard
+    /// highlight so it cannot point past the end (feature 021, data-model §2 invariants 1–3).
+    ///
+    /// One function rather than a line in each arm: `branch_matches` is derived state, and derived
+    /// state recomputed in several places is derived state that eventually is not. Every message
+    /// that can change either input calls this.
+    fn rematch_branches(&mut self) {
+        let query = Query::new(&self.branch_query);
+        self.branch_matches = rank(&self.candidates, |c| c.name.as_str(), &query);
+        self.branch_highlight = match self.branch_highlight {
+            // The list shrank under the highlight. Dropping to the first row keeps the keyboard
+            // somewhere real; leaving it dangling would let the next Enter pick a row that is no
+            // longer shown.
+            Some(_) if self.branch_matches.is_empty() => None,
+            Some(i) if i >= self.branch_matches.len() => Some(0),
+            other => other,
+        };
+    }
+
+    /// Clear everything the search owns, for when the picker is left or reopened. The search text
+    /// is per-open-picker: branch relevance changes too fast for a remembered query to help.
+    fn reset_branch_search(&mut self) {
+        self.branch_query.clear();
+        self.branch_highlight = None;
+        self.branch_list_open = false;
+        self.rematch_branches();
+    }
+
+    /// The candidate the keyboard is currently on, if any.
+    pub fn highlighted_branch(&self) -> Option<&BranchCandidate> {
+        let (index, _) = self.branch_matches.get(self.branch_highlight?)?;
+        self.candidates.get(*index)
+    }
+
     /// The live derived directory/branch preview, or the validation error (FR-008a).
     ///
     /// Under [`BranchSource::Existing`] the names come from the selected branch instead of the
@@ -595,9 +647,24 @@ pub enum Message {
     AddWorktreeSourceChanged(BranchSource),
     /// The binary listed the repository's branches for the picker (feature 016, FR-011).
     AddWorktreeBranchesListed(Vec<BranchCandidate>),
-    /// An existing branch was picked from the list (feature 016, FR-014). A blocked candidate is
-    /// still selectable — submission is what refuses (FR-012).
+    /// An existing branch was picked from the list (feature 016, FR-014).
+    ///
+    /// A blocked candidate is **ignored entirely** (feature 021, FR-012a): it does not become the
+    /// selection and does not close the list. Feature 016 let it be selected and refused at the
+    /// point of creating, because the list widget of the day could not disable a row; the
+    /// type-ahead can, so the refusal moved to the point of choosing.
     AddWorktreeBranchSelected(BranchCandidate),
+    /// The branch search field took focus, so the list opens on what is already on offer (feature
+    /// 021, FR-001b). Not a query change: focusing is not typing.
+    AddWorktreeBranchFocused,
+    /// The branch search text changed (feature 021, FR-001, FR-005).
+    AddWorktreeBranchQueryChanged(String),
+    /// The keyboard moved through the results (feature 021, FR-017). The saturating rule lives in
+    /// `micold_core::typeahead`, not here — this arm applies its answer.
+    AddWorktreeBranchHighlightMoved(Direction),
+    /// The result list closed without a pick — Escape, a press outside it, or Tab taking focus out
+    /// of the field (feature 021, FR-001b). Three triggers, one effect.
+    AddWorktreeBranchDismissed,
     /// Pre-flight found something the user must decide about; raise the prompt (feature 016,
     /// FR-001). Never dispatched for [`BranchSituation::Free`].
     AddWorktreeConflictDetected(BranchSituation),
@@ -1396,21 +1463,68 @@ impl State {
                         if source == BranchSource::New {
                             form.selected_branch = None;
                         }
+                        // …and takes the search with it, so returning never resumes someone
+                        // else's half-finished query (feature 021).
+                        form.reset_branch_search();
                     }
                 }
             }
             Message::AddWorktreeBranchesListed(candidates) => {
                 if let Some(form) = &mut self.worktree_form {
                     form.candidates = candidates;
+                    // The results describe the current query, whenever the candidates arrive.
+                    form.rematch_branches();
                 }
             }
             Message::AddWorktreeBranchSelected(candidate) => {
                 if let Some(form) = &mut self.worktree_form {
                     if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
                     {
+                        // FR-012a: a branch held elsewhere cannot be chosen. Silently, and without
+                        // closing the list — a press that does nothing must not look like a press
+                        // that did something.
+                        if !candidate.is_available() {
+                            return;
+                        }
                         form.selected_branch = Some(candidate);
                         form.error = None;
+                        form.branch_list_open = false;
+                        // The query is deliberately left alone (FR-014a).
                     }
+                }
+            }
+            Message::AddWorktreeBranchFocused => {
+                if let Some(form) = &mut self.worktree_form {
+                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
+                    {
+                        form.branch_list_open = true;
+                    }
+                }
+            }
+            Message::AddWorktreeBranchQueryChanged(text) => {
+                if let Some(form) = &mut self.worktree_form {
+                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
+                    {
+                        form.branch_query = text;
+                        form.branch_list_open = true;
+                        form.rematch_branches();
+                    }
+                }
+            }
+            Message::AddWorktreeBranchHighlightMoved(direction) => {
+                if let Some(form) = &mut self.worktree_form {
+                    // Saturating, not wrapping — and the rule itself is `micold_core`'s, not this
+                    // arm's (FR-017a, FR-021). An empty list has nowhere to land, so the highlight
+                    // is left exactly as it was.
+                    let rows = form.branch_matches.len();
+                    if let Some(next) = move_highlight(form.branch_highlight, direction, rows) {
+                        form.branch_highlight = Some(next);
+                    }
+                }
+            }
+            Message::AddWorktreeBranchDismissed => {
+                if let Some(form) = &mut self.worktree_form {
+                    form.branch_list_open = false;
                 }
             }
             Message::AddWorktreeConflictDetected(situation) => {

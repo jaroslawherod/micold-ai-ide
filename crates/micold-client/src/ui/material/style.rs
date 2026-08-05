@@ -303,6 +303,59 @@ pub fn chip(accent: Rgb) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A result row inside a type-ahead menu (feature 021, contracts/typeahead-component.md §4.7).
+///
+/// Three things can be true of one row at the same time, so each gets its own channel and none can
+/// hide another: the current *selection* is a tonal fill, the *keyboard's* row is a state layer at
+/// the focus strength over whatever fill it already has, and the *pointer's* row is the same layer
+/// at the lighter hover strength. Which characters *matched* is not here — the label colors those
+/// itself, so emphasis survives on a filled row.
+///
+/// A row with nothing to press arrives here as `Disabled`; it keeps a flat background so it still
+/// reads as a line of the list rather than disappearing from it.
+pub fn menu_row(
+    r: Roles,
+    highlighted: bool,
+    selected: bool,
+) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_theme, status| {
+        let (fill, on) = if selected {
+            (
+                Some(color(r.secondary_container)),
+                color(r.on_secondary_container),
+            )
+        } else {
+            (None, color(r.on_surface))
+        };
+
+        let layer = match status {
+            button::Status::Pressed => 0.12,
+            button::Status::Hovered => 0.08,
+            // The keyboard's row reads at the focus strength even with the pointer elsewhere.
+            _ if highlighted => 0.12,
+            _ => 0.0,
+        };
+
+        let background = match (fill, layer) {
+            (Some(fill), 0.0) => Some(Background::Color(fill)),
+            (Some(fill), l) => Some(Background::Color(blend(fill, on, l))),
+            (None, 0.0) => None,
+            (None, l) => Some(Background::Color(alpha(on, l))),
+        };
+
+        button::Style {
+            background,
+            text_color: if matches!(status, button::Status::Disabled) {
+                alpha(on, DISABLED_OPACITY)
+            } else {
+                on
+            },
+            border: radius(shape::SMALL),
+            ..button::Style::default()
+        }
+    }
+}
+
 /// A known-projects / selector list row.
 pub fn list_item(r: Roles) -> impl Fn(&Theme) -> container::Style {
     move |_theme| container::Style {

@@ -194,8 +194,35 @@ worktree without leaving the app.
 
 ### Picking the branch from a list
 
-Choose the **Existing branch** chip in the New worktree form and pick from the list. Each row
-shows the branch name and, for a branch that only exists on a remote, which remote it came from:
+Choose the **Existing branch** chip in the New worktree form and search for the branch you want.
+The field lists every branch until you type; from the first character on, it narrows to the
+branches that match, and the characters you matched are picked out in colour inside each row — so
+you can see *why* a branch is in the list, not just that it is.
+
+You don't have to type the name exactly. Three kinds of search work, in this order of confidence:
+
+| What you type | What it finds | Example |
+|---|---|---|
+| Text that is really in the name | The branches containing it | `report` → `feat/reporting-dashboard` |
+| The letters in order, with gaps | Branches you're abbreviating | `frep` → `feat/reporting` |
+| The name with one letter wrong, missing or extra | Branches you mistyped | `reportng` → `feat/reporting` |
+
+Exact matches are always listed above approximate ones, so the branch you meant stays at the top.
+The emphasis shows which kind of match you got: a solid run of colour means the text was really
+there, and scattered letters mean you abbreviated.
+
+Approximate matching needs something to go on, so it starts at **three characters** — one or two
+letters find only what literally contains them. Typo tolerance starts at **five**, because below
+that one wrong letter is too large a share of what you typed to tell a mistake from a different
+branch.
+
+Use **↑** and **↓** to move through the results and **Enter** to take the one you're on;
+**Escape** closes the list and leaves your search text alone. Everything else you type goes into
+the field, so searching never breaks stride. The **✕** at the end of the field clears the search
+in one action.
+
+Each row shows the branch name and, for a branch that only exists on a remote, which remote it
+came from:
 
 | Row | Meaning |
 |-----|---------|
@@ -203,6 +230,12 @@ shows the branch name and, for a branch that only exists on a remote, which remo
 | `feat/reporting · origin` | Exists on `origin`, not yet on this machine. |
 | `feat/login · in use by feat-login` | Already checked out in that worktree — not available. |
 | `main · in use by the project checkout` | The project's own current branch — not available. |
+
+A branch that is in use elsewhere stays in the list — dimmed, and not selectable. It is shown
+rather than hidden so you can read *where* it is in use instead of wondering why it is missing.
+
+If nothing matches what you typed, the list says so. Clear the field or shorten your search to see
+everything again.
 
 The worktree folder is derived from the branch name — `feat/abc-123-login` becomes
 `.claude/worktrees/feat-abc-123-login` — and the form shows it before you create.

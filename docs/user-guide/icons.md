@@ -27,6 +27,7 @@ status markers.
 | Add worktree | Create a new worktree | Sidebar header |
 | Delete | Delete a worktree | Sidebar worktree rows |
 | Filter | Toggle the tag-filter panel | Sidebar toolbar |
+| Search | Search a long list by typing | Branch search in the New worktree form |
 | Project root | The repository's own working directory | Sidebar **Default** entry |
 | Copy | Copy a worktree's name to the clipboard | Worktree right-click menu (**Copy name**) |
 

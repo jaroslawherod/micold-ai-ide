@@ -64,6 +64,21 @@ pub const PROJECTS: &[(&str, usize, bool)] = &[
 /// The options a dropdown offers.
 pub const CHOICES: &[&str] = &["Follow the system", "Always light", "Always dark"];
 
+/// What the type-ahead searches over: `(label, available)`.
+///
+/// Deliberately mixed, so one query exercises three different rows: one the query hits literally,
+/// one long enough that the row has to truncate around its match, and one present but unavailable —
+/// whose reason is part of its label, because the component has no second text slot for it.
+pub const SEARCH_RESULTS: &[(&str, bool)] = &[
+    ("feat/login-page", true),
+    (
+        "feat/experimental-rendering-pipeline-for-the-changelog-viewer",
+        true,
+    ),
+    ("fix/logout-redirect — in use in ../review", false),
+    ("main", true),
+];
+
 /// A tag's text, for the chip-shaped components.
 pub const TAG: &str = "feat";
 

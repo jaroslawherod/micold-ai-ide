@@ -58,6 +58,25 @@ const SANCTIONED: &[(&str, &str, &str)] = &[
     ),
 ];
 
+/// Hand-written `Widget::overlay()` implementations **inside** the cdk, as `(file, why)`.
+///
+/// The list below closes the last door (feature 021). `no_module_outside_the_cdk_implements_its_own_
+/// overlay` already refuses a hand-rolled floating mechanism anywhere else, but it exempts
+/// `ui/cdk/` wholesale — which was right when the cdk held exactly one floating primitive and
+/// wrong the moment it held two. A second mechanism in here is the same accretion the rest of this
+/// file guards against; it just accretes in the one directory nothing was watching.
+///
+/// Empty is the correct state. An entry means: this surface genuinely cannot be a
+/// `cdk::overlay::Surface`, and here is why.
+const CDK_OVERLAY_IMPLEMENTORS: &[(&str, &str)] = &[(
+    "ui/cdk/typeahead.rs",
+    "the result list must anchor to the search field's own on-screen bounds inside a content-sized \
+     dialog, where a window-level surface has nothing to anchor against — the same constraint that \
+     sanctions `select.rs`'s `pick_list`, and the one that defeated the hand-rolled dropdown \
+     before it. The stack's own menu cannot serve either: it draws every row as a single flat \
+     `Text`, and these rows must emphasise the characters that matched (feature 021, FR-009)",
+)];
+
 /// Every `.rs` file under `src/ui/`, recursively, as `(path relative to src/, source)`.
 fn ui_sources() -> Vec<(String, String)> {
     fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
@@ -204,7 +223,7 @@ fn no_module_outside_the_cdk_implements_its_own_overlay() {
     let offenders: Vec<_> = ui_sources()
         .into_iter()
         .filter(|(path, _)| !path.starts_with("ui/cdk/"))
-        .filter(|(_, src)| code_only(src).contains("fn overlay("))
+        .filter(|(_, src)| constructs_an_overlay(&code_only(src)))
         .map(|(path, _)| format!("  {path}"))
         .collect();
 
@@ -215,6 +234,74 @@ fn no_module_outside_the_cdk_implements_its_own_overlay() {
          backdrop, dismissal and stacking order so that changing any of them is one edit.",
         offenders.join("\n")
     );
+}
+
+/// Every cdk module that floats its own content is on [`CDK_OVERLAY_IMPLEMENTORS`].
+///
+/// The blind spot the check above leaves open: it exempts `ui/cdk/` entirely, so a second floating
+/// mechanism could land in the one directory nothing was watching and pass every gate in the
+/// suite. `cdk/overlay.rs` is the primitive; anything else in here that implements
+/// `Widget::overlay()` needs the same argued diff a delegation outside does.
+#[test]
+fn every_cdk_module_that_floats_its_own_content_is_on_the_list() {
+    let strays: Vec<_> = cdk_overlay_implementors()
+        .into_iter()
+        .filter(|path| !CDK_OVERLAY_IMPLEMENTORS.iter().any(|(p, _)| p == path))
+        .map(|path| format!("  {path}"))
+        .collect();
+
+    assert!(
+        strays.is_empty(),
+        "a cdk module implements its own overlay without saying why:\n{}\n\n`cdk::overlay` is the \
+         floating primitive; it owns positioning, backdrop, dismissal and stacking order so that \
+         changing any of them is one edit (FR-008). If a surface genuinely cannot sit on it — it \
+         must anchor to a widget's own bounds inside a content-sized dialog, say — add it to \
+         CDK_OVERLAY_IMPLEMENTORS with that reason.",
+        strays.join("\n")
+    );
+}
+
+/// …and no entry on that list outlives the code it describes.
+#[test]
+fn no_cdk_overlay_exception_is_stale() {
+    let found = cdk_overlay_implementors();
+    let stale: Vec<_> = CDK_OVERLAY_IMPLEMENTORS
+        .iter()
+        .filter(|(path, _)| !found.iter().any(|p| p == path))
+        .map(|(path, _)| format!("  {path} no longer implements `overlay()`"))
+        .collect();
+
+    assert!(
+        stale.is_empty(),
+        "a cdk overlay exception no longer exists:\n{}\n\nStrike it off — a stale exception reads \
+         as precedent for the next one.",
+        stale.join("\n")
+    );
+}
+
+/// Files under `ui/cdk/` that implement `Widget::overlay()`.
+fn cdk_overlay_implementors() -> Vec<String> {
+    ui_sources()
+        .into_iter()
+        .filter(|(path, _)| path.starts_with("ui/cdk/"))
+        .filter(|(_, src)| constructs_an_overlay(&code_only(src)))
+        .map(|(path, _)| path)
+        .collect()
+}
+
+/// Whether `code` builds a floating surface of its own.
+///
+/// **Constructing** an `overlay::Element` — not merely declaring `fn overlay()`. Feature 021 tried
+/// the latter first and it was wrong twice over. Too narrow, because the literal `fn overlay(`
+/// misses the real signature `fn overlay<'b>(…)`; and too broad once fixed, because four wrapper
+/// components (`NavigationDrawer` and three in `animation.rs`) *forward* their child's overlay so a
+/// tooltip inside a fade keeps working. Those are plumbing, and reporting them would have been a
+/// gate that cried wolf until someone turned it off.
+///
+/// Constructing the element is the act that matters: it is what creates a surface with its own
+/// position, capture and dismissal — the thing this file exists to keep countable.
+fn constructs_an_overlay(code: &str) -> bool {
+    code.contains("overlay::Element::new(")
 }
 
 /// A scan that scans nothing passes trivially, and both checks above are scans.
@@ -251,4 +338,22 @@ fn a_helper_ending_in_the_widget_name_is_not_a_use_of_it() {
         "`mode_tooltip` is a local helper in the terminal module"
     );
     assert!(!calls("use iced::widget::pick_list;", "pick_list"));
+}
+
+/// The overlay detector, likewise — it went wrong in both directions before it went right, and a
+/// detector that reports "no violations" when it simply cannot see them is the failure mode this
+/// whole file exists to avoid.
+#[test]
+fn the_overlay_detector_separates_building_one_from_forwarding_one() {
+    assert!(constructs_an_overlay("Some(overlay::Element::new(Box::new(Menu {"));
+
+    // Four wrapper components in `material/` do exactly this, and none of them is a floating
+    // surface: they hand their child's overlay upward so it is not lost inside the wrapper.
+    assert!(!constructs_an_overlay(
+        "self.content.as_widget_mut().overlay(&mut tree.children[0], layout, renderer, v, t)"
+    ));
+    // Declaring the method proves nothing on its own — every one of those wrappers declares it.
+    assert!(!constructs_an_overlay(
+        "fn overlay<'b>(&'b mut self) -> Option<overlay::Element<'b>>"
+    ));
 }
