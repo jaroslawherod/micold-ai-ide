@@ -110,7 +110,11 @@ fn demo<'a>(
 
 /// `fade` — compositing the surrounding surface over the content as it goes.
 pub fn fade<'a>(showcase: &'a Showcase, roles: Roles, index: usize) -> Element<'a, Message> {
+    // The subject is a rounded card, so the compositing veil is rounded to match. Left square it
+    // paints past the corners — the same class of bug the ripple had, and the reason `fade` takes a
+    // radius at all.
     let animated = material::fade(subject(roles), showcase.shown(index), OVER, roles.surface)
+        .rounded(SurfaceKind::Plain.shape())
         .restart_on(showcase.replays(index))
         .into();
     demo(animated, showcase, roles, index)
