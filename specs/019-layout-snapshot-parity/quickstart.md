@@ -179,8 +179,10 @@ Register one additional covered state.
 This is the requirement most likely to be quietly violated, because it passes locally by
 construction.
 
-- [ ] CI is green on Linux, macOS **and** Windows on the same commit, with the same committed
-      fixture (FR-017, Principle VI).
+- [x] CI is green on Linux, macOS **and** Windows on the same commit, with the same committed
+      fixture (FR-017, Principle VI). Commit `7065bba`, PR #62. The first attempt failed on Ubuntu
+      while macOS and Windows passed — the icon font was never loaded, so icons measured against
+      the host's fallback. See T035.
 - [x] Two consecutive local runs produce identical output (FR-005), and every gate binary passes
       under `env -u DISPLAY -u WAYLAND_DISPLAY`.
 
