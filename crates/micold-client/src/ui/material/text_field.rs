@@ -4,21 +4,27 @@
 //! function, an input handler and usually a submit handler — repeated at seven call sites. Nothing
 //! held them together beyond the fact that whoever added the seventh copied the sixth.
 //!
-//! Holding them together matters more than usual here: feature 018 gives text fields a container,
-//! a floating label and a focus indicator, which is a change to the *anatomy* of the widget rather
-//! than to its colours. That is one edit if there is one text field, and seven if there are seven.
+//! # Feature 021: the two affordances beside the input
 //!
-//! Parity: padding and style resolve to exactly what the call sites use today (FR-005).
+//! A leading icon saying what the field is for, and a trailing icon that *does* something. The
+//! branch search needed both, and the alternative was assembling them at that one call site.
 //!
-//! Feature 021 adds the two affordances Material's text-field anatomy names beside the input — a
-//! leading icon and a trailing action — because the branch search needed both and the alternative
-//! was assembling them at that one call site, which is the drift this module exists to prevent.
+//! # Feature 018: the chrome moved out (T045, T046 — FR-031, FR-031a, FR-031c)
+//!
+//! The container, the active indicator, the label and the supporting text belong to
+//! [`FormField`](super::FormField). This builds the *input* and hands it over; it assembles neither
+//! part itself, which is what FR-031c asks for and what stops the seven call sites each inventing
+//! their own arrangement of the same four pieces.
+//!
+//! The label is therefore a field on this builder rather than something a call site puts above the
+//! widget, and the placeholder goes back to being what §7.7 says it is: a genuine example, never
+//! the field's name.
 
 use crate::icons::Icon;
 use crate::ui::material::style;
 use crate::ui::material::text::TypeRole;
-use iced::widget::{row, text_input};
-use iced::{alignment, Element, Pixels};
+use iced::widget::text_input;
+use iced::{Element, Pixels};
 use micold_core::tokens::{spacing, Roles};
 
 /// A single-line text field. Builder form (Principle VIII):
@@ -34,6 +40,10 @@ pub struct TextField<'a, M> {
     trailing_action: Option<(Icon, M)>,
     on_input: Option<Box<dyn Fn(String) -> M + 'a>>,
     on_submit: Option<M>,
+    label: Option<String>,
+    supporting: Option<String>,
+    error: Option<String>,
+    active: bool,
 }
 
 impl<'a, M: Clone + 'a> TextField<'a, M> {
@@ -47,6 +57,10 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
             trailing_action: None,
             on_input: None,
             on_submit: None,
+            label: None,
+            supporting: None,
+            error: None,
+            active: false,
         }
     }
 
@@ -61,6 +75,38 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
     /// the leading one is an action (clearing the field, revealing a password).
     pub fn trailing_action(mut self, icon: Icon, message: M) -> Self {
         self.trailing_action = Some((icon, message));
+        self
+    }
+
+    /// The field's name, rendered inside the container above the value (FR-031a).
+    ///
+    /// A *name*, not a hint: "Ticket", not "Ticket (optional, e.g. ABC-123)". The example belongs in
+    /// [`Self::supporting`], and the two were bundled into the placeholder at every call site —
+    /// the migration §7.7 tabulates.
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Explanatory text beneath the container: a constraint, an example, a unit.
+    pub fn supporting(mut self, text: impl Into<String>) -> Self {
+        self.supporting = Some(text.into());
+        self
+    }
+
+    /// The validation failure, if any — takes the supporting text's place and recolours the chrome.
+    pub fn error(mut self, error: Option<impl Into<String>>) -> Self {
+        self.error = error.map(Into::into);
+        self
+    }
+
+    /// Whether the input holds focus, which thickens the active indicator.
+    ///
+    /// Supplied rather than observed: the rendering stack reports focus only inside the input's own
+    /// style closure, and the indicator is a sibling of the input rather than part of it. See
+    /// [`FormField`](super::FormField) for why the wrapper takes this as a parameter.
+    pub fn active(mut self, active: bool) -> Self {
+        self.active = active;
         self
     }
 
@@ -80,9 +126,9 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
 
 impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
     fn from(f: TextField<'a, M>) -> Self {
-        let mut widget = text_input(&f.placeholder, f.value)
-            .padding(spacing::SM)
-            .style(style::input(f.roles));
+        // No padding and no style of its own: `FormField` supplies the container that would
+        // otherwise be drawn twice, and pads it to §7.7's 16dp.
+        let mut widget = text_input(&f.placeholder, f.value).style(style::field_input(f.roles));
 
         if let Some(icon) = f.leading_icon {
             widget = widget.icon(text_input::Icon {
@@ -100,21 +146,20 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
             widget = widget.on_submit(on_submit);
         }
 
-        // **Always a row**, even with nothing in the trailing slot.
-        //
-        // A field that returned a bare input without a trailing action and a row with one would
-        // change the *type* of the widget at that position the moment a caller started or stopped
-        // offering the action. The rendering stack rebuilds a subtree whose tag changed, and the
-        // input's tag carries its own state — focus included. A search field whose clear button
-        // appears on the first keystroke would lose focus on that keystroke, so the second one
-        // would never arrive. One shape for both cases makes that unrepresentable rather than a
-        // rule each caller has to know.
-        let mut field = row![widget]
-            .spacing(spacing::XS)
-            .align_y(alignment::Vertical::Center);
+        // The trailing action goes into the wrapper's adornment slot rather than into a row built
+        // here. `FormField` emits that slot whether or not it is filled, which is what keeps the
+        // input's position in the widget tree stable — see its docs for why that matters more than
+        // it looks.
+        let mut field = super::FormField::new(widget, f.roles).active(f.active);
         if let Some((icon, message)) = f.trailing_action {
-            field = field.push(super::IconButton::new(icon, f.roles).on_press(message));
+            field = field.trailing(super::IconButton::new(icon, f.roles).on_press(message));
         }
-        field.into()
+        if let Some(label) = f.label {
+            field = field.label(label);
+        }
+        if let Some(supporting) = f.supporting {
+            field = field.supporting(supporting);
+        }
+        field.error(f.error).into()
     }
 }

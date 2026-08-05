@@ -562,6 +562,93 @@ pub fn input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_input::Sty
     }
 }
 
+// --- the filled form field (feature 018, T044b/T045 — FR-031, FR-031a, FR-031c; contract §7.7) --
+
+/// The filled field container: `surface_container_highest`, rounded at the top and square at the
+/// bottom, with **no border at all**.
+///
+/// The squared bottom is not a stylistic flourish — it is what makes the active indicator read as
+/// part of the field rather than as a line underneath it. A uniform radius would leave the
+/// indicator's ends floating past the container's curve.
+///
+/// Today's field is `surface`, the same tone as the dialog behind it, inside a uniform 1dp box.
+/// That is the largest single departure in this feature (§7.7).
+pub fn field_container(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface_container_highest))),
+        text_color: Some(color(r.on_surface)),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: iced::border::Radius {
+                top_left: shape::EXTRA_SMALL,
+                top_right: shape::EXTRA_SMALL,
+                bottom_right: 0.0,
+                bottom_left: 0.0,
+            },
+        },
+        ..container::Style::default()
+    }
+}
+
+/// The bottom active indicator's colour and thickness, as one decision.
+///
+/// Returned together because they move together: the indicator is 1dp `on_surface_variant` at rest
+/// and 2dp in the accent when the field is active, and an implementation that took them from two
+/// places could thicken without recolouring. `error` outranks `active` — a field that is both
+/// focused and invalid is invalid, and showing it in the accent would say the opposite.
+///
+/// "Active" is deliberately not "focused": it is **focus** for a text input and **open** for the
+/// select, which cannot report focus at all (FR-043a). The wrapper is told which; it never assumes.
+pub fn field_indicator(r: Roles, active: bool, error: bool) -> (Color, f32) {
+    let thickness = if active {
+        tokens::anatomy::text_field::INDICATOR_ACTIVE
+    } else {
+        tokens::anatomy::text_field::INDICATOR
+    };
+    let tone = if error {
+        r.error
+    } else if active {
+        r.primary
+    } else {
+        r.on_surface_variant
+    };
+    (color(tone), thickness)
+}
+
+/// The in-container label and the supporting text beneath it, which share a colour: the muted
+/// foreground, or `error` when the field is invalid.
+///
+/// One function rather than two, because §7.7 moves them together — an error state that recoloured
+/// the supporting text and left the label muted would read as two unrelated pieces of text.
+pub fn field_support(r: Roles, error: bool) -> Rgb {
+    if error {
+        r.error
+    } else {
+        r.on_surface_variant
+    }
+}
+
+/// The input *inside* a [`field_container`]: no background and no border of its own.
+///
+/// The container and the indicator belong to `FormField`, so the input draws neither (FR-031c).
+/// Leaving its old box in place would put a 1dp outline inside the filled container — the exact
+/// duplication the wrapper exists to remove.
+pub fn field_input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+    move |_theme, _status| text_input::Style {
+        background: Background::Color(Color::TRANSPARENT),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 0.0.into(),
+        },
+        icon: color(r.on_surface_variant),
+        placeholder: color(r.on_surface_variant),
+        value: color(r.on_surface),
+        selection: alpha(color(r.primary), 0.3),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! Bin unit tests — run with `cargo test --features gui`.

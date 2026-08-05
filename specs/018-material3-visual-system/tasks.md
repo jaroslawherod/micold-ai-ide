@@ -271,14 +271,14 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T041 [P] [US4] Failing tests for the notification queue in `crates/micold-core/tests/notify_queue.rs`: never more than one visible; a duplicate of the visible notification is not enqueued; the cap drops oldest pending and never the visible one; an error's duration is strictly longer than an info's; manual dismissal promotes the next pending immediately (FR-032a, FR-032b)
 - [X] T042 [P] [US4] Failing test in `crates/micold-core/tests/tokens_anatomy.rs` asserting every component anatomy constant — app bar height, both row densities, minimum touch target, dialog padding, menu item height, chip height, text field height, progress thickness, snackbar min height — matches contract §7 (FR-025 – FR-032, SC-008)
 - [ ] T043 [P] [US4] Failing test in `crates/micold-client/tests/app_bar_scroll.rs` asserting the app bar's elevated flag derives from the sidebar's scroll offset (FR-025a)
-- [ ] T044 [P] [US4] Failing test in `crates/micold-client/tests/text_field_anatomy.rs` asserting the filled container role, rounded-top/square-bottom corners, and a bottom active indicator that thickens to 2dp accent on focus (FR-031)
-- [ ] T044a [P] [US4] Failing test in `crates/micold-client/tests/form_field_anatomy.rs` asserting the wrapper composes the shared parts around **whichever control it is given**: the label renders inside the container above the value in the label role and on-container colour; supporting text renders beneath in the supporting role; in the error state both the active indicator and the supporting text switch to the error role; leading and trailing adornment slots render when supplied and take no space when not; and the same assertions hold with a text input **and** with the select wrapped (FR-031a, FR-031b, FR-031c)
+- [X] T044 [P] [US4] Failing test in `crates/micold-client/tests/text_field_anatomy.rs` asserting the filled container role, rounded-top/square-bottom corners, and a bottom active indicator that thickens to 2dp accent on focus (FR-031)
+- [X] T044a [P] [US4] Failing test in `crates/micold-client/tests/form_field_anatomy.rs` asserting the wrapper composes the shared parts around **whichever control it is given**: the label renders inside the container above the value in the label role and on-container colour; supporting text renders beneath in the supporting role; in the error state both the active indicator and the supporting text switch to the error role; leading and trailing adornment slots render when supplied and take no space when not; and the same assertions hold with a text input **and** with the select wrapped (FR-031a, FR-031b, FR-031c)
 
 ### Implementation for User Story 4
 
-- [ ] T044b [US4] Create the `FormField` wrapper in `crates/micold-client/src/ui/material/form_field.rs`, on the model of Angular Material's form field — the precedent this library already mimics. It owns the filled container, the active indicator, the in-container label, the supporting-text slot, the error presentation and the optional leading/trailing adornment slots, and it wraps whichever control it is handed rather than replacing it. Chainable builder terminating in `.into()` per `contracts/component-api.md` §2.1 (FR-031a, FR-031b, FR-031c, Principle VIII)
-- [ ] T045 [US4] Apply the filled text-field anatomy in `crates/micold-client/src/ui/material/text_field.rs` — 56dp height, per-corner radius, 16dp padding. The container and active indicator come from `FormField` (T044b); this task styles the input itself, not the shared chrome (FR-031)
-- [ ] T046 [US4] Compose `TextField` inside `FormField` so the label renders persistently in its floating position and the supporting-text slot is available, without `text_field.rs` reassembling either part itself (FR-031a, FR-031b, FR-031c, FR-044)
+- [X] T044b [US4] Create the `FormField` wrapper in `crates/micold-client/src/ui/material/form_field.rs`, on the model of Angular Material's form field — the precedent this library already mimics. It owns the filled container, the active indicator, the in-container label, the supporting-text slot, the error presentation and the optional leading/trailing adornment slots, and it wraps whichever control it is handed rather than replacing it. Chainable builder terminating in `.into()` per `contracts/component-api.md` §2.1 (FR-031a, FR-031b, FR-031c, Principle VIII)
+- [X] T045 [US4] Apply the filled text-field anatomy in `crates/micold-client/src/ui/material/text_field.rs` — 56dp height, per-corner radius, 16dp padding. The container and active indicator come from `FormField` (T044b); this task styles the input itself, not the shared chrome (FR-031)
+- [X] T046 [US4] Compose `TextField` inside `FormField` so the label renders persistently in its floating position and the supporting-text slot is available, without `text_field.rs` reassembling either part itself (FR-031a, FR-031b, FR-031c, FR-044)
 - [ ] T047 [US4] Migrate the seven input call sites off placeholder-as-label onto label + supporting text per the contract §7.7 migration table, across `crates/micold-client/src/ui/worktree_form.rs`, `rename.rs`, `worktree_rename.rs` and `settings_form.rs` (FR-031a, FR-031b)
 - [ ] T048 [US4] Compose `crates/micold-client/src/ui/material/select.rs` inside `FormField` so it gets the same container, label, supporting text and active indicator every other field has — the indicator thickening and taking the accent colour on the **open** state rather than on focus, since the select cannot report focus (FR-043a) — and style its dropdown as a menu via the per-instance menu style, which does expose a shadow (FR-031, FR-031c, FR-031d, FR-043a)
 - [ ] T049 [US4] Apply the linear progress anatomy in `crates/micold-client/src/ui/material/progress.rs` — `secondary_container` track, `primary` indicator, 4dp thickness, fully rounded (FR-031e)
@@ -296,6 +296,21 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [ ] T060 [P] [US4] Apply chip anatomy in `crates/micold-client/src/ui/material/tag.rs` and `toggle_chip.rs` — 32dp height, `full` corner, `label_large` (FR-030)
 - [ ] T061 [US4] Confirm the known-projects list in `crates/micold-client/src/ui/project_selector.rs` uses the standard row density while the sidebar stays dense (FR-026)
 - [ ] T062 [US4] Update `docs/user-guide/` to document the snackbar's one-at-a-time queueing and timed dismissal — the single sanctioned behavior change (FR-036a, FR-041, Principle VII)
+
+> **T044 and T044a moved in-crate.** Both name a path under `crates/micold-client/tests/`, and
+> neither is reachable: `material` is `pub(crate)`, so a `FormField` or a field style cannot be
+> constructed from an integration test at all. They live beside the code as
+> `src/ui/material/form_field_anatomy.rs` and `text_field_anatomy.rs`, following the precedent
+> `style_snapshot.rs` set for the same reason.
+>
+> **What the two tests each cover.** The chrome's colour and thickness is a pure function of
+> `(roles, active, error)`, so it is asserted directly — an indicator that thickened without
+> recolouring, or an error state that recoloured the supporting text and left the label muted, is
+> caught by arithmetic rather than by eye. The *composition* is a layout question, so it is laid out
+> and measured: the container at exactly 56dp, the indicator at exactly 1dp, supporting text adding
+> height beneath rather than inside, and an absent adornment contributing no layout node at all.
+> The same assertions run over a wrapped **select** as over a text input, which is the half of
+> FR-031c a single-control test would silently not cover.
 
 **Checkpoint**: Components match their Material counterparts. Demonstrable via quickstart §B4.
 
