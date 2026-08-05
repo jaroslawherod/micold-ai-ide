@@ -90,8 +90,34 @@ const TOLERANCE: f32 = 0.5;
 /// be named here with its reason, or a child escaping a parent that does not clip, which is a bug.
 const CLIP_REVEALED: &[&str] = &["0/0/0/2/0/0/0/1/0", "0/0/0/3/0/0/0/1/0"];
 
-fn clip_revealed(child_path: &str) -> bool {
-    CLIP_REVEALED.contains(&child_path)
+/// The sidebar list's scroll content, which is taller than its viewport by design.
+///
+/// A second clipping parent, kept in its own list because it is a different mechanism and the
+/// distinction is the whole point of the one above: `Expand` overhangs to *reveal* progressively,
+/// a `Scrollable` overhangs because its content does not fit and the user moves it. Folding them
+/// together would make the list read as "overhangs we tolerate", which is exactly the shapeless
+/// exemption the module documentation argues against.
+///
+/// Arrived with `main-shell-sidebar-scrolled-to-top` (T043) and nothing else fires it: no other
+/// covered state has enough worktrees to overflow the sidebar, which is why nothing in the fixture
+/// scrolled until that state existed. `the_recorded_scroll_overflow_is_the_sidebar_list` proves the
+/// attribution by shortening the list and showing the same node comes clean.
+///
+/// Like `CLIP_REVEALED` this does not expire — a scrollable whose content fits is not scrolling,
+/// and it is the overflow that makes FR-011 mean anything. The staleness assertion still applies:
+/// if this path goes quiet, either the state stopped overflowing (and FR-011 is uncovered again) or
+/// the tree renumbered around it.
+const SCROLL_CONTENT: &[&str] = &["0/0/0/2/0/0/0/2/0"];
+
+/// Every overhang this gate does not treat as a finding, with the reason it is allowed.
+fn clips_deliberately(child_path: &str) -> Option<&'static str> {
+    if CLIP_REVEALED.contains(&child_path) {
+        Some("CLIP_REVEALED")
+    } else if SCROLL_CONTENT.contains(&child_path) {
+        Some("SCROLL_CONTENT")
+    } else {
+        None
+    }
 }
 
 /// No covered state lays a node outside a parent that will not clip it.
@@ -113,8 +139,8 @@ fn no_layout_node_escapes_its_parent() {
                 escape.edge,
                 escape.layer.token()
             );
-            if clip_revealed(&escape.child_path) {
-                eprintln!("CLIP_REVEALED still fires: {line}");
+            if let Some(list) = clips_deliberately(&escape.child_path) {
+                eprintln!("{list} still fires: {line}");
                 fired.insert(escape.child_path);
             } else {
                 unexpected.push(line);
@@ -124,6 +150,7 @@ fn no_layout_node_escapes_its_parent() {
 
     let silent: Vec<&&str> = CLIP_REVEALED
         .iter()
+        .chain(SCROLL_CONTENT)
         .filter(|path| !fired.contains(**path))
         .collect();
     assert!(
@@ -285,6 +312,70 @@ fn the_check_reports_an_escape_when_one_exists() {
     );
     assert_eq!(escapes[0].edge, "bottom");
     assert!((escapes[0].overhang - 80.0).abs() < 0.01);
+}
+
+/// The recorded scroll overflow is the sidebar's list, and this is what proves it.
+///
+/// Same argument as the accordion test below: a tall child in a shorter parent is *consistent* with
+/// a scroll viewport, and consistent is not the same as caused. So drive the one input that decides
+/// whether the list overflows — how many worktrees there are — and change nothing else. Three, and
+/// the node is contained; thirty, and it escapes by hundreds of pixels.
+///
+/// Without this, `SCROLL_CONTENT` would exempt a path on the strength of its shape, which is the
+/// mistake `CLIP_REVEALED` was rewritten to stop making.
+#[test]
+fn the_recorded_scroll_overflow_is_the_sidebar_list() {
+    let escaping_nodes = |worktrees: usize| -> Vec<String> {
+        let mut workspace = crate::support::workspace_with(vec![("/fixture/project", vec![])]);
+        workspace.active = workspace.projects.first().map(|p| p.path.clone());
+        let state = micold_client::app::State {
+            workspace,
+            worktrees: (0..worktrees)
+                .map(|i| micold_core::worktree::Worktree {
+                    dir_name: format!("feat-{i:02}"),
+                    path: std::path::PathBuf::from("/fixture/project").join(format!("feat-{i:02}")),
+                    branch: Some(format!("feat/{i:02}")),
+                    status: micold_core::worktree::WorktreeStatus::Valid,
+                })
+                .collect(),
+            sidebar_width: 260,
+            ..micold_client::app::State::default()
+        };
+
+        let element = micold_client::ui::view(
+            &state,
+            None,
+            None,
+            0,
+            None,
+            &micold_core::env_include::EnvIncludeOutcome::Disabled,
+            &micold_client::ui::ConnectionStatus::Connected,
+        );
+
+        let renderer = lay::renderer();
+        lay::escapes(&lay::resolve(element, &renderer), TOLERANCE)
+            .into_iter()
+            .map(|e| e.child_path)
+            .collect()
+    };
+
+    let few = escaping_nodes(3);
+    let many = escaping_nodes(30);
+
+    for path in SCROLL_CONTENT {
+        assert!(
+            many.contains(&path.to_string()),
+            "{path} is exempted as scroll content, and a sidebar holding thirty worktrees does not \
+             lay it outside its viewport. Either it is not the list's content node, or the list no \
+             longer scrolls — and if it no longer scrolls, FR-011's sampling point is once again \
+             asserted about a tree in which nothing depends on scroll position"
+        );
+        assert!(
+            !few.contains(&path.to_string()),
+            "{path} escapes its parent with only three worktrees, so the overhang is not the list \
+             outgrowing its viewport and the attribution recorded in SCROLL_CONTENT is wrong"
+        );
+    }
 }
 
 /// The recorded escapes are `Expand`'s, and this is what proves it rather than asserting it.

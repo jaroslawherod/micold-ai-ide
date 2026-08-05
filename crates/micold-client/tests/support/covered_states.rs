@@ -16,6 +16,7 @@ use std::path::PathBuf;
 
 use micold_client::app::{BranchSource, Overlay, SettingsDraft, State, WorktreeForm};
 use micold_client::ui::ConnectionStatus;
+use micold_core::project::Availability;
 use micold_core::worktree::{Worktree, WorktreeStatus};
 
 use super::layout::{Anchor, CoveredState, RevealingState, StateUnderTest};
@@ -252,6 +253,56 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[3, 0, 0, 7],
                 },
             ],
+        },
+        // FR-008c's second required layout, and the last of the three to be covered. `shell.rs`
+        // renders an unavailable folder as a plain `Button::filled("Unavailable")` where an
+        // available one gets an icon-plus-label composite, so the two are different geometry.
+        //
+        // It has to be *set* rather than arranged, because `FakeScanner::default()` answers
+        // `is_available: true` and every state built through `workspace_with` therefore takes the
+        // available branch by construction. That is why this was missed: not an oversight about
+        // which states to add, but a scaffold that could not produce the state at all.
+        //
+        // No project active, which is the honest form of it — the folder is gone, `Workspace::
+        // activate` refuses to open an unavailable project, and this is what a restart shows.
+        CoveredState {
+            name: "error-project-unavailable",
+            build: || {
+                let mut state = with_project();
+                state.workspace.active = None;
+                for project in &mut state.workspace.projects {
+                    project.availability = Availability::Unavailable;
+                }
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
+        },
+        // --- The one state that scrolls (FR-011) ------------------------------------------------
+        // Until this existed, nothing in the fixture overflowed its viewport. FR-011 requires
+        // scroll-dependent geometry to be recorded at a defined offset, and `a_fresh_tree_samples_
+        // at_rest` proved a fresh tree reports every scrollable at the top — over `State::default()`,
+        // where nothing scrolls. The guarantee held over a tree in which no element's geometry
+        // depended on scroll position, which is the overlay pass's failure exactly.
+        //
+        // The sidebar's list is the only scrollable in the application whose content is driven by
+        // state, so overflowing it is the way in. The count is deliberate rather than generous:
+        // enough that the content exceeds a 764.8px viewport with margin, and no more.
+        CoveredState {
+            name: "main-shell-sidebar-scrolled-to-top",
+            build: || {
+                let mut state = with_project();
+                state.worktrees = (0..30)
+                    .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))
+                    .collect();
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // --- The one state that exercises the overlay pass (FR-009) -----------------------------
         // Until this existed the fixture contained **zero** `over` records. The overlay pass was

@@ -27,7 +27,8 @@ that is quietly narrower than it looks is the exact failure this feature exists 
 | A colour, border, radius or shadow change | **No** | `style_snapshot` owns these |
 | A widget swapped for a differently-drawn one of identical size | **No** | nothing reads what is painted, only where |
 | A change visible only mid-animation | **Almost never** — see [Animation](#animation) |
-| A change visible only when scrolled | **No** | everything resolves at offset zero |
+| A change visible only part-way down a scroll | **No** | everything resolves at offset zero |
+| A change to a list long enough to overflow its viewport | **Yes** | one covered state overflows the sidebar |
 | A change in rasterised pixels — anti-aliasing, hinting, subpixel placement | **No** | no image is compared |
 | A change to the typography a user actually sees | **Yes** — measured against the shipped faces |
 
@@ -150,6 +151,14 @@ during that one pinned reveal.
 Everything resolves at scroll offset zero. A defect that appears only once a list is scrolled is not
 covered by any of the three.
 
+Offset zero is a *sampled* point rather than an assumption, which it was not until
+`main-shell-sidebar-scrolled-to-top` existed. Before it, nothing in the fixture overflowed anything:
+the guarantee "every scrollable is at the top" was asserted over trees in which no element's geometry
+depended on scroll position at all — true, and about nothing. That is the same failure as the overlay
+pass recording zero records, and it is worth naming as a pattern, because the two arrived
+independently. A property that holds everywhere is worth exactly as much as the number of places it
+can fail, and neither the code nor the fixture reports that number.
+
 ### Typography
 
 **This was the largest gap and it is now closed** — feature 018 ships Roboto as the application
@@ -212,6 +221,15 @@ fix for the bug it was written against.
   it top-down by clipping to its own bounds. The overhang is the mechanism, not a defect. Unlike the
   other two this one **does not expire**; what the assertion buys is that the list cannot grow
   quietly, since a new entry is either a new clip-revealing wrapper or a real escape.
+- **`SCROLL_CONTENT` — one entry, one list.** The sidebar's scroll content in
+  `main-shell-sidebar-scrolled-to-top`, 686.8px taller than the viewport showing it. A `Scrollable`
+  overhangs because its content does not fit and the user moves it; that is what scrolling *is*.
+  Kept in a separate list from `CLIP_REVEALED` deliberately — merging them would leave one list
+  meaning "overhangs we tolerate", which is the shapeless exemption this whole section argues
+  against. Attribution is proven, not assumed: `the_recorded_scroll_overflow_is_the_sidebar_list`
+  shows the same node is contained with three worktrees and escapes with thirty. Also does not
+  expire — if it goes quiet the list has stopped overflowing, and the scroll sampling point is back
+  to being asserted about nothing.
 - **Nodes parked entirely off-window are not checked for containment.**
   `material::NavigationDrawer` translates its inactive child by `-f32::MAX / 4` so the tree, node
   list and child list stay index-aligned without it occupying space. The exemption follows from the
