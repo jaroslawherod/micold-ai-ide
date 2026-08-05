@@ -14,6 +14,19 @@
 //! `Length`, a canvas rect, a measured bound — also goes through methods called `size`, and those
 //! are not type-scale decisions, so the check looks for numeric literals specifically rather than
 //! for the method name.
+//!
+//! # The hole this used to have
+//!
+//! A literal is only the *obvious* way to state a size. Feature 003's `type_scale::BODY` was a
+//! **named** constant, so it sailed past a scan looking for numbers — and eleven shared components
+//! were still using it when feature 018 came to assign roles. They got the right size and, because
+//! a bare number carries neither, the default weight and the renderer's default line spacing. The
+//! menu, the toolbar, every chip and the whole project switcher were outside the type system while
+//! passing a test named "no call site states a raw text size".
+//!
+//! So the second rule below is structural rather than a blocklist: the Material scale is named in
+//! exactly **one** file, the one that turns a role into a size. Anywhere else, a call site can only
+//! reach the scale through a role — which is the property the first rule was trying to buy.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -155,6 +168,86 @@ fn no_call_site_states_a_raw_text_size() {
          height together, and follows when the scale is re-valued (FR-010, SC-003).",
         found.join("\n")
     );
+}
+
+/// The one file allowed to name the Material scale: the table that turns a role into a size.
+const RESOLVES_ROLES: &str = "ui/material/text.rs";
+
+/// Ways of naming the scale directly instead of going through a role. `type_scale::*` and the
+/// `sidebar::*` sizes were feature 003's flat constants — deleted at T017–T021, and listed here so
+/// re-adding one is a failure rather than a quiet return to two sources of truth.
+///
+/// The sidebar entries name their constants rather than the module: `crate::ui::sidebar` is a
+/// feature module, and `sidebar::view(..)` is not a type-scale decision.
+const NAMES_THE_SCALE: &[&str] = &[
+    "typography::",
+    "type_scale::",
+    "sidebar::NAME",
+    "sidebar::TAG",
+    "sidebar::SESSION",
+];
+
+#[test]
+fn only_the_role_table_names_the_type_scale() {
+    let mut found = Vec::new();
+    for (path, src) in sources() {
+        if path == RESOLVES_ROLES || path.ends_with("type_role_mapping.rs") {
+            continue;
+        }
+        for (i, line) in code_only(&src).lines().enumerate() {
+            for needle in NAMES_THE_SCALE {
+                if line.contains(needle) {
+                    found.push(format!("  {path}:{}  names `{needle}`", i + 1));
+                }
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "the Material type scale is named outside `{RESOLVES_ROLES}`:\n{}\n\nA size reached this \
+         way carries no weight and no line height, so the text renders at the renderer's defaults \
+         while looking, at the call site, like it is in the scale. Name a `TypeRole` instead — it \
+         carries all three together (FR-007, FR-010).",
+        found.join("\n")
+    );
+}
+
+/// The rule above is only worth anything if the file it exempts is really the resolution table.
+/// If `text.rs` stops naming the scale, the exemption is stale and the rule is guarding nothing.
+#[test]
+fn the_exempt_file_is_the_one_that_resolves_roles() {
+    let table = sources()
+        .into_iter()
+        .find(|(path, _)| path == RESOLVES_ROLES)
+        .map(|(_, src)| src)
+        .unwrap_or_else(|| panic!("{RESOLVES_ROLES} is not in the rendering layer any more"));
+    assert!(
+        table.contains("typography::"),
+        "{RESOLVES_ROLES} no longer names the Material scale, so exempting it from the rule above \
+         guards nothing. Move the exemption to wherever roles now resolve."
+    );
+}
+
+/// The scale rule fires on a real offence and stays quiet on the module that shares a name.
+///
+/// `sidebar::view(..)` is a feature module's entry point and `sidebar::TAG` was a text size; a
+/// needle of `sidebar::` cannot tell them apart, and the version of this rule that used one failed
+/// on the application's own layout code.
+#[test]
+fn the_scale_rule_tells_a_size_from_a_module_of_the_same_name() {
+    let fires = |line: &str| NAMES_THE_SCALE.iter().any(|n| line.contains(n));
+
+    assert!(fires("        .label_size(sidebar::NAME)"));
+    assert!(fires(
+        "    pub const BODY: f32 = typography::BODY_MEDIUM.size;"
+    ));
+    assert!(fires("        text(t.title).size(type_scale::BODY),"));
+
+    assert!(!fires("            sidebar::view(state, scheme),"));
+    assert!(!fires("use crate::ui::sidebar;"));
+    assert!(!fires(
+        "        Text::new(\"Worktrees\", TypeRole::Section, r)"
+    ));
 }
 
 /// A scan that reads nothing passes trivially.

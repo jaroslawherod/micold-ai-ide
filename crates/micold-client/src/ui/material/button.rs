@@ -99,7 +99,7 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
     }
 
     fn labelled(label: impl Into<String>, variant: Variant, roles: Roles) -> Self {
-        let label: Element<'a, M> = Text::new(label.into(), TypeRole::Body, roles).into();
+        let label: Element<'a, M> = Text::new(label.into(), TypeRole::Action, roles).into();
         Self::with_content(label, variant, roles)
     }
 

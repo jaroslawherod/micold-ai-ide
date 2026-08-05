@@ -346,7 +346,7 @@ pub fn pane<'a>(
             .display_offset(display_offset)
             .focused(state.terminal_focused)
             .into(),
-        None => container(Text::new("Starting…", TypeRole::Label, r).muted())
+        None => container(Text::new("Starting…", TypeRole::Caption, r).muted())
             .center_x(Length::Fill)
             .center_y(Length::Fill)
             .into(),

@@ -11,7 +11,7 @@ use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::naming::Tag;
 use micold_core::session::{SessionLifecycle, SessionLocation};
-use micold_core::tokens::{self, sidebar, spacing, Rgb, Roles};
+use micold_core::tokens::{self, spacing, Rgb, Roles};
 use micold_core::worktree::WorktreeStatus;
 
 /// Width of the collapsed strip that hosts the "show sidebar" button.
@@ -46,7 +46,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     );
     let header = row![
         filter_toggle,
-        Text::new("Worktrees", TypeRole::Title, r).width(Length::Fill),
+        Text::new("Worktrees", TypeRole::Section, r).width(Length::Fill),
         add_worktree,
         hide,
     ]
@@ -92,7 +92,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         Some(
             Text::new(
                 "No worktrees yet. Add one to get started.",
-                TypeRole::Label,
+                TypeRole::Caption,
                 r,
             )
             .muted()
@@ -102,7 +102,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         // Active filter matched nothing (FR-027): a message + a one-tap clear.
         Some(
             column![
-                Text::new("No worktrees match the filter.", TypeRole::Label, r).muted(),
+                Text::new("No worktrees match the filter.", TypeRole::Caption, r).muted(),
                 Button::with_content(
                     Text::new("Clear filters", TypeRole::SidebarTag, r),
                     ButtonVariant::Text,
@@ -119,7 +119,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     };
 
     let tree: Element<'_, Message> = TreeView::new(build_items(state, entries, r), r)
-        .label_size(sidebar::NAME)
+        .label_role(TypeRole::SidebarName)
         .into();
     let list: Element<'_, Message> = match hint {
         Some(hint) => column![tree, hint].spacing(spacing::SM).into(),

@@ -16,11 +16,11 @@ use crate::icons::Icon;
 use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
-use crate::ui::material::{menu_panel, IconButton};
-use iced::widget::{button, column, row, text};
+use crate::ui::material::{menu_panel, IconButton, Text, TypeRole};
+use iced::widget::{button, column, row};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
-use micold_core::tokens::{spacing, type_scale, Roles};
+use micold_core::tokens::{spacing, Roles};
 
 /// One entry in a menu. Generic over the message type for reuse.
 pub struct MenuItem<M> {
@@ -44,7 +44,19 @@ impl<M> MenuItem<M> {
 }
 
 /// The width of the dropdown panel.
-const PANEL_WIDTH: f32 = 220.0;
+///
+/// Widened from 220 at T017–T021. The panel's own padding, an item's padding, the leading icon and
+/// its gap take 46dp, so 220 left a label 174dp — and the longest item, "Session service
+/// diagnostics", shaped to 172.8dp. It fit by about a pixel, and only because menu labels were
+/// rendering at the body weight; giving them Material's `label_large` (the same size at weight 500,
+/// roughly 4% wider) pushed it over and wrapped the item onto two lines, which also silently
+/// invalidated [`menu_panel_size`]'s one-line-per-item height estimate and with it the anchor
+/// clamping that keeps a cursor-anchored menu on screen.
+///
+/// 240 leaves the same label about 14dp of headroom. That the old value was one character from
+/// wrapping was a latent bug, not something this change introduced — `tests/layout_snapshot.rs` is
+/// what surfaced it, and is what will surface the next label that outgrows the panel.
+const PANEL_WIDTH: f32 = 240.0;
 /// Vertical offset so the panel clears the toolbar (approx. toolbar height).
 const TOP_OFFSET: f32 = 52.0;
 /// The width of the right-click context-menu panel (narrower than the toolbar dropdown).
@@ -55,13 +67,16 @@ const CONTEXT_MENU_WIDTH: f32 = 160.0;
 /// open off-screen (feature 015).
 ///
 /// Derived from the same tokens the panel is built from: the panel's own [`spacing::XS`] padding
-/// on both sides, each item's [`spacing::SM`] button padding plus a [`type_scale::BODY`] line,
-/// and [`spacing::XS`] between items. Deliberately rounds the line height **up** — erring large
-/// keeps the panel comfortably inside the window rather than flush against the edge.
+/// on both sides, each item's [`spacing::SM`] button padding plus one line of its label, and
+/// [`spacing::XS`] between items. Deliberately rounds the line height **up** — erring large keeps
+/// the panel comfortably inside the window rather than flush against the edge.
 pub fn menu_panel_size(items: usize) -> (u16, u16) {
-    /// Generous line box for a `BODY`-sized label (font size plus leading).
-    const LINE: u16 = type_scale::BODY as u16 + 6;
-    let item = LINE + spacing::SM as u16 * 2;
+    // The label's own line height, so the estimate follows the type scale rather than restating
+    // it. This used to be the font size plus a guessed 6dp of leading; the role states the real
+    // number, which happens to be the same 20dp — an estimate that was right by luck is now right
+    // by construction, and follows if the role is ever re-valued.
+    let line = TypeRole::Action.line_height_dp().ceil() as u16;
+    let item = line + spacing::SM as u16 * 2;
     let gaps = (items.saturating_sub(1)) as u16 * spacing::XS as u16;
     let height = spacing::XS as u16 * 2 + items as u16 * item + gaps;
     (PANEL_WIDTH as u16, height)
@@ -73,9 +88,11 @@ fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) -> Element<
     for item in items {
         let mut content = row![].spacing(spacing::SM).align_y(Alignment::Center);
         if let Some(glyph) = item.icon {
-            content = content.push(icon(glyph, type_scale::BODY, r.on_surface));
+            content = content.push(icon(glyph, TypeRole::Action.size(), r.on_surface));
         }
-        content = content.push(text(item.label).size(type_scale::BODY));
+        // A menu item is something you press, so its label is `Action` — Material's `label_large`,
+        // the same 14dp at medium weight. It used to state a size and get the default weight.
+        content = content.push(Text::new(item.label, TypeRole::Action, r));
         // Menu items are buttons built here rather than through `material::Button`, so the ripple
         // is composed explicitly — FR-024c wants every interactive surface to ripple, and "it is
         // not a `Button` type" is not a reason a user would accept for one row not responding.

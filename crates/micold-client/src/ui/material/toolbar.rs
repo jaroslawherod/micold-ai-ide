@@ -5,9 +5,10 @@
 //! by the app shell; any future top bar should reuse it rather than fork a bespoke bar.
 
 use crate::ui::material::style;
-use iced::widget::{column, container, row, text, Space};
+use crate::ui::material::{Text, TypeRole};
+use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Background, Element, Length};
-use micold_core::tokens::{spacing, type_scale, Roles};
+use micold_core::tokens::{spacing, Roles};
 
 /// A toolbar with a `title` on the leading edge and trailing action elements (Principle VIII
 /// builder-API rule): construct with the required title + roles, add actions, then `.into()`.
@@ -42,8 +43,12 @@ impl<'a, M: 'a> Toolbar<'a, M> {
 
 impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
     fn from(t: Toolbar<'a, M>) -> Self {
+        // `Section` rather than `Body`: the bar's title names what you are looking at, and reading
+        // it at the body role made it indistinguishable from ordinary content. Material's small top
+        // app bar uses `title_large` (22dp); this is a dense in-app bar, so `title_medium` gives it
+        // heading weight without growing the bar's height — the one judgement call in this file.
         let mut bar = row![
-            text(t.title).size(type_scale::BODY),
+            Text::new(t.title, TypeRole::Section, t.roles),
             Space::new().width(Length::Fill),
         ]
         .spacing(spacing::MD)

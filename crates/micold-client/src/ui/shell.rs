@@ -46,12 +46,12 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                     TypeRole::Headline,
                     r
                 ),
-                Text::new(project.path.display().to_string(), TypeRole::Label, r).muted(),
+                Text::new(project.path.display().to_string(), TypeRole::Caption, r).muted(),
                 Button::with_content(
                     labeled(
                         Icon::OpenProject,
                         on_surface_tint,
-                        TypeRole::Body,
+                        TypeRole::Action,
                         "Open another project",
                         r
                     ),
@@ -80,7 +80,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                     labeled(
                         Icon::OpenProject,
                         on_primary_tint,
-                        TypeRole::Body,
+                        TypeRole::Action,
                         "Open a project",
                         r
                     ),
@@ -112,7 +112,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
     if !state.workspace.projects.is_empty() {
         let active = state.workspace.active.clone();
         let mut list =
-            column![Text::new("Known projects", TypeRole::Title, r)].spacing(spacing::SM);
+            column![Text::new("Known projects", TypeRole::Section, r)].spacing(spacing::SM);
 
         for project in &state.workspace.projects {
             let is_active = active.as_ref() == Some(&project.path);
@@ -125,7 +125,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                     labeled(
                         Icon::OpenProject,
                         on_primary_tint,
-                        TypeRole::Body,
+                        TypeRole::Action,
                         "Open",
                         r,
                     ),
@@ -140,7 +140,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             // Renaming affects only the stored name, so it is allowed even when the folder
             // is unavailable (FR-017, FR-018).
             let rename = Button::with_content(
-                labeled(Icon::Rename, on_surface_tint, TypeRole::Body, "Rename", r),
+                labeled(Icon::Rename, on_surface_tint, TypeRole::Action, "Rename", r),
                 ButtonVariant::Outlined,
                 r,
             )
@@ -151,7 +151,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             // stale entry (feature 014, FR-001/FR-011). The trash icon is error-tinted to signal
             // the destructive-to-metadata action; the confirmation dialog is the real safeguard.
             let forget = Button::with_content(
-                labeled(Icon::Delete, error_tint, TypeRole::Body, "Forget", r),
+                labeled(Icon::Delete, error_tint, TypeRole::Action, "Forget", r),
                 ButtonVariant::Outlined,
                 r,
             )

@@ -9,9 +9,10 @@
 //! duration, while the paired label names the concrete current step (`CreateStage::label`).
 
 use crate::ui::material::style;
-use iced::widget::{column, progress_bar, text};
+use crate::ui::material::{Text, TypeRole};
+use iced::widget::{column, progress_bar};
 use iced::{Element, Length};
-use micold_core::tokens::{shape, spacing, type_scale, Roles};
+use micold_core::tokens::{shape, spacing, Roles};
 
 /// Bar thickness, in logical pixels.
 const HEIGHT: f32 = 4.0;
@@ -46,11 +47,10 @@ impl<'a, M: 'a> From<StageProgress> for Element<'a, M> {
                 border: iced::border::rounded(shape::FULL),
             });
 
-        column![
-            bar,
-            text(p.label).size(type_scale::LABEL).style(style::muted(r)),
-        ]
-        .spacing(spacing::XS)
-        .into()
+        // The stage label is a plain-language sentence about what is happening, so it is prose:
+        // `Caption`, at the body weight. It was `label_medium`, the same size at weight 500.
+        column![bar, Text::new(p.label, TypeRole::Caption, r).muted()]
+            .spacing(spacing::XS)
+            .into()
     }
 }

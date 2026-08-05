@@ -7,9 +7,10 @@
 use crate::icons::Icon;
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
+use crate::ui::material::TypeRole;
 use iced::widget::{button, column, container, mouse_area, row, Row, Space};
 use iced::{Alignment, Element, Length};
-use micold_core::tokens::{shape, spacing, type_scale, Rgb, Roles};
+use micold_core::tokens::{shape, spacing, Rgb, Roles};
 
 /// One row in a [`tree_view`]. Generic over the message type so it is reusable across features.
 pub struct TreeItem<'a, M> {
@@ -158,7 +159,7 @@ impl<'a, M> TreeItem<'a, M> {
 pub struct TreeView<'a, M> {
     items: Vec<TreeItem<'a, M>>,
     roles: Roles,
-    label_size: f32,
+    label_role: TypeRole,
 }
 
 impl<'a, M: Clone + 'a> TreeView<'a, M> {
@@ -167,13 +168,16 @@ impl<'a, M: Clone + 'a> TreeView<'a, M> {
         Self {
             items,
             roles,
-            label_size: type_scale::BODY,
+            label_role: TypeRole::Body,
         }
     }
 
-    /// Override the label + leading-icon size (e.g. the sidebar's 80% scale, FR-012).
-    pub fn label_size(mut self, size: f32) -> Self {
-        self.label_size = size;
+    /// Override the label + leading-icon role (e.g. the sidebar's 80% scale, FR-011).
+    ///
+    /// A role rather than a size: the sidebar's reduced density is a named, auditable decision in
+    /// the scale, and taking an `f32` here let a caller pass any number at all.
+    pub fn label_role(mut self, role: TypeRole) -> Self {
+        self.label_role = role;
         self
     }
 }
@@ -183,8 +187,11 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
         let TreeView {
             items,
             roles: r,
-            label_size,
+            label_role,
         } = tv;
+        // The twisty glyph, and the width of the slot that stands in for it on a row that cannot
+        // expand — one number, so labels align down the column whether or not a row has a twisty.
+        let twisty_size = TypeRole::Label.size();
         let mut col = column![].spacing(spacing::XS).width(Length::Fill);
 
         for item in items {
@@ -204,7 +211,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                     } else {
                         Icon::OpenProject
                     };
-                    let mut twisty = button(icon(glyph, type_scale::LABEL, item.tint))
+                    let mut twisty = button(icon(glyph, twisty_size, item.tint))
                         .padding(spacing::XS)
                         .style(style::text_button(r));
                     if let Some(msg) = item.on_toggle.clone() {
@@ -212,11 +219,11 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                     }
                     line = line.push(twisty);
                 }
-                None => line = line.push(Space::new().width(Length::Fixed(type_scale::LABEL))),
+                None => line = line.push(Space::new().width(Length::Fixed(twisty_size))),
             }
 
             if let Some(glyph) = item.icon {
-                line = line.push(icon(glyph, label_size, item.tint));
+                line = line.push(icon(glyph, label_role.size(), item.tint));
             }
 
             // The per-session activity dot sits between the icon and the name (feature 010 US2).
@@ -228,12 +235,14 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // controls leave it. This used to be a plain `text(...).wrapping(Wrapping::None)`,
             // which keeps the single line but does not clip: a long session name was measured at
             // its full width and drawn straight over the close button beside it.
-            line = line.push(super::Ellipsized::new(item.label, label_size, item.tint));
+            line = line.push(super::Ellipsized::at_role(
+                item.label, label_role, item.tint,
+            ));
 
             if let Some(custom) = item.trailing_custom {
                 line = line.push(custom);
             } else if let Some((glyph, msg)) = item.trailing {
-                let btn = button(icon(glyph, type_scale::LABEL, item.tint))
+                let btn = button(icon(glyph, twisty_size, item.tint))
                     .padding(spacing::XS)
                     .style(style::text_button(r))
                     .on_press(msg);
@@ -249,7 +258,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             let body: Element<'a, M> = if item.tags.is_empty() {
                 line.into()
             } else {
-                let tag_indent = indent + label_size + spacing::SM;
+                let tag_indent = indent + label_role.size() + spacing::SM;
                 let mut tag_row: Row<'a, M> = row![Space::new().width(Length::Fixed(tag_indent))]
                     .spacing(spacing::XS)
                     .align_y(Alignment::Center);

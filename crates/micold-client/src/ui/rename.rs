@@ -21,7 +21,7 @@ pub fn modal<'a>(draft: &'a RenameDraft, scheme: ColorScheme) -> Element<'a, Mes
 
     let mut fields = column![
         Text::new("Rename project", TypeRole::Headline, r),
-        Text::new(draft.path.display().to_string(), TypeRole::Label, r).muted(),
+        Text::new(draft.path.display().to_string(), TypeRole::Caption, r).muted(),
         input,
     ]
     .spacing(spacing::MD);
@@ -32,7 +32,7 @@ pub fn modal<'a>(draft: &'a RenameDraft, scheme: ColorScheme) -> Element<'a, Mes
             RenameError::Empty => "Name cannot be empty.",
             RenameError::Whitespace => "Name cannot be only whitespace.",
         };
-        fields = fields.push(Text::new(message, TypeRole::Label, r).tint(r.error));
+        fields = fields.push(Text::new(message, TypeRole::Caption, r).tint(r.error));
     }
 
     let actions = row![

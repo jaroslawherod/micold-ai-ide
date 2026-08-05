@@ -17,7 +17,7 @@
 //! live promise, and they now guard the split as well as the move.
 
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing, type_scale, Rgb};
+use micold_core::tokens::{self, spacing, typography, Rgb};
 
 /// The colour values did change, and that is the point.
 ///
@@ -72,19 +72,19 @@ fn the_spacing_scale_survives_unchanged() {
 #[allow(clippy::assertions_on_constants)] // the point is to guard the values; clippy can see the answer
 fn the_sidebar_stays_denser_than_the_body_text() {
     assert!(
-        tokens::sidebar::NAME < type_scale::BODY,
+        typography::SIDEBAR_NAME.size < typography::BODY_MEDIUM.size,
         "the sidebar name ({}) is no longer smaller than body text ({}) — feature 009's density \
          decision has been lost in the move onto the Material scale (FR-011)",
-        tokens::sidebar::NAME,
-        type_scale::BODY
+        typography::SIDEBAR_NAME.size,
+        typography::BODY_MEDIUM.size
     );
     assert!(
-        tokens::sidebar::TAG < type_scale::LABEL,
+        typography::SIDEBAR_TAG.size < typography::LABEL_MEDIUM.size,
         "the sidebar tag is no longer smaller than the label role"
     );
     assert_eq!(
-        tokens::sidebar::SESSION,
-        tokens::sidebar::NAME,
+        typography::SIDEBAR_SESSION,
+        typography::SIDEBAR_NAME,
         "a session line and the worktree name it nests under share a role (§2.4)"
     );
 }

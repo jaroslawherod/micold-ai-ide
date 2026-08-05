@@ -84,6 +84,7 @@ const APPEARANCE: &[(&str, &str)] = &[
     ("Roles", "a colour role set"),
     ("tokens::", "a design token"),
     ("micold_core::tokens", "the token module"),
+    ("typography::", "a type role"),
     ("type_scale", "a type role"),
     ("shape::", "a shape size"),
     ("spacing::", "a spacing step"),

@@ -24,17 +24,49 @@ use micold_core::tokens::{typography, Rgb, Roles};
 /// The sidebar roles are separate rather than a modifier because the sidebar runs at its own
 /// density — an explicit, auditable 80% of the body/label roles — and that decision belongs in one
 /// place rather than at every sidebar call site.
+///
+/// # Choosing between [`Body`](Self::Body), [`Caption`](Self::Caption) and [`Label`](Self::Label)
+///
+/// Material splits these on *what the text does*, not on how big it is, and the split is the whole
+/// reason `Caption` and `Label` are both here at 12dp:
+///
+/// - **prose** — anything that reads as a sentence, whatever its size — is a `body` role, set at
+///   weight 400. Sentences at weight 500 read as shouting, and this application had a lot of them:
+///   error lines, diagnostics, "This repository has no other branches."
+/// - **an interface label** — a terse word or fragment naming a thing, never a sentence — is a
+///   `label` role, at weight 500. "git", "Type", "Branch:".
+///
+/// So `Caption` and `Label` are the same size and differ only in weight, deliberately. Picking
+/// between them is picking whether the text is something you *read* or something you *scan*.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TypeRole {
     /// The largest role. Used once, for the empty-state headline.
     Display,
     /// A dialog or screen title.
     Headline,
-    /// A section heading within a dialog.
+    /// A screen-level title — the largest thing inside a surface rather than above it.
     Title,
+    /// A heading introducing a group *within* a surface: a sidebar's header, a list's subheading.
+    ///
+    /// Distinct from [`Title`](Self::Title) because 22dp at weight 400 is a screen title, and a
+    /// group heading nested inside a panel that already has one has to sit below it in the
+    /// hierarchy — Material's `title_medium` is 16dp at weight 500, which reads as a heading
+    /// through weight rather than through size.
+    Section,
     /// Ordinary running text — the default for anything that is not one of the others.
     Body,
-    /// Supporting text: captions, hints, counts, status lines.
+    /// Supporting prose: hints, error lines, diagnostics, explanatory sentences.
+    ///
+    /// The same size as [`Label`](Self::Label) and deliberately a *lighter* weight, because this is
+    /// text to be read rather than scanned. See the type-level docs.
+    Caption,
+    /// Text on something you can press: a button, a menu item, a chip.
+    ///
+    /// Material's `label_large`, and one of the most recognisable things about the type system —
+    /// button text is medium weight. Rendering it at the body weight is the same size and reads as
+    /// a different design language, which is exactly the gap feature 018 exists to close.
+    Action,
+    /// A terse interface label naming a thing: a field's name, a badge, a count.
     Label,
     /// A worktree or session name in the sidebar.
     SidebarName,
@@ -62,20 +94,60 @@ impl TypeRole {
     /// The Material 3 role this resolves to (contract §2.4, §2.5).
     ///
     /// The mapping is deliberately a *narrowing*: the scale has fifteen roles and this enum names
-    /// the eight the application actually distinguishes. The others exist in the scale and are
+    /// the eleven the application actually distinguishes. The others exist in the scale and are
     /// reachable, but no call site is required to use one — Material's true display sizes (36–57)
     /// are larger than anything this app renders.
+    ///
+    /// This table is the whole of the app's typographic vocabulary, so it is pinned by
+    /// `tests/type_role_mapping.rs` rather than left to be re-derived by reading call sites.
     pub fn resolved(self) -> typography::TypeRole {
         match self {
             // Feature 003's `DISPLAY` (32) was a headline in Material's vocabulary, not a display.
             TypeRole::Display => typography::HEADLINE_LARGE,
             TypeRole::Headline => typography::HEADLINE_SMALL,
             TypeRole::Title => typography::TITLE_LARGE,
+            TypeRole::Section => typography::TITLE_MEDIUM,
             TypeRole::Body => typography::BODY_MEDIUM,
+            TypeRole::Caption => typography::BODY_SMALL,
+            TypeRole::Action => typography::LABEL_LARGE,
             TypeRole::Label => typography::LABEL_MEDIUM,
             TypeRole::SidebarName => typography::SIDEBAR_NAME,
             TypeRole::SidebarTag => typography::SIDEBAR_TAG,
             TypeRole::SidebarSession => typography::SIDEBAR_SESSION,
+        }
+    }
+
+    /// Every role a call site can name, so a test or the showcase can enumerate them without
+    /// restating the list (and drifting from it).
+    pub const ALL: [TypeRole; 11] = [
+        TypeRole::Display,
+        TypeRole::Headline,
+        TypeRole::Title,
+        TypeRole::Section,
+        TypeRole::Body,
+        TypeRole::Caption,
+        TypeRole::Action,
+        TypeRole::Label,
+        TypeRole::SidebarName,
+        TypeRole::SidebarTag,
+        TypeRole::SidebarSession,
+    ];
+
+    /// The role's name as the enum spells it — for the showcase's per-role labels and for test
+    /// failures that need to name the offender.
+    pub fn name(self) -> &'static str {
+        match self {
+            TypeRole::Display => "Display",
+            TypeRole::Headline => "Headline",
+            TypeRole::Title => "Title",
+            TypeRole::Section => "Section",
+            TypeRole::Body => "Body",
+            TypeRole::Caption => "Caption",
+            TypeRole::Action => "Action",
+            TypeRole::Label => "Label",
+            TypeRole::SidebarName => "SidebarName",
+            TypeRole::SidebarTag => "SidebarTag",
+            TypeRole::SidebarSession => "SidebarSession",
         }
     }
 
@@ -96,6 +168,15 @@ impl TypeRole {
             },
             ..ROBOTO
         }
+    }
+
+    /// The role's line height in dp, as a plain number.
+    ///
+    /// For the caller that needs the *number* rather than the renderer's type — sizing a panel
+    /// whose height depends on how tall its lines are. Everything that renders text wants
+    /// [`Self::line_height`] instead.
+    pub fn line_height_dp(self) -> f32 {
+        self.resolved().line_height
     }
 
     /// The role's line height, as an absolute dp value rather than a multiple of the size.
