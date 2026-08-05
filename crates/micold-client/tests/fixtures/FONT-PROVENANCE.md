@@ -1,48 +1,54 @@
 # Reference typeface provenance
 
-**File**: `Roboto-Regular.ttf`
+**The layout snapshot measures against the faces the application ships**, in `assets/fonts/`:
 
-| | |
+| File | Role in the snapshot |
 |---|---|
-| Family / subfamily | `Roboto` / `Regular` (name IDs 1 and 2) |
-| Source | <https://github.com/googlefonts/roboto-2> — `src/hinted/Roboto-Regular.ttf` |
-| Retrieved | 2026-07-28 |
-| Size | 515,100 bytes |
-| SHA-256 | `56a45233d29f11b4dfb86d248e921939d115778f87325e7ae8cc108383d6664d` |
-| Licence | Apache License 2.0 — matches this workspace's own licence |
-| Copyright | Copyright 2015 Google Inc. All Rights Reserved. |
+| `Roboto-Regular.ttf` | body text and every type role below weight 500 |
+| `Roboto-Medium.ttf` | the type roles that resolve to weight >= 500 (`material/text.rs`) |
+| `MaterialSymbolsOutlined.ttf` | icons, which are glyphs and are shaped and measured like any other text |
 
-## Why this file exists
+See `assets/fonts/PROVENANCE.md` for their source, versions and licences. This file records why the
+snapshot uses them and what breaks if that changes.
 
-It is the **measuring basis** for the layout snapshot (feature 019, research R2). It is *not*
-registered with the application and does not affect what any user sees.
+## This file used to describe a second copy, and that was the defect
 
-The layout snapshot builds its own headless renderer, and therefore chooses that renderer's default
-font. That matters because `iced_graphics`'s global font system calls
-`fontdb::Database::load_system_fonts()` unconditionally — 391 faces were counted on the development
-machine — and `iced::Font::DEFAULT` is `Family::SansSerif`, which resolves through a per-platform
-table. A fixture measured that way would pass only on the machine that generated it, which is
-precisely what FR-006 forbids.
+Feature 019 originally committed its own `tests/fixtures/Roboto-Regular.ttf` as a measuring basis,
+before feature 018 shipped Roboto to the application. T002 said explicitly that the asset **must not
+be committed twice** and that 018's T015 should reuse it. Both features shipped, and it was.
 
-Pinning this face as the renderer's default makes text metrics identical on Linux, macOS and
-Windows. `crates/micold-client/src/ui/material/text.rs` sets no font on body text, so it falls back
-to that default and every recorded width follows from this file.
+The two files were **different builds of Roboto with different bytes** — a tenth of a pixel apart
+over the guard's reference string. So the gate was measuring text against a face the application
+does not draw with: reproducible, stable, and wrong. The duplicate is deleted and the snapshot reads
+`assets/fonts/` directly.
 
-## Two things to know before touching it
+## Why pinning is necessary at all
 
-**Replacing this file is a fixture-wide change.** Every recorded geometry derives from its metrics.
-A different version of Roboto is a different set of advance widths, so swapping it means
-regenerating `layout_snapshot.txt` in the same commit and reviewing the whole diff.
+The layout snapshot builds its own headless renderer and therefore chooses that renderer's default
+font. `iced_graphics`'s global font system calls `fontdb::Database::load_system_fonts()`
+unconditionally — 391 faces were counted on the development machine — and `iced::Font::DEFAULT` is
+`Family::SansSerif`, which resolves through a per-platform table. A fixture measured that way would
+pass only on the machine that generated it, which is precisely what FR-006 forbids.
 
-**A host font of the same name can silently displace it.** `load_system_fonts()` still runs, so a
+## Three things to know before touching these files
+
+**Replacing one is a fixture-wide change.** Every recorded geometry derives from their metrics. A
+different build of Roboto is a different set of advance widths, so swapping one means regenerating
+`layout_snapshot.txt` in the same commit and reviewing the whole diff.
+
+**A host font of the same name can silently displace one.** `load_system_fonts()` still runs, so a
 machine with its own `Roboto` installed may win the family-name lookup and shift every measurement
-at once — presenting as a mass layout regression rather than a font problem. The guard assertion in
-`crates/micold-client/tests/layout_apparatus.rs` pins a known measurement of a known string so that
-failure names itself. That risk does not go away when feature 018 ships Roboto as the application
-font; Roboto is a common system font name, so the guard is permanent.
+at once — presenting as a mass layout regression rather than a font problem. The guards in
+`crates/micold-client/tests/layout_apparatus.rs` pin known measurements so that failure names
+itself. Roboto is a common system font name, so those guards are permanent.
 
-## Relationship to feature 018
+**Every face the application registers must be registered here too.** The icon font was missed for
+the whole of feature 019: icons resolved through the host's fallback, at whatever width the machine
+offered. Local runs were green, and so were the macOS and Windows CI runners, because the fixture
+happened to match what they resolved. Only the Ubuntu runner disagreed — icon nodes 8.4px where
+6.3px was recorded, shifting every adjacent label 2.1px.
 
-Feature 018's FR-008/FR-008a require shipping Roboto as the *application's* typeface, so that users
-see the same text everywhere. Its T015 registers it. **That task must reuse this file rather than
-committing a second copy** — one asset, two consumers.
+That is the failure mode to watch for: not a face that is absent, but a face that is *substituted*,
+which measures something plausible and wrong. `the_icon_face_parses_and_is_the_face_that_measures`
+pins each glyph to the committed face's own advance rather than to a constant, so a substitution
+fails rather than being recorded.

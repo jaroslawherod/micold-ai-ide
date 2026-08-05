@@ -40,25 +40,9 @@ fn view(state: &State) -> Element<'_, micold_client::app::Message> {
 /// The string every width assertion here is taken against.
 const REFERENCE_STRING: &str = "Roboto layout parity 0123";
 
-/// Shape one string and return its measured width, exactly as a widget's layout would.
+/// Shape one string at the renderer's default size and return its measured width.
 fn measure(content: &str, font: iced::Font) -> f32 {
-    use iced::advanced::text::{self, Paragraph as _};
-
-    let probe = text::Text {
-        content,
-        bounds: Size::INFINITE,
-        size: iced::Pixels(lay::DEFAULT_TEXT_SIZE),
-        line_height: text::LineHeight::default(),
-        font,
-        align_x: text::Alignment::Default,
-        align_y: iced::alignment::Vertical::Top,
-        shaping: text::Shaping::Advanced,
-        wrapping: text::Wrapping::default(),
-    };
-
-    iced::advanced::graphics::text::Paragraph::with_text(probe)
-        .min_bounds()
-        .width
+    lay::measure(content, font, lay::DEFAULT_TEXT_SIZE)
 }
 
 // --- T004 — headless construction -------------------------------------------------------------

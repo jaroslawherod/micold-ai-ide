@@ -60,6 +60,30 @@ pub const WINDOW: Size = Size::new(1280.0, 800.0);
 /// The renderer's default text size.
 pub const DEFAULT_TEXT_SIZE: f32 = 16.0;
 
+/// Shape one string at one size and return its measured width, exactly as a widget's layout would.
+///
+/// The renderer must already have been constructed (it is what loads the reference faces into the
+/// global font system), or this measures against whatever the host offers.
+pub fn measure(content: &str, font: Font, size: f32) -> f32 {
+    use iced::advanced::text::{self, Paragraph as _};
+
+    let probe = text::Text {
+        content,
+        bounds: Size::INFINITE,
+        size: iced::Pixels(size),
+        line_height: text::LineHeight::default(),
+        font,
+        align_x: text::Alignment::Default,
+        align_y: iced::alignment::Vertical::Top,
+        shaping: text::Shaping::Advanced,
+        wrapping: text::Wrapping::default(),
+    };
+
+    iced::advanced::graphics::text::Paragraph::with_text(probe)
+        .min_bounds()
+        .width
+}
+
 /// The spacing between pumped redraw frames in [`resolve_revealing`].
 ///
 /// Only its *non-zero-ness* matters. A track steps a fixed amount per redraw rather than by

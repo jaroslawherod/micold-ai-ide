@@ -23,6 +23,10 @@ use super::layout::{Anchor, CoveredState, RevealingState, StateUnderTest};
 /// A fixed project path. Never canonicalised against a real directory.
 const PROJECT: &str = "/fixture/project";
 
+/// The toolbar's title, at the same path in every state: shell column → toolbar column → bar
+/// container → bar row → leading child.
+const TOOLBAR_TITLE: &[usize] = &[0, 0, 0, 0, 0, 0];
+
 /// Deliberately long, so the label/close-button relationship this gate was built to watch is under
 /// real pressure at the canonical window size (FR-008b, FR-018).
 const LONG_NAME: &str = "feat-a-deliberately-long-worktree-name-that-crowds-its-controls";
@@ -95,6 +99,13 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "sidebar.row.delete_button",
                     path: &[0, 0, 2, 0, 0, 0, 2, 0, 0, 2, 0, 2, 1],
                 },
+                // `Toolbar`'s leading `text(title)` (`material/toolbar.rs:46`). Named on both shell
+                // states rather than on all eleven: the toolbar is behind every dialog too, and an
+                // anchor repeated on a state whose failures are never about it is noise.
+                Anchor {
+                    name: "toolbar.title",
+                    path: TOOLBAR_TITLE,
+                },
             ],
         },
         CoveredState {
@@ -104,10 +115,16 @@ pub fn covered_states() -> &'static [CoveredState] {
                 state.sidebar_hidden = true;
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor {
-                name: "shell.root",
-                path: &[],
-            }],
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "toolbar.title",
+                    path: TOOLBAR_TITLE,
+                },
+            ],
         },
         CoveredState {
             name: "add-worktree-dialog-new-branch",
@@ -121,10 +138,21 @@ pub fn covered_states() -> &'static [CoveredState] {
                 });
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor {
-                name: "dialog.root",
-                path: &[],
-            }],
+            anchors: &[
+                Anchor {
+                    name: "dialog.root",
+                    path: &[],
+                },
+                // The Create/Cancel row. **The index differs per state and that is not avoidable**:
+                // it is the last child of a column whose length depends on which fields the form
+                // shows, so there is no single path that means "the actions" across all of them.
+                // `the_action_row_anchors_are_action_rows` holds each one to the signature rather
+                // than to the number.
+                Anchor {
+                    name: "dialog.actions",
+                    path: &[3, 0, 0, 6],
+                },
+            ],
         },
         CoveredState {
             name: "add-worktree-dialog-existing-branch",
@@ -137,10 +165,18 @@ pub fn covered_states() -> &'static [CoveredState] {
                 });
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor {
-                name: "dialog.root",
-                path: &[],
-            }],
+            anchors: &[
+                Anchor {
+                    name: "dialog.root",
+                    path: &[],
+                },
+                // Three fewer fields than the new-branch form: one picker in place of label,
+                // select, ticket and name.
+                Anchor {
+                    name: "dialog.actions",
+                    path: &[3, 0, 0, 3],
+                },
+            ],
         },
         CoveredState {
             name: "worktree-menu-open",
@@ -204,10 +240,18 @@ pub fn covered_states() -> &'static [CoveredState] {
                     Some("could not create the worktree: branch already checked out".to_string());
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor {
-                name: "dialog.root",
-                path: &[],
-            }],
+            anchors: &[
+                Anchor {
+                    name: "dialog.root",
+                    path: &[],
+                },
+                // One past the new-branch form: the error sentence is a field-column child of its
+                // own, and it pushes the actions down.
+                Anchor {
+                    name: "dialog.actions",
+                    path: &[3, 0, 0, 7],
+                },
+            ],
         },
         // --- The one state that exercises the overlay pass (FR-009) -----------------------------
         // Until this existed the fixture contained **zero** `over` records. The overlay pass was
@@ -241,6 +285,12 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "dialog.type-select",
                     path: &[3, 0, 0, 3],
                 },
+                // Same form as `add-worktree-dialog-new-branch`; opening the menu adds an overlay
+                // layer, not a field.
+                Anchor {
+                    name: "dialog.actions",
+                    path: &[3, 0, 0, 6],
+                },
             ],
         },
         // --- Added to exercise FR-016 end-to-end (T032) ------------------------------------------
@@ -266,10 +316,17 @@ pub fn covered_states() -> &'static [CoveredState] {
                 });
                 StateUnderTest::new(state)
             },
-            anchors: &[Anchor {
-                name: "dialog.root",
-                path: &[],
-            }],
+            anchors: &[
+                Anchor {
+                    name: "dialog.root",
+                    path: &[],
+                },
+                // The tallest form, so the furthest-down action row: eight fields above it.
+                Anchor {
+                    name: "dialog.actions",
+                    path: &[3, 0, 0, 8],
+                },
+            ],
         },
     ]
 }
