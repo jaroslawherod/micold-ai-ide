@@ -17,6 +17,7 @@
 use crate::naming::ConventionalType;
 use crate::theme::ColorScheme;
 
+pub mod anatomy;
 pub mod density;
 pub mod elevation;
 pub mod motion;

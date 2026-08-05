@@ -21,6 +21,7 @@ pub mod input;
 pub mod logout_survival;
 pub mod metadata;
 pub mod naming;
+pub mod notify;
 pub mod overlay;
 pub mod project;
 pub mod protocol;
