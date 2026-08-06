@@ -46,10 +46,11 @@
 //! to transition. The result matches Material's *populated* field exactly; only the transition is
 //! absent.
 
-use iced::widget::{column, container, row, Space};
+use iced::widget::{column, container, Space};
 use iced::{Element, Length};
-use micold_core::tokens::{anatomy, density, spacing, Roles};
+use micold_core::tokens::{anatomy, spacing, Roles};
 
+use super::filled_field::FilledField;
 use super::style;
 use super::{Text, TypeRole};
 
@@ -140,60 +141,39 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
         let r = f.roles;
         let invalid = f.error.is_some();
 
-        // Both adornment slots are always present, an empty one as a bare `Space`. See the module
-        // docs for why the slot must exist even when empty — and note that the placeholder is
-        // `Space::new()` rather than an explicitly zero-sized one: iced's `Column::push` and
-        // `Row::push` *drop* any child whose size hint `is_void()`, which is true the moment either
-        // dimension is `Fixed(0)`. A zero-sized placeholder is therefore deleted outright, which is
-        // exactly the shape change it was added to prevent. A `Shrink` space lays out at zero and
-        // survives. `spacing` is deliberately absent, so an empty slot adds no gap either.
+        // Every slot is emitted whether or not it is filled — see the module docs. `Space::new()`
+        // and not a zero-sized one: iced drops a child whose size hint `is_void()`, which is true
+        // the moment either dimension is `Fixed(0)`, so an explicitly empty placeholder is deleted
+        // and takes the stability it was added for with it.
         let slot = |content: Option<Element<'a, M>>| -> Element<'a, M> {
             content.unwrap_or_else(|| Space::new().into())
         };
-        let line =
-            row![slot(f.leading), f.control, slot(f.trailing)].align_y(iced::Alignment::Center);
-
-        // The label sits above the value, inside the container, always in its floating position
-        // (FR-044). `Caption` is `body_small`, the role §7.7 gives it. Emitted even when there is
-        // no label, for the same tree-stability reason as the adornment slots.
         let label: Element<'a, M> = match f.label {
-            Some(label) => Text::new(label, TypeRole::Caption, r)
+            Some(text) => Text::new(text, TypeRole::Caption, r)
                 .tint(style::field_support(r, invalid))
                 .into(),
             None => Space::new().into(),
         };
-        let inner: Element<'a, M> = column![label, line].into();
 
-        let filled = container(inner)
-            .width(Length::Fill)
-            .height(Length::Fixed(density::height(
-                density::TEXT_FIELD_BASE,
-                density::STANDARD,
-            )))
-            .padding(iced::Padding {
-                top: spacing::SM,
-                bottom: spacing::SM,
-                left: anatomy::text_field::PADDING,
-                right: anatomy::text_field::PADDING,
-            })
-            .style(style::field_container(r));
+        // The box itself is a widget, not a stack of containers: §7.7's internal geometry is fixed
+        // (8 + 16 + 24 + 8 = 56) and a column distributes leftover space it does not have. See
+        // `filled_field.rs` for what composing it looked like and why it did not read as Material.
+        let field: Element<'a, M> = FilledField::new(
+            slot(f.leading),
+            f.control,
+            slot(f.trailing),
+            label,
+            r,
+            f.active,
+            invalid,
+        )
+        .into();
 
-        // The active indicator: the bottom edge of the container, and the whole of the field's focus
-        // affordance — there is no border here to recolour.
-        let (indicator_color, indicator_thickness) = style::field_indicator(r, f.active, invalid);
-        let indicator = container(Space::new().width(Length::Fill))
-            .width(Length::Fill)
-            .height(Length::Fixed(indicator_thickness))
-            .style(move |_theme: &iced::Theme| container::Style {
-                background: Some(iced::Background::Color(indicator_color)),
-                ..container::Style::default()
-            });
-
-        // The supporting slot is emitted unconditionally too — this is the one that would
-        // otherwise appear *while the user types*, the moment a value became invalid.
+        // Supporting text sits *beneath* the box, outside it. The error message replaces it rather
+        // than joining it: a field showing a problem should not also be showing the hint the
+        // problem replaces.
         let beneath: Element<'a, M> = match f.error.or(f.supporting) {
-            // The error message replaces the supporting text rather than joining it.
-            Some(message) => (container(
+            Some(message) => container(
                 Text::new(message, TypeRole::Caption, r).tint(style::field_support(r, invalid)),
             )
             .padding(iced::Padding {
@@ -201,13 +181,11 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
                 bottom: 0.0,
                 left: anatomy::text_field::PADDING,
                 right: anatomy::text_field::PADDING,
-            }))
+            })
             .into(),
             None => Space::new().into(),
         };
 
-        column![filled, indicator, beneath]
-            .width(Length::Fill)
-            .into()
+        column![field, beneath].width(Length::Fill).into()
     }
 }

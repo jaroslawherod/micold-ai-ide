@@ -179,10 +179,15 @@ fn the_field_is_at_least_the_contract_height() {
          30dp, and this is the largest single anatomical departure the feature corrects",
         bands[0].height
     );
+    // The indicator is no longer a band of its own: `FilledField` draws it inside the box, so the
+    // two are one shape rather than a line sitting under a container. Its thickness is asserted
+    // where it is now decided — `the_resting_indicator_is_a_muted_hairline`, against the pure
+    // function — and the band check that used to stand here would now be measuring the supporting
+    // slot and passing for the wrong reason.
     assert_eq!(
-        bands[1].height,
-        anatomy::text_field::INDICATOR,
-        "the resting active indicator is not a hairline"
+        bands.len(),
+        2,
+        "the field should be two bands — the box and the supporting slot beneath it"
     );
 }
 
@@ -276,9 +281,9 @@ fn an_empty_slot_takes_no_space() {
         "an adornment changed the field's height, so the empty slot was not zero-sized"
     );
     assert_eq!(
-        bare_bands[2].height, 0.0,
+        bare_bands[1].height, 0.0,
         "the empty supporting slot is {:.1}dp tall — it should be invisible",
-        bare_bands[2].height
+        bare_bands[1].height
     );
 }
 
