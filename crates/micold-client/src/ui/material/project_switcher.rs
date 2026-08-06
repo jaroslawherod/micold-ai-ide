@@ -19,7 +19,7 @@ use crate::ui::material::{Text, TypeRole};
 use iced::widget::{button, column, mouse_area, row};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
-use micold_core::tokens::{spacing, Roles};
+use micold_core::tokens::{shape, spacing, Roles};
 
 /// The width of the switcher panel.
 const PANEL_WIDTH: f32 = 260.0;
@@ -72,10 +72,14 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherTrigger<M>> for Element<'a, M> {
         ]
         .spacing(spacing::XS)
         .align_y(Alignment::Center);
+        // Every pressable here ripples, like every other pressable surface in the library
+        // (FR-021, SC-005a). `shape::FULL` because that is the corner `style::text_button` draws —
+        // a ripple clipped to the wrong shape is the bug `shape_bands` exists to prevent.
         let trigger = button(content)
             .padding(spacing::XS)
             .style(style::text_button(t.roles))
             .on_press(t.on_toggle);
+        let trigger = super::Ripple::new(trigger, t.roles.on_surface, shape::FULL);
         // Hover tooltip identifying the control (reuses the shared Tooltip primitive, Principle VIII).
         Tooltip::new(trigger, "Project selector", t.roles).into()
     }
@@ -161,6 +165,7 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Option<Surface<'
             }
             // Right-click opens the row's context menu (feature 015). Offered even for
             // unavailable projects — those are precisely the ones a user wants to forget.
+            let entry = super::Ripple::new(entry, r.on_surface, shape::FULL);
             let row: Element<'_, M> = match pr.on_context {
                 Some(msg) => mouse_area(entry).on_right_press(msg).into(),
                 None => entry.into(),
@@ -169,7 +174,7 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Option<Surface<'
         }
 
         // Trailing "Add project…" row opens the existing folder browser (FR-009).
-        list = list.push(
+        list = list.push(super::Ripple::new(
             button(
                 row![
                     icon(Icon::OpenProject, TypeRole::Action.size(), add_tint),
@@ -182,7 +187,9 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Option<Surface<'
             .padding(spacing::SM)
             .style(style::text_button(r))
             .on_press(on_add),
-        );
+            r.on_surface,
+            shape::FULL,
+        ));
 
         let panel = menu_panel(list, Length::Fixed(PANEL_WIDTH), r, true);
         Some(

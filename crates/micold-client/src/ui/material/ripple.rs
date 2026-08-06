@@ -401,11 +401,20 @@ impl<'a, M: 'a> From<Ripple<'a, M>> for Element<'a, M> {
 /// It visits the ripples that are on screen, which is exactly the set FR-024e refuses to keep a list
 /// of — the requirement is that no *registry* exists, not that the tree cannot be walked.
 ///
-/// Only the first idle ripple is pressed, and only when it is idle. Pressing every one would
-/// measure a scene the contract does not describe; re-pressing one already running would restart it
-/// every frame and hold it at zero expansion, which is a ripple that never gets anywhere rather
-/// than one mid-animation. Left alone, a ripple runs its full cycle and is re-pressed on the frame
-/// after it settles.
+/// **One ripple, kept going** — the scene is the baseline plus *a* ripple, singular. Two rules get
+/// it there, and the second is easy to leave out:
+///
+/// - A ripple already running is never pressed again. Re-pressing one every frame holds it at zero
+///   expansion for ever, which is a ripple that never gets anywhere rather than one mid-animation.
+/// - Nothing is pressed at all unless the previous traversal found nothing animating. Without this
+///   the rule degrades to "press whichever one is idle", and since the probe pulses on *every*
+///   frame, that starts a second ripple while the first is still running, a third on the frame
+///   after, and has every ripple on screen animating within as many frames as there are rows. The
+///   scene check cannot see it — it only asks whether *a* ripple is animating — so the figure would
+///   be recorded against a screen full of them.
+///
+/// That is why `found` is read as well as written: it is the previous frame's answer, and the only
+/// thing a single traversal can know about ripples it has not reached yet.
 ///
 /// `found` receives how many ripples the traversal saw mid-animation. It is what `Scene::check`
 /// reads, and it is *observed* rather than assumed: a run that reported "a ripple is animating"
@@ -419,6 +428,8 @@ impl<'a, M: 'a> From<Ripple<'a, M>> for Element<'a, M> {
 /// faster, by a measurement the measurement had changed.
 pub fn pulse(found: Arc<AtomicUsize>) -> impl Operation<()> {
     struct Pulse {
+        /// Whether this traversal is allowed to start one — false while another is still running.
+        may_press: bool,
         pressed: bool,
         animating: usize,
         found: Arc<AtomicUsize>,
@@ -434,7 +445,7 @@ pub fn pulse(found: Arc<AtomicUsize>) -> impl Operation<()> {
                 return;
             };
             if ripple.is_idle() {
-                if !self.pressed {
+                if self.may_press && !self.pressed {
                     // `None` starts it from the centre — the documented origin for an activation
                     // that carries no pointer position, which is precisely what this is.
                     ripple.press(None, bounds.size());
@@ -453,6 +464,9 @@ pub fn pulse(found: Arc<AtomicUsize>) -> impl Operation<()> {
     }
 
     Pulse {
+        // The previous frame's count, which is the only view a single forward traversal has of the
+        // ripples it has not visited yet.
+        may_press: found.load(Ordering::Relaxed) == 0,
         pressed: false,
         animating: 0,
         found,
