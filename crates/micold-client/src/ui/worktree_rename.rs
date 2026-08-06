@@ -15,7 +15,8 @@ use micold_core::tokens::{self, spacing};
 pub fn modal<'a>(draft: &'a WorktreeRenameDraft, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
-    let input = TextField::new("Worktree name", &draft.text, r)
+    let input = TextField::new("", &draft.text, r)
+        .label("Worktree name")
         .on_input(Message::WorktreeRenameTextChanged)
         .on_submit(Message::WorktreeRenameConfirmed);
 

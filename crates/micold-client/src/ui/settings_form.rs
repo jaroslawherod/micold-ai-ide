@@ -33,7 +33,9 @@ pub fn modal<'a>(
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
-    let input = TextField::new("Scrollback lines", &draft.scrollback_lines, r)
+    let input = TextField::new("", &draft.scrollback_lines, r)
+        .label("Scrollback lines")
+        .supporting("Lines kept per terminal")
         .on_input(Message::SettingsScrollbackChanged)
         .on_submit(Message::SettingsSaved);
 
@@ -41,18 +43,24 @@ pub fn modal<'a>(
     // distinct set, separate from the scrollback field above (FR-015).
     let env_include_enabled_checkbox = Checkbox::new("Enabled", draft.env_include_enabled, r)
         .on_toggle(Message::SettingsEnvIncludeEnabledToggled);
-    let env_include_path_input = TextField::new("Script path", &draft.env_include_script_path, r)
+    let env_include_path_input = TextField::new("", &draft.env_include_script_path, r)
+        .label("Script path")
         .on_input(Message::SettingsEnvIncludePathChanged)
         .on_submit(Message::SettingsSaved);
-    let env_include_timeout_input =
-        TextField::new("Timeout (seconds)", &draft.env_include_timeout, r)
-            .on_input(Message::SettingsEnvIncludeTimeoutChanged)
-            .on_submit(Message::SettingsSaved);
+    let env_include_timeout_input = TextField::new("", &draft.env_include_timeout, r)
+        .label("Timeout")
+        .supporting("Seconds")
+        .on_input(Message::SettingsEnvIncludeTimeoutChanged)
+        .on_submit(Message::SettingsSaved);
 
     let mut fields = column![
         Text::new("Settings", TypeRole::Headline, r),
-        Text::new("Terminal scrollback limit (lines)", TypeRole::Label, r).muted(),
+        // No free-standing label above the field: it carries its own now (§7.7, FR-031a). Leaving
+        // this one would have shown the field's name twice — once above the container and once
+        // inside it — which is the duplication the migration exists to remove.
         input,
+        // This one stays. It names the *group* below it — a checkbox and two fields — rather than
+        // any single control, so it is a section heading and has no container to move into.
         Text::new("Environment include", TypeRole::Label, r).muted(),
         env_include_enabled_checkbox,
         env_include_path_input,

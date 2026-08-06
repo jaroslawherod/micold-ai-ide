@@ -45,20 +45,24 @@ pub fn modal<'a>(
                 Message::AddWorktreeTypeSelected,
                 r,
             )
-            .placeholder("Select a type…");
+            .placeholder("Select a type…")
+            // §7.7: the label moves *inside* the control's container, where every other field
+            // carries its own. It used to be a free-standing muted line above the select, which is
+            // the arrangement FR-031a replaces.
+            .label("Type");
 
-            let ticket = TextField::new("Ticket (optional, e.g. ABC-123)", &form.ticket, r)
+            let ticket = TextField::new("ABC-123", &form.ticket, r)
+                .label("Ticket")
+                .supporting("Optional — e.g. ABC-123")
                 .on_input(Message::AddWorktreeTicketChanged);
 
-            let name = TextField::new("Name (e.g. login page)", &form.name, r)
+            let name = TextField::new("login page", &form.name, r)
+                .label("Name")
+                .supporting("e.g. login page")
                 .on_input(Message::AddWorktreeNameChanged)
                 .on_submit(Message::AddWorktreeSubmitted);
 
-            fields = fields
-                .push(Text::new("Type", TypeRole::Label, r).muted())
-                .push(type_select)
-                .push(ticket)
-                .push(name);
+            fields = fields.push(type_select).push(ticket).push(name);
         }
         BranchSource::Existing => {
             fields = fields.push(branch_picker(form, r));

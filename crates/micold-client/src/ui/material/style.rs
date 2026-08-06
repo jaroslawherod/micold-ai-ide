@@ -201,28 +201,25 @@ pub fn menu_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
 /// The closed field of a `pick_list`-backed `Select` (feature 013): an outlined box matching
 /// [`input`]'s look, with the outline switching to `primary` while hovered or open.
 pub fn select_field(r: Roles) -> impl Fn(&Theme, pick_list::Status) -> pick_list::Style {
-    move |_theme, status| {
-        // The select's active indicator is driven by **open**, not focus (FR-043a). The rendering
-        // stack's `pick_list` reports only active, hovered and opened — it has no focused status to
-        // observe — so "the control the keyboard is on" is not a question this widget can answer.
-        // Open is the nearest honest signal, and it is accepted fidelity gap #3 rather than an
-        // approximation of focus that would sometimes be wrong.
-        let (border_color, border_width) = match status {
-            pick_list::Status::Opened { .. } => (color(r.secondary), state::FOCUS_RING_WIDTH),
-            pick_list::Status::Hovered => (color(r.on_surface_variant), 1.0),
-            pick_list::Status::Active => (color(r.outline), 1.0),
-        };
-        pick_list::Style {
-            text_color: color(r.on_surface),
-            placeholder_color: color(r.on_surface_variant),
-            handle_color: color(r.on_surface_variant),
-            background: Background::Color(color(r.surface)),
-            border: Border {
-                color: border_color,
-                width: border_width,
-                radius: shape::SMALL.into(),
-            },
-        }
+    move |_theme, _status| pick_list::Style {
+        text_color: color(r.on_surface),
+        placeholder_color: color(r.on_surface_variant),
+        handle_color: color(r.on_surface_variant),
+        // No chrome of its own, exactly as [`field_input`]: the container and the active indicator
+        // belong to `FormField`, and a select that kept its own box would draw a second outline
+        // inside the filled container (FR-031c).
+        //
+        // Its open state used to be expressed here, as a 3dp `secondary` border. That affordance is
+        // gone with the border — §7.7 gives a filled field a bottom indicator instead, and
+        // `FormField` draws it. The select still cannot report focus, which is why the wrapper takes
+        // its active state as a parameter (FR-043a); `pick_list` does not tell a parent when it
+        // opens either, so a caller that tracks it passes `Select::active`.
+        background: Background::Color(Color::TRANSPARENT),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 0.0.into(),
+        },
     }
 }
 

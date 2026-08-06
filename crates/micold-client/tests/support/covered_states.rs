@@ -151,7 +151,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // than to the number.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[3, 0, 0, 6],
+                    path: &[3, 0, 0, 5],
                 },
             ],
         },
@@ -250,7 +250,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // own, and it pushes the actions down.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[3, 0, 0, 7],
+                    path: &[3, 0, 0, 6],
                 },
             ],
         },
@@ -325,7 +325,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "example".to_string(),
                     ..WorktreeForm::default()
                 });
-                StateUnderTest::new(state).pressing(&[3, 0, 0, 3])
+                StateUnderTest::new(state).pressing(&[3, 0, 0, 2])
             },
             anchors: &[
                 Anchor {
@@ -334,13 +334,13 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.type-select",
-                    path: &[3, 0, 0, 3],
+                    path: &[3, 0, 0, 2],
                 },
                 // Same form as `add-worktree-dialog-new-branch`; opening the menu adds an overlay
                 // layer, not a field.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[3, 0, 0, 6],
+                    path: &[3, 0, 0, 5],
                 },
             ],
         },
@@ -372,10 +372,12 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "dialog.root",
                     path: &[],
                 },
-                // The tallest form, so the furthest-down action row: eight fields above it.
+                // The tallest form, so the furthest-down action row: seven children above it.
+                // Was eight until §7.7 moved the scrollback field's free-standing label inside the
+                // field's own container.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[3, 0, 0, 8],
+                    path: &[3, 0, 0, 7],
                 },
             ],
         },
