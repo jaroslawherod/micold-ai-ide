@@ -326,14 +326,22 @@ fn a_select_gets_the_same_chrome_as_a_text_input() {
          container it is nested in)"
     );
     assert_eq!(
-        (bare_bounds.height, bare_bands[0].height, bare_bands[1].height),
+        (
+            bare_bounds.height,
+            bare_bands[0].height,
+            bare_bands[1].height
+        ),
         (
             input_bounds.height,
             input_bands[0].height,
             input_bands[1].height
         ),
         "a labelled select's bands are {:?} against the text input's {:?}",
-        (bare_bounds.height, bare_bands[0].height, bare_bands[1].height),
+        (
+            bare_bounds.height,
+            bare_bands[0].height,
+            bare_bands[1].height
+        ),
         (
             input_bounds.height,
             input_bands[0].height,

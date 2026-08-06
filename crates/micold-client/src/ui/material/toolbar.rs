@@ -8,7 +8,7 @@ use crate::ui::material::style;
 use crate::ui::material::{Text, TypeRole};
 use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Background, Element, Length};
-use micold_core::tokens::{spacing, Roles};
+use micold_core::tokens::{anatomy, Roles};
 
 /// A toolbar with a `title` on the leading edge and trailing action elements (Principle VIII
 /// builder-API rule): construct with the required title + roles, add actions, then `.into()`.
@@ -16,6 +16,7 @@ pub struct Toolbar<'a, M> {
     title: String,
     roles: Roles,
     actions: Vec<Element<'a, M>>,
+    elevated: bool,
 }
 
 impl<'a, M: 'a> Toolbar<'a, M> {
@@ -25,7 +26,18 @@ impl<'a, M: 'a> Toolbar<'a, M> {
             title: title.into(),
             roles,
             actions: Vec::new(),
+            elevated: false,
         }
+    }
+
+    /// Whether content is scrolled beneath the bar, which raises it to elevation 2 (FR-025a).
+    ///
+    /// Supplied rather than observed: the bar has no way to see the sidebar's scroll position, and
+    /// the sidebar is the only scroll region under it (contract §7.1). `State::app_bar_elevated`
+    /// derives the flag from that one offset.
+    pub fn elevated(mut self, elevated: bool) -> Self {
+        self.elevated = elevated;
+        self
     }
 
     /// Append a trailing action element.
@@ -43,15 +55,14 @@ impl<'a, M: 'a> Toolbar<'a, M> {
 
 impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
     fn from(t: Toolbar<'a, M>) -> Self {
-        // `Section` rather than `Body`: the bar's title names what you are looking at, and reading
-        // it at the body role made it indistinguishable from ordinary content. Material's small top
-        // app bar uses `title_large` (22dp); this is a dense in-app bar, so `title_medium` gives it
-        // heading weight without growing the bar's height — the one judgement call in this file.
+        // `title_large`, which is what §7.1 gives the small top app bar. It was `Section`
+        // (`title_medium`) as a hedge against growing the bar — but the bar is now a fixed 64dp,
+        // so the hedge costs nothing to drop and the contract's role applies as written.
         let mut bar = row![
-            Text::new(t.title, TypeRole::Section, t.roles),
+            Text::new(t.title, TypeRole::Title, t.roles),
             Space::new().width(Length::Fill),
         ]
-        .spacing(spacing::MD)
+        .spacing(anatomy::app_bar::PADDING)
         .align_y(Alignment::Center)
         .width(Length::Fill);
 
@@ -59,15 +70,26 @@ impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
             bar = bar.push(action);
         }
 
-        // Compact bar: tight vertical padding (`XS`) with comfortable horizontal padding (`SM`).
+        // §7.1's small app bar: a fixed 64dp with 16dp of horizontal padding. Vertical padding is
+        // the height's business now — the bar is a fixed box and the row centres inside it.
+        let elevated = t.elevated;
         let bar = container(bar)
             .width(Length::Fill)
-            .padding(iced::Padding::from([spacing::XS, spacing::SM]))
-            .style(style::toolbar_surface(t.roles));
+            .height(Length::Fixed(anatomy::app_bar::HEIGHT))
+            .padding(iced::Padding {
+                top: 0.0,
+                bottom: 0.0,
+                left: anatomy::app_bar::PADDING,
+                right: anatomy::app_bar::PADDING,
+            })
+            .style(style::app_bar_surface(t.roles, elevated));
 
-        // A thin bottom border separating the toolbar from the content below (a `Container`
-        // border applies to all four sides, so this is a dedicated 1px line rather than the
-        // surface style's own border).
+        // The separator belongs to the bar *at rest* only. Once the bar is raised its own shadow
+        // and tonal shift do that job (§7.1), and keeping a hairline under a shadow reads as two
+        // edges — the thing FR-015 replaces lines with depth to avoid.
+        if elevated {
+            return bar.into();
+        }
         let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
             .style(move |_theme: &iced::Theme| iced::widget::container::Style {
                 background: Some(Background::Color(style::separator(t.roles))),

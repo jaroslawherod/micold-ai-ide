@@ -189,6 +189,20 @@ pub fn toolbar_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
     elevated(r, elevation::APP_BAR_REST, shape::NONE)
 }
 
+/// The app bar, flat at rest and raised once content passes beneath it (§7.1, FR-025a).
+///
+/// Two levels rather than a shadow toggled on: at elevation 2 the bar takes a *tonal* shift as well
+/// as a shadow, which is what keeps the raise readable in the dark scheme where a shadow alone
+/// barely registers (FR-016).
+pub fn app_bar_surface(r: Roles, scrolled: bool) -> impl Fn(&Theme) -> container::Style {
+    let level = if scrolled {
+        elevation::APP_BAR_SCROLLED
+    } else {
+        elevation::APP_BAR_REST
+    };
+    elevated(r, level, shape::NONE)
+}
+
 /// A floating menu, context menu or popover. Elevation 2 and the extra-small 4dp corner (§3).
 ///
 /// Level 2 sits below a dialog's 3 on purpose: a menu opened *over* a dialog must still read as
