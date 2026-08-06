@@ -88,7 +88,7 @@ const TOLERANCE: f32 = 0.5;
 /// So, unlike a defect exemption, this list **does not expire**. What the assertion below still
 /// buys is that it cannot quietly grow: a new entry means either a new clip-revealing wrapper, to
 /// be named here with its reason, or a child escaping a parent that does not clip, which is a bug.
-const CLIP_REVEALED: &[&str] = &["0/0/0/2/0/0/0/1/0", "0/0/0/3/0/0/0/1/0"];
+const CLIP_REVEALED: &[&str] = &["0/0/0/1/0/0/0/1/0", "0/0/0/2/0/0/0/1/0"];
 
 /// The sidebar list's scroll content, which is taller than its viewport by design.
 ///
@@ -107,7 +107,7 @@ const CLIP_REVEALED: &[&str] = &["0/0/0/2/0/0/0/1/0", "0/0/0/3/0/0/0/1/0"];
 /// and it is the overflow that makes FR-011 mean anything. The staleness assertion still applies:
 /// if this path goes quiet, either the state stopped overflowing (and FR-011 is uncovered again) or
 /// the tree renumbered around it.
-const SCROLL_CONTENT: &[&str] = &["0/0/0/2/0/0/0/2/0"];
+const SCROLL_CONTENT: &[&str] = &["0/0/0/1/0/0/0/2/0"];
 
 /// Every overhang this gate does not treat as a finding, with the reason it is allowed.
 fn clips_deliberately(child_path: &str) -> Option<&'static str> {

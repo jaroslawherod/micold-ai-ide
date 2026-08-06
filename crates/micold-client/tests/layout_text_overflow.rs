@@ -48,10 +48,12 @@ use support::layout as lay;
 /// containment gate, which had made FR-016 false in practice by demanding a second entry per new
 /// sidebar-bearing state.
 const KNOWN_OVERFLOWS: &[&str] = &[
+    "0/0/0/1/0/0/0/1/0/0/1/0/0/0",
+    // The same chip with the disconnection banner in the shell, which shifts the index by one —
+    // the check following structure rather than a hardcoded path, as in `CLIP_REVEALED`.
     "0/0/0/2/0/0/0/1/0/0/1/0/0/0",
-    // The same chip with the disconnection banner in the shell, which shifts the index from 2 to
-    // 3 — the check following structure rather than a hardcoded path, as in `CLIP_REVEALED`.
-    "0/0/0/3/0/0/0/1/0/0/1/0/0/0",
+    // Both moved up one when T053 took the notification strip out of the window column and made it
+    // a floating snackbar. The chip did not change; the column it sits under lost a sibling.
 ];
 
 /// Name an offending node by its anchor where one covers it, otherwise by its path (FR-004).

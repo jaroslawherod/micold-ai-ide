@@ -33,6 +33,11 @@ pub enum Anchor {
     TopEnd { top: f32, end: f32 },
     /// Centred in the window, horizontally and vertically. Dialogs.
     Center,
+    /// Centred horizontally against the window's bottom edge, inset by `bottom` pixels. Snackbars.
+    ///
+    /// Bottom rather than centred so a notification raised while a dialog is open does not sit over
+    /// the dialog's action row — it is above the scrim by band, and out of the way by position.
+    BottomCenter { bottom: f32 },
 }
 
 /// One floating surface: a panel, where it goes, and how it closes.
@@ -139,6 +144,15 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
         let placed = container(panel).width(Length::Fill).height(Length::Fill);
         match self.anchor {
             Anchor::Center => placed.center_x(Length::Fill).center_y(Length::Fill),
+            Anchor::BottomCenter { bottom } => placed
+                .center_x(Length::Fill)
+                .align_y(iced::alignment::Vertical::Bottom)
+                .padding(Padding {
+                    bottom,
+                    top: 0.0,
+                    left: 0.0,
+                    right: 0.0,
+                }),
             Anchor::Point(point) => placed
                 .align_x(iced::alignment::Horizontal::Left)
                 .align_y(iced::alignment::Vertical::Top)

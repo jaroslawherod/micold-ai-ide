@@ -5,7 +5,7 @@
 //! kill seam (`TerminalHandle::kill`) — against `FakeGit` + `FakeHandle`, with no real
 //! process or repository (Constitution Principle I).
 
-use micold_client::app::{Message, NoticeLevel, State};
+use micold_client::app::{Message, State};
 use micold_core::git::{FakeGit, Git, GitCli};
 use micold_core::project::{Availability, Project};
 use micold_core::provider::{AiCliProvider, ClaudeProvider};
@@ -177,9 +177,12 @@ fn fr_023_failed_delete_is_reported_and_the_worktree_survives() {
     state.notify_error(format!("Could not delete worktree \"feat-locked\": {err}"));
 
     // The failure reached the user through the surface that always renders.
-    assert_eq!(state.notifications.len(), 1);
-    assert_eq!(state.notifications[0].level, NoticeLevel::Error);
-    assert!(state.notifications[0].message.contains("feat-locked"));
+    let visible = state
+        .notify
+        .visible()
+        .expect("the refusal reached the queue");
+    assert_eq!(visible.level, micold_core::notify::Level::Error);
+    assert!(visible.message.contains("feat-locked"));
 
     // Git still owns the worktree and its branch — nothing was silently half-removed.
     assert_eq!(git.worktrees(&repo).len(), 1, "registration survives");
@@ -364,9 +367,9 @@ fn fr_023a_successful_delete_is_silent_when_git_already_removed_the_dir() {
     }
 
     assert!(
-        state.notifications.is_empty(),
+        state.notify.visible().is_none(),
         "a fully successful delete must report nothing, got: {:?}",
-        state.notifications
+        state.notify.visible()
     );
 }
 
@@ -388,12 +391,16 @@ fn fr_023_leftover_directory_is_still_reported() {
     }
 
     assert_eq!(
-        state.notifications.len(),
+        state.notify.pending() + usize::from(state.notify.visible().is_some()),
         1,
         "a genuine leftover must still reach the user"
     );
-    assert_eq!(state.notifications[0].level, NoticeLevel::Error);
-    assert!(state.notifications[0].message.contains("feat-leftover"));
+    let visible = state
+        .notify
+        .visible()
+        .expect("the failure reached the queue");
+    assert_eq!(visible.level, micold_core::notify::Level::Error);
+    assert!(visible.message.contains("feat-leftover"));
 }
 
 // ---------------------------------------------------------------------------

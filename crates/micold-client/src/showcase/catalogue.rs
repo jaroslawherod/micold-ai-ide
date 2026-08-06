@@ -480,6 +480,19 @@ pub const COMPONENTS: &[Entry] = &[
     // already partitions them out of the library's component set. They are visible on the page all the
     // same, inside the menus, the switcher and the tree that consume them.
     Entry {
+        module: "material/snackbar.rs",
+        component: "Snackbar",
+        // `Anchor::BottomCenter` — above a dialog and its scrim, but out of the action row's way.
+        variants: &["BottomCenter"],
+        density: &[],
+        posed: &["info, dismissible", "error, dismissible", "no action"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::floating::snackbar,
+    },
+    Entry {
         module: "material/modal.rs",
         component: "Modal",
         // `Anchor::Center` — a dialog is centred, which is the anchor this surface poses.

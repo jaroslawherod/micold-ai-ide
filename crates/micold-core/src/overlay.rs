@@ -79,11 +79,23 @@ pub enum Layer {
     /// A modal dialog. Always above every non-modal surface — a dialog beneath a menu would be
     /// unreachable, since the dialog captures input the menu is then drawn on top of.
     Dialog,
+    /// A snackbar. Above everything, including a dialog and its scrim (design-tokens §7.8).
+    ///
+    /// Above a *dialog* specifically, which is unusual and deliberate: a notification raised while
+    /// a dialog is open is usually **about** what the dialog just tried to do, so putting it behind
+    /// the scrim would hide the answer to the question the user is looking at. It is bottom-aligned
+    /// and times out, so it does not permanently obstruct the dialog's action row.
+    Snackbar,
 }
 
 impl Layer {
     /// Every band, bottom-to-top, so callers (and the totality test) can enumerate exhaustively.
-    pub const ALL: &'static [Layer] = &[Layer::Popover, Layer::ContextMenu, Layer::Dialog];
+    pub const ALL: &'static [Layer] = &[
+        Layer::Popover,
+        Layer::ContextMenu,
+        Layer::Dialog,
+        Layer::Snackbar,
+    ];
 
     /// The surface kind this band implies, so a caller cannot pair a dialog band with non-modal
     /// dismissal by accident. `Dialog` is the dismissible variant; a caller that needs
@@ -92,6 +104,11 @@ impl Layer {
         match self {
             Layer::Popover | Layer::ContextMenu => Surface::NonModal,
             Layer::Dialog => Surface::Dialog,
+            // A snackbar captures nothing and is not dismissed by the triggers a popover is: the
+            // ground moving under it, or Escape, says nothing about whether the user has read it.
+            // It clears on its own timeout or on its own button, which is why it is non-modal
+            // *and* why the dismissal rule below never sees it — nothing pushes it as dismissible.
+            Layer::Snackbar => Surface::NonModal,
         }
     }
 }

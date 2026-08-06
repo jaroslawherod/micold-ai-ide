@@ -94,11 +94,11 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // close — named for what it is.
                 Anchor {
                     name: "sidebar.row.label",
-                    path: &[0, 0, 2, 0, 0, 0, 2, 0, 0, 2, 0, 1],
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 0, 1],
                 },
                 Anchor {
                     name: "sidebar.row.delete_button",
-                    path: &[0, 0, 2, 0, 0, 0, 2, 0, 0, 2, 0, 2, 1],
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 0, 2, 1],
                 },
                 // `Toolbar`'s leading `text(title)` (`material/toolbar.rs:46`). Named on both shell
                 // states rather than on all eleven: the toolbar is behind every dialog too, and an
@@ -405,7 +405,7 @@ pub fn revealing_states() -> &'static [RevealingState] {
             build: || StateUnderTest::new(with_project()),
             toward: |state| state.sidebar_filter_open = true,
             frames: 2,
-            node: "0/0/0/2/0/0/0/1",
+            node: "0/0/0/1/0/0/0/1",
             expect_between: (0.2, 0.5),
         },
     ]

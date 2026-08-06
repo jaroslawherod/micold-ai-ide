@@ -255,3 +255,51 @@ pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
         Layout::Inline,
     )
 }
+
+/// `Snackbar` — the visible notification, at both severities.
+///
+/// Posed at rest rather than driven by the queue: the queue lives in `micold-core` and is tested
+/// there without a renderer, so what the gallery has to show is the *surface* — the one place in
+/// the application that is deliberately inverted, and the only use of the `inverse_*` roles.
+///
+/// `Anchor::BottomCenter` is the band it floats on: above a dialog and its scrim, but bottom-
+/// aligned so it does not sit over the dialog's action row.
+pub fn snackbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    use micold_core::notify::{Level, Notification};
+    use std::sync::LazyLock;
+
+    // Statics rather than values built here: `Snackbar` borrows the notification it draws, and a
+    // render function has nowhere to own one. Leaking a `Box` would satisfy the borrow and lose a
+    // little memory on **every frame** the gallery draws, which is exactly the kind of cost that
+    // never announces itself.
+    static INFO: LazyLock<Notification> =
+        LazyLock::new(|| Notification::new(Level::Info, samples::LABEL));
+    static ERROR: LazyLock<Notification> = LazyLock::new(|| {
+        Notification::new(
+            Level::Error,
+            "Could not create the worktree — that branch is already checked out.",
+        )
+    });
+    let (info, error) = (&*INFO, &*ERROR);
+
+    arrange(
+        vec![
+            posed(
+                "info, dismissible",
+                material::Snackbar::new(info, roles).on_dismiss(Message::NoOp),
+                roles,
+            ),
+            posed(
+                "error, dismissible",
+                material::Snackbar::new(error, roles).on_dismiss(Message::NoOp),
+                roles,
+            ),
+            posed(
+                "no action",
+                material::Snackbar::<Message>::new(info, roles),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}

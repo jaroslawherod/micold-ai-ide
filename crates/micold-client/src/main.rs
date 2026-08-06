@@ -2390,6 +2390,13 @@ fn selected_text(app: &App) -> String {
     sel.text(|id| grid.line(id).map(|l| l.text.clone()))
 }
 
+/// How often the snackbar's countdown ticks while one is visible.
+///
+/// Coarse on purpose: the durations it serves are 4s and 10s, so a quarter-second tick is
+/// imperceptible in the dismissal and costs four wake-ups a second instead of sixty. It runs only
+/// while a notification is on screen.
+const SNACKBAR_TICK: std::time::Duration = std::time::Duration::from_millis(250);
+
 fn subscription(app: &App) -> Subscription<Message> {
     // Event-driven (not a poll): reports actual OS focus changes, so it costs nothing while
     // the window sits idle either focused or not (idle-CPU fix).
@@ -2407,6 +2414,15 @@ fn subscription(app: &App) -> Subscription<Message> {
     ];
     // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.
     subs.push(os_theme_poll(os_theme_poll_interval(app.window_focused)));
+    // The snackbar's clock, subscribed **only while something is on screen** (FR-032a, SC-017).
+    // A timer that ran at rest would hold the loop awake for the life of the process to count down
+    // a notification that does not exist; `Queue::is_active` is what keeps it off.
+    if app.core.notify.is_active() {
+        subs.push(
+            iced::time::every(SNACKBAR_TICK)
+                .map(|_| Message::NotificationsAdvanced(SNACKBAR_TICK.as_millis() as u32)),
+        );
+    }
     // The terminal output poll is gone — the daemon streams grid frames over the connection. Worktree
     // create now runs on the daemon too, so there is no local progress buffer to drain (T055).
     // No animation clock. Every transition is played by the widget that owns it, and a widget
@@ -2625,7 +2641,7 @@ fn scan(dir: PathBuf) -> Message {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use micold_client::app::{NoticeLevel, Notification, SettingsDraft};
+    use micold_client::app::SettingsDraft;
     use micold_core::protocol::messages::{ActivitySignal, ProjectSnapshot, SessionSummary};
 
     // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
@@ -2860,12 +2876,14 @@ mod tests {
         // Returning to /a fires the return notice (mirrors `background_restart.rs`).
         core.record_foreground();
         assert!(core.switch_active(Path::new("/a")));
+        let visible = core
+            .notify
+            .visible()
+            .expect("the return notice reached the queue");
+        assert_eq!(visible.level, micold_core::notify::Level::Info);
         assert_eq!(
-            core.notifications,
-            vec![Notification {
-                level: NoticeLevel::Info,
-                message: "A background session was restarted while you were away.".to_string(),
-            }]
+            visible.message,
+            "A background session was restarted while you were away."
         );
     }
 

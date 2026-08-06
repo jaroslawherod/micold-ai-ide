@@ -146,43 +146,6 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
         .into()
 }
 
-/// The stack of dismissible global notification banners, newest last. Empty when there is
-/// nothing to report, in which case it occupies no space.
-fn notifications<'a>(state: &'a State, r: Roles) -> Element<'a, Message> {
-    let mut stack = column![].spacing(spacing::SM);
-    for (index, notification) in state.notifications.iter().enumerate() {
-        let banner = row![
-            material::Text::new(notification.message.clone(), material::TypeRole::Body, r)
-                .width(Length::Fill),
-            material::Button::with_content(
-                material::Text::new("Dismiss", material::TypeRole::Action, r),
-                material::ButtonVariant::Outlined,
-                r
-            )
-            .on_press(Message::NotificationDismissed(index)),
-        ]
-        .spacing(spacing::SM)
-        .align_y(iced::Alignment::Center);
-        stack = stack.push(
-            material::Surface::new(
-                banner,
-                material::SurfaceKind::Notification(notification.level),
-                r,
-            )
-            .padding(spacing::MD)
-            .width(Length::Fill),
-        );
-    }
-    if state.notifications.is_empty() {
-        stack.into()
-    } else {
-        container(stack)
-            .padding([spacing::SM, spacing::MD])
-            .width(Length::Fill)
-            .into()
-    }
-}
-
 /// Render the main window: the top app bar over the shell body (active project / empty state),
 /// with any floating surface stacked on top. Every surface is styled from the active color
 /// scheme's design tokens.
@@ -247,7 +210,6 @@ pub fn view<'a>(
         column![
             toolbar::view(state, scheme),
             connection_banner(connection, roles),
-            notifications(state, roles),
             body
         ],
         material::SurfaceKind::Window,
@@ -434,6 +396,21 @@ pub fn view<'a>(
         modal.into()
     });
 
+    // The snackbar goes through the same overlay as everything else that floats (FR-008), on its
+    // own band above `Dialog`. Stacking it over the finished overlay instead would have put it
+    // above the dialog just as well — and changed the root's shape, which every recorded layout
+    // anchor is expressed against. The band is what the overlay exists for.
+    let snackbar: Option<cdk::overlay::Surface<'a, Message>> =
+        state.notify.visible().map(|visible| {
+            cdk::overlay::Surface::new(
+                micold_core::overlay::Layer::Snackbar,
+                material::Snackbar::new(visible, roles).on_dismiss(Message::NotificationDismissed),
+                cdk::overlay::Anchor::BottomCenter {
+                    bottom: spacing::LG,
+                },
+            )
+        });
+
     cdk::overlay::Overlay::new(base)
         .push(overflow_menu)
         .push_maybe(switcher)
@@ -441,6 +418,7 @@ pub fn view<'a>(
         .push_maybe(worktree_menu)
         .push_maybe(session_menu)
         .push_maybe(modal)
+        .push_maybe(snackbar)
         .into()
 }
 
