@@ -167,8 +167,18 @@ fn a_widget_that_lays_out_from_progress_advances_it_as_layout() {
             let Some(layout_body) = method_body(block, "fn layout(") else {
                 continue;
             };
-            // The widget animates its own size if its `layout` reads an animated progress.
-            if !(layout_body.contains("progress") || layout_body.contains("::value(tree)")) {
+            // The widget animates its own size if its `layout` reads a track's *value*.
+            //
+            // The read, not the word. This matched a bare `"progress"` until `StageProgress`'s bar
+            // laid itself out at `anatomy::progress::THICKNESS` — a fixed height whose module is
+            // called `progress` — and was reported as animating a size it does not animate. A gate
+            // that cries wolf on a substring gets edited away by whoever hits it next, so it looks
+            // for what actually causes BUG-001: a layout pass reading a value that moves.
+            let reads_a_track = layout_body.contains("::value(tree)")
+                || layout_body.contains(".value()")
+                || layout_body.contains("downcast_ref::<Progress>")
+                || layout_body.contains("downcast_mut::<Progress>");
+            if !reads_a_track {
                 continue;
             }
             checked += 1;
