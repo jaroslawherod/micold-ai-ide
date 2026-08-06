@@ -11,7 +11,7 @@
 use std::marker::PhantomData;
 
 use crate::ui::material::{Text, TypeRole};
-use iced::widget::{button, column, container, row};
+use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 
 use crate::app::NoticeLevel;
@@ -72,11 +72,11 @@ impl<'a, M: 'a + Clone> From<ConnectionBanner<'a, M>> for Element<'a, M> {
             .align_y(Alignment::Center);
 
         if let Some((label, on_press)) = b.action {
-            line = line.push(
-                button(Text::new(label, TypeRole::Action, b.roles))
-                    .on_press(on_press)
-                    .style(style::outlined(b.roles)),
-            );
+            // The shared `Button`, not a locally styled one. Building the outlined look here would
+            // put a second definition of "an outlined button" in the library — one that a change to
+            // `Button` never reaches — and it would not ripple, because the ripple is composed
+            // inside the component rather than by its callers (FR-021, FR-027).
+            line = line.push(super::Button::outlined(label, b.roles).on_press(on_press));
         }
 
         container(line)

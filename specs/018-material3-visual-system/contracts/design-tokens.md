@@ -516,7 +516,7 @@ Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`
 | Body role          | `body_medium`, `on_surface_variant`           |
 | Body → actions gap | 24                                            |
 | Action row         | trailing-aligned, 8 gap, text buttons          |
-| Min width          | 280                                           |
+| Min width          | 280 — *recorded, not applied* (FR-046)        |
 | Max width          | 560                                           |
 
 ### 7.5 Menus, context menus, popovers (FR-029)

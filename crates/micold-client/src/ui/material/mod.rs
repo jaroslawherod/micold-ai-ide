@@ -45,6 +45,9 @@ pub(crate) mod style;
 /// same reason as the snapshots above.
 #[cfg(test)]
 mod ripple_clipping;
+/// The reference scene's ripple, and the rule it presses by. In-crate for the same reason.
+#[cfg(test)]
+mod ripple_pulse;
 /// The style layer's parity snapshot. Lives inside the crate rather than in `tests/` because the
 /// layer it asserts is no longer reachable from outside it — which is the point.
 #[cfg(test)]
