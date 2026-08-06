@@ -141,13 +141,7 @@ impl Progress {
     /// awake, so it arrives immediately instead. Refusing to animate is recoverable; refusing to
     /// stop is not.
     pub fn advance_to(&mut self, target: f32, speed: f32) {
-        // A new destination starts a new transition: time restarts, and the curve interpolates from
-        // wherever the track had got to rather than from where the last one began.
-        if (target - self.target).abs() > f32::EPSILON {
-            self.from = self.value;
-            self.t = 0.0;
-            self.target = target;
-        }
+        self.retarget(target);
         let distance = target - self.value;
         if distance.abs() <= f32::EPSILON {
             self.value = target;
@@ -165,6 +159,30 @@ impl Progress {
         } else {
             self.from + (target - self.from) * ease(self.curve, self.t)
         };
+    }
+
+    /// Point the track at a new destination, restarting its eased clock.
+    ///
+    /// The one place `target` is assigned, and it must stay that way. Easing made this a
+    /// *transition* rather than a value: `t` is linear time through the current one and `from` is
+    /// where it began, so a `target` written on its own leaves the pair describing the transition
+    /// before it. Concretely, a track parked at `t == 1.0` — which is every track at rest, and
+    /// every track [`restart_at`](Self::restart_at) has just snapped — would step to `min(1 + speed,
+    /// 1) == 1` on its very next frame and arrive instantly.
+    ///
+    /// That is not hypothetical: the ripple did exactly this. Its press arrives as a mouse event
+    /// rather than a frame, so [`on_event`](Self::on_event) took the between-frames branch, which
+    /// assigned `target` and nothing else — and the circle jumped to full size on frame one and
+    /// then faded, which reads as a flash rather than as a press.
+    ///
+    /// No-ops when the destination has not moved, so stepping toward an unchanged target does not
+    /// rewind the transition already under way.
+    fn retarget(&mut self, target: f32) {
+        if (target - self.target).abs() > f32::EPSILON {
+            self.from = self.value;
+            self.t = 0.0;
+            self.target = target;
+        }
     }
 
     /// Ease this track along a cubic bézier instead of at a constant rate.
@@ -206,11 +224,7 @@ impl Progress {
     /// destination here starts it asking without advancing it, so its full duration is still ahead
     /// of it.
     pub fn aim<M>(&mut self, target: f32, shell: &mut Shell<'_, M>) {
-        if (target - self.target).abs() > f32::EPSILON {
-            self.from = self.value;
-            self.t = 0.0;
-        }
-        self.target = target;
+        self.retarget(target);
         self.request_frame(shell);
     }
 
@@ -289,10 +303,12 @@ impl Progress {
                 self.last_frame = Some(*now);
                 self.advance_to(target, speed);
             }
-        } else if (target - self.target).abs() > f32::EPSILON {
-            // The destination changed between frames — start moving now rather than waiting for a
-            // tick that nothing has asked for yet.
-            self.target = target;
+        } else {
+            // The destination may have changed between frames — a press, a hover, an overlay
+            // opening. Start the transition now rather than waiting for a tick nothing has asked
+            // for yet, and start it *properly*: through `retarget`, so the eased clock rewinds. See
+            // its docs for what assigning `target` alone here used to cost.
+            self.retarget(target);
         }
         self.request_frame(shell);
         self.value
@@ -318,5 +334,53 @@ mod tests {
     fn a_fresh_track_is_already_at_rest() {
         assert!(!Progress::new(0.0).animating());
         assert!(!Progress::new(1.0).animating());
+    }
+
+    /// A destination handed over between frames still takes its full time.
+    ///
+    /// This is the path almost every transition in the application actually takes: a press, a
+    /// hover, a message opening an overlay — none of them arrive as a redraw, so the track learns
+    /// where it is going on a non-frame event and starts moving on the next frame.
+    ///
+    /// A track at rest sits at `t == 1.0`, because that is what "arrived" means. So a `target`
+    /// written without rewinding the clock leaves the very next step computing `min(1 + speed, 1)`
+    /// and jumping straight to the end — the whole transition in one frame, which reads as a
+    /// flicker or, for the ripple, as a flash. Both endpoints are still correct, which is why every
+    /// test that only checked where a track starts and stops stayed green.
+    #[test]
+    fn a_destination_set_between_frames_still_takes_its_time() {
+        use iced::window;
+
+        let mut p = Progress::new(0.0);
+        let start = Instant::now();
+        let mut messages: Vec<()> = Vec::new();
+
+        // The non-frame event that changes where it is headed.
+        p.on_event(
+            &Event::Mouse(iced::mouse::Event::CursorEntered),
+            1.0,
+            0.1,
+            &mut Shell::new(&mut messages),
+        );
+        assert_eq!(
+            p.value(),
+            0.0,
+            "learning the destination is not moving toward it"
+        );
+
+        // The first frame after it moves by one step, not all the way.
+        p.on_event(
+            &Event::Window(window::Event::RedrawRequested(
+                start + Duration::from_millis(16),
+            )),
+            1.0,
+            0.1,
+            &mut Shell::new(&mut messages),
+        );
+        assert!(
+            p.value() > 0.0 && p.value() < 0.5,
+            "one frame at a tenth of the way per frame put the track at {} — it arrived at once",
+            p.value()
+        );
     }
 }
