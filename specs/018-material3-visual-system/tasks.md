@@ -297,7 +297,7 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T059 [P] [US4] Apply menu anatomy in `crates/micold-client/src/ui/material/menu.rs` — `surface_container`, elevation 2, `extra_small` corner, 48dp items (FR-029)
 - [X] T060 [P] [US4] Apply chip anatomy in `crates/micold-client/src/ui/material/tag.rs` and `toggle_chip.rs` — 32dp height, `full` corner, `label_large` (FR-030)
 - [X] T061 [US4] Confirm the known-projects list in `crates/micold-client/src/ui/project_selector.rs` uses the standard row density while the sidebar stays dense (FR-026)
-- [ ] T062 [US4] Update `docs/user-guide/` to document the snackbar's one-at-a-time queueing and timed dismissal — the single sanctioned behavior change (FR-036a, FR-041, Principle VII)
+- [X] T062 [US4] Update `docs/user-guide/` to document the snackbar's one-at-a-time queueing and timed dismissal — the single sanctioned behavior change (FR-036a, FR-041, Principle VII)
 
 > **T044 and T044a moved in-crate.** Both name a path under `crates/micold-client/tests/`, and
 > neither is reachable: `material` is `pub(crate)`, so a `FormField` or a field style cannot be
@@ -354,7 +354,7 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T065 [US5] Apply the assigned duration and easing per contract §6.3 in `crates/micold-client/src/ui/material/animation.rs`, `menu.rs`, `tree_view.rs` and `crates/micold-client/src/ui/sidebar.rs`, preserving each animation's existing trigger, start state and end state (FR-034, FR-035)
 - [X] T066 [US5] Drive the four new animations from the same tokens — app bar elevation in `crates/micold-client/src/ui/material/toolbar.rs`, snackbar enter/exit in `snackbar.rs`, indeterminate progress in `progress.rs`, ripple expand/fade in `ripple.rs` — and confirm no fifth animation is introduced (FR-035a, SC-010)
 - [X] T067 [US5] Confirm 017's `crates/micold-client/tests/idle_requests_no_frames.rs` still passes unchanged with all four new animations in play — its structural half already proves no module outside the motion primitive asks for a frame, so this is a check that the gate was honoured rather than a fresh hand-verification. Add **one new test case** to that file for the indeterminate indicator's external settle condition — running while an operation is in flight, stopped within one frame of the operation ending. Adding a case is not editing the gate: the `SANCTIONED` constant stays at exactly one entry, which is what FR-039e forbids changing (FR-024d, FR-039a, FR-039d, FR-039e)
-- [ ] T068 [US5] Update `docs/user-guide/` if motion is user-visible enough to warrant a note; otherwise record in the PR that no doc change was needed (Principle VII)
+- [X] T068 [US5] Update `docs/user-guide/` if motion is user-visible enough to warrant a note; otherwise record in the PR that no doc change was needed (Principle VII)
 
 **Checkpoint**: All five stories complete and independently demonstrable.
 
@@ -362,9 +362,16 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T069 [P] Delete the superseded notification style function from `crates/micold-client/src/ui/material/style.rs` and any feature-003 token constants left unreferenced after Phase 2
+- [X] T069 [P] Delete the superseded notification style function from `crates/micold-client/src/ui/material/style.rs` and any feature-003 token constants left unreferenced after Phase 2
+  — **the style function is not superseded.** `style::notification` is what the *connection banner*
+  draws with, and FR-032c requires the banner to stay a separate component from the snackbar: it
+  reports a standing condition, is full-width and is not dismissible. Deleting it would have meant
+  folding the banner in, which is the specific mistake that requirement forbids. What *was*
+  superseded — feature 003's `tokens::type_scale` and `tokens::sidebar` — is gone, deleted during
+  T017–T021 once the last call site named a role instead, and `tests/type_role_call_sites.rs` fails
+  the build if either is re-added
 - [X] T070 [P] ~~Fix the stale test command in `CLAUDE.md`~~ — already done as part of [017](../017-material-component-architecture/tasks.md) T003; kept here only so the numbering is stable
-- [ ] T071 [P] Cross-cutting documentation review and `docs/` index/navigation updates (Principle VII)
+- [X] T071 [P] Cross-cutting documentation review and `docs/` index/navigation updates (Principle VII)
 - [ ] T072 Run the full `quickstart.md` Part B walkthrough in the **light** scheme and record the result
 - [ ] T073 Run the full `quickstart.md` Part B walkthrough in the **dark** scheme and record the result
 - [ ] T074 Complete the no-behavior-change regression pass in `specs/018-material3-visual-system/quickstart.md` §B6. Any unchecked box there blocks merge; exactly one behavioral difference (the snackbar) is permitted (FR-036, FR-036a, SC-007)
