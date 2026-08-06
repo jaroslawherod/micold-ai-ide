@@ -273,6 +273,64 @@ fn it_asks_for_a_frame_on_every_frame_but_its_last() {
     panic!("the ripple never settled");
 }
 
+/// The circle *grows*. It does not appear already covering the element.
+///
+/// Driven through `Shell` rather than through `advance`, because that is the difference: `advance`
+/// calls the primitive's stepping function directly, and the widget path reaches it through
+/// `on_event`, which retargets a track by a route of its own. This asserts the shape of the
+/// expansion rather than only its endpoints — a ripple that arrives at full size on its first frame
+/// and then fades still settles in the same number of frames as one that grows, and still asks for
+/// a frame on every frame but its last, so both of the tests above pass while what is on screen is
+/// a flash rather than a ripple.
+#[test]
+fn the_expansion_takes_the_time_it_is_given() {
+    let mut r = pressed_at(30.0, 10.0);
+    let start = Instant::now();
+
+    // The press itself, which is the event the widget hands the ripple before any frame arrives.
+    let mut messages: Vec<()> = Vec::new();
+    let mut shell = Shell::new(&mut messages);
+    r.on_frame(
+        &Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+        EXPAND,
+        FADE,
+        &mut shell,
+    );
+
+    let mut frames_to_full = None;
+    for frame in 0..1_000u32 {
+        let now = start + Duration::from_millis(16 * u64::from(frame) + 16);
+        let mut messages: Vec<()> = Vec::new();
+        let mut shell = Shell::new(&mut messages);
+        r.on_frame(
+            &Event::Window(window::Event::RedrawRequested(now)),
+            EXPAND,
+            FADE,
+            &mut shell,
+        );
+        if r.expansion() >= 1.0 {
+            frames_to_full = Some(frame + 1);
+            break;
+        }
+    }
+
+    let frames = frames_to_full.expect("the expansion never completed");
+    // `medium_2` over 16ms frames is about a dozen. Bounded loosely at both ends: the point is that
+    // it is neither instant nor unbounded, and pinning the exact count would break on any re-value
+    // of the scale.
+    assert!(
+        frames >= 5,
+        "the circle reached full size in {frames} frame(s) — it is meant to grow over {}ms, and \
+         arriving at once reads as a flash rather than as a press",
+        EXPAND.as_millis()
+    );
+    assert!(
+        frames <= 40,
+        "the circle took {frames} frames to grow, well past the {}ms it is given",
+        EXPAND.as_millis()
+    );
+}
+
 // ---------------------------------------------------------------------------------------------
 // Independence — the requirement FR-024e is really about
 // ---------------------------------------------------------------------------------------------
