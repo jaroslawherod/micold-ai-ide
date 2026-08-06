@@ -39,7 +39,7 @@ mimics. It wraps whichever control it is given rather than replacing it.
 
 ```
 FormField::new(control, roles)
-    .label("Branch name")          // in-container, persistent floating position
+    .label("Branch name")          // in-container; rests over the value, floats when populated
     .supporting("Lowercase only")  // beneath the container
     .error(Some("Already exists")) // switches indicator + supporting text to the error role
     .leading(icon)                 // optional adornments
@@ -60,9 +60,15 @@ and the wrapper MUST accept it rather than assume it: **focus** for a text input
 select, which cannot report focus at all (FR-043a). The rendered result is identical; only the
 trigger differs.
 
-**Fidelity gap.** The label is composed *alongside* the input and rendered persistently in its
-floating position, not transitioned between resting and floating — the rendering stack's text input
-has no label concept to animate. Accepted gap #4 (FR-044), design-tokens §7.7.
+**The populated state** decides where the label sits, and the wrapper MUST accept it for the same
+reason it accepts the active state: it is handed an opaque control and cannot see whether an input
+holds text or a select holds a selection. A resting label occupies the value's line, so a control
+whose label is resting MUST NOT also draw a placeholder — the two would overprint.
+
+**Fidelity gap.** The label takes both of Material's positions but **snaps** between them rather
+than animating — the rendering stack's text input has no label concept to transition. Both
+endpoints are correct; only the transition is absent. Accepted gap #4 (FR-044), design-tokens
+§7.7.
 
 ---
 

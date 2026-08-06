@@ -622,11 +622,30 @@ pub fn field_indicator(r: Roles, active: bool, error: bool) -> (Color, f32) {
     (color(tone), thickness)
 }
 
-/// The in-container label and the supporting text beneath it, which share a colour: the muted
-/// foreground, or `error` when the field is invalid.
+/// The in-container label's colour.
 ///
-/// One function rather than two, because §7.7 moves them together — an error state that recoloured
-/// the supporting text and left the label muted would read as two unrelated pieces of text.
+/// Separate from [`field_support`] because the label answers to focus and the supporting text does
+/// not: a focused field draws its label in the accent, which — together with the thickened
+/// indicator — is how a filled field says it is the one taking input. Recolouring only the
+/// indicator left the field reading as inactive with a coloured rule under it. `error` outranks
+/// focus here for the same reason it does on the indicator: a focused invalid field is still
+/// invalid.
+pub fn field_label(r: Roles, active: bool, error: bool) -> Rgb {
+    if error {
+        r.error
+    } else if active {
+        r.primary
+    } else {
+        r.on_surface_variant
+    }
+}
+
+/// The supporting text beneath the container: the muted foreground, or `error` when the field is
+/// invalid.
+///
+/// It follows the error state along with the label — an error that recoloured one and left the
+/// other muted would read as two unrelated pieces of text — but not the focus state, because a
+/// focused field's hint is not itself the thing taking input.
 pub fn field_support(r: Roles, error: bool) -> Rgb {
     if error {
         r.error

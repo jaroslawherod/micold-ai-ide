@@ -47,13 +47,27 @@ const PAD_Y: f32 = 8.0;
 const LABEL_LINE: f32 = 16.0;
 const VALUE_LINE: f32 = 24.0;
 
+/// What the field's chrome responds to.
+///
+/// Grouped rather than passed as three loose booleans, because `(true, false, true)` at a call
+/// site says nothing about which of focus, invalidity and the label's position it is describing —
+/// and the three are read together everywhere they are read at all.
+#[derive(Clone, Copy)]
+pub struct State {
+    /// Focused: the indicator thickens and takes the accent, and so does the label.
+    pub active: bool,
+    /// Invalid: the error role, which outranks `active`.
+    pub error: bool,
+    /// Whether the label has floated to the top, or is resting in the middle of an empty box.
+    pub floating: bool,
+}
+
 /// The filled box: container, label, control and active indicator, laid out to §7.7's metrics.
 pub struct FilledField<'a, M> {
     /// `[leading, control, trailing, label]`, always four.
     children: Vec<Element<'a, M>>,
     roles: Roles,
-    active: bool,
-    error: bool,
+    state: State,
 }
 
 impl<'a, M: 'a> FilledField<'a, M> {
@@ -63,14 +77,12 @@ impl<'a, M: 'a> FilledField<'a, M> {
         trailing: Element<'a, M>,
         label: Element<'a, M>,
         roles: Roles,
-        active: bool,
-        error: bool,
+        state: State,
     ) -> Self {
         Self {
             children: vec![leading, control, trailing, label],
             roles,
-            active,
-            error,
+            state,
         }
     }
 
@@ -129,15 +141,40 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
                     Size::new(control_width, VALUE_LINE),
                 ),
             )
-            .move_to((pad + leading.size().width, PAD_Y + LABEL_LINE));
-        let label = self.children[3]
-            .as_widget_mut()
-            .layout(
-                &mut tree.children[3],
-                renderer,
-                &layout::Limits::new(Size::ZERO, Size::new(inner, LABEL_LINE)),
-            )
-            .move_to((pad, PAD_Y));
+            .move_to((
+                pad + leading.size().width,
+                if self.state.floating {
+                    PAD_Y + LABEL_LINE
+                } else {
+                    // Resting, the control sits where the label is: an empty input's caret belongs
+                    // at the label it is about to replace, not below it.
+                    (height - VALUE_LINE) / 2.0
+                },
+            ));
+        // Floating: the small label at the top, with the value beneath it. Resting: the full-size
+        // label centred in the box, where the value will appear — it *is* where the value goes,
+        // which is what makes it read as the field's content rather than as a caption above it.
+        let label_line = if self.state.floating {
+            LABEL_LINE
+        } else {
+            VALUE_LINE
+        };
+        // Centred *within* its band rather than pinned to the band's top. A line of text measures
+        // shorter than the line box it is given — 20dp of glyphs in the 24dp value line — so
+        // pinning would leave the resting label sitting a couple of dp above the caret it stands
+        // in for, which is visible as a wobble the moment the label lifts.
+        let band_center = if self.state.floating {
+            PAD_Y + LABEL_LINE / 2.0
+        } else {
+            height / 2.0
+        };
+        let label = self.children[3].as_widget_mut().layout(
+            &mut tree.children[3],
+            renderer,
+            &layout::Limits::new(Size::ZERO, Size::new(inner, label_line)),
+        );
+        let label_y = band_center - label.size().height / 2.0;
+        let label = label.move_to((pad, label_y));
 
         let trailing_w = trailing.size().width;
         nodes.push(leading.move_to((pad, PAD_Y + LABEL_LINE)));
@@ -181,7 +218,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
         // The active indicator, drawn *inside* the container's own footprint so the two are one
         // shape. Thickening it is the whole of a filled field's focus affordance — there is no
         // border left to recolour.
-        let (colour, thickness) = style::field_indicator(r, self.active, self.error);
+        let (colour, thickness) = style::field_indicator(r, self.state.active, self.state.error);
         renderer.fill_quad(
             renderer::Quad {
                 bounds: Rectangle {

@@ -41,18 +41,35 @@
 //!
 //! # Accepted fidelity gap #4 (FR-044)
 //!
-//! The label is composed alongside the input and rendered **persistently in its floating position**,
-//! not animated between resting and floating. The rendering stack's text input has no label concept
-//! to transition. The result matches Material's *populated* field exactly; only the transition is
-//! absent.
+//! The label takes both of Material's positions — resting in the middle of an empty box at full
+//! size, floating at the top in the smaller role once there is a value or the field is active —
+//! but **snaps** between them rather than animating. See [`label_floats`] for how the two halves of
+//! that decision are kept in agreement.
+//!
+//! The gap is the transition alone. Both endpoints are correct, and this narrowed once the field
+//! became a widget with its own layout: the original note here recorded the label as permanently
+//! floating, which matched Material's *populated* field and left an empty one with a caption
+//! hanging over nothing.
 
 use iced::widget::{column, container, Space};
 use iced::{Element, Length};
 use micold_core::tokens::{anatomy, spacing, Roles};
 
-use super::filled_field::FilledField;
+use super::filled_field::{FilledField, State as FilledFieldState};
 use super::style;
 use super::{Text, TypeRole};
+
+/// Whether the label has floated clear of the value's line.
+///
+/// One rule in one place, because two parties depend on it and must agree: `FormField` uses it to
+/// decide where to put the label, and each *control* uses it to decide whether to draw a
+/// placeholder at all. While the label rests it occupies the value's line, so a control that also
+/// drew a placeholder there would print two words on top of each other — which is what an unset
+/// select looked like the first time round. Disagreement is the failure mode, so there is only one
+/// place to disagree with.
+pub fn label_floats(populated: bool, active: bool) -> bool {
+    populated || active
+}
 
 /// A form control wearing Material's filled-field chrome. Builder form (Principle VIII):
 ///
@@ -71,6 +88,7 @@ pub struct FormField<'a, M> {
     supporting: Option<String>,
     error: Option<String>,
     active: bool,
+    populated: bool,
     leading: Option<Element<'a, M>>,
     trailing: Option<Element<'a, M>>,
 }
@@ -85,6 +103,7 @@ impl<'a, M: 'a> FormField<'a, M> {
             supporting: None,
             error: None,
             active: false,
+            populated: false,
             leading: None,
             trailing: None,
         }
@@ -123,6 +142,20 @@ impl<'a, M: 'a> FormField<'a, M> {
         self
     }
 
+    /// Whether the control has a value in it.
+    ///
+    /// Decides where the label sits. Material's filled field rests its label in the middle of an
+    /// empty, unfocused box at full size, and *floats* it to the top at the smaller role once there
+    /// is something to label — otherwise a name hangs above an empty box with nothing under it,
+    /// which is what the field looked like before this existed.
+    ///
+    /// Supplied rather than inferred: the wrapper is handed an opaque control and cannot see
+    /// whether a text input has text or a select has a selection. Each knows its own.
+    pub fn populated(mut self, populated: bool) -> Self {
+        self.populated = populated;
+        self
+    }
+
     /// An adornment before the control, inside the container.
     pub fn leading(mut self, element: impl Into<Element<'a, M>>) -> Self {
         self.leading = Some(element.into());
@@ -148,10 +181,22 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
         let slot = |content: Option<Element<'a, M>>| -> Element<'a, M> {
             content.unwrap_or_else(|| Space::new().into())
         };
+        // Floating once there is a value or the field is being used; resting otherwise. The role
+        // changes with the position — `body_small` floating, `body_large` at rest — which is what
+        // makes a resting label read as the field's *content placeholder* rather than as a caption.
+        let floating = label_floats(f.populated, f.active);
         let label: Element<'a, M> = match f.label {
-            Some(text) => Text::new(text, TypeRole::Caption, r)
-                .tint(style::field_support(r, invalid))
-                .into(),
+            Some(text) => Text::new(
+                text,
+                if floating {
+                    TypeRole::Caption
+                } else {
+                    TypeRole::Body
+                },
+                r,
+            )
+            .tint(style::field_label(r, f.active, invalid))
+            .into(),
             None => Space::new().into(),
         };
 
@@ -164,8 +209,11 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
             slot(f.trailing),
             label,
             r,
-            f.active,
-            invalid,
+            FilledFieldState {
+                active: f.active,
+                error: invalid,
+                floating,
+            },
         )
         .into();
 

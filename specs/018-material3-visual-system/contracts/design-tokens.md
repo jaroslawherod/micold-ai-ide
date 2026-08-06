@@ -574,9 +574,18 @@ the rendering stack (`Radius { top_left, top_right, bottom_right, bottom_left }`
 
 **Label placement (FR-031a, FR-044).** The rendering stack's text input has **no label concept** —
 only a placeholder. The shared text field therefore composes the label as a sibling of the input
-inside the container. The label is rendered persistently in its floating (top) position; Material's
-animated transition between resting and floating is **not** implemented. The result matches
-Material's *populated* field exactly; only the transition is absent. Accepted fidelity gap #4.
+inside the container, and the container owns its own layout so it can put the label in either of
+Material's two positions:
+
+| State | Label | Position | Control |
+|---|---|---|---|
+| Empty and inactive | `body_large` | centred on the value's line | placeholder suppressed |
+| Populated *or* active | `body_small` | 8dp from the top | on the line below |
+
+An empty field therefore shows one word on the value's line, not two: while the label rests it *is*
+the placeholder. Material's animated transition between the two positions is **not** implemented —
+the label snaps. Both endpoints are correct; only the transition is absent. Accepted fidelity gap
+#4.
 
 **Content migration (FR-031a, FR-031b).** Today's placeholders bundle the field name and a hint
 into one string. These split:
@@ -692,7 +701,8 @@ spacing tokens.
   open, with no focus concept to observe, so its active indicator is driven by the **open** state
   instead (§7.7). Accepted fidelity gap #3 (FR-043a).
 - **The text field label's float transition** — the stack's text input has no label concept, so the
-  label is composed persistently in its floating position (§7.7). Accepted fidelity gap #4 (FR-044).
+  label snaps between resting and floating rather than animating (§7.7). Accepted fidelity gap #4
+  (FR-044).
 - **Information architecture** — no navigation rail, no floating action button, no responsive
   breakpoints.
 - **Dynamic color** — no Material You extraction from the host environment; the seed is fixed.
