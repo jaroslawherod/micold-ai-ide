@@ -594,6 +594,19 @@ The free-standing `Type` label above the select moves inside that control's cont
 
 This is presentation only — no field changes what it accepts, validates or submits (FR-036).
 
+**The type-ahead (added after this section was written).** Feature 021 replaced the branch picker's
+select with a `Typeahead`, so the row above reading "The free-standing `Type` label above the select
+moves inside that control's container" now has a sibling: the branch picker's `Branch` label moves
+the same way, into the type-ahead's own container. It is the same requirement (FR-031a) reaching a
+control that did not exist when the requirement was written, not a new one.
+
+The type-ahead also settles what the select could not. §7.7 asks for the active indicator to respond
+to **open** rather than focus (FR-043a), and `pick_list` reports `Opened` to its own style closure
+and to no parent — so `Select::active` must be supplied by a caller and is in practice left unset.
+`Typeahead` already takes `.open(bool)` from a caller that tracks it, so on that control the
+indicator follows the open state for real. The accepted gap stands for the select and is closed for
+the type-ahead.
+
 ### 7.8 Snackbar (FR-032, FR-032a, FR-032b)
 
 Replaces the current inline notification banner. It is a floating, elevated, self-contained
