@@ -67,6 +67,29 @@ impl Kind {
         }
     }
 
+    /// The tone this kind actually paints, for a wrapper that has to composite against it.
+    ///
+    /// Public for the same reason as [`Self::shape`], and it closes the same class of bug from the
+    /// other side. `fade` has no true opacity to work with — the rendering stack offers none — so it
+    /// composites a veil of *the surface behind the content* over it. A veil in the wrong tone is a
+    /// visible rectangle for the length of every transition, and three call sites were passing
+    /// `roles.surface` while covering something else entirely: the sidebar is elevation 1
+    /// (`surface_container_low`), a menu panel elevation 2, a dialog elevation 3. On the sidebar
+    /// that is tone 6 painted over tone 10 — four tones too dark, and plainly visible as a block
+    /// around the row actions while they fade.
+    ///
+    /// Asking the surface is the difference between one answer and one guess per call site.
+    pub fn tone(self, roles: Roles) -> Rgb {
+        match self.elevation() {
+            Some(level) => roles.elevation_surface(level),
+            // Colour-driven kinds are identified by their own fill rather than by depth, and that
+            // fill is not a surface tone. What sits *behind* one of these is the surface it was
+            // placed on, which is what a compositing wrapper needs — a row fading out reveals the
+            // list beneath it, not the row's own colour.
+            None => roles.surface,
+        }
+    }
+
     /// The corner size this kind takes, from contract §3.
     ///
     /// Public so a wrapper that has to match this surface's shape can ask instead of restating it.
@@ -227,5 +250,85 @@ impl<'a, M: 'a> From<Surface<'a, M>> for Element<'a, M> {
             widget = widget.align_y(iced::alignment::Vertical::Center);
         }
         widget.into()
+    }
+}
+
+#[cfg(test)]
+mod tone_tests {
+    use super::*;
+    use micold_core::theme::ColorScheme;
+
+    fn roles(scheme: ColorScheme) -> Roles {
+        micold_core::tokens::roles(scheme)
+    }
+
+    /// Every elevation-driven kind reports the tone its own level paints.
+    ///
+    /// The property, rather than nine transcribed colours: a wrapper compositing against a surface
+    /// must get *that* surface's tone, and the elevation table is where that already lives.
+    #[test]
+    fn each_kind_reports_the_tone_its_elevation_paints() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = roles(scheme);
+            for (kind, level) in [
+                (Kind::Window, elevation::PAGE),
+                (Kind::Plain, elevation::CARD),
+                (Kind::Sidebar, elevation::CARD),
+                (Kind::Toolbar, elevation::APP_BAR_REST),
+                (Kind::Menu, elevation::MENU),
+                (Kind::Dialog, elevation::DIALOG),
+            ] {
+                assert_eq!(
+                    kind.tone(r),
+                    r.elevation_surface(level),
+                    "{kind:?} in {scheme:?} reports a tone its own elevation does not paint"
+                );
+            }
+        }
+    }
+
+    /// The three kinds that were being veiled with `roles.surface` do not paint `roles.surface`.
+    ///
+    /// This is the regression, stated as the thing that was false. A screen recording of the
+    /// sidebar's row actions showed the sidebar case: `surface` is neutral tone 6 in dark and the
+    /// sidebar is tone 10, so the fade painted a rectangle four tones too dark around the icons for
+    /// the length of every reveal. The dialog and the menu had the same mistake and are less
+    /// obvious only because they sit over a scrim.
+    #[test]
+    fn the_veiled_surfaces_are_not_the_plain_surface_tone() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = roles(scheme);
+            for kind in [Kind::Sidebar, Kind::Menu, Kind::Dialog] {
+                assert_ne!(
+                    kind.tone(r),
+                    r.surface,
+                    "{kind:?} in {scheme:?} paints the plain `surface` tone, so veiling it with \
+                     `roles.surface` would be correct — if that ever becomes true, the call sites \
+                     that now ask `tone()` are carrying a guess again"
+                );
+            }
+        }
+    }
+
+    /// A kind's tone and its shape answer for the same surface, so a wrapper that asks for both
+    /// gets a consistent pair. Cheap, and it is the pairing every compositing wrapper relies on.
+    #[test]
+    fn tone_and_shape_are_available_for_every_kind() {
+        let r = roles(ColorScheme::Dark);
+        for kind in [
+            Kind::Window,
+            Kind::Plain,
+            Kind::Dialog,
+            Kind::Sidebar,
+            Kind::Toolbar,
+            Kind::Menu,
+            Kind::ListItem,
+        ] {
+            let _ = kind.tone(r);
+            assert!(
+                kind.shape() >= 0.0,
+                "{kind:?} reports a negative corner size"
+            );
+        }
     }
 }

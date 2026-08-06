@@ -103,11 +103,11 @@ impl<'a, M: Clone + 'a> From<Modal<'a, M>> for Surface<'a, M> {
         // The dialog fades its contents toward its own surface colour, then lifts (scales about
         // its centre). Together with the scrim this reads as a Material dialog enter/exit.
         let dialog = super::scale(
-            super::fade(dialog, shown, ENTER, roles.surface)
-                // The veil takes the dialog's own corners. Left square it paints four opaque
-                // surface-coloured corners outside the dialog's `EXTRA_LARGE` radius — over the
-                // scrim, where there is nothing for them to hide against — for the whole of every
-                // entrance and exit.
+            super::fade(dialog, shown, ENTER, super::SurfaceKind::Dialog.tone(roles))
+                // Both the tone and the corners come from the dialog's own surface kind. The
+                // tone matters as much as the shape: a dialog is elevation 3, so veiling it with
+                // `roles.surface` painted a rectangle several tones too dark over it for the whole
+                // of every entrance and exit.
                 .rounded(super::SurfaceKind::Dialog.shape())
                 .exiting_over(EXIT)
                 .animate_in()
