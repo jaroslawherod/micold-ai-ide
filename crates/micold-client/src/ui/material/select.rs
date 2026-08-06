@@ -16,7 +16,7 @@ use crate::ui::material::style;
 use crate::ui::material::TypeRole;
 use iced::widget::pick_list;
 use iced::{Element, Length};
-use micold_core::tokens::{spacing, Roles};
+use micold_core::tokens::Roles;
 
 /// A Material-styled select control. Builder form (Principle VIII):
 /// `Select::new(options, selected, on_selected, roles).placeholder("...").into()`.
@@ -26,6 +26,10 @@ pub struct Select<'a, T, M> {
     on_selected: Box<dyn Fn(T) -> M + 'a>,
     placeholder: String,
     roles: Roles,
+    label: Option<String>,
+    supporting: Option<String>,
+    error: Option<String>,
+    active: bool,
 }
 
 impl<'a, T, M> Select<'a, T, M>
@@ -46,7 +50,44 @@ where
             on_selected: Box::new(on_selected),
             placeholder: "Select…".to_string(),
             roles,
+            label: None,
+            supporting: None,
+            error: None,
+            active: false,
         }
+    }
+
+    /// The control's name, rendered inside its container above the value (FR-031a).
+    ///
+    /// §7.7 moves the free-standing label that sat above the select into the control's own
+    /// container, which is what makes it look like every other field rather than like a button
+    /// with a caption.
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Explanatory text beneath the container.
+    pub fn supporting(mut self, text: impl Into<String>) -> Self {
+        self.supporting = Some(text.into());
+        self
+    }
+
+    /// The validation failure, if any — replaces the supporting text and recolours the chrome.
+    pub fn error(mut self, error: Option<impl Into<String>>) -> Self {
+        self.error = error.map(Into::into);
+        self
+    }
+
+    /// Whether the list is **open**, which thickens the active indicator (FR-043a).
+    ///
+    /// Open rather than focused, because `pick_list` has no focused status to report — that is
+    /// accepted fidelity gap #3. It does not tell a parent when it opens either, so this is supplied
+    /// by a caller that tracks it rather than observed. Left unset the indicator stays at rest,
+    /// which is the honest answer for a caller that does not know.
+    pub fn active(mut self, active: bool) -> Self {
+        self.active = active;
+        self
     }
 
     /// Text shown when nothing is selected (default: "Select…").
@@ -63,16 +104,25 @@ where
 {
     fn from(s: Select<'a, T, M>) -> Self {
         let r = s.roles;
-        pick_list(s.options, s.selected, s.on_selected)
+        // No padding of its own: `FormField` pads the container to §7.7's 16dp, and a select that
+        // padded itself as well would sit inset from every text field beside it.
+        let control = pick_list(s.options, s.selected, s.on_selected)
             .placeholder(s.placeholder)
             .width(Length::Fill)
-            .padding(spacing::SM)
             // A `pick_list` takes a size and a font separately rather than a role, so the role is
             // named here and taken apart — the call site still never states a number.
             .text_size(TypeRole::Body.size())
             .font(TypeRole::Body.font())
             .style(style::select_field(r))
-            .menu_style(style::select_menu(r))
-            .into()
+            .menu_style(style::select_menu(r));
+
+        let mut field = super::FormField::new(control, r).active(s.active);
+        if let Some(label) = s.label {
+            field = field.label(label);
+        }
+        if let Some(supporting) = s.supporting {
+            field = field.supporting(supporting);
+        }
+        field.error(s.error).into()
     }
 }
