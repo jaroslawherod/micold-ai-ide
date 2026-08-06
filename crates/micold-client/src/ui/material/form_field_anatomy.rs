@@ -135,12 +135,29 @@ fn layout_of(element: Element<'_, Message>, width: f32) -> (iced::Rectangle, Vec
     (node.bounds(), children)
 }
 
-/// How many layout nodes the element produces, all the way down.
+/// The **widget** tree's *arity* — how many children sit at each level, all the way down.
 ///
-/// An absent adornment must contribute *nothing* — not a zero-width spacer, which would look
-/// identical here and drift into a real gap the moment someone gave the row a spacing.
-fn node_count(node: &iced::advanced::layout::Node) -> usize {
-    1 + node.children().iter().map(node_count).sum::<usize>()
+/// This tree rather than the layout one, because it is what decides whether state survives a
+/// re-render: `Tree::diff` walks it, and a subtree it has to rebuild loses a text input's focus.
+///
+/// Arity rather than tags, deliberately. A slot holding a `Text` this frame and a placeholder the
+/// next has a different *tag* at that position, and iced rebuilds that child alone — which is
+/// harmless, because the child is the label. What must not change is the **number and order** of
+/// children, because that is what fixes the control's own index in the tree. Comparing tags would
+/// fail on a difference that costs nothing and would push toward making the placeholder imitate the
+/// thing it stands in for, which is not the requirement.
+fn tree_shape(element: &Element<'_, Message>) -> String {
+    use iced::advanced::widget::Tree;
+
+    fn walk(tree: &Tree, depth: usize, out: &mut String) {
+        out.push_str(&format!("{}{}\n", "  ".repeat(depth), tree.children.len()));
+        for child in &tree.children {
+            walk(child, depth + 1, out);
+        }
+    }
+    let mut out = String::new();
+    walk(&Tree::new(element), 0, &mut out);
+    out
 }
 
 /// The container is at least the contract's field height (§7.7).
@@ -192,52 +209,74 @@ fn supporting_text_adds_height_beneath_the_container() {
     );
 }
 
-/// An adornment slot takes no space when it is not supplied.
+/// The tree has the same shape whatever the slots hold (feature 021's lesson).
 ///
-/// The failure this rules out is a wrapper that always reserves room for a trailing icon: every
-/// field in the application would carry a silent 24dp gap on its right, and nothing would look
-/// broken enough to notice.
+/// The rendering stack rebuilds a subtree whose tag changed, and a text input's tag carries its own
+/// state — focus included. A field that gained a child the moment a validation error appeared would
+/// rebuild the input *while the user was typing into it* and drop the focus, so the next keystroke
+/// would go nowhere. Feature 021 hit this with a search field whose clear button appeared on the
+/// first keystroke; the same trap is here, and it opens on the error slot, which by definition
+/// appears mid-typing.
+///
+/// This is the assertion an earlier version of this file got exactly backwards: it required an
+/// absent slot to contribute *no* node, which is the shape change that causes the bug.
 #[test]
-fn an_absent_adornment_contributes_no_element() {
+fn the_shape_is_stable_whatever_the_slots_hold() {
     let r = roles();
     let glyph =
         |r| super::Glyph::<Message>::new(crate::icons::Icon::Close, super::TypeRole::Body, r);
 
-    let plain = node_count(&laid_out(
-        FormField::new(input(), r).label("Name").into(),
-        400.0,
-    ));
-    let trailing = node_count(&laid_out(
-        FormField::new(input(), r)
-            .label("Name")
-            .trailing(glyph(r))
-            .into(),
-        400.0,
-    ));
-    let leading = node_count(&laid_out(
-        FormField::new(input(), r)
-            .label("Name")
-            .leading(glyph(r))
-            .into(),
-        400.0,
-    ));
+    let bare = tree_shape(&FormField::new(input(), r).into());
+    for (what, field) in [
+        ("a label", FormField::new(input(), r).label("Name")),
+        (
+            "supporting text",
+            FormField::new(input(), r).supporting("Lowercase only"),
+        ),
+        (
+            "an error",
+            FormField::new(input(), r).error(Some("Already exists")),
+        ),
+        (
+            "a leading adornment",
+            FormField::new(input(), r).leading(glyph(r)),
+        ),
+        (
+            "a trailing adornment",
+            FormField::new(input(), r).trailing(glyph(r)),
+        ),
+    ] {
+        assert_eq!(
+            tree_shape(&field.into()),
+            bare,
+            "adding {what} changed the widget tree's arity, so the control's index in the tree \
+             moved. The renderer rebuilds what it cannot match up, and a text input's focus goes \
+             with it — and the error slot is the one that fills while the user is typing"
+        );
+    }
+}
 
-    assert!(
-        trailing > plain,
-        "a trailing adornment produced no extra layout node, so it is not being rendered at all"
+/// …and an unfilled slot still takes no space.
+///
+/// The other half. Emitting every slot is only acceptable if an empty one is invisible; otherwise
+/// every field in the application carries a silent gap where an icon would go.
+#[test]
+fn an_empty_slot_takes_no_space() {
+    let r = roles();
+    let glyph =
+        |r| super::Glyph::<Message>::new(crate::icons::Icon::Close, super::TypeRole::Body, r);
+
+    let (bare, bare_bands) = layout_of(FormField::new(input(), r).into(), 400.0);
+    let (adorned, _) = layout_of(FormField::new(input(), r).trailing(glyph(r)).into(), 400.0);
+
+    assert_eq!(
+        bare.height, adorned.height,
+        "an adornment changed the field's height, so the empty slot was not zero-sized"
     );
     assert_eq!(
-        leading, trailing,
-        "one adornment slot costs more nodes than the other"
-    );
-    assert_eq!(
-        plain,
-        trailing - 1,
-        "the field without adornments carries {} nodes against {} with one — an empty slot is \
-         reserving something, and a spacer that is zero-wide today becomes a real gap the moment \
-         the row is given a spacing",
-        plain,
-        trailing
+        bare_bands[2].height, 0.0,
+        "the empty supporting slot is {:.1}dp tall — it should be invisible",
+        bare_bands[2].height
     );
 }
 

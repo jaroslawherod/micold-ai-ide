@@ -529,39 +529,6 @@ pub fn checkbox(r: Roles) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbo
     }
 }
 
-/// A text input styled to the design system.
-pub fn input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
-    move |_theme, status| {
-        // The focus indicator (FR-022): a 3dp `secondary` outline, drawn *in addition to* the focus
-        // state layer rather than instead of it. It has to remain distinguishable while the element
-        // is also hovered — tabbing to a field the mouse happens to rest on is the ordinary case,
-        // and losing the indicator there makes keyboard navigation vanish exactly when the user is
-        // also touching the mouse.
-        //
-        // Text fields and the select control are the only elements that can hold focus in this
-        // rendering stack; buttons, rows, menu items and chips have no focused status to observe.
-        // That is accepted fidelity gap #2 (FR-043), and it is why this lives here rather than in a
-        // shared helper every interactive style would call.
-        let (border_color, border_width) = match status {
-            text_input::Status::Focused { .. } => (color(r.secondary), state::FOCUS_RING_WIDTH),
-            text_input::Status::Hovered => (color(r.on_surface_variant), 1.0),
-            _ => (color(r.outline), 1.0),
-        };
-        text_input::Style {
-            background: Background::Color(color(r.surface)),
-            border: Border {
-                color: border_color,
-                width: border_width,
-                radius: shape::SMALL.into(),
-            },
-            icon: color(r.on_surface_variant),
-            placeholder: color(r.on_surface_variant),
-            value: color(r.on_surface),
-            selection: alpha(color(r.primary), 0.3),
-        }
-    }
-}
-
 // --- the filled form field (feature 018, T044b/T045 — FR-031, FR-031a, FR-031c; contract §7.7) --
 
 /// The filled field container: `surface_container_highest`, rounded at the top and square at the
