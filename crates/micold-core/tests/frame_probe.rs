@@ -541,3 +541,89 @@ fn the_full_scene_still_requires_the_rest_of_the_baseline() {
     };
     assert!(Scene::Full.check(&facts).is_err());
 }
+
+// ---------------------------------------------------------------------------------------------
+// The scene has to still be the scene when the frames are counted (T083 — FR-039b, SC-018)
+// ---------------------------------------------------------------------------------------------
+
+/// A scene that drifts *after* it was composed is refused.
+///
+/// The original check ran until it passed and then never again, which left the 300 counted frames
+/// measured against whatever the window drifted into. That is the same error the check exists to
+/// prevent — "there is nothing in `300 frames — mean 0.84 ms` that says what it was measured
+/// against" — reappearing one step later in the run, and it showed up exactly as the theory
+/// predicts: six `full` runs in two clusters 60% apart, with baseline runs interleaved between them
+/// holding steady.
+#[test]
+fn a_scene_that_drifts_mid_run_is_refused() {
+    let mut facts = baseline_facts();
+    facts.context_menu_open = false;
+
+    let err = Scene::Baseline
+        .check_still_composed(&facts)
+        .expect_err("a dismissed context menu must not go unnoticed mid-run");
+    assert!(
+        err.contains("context menu"),
+        "the refusal must name what drifted: {err}"
+    );
+}
+
+/// The mid-run check covers every element that has to hold continuously.
+#[test]
+fn every_continuous_element_is_checked_mid_run() {
+    for (name, break_it) in [
+        (
+            "worktrees",
+            (|f: &mut SceneFacts| f.worktrees = 19) as fn(&mut SceneFacts),
+        ),
+        ("session", |f: &mut SceneFacts| f.running_sessions = 0),
+        ("dialog", |f: &mut SceneFacts| f.dialog_open = false),
+        ("context menu", |f: &mut SceneFacts| {
+            f.context_menu_open = false
+        }),
+    ] {
+        let mut facts = baseline_facts();
+        break_it(&mut facts);
+        assert!(
+            Scene::Baseline.check_still_composed(&facts).is_err(),
+            "{name} drifted mid-run and the check passed anyway"
+        );
+    }
+}
+
+/// The mid-run check does **not** fail on a momentarily absent ripple.
+///
+/// The ripple is the one element that legitimately blinks: it runs its cycle, settles, and is
+/// re-pressed on the frame after. A per-frame check that demanded one would refuse nearly every
+/// honest run, so the ripple is held to a coverage fraction over the whole run instead.
+#[test]
+fn a_ripple_between_cycles_does_not_fail_the_mid_run_check() {
+    let mut facts = baseline_facts();
+    facts.ripple_animating = false;
+    assert_eq!(Scene::Full.check_still_composed(&facts), Ok(()));
+}
+
+/// The full scene must have had a ripple for most of the run, not for one frame of it.
+#[test]
+fn the_full_scene_requires_the_ripple_to_cover_most_of_the_run() {
+    // A run that showed a ripple almost throughout is what the scene describes.
+    assert_eq!(Scene::Full.check_ripple_coverage(291, 300), Ok(()));
+    // One that showed it for a handful of frames measured the baseline under the full scene's name.
+    let err = Scene::Full
+        .check_ripple_coverage(12, 300)
+        .expect_err("a ripple present for 4% of the run is not `a ripple mid-animation`");
+    assert!(
+        err.contains("12") && err.contains("300"),
+        "the refusal must state what it saw: {err}"
+    );
+}
+
+/// The baseline scene must have had **no** ripple at any point.
+#[test]
+fn the_baseline_scene_refuses_any_ripple_over_the_run() {
+    assert_eq!(Scene::Baseline.check_ripple_coverage(0, 300), Ok(()));
+    assert!(
+        Scene::Baseline.check_ripple_coverage(1, 300).is_err(),
+        "a ripple on even one counted frame means the baseline slot would hold the wrong scene"
+    );
+}

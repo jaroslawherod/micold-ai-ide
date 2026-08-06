@@ -214,15 +214,76 @@ impl Scene {
         }
     }
 
-    /// Whether the scene on screen is the one this run claims to be measuring.
+    /// The share of counted frames a `full` run must have shown a ripple on.
     ///
-    /// This is the check that makes three figures comparable. Without it a run against 19 worktrees,
-    /// or with the dialog already dismissed, produces a figure indistinguishable from a good one —
-    /// there is nothing in `300 frames — mean 0.30 ms` that says what it was measured against, and
-    /// the error would surface only as an unexplained gap between slots.
-    pub fn check(&self, facts: &SceneFacts) -> Result<(), String> {
-        let mut wrong = Vec::new();
+    /// Not 100%: the ripple is the one element of the scene that legitimately blinks. It runs its
+    /// cycle, settles, and is pressed again on the frame after — so a handful of frames across a
+    /// run have none, and demanding every frame would refuse honest runs. It is deliberately high,
+    /// because the failure this guards against is a run that showed a ripple briefly and then
+    /// measured the baseline under the full scene's name.
+    pub const RIPPLE_COVERAGE: f32 = 0.9;
 
+    /// Whether the scene is *still* the scene, checked on a frame that is being counted.
+    ///
+    /// [`check`](Self::check) answers "has the scene been composed yet" and stops being asked the
+    /// moment it says yes. That leaves every counted frame after it measured against whatever the
+    /// window drifted into — a dialog that dismissed itself, a context menu that closed — and the
+    /// resulting figure is indistinguishable from a good one, which is the exact failure `check`
+    /// exists to prevent, one step later in the run. It showed up as predicted: six `full` runs in
+    /// two clusters 60% apart, with baseline runs interleaved between them holding steady.
+    ///
+    /// The ripple is deliberately **not** checked here — see [`RIPPLE_COVERAGE`](Self::RIPPLE_COVERAGE)
+    /// for why a per-frame ripple check would refuse honest runs, and where it is checked instead.
+    pub fn check_still_composed(&self, facts: &SceneFacts) -> Result<(), String> {
+        let wrong = Self::structural_faults(facts);
+        if wrong.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "the {self:?} scene stopped being composed while its frames were being counted:\n                   - {}\n\nThe figure would be for whatever was left on screen rather than for the \
+                 scene it is filed under.",
+                wrong.join("\n  - ")
+            ))
+        }
+    }
+
+    /// Whether the ripple was present for as much of the run as the scene requires.
+    ///
+    /// Checked once over the whole run rather than per frame, because the ripple cycles. `Baseline`
+    /// is the mirror image and admits none at all: one ripple on one counted frame means the
+    /// baseline slot would hold a figure for the full scene.
+    pub fn check_ripple_coverage(
+        &self,
+        frames_with_ripple: usize,
+        counted: usize,
+    ) -> Result<(), String> {
+        match self {
+            Scene::Baseline if frames_with_ripple > 0 => Err(format!(
+                "a ripple was animating on {frames_with_ripple} of {counted} counted frames, but \
+                 the baseline scene has none — this figure belongs in no slot"
+            )),
+            Scene::Full => {
+                let need = (counted as f32 * Self::RIPPLE_COVERAGE).ceil() as usize;
+                if frames_with_ripple < need {
+                    Err(format!(
+                        "a ripple was animating on only {frames_with_ripple} of {counted} counted \
+                         frames, short of the {need} the full scene needs. Most of this run \
+                         measured the baseline under the full scene's name."
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// The scene elements that must hold continuously, and what is wrong with them.
+    ///
+    /// Shared by [`check`](Self::check) and [`check_still_composed`](Self::check_still_composed) so
+    /// the two cannot drift into disagreeing about what the scene is.
+    fn structural_faults(facts: &SceneFacts) -> Vec<String> {
+        let mut wrong = Vec::new();
         if facts.worktrees != REFERENCE_WORKTREES {
             wrong.push(format!(
                 "the sidebar shows {} worktrees, but the reference scene is {REFERENCE_WORKTREES} \
@@ -239,6 +300,17 @@ impl Scene {
         if !facts.context_menu_open {
             wrong.push("no context menu is open".to_string());
         }
+        wrong
+    }
+
+    /// Whether the scene on screen is the one this run claims to be measuring.
+    ///
+    /// This is the check that makes three figures comparable. Without it a run against 19 worktrees,
+    /// or with the dialog already dismissed, produces a figure indistinguishable from a good one —
+    /// there is nothing in `300 frames — mean 0.30 ms` that says what it was measured against, and
+    /// the error would surface only as an unexplained gap between slots.
+    pub fn check(&self, facts: &SceneFacts) -> Result<(), String> {
+        let mut wrong = Self::structural_faults(facts);
 
         match self {
             // The baseline scene is *defined* by having no ripple — it is what the pre-change build

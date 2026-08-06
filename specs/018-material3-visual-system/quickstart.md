@@ -258,65 +258,54 @@ scene's true cost.
 
       Machine: AMD Ryzen 7 260 (16 threads) / Radeon 780M, Ubuntu 26.04, Wayland/GNOME, debug build
       Date: 2026-08-06
-      Frame time: 300 frames — mean 0.89 ms, p95 1.15 ms, max 1.47 ms
-
-      Three runs, as for figure 1. The `p95` did not move at all between them:
+      Frame time: 300 frames — mean 0.86 ms, p95 1.12 ms, max 1.48 ms
 
       | run | mean | p95 | max |
       |-----|------|-----|-----|
-      | 1 | 0.86 ms | 1.15 ms | 1.39 ms |
-      | 2 | 0.88 ms | 1.15 ms | 1.35 ms |
-      | 3 | 0.89 ms | 1.15 ms | 1.47 ms |
+      | 1 | 0.88 ms | 1.12 ms | 1.30 ms |
+      | 2 | 0.84 ms | 1.11 ms | 1.50 ms |
+      | 3 | 0.86 ms | 1.12 ms | 1.48 ms |
 
-- [ ] **3 — full scene, post-change** (T076a). Same machine, same profile as 1. **Not recorded — the
-      measurement is unstable.**
+- [X] **3 — full scene, post-change** (T076a). Same machine, same profile, same build as 2.
 
       Machine: AMD Ryzen 7 260 (16 threads) / Radeon 780M, Ubuntu 26.04, Wayland/GNOME, debug build
       Date: 2026-08-06
-      Frame time: *see below — six runs did not agree*
+      Frame time: 300 frames — mean 0.90 ms, p95 1.13 ms, max 1.50 ms
 
       | run | mean | p95 | max |
       |-----|------|-----|-----|
-      | 1 | 0.83 ms | 1.21 ms | 1.70 ms |
-      | 2 | 0.87 ms | 1.25 ms | 2.23 ms |
-      | 3 | 0.53 ms | 0.70 ms | 0.98 ms |
-      | 4 | 0.77 ms | 1.15 ms | 1.51 ms |
-      | 5 | 0.54 ms | 0.76 ms | 1.31 ms |
-      | 6 | 0.53 ms | 0.73 ms | 1.06 ms |
+      | 1 | 0.94 ms | 1.15 ms | 1.50 ms |
+      | 2 | 0.89 ms | 1.13 ms | 1.34 ms |
+      | 3 | 0.86 ms | 1.12 ms | 1.39 ms |
 
-      **The result is bimodal**: three runs near `p95` 1.20 ms and three near 0.73 ms, with nothing
-      in between. Baseline runs taken on the same binary between them sat at 1.19 and 1.18 ms, so
-      the machine was not the variable. A figure that lands in one of two clusters is not a figure —
-      recording either one would state a precision the measurement does not have, and the whole
-      point of §B8 is that a number cannot be recorded against a scene nobody verified.
-
-      **The likely cause is a gap in the scene check, not in the scene.** `Scene::check` runs while
-      the window is being *composed* and stops once it passes; nothing re-verifies during the 300
-      counted frames. So a run whose context menu or dialog dismissed itself after composition would
-      measure a lighter scene and report it under the full scene's name — which is exactly the class
-      of error the check exists to prevent, reappearing one step later. Closing it means re-checking
-      the scene each counted frame (or at least at the end) and refusing the run if it drifted.
-
-      Figures 1 and 2 are unaffected: the baseline scene is stable across every run taken here, and
-      1 → 2 is the comparison SC-018 turns on.
+      An earlier attempt at this figure came out **bimodal** — three runs near `p95` 1.20 ms and
+      three near 0.73 ms, with baseline runs interleaved between them holding steady, so the machine
+      was not the variable. The cause was a gap in the verification rather than in the scene:
+      `Scene::check` ran until it passed and was never asked again, so the 300 counted frames were
+      measured against whatever the window drifted into. T083 closed it — the structural elements are
+      re-checked on every counted frame and a drifted run exits rather than reporting, and the ripple
+      is held to a coverage fraction over the run because it is the one element that legitimately
+      blinks between cycles. Both refusals were confirmed to fire before these figures were taken.
+      Six consecutive runs then landed within 0.12 ms of each other.
 
 - [X] **1 → 2 is the comparison that matters.** Like-for-like: same scene, same machine. A gap here
       is a regression in rendering this feature did not add. **2 → 3** is this feature's own cost —
       expected to be non-zero, and worth knowing rather than fearing.
 
-      **1 → 2: `p95` 1.07 ms → 1.15 ms, +0.08 ms (+7%).** Above this machine's ~0.02 ms noise
-      floor, and the three post-change runs agree on 1.15 ms exactly, so it is a real cost rather
+      **1 → 2: `p95` 1.07 ms → 1.12 ms, +0.05 ms (+4.7%).** Above this machine's ~0.02 ms noise
+      floor, and the three post-change runs agree to within 0.01 ms, so it is a real cost rather
       than a slow run. It is composition cost — token lookups, type-role resolution, elevation and
       shape resolution, and the extra widgets `FormField` puts in the tree — which is precisely
       what §B8 says this figure is sensitive to. Recorded as a review finding, which is what
       FR-039c asks for; it does not gate the build.
 
-      **2 → 3: not stated.** The full scene did not produce a figure worth recording (see above).
-      Even once it does, §B8 states this figure is blind to draw cost and the ripple's cost is
-      almost entirely draw — the band tiling and the quads it fills all land after composition
-      returns — so 2 → 3 will bound the ripple's *composition* cost and nothing else.
+      **2 → 3: `p95` 1.12 ms → 1.13 ms.** Inside the run-to-run spread, so the ripple's
+      *composition* cost is below what this measurement can resolve. That is the whole of the claim:
+      §B8 states this figure is blind to draw cost, and the ripple's cost is almost entirely draw —
+      the band tiling and the quads it fills all land after composition returns. Read 2 → 3 as "the
+      ripple adds no measurable composition cost", and read nothing else into it.
 
-- [ ] All three figures recorded in the PR so the comparison is reviewable (SC-018). **Two of three.** Figure 3 is outstanding pending the scene-drift fix described above.
+- [X] All three figures recorded in the PR so the comparison is reviewable (SC-018).
 
 **How 2 and 3 were taken.** Under an isolated `XDG_DATA_HOME` / `XDG_RUNTIME_DIR` seeded with a
 catalog holding only the fixture, so the measurement neither read nor wrote the operator's own
