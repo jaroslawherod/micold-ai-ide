@@ -350,7 +350,13 @@ fn row_actions_cluster(
         active,
         r,
     ));
-    HoverReveal::new(cluster, r.surface).shown(active).into()
+    // The veil has to be the tone the cluster sits on, which is the sidebar panel — elevation 1,
+    // `surface_container_low` — and *not* `r.surface`. Passing the latter painted a rectangle four
+    // tones too dark around the icons for the length of every reveal, which is what a screen
+    // recording of the row actions showed.
+    HoverReveal::new(cluster, material::SurfaceKind::Sidebar.tone(r))
+        .shown(active)
+        .into()
 }
 
 /// Flatten the sidebar's location list (feature 010: the "Default" entry, then worktrees) into

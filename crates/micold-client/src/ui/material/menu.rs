@@ -204,10 +204,11 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
             menu_panel(item_column(items, r), Length::Fixed(PANEL_WIDTH), r, true),
             open,
             FADE,
-            r.surface,
+            super::SurfaceKind::Menu.tone(r),
         )
-        // Rounded to the panel it covers, or the veil squares off the panel's corners for the
-        // length of the fade.
+        // Tone and corners both taken from the panel's own surface kind — a menu is elevation 2,
+        // and veiling it with `r.surface` left a rectangle two tones too dark over it while it
+        // faded.
         .rounded(super::SurfaceKind::Menu.shape())
         .animate_in();
 
