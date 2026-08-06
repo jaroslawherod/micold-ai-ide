@@ -215,6 +215,12 @@ struct App {
     /// Shared with the traversal rather than delivered as a message, because a message would make
     /// the probe compose an extra view per frame and count it. See `material::ripple_pulse`.
     ripples_animating: Arc<AtomicUsize>,
+    /// Counted frames on which a ripple was animating, against `Scene::RIPPLE_COVERAGE`.
+    ///
+    /// A count over the run rather than a per-frame check, because the ripple is the one element of
+    /// the scene that legitimately blinks — it settles and is pressed again on the frame after.
+    /// `Cell` because it is tallied from `view`, which only ever gets `&App`.
+    scene_ripple_frames: std::cell::Cell<usize>,
 }
 
 /// The measurement run this process was asked for, or `None` for an ordinary launch.
@@ -347,9 +353,19 @@ fn compose_scene(app: &mut App) -> Task<Message> {
 /// operator reading the summary rather than the scene being measured. The figure goes to stderr so
 /// it survives being piped, and is shaped by [`micold_core::frame_probe::Summary::report_line`] so
 /// all three of §B8's slots are written to the same precision.
-fn report_probe_and_exit(probe: &FrameProbe) -> ! {
+fn report_probe_and_exit(probe: &FrameProbe, app: &App) -> ! {
     match probe.summary() {
         Some(summary) => {
+            // The ripple is checked over the whole run rather than per frame, so this is the first
+            // point it can be judged — and the last point at which refusing still costs nothing.
+            if let Some(scene) = probe_scene() {
+                if let Err(why) =
+                    scene.check_ripple_coverage(app.scene_ripple_frames.get(), summary.frames)
+                {
+                    eprintln!("frame probe: {why}");
+                    std::process::exit(5);
+                }
+            }
             eprintln!("frame probe: {}", summary.report_line());
             std::process::exit(0)
         }
@@ -566,6 +582,7 @@ fn boot() -> (App, Task<Message>) {
             scene_ready: false,
             scene_frames: 0,
             ripples_animating: Arc::new(AtomicUsize::new(0)),
+            scene_ripple_frames: std::cell::Cell::new(0),
         },
         // Ask for the initial window size up front: `resize_events` only fires on *changes*, so
         // without this the first context menu before any resize would have nothing to clamp
@@ -2021,10 +2038,29 @@ fn view(app: &App) -> iced::Element<'_, Message> {
     // run has the frames it asked for.
     let started = Instant::now();
     let element = render(app);
+    let elapsed = started.elapsed();
+
+    // Outside the timed span, deliberately: this is the probe's own bookkeeping and belongs in the
+    // figure no more than the borrow below does.
+    if let Some(scene) = probe_scene() {
+        // The scene has to still *be* the scene. `Scene::check` stopped being asked the moment it
+        // first passed, which left every counted frame measured against whatever the window drifted
+        // into — and produced a `full` figure that landed in one of two clusters 60% apart
+        // depending on whether it drifted (T083, FR-039b).
+        if let Err(why) = scene.check_still_composed(&scene_facts(app)) {
+            eprintln!("frame probe: {why}");
+            std::process::exit(4);
+        }
+        if app.ripples_animating.load(Ordering::Relaxed) > 0 {
+            app.scene_ripple_frames
+                .set(app.scene_ripple_frames.get() + 1);
+        }
+    }
+
     let mut probe = probe.borrow_mut();
-    probe.record(started.elapsed());
+    probe.record(elapsed);
     if probe_config().is_some_and(|config| config.is_complete(&probe)) {
-        report_probe_and_exit(&probe);
+        report_probe_and_exit(&probe, app);
     }
     element
 }
@@ -3070,6 +3106,7 @@ mod tests {
             scene_ready: false,
             scene_frames: 0,
             ripples_animating: Arc::new(AtomicUsize::new(0)),
+            scene_ripple_frames: std::cell::Cell::new(0),
         };
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
@@ -3113,6 +3150,7 @@ mod tests {
             scene_ready: false,
             scene_frames: 0,
             ripples_animating: Arc::new(AtomicUsize::new(0)),
+            scene_ripple_frames: std::cell::Cell::new(0),
         };
         assert_eq!(app.last_grid, None);
 
@@ -3166,6 +3204,7 @@ mod tests {
             scene_ready: false,
             scene_frames: 0,
             ripples_animating: Arc::new(AtomicUsize::new(0)),
+            scene_ripple_frames: std::cell::Cell::new(0),
         }
     }
 
@@ -3484,6 +3523,7 @@ mod tests {
             scene_ready: false,
             scene_frames: 0,
             ripples_animating: Arc::new(AtomicUsize::new(0)),
+            scene_ripple_frames: std::cell::Cell::new(0),
         };
 
         assert_eq!(connection_status(&app), ConnectionStatus::Connected);
