@@ -20,6 +20,7 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Tree};
 use iced::advanced::{mouse, renderer, Clipboard, Shell, Widget};
 use iced::{Element, Event, Length, Rectangle, Size};
+use micold_core::tokens::motion::duration;
 use micold_core::tokens::Roles;
 
 use super::style;
@@ -33,7 +34,7 @@ const RULE: f32 = 1.0;
 
 /// How long the hover highlight takes to travel its full range — a deliberately gentle ramp, so
 /// the edge warms as the pointer approaches rather than snapping on under it.
-const HOVER: Duration = Duration::from_millis(800);
+const HOVER: Duration = Duration::from_millis(duration::LONG_4);
 
 /// A draggable vertical edge. Builder form (Principle VIII):
 /// `ResizeHandle::new(roles).on_resize(Message::SidebarWidthDragged).into()`.

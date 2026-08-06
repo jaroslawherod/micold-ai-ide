@@ -27,6 +27,7 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{Color, Element, Event, Length, Rectangle, Size, Transformation, Vector};
+use micold_core::tokens::motion::duration;
 
 /// At or below this a transition counts as finished, and the wrapper is fully hidden.
 ///
@@ -534,7 +535,7 @@ where
 // ---------------------------------------------------------------------------------------
 
 /// How long the main content area takes to arrive after what it shows changes.
-const VIEW_FADE: Duration = Duration::from_millis(90);
+const VIEW_FADE: Duration = Duration::from_millis(duration::SHORT_3);
 
 /// The main content area, fading in whenever it starts showing something else.
 ///
@@ -579,7 +580,7 @@ impl<'a, M: Clone + 'a> From<ViewFade<'a, M>> for Element<'a, M> {
 
 /// How long a row's actions take to appear or disappear. Quick, so they feel like a response to
 /// the pointer rather than an animation being played at the user.
-const HOVER_REVEAL: Duration = Duration::from_millis(120);
+const HOVER_REVEAL: Duration = Duration::from_millis(duration::SHORT_2);
 
 /// Controls that fade in while their row is pointed at, and out again when it is not.
 ///

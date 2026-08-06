@@ -20,7 +20,7 @@ use crate::ui::material::{menu_panel, IconButton, Text, TypeRole};
 use iced::widget::{button, column, row};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
-use micold_core::tokens::{shape, spacing, Roles};
+use micold_core::tokens::{motion::duration, shape, spacing, Roles};
 
 /// One entry in a menu. Generic over the message type for reuse.
 pub struct MenuItem<M> {
@@ -137,7 +137,7 @@ impl<'a, M: Clone + 'a> From<MenuTrigger<M>> for Element<'a, M> {
 }
 
 /// How long the panel takes to fade in or out.
-const FADE: Duration = Duration::from_millis(90);
+const FADE: Duration = Duration::from_millis(duration::SHORT_3);
 
 /// The menu panel, anchored top-right below the toolbar by default, fading itself in and out.
 /// Builder form (Principle VIII): `MenuOverlay::new(items, on_dismiss, roles).open(flag).into()`.

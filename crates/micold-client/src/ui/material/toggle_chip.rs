@@ -70,9 +70,14 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         let muted = style::color(r.on_surface_variant);
         let outline = style::color(r.outline);
         let active = chip.active;
-        // The sidebar's tag role: this chip sits among the tag chips and runs at the same reduced
-        // density, so it takes the same role rather than the general `Action` one.
-        let chip_button = button(Text::new(chip.label, TypeRole::SidebarTag, r))
+        // §7.6 gives a chip `label_large`. It was `SidebarTag` (`label_small`, 11dp), which was
+        // right while the chip had no height of its own — but T060 gave it §7.6's 32dp, and an 11dp
+        // word in a 32dp pill leaves so much empty height that a short label renders as a circle
+        // rather than a chip. The height and the label role are one decision, not two.
+        //
+        // `Tag` keeps `sidebar_tag`: the contract's own row for the worktree tag says `label_small`
+        // *in the sidebar*, and those sit inside 36dp dense rows where 32dp chips would not fit.
+        let chip_button = button(Text::new(chip.label, TypeRole::Action, r))
             // §7.6: a chip is 32dp tall with 12dp of horizontal padding. The vertical padding is
             // what makes the height, so it is derived from the two rather than guessed at 1dp.
             .padding(iced::Padding {

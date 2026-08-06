@@ -21,6 +21,7 @@ use std::time::Duration;
 use crate::ui::cdk::overlay::{Anchor, Surface};
 use iced::{Color, Element};
 use micold_core::overlay::Layer;
+use micold_core::tokens::motion::duration;
 use micold_core::tokens::Roles;
 
 /// The scrim's alpha at full progress — Material's 32% (contract §4).
@@ -32,9 +33,9 @@ const SCRIM_ALPHA: f32 = 0.32;
 
 /// Dialog entrance — Material Design 3 "medium" duration; clearly perceptible (the ~90ms this
 /// replaced was not).
-const ENTER: Duration = Duration::from_millis(250);
+const ENTER: Duration = Duration::from_millis(duration::MEDIUM_2);
 /// Dialog exit — ~0.8× the entrance (Material convention: exits are quicker).
-const EXIT: Duration = Duration::from_millis(200);
+const EXIT: Duration = Duration::from_millis(duration::SHORT_4);
 
 /// A modal dialog. Builder form (Principle VIII):
 /// `Modal::new(dialog, roles).shown(open).on_dismiss(msg).on_hidden(msg).into()`.

@@ -128,7 +128,13 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
     fn from(f: TextField<'a, M>) -> Self {
         // No padding and no style of its own: `FormField` supplies the container that would
         // otherwise be drawn twice, and pads it to §7.7's 16dp.
-        let mut widget = text_input(&f.placeholder, f.value).style(style::field_input(f.roles));
+        // `.padding(0)` is load-bearing: the rendering stack insets a text input by default, and
+        // `FormField` has already padded the container to §7.7's 16dp — so the default puts the
+        // *value* a few pixels right of the label sitting directly above it, which reads as a
+        // misalignment rather than as a field.
+        let mut widget = text_input(&f.placeholder, f.value)
+            .padding(0)
+            .style(style::field_input(f.roles));
 
         if let Some(icon) = f.leading_icon {
             widget = widget.icon(text_input::Icon {
