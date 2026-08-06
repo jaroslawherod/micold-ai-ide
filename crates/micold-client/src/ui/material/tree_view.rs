@@ -10,7 +10,7 @@ use crate::ui::material::style;
 use crate::ui::material::TypeRole;
 use iced::widget::{button, column, container, mouse_area, row, Row, Space};
 use iced::{Alignment, Element, Length};
-use micold_core::tokens::{shape, spacing, Rgb, Roles};
+use micold_core::tokens::{anatomy, density, shape, spacing, Rgb, Roles};
 
 /// One row in a [`tree_view`]. Generic over the message type so it is reusable across features.
 pub struct TreeItem<'a, M> {
@@ -160,6 +160,7 @@ pub struct TreeView<'a, M> {
     items: Vec<TreeItem<'a, M>>,
     roles: Roles,
     label_role: TypeRole,
+    density: i8,
 }
 
 impl<'a, M: Clone + 'a> TreeView<'a, M> {
@@ -169,7 +170,18 @@ impl<'a, M: Clone + 'a> TreeView<'a, M> {
             items,
             roles,
             label_role: TypeRole::Body,
+            density: density::STANDARD,
         }
+    }
+
+    /// The row density: `density::STANDARD` (48dp) or `density::DENSE` (36dp) — §7.2's two named
+    /// densities, and no third (FR-026, FR-026a).
+    ///
+    /// A step on the shared scale rather than a height, so a list cannot invent its own compactness.
+    /// The sidebar takes `DENSE`; every other list stays standard.
+    pub fn density(mut self, step: i8) -> Self {
+        self.density = step;
+        self
     }
 
     /// Override the label + leading-icon role (e.g. the sidebar's 80% scale, FR-011).
@@ -188,7 +200,22 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             items,
             roles: r,
             label_role,
+            density: step,
         } = tv;
+        // The row's own height and horizontal padding both follow the density (§7.2): a dense row
+        // is shorter *and* tighter, which is what keeps the sidebar's worktree count on screen.
+        let row_height = density::height(density::LIST_ROW_BASE, step);
+        let (row_padding, icon_gap) = if step == density::DENSE {
+            (
+                anatomy::list_row::DENSE_PADDING,
+                anatomy::list_row::DENSE_ICON_GAP,
+            )
+        } else {
+            (
+                anatomy::list_row::STANDARD_PADDING,
+                anatomy::list_row::STANDARD_ICON_GAP,
+            )
+        };
         // The twisty glyph, and the width of the slot that stands in for it on a row that cannot
         // expand — one number, so labels align down the column whether or not a row has a twisty.
         let twisty_size = TypeRole::Label.size();
@@ -198,10 +225,16 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // Minimal base indent (feature 008, FR-009): depth-0 rows sit flush with the
             // sidebar's small left padding; each level nests by one step.
             let indent = f32::from(item.depth) * spacing::MD;
-            let mut line = row![Space::new().width(Length::Fixed(indent))]
-                .spacing(spacing::XS)
-                .align_y(Alignment::Center)
-                .width(Length::Fill);
+            // The indent spacer carries the density's height floor as well, so the row reaches its
+            // 36dp or 48dp without gaining a wrapper — a wrapper would add a tree level and shift
+            // every recorded anchor beneath it. A tagged row grows past the floor rather than being
+            // clipped by it, which is why this is a minimum and not a fixed height.
+            let mut line = row![Space::new()
+                .width(Length::Fixed(indent))
+                .height(Length::Fixed(row_height))]
+            .spacing(icon_gap)
+            .align_y(Alignment::Center)
+            .width(Length::Fill);
 
             // Expand/collapse twisty (or a spacer to keep labels aligned).
             match item.expandable {
@@ -276,8 +309,18 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 // Material (FR-024c).
                 super::Ripple::new(
                     button(body)
-                        .padding(spacing::XS)
+                        // §7.2's density: the row's height and its horizontal padding both follow
+                        // the step, so a dense row is shorter *and* tighter. A tagged row grows
+                        // past the floor rather than being clipped by it, which is why this is a
+                        // minimum and not a fixed height.
+                        .padding(iced::Padding {
+                            top: 0.0,
+                            bottom: 0.0,
+                            left: row_padding,
+                            right: row_padding,
+                        })
                         .width(Length::Fill)
+                        .height(Length::Shrink)
                         .style(style::text_button(r))
                         .on_press(msg),
                     r.on_surface,

@@ -48,6 +48,7 @@ impl<'a, M: Clone + 'a> From<FilterTrigger<M>> for Element<'a, M> {
             t.roles.on_surface_variant
         };
         let button = IconButton::new(Icon::Filter, t.roles)
+            .compact()
             .tint(tint)
             .on_press(t.on_toggle);
         Tooltip::new(button, "Filter worktrees", t.roles).into()
