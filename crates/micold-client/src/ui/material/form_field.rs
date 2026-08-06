@@ -24,6 +24,21 @@
 //! result is identical and only the trigger differs, so the wrapper is *told* which. A wrapper that
 //! assumed focus would leave the select's indicator permanently at rest.
 //!
+//! # Every slot is always emitted, filled or not
+//!
+//! The label, the adornments and the supporting text are rendered whether or not they have
+//! anything in them — an unfilled slot is a zero-sized element rather than an absent one.
+//!
+//! That is not tidiness. The rendering stack rebuilds a subtree whose tag changed, and a text
+//! input's tag carries its own state, focus included. A field that gained a child the moment a
+//! validation error appeared would rebuild the input *while the user was typing into it* and drop
+//! the focus, so the next keystroke would go nowhere. Feature 021 hit exactly this with a search
+//! field whose clear button appeared on the first keystroke, and its answer — one shape for both
+//! cases, so the difference is unrepresentable — is the answer here too.
+//!
+//! A zero-sized slot still costs nothing visually: `an_empty_slot_takes_no_space` measures that,
+//! and `the_shape_is_stable_whatever_the_slots_hold` measures the other half.
+//!
 //! # Accepted fidelity gap #4 (FR-044)
 //!
 //! The label is composed alongside the input and rendered **persistently in its floating position**,
@@ -125,28 +140,29 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
         let r = f.roles;
         let invalid = f.error.is_some();
 
-        // The control, with its adornments either side. Built as a row only when there is something
-        // to put beside it — an empty slot must take no space at all, or every field in the
-        // application carries a silent gap where an icon would go.
-        let mut line = row![].align_y(iced::Alignment::Center).spacing(spacing::SM);
-        if let Some(leading) = f.leading {
-            line = line.push(leading);
-        }
-        line = line.push(f.control);
-        if let Some(trailing) = f.trailing {
-            line = line.push(trailing);
-        }
+        // Both adornment slots are always present, an empty one as a bare `Space`. See the module
+        // docs for why the slot must exist even when empty — and note that the placeholder is
+        // `Space::new()` rather than an explicitly zero-sized one: iced's `Column::push` and
+        // `Row::push` *drop* any child whose size hint `is_void()`, which is true the moment either
+        // dimension is `Fixed(0)`. A zero-sized placeholder is therefore deleted outright, which is
+        // exactly the shape change it was added to prevent. A `Shrink` space lays out at zero and
+        // survives. `spacing` is deliberately absent, so an empty slot adds no gap either.
+        let slot = |content: Option<Element<'a, M>>| -> Element<'a, M> {
+            content.unwrap_or_else(|| Space::new().into())
+        };
+        let line =
+            row![slot(f.leading), f.control, slot(f.trailing)].align_y(iced::Alignment::Center);
 
         // The label sits above the value, inside the container, always in its floating position
-        // (FR-044). `Caption` is `body_small`, which is the role §7.7 gives it.
-        let inner: Element<'a, M> = match f.label {
-            Some(label) => column![
-                Text::new(label, TypeRole::Caption, r).tint(style::field_support(r, invalid)),
-                line,
-            ]
-            .into(),
-            None => line.into(),
+        // (FR-044). `Caption` is `body_small`, the role §7.7 gives it. Emitted even when there is
+        // no label, for the same tree-stability reason as the adornment slots.
+        let label: Element<'a, M> = match f.label {
+            Some(label) => Text::new(label, TypeRole::Caption, r)
+                .tint(style::field_support(r, invalid))
+                .into(),
+            None => Space::new().into(),
         };
+        let inner: Element<'a, M> = column![label, line].into();
 
         let filled = container(inner)
             .width(Length::Fill)
@@ -173,23 +189,25 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
                 ..container::Style::default()
             });
 
-        let mut stack = column![filled, indicator].width(Length::Fill);
+        // The supporting slot is emitted unconditionally too — this is the one that would
+        // otherwise appear *while the user types*, the moment a value became invalid.
+        let beneath: Element<'a, M> = match f.error.or(f.supporting) {
+            // The error message replaces the supporting text rather than joining it.
+            Some(message) => (container(
+                Text::new(message, TypeRole::Caption, r).tint(style::field_support(r, invalid)),
+            )
+            .padding(iced::Padding {
+                top: spacing::XS,
+                bottom: 0.0,
+                left: anatomy::text_field::PADDING,
+                right: anatomy::text_field::PADDING,
+            }))
+            .into(),
+            None => Space::new().into(),
+        };
 
-        // The error message replaces the supporting text rather than joining it.
-        if let Some(message) = f.error.or(f.supporting) {
-            stack = stack.push(
-                container(
-                    Text::new(message, TypeRole::Caption, r).tint(style::field_support(r, invalid)),
-                )
-                .padding(iced::Padding {
-                    top: spacing::XS,
-                    bottom: 0.0,
-                    left: anatomy::text_field::PADDING,
-                    right: anatomy::text_field::PADDING,
-                }),
-            );
-        }
-
-        stack.into()
+        column![filled, indicator, beneath]
+            .width(Length::Fill)
+            .into()
     }
 }

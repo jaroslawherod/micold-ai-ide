@@ -22,7 +22,7 @@
 //! paths cannot exist, so the three concerns live here together.
 
 use super::style;
-use iced::widget::{button, text_input};
+use iced::widget::button;
 use iced::{Background, Color, Theme};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, state, Roles};
@@ -151,53 +151,23 @@ fn the_state_layers_come_from_the_token_scale() {
 // Focus (T026, FR-022)
 // ---------------------------------------------------------------------------------------------
 
-/// A focused text field draws the 3dp `secondary` indicator, and it is distinguishable from hover.
-///
-/// Both mattering together is the point: an indicator that only appears on focus but looks the same
-/// as hover cannot be told apart when an element is both, which is exactly what happens when the
-/// pointer is resting over the field you just tabbed into.
-#[test]
-fn a_focused_text_field_draws_the_focus_indicator() {
-    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
-        let r = tokens::roles(scheme);
-        let theme = style::theme(scheme);
-        let f = style::input(r);
-
-        let focused = f(&theme, text_input::Status::Focused { is_hovered: false });
-        assert_eq!(
-            focused.border.width,
-            state::FOCUS_RING_WIDTH,
-            "{scheme:?}: the focus indicator must be {}dp (contract §5)",
-            state::FOCUS_RING_WIDTH
-        );
-        assert_eq!(
-            focused.border.color,
-            style::color(r.secondary),
-            "{scheme:?}: the focus indicator is drawn in `secondary` (FR-022)"
-        );
-
-        let hovered = f(&theme, text_input::Status::Hovered);
-        assert!(
-            hovered.border.width != focused.border.width
-                || hovered.border.color != focused.border.color,
-            "{scheme:?}: focused and hovered look identical, so a field that is both cannot be read"
-        );
-    }
-}
-
-/// Focus survives the pointer being over the field. `Focused { is_hovered: true }` is the ordinary
-/// case of tabbing to a field the mouse happens to rest on, and losing the indicator there would
-/// make keyboard navigation vanish exactly when the user is also touching the mouse.
-#[test]
-fn focus_stays_visible_while_also_hovered() {
-    let r = tokens::roles(ColorScheme::Light);
-    let theme = style::theme(ColorScheme::Light);
-    let f = style::input(r);
-    let a = f(&theme, text_input::Status::Focused { is_hovered: false });
-    let b = f(&theme, text_input::Status::Focused { is_hovered: true });
-    assert_eq!(a.border.width, b.border.width);
-    assert_eq!(a.border.color, b.border.color);
-}
+// A filled field's focus lives in its active indicator, not in a border (§7.7).
+//
+// Two tests stood here and asserted feature 017's affordance: a 3dp `secondary` border on the
+// input when focused, distinguishable from hover. Feature 018 replaced that outright — the filled
+// container has **no border at all**, so there is nothing left to recolour, and focus is the bottom
+// indicator thickening to 2dp in the accent.
+//
+// They were deleted rather than adjusted, and they are recorded here because they had stopped
+// meaning anything some time before they were noticed: they exercised `style::input`, and once
+// `TextField` moved onto `field_input` and feature 021 moved the type-ahead onto `TextField`,
+// nothing in the application called it. Both tests stayed green while asserting the appearance of
+// a control that no longer existed.
+//
+// The surviving intent — focus must be readable, and readable *while the pointer is also over the
+// field* — is asserted in `text_field_anatomy.rs`. It holds by construction now rather than by
+// care: the indicator is a sibling of the input and takes no hover state, so there is no state in
+// which hover can mask focus.
 
 // ---------------------------------------------------------------------------------------------
 // Disabled (T027, FR-023)

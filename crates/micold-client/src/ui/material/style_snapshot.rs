@@ -120,8 +120,8 @@ fn render_all() -> String {
             }
         }
 
-        // --- Text input: including the focused state -------------------------
-        let input = style::input(r);
+        // --- Text input: the filled field's input, which draws no chrome of its own ---
+        let input = style::field_input(r);
         for (st_name, st) in [
             ("active", text_input::Status::Active),
             ("hovered", text_input::Status::Hovered),
