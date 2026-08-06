@@ -37,11 +37,13 @@ fn input<'a>() -> Element<'a, Message> {
     text_input("", "").into()
 }
 
-/// The other control FR-031c names. Wrapping it must work identically — the select cannot report
-/// focus, so it is the case that proves the wrapper takes its active state rather than assuming it.
-fn select<'a>(roles: Roles) -> Element<'a, Message> {
+/// The other control FR-031c names — and, since T048, one that composes its **own** `FormField`
+/// rather than arriving bare. Handing it to a second `FormField` would draw two containers and two
+/// indicators, so the builder is returned unbuilt and the assertions run over the composition the
+/// select performs itself, which is the path the application takes.
+fn select<'a>(roles: Roles) -> Select<'a, &'a str, Message> {
     const OPTIONS: &[&str] = &["one", "two"];
-    Select::new(OPTIONS, None, |_| Message::NoOp, roles).into()
+    Select::new(OPTIONS, None, |_| Message::NoOp, roles)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -284,13 +286,14 @@ fn an_empty_slot_takes_no_space() {
 ///
 /// The half a single-control test would not cover. The select is also the control that cannot
 /// report focus, so it is the reason the wrapper takes its active state as a parameter.
+///
+/// The bands are compared against a wrapped text input rather than only against the contract's
+/// number: a container fixed at 56dp satisfies "at least 56dp" no matter what is inside it, so the
+/// height alone would pass even if the select were wearing chrome of its own as well.
 #[test]
 fn a_select_gets_the_same_chrome_as_a_text_input() {
     let r = roles();
-    let wrapped: Element<'_, Message> = FormField::new(select(r), r)
-        .label("Type")
-        .supporting("Pick one")
-        .into();
+    let wrapped: Element<'_, Message> = select(r).label("Type").supporting("Pick one").into();
     let (bounds, _) = layout_of(wrapped, 400.0);
 
     let want = tokens::density::height(tokens::density::TEXT_FIELD_BASE, tokens::density::STANDARD);
@@ -300,11 +303,42 @@ fn a_select_gets_the_same_chrome_as_a_text_input() {
         bounds.height
     );
 
-    let bare: Element<'_, Message> = FormField::new(select(r), r).label("Type").into();
-    let (bare_bounds, _) = layout_of(bare, 400.0);
+    let bare: Element<'_, Message> = select(r).label("Type").into();
+    let (bare_bounds, bare_bands) = layout_of(bare, 400.0);
     assert!(
         bounds.height > bare_bounds.height,
         "supporting text beneath a select added no height"
+    );
+
+    // Same chrome as the text input gets, band for band — one container and one indicator, not two.
+    //
+    // The *shape* rather than the heights, and that is the whole point of this assertion: the
+    // container is `Length::Fixed`, so a field carrying a second container inside it measures 56dp
+    // exactly like one that is not. Only the tree tells them apart.
+    let (input_bounds, input_bands) =
+        layout_of(FormField::new(input(), r).label("Type").into(), 400.0);
+    assert_eq!(
+        tree_shape(&select(r).label("Type").into()),
+        tree_shape(&FormField::new(input(), r).label("Type").into()),
+        "a labelled select's tree is not the shape a labelled text input's is — the select is \
+         wearing chrome the text input does not (a `FormField` around a control that composes its \
+         own draws two containers and two indicators, and its content overflows the fixed 56dp \
+         container it is nested in)"
+    );
+    assert_eq!(
+        (bare_bounds.height, bare_bands[0].height, bare_bands[1].height),
+        (
+            input_bounds.height,
+            input_bands[0].height,
+            input_bands[1].height
+        ),
+        "a labelled select's bands are {:?} against the text input's {:?}",
+        (bare_bounds.height, bare_bands[0].height, bare_bands[1].height),
+        (
+            input_bounds.height,
+            input_bands[0].height,
+            input_bands[1].height
+        )
     );
 }
 

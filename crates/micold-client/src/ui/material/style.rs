@@ -201,7 +201,7 @@ pub fn menu_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
 /// The closed field of a `pick_list`-backed `Select` (feature 013): an outlined box matching
 /// [`input`]'s look, with the outline switching to `primary` while hovered or open.
 pub fn select_field(r: Roles) -> impl Fn(&Theme, pick_list::Status) -> pick_list::Style {
-    move |_theme, _status| pick_list::Style {
+    move |_theme, status| pick_list::Style {
         text_color: color(r.on_surface),
         placeholder_color: color(r.on_surface_variant),
         handle_color: color(r.on_surface_variant),
@@ -209,12 +209,24 @@ pub fn select_field(r: Roles) -> impl Fn(&Theme, pick_list::Status) -> pick_list
         // belong to `FormField`, and a select that kept its own box would draw a second outline
         // inside the filled container (FR-031c).
         //
-        // Its open state used to be expressed here, as a 3dp `secondary` border. That affordance is
-        // gone with the border — §7.7 gives a filled field a bottom indicator instead, and
-        // `FormField` draws it. The select still cannot report focus, which is why the wrapper takes
-        // its active state as a parameter (FR-043a); `pick_list` does not tell a parent when it
-        // opens either, so a caller that tracks it passes `Select::active`.
-        background: Background::Color(Color::TRANSPARENT),
+        // Its open state used to be a 3dp `secondary` border. That affordance is gone with the
+        // border — §7.7 gives a filled field a bottom indicator instead, and `FormField` draws it.
+        //
+        // But the indicator cannot answer for this control: `pick_list` reports `Opened` here and
+        // to no parent, so `Select::active` has to be supplied by a caller that tracks openness,
+        // and none does (FR-043a, accepted gap #3). Deleting the border and stopping there left
+        // opening the list with *no* feedback at all, which is worse than the affordance it
+        // replaced.
+        //
+        // So the state layer answers instead, which is what §5 asks of every interactive surface
+        // anyway (FR-021): the content colour over the container at the state's opacity. It needs
+        // no parent to know anything, and it composes with the indicator rather than standing in
+        // for it.
+        background: Background::Color(match status {
+            pick_list::Status::Opened { .. } => state_fill(color(r.on_surface), state::PRESSED),
+            pick_list::Status::Hovered => state_fill(color(r.on_surface), state::HOVER),
+            pick_list::Status::Active => Color::TRANSPARENT,
+        }),
         border: Border {
             color: Color::TRANSPARENT,
             width: 0.0,

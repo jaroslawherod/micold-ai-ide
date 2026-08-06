@@ -51,12 +51,15 @@ pub fn modal<'a>(
             // the arrangement FR-031a replaces.
             .label("Type");
 
-            let ticket = TextField::new("ABC-123", &form.ticket, r)
+            // No placeholder: §7.7's migration table moves the whole of the old one into the label
+            // and the supporting text. Keeping the example in the placeholder as well would print
+            // it twice on an empty field — once greyed inside the container and once beneath it.
+            let ticket = TextField::new("", &form.ticket, r)
                 .label("Ticket")
                 .supporting("Optional — e.g. ABC-123")
                 .on_input(Message::AddWorktreeTicketChanged);
 
-            let name = TextField::new("login page", &form.name, r)
+            let name = TextField::new("", &form.name, r)
                 .label("Name")
                 .supporting("e.g. login page")
                 .on_input(Message::AddWorktreeNameChanged)
@@ -150,7 +153,10 @@ fn source_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
 
 /// The existing-branch picker (feature 016, FR-011–FR-013).
 fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
-    let mut col = column![Text::new("Branch", TypeRole::Label, r).muted()].spacing(spacing::XS);
+    // No free-standing label: the type-ahead carries its own now, inside its container, the same
+    // way the `Type` select does (§7.7, FR-031a). This was the last field in the application still
+    // showing its name above the box while every other one showed it inside.
+    let mut col = column![].spacing(spacing::XS);
 
     if form.candidates.is_empty() {
         // Never an empty control with no explanation (FR-013).
@@ -212,6 +218,7 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
             r,
         )
         .placeholder("Search branches…")
+        .label("Branch")
         .open(form.branch_list_open)
         .highlighted(form.branch_highlight)
         .selected(selected)
