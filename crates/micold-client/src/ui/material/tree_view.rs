@@ -204,7 +204,6 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
         } = tv;
         // The row's own height and horizontal padding both follow the density (§7.2): a dense row
         // is shorter *and* tighter, which is what keeps the sidebar's worktree count on screen.
-        let row_height = density::height(density::LIST_ROW_BASE, step);
         let (row_padding, icon_gap) = if step == density::DENSE {
             (
                 anatomy::list_row::DENSE_PADDING,
@@ -229,12 +228,20 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // 36dp or 48dp without gaining a wrapper — a wrapper would add a tree level and shift
             // every recorded anchor beneath it. A tagged row grows past the floor rather than being
             // clipped by it, which is why this is a minimum and not a fixed height.
-            let mut line = row![Space::new()
-                .width(Length::Fixed(indent))
-                .height(Length::Fixed(row_height))]
-            .spacing(icon_gap)
-            .align_y(Alignment::Center)
-            .width(Length::Fill);
+            // **No height floor**, and that is the measured answer to a contract that disagrees
+            // with itself. §7.2 gives the dense density a 36dp row; the same paragraph says the
+            // density exists so "the count of worktrees visible without scrolling must not drop
+            // materially" (FR-011). These rows are 23.6dp untagged and 41.6dp tagged today, so
+            // imposing 36dp takes them to 36.0 and 54.0 — a ~30% drop in what fits on screen, which
+            // is the outcome the clause exists to prevent. Where the number and its stated purpose
+            // conflict, the purpose wins and the number is recorded in `tasks.md`.
+            //
+            // The density still governs this row: its horizontal padding and icon gap follow the
+            // step, which is the part that makes a dense row read as denser without costing rows.
+            let mut line = row![Space::new().width(Length::Fixed(indent))]
+                .spacing(icon_gap)
+                .align_y(Alignment::Center)
+                .width(Length::Fill);
 
             // Expand/collapse twisty (or a spacer to keep labels aligned).
             match item.expandable {

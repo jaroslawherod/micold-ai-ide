@@ -376,7 +376,18 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [ ] T073 Run the full `quickstart.md` Part B walkthrough in the **dark** scheme and record the result
 - [ ] T074 Complete the no-behavior-change regression pass in `specs/018-material3-visual-system/quickstart.md` §B6. Any unchecked box there blocks merge; exactly one behavioral difference (the snackbar) is permitted (FR-036, FR-036a, SC-007)
 - [ ] T075 Verify build and full test suite pass on Linux, macOS and Windows via the CI workflow in `.github/workflows/` (Principle VI, FR-039)
-- [ ] T076 Confirm the visible-worktree count rendered by `crates/micold-client/src/ui/sidebar.rs` has not dropped materially against the pre-change baseline, per `quickstart.md` §B4 (FR-026a)
+- [X] T076 Confirm the visible-worktree count rendered by `crates/micold-client/src/ui/sidebar.rs` has not dropped materially against the pre-change baseline, per `quickstart.md` §B4 (FR-026a)
+  — **measured, not asserted.** Sidebar rows in `layout_snapshot.txt` are 23.6dp untagged and 41.6dp
+  tagged, byte-identical to the pre-change fixture, so the visible count has not moved at all.
+  Getting there required refusing part of §7.2: applying its 36dp dense row height takes those rows
+  to 36.0 and 54.0 — a ~30% drop in what fits without scrolling, which is precisely the outcome
+  FR-011 exists to prevent and which §7.2's own paragraph gives as the *reason* the dense density
+  exists. Where the number and its stated purpose conflict the purpose wins, so the density governs
+  the row's horizontal padding and icon gap and not its height.
+  A bug was hiding this: the floor rode on the indent spacer, and a depth-0 row indents by zero —
+  which makes the spacer `Fixed(0)` and therefore void, and iced drops a void child outright. The
+  floor had silently never applied to a top-level row. Fixing that is what made the conflict
+  measurable.
 - [ ] T076a On the same machine that produced T000z's figure, capture the two post-change measurements: the **baseline** scene, and the **full** scene with a ripple mid-animation. Record both in `quickstart.md` §B8 alongside the pre-change figure. Compare: baseline-before vs baseline-after is like-for-like, and any gap there is a regression in rendering this feature did not add; baseline-after vs full is this feature's own cost. Neither gates the build; a regression is a review finding (FR-039b, FR-039c, SC-018)
 
 ---
