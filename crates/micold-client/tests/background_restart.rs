@@ -2,7 +2,7 @@
 
 mod support;
 
-use micold_client::app::{NoticeLevel, Notification, State};
+use micold_client::app::State;
 use std::path::{Path, PathBuf};
 use support::{running_session, workspace_with};
 
@@ -46,15 +46,17 @@ fn returning_to_project_notifies_the_user_and_clears_markers() {
     let a_id = st.workspace.sessions[Path::new("/a")][0].id;
     st.note_background_restart(a_id);
 
-    assert!(st.notifications.is_empty());
+    assert!(st.notify.visible().is_none());
     assert!(st.switch_active(Path::new("/a")));
 
+    let visible = st
+        .notify
+        .visible()
+        .expect("the return notice reached the queue");
+    assert_eq!(visible.level, micold_core::notify::Level::Info);
     assert_eq!(
-        st.notifications,
-        vec![Notification {
-            level: NoticeLevel::Info,
-            message: "A background session was restarted while you were away.".to_string(),
-        }]
+        visible.message,
+        "A background session was restarted while you were away."
     );
     assert!(st.restarted_while_inactive.is_empty());
 

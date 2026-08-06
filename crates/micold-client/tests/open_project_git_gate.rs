@@ -1,6 +1,6 @@
 //! T015 — open-project git-only gate (FR-001a, SC-003a).
 
-use micold_client::app::{Message, NoticeLevel, Notification, State};
+use micold_client::app::{Message, State};
 use micold_core::git::{FakeGit, Git};
 use std::path::Path;
 
@@ -24,17 +24,17 @@ fn non_git_directory_fails_the_gate() {
 #[test]
 fn refusal_message_is_surfaced_to_the_user() {
     let mut state = State::default();
-    assert!(state.notifications.is_empty());
+    assert!(state.notify.visible().is_none());
     state.update(Message::ProjectOpenRefused(
         "Only git repositories can be opened".to_string(),
     ));
-    assert_eq!(
-        state.notifications,
-        vec![Notification {
-            level: NoticeLevel::Error,
-            message: "Only git repositories can be opened".to_string(),
-        }]
-    );
+    let visible = state
+        .notify
+        .visible()
+        .expect("the refusal reached the queue");
+    assert_eq!(visible.level, micold_core::notify::Level::Error);
+    assert_eq!(visible.message, "Only git repositories can be opened");
+    assert_eq!(state.notify.pending(), 0);
     // Not stashed in the modal-owned field that made it unreachable.
     assert!(state.worktree_error.is_none());
 }
@@ -46,8 +46,8 @@ fn refusal_persists_until_dismissed() {
     let mut state = State::default();
     state.update(Message::ProjectOpenRefused("nope".to_string()));
     state.update(Message::WorktreesLoaded(vec![]));
-    assert_eq!(state.notifications.len(), 1);
+    assert!(state.notify.visible().is_some());
 
-    state.update(Message::NotificationDismissed(0));
-    assert!(state.notifications.is_empty());
+    state.update(Message::NotificationDismissed);
+    assert!(state.notify.visible().is_none());
 }

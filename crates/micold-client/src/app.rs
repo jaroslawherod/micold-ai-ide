@@ -14,6 +14,7 @@ use micold_core::naming::{
     derive, dir_name_from_branch, display_name, parse_tags, ConventionalType, DerivedNames,
     NamingError, Tag, WorktreeNaming,
 };
+use micold_core::notify;
 use micold_core::project::{canonicalize_best_effort, Availability, FolderEntry, RenameError};
 use micold_core::selector::Selector;
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
@@ -26,6 +27,7 @@ use micold_core::worktree::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// The labels of the actions revealed under the "Help" menu, in display order.
 ///
@@ -840,7 +842,16 @@ pub enum Message {
     // ---- Global notification surface ----
     /// Dismiss the notification at this index. Out-of-range indices are ignored, so a stale
     /// click delivered after the list shrank is harmless.
-    NotificationDismissed(usize),
+    /// Dismiss the visible notification, promoting the next immediately (FR-032b).
+    ///
+    /// No index: exactly one is visible, so there is nothing to identify. The index this used to
+    /// carry was a position in a stack that no longer exists.
+    NotificationDismissed,
+    /// Time passed while a notification was on screen, in milliseconds.
+    ///
+    /// Subscribed to only while the queue is active (`Queue::is_active`), so nothing ticks at rest
+    /// (SC-017).
+    NotificationsAdvanced(u32),
 
     // ---- Feature 010: daemon connection (client of the daemon-hosted sessions) ----
     /// The daemon connection is up: the binary stores the [`Outbox`] to drive sessions and adopts
@@ -982,7 +993,12 @@ pub struct State {
     /// A message stays until the user dismisses it or it is evicted by newer ones. Nothing
     /// clears these implicitly: a report that vanishes on unrelated activity (a background
     /// worktree re-scan, say) is how these failures became invisible in the first place.
-    pub notifications: Vec<Notification>,
+    /// The notification queue: one visible, the rest waiting (FR-032a).
+    ///
+    /// A `micold_core::notify::Queue` rather than a `Vec` that renders all at once. Which one is
+    /// visible, how long it stays and what is behind it are decisions with no pixels in them, so
+    /// they live in the render-free core and the view draws whatever is currently visible.
+    pub notify: notify::Queue,
     /// How far the worktree sidebar is scrolled, in logical pixels.
     ///
     /// The app bar's elevation derives from this and nothing else (FR-025a) — see
@@ -1100,10 +1116,6 @@ impl State {
         }
     }
 
-    /// The most notifications kept at once. Older ones are dropped rather than growing a
-    /// banner stack tall enough to crowd out the application.
-    const MAX_NOTIFICATIONS: usize = 3;
-
     /// Surface a failed action to the user (see [`Notification`]).
     ///
     /// Use this for anything the user asked for that could not be completed. Do not add a new
@@ -1119,15 +1131,14 @@ impl State {
     }
 
     fn push_notification(&mut self, level: NoticeLevel, message: String) {
-        let notification = Notification { level, message };
-        // Repeating an action that keeps failing should not stack identical banners.
-        if self.notifications.contains(&notification) {
-            return;
-        }
-        self.notifications.push(notification);
-        if self.notifications.len() > Self::MAX_NOTIFICATIONS {
-            self.notifications.remove(0);
-        }
+        // Dedup and the retention cap moved into the queue with the rest of the discipline, so
+        // this is now only the level translation: `NoticeLevel` stays the *banner's* vocabulary
+        // (FR-032c keeps that a separate component) while the queue speaks the core's.
+        let level = match level {
+            NoticeLevel::Info => notify::Level::Info,
+            NoticeLevel::Error => notify::Level::Error,
+        };
+        self.notify.push(notify::Notification::new(level, message));
     }
 
     /// Open a modal overlay, closing any lightweight popover first. The two are meant to be
@@ -1881,10 +1892,9 @@ impl State {
                 self.overlay = Overlay::None;
                 self.settings_draft = None;
             }
-            Message::NotificationDismissed(index) => {
-                if index < self.notifications.len() {
-                    self.notifications.remove(index);
-                }
+            Message::NotificationDismissed => self.notify.dismiss(),
+            Message::NotificationsAdvanced(elapsed_ms) => {
+                self.notify.advance(Duration::from_millis(u64::from(elapsed_ms)));
             }
 
             // Performed by the binary at the I/O boundary (needs the home directory + a

@@ -33,6 +33,7 @@ mod resize_handle;
 mod ripple;
 mod scrollable;
 mod select;
+mod snackbar;
 /// The one place design tokens become rendering types. Internal by intent (FR-002): a feature
 /// module that could reach it could render an off-spec variant of a shared component, which is
 /// exactly the drift this feature removes. `pub(crate)` rather than private only because the
@@ -96,6 +97,7 @@ pub use resize_handle::ResizeHandle;
 pub use ripple::Ripple;
 pub use scrollable::Scrollable;
 pub use select::Select;
+pub use snackbar::Snackbar;
 pub use surface::{Kind as SurfaceKind, Surface};
 pub use tag::Tag;
 #[cfg(test)]

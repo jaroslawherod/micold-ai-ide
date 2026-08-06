@@ -1,83 +1,143 @@
-//! The global notification surface: the shared replacement for the per-feature error fields
-//! whose single modal-specific render sites became unreachable as the UI grew. Feature 005
-//! FR-017 (a session that fails to start must tell the user) is the first consumer.
+//! Notifications reach the queue and can be cleared (feature 018, T053 — FR-032a, FR-032b).
+//!
+//! # What this file used to assert
+//!
+//! Up to three banners visible at once, dismissed by index, oldest dropped at the cap. That was the
+//! behaviour before feature 018 and it is the **single sanctioned behaviour change** in a feature
+//! whose rule is otherwise appearance-only (FR-036a): Material's snackbar shows exactly one and
+//! queues the rest. The old assertions were not wrong, they were about a design that no longer
+//! exists, so they are replaced rather than adjusted.
+//!
+//! # What it asserts now
+//!
+//! The *client side* of the queue: that the application's two entry points reach it, that the
+//! dismissal message clears the visible one, and that dedup survives at this boundary. The queue's
+//! own discipline — ordering, timing by severity, the cap, promotion on dismissal — is
+//! `micold-core/tests/notify_queue.rs`, where it needs no renderer and no `State`.
 
-use micold_client::app::{Message, NoticeLevel, Notification, State};
+use micold_client::app::{Message, State};
+use micold_core::notify::Level;
 
+/// Nothing is shown until something is reported.
 #[test]
-fn a_new_state_has_nothing_to_report() {
-    assert!(State::default().notifications.is_empty());
+fn a_fresh_application_shows_nothing() {
+    let state = State::default();
+    assert!(state.notify.visible().is_none());
+    assert_eq!(state.notify.pending(), 0);
 }
 
-/// FR-017: a failed session start must be surfaced, not swallowed. The failure is reported by
-/// the binary at the PTY boundary; this covers the state it produces.
+/// Both entry points reach the queue, at their own severities.
 #[test]
-fn fr_017_failed_session_start_surfaces_an_error() {
-    let mut st = State::default();
-    st.notify_error("Could not start session: No such file or directory (os error 2)");
+fn both_entry_points_reach_the_queue() {
+    let mut error = State::default();
+    error.notify_error("could not create the worktree");
+    assert_eq!(error.notify.visible().map(|n| n.level), Some(Level::Error));
 
-    assert_eq!(
-        st.notifications,
-        vec![Notification {
-            level: NoticeLevel::Error,
-            message: "Could not start session: No such file or directory (os error 2)".to_string(),
-        }]
-    );
+    let mut info = State::default();
+    info.notify_info("a background session was restarted");
+    assert_eq!(info.notify.visible().map(|n| n.level), Some(Level::Info));
 }
 
+/// One at a time (FR-032a). The rest wait rather than stacking up the screen.
 #[test]
-fn info_and_error_are_distinguishable() {
-    let mut st = State::default();
-    st.notify_info("Session restarted while you were away.");
-    st.notify_error("Could not start session: boom");
-
-    let levels: Vec<_> = st.notifications.iter().map(|n| n.level).collect();
-    assert_eq!(levels, vec![NoticeLevel::Info, NoticeLevel::Error]);
-}
-
-/// Clicking Dismiss removes exactly that banner and leaves the others.
-#[test]
-fn dismissing_removes_only_the_chosen_notification() {
+fn only_one_is_visible_and_the_rest_wait() {
     let mut st = State::default();
     st.notify_error("first");
     st.notify_error("second");
-    st.notify_error("third");
+    st.notify_info("third");
 
-    st.update(Message::NotificationDismissed(1));
-
-    let messages: Vec<_> = st.notifications.iter().map(|n| &n.message).collect();
-    assert_eq!(messages, vec!["first", "third"]);
+    assert_eq!(
+        st.notify.visible().map(|n| n.message.as_str()),
+        Some("first")
+    );
+    assert_eq!(st.notify.pending(), 2);
 }
 
-/// A click delivered after the list already shrank must not panic or remove a bystander.
+/// Dismissal clears the visible one and promotes the next immediately (FR-032b).
+///
+/// No index any more: exactly one is visible, so there is nothing to identify. The index this
+/// message used to carry was a position in a stack that no longer exists.
 #[test]
-fn dismissing_an_out_of_range_index_is_a_no_op() {
+fn dismissing_promotes_the_next_one() {
     let mut st = State::default();
-    st.notify_error("only");
+    st.notify_error("first");
+    st.notify_error("second");
 
-    st.update(Message::NotificationDismissed(7));
+    st.update(Message::NotificationDismissed);
 
-    assert_eq!(st.notifications.len(), 1);
+    assert_eq!(
+        st.notify.visible().map(|n| n.message.as_str()),
+        Some("second"),
+        "dismissing left a gap instead of promoting what was waiting"
+    );
+    assert_eq!(st.notify.pending(), 0);
 }
 
-/// Retrying an action that keeps failing must not stack identical banners.
+/// Dismissing the last one leaves nothing, and dismissing nothing is harmless — the message can
+/// arrive just after a timeout cleared the same notification.
 #[test]
-fn repeating_the_same_failure_does_not_duplicate_it() {
+fn dismissing_the_last_one_is_safe_and_so_is_dismissing_none() {
     let mut st = State::default();
-    st.notify_error("Could not start session: boom");
-    st.notify_error("Could not start session: boom");
+    st.notify_info("only");
+    st.update(Message::NotificationDismissed);
+    assert!(st.notify.visible().is_none());
 
-    assert_eq!(st.notifications.len(), 1);
+    st.update(Message::NotificationDismissed);
+    assert!(st.notify.visible().is_none());
 }
 
-/// Unrelated failures in a row must not grow an unbounded banner stack.
+/// Dedup survives the move (FR-032a). Repeating an action that keeps failing must not queue the
+/// same sentence behind itself.
 #[test]
-fn the_notification_stack_is_bounded_keeping_the_newest() {
+fn a_repeated_failure_does_not_queue_behind_itself() {
     let mut st = State::default();
-    for i in 0..6 {
-        st.notify_error(format!("failure {i}"));
-    }
+    st.notify_error("could not reach the daemon");
+    st.notify_error("could not reach the daemon");
 
-    let messages: Vec<_> = st.notifications.iter().map(|n| n.message.clone()).collect();
-    assert_eq!(messages, vec!["failure 3", "failure 4", "failure 5"]);
+    assert_eq!(st.notify.pending(), 0);
+}
+
+/// Time clears the visible one, and the application drives that clock explicitly — nothing here
+/// sleeps.
+#[test]
+fn elapsed_time_clears_the_visible_notification() {
+    let mut st = State::default();
+    st.notify_info("a background session was restarted");
+
+    let ms = Level::Info.duration().as_millis() as u32;
+    st.update(Message::NotificationsAdvanced(ms));
+
+    assert!(
+        st.notify.visible().is_none(),
+        "an info notice outlived its own duration"
+    );
+}
+
+/// An error outlasts an info, so a failure is not as easy to miss as a success (FR-032b).
+#[test]
+fn an_error_survives_an_info_s_duration() {
+    let mut st = State::default();
+    st.notify_error("could not create the worktree");
+
+    st.update(Message::NotificationsAdvanced(
+        Level::Info.duration().as_millis() as u32,
+    ));
+    assert!(
+        st.notify.visible().is_some(),
+        "the error was cleared after the info duration — it is being timed by the wrong severity"
+    );
+}
+
+/// The clock is only wanted while something is on screen (SC-017). A timer running at rest would
+/// hold the render loop awake for the life of the process.
+#[test]
+fn the_queue_wants_the_clock_only_while_it_has_something_to_show() {
+    let mut st = State::default();
+    assert!(!st.notify.is_active());
+
+    st.notify_error("something");
+    assert!(st.notify.is_active());
+
+    st.update(Message::NotificationDismissed);
+    assert!(!st.notify.is_active());
 }

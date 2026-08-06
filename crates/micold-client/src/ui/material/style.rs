@@ -165,6 +165,22 @@ pub fn surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
     elevated(r, elevation::CARD, shape::MEDIUM)
 }
 
+/// The snackbar: the one deliberately **inverted** surface in the application (§7.8).
+///
+/// `inverse_surface` is light-on-dark in a light scheme and dark-on-light in a dark one, which is
+/// what makes a snackbar read as an interruption rather than as another panel. Elevation 3 and the
+/// extra-small corner; its text and action take the paired `inverse_*` roles, which exist only to
+/// stay legible against this container.
+pub fn snackbar(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.inverse_surface))),
+        text_color: Some(color(r.inverse_on_surface)),
+        border: radius(shape::EXTRA_SMALL),
+        shadow: elevation_shadow(r, elevation::SNACKBAR),
+        ..container::Style::default()
+    }
+}
+
 /// A dialog surface. Elevation 3 and the extra-large 28dp corner — both a step up from feature
 /// 003's 16dp and borrowed outline, and both what makes a dialog read as the frontmost thing on
 /// screen (FR-018, FR-028).

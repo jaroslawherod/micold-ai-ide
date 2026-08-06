@@ -473,7 +473,13 @@ mod tests {
             .into_iter()
             .find(|e| e.name == "Anchor")
             .expect("cdk/overlay.rs declares `Anchor`");
-        assert_eq!(anchor.variants, vec!["Point", "TopEnd", "Center"]);
+        assert_eq!(
+            anchor.variants,
+            vec!["Point", "TopEnd", "Center", "BottomCenter"],
+            "the scanner is meant to read a struct-like variant's *name* and skip its fields — \
+             `BottomCenter {{ bottom }}` was added for the snackbar, and if its field leaked in as \
+             a variant this list would say so"
+        );
     }
 
     /// Only the free helpers, not the builder steps they share.
