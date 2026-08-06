@@ -12,6 +12,12 @@ mod confirm_session_remove;
 /// site. `tests/material_boundary.rs` scans the showcase at the same zero budgets it holds these
 /// feature modules to, so the wider visibility cannot become a way to style a widget by hand.
 pub(crate) mod material;
+/// The reference scene's ripple, for the frame probe (feature 018, FR-039b).
+///
+/// Named individually rather than by opening the module, which stays `pub(crate)`. The binary
+/// composes the `full` measurement scene and a ripple only starts from a press, so it needs the one
+/// traversal that can reach a ripple's per-instance state — and nothing else from the library.
+pub use material::ripple_pulse;
 pub use material::target_offset_delta;
 mod project_selector;
 mod rename;

@@ -41,7 +41,8 @@ use micold_core::worktree::{BranchOrigin, CreateMode};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 /// How often the OS light/dark preference is polled while the window has input focus
@@ -204,6 +205,16 @@ struct App {
     scene_ready: bool,
     /// Frames spent so far trying to compose the scene, against [`SCENE_COMPOSE_BUDGET`].
     scene_frames: usize,
+    /// Ripples the last traversal found mid-animation, for [`Scene::Full`]'s half of the check.
+    ///
+    /// Observed rather than assumed. The probe asks for a ripple every frame of a `full` run, but
+    /// what it records is what the traversal *found* — a scene that claimed a ripple because it had
+    /// requested one would put a baseline figure in the full slot, which is the specific mistake
+    /// `Scene::check` exists to prevent.
+    ///
+    /// Shared with the traversal rather than delivered as a message, because a message would make
+    /// the probe compose an extra view per frame and count it. See `material::ripple_pulse`.
+    ripples_animating: Arc<AtomicUsize>,
 }
 
 /// The measurement run this process was asked for, or `None` for an ordinary launch.
@@ -276,11 +287,21 @@ fn scene_facts(app: &App) -> SceneFacts {
         running_sessions,
         dialog_open: app.core.overlay != Overlay::None,
         context_menu_open: app.core.terminal_context_menu.is_some(),
-        // No ripple exists yet — it arrives with this feature's own tasks. Until then the `full`
-        // scene cannot be composed, and `Scene::check` refuses it rather than reporting a figure
-        // for a scene that is really the baseline.
-        ripple_animating: false,
+        ripple_animating: app.ripples_animating.load(Ordering::Relaxed) > 0,
     }
+}
+
+/// Keep a ripple running and report how many there are (FR-039b).
+///
+/// Issued on every frame of a [`Scene::Full`] run — during composition *and* during measurement.
+/// A ripple lives about half a second, so one pressed while the scene was being composed would
+/// have settled long before the 300th counted frame, and most of the run would be measuring the
+/// baseline under the full scene's name. The traversal presses only what it finds idle, so this
+/// keeps exactly one going rather than restarting it.
+fn pulse_ripples(found: Arc<AtomicUsize>) -> Task<Message> {
+    // `discard`, so the traversal yields no message: see `material::ripple_pulse` for why a message
+    // here would corrupt the very figure this scene exists to produce.
+    iced::advanced::widget::operate(micold_client::ui::ripple_pulse(found)).discard()
 }
 
 /// Drive the window toward the reference scene (FR-039b).
@@ -544,6 +565,7 @@ fn boot() -> (App, Task<Message>) {
             probe: probe_config().map(|config| RefCell::new(config.probe())),
             scene_ready: false,
             scene_frames: 0,
+            ripples_animating: Arc::new(AtomicUsize::new(0)),
         },
         // Ask for the initial window size up front: `resize_events` only fires on *changes*, so
         // without this the first context menu before any resize would have nothing to clamp
@@ -646,14 +668,27 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     };
     // A scene run (FR-039b). Drive the window toward the scene, and do not let the probe count a
     // single frame until the scene it claims to be measuring is actually the one on screen.
+    // The full scene is the baseline *plus a ripple mid-animation*, so the ripple has to outlive
+    // composition — see `pulse_ripples`.
+    let pulse = if scene == Scene::Full {
+        Some(pulse_ripples(Arc::clone(&app.ripples_animating)))
+    } else {
+        None
+    };
     if app.scene_ready {
-        return task;
+        return match pulse {
+            Some(pulse) => Task::batch([task, pulse]),
+            None => task,
+        };
     }
     app.scene_frames += 1;
     if scene.check(&scene_facts(app)).is_ok() {
         app.scene_ready = true;
         eprintln!("frame probe: {scene:?} scene composed; measuring.");
-        return task;
+        return match pulse {
+            Some(pulse) => Task::batch([task, pulse]),
+            None => task,
+        };
     }
     if app.scene_frames > SCENE_COMPOSE_BUDGET {
         // Loud, and with the reason: an unattended run that quietly measured a half-composed window
@@ -665,7 +700,9 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
         eprintln!("{why}");
         std::process::exit(3);
     }
-    Task::batch([task, compose_scene(app)])
+    let mut steps = vec![task, compose_scene(app)];
+    steps.extend(pulse);
+    Task::batch(steps)
 }
 
 /// Snapshot the currently open overlay (and its draft) so it can be rendered while it fades out.
@@ -3032,6 +3069,7 @@ mod tests {
             probe: None,
             scene_ready: false,
             scene_frames: 0,
+            ripples_animating: Arc::new(AtomicUsize::new(0)),
         };
 
         let _ = update_inner(&mut app, Message::WindowFocusChanged(false));
@@ -3074,6 +3112,7 @@ mod tests {
             probe: None,
             scene_ready: false,
             scene_frames: 0,
+            ripples_animating: Arc::new(AtomicUsize::new(0)),
         };
         assert_eq!(app.last_grid, None);
 
@@ -3126,6 +3165,7 @@ mod tests {
             probe: None,
             scene_ready: false,
             scene_frames: 0,
+            ripples_animating: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -3443,6 +3483,7 @@ mod tests {
             probe: None,
             scene_ready: false,
             scene_frames: 0,
+            ripples_animating: Arc::new(AtomicUsize::new(0)),
         };
 
         assert_eq!(connection_status(&app), ConnectionStatus::Connected);

@@ -254,18 +254,75 @@ scene's true cost.
       **A change in `p95` below ~0.02 ms is noise on this machine.** `mean` varies by ~8% run to
       run and `max` by ~15%, so neither should be read alone.
 
-- [ ] **2 — baseline, post-change** (T076a). Same machine, same profile, same scene as 1.
+- [X] **2 — baseline, post-change** (T076a). Same machine, same profile, same scene as 1.
 
-      Machine: ______________  Date: __________  Frame time: __________
+      Machine: AMD Ryzen 7 260 (16 threads) / Radeon 780M, Ubuntu 26.04, Wayland/GNOME, debug build
+      Date: 2026-08-06
+      Frame time: 300 frames — mean 0.89 ms, p95 1.15 ms, max 1.47 ms
 
-- [ ] **3 — full scene, post-change** (T076a). Same machine, same profile as 1.
+      Three runs, as for figure 1. The `p95` did not move at all between them:
 
-      Machine: ______________  Date: __________  Frame time: __________
+      | run | mean | p95 | max |
+      |-----|------|-----|-----|
+      | 1 | 0.86 ms | 1.15 ms | 1.39 ms |
+      | 2 | 0.88 ms | 1.15 ms | 1.35 ms |
+      | 3 | 0.89 ms | 1.15 ms | 1.47 ms |
 
-- [ ] **1 → 2 is the comparison that matters.** Like-for-like: same scene, same machine. A gap here
+- [X] **3 — full scene, post-change** (T076a). Same machine, same profile as 1.
+
+      Machine: AMD Ryzen 7 260 (16 threads) / Radeon 780M, Ubuntu 26.04, Wayland/GNOME, debug build
+      Date: 2026-08-06
+      Frame time: 300 frames — mean 0.91 ms, p95 1.16 ms, max 1.42 ms
+
+      | run | mean | p95 | max |
+      |-----|------|-----|-----|
+      | 1 | 0.83 ms | 1.11 ms | 1.35 ms |
+      | 2 | 0.79 ms | 1.12 ms | 1.26 ms |
+      | 3 | 0.91 ms | 1.16 ms | 1.42 ms |
+
+- [X] **1 → 2 is the comparison that matters.** Like-for-like: same scene, same machine. A gap here
       is a regression in rendering this feature did not add. **2 → 3** is this feature's own cost —
       expected to be non-zero, and worth knowing rather than fearing.
-- [ ] All three figures recorded in the PR so the comparison is reviewable (SC-018).
+
+      **1 → 2: `p95` 1.07 ms → 1.15 ms, +0.08 ms (+7%).** Above this machine's ~0.02 ms noise
+      floor, and the three post-change runs agree on 1.15 ms exactly, so it is a real cost rather
+      than a slow run. It is composition cost — token lookups, type-role resolution, elevation and
+      shape resolution, and the extra widgets `FormField` puts in the tree — which is precisely
+      what §B8 says this figure is sensitive to. Recorded as a review finding, which is what
+      FR-039c asks for; it does not gate the build.
+
+      **2 → 3: `p95` 1.15 ms → 1.16 ms.** Inside the run-to-run spread, i.e. the ripple costs
+      nothing measurable *here*. Not a claim that the ripple is free: §B8 states this figure is
+      blind to draw cost, and the ripple's cost is almost entirely draw — the band tiling and the
+      quads it fills all land after composition returns. Read 2 → 3 as "the ripple adds no
+      composition cost", and read nothing else into it.
+
+- [X] All three figures recorded in the PR so the comparison is reviewable (SC-018).
+
+**How 2 and 3 were taken.** Under an isolated `XDG_DATA_HOME` / `XDG_RUNTIME_DIR` seeded with a
+catalog holding only the fixture, so the measurement neither read nor wrote the operator's own
+projects and spawned its own daemon rather than talking to a running one. Worth repeating rather
+than improvising: a run against a real catalog opens whatever project was last active, and the
+scene check would pass or fail on it.
+
+    P=/tmp/mc-probe-$(id -u)                         # short: the socket must fit sun_path's 108 bytes
+    mkdir -p $P/data/micold-ai-ide $P/run && chmod 700 $P/run
+    cat > $P/data/micold-ai-ide/projects.json <<JSON
+    {"schema_version":1,"last_active":"$HOME/micold-reference-scene",
+     "projects":[{"path":"$HOME/micold-reference-scene",
+                  "display_name":"micold-reference-scene","is_git_repo":true}]}
+    JSON
+    cargo build -p micold-client -p micold-daemon
+    env XDG_DATA_HOME=$P/data XDG_CONFIG_HOME=$P/config XDG_RUNTIME_DIR=$P/run \
+        WAYLAND_DISPLAY=/run/user/$(id -u)/wayland-0 \
+        MICOLD_DAEMON_BIN=$PWD/target/debug/micold-daemon \
+        MICOLD_FRAME_PROBE=300 MICOLD_FRAME_PROBE_SCENE=baseline \
+        ./target/debug/micold-ai-ide
+
+`WAYLAND_DISPLAY` is given as an absolute path because the compositor's socket lives under the
+*real* runtime dir, which the isolation has just replaced. Run the binary directly rather than
+through `mise run run`: mise keeps its own toolchains under `XDG_DATA_HOME` and tries to reinstall
+them into the empty one.
 
 ### B9. Idle quiescence
 
