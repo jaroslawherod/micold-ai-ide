@@ -30,6 +30,7 @@ pub struct Scrollable<'a, M> {
     height: Option<Length>,
     width: Option<Length>,
     on_scroll: Option<M>,
+    on_scroll_offset: Option<Box<dyn Fn(u32) -> M + 'a>>,
 }
 
 impl<'a, M: Clone + 'a> Scrollable<'a, M> {
@@ -41,6 +42,7 @@ impl<'a, M: Clone + 'a> Scrollable<'a, M> {
             height: None,
             width: None,
             on_scroll: None,
+            on_scroll_offset: None,
         }
     }
 
@@ -58,11 +60,23 @@ impl<'a, M: Clone + 'a> Scrollable<'a, M> {
 
     /// The message emitted whenever the content scrolls.
     ///
-    /// The offset is deliberately not passed on: the only consumer is dismiss-on-scroll, which
-    /// cares *that* the ground moved and not by how much. A caller that receives an offset would
-    /// have to decide what counts as movement, and that decision belongs in one place.
+    /// The offset is deliberately not passed on *here*: dismiss-on-scroll cares only *that* the
+    /// ground moved. A consumer that needs the number asks for it with [`Self::on_scroll_offset`],
+    /// which is a second subscription rather than a change to this one — the two answer different
+    /// questions and folding them together would make every dismissal carry a measurement.
     pub fn on_scroll(mut self, message: M) -> Self {
         self.on_scroll = Some(message);
+        self
+    }
+
+    /// Report the vertical offset as the list scrolls, in whole pixels from the top.
+    ///
+    /// Added for the app bar's elevate-on-scroll (FR-025a): the sidebar is the only scroll region
+    /// beneath the bar, so its offset is the whole of the signal. Rounded and clamped by
+    /// [`crate::app::scroll_offset_px`] before it reaches the caller, so an overscroll bounce or an
+    /// unsettled viewport reads as "at the top" rather than as movement.
+    pub fn on_scroll_offset(mut self, f: impl Fn(u32) -> M + 'a) -> Self {
+        self.on_scroll_offset = Some(Box::new(f));
         self
     }
 }
@@ -83,7 +97,14 @@ impl<'a, M: Clone + 'a> From<Scrollable<'a, M>> for Element<'a, M> {
         if let Some(width) = s.width {
             widget = widget.width(width);
         }
-        if let Some(message) = s.on_scroll {
+        // One subscription, because the rendering stack gives a scrollable one. The offset form
+        // wins when both are set: it carries strictly more information, and its reducer arm runs
+        // the dismissal too, so nothing is lost by preferring it.
+        if let Some(f) = s.on_scroll_offset {
+            widget = widget.on_scroll(move |viewport| {
+                f(crate::app::scroll_offset_px(viewport.absolute_offset().y))
+            });
+        } else if let Some(message) = s.on_scroll {
             widget = widget.on_scroll(move |_| message.clone());
         }
         widget.into()

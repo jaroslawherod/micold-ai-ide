@@ -67,6 +67,9 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let switcher = ProjectSwitcherTrigger::new(switcher_label, Message::ProjectSwitcherToggled, r);
     let menu = MenuTrigger::new(Icon::Menu, Message::HelpMenuToggled, r);
     Toolbar::new(meta.name, r)
+        // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from
+        // the sidebar's offset rather than stored, so nothing else can set it.
+        .elevated(state.app_bar_elevated())
         .action(switcher)
         .action(menu)
         .into()

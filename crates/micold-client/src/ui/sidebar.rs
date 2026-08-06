@@ -140,7 +140,11 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // Scrolling the list is the third dismissal trigger (feature 017, FR-009): a menu opened from
     // a row is stale once the rows have moved. Reported unconditionally — whether anything closes
     // is the reducer's decision, taken through the shared rule.
-    .on_scroll(Message::ScrolledBeneathOverlay)
+    // Reports the offset rather than a bare notification: the app bar's elevation derives from it
+    // (FR-025a), and the sidebar is the only scroll region beneath the bar. The reducer runs the
+    // dismissal from this message too, so the third dismissal trigger (feature 017, FR-009) is
+    // unchanged — a scrollable gets one subscription, not two.
+    .on_scroll_offset(Message::SidebarScrolled)
     .into();
 
     // Minimal left/right padding to maximize name/tag width (FR-009); a little vertical breathing

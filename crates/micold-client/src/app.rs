@@ -627,6 +627,12 @@ pub enum Message {
     /// [`micold_core::overlay::Trigger::ScrollBeneath`]. Emitted unconditionally by the scrollable
     /// that moved; deciding whether anything closes is the reducer's job, via the shared rule.
     ScrolledBeneathOverlay,
+    /// The worktree sidebar scrolled to this vertical offset.
+    ///
+    /// Carries the offset rather than being a bare notification, because the app bar's elevation
+    /// derives from it (FR-025a) — and the sidebar is the only scroll region beneath the bar, so it
+    /// is the only thing that can answer "is content passing under it".
+    SidebarScrolled(u32),
     /// A dialog has finished animating out (feature 017, FR-011). Emitted by the `Modal` component
     /// itself, which owns the transition, so the binary can release the snapshot it was rendering
     /// from ([`ClosingOverlay`]). The binary used to watch a central progress value for this; the
@@ -977,6 +983,11 @@ pub struct State {
     /// clears these implicitly: a report that vanishes on unrelated activity (a background
     /// worktree re-scan, say) is how these failures became invisible in the first place.
     pub notifications: Vec<Notification>,
+    /// How far the worktree sidebar is scrolled, in logical pixels.
+    ///
+    /// The app bar's elevation derives from this and nothing else (FR-025a) — see
+    /// [`Self::app_bar_elevated`] for why a second source would be a defect rather than a feature.
+    pub sidebar_scroll_offset: u32,
     /// Whether the top-bar project switcher panel is open. Mutually exclusive with
     /// `help_menu_open`.
     pub project_switcher_open: bool,
@@ -1035,11 +1046,58 @@ pub struct State {
     pub forget_target: Option<PathBuf>,
 }
 
+/// The sidebar's reported offset as the app bar reads it: whole pixels, never above the top.
+///
+/// Whole pixels because [`State`] derives `Eq`, and an `f32` field would take that from every type
+/// that holds one. Nothing is lost — the bar asks only whether anything is under it at all.
+///
+/// Clamped at zero because an overscroll bounce reports *past* the origin, and treating that as
+/// "scrolled" would raise the bar for a gesture that moved content the wrong way. A non-finite
+/// reading is treated the same: it means the viewport has not settled, not that the list moved.
+pub fn scroll_offset_px(reported: f32) -> u32 {
+    if reported.is_finite() && reported > 0.0 {
+        reported.round() as u32
+    } else {
+        0
+    }
+}
+
 impl State {
     /// The color scheme to render, resolved from the user's preference and the OS scheme
     /// (FR-005, FR-007, FR-018). See [`micold_core::theme::resolve`].
     pub fn color_scheme(&self) -> ColorScheme {
         resolve(self.theme_pref, self.system_scheme)
+    }
+
+    /// Whether the app bar sits raised over content passing beneath it (FR-025a, contract §7.1).
+    ///
+    /// **Derived, never stored.** The flag exists only as a reading of the sidebar's offset, so
+    /// there is no second field for an unrelated message to forget to update — which is how a bar
+    /// ends up raised or flat according to whichever write happened last.
+    ///
+    /// The sidebar is the only scroll region beneath the bar, which is what makes one offset the
+    /// whole answer. A bar that also raised itself for the terminal's scrollback would flicker
+    /// between states that have nothing to do with what is under it.
+    pub fn app_bar_elevated(&self) -> bool {
+        self.sidebar_scroll_offset > 0
+    }
+
+    /// Close the transient popovers when the ground moves under them (FR-009, FR-017).
+    ///
+    /// Asks the shared rule rather than deciding here: a non-modal surface is transient and the
+    /// ground moving under it means the user has moved on, while a dialog is anchored to nothing
+    /// and must survive it. Shared by the two messages that can report a scroll so the rule has one
+    /// caller-visible answer rather than two that can drift.
+    fn dismiss_on_scroll_beneath(&mut self) {
+        use micold_core::overlay::{dismisses, Surface as OverlaySurface, Trigger};
+        if dismisses(OverlaySurface::NonModal, Trigger::ScrollBeneath) {
+            self.help_menu_open = false;
+            self.project_switcher_open = false;
+            self.sidebar_filter_open = false;
+            self.project_menu_open = None;
+            self.worktree_menu_open = None;
+            self.session_menu_open = None;
+        }
     }
 
     /// The most notifications kept at once. Older ones are dropped rather than growing a
@@ -1375,20 +1433,14 @@ impl State {
             Message::SidebarFiltersCleared => {
                 self.sidebar_filters.clear();
             }
-            Message::ScrolledBeneathOverlay => {
-                // Ask the shared rule, rather than deciding here: a non-modal surface is transient
-                // and the ground moving under it means the user has moved on, while a dialog is
-                // anchored to nothing and must survive it (feature 017, FR-009, FR-017).
-                use micold_core::overlay::{dismisses, Surface as OverlaySurface, Trigger};
-                if dismisses(OverlaySurface::NonModal, Trigger::ScrollBeneath) {
-                    self.help_menu_open = false;
-                    self.project_switcher_open = false;
-                    self.sidebar_filter_open = false;
-                    self.project_menu_open = None;
-                    self.worktree_menu_open = None;
-                    self.session_menu_open = None;
-                }
+            Message::SidebarScrolled(offset) => {
+                self.sidebar_scroll_offset = offset;
+                // The sidebar's scroll is *also* the dismissal trigger, and the rendering stack
+                // gives a scrollable one message per event — so this arm does both rather than the
+                // view trying to emit two. Same rule, one call, no second copy of it.
+                self.dismiss_on_scroll_beneath();
             }
+            Message::ScrolledBeneathOverlay => self.dismiss_on_scroll_beneath(),
             Message::SidebarFilterMenuToggled => {
                 self.sidebar_filter_open = !self.sidebar_filter_open;
                 // Mutually exclusive with the other two lightweight popovers (feature 009).
