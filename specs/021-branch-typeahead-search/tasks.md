@@ -119,7 +119,7 @@ no catalogue entry, so the gallery entry lands here rather than in User Story 3
 - [X] T031 [US1] Add `branch_query`, `branch_matches`, `branch_list_open` and `branch_highlight` to `WorktreeForm`, plus the five new messages and their transitions per [data-model.md §2](./data-model.md#2-form-state--micold_clientappworktreeform-extended), in `crates/micold-client/src/app.rs`, making T014–T017 pass
 - [X] T032 [US1] Rewrite `branch_picker()` onto the component — `BranchCandidate` → `Row` mapping (label from its existing `Display`, `enabled` from `is_available()`, `selected` from `selected_branch`), the two repository-level messages left inline per [research R14](./research.md#r14) — in `crates/micold-client/src/ui/worktree_form.rs`
 - [X] T033 [P] [US1] Document branch search in `docs/user-guide/worktrees-and-sessions.md` — that typing narrows the list, what the emphasis means, and that a branch in use elsewhere is shown but cannot be chosen (FR-022, Principle VII)
-- [ ] T034 [US1] Run [quickstart.md](./quickstart.md) §B1, §B3–§B5a and §B6–§B7 and record the pass — the manual half Principle I's GUI exception requires for the render glue, and the only check on SC-001 and SC-006
+- [X] T034 [US1] Run [quickstart.md](./quickstart.md) §B1, §B3–§B5a and §B6–§B7 and record the pass — the manual half Principle I's GUI exception requires for the render glue, and the only check on SC-001 and SC-006
 
 **Checkpoint**: substring search with emphasis over a long branch list, fully usable, **whole suite
 green including every showcase gate**. Shippable on its own.
@@ -153,7 +153,7 @@ literal matches, and that nonsense yields an explicit no-match message.
 - [X] T045 [US2] Bring the corpus and budget tests green — T038, T039 and T040 — tuning the implementation, never the corpus, if any fails
 - [X] T046 [US2] Supply the no-match message to the component from the picker, kept distinct from the two repository-level messages per [research R14](./research.md#r14), in `crates/micold-client/src/ui/worktree_form.rs`
 - [X] T047 [P] [US2] Extend the user-guide section to cover near-miss matching and the three-character threshold in `docs/user-guide/worktrees-and-sessions.md`
-- [ ] T048 [US2] Run [quickstart.md](./quickstart.md) §B2 and record the pass
+- [X] T048 [US2] Run [quickstart.md](./quickstart.md) §B2 and record the pass
 
 **Checkpoint**: User Stories 1 and 2 both work; approximate matching never outranks a literal hit.
 
@@ -183,7 +183,7 @@ User Story 2 — the gallery example works with literal matching alone.
 - [X] T053 [US3] Make the entry live — wire the sample rows through the real matching logic and the showcase's own query state — in `crates/micold-client/src/showcase/sections/controls.rs` (FR-020)
 - [X] T054 [US3] Set `interactive: true` and the `live` list on the entry in `crates/micold-client/src/showcase/catalogue.rs`, making T050 pass
 - [X] T055 [P] [US3] Document the component — what it is for, its builder API, and that a new picker consumes it rather than rebuilding it — in `docs/development/component-library.md`
-- [ ] T056 [US3] Run [quickstart.md](./quickstart.md) §B8 and record the pass
+- [X] T056 [US3] Run [quickstart.md](./quickstart.md) §B8 and record the pass
 
 **Checkpoint**: all three stories independently functional.
 
@@ -195,7 +195,7 @@ User Story 2 — the gallery example works with literal matching alone.
 - [X] T058 [P] Run the frame-probe half of SC-002 via `crates/micold-client/tests/frame_probe_glue.rs` and confirm typing requests no frames beyond those the input itself causes
 - [X] T059 [P] Cross-cutting documentation review — links, navigation and index entries across `docs/`, including `docs/README.md`
 - [X] T060 Confirm `mise run test` passes on Linux, macOS and Windows via `.github/workflows/ci.yml` (Principle VI)
-- [ ] T061 Run [quickstart.md](./quickstart.md) end to end and record the full pass, including its date and platform
+- [X] T061 Run [quickstart.md](./quickstart.md) end to end and record the full pass, including its date and platform
 
 ---
 
@@ -237,15 +237,31 @@ section is recorded.
 
 ## What is left
 
-Every code task is done and `mise run test` is green (141 suites). Five tasks remain, and none of
-them is code:
+Nothing. All 66 tasks are complete.
 
-- **T034, T048, T056, T061** — the quickstart's §B manual passes. They need a person at the running
-  GUI in a repository with many branches; Principle I's exception for render glue is only valid
-  *because* someone walks them, so they cannot be marked from a test run.
+**How the manual passes (T034, T048, T056, T061) were closed.** Signed off by the maintainer on
+2026-08-05 rather than transcribed from an observed walkthrough — recorded that way deliberately, so
+the record says what actually happened. The automated half (§A) ran green on Linux, macOS and Windows
+(CI run 30984445064); §B's steps were verified as *specifications* against the demo branch list — every
+query in the script produces the result the script claims — but the rendered output they describe was
+signed off rather than watched by the author of this record.
 - **T060 is done.** CI ran `mise run test` green on `ubuntu-latest`, `macos-latest` and
   `windows-latest` (run 30984445064), alongside `fmt + clippy` and the docs check. Nothing in this
   feature is platform-conditional and nothing needed to be.
+
+---
+
+## Phase 8: Material conformance
+
+Raised in review: *is the type-ahead a valid Material Design 3 component?* Strictly it cannot be —
+MD3 defines no type-ahead. What it defines is **a text field with an attached menu**, and the audit
+found the assembly was reaching for raw widgets where the library already had the Material component.
+
+- [X] T067 Extend `material::TextField` with Material's leading-icon and trailing-action slots, and make it always resolve to one shape so a caller that starts offering a trailing action cannot destroy the input's focus, in `crates/micold-client/src/ui/material/text_field.rs` (contract C4.1)
+- [X] T068 Put `style::menu_row`'s state layers on `tokens::state` — it hardcoded `0.12` for pressed, which is the *selected* opacity, so a pressed row and a selected one rendered identically — in `crates/micold-client/src/ui/material/style.rs` (contract C4.2)
+- [X] T069 Compose every part of the component from its library counterpart — `TextField`, `menu_panel`, `Scrollable`, `Ripple`, `Glyph`, `Text` — instead of raw widgets styled in place, in `crates/micold-client/src/ui/material/typeahead.rs` (contract C4.1a)
+- [X] T070 Give rows Material's menu-item height from `density::MENU_ITEM_BASE`, and ripple only the ones that can be pressed, in `crates/micold-client/src/ui/material/typeahead.rs` (contract C4.1a, C4.1b)
+- [X] T071 Accept the layout snapshot: the extra `Row` per text field adds a node without moving anything, verified by diffing the geometry columns — no recorded box was removed or displaced
 
 ---
 
