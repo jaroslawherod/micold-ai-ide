@@ -109,6 +109,9 @@ where
         let control = pick_list(s.options, s.selected, s.on_selected)
             .placeholder(s.placeholder)
             .width(Length::Fill)
+            // Zero, for the same reason as the text field: the wrapper owns the padding, and the
+            // stack's default would inset the value from the label above it.
+            .padding(0)
             // A `pick_list` takes a size and a font separately rather than a role, so the role is
             // named here and taken apart — the call site still never states a number.
             .text_size(TypeRole::Body.size())

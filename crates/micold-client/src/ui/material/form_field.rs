@@ -171,8 +171,8 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
                 density::STANDARD,
             )))
             .padding(iced::Padding {
-                top: spacing::XS,
-                bottom: spacing::XS,
+                top: spacing::SM,
+                bottom: spacing::SM,
                 left: anatomy::text_field::PADDING,
                 right: anatomy::text_field::PADDING,
             })

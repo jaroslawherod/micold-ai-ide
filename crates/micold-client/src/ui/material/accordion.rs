@@ -11,11 +11,12 @@
 use std::time::Duration;
 
 use iced::{Element, Length};
+use micold_core::tokens::motion::duration;
 use micold_core::tokens::Roles;
 
 /// How long the panel takes to open or close. Matches the menu fade — both are small panels
 /// answering a press on a toolbar control, and they would read as inconsistent if they differed.
-const REVEAL: Duration = Duration::from_millis(90);
+const REVEAL: Duration = Duration::from_millis(duration::SHORT_3);
 
 /// A panel that reveals downward. Builder form (Principle VIII):
 /// `Accordion::new(body, roles).open(flag).into()`.
