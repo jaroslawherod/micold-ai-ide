@@ -153,27 +153,26 @@ pub fn toggle_chip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
     )
 }
 
-/// `TextField` — empty (showing its placeholder) and filled.
+/// `TextField` — empty and filled, which is also where the label's two positions show.
+///
+/// Every pose carries a label, because that is what §7.7 specifies and a gallery of placeholder-only
+/// fields would be demonstrating the arrangement the contract replaced. It also makes the pair worth
+/// putting side by side: empty, the label rests on the value's line at full size and no placeholder
+/// competes with it; filled, it has floated to the top at the smaller role with the value beneath.
+/// Each state is plausible on its own and only the two together show the component.
 pub fn text_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let field = |value: &'a str| {
+        material::TextField::new(samples::PLACEHOLDER, value, roles).label(samples::FIELD_LABEL)
+    };
     arrange(
         vec![
-            posed(
-                "empty",
-                material::TextField::new(samples::PLACEHOLDER, "", roles)
-                    .on_input(|_| Message::NoOp),
-                roles,
-            ),
+            posed("empty", field("").on_input(|_| Message::NoOp), roles),
             posed(
                 "filled",
-                material::TextField::new(samples::PLACEHOLDER, samples::FILLED, roles)
-                    .on_input(|_| Message::NoOp),
+                field(samples::FILLED).on_input(|_| Message::NoOp),
                 roles,
             ),
-            posed(
-                "read-only",
-                material::TextField::<Message>::new(samples::PLACEHOLDER, samples::FILLED, roles),
-                roles,
-            ),
+            posed("read-only", field(samples::FILLED), roles),
         ],
         Layout::Inline,
     )
@@ -219,29 +218,25 @@ pub fn form_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
     )
 }
 
-/// `Select` — nothing selected (so the placeholder shows) and a choice made.
+/// `Select` — nothing selected and a choice made, both labelled.
+///
+/// The unset pose is the one that shows the rule a select shares with a text field: with a label,
+/// an empty control rests it on the value's line and draws **no** placeholder underneath, because
+/// the resting label is the placeholder. The placeholder-only form — for the rare select with no
+/// name to give it — is posed by `form_field`'s `no label`.
 ///
 /// Its dropdown panel is opened by the rendering stack rather than by the gallery, so it is exercised
 /// live like hover and focus: click it and the menu appears.
 pub fn select<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let control = |selected: Option<&'a str>| {
+        material::Select::new(samples::CHOICES, selected, |_| Message::NoOp, roles)
+            .placeholder("Choose a theme…")
+            .label("Theme")
+    };
     arrange(
         vec![
-            posed(
-                "unset",
-                material::Select::new(samples::CHOICES, None, |_| Message::NoOp, roles)
-                    .placeholder("Choose a theme…"),
-                roles,
-            ),
-            posed(
-                "selected",
-                material::Select::new(
-                    samples::CHOICES,
-                    Some(samples::CHOICES[1]),
-                    |_| Message::NoOp,
-                    roles,
-                ),
-                roles,
-            ),
+            posed("unset", control(None), roles),
+            posed("selected", control(Some(samples::CHOICES[1])), roles),
         ],
         Layout::Inline,
     )
@@ -269,6 +264,9 @@ pub fn typeahead<'a>(s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Me
                 roles,
             )
             .placeholder("Search branches…")
+            // Labelled like the branch picker it stands for. Its search box is a text field, so an
+            // empty query rests the label exactly as an empty input does.
+            .label("Branch")
             // Always open, because the list is the half worth looking at and this page exists to be
             // looked at. In the application the caller opens it on focus instead.
             .open(true)

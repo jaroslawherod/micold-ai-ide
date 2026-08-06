@@ -40,8 +40,16 @@ pub const LONG_LABEL: &str =
 pub const BODY: &str =
     "Sessions keep running when you close the window. Reopen it and they are still there.";
 
-/// A short prompt for a text field, so the empty and filled states are distinguishable.
-pub const PLACEHOLDER: &str = "Branch name";
+/// What a text field is *called* — its label, which sits inside the container.
+///
+/// Split from [`PLACEHOLDER`] deliberately. This used to be the placeholder, which is the
+/// arrangement §7.7's migration table exists to undo: the field's name belongs in the label, and
+/// the placeholder holds a genuine example or nothing at all. A gallery that demonstrated the old
+/// bundling would be teaching call sites the thing the contract removed.
+pub const FIELD_LABEL: &str = "Branch name";
+
+/// A genuine example of what a text field would contain — never its name.
+pub const PLACEHOLDER: &str = "e.g. feat/login-page";
 
 /// What a filled text field contains.
 pub const FILLED: &str = "feat/material-showcase";
