@@ -379,6 +379,103 @@ fn the_field_fills_the_width_it_is_offered() {
     );
 }
 
+// ---------------------------------------------------------------------------------------------
+// The label's two positions
+// ---------------------------------------------------------------------------------------------
+
+/// The bounds of the box's four slots — `[leading, control, trailing, label]`.
+fn slots(element: Element<'_, Message>, width: f32) -> Vec<iced::Rectangle> {
+    let node = laid_out(element, width);
+    node.children()[0]
+        .children()
+        .iter()
+        .map(|c| c.bounds())
+        .collect()
+}
+
+/// An empty field rests its label where the value will go; a filled one floats it above.
+///
+/// This is the difference between a field that reads as Material and one that reads as a caption
+/// stuck to a box. Empty, there is no value to sit under, so a label pinned to the top leaves a
+/// visibly hollow container with text clinging to its ceiling — and the user has nothing telling
+/// them the empty space below is where they type. Material puts the label *in* that space and
+/// lifts it out of the way once there is something to lift it for.
+///
+/// Asserted as the label's centre against the box's, because that is the property: resting means
+/// centred, floating means above centre. The exact 8dp is `filled_field`'s to state.
+#[test]
+fn an_empty_field_rests_its_label_and_a_filled_one_floats_it() {
+    let r = roles();
+    let empty: Element<'_, Message> = FormField::new(input(), r).label("Branch").into();
+    let filled: Element<'_, Message> = FormField::new(input(), r)
+        .label("Branch")
+        .populated(true)
+        .into();
+
+    let box_height =
+        tokens::density::height(tokens::density::TEXT_FIELD_BASE, tokens::density::STANDARD);
+    let middle = box_height / 2.0;
+
+    let resting = slots(empty, 400.0)[3];
+    let floating = slots(filled, 400.0)[3];
+
+    assert!(
+        (resting.center_y() - middle).abs() < 1.0,
+        "an empty field's label is centred at {:.1}dp in a {box_height}dp box, not at {middle}dp — \
+         resting means sitting where the value will appear",
+        resting.center_y()
+    );
+    assert!(
+        floating.center_y() < middle - 4.0,
+        "a filled field's label is centred at {:.1}dp, which is not clear of the {middle}dp middle \
+         — it has to leave the value's line free",
+        floating.center_y()
+    );
+    assert!(
+        floating.height < resting.height,
+        "the label floats at {:.1}dp and rests at {:.1}dp — floating is the *small* label, and one \
+         that only moved would collide with the value it made way for",
+        floating.height,
+        resting.height
+    );
+}
+
+/// A resting label leaves the control's line free of a second label.
+///
+/// The two occupy the same band by design, so whichever one draws text there has to be the only
+/// one: a select showing `Select…` under a resting `Select` label prints the word twice, offset by
+/// a pixel or two, which is exactly how the first version of this looked.
+#[test]
+fn a_resting_label_and_the_control_share_one_line() {
+    let r = roles();
+    let empty: Element<'_, Message> = FormField::new(input(), r).label("Branch").into();
+    let s = slots(empty, 400.0);
+    let (control, label) = (s[1], s[3]);
+    assert!(
+        (control.center_y() - label.center_y()).abs() < 1.0,
+        "the control sits at {:.1}dp and the resting label at {:.1}dp — they are meant to be the \
+         same line, so the caret lands on the label it replaces",
+        control.center_y(),
+        label.center_y()
+    );
+}
+
+/// Focus tints the label as well as the indicator, and an error outranks focus (§7.7).
+///
+/// A focused field recolours *both*; the version that moved only the indicator left the label in
+/// the muted role, and the field read as inactive with a coloured rule under it.
+#[test]
+fn the_label_follows_focus_and_error() {
+    let r = roles();
+    assert_eq!(style::field_label(r, false, false), r.on_surface_variant);
+    assert_eq!(style::field_label(r, true, false), r.primary);
+    assert_eq!(
+        style::field_label(r, true, true),
+        r.error,
+        "an error has to outrank focus — a focused invalid field is still invalid"
+    );
+}
+
 /// The wrapper reports `Length::Fill` for its width, which is what makes the test above true of
 /// every caller rather than of this one arrangement.
 #[test]

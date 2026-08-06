@@ -104,10 +104,20 @@ where
 {
     fn from(s: Select<'a, T, M>) -> Self {
         let r = s.roles;
+        // Read before `selected` moves into the pick list.
+        let populated = s.selected.is_some();
+        // A resting label *is* the placeholder — it sits on the value's line — so the pick list
+        // must not draw a second one under it. See `form_field::label_floats`.
+        let resting = s.label.is_some() && !super::form_field::label_floats(populated, s.active);
+        let placeholder = if resting {
+            String::new()
+        } else {
+            s.placeholder
+        };
         // No padding of its own: `FormField` pads the container to §7.7's 16dp, and a select that
         // padded itself as well would sit inset from every text field beside it.
         let control = pick_list(s.options, s.selected, s.on_selected)
-            .placeholder(s.placeholder)
+            .placeholder(placeholder)
             .width(Length::Fill)
             // Zero, for the same reason as the text field: the wrapper owns the padding, and the
             // stack's default would inset the value from the label above it.
@@ -119,7 +129,10 @@ where
             .style(style::select_field(r))
             .menu_style(style::select_menu(r));
 
-        let mut field = super::FormField::new(control, r).active(s.active);
+        let mut field = super::FormField::new(control, r)
+            .active(s.active)
+            // A selection counts as content; an unset select rests its label like an empty input.
+            .populated(populated);
         if let Some(label) = s.label {
             field = field.label(label);
         }

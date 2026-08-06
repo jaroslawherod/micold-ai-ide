@@ -384,6 +384,9 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
             .leading_icon(Icon::Search)
             .active(open)
             .on_input(on_input);
+        // Nothing here has to say whether the label rests or floats: `TextField` derives that from
+        // its own value, which for the type-ahead *is* the query — so a picker with an empty search
+        // box rests its label exactly as an empty input does, and one being typed into floats it.
         if let Some(label) = label {
             input = input.label(label);
         }

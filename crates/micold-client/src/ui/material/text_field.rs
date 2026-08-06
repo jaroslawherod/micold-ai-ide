@@ -132,7 +132,13 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
         // `FormField` has already padded the container to §7.7's 16dp — so the default puts the
         // *value* a few pixels right of the label sitting directly above it, which reads as a
         // misalignment rather than as a field.
-        let mut widget = text_input(&f.placeholder, f.value)
+        // While the label rests it *occupies* the value's line, so a placeholder there would sit
+        // on top of it. Material shows one or the other, never both: the resting label is the
+        // placeholder, and the real one appears once the label has floated out of the way.
+        let resting =
+            f.label.is_some() && !super::form_field::label_floats(!f.value.is_empty(), f.active);
+        let placeholder = if resting { "" } else { &f.placeholder };
+        let mut widget = text_input(placeholder, f.value)
             .padding(0)
             .style(style::field_input(f.roles));
 
@@ -156,7 +162,11 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
         // here. `FormField` emits that slot whether or not it is filled, which is what keeps the
         // input's position in the widget tree stable — see its docs for why that matters more than
         // it looks.
-        let mut field = super::FormField::new(widget, f.roles).active(f.active);
+        let mut field = super::FormField::new(widget, f.roles)
+            .active(f.active)
+            // A field with text in it floats its label; an empty one rests it where the text will
+            // go. Only the control knows which it is.
+            .populated(!f.value.is_empty());
         if let Some((icon, message)) = f.trailing_action {
             field = field.trailing(super::IconButton::new(icon, f.roles).on_press(message));
         }
