@@ -83,6 +83,8 @@ Today, after clicking "Create," the user sees a static "Creating worktree…" me
 - **FR-006**: Upon the user clicking "Create" with a valid form, the overlay MUST show a continuously visible progress indicator for the duration of the creation operation, in place of today's static "Creating worktree…" text.
 - **FR-007**: The progress indicator MUST be accompanied by a plain-language description of the current stage being performed (for example: checking for naming conflicts, creating the branch and worktree, setting up submodules), and MUST update this description as the operation moves between stages.
 - **FR-008**: The progress display MUST only represent stages that actually apply to the current creation (for example, no submodule-setup stage is shown when the target repository has no submodules).
+- **FR-008a**: FR-006's "for the duration of the creation operation" MUST hold for a stage that lasts minutes as well as one that lasts a moment — including across the session-service boundary the operation now runs behind. Reporting only stage *transitions* is permitted as a display rule, but MUST NOT become the only traffic that keeps that boundary's connection alive: a stage that legitimately produces nothing for longer than the service's liveness deadline MUST still leave the indicator on screen and the connection healthy (see `010-daemon-session-persistence` FR-026a).
+  **Bugfix**: 2026-08-06 — BUG-009 added this requirement; a submodule-setup stage emitted one frame and then nothing, the client's liveness deadline reaped the connection at 9 s, and the progress display was replaced mid-creation by a disconnect banner — the "is it hung?" state FR-006 exists to prevent. See `010-daemon-session-persistence/bugs/BUG-009.md`.
 - **FR-009**: If creation fails at any stage, the progress indicator MUST stop advancing and the failed stage MUST be identifiable from the display, followed by the existing failure/error message — the indicator must never continue to suggest progress after a failure.
 - **FR-010**: On successful creation, the progress indicator and any stage description MUST be cleared and the overlay MUST close, consistent with today's successful-creation behavior.
 - **FR-011**: The worktree-delete confirmation MUST let the user explicitly choose whether the worktree's associated git branch is also deleted, in addition to the existing explanation of what is being removed.
@@ -117,3 +119,12 @@ Today, after clicking "Create," the user sees a static "Creating worktree…" me
 - This feature does not change the underlying git operations used for creation (worktree add, conditional submodule update) or deletion (worktree remove, prune, conditional branch delete) — it changes how their progress and choices are presented to the user.
 - This feature does not add, remove, or reorder any creation or deletion stages beyond what already exists; it makes existing stages visible where they weren't before.
 
+
+---
+
+**Bugfix**: 2026-08-06 — BUG-009 Added FR-008a: reporting only stage transitions is a display rule and
+must not double as the only traffic keeping the session-service connection alive, since a stage can
+legitimately be silent for longer than that connection's liveness deadline. **No task reopened** —
+this feature's stage model is intact; the defect is in how the service thins it on the wire. The fix
+is `010-daemon-session-persistence` Phase 22 (T120, T123). See
+`010-daemon-session-persistence/bugs/BUG-009.md`.

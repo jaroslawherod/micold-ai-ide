@@ -430,7 +430,7 @@ pub const COMPONENTS: &[Entry] = &[
         component: "StageProgress",
         variants: &[],
         density: &[],
-        posed: &["in progress"],
+        posed: &["in progress", "with a live line"],
         live: &[],
         interactive: false,
         section: Section::Components,

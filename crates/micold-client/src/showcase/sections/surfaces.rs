@@ -187,11 +187,22 @@ pub fn connection_banner<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Eleme
 /// one arrives with feature 018.
 pub fn stage_progress<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
-        vec![posed(
-            "in progress",
-            material::StageProgress::new(samples::STAGE, roles),
-            roles,
-        )],
+        vec![
+            posed(
+                "in progress",
+                material::StageProgress::new(samples::STAGE, roles),
+                roles,
+            ),
+            // The second pose is what a stage looks like once it has been running long enough to
+            // report where it has got to (BUG-009, T123) — the state a submodule fetch spends
+            // minutes in, and the one that used to show nothing but the label above.
+            posed(
+                "with a live line",
+                material::StageProgress::new(samples::STAGE, roles)
+                    .detail(Some(samples::STAGE_DETAIL.to_string())),
+                roles,
+            ),
+        ],
         Layout::FullWidth,
     )
 }

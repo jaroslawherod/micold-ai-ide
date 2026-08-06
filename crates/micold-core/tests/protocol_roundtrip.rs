@@ -299,6 +299,14 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
         DaemonMsg::OperationProgress {
             req: 7,
             stage: CreateStage::CreatingWorktree,
+            detail: None,
+        },
+        // The detail-carrying shape too (BUG-009, T123): a live line rides the same frame, so both
+        // variants have to survive the round trip.
+        DaemonMsg::OperationProgress {
+            req: 7,
+            stage: CreateStage::SettingUpSubmodules,
+            detail: Some("Receiving objects:  47% (470/1000)".into()),
         },
         DaemonMsg::CatalogChanged {
             catalog: sample_catalog(),

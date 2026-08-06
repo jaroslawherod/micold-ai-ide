@@ -336,3 +336,29 @@ other). Once done, US1, US2, and US3 can be split across contributors — they t
 concerns (docs/manual validation; `app.rs`/`main.rs`/`worktree_form.rs` async wiring; a
 regression test + docs) even though some touch overlapping files (`app.rs`, `main.rs`), so
 coordinate on those two files specifically if working in parallel.
+
+---
+
+## Bugfix BUG-009 — the fetch could end the connection carrying its own create
+
+FR-004a's implementation lives in `010-daemon-session-persistence` Phase 22, because the defect is
+in that feature's connection loop, not in anything this feature owns. Recorded here so this file
+does not dead-end at a requirement with no task.
+
+- [X] T022 [US2] Closed by `010-daemon-session-persistence` **T120** (the create no longer parks its
+  connection, so a fetch longer than the 9 s liveness deadline no longer disconnects the client) and
+  **T123** (the fetch's live output reaches the form at a rate limit, so a long fetch reads as
+  moving rather than frozen on "Setting up submodules"). No work in this feature. Closes FR-004a;
+  restores FR-004/SC-002 and FR-006/SC-003 for fetches slower than the deadline, which is where they
+  were silently not holding.
+- [ ] T023 [US2] Re-run quickstart.md §2 and §3 against the daemon architecture, using a repository
+  whose submodule fetch genuinely exceeds 9 s. T014/T017/T020 passed against a repo that fetched
+  faster than that, which is exactly why this went unnoticed for the life of the feature: the manual
+  validations were honest and the fixture was too quick to reach the failure. Not closed by T022's
+  automated coverage — that proves the connection survives, not that the form reads well over
+  minutes.
+
+**Bugfix**: 2026-08-06 — BUG-009 Added T022 (pointer, closed) and T023 (re-validation, open). **No
+task reopened**: T005/T012 are correct for the in-process architecture they were written against,
+and T014/T017/T020 are stale rather than wrong. See
+`../010-daemon-session-persistence/bugs/BUG-009.md`.

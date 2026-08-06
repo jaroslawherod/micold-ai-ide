@@ -1278,3 +1278,147 @@ is documented as point-in-time rather than re-derived; and clearing on `Detach` 
 so the flag keeps a single write rule. Four tests, red confirmed by neutralising the arm.
 `mise run test` green (120 groups), `cargo clippy --workspace --all-targets -- -D warnings` and
 `cargo fmt --check` clean. See `bugs/BUG-007.md`.
+
+---
+
+## Phase 22: Bugfix BUG-009 — a worktree create with submodules reaps its own connection
+
+**Goal**: an operation that runs far longer than the liveness deadline keeps its connection alive,
+delivers its real outcome to the client that asked for it, and never turns that client's reconnect
+into a takeover banner (FR-025a, FR-026a, FR-035a, SC-011a).
+
+**Root cause**: `route()` (`crates/micold-daemon/src/server.rs:317`) is one sequential loop per
+connection and the only place `ClientMsg::Ping` is answered (`server.rs:325`). The `WorktreeCreate`
+arm moves the git work off the runtime with `spawn_blocking` and then `.await`s it inline
+(`server.rs:658-697`) — freeing the runtime but parking the connection. The one signal that could
+have covered for that is filtered out: progress frames are deduplicated per stage ("only transitions
+are worth a frame", `server.rs:666-679`) while every line of submodule-fetch output carries the same
+`CreateStage::SettingUpSubmodules` (`crates/micold-core/src/worktree.rs:881-890`), so the stage emits
+exactly one frame and then silence. At 9 s (`protocol/keepalive.rs:22`) the client declares the link
+dead (`client/src/daemon.rs:267`), drains its pending op into the "may or may not have taken effect"
+notice (`client/src/main.rs:1082`), and reconnects with `force: false` (`main.rs:759`) — into a daemon
+whose `deregister` (`server.rs:295`) has not run, because the handler that would run it is still
+parked. The attach is refused `ProjectBusy` naming the reconnecting window's own build, which the
+client renders as the takeover banner (`main.rs:1023`).
+
+**Why it survived**: `crates/micold-daemon/tests/liveness.rs` has exactly two cases — a responsive
+daemon and a half-open connection. Neither is a *busy* one, and busy is the only state in which the
+premise "silent means dead" is false. Nothing else could have caught it either: the failure needs a
+repository whose submodule fetch crosses 9 s, which a test fixture never is.
+
+**No task is reopened**: T053 built worktree management over the daemon as specified, and
+`010-submodule-worktree-support`'s T005/T012 are correct for the in-process architecture they were
+written against (that feature predates the daemon; its tasks target `client/src/app.rs` directly).
+The defect is at the seam neither feature owned. `010-submodule-worktree-support`'s T014/T017/T020
+manual validations are stale rather than wrong — they passed against a repo that fetched fast enough.
+
+**Design note**: the fix is not "make the fetch report progress more often". Progress traffic
+resetting the deadline is a side effect, and an operation is allowed to be genuinely silent for
+minutes. The connection must serve its own protocol while it is busy, independent of what the
+operation emits — see plan Risk 9 and W6's BUG-009 annotation.
+
+- [X] T120 [US3] Stop `WorktreeCreate` parking its connection: in
+  `crates/micold-daemon/src/server.rs:658-697`, run the create as a spawned task that replies
+  (`OperationOk` / `OperationError`, and the post-create `refresh_worktrees_and_broadcast`) through
+  the client's existing ordered frame channel — `state.frame_sender(id)`, already cloned there for
+  progress — instead of `.await`ing the join handle inside `route()`. The loop must keep reading that
+  client's frames for the whole create, so `Ping` is answered on cadence. Decide and record what
+  happens to a second mutating request that arrives while one is in flight (serialize per project,
+  reject as busy, or allow) — the current inline `.await` serializes them as a side effect, and that
+  property must not be lost silently. Closes FR-026a, and FR-035a for this operation.
+  **Done**: the arm now `tokio::spawn`s the whole operation, replying through `state.send`/the
+  client's frame sender, so `route()` returns to reading frames immediately. **Decision on a second
+  mutating request: serialized per project**, via a new `DaemonState::worktree_gate(project)`
+  (`Arc<tokio::sync::Mutex<()>>`, taken *inside* the spawned task, never on the loop). Allowing
+  concurrency was rejected on a concrete failure, not on principle: two same-named creates both pass
+  their own pre-flight, the second's `worktree add` fails, and its `RolledBack` arm runs
+  `remove_dir_all(&target)` — deleting the *first* create's freshly populated directory. Per project
+  rather than globally because two projects share no git state to race over.
+- [X] T121 [US5] Release a project's attachment when its holder's transport ends rather than when its
+  handler returns (`state.deregister`, `server.rs:295`), so a client that is already gone cannot
+  refuse an attach — including its own reconnect — for the remaining duration of work it requested.
+  With T120 in place the parked-handler window closes, but the release rule is the load-bearing half:
+  any future long await, or a handler wedged for any other reason, reproduces the refusal. Closes
+  FR-025a.
+  **Done**: `DaemonState::release_attachments(id)` (the attachment half of `deregister`, idempotent)
+  is called from the writer task the moment a push to that client fails — the earliest observable
+  proof the peer is gone, and independent of what `route()` is doing. `deregister` on loop exit is
+  unchanged, so the two are belt and braces. Note the honest limit: the writer only learns of the
+  peer on a *send*, so this covers a departed client the daemon still has something to say to (the
+  create's own progress frames, any broadcast) — the general guarantee rests on T120's rule that no
+  arm parks the loop, which T124 records.
+- [X] T122 [P] [US3] Red-first regression test in `crates/micold-daemon/tests/` beside `liveness.rs`:
+  drive an operation that blocks well past `LIVENESS_DEADLINE` (a synthetic slow operation, or an
+  injected slow `Git`; not a real network fetch) and assert (a) `Pong`s keep arriving on cadence
+  throughout, (b) the operation's own `OperationOk`/`OperationError` is delivered to the requesting
+  client, and (c) an attach to the same project from a second connection during the block is answered
+  — accepted or refused per T120's recorded decision — rather than parked. Confirm red by restoring
+  the inline `.await`. Depends on T120/T121. Closes SC-011a.
+  **Done**: `crates/micold-daemon/tests/busy_connection.rs`, three tests. The slow operation is a
+  **real** `git worktree add` held open by a real `post-checkout` hook (`sleep 3`) — no stubbed
+  `Git`, since the property under test is about the loop and the work must reach it the way
+  production's does. Red confirmed pre-fix: every `Pong` arrived only *after* the create finished
+  (all six probes completed at 4.2 s against a 3 s hook), and the reconnect was refused
+  `ProjectBusy` naming the departed connection's own build — the reported banner, reproduced. The
+  third test (a second client is refused while a create runs) passes both before and after: it
+  guards the fix rather than reproducing the bug, since a spawned create must not drop the *live*
+  holder's claim. **On SC-011a's "ten times the deadline"**: a 90 s wall-clock test was rejected.
+  The tests hold the operation open for seconds while probing far faster than the real 3 s cadence,
+  which proves the loop is never parked *at all* — a stronger claim than any single multiple, and it
+  keeps the suite fast. Recorded here because it resolves the SC-011a/T122 scale mismatch the
+  verification pass raised.
+- [X] T123 [P] [US3] Let a long stage report progress rather than freezing at its first line: relax
+  the stage-transition-only dedupe (`server.rs:666-679`) so live submodule-fetch output reaches the
+  client throttled (a time-based cap, not per-line — the fetch can emit thousands of lines), and
+  render it in the create form. This is a UX fix and explicitly **not** the liveness fix: state in
+  the code comment that liveness is T120's property, so nobody later "optimises" the throttle back to
+  one-frame-per-stage and reintroduces the reap. Serves `010-submodule-worktree-support` FR-004 and
+  SC-002 across the daemon boundary; coordinate wording with feature 013's FR-006/FR-007 stage labels.
+  **Done**, and it needed the wire: `DaemonMsg::OperationProgress` gained `detail: Option<String>`
+  (`PROTOCOL_VERSION` 4 → 5), since the frame previously carried nothing but a stage. The rule lives
+  in `micold-daemon/src/progress.rs::ProgressThrottle` with the clock injected — a transition always
+  reports; within a stage the latest line reports at most once per 400 ms; a stage's *first* line is
+  never made to wait out the gap. Six unit tests, red confirmed by neutralising the gap check.
+  Client: `WorktreeForm::stage_detail`, cleared on every stage change and new attempt (three tests,
+  red confirmed by neutralising the arm), rendered by `StageProgress::detail(..)` ellipsised to one
+  line so the dialog does not reflow. Both the module doc and the `server.rs` comment state that
+  liveness is T120's property and must never be re-derived from this traffic. The showcase gains a
+  "with a live line" pose so the gallery shows the state a submodule fetch actually sits in.
+- [X] T124 Audit the remaining `route()` arms for the same shape — any `.await` inside the loop that
+  can outlast `LIVENESS_DEADLINE` (the other `spawn_blocking` git calls, `env_include` script
+  execution with its configurable timeout, worktree removal) — and record, in
+  `specs/010-daemon-session-persistence/contracts/protocol.md`, which operations may exceed the
+  deadline and what the loop owes the connection while they run. The rule is what stops the next slow
+  operation from re-landing this bug; BUG-009 was a single arm, not a single mistake.
+  **Done**: `contracts/protocol.md` §5 *Liveness* gains "What the deadline assumes of the daemon" —
+  the obligation stated as a property of the connection, the three concrete rules
+  (`spawn_blocking(..).await` in the loop does **not** satisfy it; spawn and reply through the frame
+  channel; take an explicit gate where spawning removes incidental serialization), and a per-arm
+  audit table. The audit found two more:
+  - **`WorktreeDelete` — fixed here.** `remove_dir_all` over a populated worktree (dependency trees,
+    build output, initialized submodules) is unbounded work; on a network filesystem it crosses the
+    deadline on its own. Same treatment as the create, same per-project gate.
+  - **`SessionCreate`/`SessionStart` — a live instance, left open deliberately.** `start_session`
+    runs *on the loop* (not even `spawn_blocking`) and resolves the environment-include script,
+    whose timeout is user-configurable to 60 s (`MAX_ENV_INCLUDE_TIMEOUT_SECS`, default 10). A
+    hanging version-manager hook reproduces BUG-009 on a session start. Not fixed as a drive-by:
+    spawning it races the input-ordering contract (protocol.md §7) — a `SessionInput` arriving
+    before the spawned start has registered the session has nowhere ordered to go — so it needs its
+    own design (a per-session gate, or queueing input behind the start). Recorded in the table and
+    in `bugs/BUG-009.md` as follow-up work.
+
+**Bugfix**: 2026-08-06 — BUG-009 Added Phase 22 (T120–T124): the create no longer parks its
+connection, attachments are released on transport close, a busy-connection regression test joins
+`liveness.rs`'s two cases, long stages report throttled progress, and the remaining loop arms are
+audited against a written rule. **No task reopened** — T053 and the submodule feature's tasks were
+each correct for the architecture they were written against; the defect is at the seam between them,
+which no task owned. See `bugs/BUG-009.md`.
+
+Implemented 2026-08-06: **T120–T124 all done, none left open.** The audit widened the fix by one arm
+(`WorktreeDelete`) and surfaced one live instance left open by design
+(`SessionCreate`/`SessionStart`, blocked on the input-ordering contract — it needs its own task, not
+a drive-by). `PROTOCOL_VERSION` 4 → 5 for `OperationProgress::detail`. Fifteen new tests: twelve
+behavioural — three end-to-end over the real transport with a real slow git, six on the throttle,
+three on the form reducer — each observed red first, plus three on the ellipsis helper the detail
+line is rendered through. `mise run test` green (145 groups, 1180 tests),
+`cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check` clean.

@@ -39,10 +39,18 @@ const TRAVEL: Duration = Duration::from_millis(duration::LONG_2);
 /// the readable part of that at this size, and the difference at 4dp tall is not perceptible.
 const SEGMENT: f32 = 0.3;
 
+/// The longest live-output line shown under the stage label; longer lines are ellipsised. The
+/// dialog is a fixed 520 px, and a git progress line ("Receiving objects:  47% (…)") can be far
+/// wider than that — this keeps the indicator one line tall so a long stage does not reflow the
+/// dialog on every update (BUG-009, T123).
+const DETAIL_MAX_CHARS: usize = 64;
+
 /// A stage-progress indicator: a thin indeterminate bar plus the current stage's plain-language
-/// label. Builder form (Principle VIII): `StageProgress::new(label, roles).into()`.
+/// label, and optionally the stage's latest live output line beneath it. Builder form
+/// (Principle VIII): `StageProgress::new(label, roles).detail(line).into()`.
 pub struct StageProgress {
     label: String,
+    detail: Option<String>,
     roles: Roles,
 }
 
@@ -51,22 +59,39 @@ impl StageProgress {
     pub fn new(label: impl Into<String>, roles: Roles) -> Self {
         Self {
             label: label.into(),
+            detail: None,
             roles,
         }
+    }
+
+    /// Show `detail` — the stage's most recent output line — under the label (BUG-009, T123).
+    ///
+    /// Only long stages produce one (a submodule fetch, in practice); passing `None` renders
+    /// exactly as before, so the fast stages are visually unchanged.
+    pub fn detail(mut self, detail: Option<String>) -> Self {
+        self.detail = detail;
+        self
     }
 }
 
 impl<'a, M: 'a> From<StageProgress> for Element<'a, M> {
     fn from(p: StageProgress) -> Self {
         let r = p.roles;
-        iced::widget::column![
+        let mut stack = iced::widget::column![
             Element::from(Bar { roles: r }),
             // The stage label is a plain-language sentence about what is happening, so it is prose:
             // `Caption`, at the body weight (§7.9).
             Text::new(p.label, TypeRole::Caption, r).muted(),
         ]
-        .spacing(anatomy::progress::LABEL_GAP)
-        .into()
+        .spacing(anatomy::progress::LABEL_GAP);
+
+        // The live line sits under the label, dimmer than it: the label is the claim about what is
+        // happening, this is only evidence that it still is. Ellipsised rather than wrapped so the
+        // dialog's height does not jump as lines of different lengths arrive.
+        if let Some(detail) = p.detail {
+            stack = stack.push(Text::new(ellipsise(&detail), TypeRole::Caption, r).muted());
+        }
+        stack.into()
     }
 }
 
@@ -191,5 +216,44 @@ where
 {
     fn from(bar: Bar) -> Self {
         Element::new(bar)
+    }
+}
+
+/// Shorten `line` to [`DETAIL_MAX_CHARS`], marking the cut with an ellipsis. Character-wise, so a
+/// multi-byte path in a submodule's name cannot panic on a byte-index slice.
+fn ellipsise(line: &str) -> String {
+    let line = line.trim();
+    if line.chars().count() <= DETAIL_MAX_CHARS {
+        return line.to_string();
+    }
+    let kept: String = line.chars().take(DETAIL_MAX_CHARS - 1).collect();
+    format!("{kept}…")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_short_detail_line_is_shown_whole() {
+        assert_eq!(
+            ellipsise("  Cloning into 'vendor/x'…  "),
+            "Cloning into 'vendor/x'…"
+        );
+    }
+
+    #[test]
+    fn a_long_detail_line_is_cut_to_one_line_with_an_ellipsis() {
+        let long = "a".repeat(DETAIL_MAX_CHARS * 2);
+        let out = ellipsise(&long);
+        assert_eq!(out.chars().count(), DETAIL_MAX_CHARS);
+        assert!(out.ends_with('…'));
+    }
+
+    #[test]
+    fn cutting_a_multibyte_line_does_not_split_a_character() {
+        // A byte-index slice at DETAIL_MAX_CHARS would panic here; character-wise does not.
+        let long = "ż".repeat(DETAIL_MAX_CHARS * 2);
+        assert_eq!(ellipsise(&long).chars().count(), DETAIL_MAX_CHARS);
     }
 }
