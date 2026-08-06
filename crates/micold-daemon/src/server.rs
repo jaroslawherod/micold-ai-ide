@@ -309,6 +309,15 @@ where
     result
 }
 
+/// An event from a connection's own spawned work back to its message loop.
+///
+/// The loop owns state no other task may touch — the view stream — so work that now finishes
+/// elsewhere reports back rather than reaching in (BUG-009, T125).
+enum Internal {
+    /// A session start this connection asked for has concluded (successfully or not).
+    SessionStarted(micold_core::session::SessionId),
+}
+
 /// The per-connection message loop. Every push back to the client goes through the shared state's
 /// per-client channel so other connections can reach this one too.
 async fn route<St>(
@@ -325,12 +334,41 @@ where
     // at a time; changing the viewed session aborts the old stream and starts the new one, and the
     // loop exit below stops it. The task pushes `Frame::Grid` into this client's ordered channel.
     let mut view_stream: Option<tokio::task::JoinHandle<()>> = None;
+    // Which session this client asked to view, whether or not it is live yet (BUG-009, T125).
+    // `view_stream` alone cannot answer that: a client may ask to view a session whose start is
+    // still running, and the stream can only be built once the session exists.
+    let mut viewing: Option<micold_core::session::SessionId> = None;
+    // Events from this connection's own spawned work back to its loop. The loop owns `view_stream`
+    // and is the only thing that may touch it, so work that finishes elsewhere — a session start,
+    // now that starts no longer block the loop — reports back here rather than reaching in.
+    let (internal_tx, mut internal_rx) = tokio::sync::mpsc::unbounded_channel::<Internal>();
 
-    while let Some(frame) = incoming.next().await {
-        let msg = match frame {
-            Ok(Frame::Control(msg)) => msg,
-            Ok(Frame::Grid(_)) => continue, // clients never send grid frames
-            Err(e) => return Err(io::Error::other(e)),
+    loop {
+        let msg = tokio::select! {
+            // Both arms are cancel-safe: `Framed`'s decoder keeps its read buffer across polls, and
+            // an unbounded receiver drops nothing on a cancelled `recv`.
+            frame = incoming.next() => match frame {
+                Some(Ok(Frame::Control(msg))) => msg,
+                Some(Ok(Frame::Grid(_))) => continue, // clients never send grid frames
+                Some(Err(e)) => return Err(io::Error::other(e)),
+                None => break, // EOF
+            },
+            Some(event) = internal_rx.recv() => {
+                match event {
+                    // A start this connection asked for has finished. If the client is waiting to
+                    // view that session, this is the moment its stream can exist.
+                    Internal::SessionStarted(session) => {
+                        if viewing == Some(session) {
+                            if let Some((pty, framer)) =
+                                state.live_session(session).zip(state.session_framer(session))
+                            {
+                                restart_view(state, id, &mut view_stream, pty, framer);
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
         };
 
         match msg {
@@ -416,9 +454,21 @@ where
             } => state.session_input(session, serial, &bytes),
             ClientMsg::SessionStart { session } => {
                 // Bringing an existing durable session back is a resume.
-                if let Err(err) = state.start_session(session, LaunchMode::Resume) {
-                    tracing::warn!(session = %session.0, %err, "session start failed");
-                }
+                //
+                // Spawned, not run here (BUG-009 T125, FR-026a): `start_session` resolves the
+                // user's environment-include script, which is a subprocess with a timeout the user
+                // can set to 60 s, and it used to run *directly on this loop* — so a version
+                // manager waiting on the network silenced the connection well past the client's 9 s
+                // liveness deadline. `begin_start` holds any input typed meanwhile so nothing is
+                // lost to the gap it opens (protocol.md §7).
+                state.begin_start(session);
+                spawn_session_start(
+                    state,
+                    session,
+                    LaunchMode::Resume,
+                    None,
+                    internal_tx.clone(),
+                );
             }
             ClientMsg::ScrollbackRequest {
                 session,
@@ -466,21 +516,27 @@ where
                 project,
                 worktree_dir,
             } => {
+                // The catalog write stays on the loop: it is a small atomic file write, and it is
+                // what mints the id every later message refers to. Only the spawn — the slow half
+                // — is deferred (BUG-009, T125).
                 match state.create_session(&project, &worktree_dir) {
                     Ok(session) => {
                         // A brand-new session starts fresh (`claude --session-id`), never `--resume`
                         // against a conversation that does not exist yet.
-                        if let Err(err) = state.start_session(session, LaunchMode::Fresh) {
-                            tracing::warn!(session = %session.0, %err, "created session failed to start");
-                        }
-                        state.send(
-                            id,
-                            DaemonMsg::OperationOk {
-                                req,
-                                result: OperationResult::SessionCreated { session },
-                            },
+                        //
+                        // The reply rides with the start rather than preceding it, so the client
+                        // still learns of the session exactly when it is usable — the ordering it
+                        // had when this ran inline. `begin_start` is belt and braces here (the
+                        // client cannot type into an id it has not been told yet), kept for one
+                        // rule rather than two.
+                        state.begin_start(session);
+                        spawn_session_start(
+                            state,
+                            session,
+                            LaunchMode::Fresh,
+                            Some((id, req)),
+                            internal_tx.clone(),
                         );
-                        state.broadcast_catalog();
                     }
                     Err(e) => state.send(
                         id,
@@ -495,8 +551,13 @@ where
             }
             ClientMsg::SetViewedSession { project, session } => {
                 state.set_viewed(id, project, session);
+                viewing = session;
                 match session.and_then(|s| state.live_session(s).zip(state.session_framer(s))) {
                     Some((pty, framer)) => restart_view(state, id, &mut view_stream, pty, framer),
+                    // Not live *yet* is the ordinary case now: the client sends `SessionStart` and
+                    // `SetViewedSession` back to back, and the start no longer completes before this
+                    // arrives (BUG-009, T125). `viewing` above records the intent, and the
+                    // `Internal::SessionStarted` arm builds the stream when the session exists.
                     None => {
                         if let Some(prev) = view_stream.take() {
                             prev.abort();
@@ -1293,6 +1354,63 @@ fn rename_error_message(err: micold_core::project::RenameError) -> &'static str 
         RenameError::Empty => "the name cannot be empty",
         RenameError::Whitespace => "the name cannot be only whitespace",
     }
+}
+
+/// Start a session off the connection loop (BUG-009 T125, FR-026a).
+///
+/// `start_session` is blocking twice over — it sources the user's environment-include script
+/// (a subprocess, timeout configurable to 60 s) and forks a PTY — and it used to run on the loop
+/// that answers this client's `Ping`. Here it runs on the blocking pool inside a spawned task, so
+/// the loop keeps serving the connection for the whole start.
+///
+/// Three obligations the inline version met for free, met explicitly now:
+/// - **Serialization**: the per-session gate, so two rapid starts cannot both see "not live" and
+///   fork a process each.
+/// - **Input ordering**: `finish_start` replays whatever was typed while the start ran, in arrival
+///   order, and it runs on *every* outcome — a failed start must not strand held keystrokes
+///   (protocol.md §7).
+/// - **Reply ordering**: `reply` (Some for `SessionCreate`, None for `SessionStart`) is sent after
+///   the start concludes, exactly where it was sent before.
+fn spawn_session_start(
+    state: &Arc<DaemonState>,
+    session: micold_core::session::SessionId,
+    launch: LaunchMode,
+    reply: Option<(crate::state::ClientId, u64)>,
+    done: tokio::sync::mpsc::UnboundedSender<Internal>,
+) {
+    let task_state = Arc::clone(state);
+    tokio::spawn(async move {
+        let gate = task_state.session_gate(session);
+        let _serialized = gate.lock().await;
+        let worker = Arc::clone(&task_state);
+        let outcome =
+            tokio::task::spawn_blocking(move || worker.start_session(session, launch)).await;
+        match outcome {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                tracing::warn!(session = %session.0, %err, "session start failed");
+            }
+            Err(join) => {
+                tracing::warn!(session = %session.0, error = %join, "session start task failed");
+            }
+        }
+        // Before the reply, so a client that acts on `SessionCreated` immediately finds the session
+        // already caught up on anything held.
+        task_state.finish_start(session);
+        // Tell the connection loop, which owns the view stream and may have been waiting to build
+        // one for this session. A closed channel just means the client has gone.
+        let _ = done.send(Internal::SessionStarted(session));
+        if let Some((client, req)) = reply {
+            task_state.send(
+                client,
+                DaemonMsg::OperationOk {
+                    req,
+                    result: OperationResult::SessionCreated { session },
+                },
+            );
+            task_state.broadcast_catalog();
+        }
+    });
 }
 
 /// The error reply for a `spawn_blocking` task that itself failed (panicked / was cancelled) — an

@@ -279,19 +279,34 @@ Audit of the arms, as of 2026-08-06:
 |---|---|---|
 | `WorktreeCreate` | **Yes** — submodule fetch is network-bound and routinely minutes | Spawned + per-project gate (T120) |
 | `WorktreeDelete` | **Yes** — `remove_dir_all` over dependency trees/build output; worse on a network FS | Spawned + per-project gate (T124) |
-| `SessionCreate` / `SessionStart` | **Yes** — `start_session` runs on the loop and resolves the user's environment-include script, whose timeout is user-configurable up to **60 s** (`MAX_ENV_INCLUDE_TIMEOUT_SECS`), plus a PTY fork | ⚠️ **Open** — see below |
+| `SessionCreate` / `SessionStart` | **Yes** — `start_session` resolves the user's environment-include script, whose timeout is user-configurable up to **60 s** (`MAX_ENV_INCLUDE_TIMEOUT_SECS`), plus a PTY fork | Spawned + per-session gate, with held input and a view hand-back (T125) |
 | `BranchPreflight`, `BranchList` | Unlikely — local `git for-each-ref` / `worktree list --porcelain`, no remote | Left inline; revisit if a pathological ref count is ever reported |
 | `SettingsSet`, `WorktreeRename`, `Project*`, `SessionDelete` | No — catalog + a small atomic file write | Left inline |
 | `Ping`, `Attach`, `Detach`, `SetViewedSession`, `SessionInput`, `Scrollback*` | No — lock-only or bounded | Left inline |
 
-⚠️ **`SessionCreate`/`SessionStart` is a known live instance of the same defect** and is *not* fixed
-here. A hanging environment-include script (a version manager waiting on the network) parks the
-connection for up to its configured timeout — 10 s by default, 60 s at the maximum — which reproduces
-BUG-009's disconnect on a session start rather than a worktree create. It is left open deliberately:
-unlike the worktree arms, spawning it races the input-ordering contract (§7) — a `SessionInput`
-arriving before the spawned start has registered the session has nowhere ordered to go — so it needs
-its own design (a per-session gate, or queueing input behind the start), not a drive-by change. See
-`bugs/BUG-009.md`.
+#### Spawning a session start owes two more things (T125)
+
+The worktree arms only had to preserve their own reply. A session start is different: other messages
+are *about* the thing it is creating, and the inline version made them safe by accident.
+
+- **Input must be held, not dropped.** With the start spawned, `SessionInput` can arrive before the
+  session exists — where it would have hit the "input for a session the daemon is not hosting" path
+  and been discarded. §7 forbids that. `DaemonState::begin_start` marks the session, `session_input`
+  holds arriving batches in order, and `finish_start` replays them through the ordinary path the
+  moment the session is live, so classification happens exactly as it would have had the start been
+  instant. `finish_start` runs on **every** outcome, including a failed start — held keystrokes must
+  never be stranded. It drains repeatedly and only clears the marker on an empty buffer observed
+  *under the lock*, so no input can take the direct path and overtake a held one.
+- **A view asked for too early must still be built.** The client sends `SessionStart` and
+  `SetViewedSession` back to back; the second used to find the session live. It no longer does, and
+  a view request that quietly resolves to nothing is a permanently blank terminal. The connection
+  loop records what the client asked to view and builds the stream when its own spawned start
+  reports back over an internal channel (`Internal::SessionStarted`). The loop owns the view stream,
+  so work finishing elsewhere reports to it rather than reaching in — the general shape for any
+  future spawned work that the loop's own state depends on.
+
+Both are covered by `crates/micold-daemon/tests/busy_session_start.rs`, whose slow operation is a
+real environment-include script that sleeps.
 
 ---
 

@@ -1405,7 +1405,9 @@ operation emits — see plan Risk 9 and W6's BUG-009 annotation.
     spawning it races the input-ordering contract (protocol.md §7) — a `SessionInput` arriving
     before the spawned start has registered the session has nowhere ordered to go — so it needs its
     own design (a per-session gate, or queueing input behind the start). Recorded in the table and
-    in `bugs/BUG-009.md` as follow-up work.
+    in `bugs/BUG-009.md` as follow-up work. **Closed 2026-08-06 by Phase 23 (T125)** — the design it
+    needed turned out to be a per-session gate plus held input plus a view hand-back to the loop;
+    see that phase for what spawning a start owes beyond spawning a git command.
 
 **Bugfix**: 2026-08-06 — BUG-009 Added Phase 22 (T120–T124): the create no longer parks its
 connection, attachments are released on transport close, a busy-connection regression test joins
@@ -1422,3 +1424,57 @@ behavioural — three end-to-end over the real transport with a real slow git, s
 three on the form reducer — each observed red first, plus three on the ellipsis helper the detail
 line is rendered through. `mise run test` green (145 groups, 1180 tests),
 `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check` clean.
+
+---
+
+## Phase 23: Bugfix BUG-009 (second arm) — a session start parked its connection too
+
+**Goal**: close the instance T124's audit found and left open, so FR-026a holds for every arm that
+can outlast the liveness deadline, not only the worktree ones.
+
+**Root cause**: `ClientMsg::SessionStart` called `state.start_session(..)` directly on the connection
+loop (`server.rs`), and `SessionCreate` did the same after its catalog write. `start_session`
+resolves the user's environment-include script — a subprocess with a timeout the user can set to
+60 s (`MAX_ENV_INCLUDE_TIMEOUT_SECS`; 10 s by default) — and then forks a PTY. Not even
+`spawn_blocking`: the loop itself waited. A version manager hanging on the network reproduces
+BUG-009 exactly, through a second door.
+
+**Why it was deferred, and what it cost to do properly**: the worktree arms only had to preserve
+their own reply. Here, two other messages are *about* the session being started, and the inline call
+made both safe by accident — `SessionInput` always found a live session, and `SetViewedSession`
+always found something to stream. Spawning breaks both, and the failure modes are worse than the bug
+being fixed: silently swallowed keystrokes (§7) and a permanently blank terminal.
+
+- [X] T125 [US2] Take `SessionStart`/`SessionCreate` off the connection loop, with the three
+  obligations the inline call met for free met explicitly.
+  **Done**, in four parts:
+  - `spawn_session_start` runs the start on the blocking pool inside a spawned task, behind a new
+    per-session gate (`DaemonState::session_gate`) so two rapid starts cannot both observe "not
+    live" and fork a process each. `SessionCreate` keeps its catalog write on the loop — it is a
+    small atomic write and it mints the id every later message refers to — and its `OperationOk`
+    still rides *after* the start, exactly where it was.
+  - **Held input**: `begin_start` marks the session, `session_input` buffers arriving batches in
+    order rather than hitting the "not hosting this session" discard path, and `finish_start`
+    replays them through the ordinary path — so `InputReceiver` classifies every serial exactly as
+    it would have with an instant start. It drains repeatedly and clears the marker only on an empty
+    buffer observed under the lock, so nothing can overtake a held batch, and it runs on **every**
+    outcome including a failed start.
+  - **View hand-back**: the loop now records what the client asked to view and receives an
+    `Internal::SessionStarted` event from its own spawned start, building the grid stream then. This
+    is the general shape for spawned work the loop's own state depends on — the loop owns the view
+    stream, so work finishing elsewhere reports to it rather than reaching in.
+  - `contracts/protocol.md`'s audit table and its new "Spawning a session start owes two more
+    things" section record all of it.
+  **Verification**: `crates/micold-daemon/tests/busy_session_start.rs`, three tests against a real
+  environment-include script that sleeps 3 s. Red observed: probes completed only at 4.26 s
+  (the loop was parked); and with the view arm neutralised, the view test never receives a snapshot.
+  The input-ordering test passes both pre- and post-fix by design — it exists to stop the fix from
+  trading a visible disconnect for a silent keystroke loss. The regression the fix *did* cause was
+  caught by an existing test (`stream_view.rs`'s cold start-view-drive), which is what prompted the
+  view hand-back. Closes FR-026a for this arm.
+
+**Bugfix**: 2026-08-06 — BUG-009 Added Phase 23 (T125). **No task reopened** — T024/T044's session
+plumbing was correct for a loop that had nothing slow on it; the environment-include script arrived
+with feature 011 and nothing owned the interaction. `mise run test` green (146 groups, 1183 tests),
+`cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check` clean. See
+`bugs/BUG-009.md`.

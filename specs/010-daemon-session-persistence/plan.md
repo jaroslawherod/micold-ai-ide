@@ -595,6 +595,16 @@ control plane you can read by eye is the justification for carrying two encoding
    rather than shipping. *Generalisation*: when a protocol infers a peer's state from the **absence**
    of traffic, every long-running operation is a liveness bug until proven otherwise — and the proof
    has to be a test that is slow on purpose, since nothing else reproduces it.
+   **Widened 2026-08-06 (T125)**: the audit the mitigation called for immediately found a second
+   instance — a session start, slow because feature 011 put a user-configurable 60 s subprocess in
+   its path, on a loop that predates it. Two lessons the risk did not originally carry. First, the
+   slow thing is often introduced by a *different* feature than the one that owns the arm, so
+   "is this operation slow?" has to be re-asked whenever anything in its call graph gains a timeout.
+   Second, taking work off the loop costs more than moving it: whatever the loop did *implicitly* by
+   being sequential — serializing repeats, guaranteeing a session existed before the next message
+   about it arrived, owning state only it may touch — becomes an explicit obligation, and each one
+   is a silent failure if missed. Spawning a git command owed one (its reply); spawning a session
+   start owed four.
 
 ---
 
