@@ -86,6 +86,8 @@ pub struct Typeahead<'a, M> {
     on_input: Box<dyn Fn(String) -> M + 'a>,
     roles: Roles,
     placeholder: String,
+    label: Option<String>,
+    supporting: Option<String>,
     open: bool,
     highlighted: Option<usize>,
     selected: Option<usize>,
@@ -117,6 +119,8 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
             on_input: Box::new(on_input),
             roles,
             placeholder: "Search…".to_string(),
+            label: None,
+            supporting: None,
             open: false,
             highlighted: None,
             selected: None,
@@ -129,6 +133,22 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
     }
 
     /// Text shown when the field is empty.
+    /// The control's name, rendered inside its container above the value (FR-031a).
+    ///
+    /// Forwarded to the search field's own `FormField`, so the branch picker's label sits where
+    /// every other field's does. §7.7's migration table predates this control — it names the select
+    /// the type-ahead replaced — and design-tokens §7.7 extends the same requirement here.
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Explanatory text beneath the container.
+    pub fn supporting(mut self, text: impl Into<String>) -> Self {
+        self.supporting = Some(text.into());
+        self
+    }
+
     pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
         self.placeholder = placeholder.into();
         self
@@ -318,6 +338,8 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
             on_input,
             roles: r,
             placeholder,
+            label,
+            supporting,
             open,
             highlighted,
             selected,
@@ -353,9 +375,21 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
         //
         // The clear action appears only when there is something to clear, so an empty field
         // carries no action that would do nothing.
+        // `.active(open)` is the half the select cannot manage. §7.7 wants the active indicator to
+        // follow **open** rather than focus (FR-043a), and `pick_list` reports its open state to
+        // its own style closure and to nobody else — so `Select::active` must be supplied and in
+        // practice is not. This control's openness is already a caller-held value, so the
+        // indicator follows it for real. The accepted gap stands for the select and closes here.
         let mut input = super::TextField::new(placeholder, query, r)
             .leading_icon(Icon::Search)
+            .active(open)
             .on_input(on_input);
+        if let Some(label) = label {
+            input = input.label(label);
+        }
+        if let Some(supporting) = supporting {
+            input = input.supporting(supporting);
+        }
         if !query.is_empty() {
             input = input.trailing_action(Icon::Close, cleared);
         }

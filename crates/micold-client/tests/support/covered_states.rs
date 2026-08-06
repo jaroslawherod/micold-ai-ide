@@ -171,8 +171,9 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "dialog.root",
                     path: &[],
                 },
-                // Three fewer fields than the new-branch form: one picker in place of label,
-                // select, ticket and name.
+                // Two fewer fields than the new-branch form: one picker in place of the select,
+                // the ticket and the name. It was three until §7.7 moved the select's
+                // free-standing `Type` label inside the control's own container.
                 Anchor {
                     name: "dialog.actions",
                     path: &[3, 0, 0, 3],

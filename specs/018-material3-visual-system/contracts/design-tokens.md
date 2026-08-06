@@ -602,10 +602,16 @@ control that did not exist when the requirement was written, not a new one.
 
 The type-ahead also settles what the select could not. §7.7 asks for the active indicator to respond
 to **open** rather than focus (FR-043a), and `pick_list` reports `Opened` to its own style closure
-and to no parent — so `Select::active` must be supplied by a caller and is in practice left unset.
-`Typeahead` already takes `.open(bool)` from a caller that tracks it, so on that control the
-indicator follows the open state for real. The accepted gap stands for the select and is closed for
-the type-ahead.
+and to no parent — so `Select::active` must be supplied by a caller, and no caller tracks it.
+`Typeahead` takes `.open(bool)` from a caller that already holds that state, so it passes it to the
+field as the active flag and the indicator follows it. The accepted gap stands for the select and is
+closed for the type-ahead.
+
+**The select is therefore not left mute.** Removing its 3dp open-state border because a filled field
+has no border, and leaving the indicator unable to answer for it, would have made opening the list
+produce no feedback at all — worse than the affordance it replaced. Its open and hover states are
+carried by the **state layer** instead (§5, FR-021), which is what every other interactive surface
+already uses and needs no parent to know anything.
 
 ### 7.8 Snackbar (FR-032, FR-032a, FR-032b)
 
