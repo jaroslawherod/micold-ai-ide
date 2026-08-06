@@ -406,7 +406,12 @@ pub fn revealing_states() -> &'static [RevealingState] {
             toward: |state| state.sidebar_filter_open = true,
             frames: 2,
             node: "0/0/0/1/0/0/0/1",
-            expect_between: (0.2, 0.5),
+            // Widened when the reveal took §6.2's easing (T064). A *decelerating* curve covers
+            // most of its distance early, so two frames of a 150ms transition now sit at 0.64 of
+            // the open height where a linear ramp put them at 0.21. The window still fails at 0 and
+            // at 1, which is what "pinned mid-reveal" has to mean; it no longer assumes the value
+            // and the elapsed time are the same number.
+            expect_between: (0.2, 0.8),
         },
     ]
 }

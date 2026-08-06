@@ -27,7 +27,7 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{Color, Element, Event, Length, Rectangle, Size, Transformation, Vector};
-use micold_core::tokens::motion::duration;
+use micold_core::tokens::motion::{self, duration};
 
 /// At or below this a transition counts as finished, and the wrapper is fully hidden.
 ///
@@ -105,6 +105,9 @@ struct Motion<M> {
     key: u64,
     enter: bool,
     on_hidden: Option<M>,
+    /// The curve travelled on the way in, and the one on the way out (contract §6.3).
+    enter_curve: motion::Easing,
+    exit_curve: motion::Easing,
 }
 
 impl<M: Clone> Motion<M> {
@@ -117,6 +120,10 @@ impl<M: Clone> Motion<M> {
             key: 0,
             enter: false,
             on_hidden: None,
+            // Standard by default: the utilitarian pair §6.2 gives small transitions. A wrapper
+            // whose row in §6.3 says `emphasized` overrides both.
+            enter_curve: motion::STANDARD_DECELERATE,
+            exit_curve: motion::STANDARD_ACCELERATE,
         }
     }
 
@@ -156,6 +163,17 @@ impl<M: Clone> Motion<M> {
             key: self.key,
             announced: false,
         })
+    }
+
+    /// Take the emphasized pair instead of the standard one (contract §6.2, §6.3).
+    ///
+    /// The larger, more expressive set: overlays and the sidebar slide. A menu, a hover reveal and
+    /// a row fade stay standard — the distinction is what stops every transition in the
+    /// application feeling like the same one at different speeds.
+    fn emphasized(mut self) -> Self {
+        self.enter_curve = motion::EMPHASIZED_DECELERATE;
+        self.exit_curve = motion::EMPHASIZED_ACCELERATE;
+        self
     }
 
     /// Restart the transition when the caller's identity changed under it.
@@ -202,6 +220,17 @@ impl<M: Clone> Motion<M> {
     ) -> f32 {
         let target = self.target();
         let track = tree.state.downcast_mut::<Track>();
+        // §6.3 gives a transition a different curve each way: things arrive decelerating and leave
+        // accelerating, which is what makes an exit feel quicker than an entrance at the same
+        // duration. The track is told which it is doing before it steps.
+        let curve = if target >= track.progress.value() {
+            self.enter_curve
+        } else {
+            self.exit_curve
+        };
+        track
+            .progress
+            .set_easing(curve.x1, curve.y1, curve.x2, curve.y2);
         let value = match feeds_layout {
             FeedsLayout::Yes => {
                 track
@@ -265,6 +294,17 @@ macro_rules! motion_builder {
         /// Take a different, usually shorter, time on the way out.
         pub fn exiting_over(mut self, out: Duration) -> Self {
             self.motion.out = Some(out);
+            self
+        }
+
+        /// Travel §6.2's *emphasized* pair rather than the standard one.
+        ///
+        /// For the larger, more expressive transitions §6.3 marks emphasized: an overlay and the
+        /// sidebar slide. A menu, a hover reveal and a row fade stay standard, and that difference
+        /// is what stops every transition in the application reading as one transition at
+        /// different speeds.
+        pub fn emphasized(mut self) -> Self {
+            self.motion = self.motion.emphasized();
             self
         }
 

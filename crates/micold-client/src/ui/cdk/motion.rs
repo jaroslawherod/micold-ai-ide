@@ -37,6 +37,41 @@ const FRAME: Duration = Duration::from_millis(16);
 pub fn step_for(duration: Duration) -> f32 {
     (FRAME.as_secs_f32() / duration.as_secs_f32()).clamp(f32::EPSILON, 1.0)
 }
+/// A straight line: what every track did before easing existed, and the default.
+const LINEAR: (f32, f32, f32, f32) = (0.0, 0.0, 1.0, 1.0);
+
+/// `y` at linear time `t` on the cubic bézier through `(0,0)`, `(x1,y1)`, `(x2,y2)`, `(1,1)`.
+///
+/// The curve is parameterised by its own `x`, not by time, so `t` has to be solved for first. Ten
+/// Newton steps from `t` itself converge well inside a pixel for every curve in §6.2 — these are
+/// all monotone and gently sloped, which is what makes the naive start good enough.
+fn ease(curve: (f32, f32, f32, f32), t: f32) -> f32 {
+    let (x1, y1, x2, y2) = curve;
+    if curve == LINEAR {
+        return t;
+    }
+    let bezier = |a: f32, b: f32, u: f32| {
+        let v = 1.0 - u;
+        3.0 * v * v * u * a + 3.0 * v * u * u * b + u * u * u
+    };
+    let slope = |a: f32, b: f32, u: f32| {
+        let v = 1.0 - u;
+        3.0 * v * v * (a) + 6.0 * v * u * (b - a) + 3.0 * u * u * (1.0 - b)
+    };
+    let mut u = t.clamp(0.0, 1.0);
+    for _ in 0..10 {
+        let dx = bezier(x1, x2, u) - t;
+        if dx.abs() < 1e-5 {
+            break;
+        }
+        let d = slope(x1, x2, u);
+        if d.abs() < 1e-6 {
+            break;
+        }
+        u = (u - dx / d).clamp(0.0, 1.0);
+    }
+    bezier(y1, y2, u)
+}
 
 /// One animated scalar, owned by the widget that animates it.
 ///
@@ -46,6 +81,21 @@ pub fn step_for(duration: Duration) -> f32 {
 pub struct Progress {
     value: f32,
     target: f32,
+    /// Where the current transition started, so the eased curve has something to interpolate from.
+    from: f32,
+    /// Linear time through the current transition, `0.0..=1.0`.
+    ///
+    /// Separate from [`value`](Self::value) because easing is a mapping *from* time *to* position:
+    /// a track that stepped its own position by a curve would be applying the curve to whatever it
+    /// had already reached, which compounds and is not the shape Material specifies.
+    t: f32,
+    /// The cubic-bézier control points, as four plain numbers.
+    ///
+    /// Not a token type: `tests/cdk_no_appearance.rs` fails the build if this layer names one, so a
+    /// curve arrives the same way a duration does — from the caller. The default is linear, which
+    /// is what every track did before easing existed, so a track nobody has given a curve behaves
+    /// exactly as it used to.
+    curve: (f32, f32, f32, f32),
     /// The frame this track last advanced on, so it advances exactly once per frame.
     ///
     /// The runtime re-runs `update` with the *same* redraw event when that update invalidated the
@@ -62,6 +112,9 @@ impl Progress {
         Self {
             value: initial,
             target: initial,
+            from: initial,
+            t: 1.0,
+            curve: LINEAR,
             last_frame: None,
         }
     }
@@ -88,21 +141,48 @@ impl Progress {
     /// awake, so it arrives immediately instead. Refusing to animate is recoverable; refusing to
     /// stop is not.
     pub fn advance_to(&mut self, target: f32, speed: f32) {
-        self.target = target;
+        // A new destination starts a new transition: time restarts, and the curve interpolates from
+        // wherever the track had got to rather than from where the last one began.
+        if (target - self.target).abs() > f32::EPSILON {
+            self.from = self.value;
+            self.t = 0.0;
+            self.target = target;
+        }
         let distance = target - self.value;
         if distance.abs() <= f32::EPSILON {
             self.value = target;
+            self.t = 1.0;
             return;
         }
         if !speed.is_finite() || speed <= 0.0 {
             self.value = target;
+            self.t = 1.0;
             return;
         }
-        self.value = if distance.abs() <= speed {
+        self.t = (self.t + speed).min(1.0);
+        self.value = if self.t >= 1.0 {
             target
         } else {
-            self.value + speed * distance.signum()
+            self.from + (target - self.from) * ease(self.curve, self.t)
         };
+    }
+
+    /// Ease this track along a cubic bézier instead of at a constant rate.
+    ///
+    /// Four plain numbers rather than a token, for the reason given on [`Self::curve`]. The
+    /// material layer names the curve from contract §6.2 and passes it here.
+    pub fn easing(mut self, x1: f32, y1: f32, x2: f32, y2: f32) -> Self {
+        self.curve = (x1, y1, x2, y2);
+        self
+    }
+
+    /// Change the curve on a track already in the widget tree.
+    ///
+    /// Needed because a transition's curve depends on its *direction*: §6.3 gives an overlay
+    /// `emphasized_decelerate` on the way in and `emphasized_accelerate` on the way out, and a
+    /// track built once has to be told which it is doing before each step.
+    pub fn set_easing(&mut self, x1: f32, y1: f32, x2: f32, y2: f32) {
+        self.curve = (x1, y1, x2, y2);
     }
 
     /// Snap to `value` and come to rest there, abandoning whatever was in flight.
@@ -113,6 +193,8 @@ impl Progress {
     pub fn restart_at(&mut self, value: f32) {
         self.value = value;
         self.target = value;
+        self.from = value;
+        self.t = 1.0;
     }
 
     /// Point the track at `target` without stepping it, and ask for the frame that will.
@@ -124,6 +206,10 @@ impl Progress {
     /// destination here starts it asking without advancing it, so its full duration is still ahead
     /// of it.
     pub fn aim<M>(&mut self, target: f32, shell: &mut Shell<'_, M>) {
+        if (target - self.target).abs() > f32::EPSILON {
+            self.from = self.value;
+            self.t = 0.0;
+        }
         self.target = target;
         self.request_frame(shell);
     }

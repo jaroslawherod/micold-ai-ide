@@ -105,6 +105,9 @@ impl<'a, M: Clone + 'a> From<Modal<'a, M>> for Surface<'a, M> {
         // its centre). Together with the scrim this reads as a Material dialog enter/exit.
         let dialog = super::scale(
             super::fade(dialog, shown, ENTER, super::SurfaceKind::Dialog.tone(roles))
+                // §6.3: an overlay travels the *emphasized* pair — decelerating in, accelerating
+                // out. The standard set is for the small utilitarian transitions.
+                .emphasized()
                 // Both the tone and the corners come from the dialog's own surface kind. The
                 // tone matters as much as the shape: a dialog is elevation 3, so veiling it with
                 // `roles.surface` painted a rectangle several tones too dark over it for the whole
