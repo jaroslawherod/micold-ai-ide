@@ -79,6 +79,15 @@ struct Inner {
     /// stated explicitly here instead of being lost. Keyed by project because two projects share no
     /// git state to race over. Entries are cheap (`Arc<Mutex<()>>`) and bounded by project count.
     worktree_gates: HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>,
+    /// Sessions whose start is in flight, each holding the input typed while it runs, in arrival
+    /// order (BUG-009, T125). Present only for the duration of a start — see
+    /// [`DaemonState::session_input`] for why the input is held rather than dropped, and
+    /// [`DaemonState::finish_start`] for how the buffer is closed without a gap.
+    starting: HashMap<SessionId, Vec<(u64, Vec<u8>)>>,
+    /// One mutual-exclusion gate per session for starts (T125), for the same reason
+    /// [`Self::worktree_gates`] exists: spawning the work removed the serialization the connection
+    /// loop provided incidentally, and two concurrent starts would spawn two processes.
+    session_gates: HashMap<SessionId, Arc<tokio::sync::Mutex<()>>>,
 }
 
 /// One live process of a session: its PTY and its framer. The [`PtySession`] is behind an `Arc` so
@@ -167,6 +176,8 @@ impl DaemonState {
                 worktrees: HashMap::new(),
                 env_include_cache: HashMap::new(),
                 worktree_gates: HashMap::new(),
+                starting: HashMap::new(),
+                session_gates: HashMap::new(),
             }),
             next_id: AtomicU64::new(1),
             lifecycle: Lifecycle::new(),
@@ -1181,7 +1192,65 @@ impl DaemonState {
     ///   are still written, because dropping input that *did* arrive would compound the loss.
     /// - `Stale` — a duplicate/reordered serial: dropped and never written, so the log is never
     ///   reordered or coalesced.
+    ///
+    /// While a start for this session is in flight (BUG-009, T125), the session does not exist yet
+    /// — so input for it is *held*, in arrival order, and replayed by [`Self::finish_start`] the
+    /// moment it does. Without this, spawning the start off the connection loop would trade a
+    /// visible disconnect for silently swallowed keystrokes, which §7 forbids and BUG-006 already
+    /// demonstrated the cost of. Classification is deliberately deferred with the bytes: replaying
+    /// in arrival order puts every serial through [`InputReceiver`] exactly as it would have been
+    /// had the start been instant.
     pub fn session_input(&self, session: SessionId, serial: u64, bytes: &[u8]) {
+        {
+            let mut inner = self.lock();
+            if let Some(held) = inner.starting.get_mut(&session) {
+                held.push((serial, bytes.to_vec()));
+                return;
+            }
+        }
+        self.apply_input(session, serial, bytes);
+    }
+
+    /// Mark a start as in flight, so input for `session` is held rather than dropped (T125).
+    /// Idempotent — a redundant `SessionStart` must not discard input already held.
+    pub fn begin_start(&self, session: SessionId) {
+        self.lock().starting.entry(session).or_default();
+    }
+
+    /// End the in-flight start and replay whatever was typed while it ran, in arrival order (T125).
+    ///
+    /// Drains repeatedly rather than once: the connection loop keeps appending while the marker is
+    /// set, so only an empty buffer observed *under the lock* proves nothing more can arrive before
+    /// the marker goes. That last observation removes the marker in the same critical section, so
+    /// there is no window in which an input could take the direct path and overtake a held one.
+    /// Writes happen outside the lock, as everywhere else.
+    pub fn finish_start(&self, session: SessionId) {
+        loop {
+            let batch = {
+                let mut inner = self.lock();
+                match inner.starting.get_mut(&session) {
+                    Some(held) if held.is_empty() => {
+                        inner.starting.remove(&session);
+                        return;
+                    }
+                    Some(held) => std::mem::take(held),
+                    None => return, // never begun, or already finished
+                }
+            };
+            for (serial, bytes) in batch {
+                self.apply_input(session, serial, &bytes);
+            }
+        }
+    }
+
+    /// The per-session gate serializing starts (T125). Spawning removed the serialization the
+    /// connection loop used to provide, and two concurrent starts would both observe "not live" and
+    /// spawn a process each. Taken *inside* the spawned task, never on the loop.
+    pub fn session_gate(&self, session: SessionId) -> Arc<tokio::sync::Mutex<()>> {
+        Arc::clone(self.lock().session_gates.entry(session).or_default())
+    }
+
+    fn apply_input(&self, session: SessionId, serial: u64, bytes: &[u8]) {
         let resolved = {
             let mut inner = self.lock();
             inner.sessions.get_mut(&session).and_then(|live| {
