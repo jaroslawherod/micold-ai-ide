@@ -138,7 +138,34 @@ The interface uses brief, consistent motion so changes feel considered rather th
   instead, so nothing animates away.)
 - **The rest of the interface keeps its familiar motion.** The overflow menu still fades, the
   worktree sidebar still slides as it collapses and expands, the main area cross-fades when its
-  content changes, and the sidebar's resize handle highlights on hover — all unchanged.
+  content changes, and the sidebar's resize handle highlights on hover — all unchanged in *what*
+  they do.
+- **Things now arrive and leave at different speeds.** Every transition eases: it slows as it
+  arrives and speeds up as it goes, rather than moving at a constant rate. Leaving is a little
+  quicker than arriving, which is deliberate — an exit is an acknowledgement, an entrance is a
+  presentation. Larger movements (dialogs, the sidebar) use a more pronounced curve than small
+  ones (menus, hover reveals), so they do not all read as the same movement at different speeds.
+- **A progress bar no longer claims a percentage.** While a worktree is being created the bar's
+  segment travels across the track instead of sitting at a fixed fill. The app cannot know how far
+  through it is — whether the submodule step runs at all is only known once the branch and worktree
+  exist — so the bar now says "working" and nothing more.
 
 Motion only runs while something is actually moving, so it never adds ongoing background work
 when the interface is at rest. There is currently no reduced-motion setting.
+
+## Notifications
+
+Messages the app needs to tell you about — a worktree that could not be created, a background
+session that restarted — appear as a small bar near the bottom of the window.
+
+- **One at a time.** If several things happen at once, they are shown in turn rather than stacking
+  up and crowding the interface. This is a change: previously up to three could be on screen
+  together.
+- **They clear themselves.** An informational message stays about 4 seconds; an error stays about
+  10, so a failure is not gone before you have read it. **Dismiss** clears the current one
+  immediately and shows the next straight away.
+- **Repeats are not queued.** Retrying something that keeps failing shows the message once, not
+  once per attempt.
+- **The connection banner is not one of these.** The strip that appears when the app cannot reach
+  its session service reports a condition that is still true, so it stays put until it is not —
+  it does not time out and cannot be dismissed.
