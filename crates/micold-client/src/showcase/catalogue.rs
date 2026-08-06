@@ -686,6 +686,16 @@ pub const MOTION: &[MotionEntry] = sections::motion::MOTION;
 /// they are exercised on the page without being posed on it.
 pub const EXEMPTIONS: &[Exemption] = &[
     Exemption {
+        module: "material/filled_field.rs",
+        component: "FilledField",
+        reason: "the filled box `FormField` renders — the container, the in-container label, the \
+                 adornment slots and the active indicator, laid out to §7.7's fixed internal \
+                 geometry. It has an appearance, but not one of its own: `FormField` is the only \
+                 thing that builds it, and the gallery already poses it in four states there. A \
+                 second entry would pose the same pixels twice under two names, which is what makes \
+                 a catalogue stop being readable.",
+    },
+    Exemption {
         module: "cdk/overlay.rs",
         component: "Overlay",
         reason: "the overlay host: it positions and stacks floating surfaces and draws nothing of \

@@ -16,6 +16,7 @@ mod checkbox;
 mod connection_banner;
 mod divider;
 mod ellipsized;
+mod filled_field;
 mod filter_panel;
 mod form_field;
 /// `FormField`'s composition and chrome, checked in-crate because `material` is `pub(crate)` and a
