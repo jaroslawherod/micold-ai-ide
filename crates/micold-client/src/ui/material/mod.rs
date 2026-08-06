@@ -95,7 +95,7 @@ pub use navigation_drawer::NavigationDrawer;
 pub use progress::StageProgress;
 pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};
 pub use resize_handle::ResizeHandle;
-pub use ripple::Ripple;
+pub use ripple::{pulse as ripple_pulse, Ripple};
 pub use scrollable::Scrollable;
 pub use select::Select;
 pub use snackbar::Snackbar;

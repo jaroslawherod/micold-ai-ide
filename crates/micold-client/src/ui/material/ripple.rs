@@ -38,10 +38,12 @@
 //! tiling. It is pure geometry and tested as such, because "does this rectangle lie inside a
 //! rounded rectangle" is checkable arithmetic and not something to confirm by looking at it.
 
-use iced::advanced::widget::{tree, Operation, Tree, Widget};
+use iced::advanced::widget::{operation::Outcome, tree, Id, Operation, Tree, Widget};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell};
 use iced::{Border, Color, Element, Event, Length, Rectangle, Size, Vector};
 use micold_core::tokens::{motion::duration, state};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::ui::cdk::ripple::Ripple as RippleState;
@@ -243,13 +245,20 @@ where
         );
     }
 
-    /// Forwarded, or the wrapper would swallow every widget operation aimed at what it wraps.
+    /// Offers this ripple's own state, then forwards.
     ///
-    /// The default implementation does nothing, so focus traversal, `text_input::focus(id)` and
-    /// `scrollable::scroll_to` would all stop at this wrapper and silently skip the subtree beneath
-    /// it — no error, no warning, just a control that cannot be reached. `animation.rs`'s wrappers
-    /// each forward for the same reason (`operate_direct_child!`), and this one returns its child's
-    /// layout node unchanged, so it forwards its own layout too.
+    /// Forwarding is the load-bearing half. The default implementation does nothing, so focus
+    /// traversal, `text_input::focus(id)` and `scrollable::scroll_to` would all stop at this
+    /// wrapper and silently skip the subtree beneath it — no error, no warning, just a control that
+    /// cannot be reached. `animation.rs`'s wrappers each forward for the same reason
+    /// (`operate_direct_child!`), and this one returns its child's layout node unchanged, so it
+    /// forwards its own layout too.
+    ///
+    /// Offering its state first is what makes [`pulse`] possible: an operation is how iced reaches
+    /// per-widget state, and it is the *only* way to reach a ripple's, because FR-024e puts that
+    /// state inside the instance with nothing keeping a list of instances. A traversal visits what
+    /// is on screen rather than consulting a registry, so this stays true to the requirement rather
+    /// than working around it.
     fn operate(
         &mut self,
         tree: &mut Tree,
@@ -257,6 +266,9 @@ where
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
+        if let tree::State::Some(state) = &mut tree.state {
+            operation.custom(None, layout.bounds(), state.as_mut());
+        }
         self.content
             .as_widget_mut()
             .operate(&mut tree.children[0], layout, renderer, operation);
@@ -375,6 +387,75 @@ where
 impl<'a, M: 'a> From<Ripple<'a, M>> for Element<'a, M> {
     fn from(r: Ripple<'a, M>) -> Self {
         Element::new(r)
+    }
+}
+
+/// Keep one ripple running, and report how many are.
+///
+/// The reference scene's `full` slot is "the baseline scene plus a ripple mid-animation"
+/// (FR-039b, quickstart §B8), and §B8 requires the scene to compose *itself* — nothing is clicked,
+/// so nothing differs between runs. A ripple, though, only starts from a press, and the frame probe
+/// has no way to press anything.
+///
+/// So this presses one, through the mechanism iced provides for reaching widget state: a traversal.
+/// It visits the ripples that are on screen, which is exactly the set FR-024e refuses to keep a list
+/// of — the requirement is that no *registry* exists, not that the tree cannot be walked.
+///
+/// Only the first idle ripple is pressed, and only when it is idle. Pressing every one would
+/// measure a scene the contract does not describe; re-pressing one already running would restart it
+/// every frame and hold it at zero expansion, which is a ripple that never gets anywhere rather
+/// than one mid-animation. Left alone, a ripple runs its full cycle and is re-pressed on the frame
+/// after it settles.
+///
+/// `found` receives how many ripples the traversal saw mid-animation. It is what `Scene::check`
+/// reads, and it is *observed* rather than assumed: a run that reported "a ripple is animating"
+/// because it had asked for one would record a `full` figure for whatever was actually on screen.
+///
+/// Reported through a counter rather than as the task's outcome, which is not a detail. An outcome
+/// arrives as a message, a message runs an update, and iced composes the view again after every
+/// update — so a run that asked for this each frame would compose *twice* per frame, and the probe,
+/// which times composition, would count the second one. Those extra compositions are cheaper than a
+/// real frame, and the `full` figure came out at half the baseline's: a heavier scene reported as
+/// faster, by a measurement the measurement had changed.
+pub fn pulse(found: Arc<AtomicUsize>) -> impl Operation<()> {
+    struct Pulse {
+        pressed: bool,
+        animating: usize,
+        found: Arc<AtomicUsize>,
+    }
+
+    impl Operation for Pulse {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+
+        fn custom(&mut self, _id: Option<&Id>, bounds: Rectangle, state: &mut dyn std::any::Any) {
+            let Some(ripple) = state.downcast_mut::<RippleState>() else {
+                return;
+            };
+            if ripple.is_idle() {
+                if !self.pressed {
+                    // `None` starts it from the centre — the documented origin for an activation
+                    // that carries no pointer position, which is precisely what this is.
+                    ripple.press(None, bounds.size());
+                    self.pressed = true;
+                    self.animating += 1;
+                }
+            } else {
+                self.animating += 1;
+            }
+        }
+
+        fn finish(&self) -> Outcome<()> {
+            self.found.store(self.animating, Ordering::Relaxed);
+            Outcome::None
+        }
+    }
+
+    Pulse {
+        pressed: false,
+        animating: 0,
+        found,
     }
 }
 
