@@ -180,6 +180,10 @@ pub struct WorktreeForm {
     /// The stage the daemon last reported for the in-flight create (feature 016, FR-024).
     /// `None` until the first `OperationProgress` arrives; reset when a new attempt starts.
     pub stage: Option<CreateStage>,
+    /// The latest live output line for [`Self::stage`], when the daemon has sent one (BUG-009,
+    /// T123). Only long stages produce these — a submodule fetch, in practice — so it stays `None`
+    /// for the fast ones, and is cleared on every stage change and new attempt.
+    pub stage_detail: Option<String>,
 }
 
 impl WorktreeForm {
@@ -698,9 +702,10 @@ pub enum Message {
     /// `Creating` so it shows an in-progress state until the daemon's reply closes or reopens it.
     /// Carries the mode so the stage display can be worded for it (feature 016, FR-024).
     WorktreeCreateStarted(CreateMode),
-    /// The daemon reported that the in-flight create entered a new stage (feature 016, FR-024).
-    /// Ignored once the form has closed.
-    WorktreeCreateStageChanged(CreateStage),
+    /// The daemon reported progress on the in-flight create: a new stage (feature 016, FR-024), or
+    /// — with the stage unchanged — its latest live output line, rate-limited daemon-side so a long
+    /// stage reads as moving rather than frozen (BUG-009, T123). Ignored once the form has closed.
+    WorktreeCreateStageChanged(CreateStage, Option<String>),
     /// The daemon created a worktree successfully (FR-007); add it and close the form.
     WorktreeCreated(Worktree),
     /// The daemon reported a worktree create failure (FR-017); show it, keep the form open.
@@ -1661,11 +1666,20 @@ impl State {
                     form.mode = mode;
                     // A new attempt never inherits the previous one's stage.
                     form.stage = None;
+                    form.stage_detail = None;
                 }
             }
-            Message::WorktreeCreateStageChanged(stage) => {
+            Message::WorktreeCreateStageChanged(stage, detail) => {
                 if let Some(form) = &mut self.worktree_form {
-                    form.stage = Some(stage);
+                    // Entering a stage clears the previous stage's trailing line — it described
+                    // work that is over. A detail-only push keeps the stage and replaces the line.
+                    if form.stage != Some(stage) {
+                        form.stage = Some(stage);
+                        form.stage_detail = None;
+                    }
+                    if detail.is_some() {
+                        form.stage_detail = detail;
+                    }
                 }
             }
             Message::WorktreeCreated(worktree) => {

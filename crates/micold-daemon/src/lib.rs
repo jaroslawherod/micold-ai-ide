@@ -14,6 +14,7 @@ pub mod hooks;
 pub mod lifecycle;
 pub mod logging;
 pub mod platform;
+pub mod progress;
 pub mod server;
 pub mod singleton;
 pub mod state;

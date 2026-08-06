@@ -12,7 +12,8 @@
 /// Bumped 1 → 2 for `ClientMsg::Hello::client_package_version` (FR-022a, BUG-002).
 /// Bumped 2 → 3 for `SessionSummary::input_serial` (FR-028a, BUG-006).
 /// Bumped 3 → 4 for `OperationResult::WorktreeDeleted::leftovers` (FR-023).
-pub const PROTOCOL_VERSION: u32 = 4;
+/// Bumped 4 → 5 for `DaemonMsg::OperationProgress::detail` (FR-004a, BUG-009).
+pub const PROTOCOL_VERSION: u32 = 5;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

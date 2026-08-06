@@ -369,6 +369,13 @@ pub enum DaemonMsg {
         req: u64,
         /// The stage that operation just entered.
         stage: CreateStage,
+        /// The operation's most recent live output line, when the stage has been running long
+        /// enough to have some (BUG-009, T123). `None` on the frame that announces a stage.
+        ///
+        /// Rate-limited by the sender, not per line: a submodule fetch emits thousands, and this
+        /// is a "still working, here's where" signal rather than a log to be reassembled. Lossy
+        /// like the stage itself — a missed line is simply superseded by the next.
+        detail: Option<String>,
     },
     /// A single session's summary changed.
     SessionChanged {

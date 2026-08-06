@@ -73,6 +73,12 @@ struct Inner {
     /// Cleared entirely on a `SettingsSet` that changes any env-include field; a single entry is
     /// removed on that directory's `WorktreeDelete`.
     env_include_cache: HashMap<PathBuf, Vec<(String, String)>>,
+    /// One mutual-exclusion gate per project for mutating worktree work (BUG-009, T120). Worktree
+    /// creates run as spawned tasks now — they must not park the connection loop that dispatched
+    /// them (FR-026a) — so the serialization the old inline `.await` provided as a side effect is
+    /// stated explicitly here instead of being lost. Keyed by project because two projects share no
+    /// git state to race over. Entries are cheap (`Arc<Mutex<()>>`) and bounded by project count.
+    worktree_gates: HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>,
 }
 
 /// One live process of a session: its PTY and its framer. The [`PtySession`] is behind an `Arc` so
@@ -160,6 +166,7 @@ impl DaemonState {
                 sessions: HashMap::new(),
                 worktrees: HashMap::new(),
                 env_include_cache: HashMap::new(),
+                worktree_gates: HashMap::new(),
             }),
             next_id: AtomicU64::new(1),
             lifecycle: Lifecycle::new(),
@@ -349,6 +356,32 @@ impl DaemonState {
             inner.attachments.retain(|_, att| att.client != id);
         }
         self.lifecycle.client_disconnected();
+    }
+
+    /// Release every attachment `id` holds, without deregistering it (FR-025a, BUG-009, T121).
+    ///
+    /// `deregister` above is the ordinary release, and it runs when the connection's message loop
+    /// exits. That is the right *place* only while nothing can park that loop: a handler blocked on
+    /// a multi-minute git operation kept a departed client's project held for the rest of it, so the
+    /// client's own reconnect was refused as busy by a connection that no longer existed — the
+    /// takeover banner naming the reconnecting window's own build. T120 removes the parking; this
+    /// makes the release independent of it, driven by the transport itself: the writer task calls it
+    /// the moment a push to this client fails, which is the earliest observable proof the peer is
+    /// gone. Idempotent, and safe to interleave with `deregister`.
+    pub fn release_attachments(&self, id: ClientId) {
+        self.lock().attachments.retain(|_, att| att.client != id);
+    }
+
+    /// The per-project gate serializing mutating worktree work (BUG-009, T120). Created on first
+    /// use. Callers `lock()` it inside the spawned operation — never on the connection loop, which
+    /// must stay free to answer this client's other frames (FR-026a).
+    pub fn worktree_gate(&self, project: &Path) -> Arc<tokio::sync::Mutex<()>> {
+        Arc::clone(
+            self.lock()
+                .worktree_gates
+                .entry(project.to_path_buf())
+                .or_default(),
+        )
     }
 
     /// Send one message to a specific client (best-effort; a dead channel is ignored).

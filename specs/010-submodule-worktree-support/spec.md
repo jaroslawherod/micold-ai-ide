@@ -77,6 +77,8 @@ A submodule fetch can fail for reasons outside the user's control mid-creation: 
 - **FR-002**: When the repository declares submodules, the system MUST automatically initialize and fetch all of them, including submodules nested inside other submodules, as part of worktree creation, without any separate user action.
 - **FR-003**: When the repository declares no submodules, the system MUST create the worktree exactly as today, with no additional step, delay, network activity, or UI change.
 - **FR-004**: While submodule content is being fetched, the system MUST visibly indicate to the user that fetching is in progress, distinguishing this state from the worktree creation form being unresponsive.
+- **FR-004a**: The in-progress indication MUST survive the entire fetch, including a fetch that runs for minutes. Since creation now runs behind the session service, this means the fetch MUST NOT be able to end the client's connection to that service: a fetch outlasting the service's liveness deadline MUST leave the connection healthy, the indication on screen, and the operation's own result deliverable (see `010-daemon-session-persistence` FR-026a/FR-035a).
+  **Bugfix**: 2026-08-06 — BUG-009 added this requirement; at ~10 s into a real submodule fetch the client declared the service dead, replaced the progress display with a disconnect banner and an unknown-outcome notice, and went read-only — so every promise this feature makes about slow fetches held only for fetches under 9 s. See `010-daemon-session-persistence/bugs/BUG-009.md`.
 - **FR-005**: When submodule fetch fails for one or more submodules (network failure, authentication failure, or an unreachable recorded commit), the system MUST roll back the entire worktree creation to a clean pre-creation state — worktree, branch, and directory all removed — consistent with the existing rollback flow used for other worktree-add failures. No worktree is left behind in an incomplete or partially-fetched state.
 - **FR-006**: When submodule fetch fails, the system MUST report which specific submodule(s) failed and a reason category (network error, authentication/credentials required, unreachable commit) rather than a generic failure message.
 - **FR-007**: System MUST authenticate to submodule remotes using the user's existing git/OS-level credential configuration (e.g., SSH agent, credential helper); it does not present its own credential entry UI.
@@ -98,6 +100,18 @@ A submodule fetch can fail for reasons outside the user's control mid-creation: 
 
 - Submodule authentication reuses the user's existing git/OS-level credential configuration (SSH agent, stored credential helper); this feature does not add an in-app credential entry flow.
 - Submodule fetching runs as a synchronous part of the create flow — the worktree is not presented to the user as ready until submodule fetching has concluded (succeeded, or reached the defined failure outcome).
+  **Bugfix 2026-08-06 (BUG-009)**: this assumption was written when creation ran inside the client process, where "synchronous" cost nothing but a spinning form. Creation now runs behind the session service, and the assumption must be read as a constraint on **user-visible ordering only** — it is not licence for the fetch to block the connection carrying the create. It blocked exactly that: the fetch was awaited inline in its connection's message loop, so liveness probes went unanswered and the client disconnected mid-fetch. See `010-daemon-session-persistence/bugs/BUG-009.md`.
 - Re-syncing submodules for a worktree that already exists (e.g., after `.gitmodules` changes upstream and the user pulls) remains a manual action outside this feature's scope; this feature only covers the moment of worktree creation.
 - A git version capable of submodule operations is available in the environment the application runs in; no bundled or alternate submodule implementation is introduced.
 - Relative submodule URLs resolve the same way for a linked worktree as for the main working tree, since git resolves them against the parent repository's configured remote rather than the local checkout path.
+
+---
+
+**Bugfix**: 2026-08-06 — BUG-009 Added FR-004a (the in-progress indication survives the whole fetch,
+which requires the fetch not to end the client's connection to the session service) and annotated the
+synchronous-create assumption, which predates this feature running behind that service. **No task
+reopened**: T005/T012 are correct for the in-process architecture they were written against, and
+T014/T017/T020's manual validations passed against a repository whose fetch finished inside the
+deadline — stale, not wrong. The fix itself is
+`010-daemon-session-persistence` Phase 22 (T120–T124), where the connection loop lives. See
+`010-daemon-session-persistence/bugs/BUG-009.md`.

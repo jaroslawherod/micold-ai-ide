@@ -272,6 +272,13 @@ a session survived; confirm it does not survive without the setting.
 - **Half-open connection**: the service is alive but the connection is silently dead (suspend/resume,
   container pause) — the client must detect this within a bounded time and enter the disconnected
   state rather than appearing live with a frozen screen.
+- **A long operation on an otherwise quiet connection**: the client asks for something that takes far
+  longer than the half-open deadline — a worktree create whose submodule fetch runs for minutes — and
+  nothing else is happening on that connection to prove it carries. The service is alive and working,
+  so the connection must keep answering liveness probes throughout; the operation's duration must not
+  be indistinguishable from the service having died. Getting this wrong compounds: the client
+  disconnects, the operation's real result is written to a socket nobody reads, and the reconnect can
+  be refused by the very connection that is still busy producing that result. *(BUG-009)*
 - **Slow consumer**: a session floods output faster than the client renders — the service must not
   block the session's process, must not grow memory without bound, and the client must converge to
   the true current screen rather than lagging indefinitely behind.
@@ -449,8 +456,27 @@ a session survived; confirm it does not survive without the setting.
   than about takeover events, the defect is unreachable. See `bugs/BUG-007.md`.
 - **FR-025**: A project held by a client that disconnects for any reason (including crash) MUST become
   attachable again without restarting the service.
+- **FR-025a**: A project's attachment MUST be released when its holder's connection ends, not when
+  whatever the service is doing on behalf of that holder finishes. A departed client MUST NOT be able
+  to refuse another attach — including its own reconnect — for the remaining duration of an operation
+  it requested.
+  **Bugfix**: 2026-08-06 — BUG-009 added this requirement; the attachment was released only when the
+  per-connection handler returned, and that handler was parked inside a multi-minute worktree create,
+  so the client's own reconnect was refused as busy by the connection it had just lost — the takeover
+  banner named the reconnecting window's own build. See `bugs/BUG-009.md`.
 - **FR-026**: A client MUST detect a dead or half-open connection within a bounded time and transition
   to a disconnected state; it MUST NOT continue to present stale content as live.
+- **FR-026a**: FR-026 infers death from silence, so the service MUST NOT be silent while it is alive:
+  a connection MUST remain responsive to that client's protocol traffic — at minimum its liveness
+  probes — for the entire duration of any operation that client requested, however long the operation
+  runs. No service-side operation may make a healthy connection indistinguishable from a dead one.
+  Progress reporting MAY reset the deadline as a side effect, but MUST NOT be what a connection's
+  liveness depends on: an operation that legitimately produces no output for longer than the deadline
+  MUST still keep its connection alive.
+  **Bugfix**: 2026-08-06 — BUG-009 added this requirement; a worktree create was moved off the async
+  runtime but still awaited inline in its connection's message loop, so liveness probes went
+  unanswered for the length of a submodule fetch and FR-026 correctly reported a healthy service as
+  dead. See `bugs/BUG-009.md`.
 - **FR-027**: While disconnected, the client MUST clearly indicate that displayed content may be
   stale, MUST disable actions that require the service, and MUST offer reconnection.
 - **FR-028**: On reconnect, the client MUST resynchronize by re-reading current authoritative state
@@ -477,6 +503,11 @@ a session survived; confirm it does not survive without the setting.
 compatibility), a new Edge Case, a 4th acceptance scenario on User Story 6, and SC-009a. See
 `bugs/BUG-002.md`.
 
+**Bugfix**: 2026-08-06 — BUG-009 Added FR-025a (an attachment is released when its holder's connection
+ends, not when the work it requested finishes) and FR-026a (a connection stays responsive for the
+whole duration of an operation it requested, so FR-026's silence-means-death inference stays sound),
+plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
+
 ### Synchronous operations across the boundary
 
 - **FR-031**: Every user-initiated mutating operation MUST resolve to exactly one of: success, a
@@ -490,6 +521,14 @@ compatibility), a new Edge Case, a 4th acceptance scenario on User Story 6, and 
   not a generic substitute.
 - **FR-035**: A mutation whose outcome is unknown MUST be resolved by reading authoritative state on
   reconnect, and the resolved outcome MUST be shown to the user.
+- **FR-035a**: The unknown-outcome state of FR-031 is reserved for a connection genuinely lost
+  mid-operation. It MUST NOT be reachable while the service is alive and holds the operation's actual
+  result: a slow operation MUST resolve to the specific success or failure the service computed —
+  including the version-control diagnostic detail FR-034 requires — rather than degrading to "may or
+  may not have taken effect" because the operation outlasted the liveness deadline (FR-026a).
+  **Bugfix**: 2026-08-06 — BUG-009 added this requirement; every submodule-repository worktree create
+  slower than the deadline resolved as unknown, discarding the failure detail that names which
+  submodule failed and why. See `bugs/BUG-009.md`.
 
 ### Platform behavior
 
@@ -593,6 +632,10 @@ compatibility), a new Edge Case, a 4th acceptance scenario on User Story 6, and 
   actionable message; after takeover, the displaced window sends zero further input and exits zero
   times.
 - **SC-011**: A dead or half-open connection is surfaced to the user within 10 seconds.
+- **SC-011a**: Zero disconnects are produced by the service being busy: an operation running for at
+  least ten times the liveness deadline on an otherwise quiet connection ends with its own definite
+  outcome delivered to the client that asked for it, and produces no disconnect notice, no
+  unknown-outcome notice, and no read-only banner along the way. *(BUG-009)*
 - **SC-012**: Session restart behavior when unattended is indistinguishable from attended behavior in
   attempt count, timing policy, and give-up state, verified by test.
 - **SC-013**: The existing headless integration test suite passes, with every migrated test recorded

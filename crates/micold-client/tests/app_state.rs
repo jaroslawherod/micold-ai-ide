@@ -1046,6 +1046,7 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
     state.update(Message::WorktreeCreateStarted(CreateMode::ReuseLocal));
     state.update(Message::WorktreeCreateStageChanged(
         CreateStage::CreatingWorktree,
+        None,
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1056,6 +1057,7 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
     state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
     state.update(Message::WorktreeCreateStageChanged(
         CreateStage::CreatingWorktree,
+        None,
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1066,6 +1068,7 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
     state.update(Message::WorktreeCreateStarted(CreateMode::Overwrite));
     state.update(Message::WorktreeCreateStageChanged(
         CreateStage::CreatingWorktree,
+        None,
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1078,6 +1081,7 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
     }));
     state.update(Message::WorktreeCreateStageChanged(
         CreateStage::CreatingWorktree,
+        None,
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1092,6 +1096,7 @@ fn stages_that_do_not_vary_by_mode_read_the_same_everywhere() {
         state.update(Message::WorktreeCreateStarted(mode));
         state.update(Message::WorktreeCreateStageChanged(
             CreateStage::SettingUpSubmodules,
+            None,
         ));
         assert_eq!(form(&state).stage_label(), Some("Setting up submodules"));
     }
@@ -1112,6 +1117,7 @@ fn a_new_attempt_never_inherits_the_previous_attempts_stage() {
     state.update(Message::WorktreeCreateStarted(CreateMode::Overwrite));
     state.update(Message::WorktreeCreateStageChanged(
         CreateStage::CreatingWorktree,
+        None,
     ));
     // The create fails and the user retries with a plain new branch.
     state.update(Message::WorktreeCreateFailed("boom".to_string()));
@@ -1120,10 +1126,95 @@ fn a_new_attempt_never_inherits_the_previous_attempts_stage() {
     assert_eq!(form(&state).stage_label(), None);
     state.update(Message::WorktreeCreateStageChanged(
         CreateStage::CreatingWorktree,
+        None,
     ));
     assert_eq!(
         form(&state).stage_label(),
         Some("Creating branch and worktree"),
         "a retry must not keep the previous attempt's wording"
     );
+}
+
+// --- BUG-009 T123: a long stage shows where it has got to, not just its name -------------
+
+#[test]
+fn a_live_output_line_is_kept_beside_the_stage_it_belongs_to() {
+    // The reported case: "Setting up submodules" sat unchanged for the length of a fetch. The
+    // daemon rate-limits these; the form's job is simply to hold the latest one.
+    let mut state = form_state();
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::SettingUpSubmodules,
+        None,
+    ));
+    assert_eq!(
+        form(&state).stage_detail,
+        None,
+        "a stage arrives on its own"
+    );
+
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::SettingUpSubmodules,
+        Some("Cloning into 'vendor/a'…".to_string()),
+    ));
+    assert_eq!(
+        form(&state).stage_detail.as_deref(),
+        Some("Cloning into 'vendor/a'…")
+    );
+
+    // Superseded, not accumulated — this is a "where it is now" signal, not a log.
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::SettingUpSubmodules,
+        Some("Receiving objects:  47%".to_string()),
+    ));
+    assert_eq!(
+        form(&state).stage_detail.as_deref(),
+        Some("Receiving objects:  47%")
+    );
+    assert_eq!(
+        form(&state).stage_label(),
+        Some("Setting up submodules"),
+        "a line never displaces the stage it describes"
+    );
+}
+
+#[test]
+fn a_stage_change_drops_the_previous_stages_trailing_line() {
+    // Otherwise a rollback would be captioned with the fetch line that preceded it — the most
+    // misleading moment to show a stale line.
+    let mut state = form_state();
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::SettingUpSubmodules,
+        None,
+    ));
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::SettingUpSubmodules,
+        Some("Receiving objects:  47%".to_string()),
+    ));
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::RollingBack,
+        None,
+    ));
+
+    assert_eq!(form(&state).stage_label(), Some("Rolling back"));
+    assert_eq!(form(&state).stage_detail, None);
+}
+
+#[test]
+fn a_new_attempt_never_inherits_the_previous_attempts_line() {
+    let mut state = form_state();
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::SettingUpSubmodules,
+        None,
+    ));
+    state.update(Message::WorktreeCreateStageChanged(
+        CreateStage::SettingUpSubmodules,
+        Some("Cloning into 'vendor/a'…".to_string()),
+    ));
+    state.update(Message::WorktreeCreateFailed("boom".to_string()));
+    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+
+    assert_eq!(form(&state).stage_detail, None);
 }

@@ -248,6 +248,51 @@ NOT** present stale content as live (FR-026).
 here (analysis I1). The 3 s/9 s figures are the contract — the interval and the deadline must stay
 coupled so their sum stays under the SC-011 bound.
 
+#### What the deadline assumes of the daemon (BUG-009, T124, FR-026a)
+
+The rule above infers death from silence. That inference is only sound while **the daemon is silent
+only when it is dead** — which is a constraint on the daemon, not on the client, and one that every
+newly added operation can violate without touching a line of this section.
+
+The obligation, stated as a property of the connection rather than of any operation:
+
+> A connection **MUST** keep serving its own protocol — at minimum answering `Ping` — for the entire
+> duration of any operation the client asked it for, however long that operation runs. Progress
+> reporting **MAY** reset the deadline as a side effect but **MUST NOT** be what liveness rests on:
+> an operation that legitimately emits nothing for longer than 9 s must still keep its link alive.
+
+Concretely, in `route()` (`crates/micold-daemon/src/server.rs`) — the one sequential loop per
+connection, and the only place that client's `Ping` is answered:
+
+- **`spawn_blocking(..).await` in the loop does not satisfy this.** It frees the runtime; it does not
+  free the loop. That is exactly how BUG-009 shipped.
+- An operation that can outlast the deadline **MUST** be `tokio::spawn`ed, replying through the
+  client's ordered frame channel (`state.frame_sender(id)` / `state.send(id, ..)`), which a departed
+  client drops harmlessly.
+- Spawning removes the incidental serialization the inline `.await` provided. Where two concurrent
+  runs could corrupt each other, take an explicit gate — `DaemonState::worktree_gate(project)` for
+  worktree mutations — inside the spawned task, never on the loop.
+
+Audit of the arms, as of 2026-08-06:
+
+| Arm | Can exceed 9 s? | Status |
+|---|---|---|
+| `WorktreeCreate` | **Yes** — submodule fetch is network-bound and routinely minutes | Spawned + per-project gate (T120) |
+| `WorktreeDelete` | **Yes** — `remove_dir_all` over dependency trees/build output; worse on a network FS | Spawned + per-project gate (T124) |
+| `SessionCreate` / `SessionStart` | **Yes** — `start_session` runs on the loop and resolves the user's environment-include script, whose timeout is user-configurable up to **60 s** (`MAX_ENV_INCLUDE_TIMEOUT_SECS`), plus a PTY fork | ⚠️ **Open** — see below |
+| `BranchPreflight`, `BranchList` | Unlikely — local `git for-each-ref` / `worktree list --porcelain`, no remote | Left inline; revisit if a pathological ref count is ever reported |
+| `SettingsSet`, `WorktreeRename`, `Project*`, `SessionDelete` | No — catalog + a small atomic file write | Left inline |
+| `Ping`, `Attach`, `Detach`, `SetViewedSession`, `SessionInput`, `Scrollback*` | No — lock-only or bounded | Left inline |
+
+⚠️ **`SessionCreate`/`SessionStart` is a known live instance of the same defect** and is *not* fixed
+here. A hanging environment-include script (a version manager waiting on the network) parks the
+connection for up to its configured timeout — 10 s by default, 60 s at the maximum — which reproduces
+BUG-009's disconnect on a session start rather than a worktree create. It is left open deliberately:
+unlike the worktree arms, spawning it races the input-ordering contract (§7) — a `SessionInput`
+arriving before the spawned start has registered the session has nowhere ordered to go — so it needs
+its own design (a per-session gate, or queueing input behind the start), not a drive-by change. See
+`bugs/BUG-009.md`.
+
 ---
 
 ## 6. Scrollback

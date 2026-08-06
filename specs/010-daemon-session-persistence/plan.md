@@ -395,6 +395,22 @@ pre-split count accounted for.
 client sends zero further input and does not exit; a project held by a crashed client becomes
 attachable without restarting the daemon.
 
+**Bugfix 2026-08-06 (BUG-009)**: the 3 s-ping / 9 s-deadline keepalive was designed against session
+traffic, where the daemon is never quiet for long, and its correctness rests on an unstated premise —
+*the daemon is silent only when it is dead*. W3's worktree management (T053) broke that premise by
+putting a multi-minute git operation on the same connection: the create runs off the runtime via
+`spawn_blocking` but is awaited inline in `route()`, the only place `Ping` is answered, and the
+per-stage progress dedupe means a submodule fetch emits one frame and then nothing. So the keepalive
+reaps a working daemon. Two rules follow, and both belong here rather than in whichever feature adds
+the next slow operation: **a connection serves its own protocol while it is busy** (spawn the
+operation, reply through the client's frame channel — never `.await` it in the loop that reads that
+client's frames), and **liveness is not a side effect of progress output** (a genuinely silent fetch
+must still keep the link alive). The exclusivity half is the same premise from the other side:
+`deregister` runs when the handler returns, so a parked handler keeps holding a project for a client
+that is already gone — release the attachment on transport close (FR-025a). *Tests first*: a client
+whose operation blocks past the deadline still receives `Pong`s throughout and still receives its
+operation's real outcome; a reconnect while that operation is running is accepted, not refused.
+
 **Bugfix 2026-07-28 (BUG-007)**: every clause above is about *entering* and *holding* the displaced
 state, and all of it is asserted daemon-side — what the daemon sends, never what the client does
 with it. That left the exit condition owned by nobody: the client recorded refusals and ignored
@@ -565,6 +581,20 @@ control plane you can read by eye is the justification for carrying two encoding
    carries it, not only on connect — and make sure the client's copy can move in both directions.**
    A shadow that is only ever corrected one way is a latch, not a cache. Two instances in one
    feature suggests looking for a third rather than waiting for it to be reported.
+9. **A protocol whose liveness is inferred from silence acquires a new failure mode every time a slow
+   operation is added to it.** The keepalive (W6) and the per-connection message loop (W1/W2) are
+   individually correct and jointly assume the daemon is quiet only when it is dead. Every
+   client-initiated operation added later — worktree create today, anything that shells out to a
+   network-bound tool tomorrow — is a chance to violate that assumption invisibly, because the code
+   that breaks it is nowhere near the code that depends on it: `spawn_blocking` looks like it has
+   already solved the problem (it frees the runtime, not the connection), and the failure only shows
+   up on repositories slow enough to cross the deadline, which the developer's test repo usually is
+   not (BUG-009). *Mitigation*: FR-026a states the obligation as a property of the connection rather
+   than of any one operation, and the T122 regression test asserts it against a synthetic operation
+   that blocks well past the deadline, so a future slow operation added to the loop fails a test
+   rather than shipping. *Generalisation*: when a protocol infers a peer's state from the **absence**
+   of traffic, every long-running operation is a liveness bug until proven otherwise — and the proof
+   has to be a test that is slow on purpose, since nothing else reproduces it.
 
 ---
 
@@ -583,6 +613,12 @@ structure entry, and added Risk 7 (a new indicator stacking on an inherited one)
 the client-restart resync step (the binding boundary is a new client process, not a reconnect), and
 added Risk 8 (mismatched lifetimes across the client/daemon boundary, and a contract test that
 encodes the mismatch as its premise). See `bugs/BUG-006.md`.
+
+**Bugfix**: 2026-08-06 — BUG-009 Updated from bugfix patch: annotated W6 with the two rules a
+silence-based keepalive imposes on any long client-initiated operation (serve the protocol while
+busy; liveness is not a side effect of progress output) and with the transport-close release of
+attachments, and added Risk 9 (a silence-inferred liveness protocol acquires a failure mode with
+every slow operation added to it). See `bugs/BUG-009.md`.
 
 **Bugfix**: 2026-07-28 — BUG-007 Updated from bugfix patch: annotated the exclusivity workstream's
 *Tests first* line with the missing symmetric clause (an accepted attach makes the window writable

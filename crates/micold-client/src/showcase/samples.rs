@@ -93,6 +93,10 @@ pub const TAG: &str = "feat";
 /// A stage name, for the progress indicator that pairs a bar with the step in flight.
 pub const STAGE: &str = "Fetching submodules…";
 
+/// A live output line under that stage — what a long stage reports while it runs (BUG-009, T123).
+/// Deliberately a real-shaped git line, so the pose shows the width the component actually meets.
+pub const STAGE_DETAIL: &str = "Receiving objects:  47% (470/1000), 1.21 MiB | 2.30 MiB/s";
+
 // ---------------------------------------------------------------------------------------------
 // The terminal grid
 // ---------------------------------------------------------------------------------------------

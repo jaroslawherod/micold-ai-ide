@@ -465,3 +465,19 @@ them): Developer A takes US1 (`select.rs` + `worktree_form.rs`), Developer B tak
   documented GUI-wiring exception.
 - Commit after each task or logical group.
 - Stop at any checkpoint to validate a story independently.
+
+---
+
+## Bugfix BUG-009 — stage-transition-only reporting was also the connection's only traffic
+
+- [X] T031 [US3] Closed by `010-daemon-session-persistence` **T120** and **T123**. FR-008a's rule —
+  reporting only stage *transitions* is a display decision and must not double as what keeps the
+  session-service connection alive — is now enforced on the daemon side: liveness comes from the
+  connection loop never being parked, and a long stage additionally reports its latest live output
+  line at a rate limit (`ProgressThrottle`, 400 ms). This feature's stage model is unchanged;
+  `StageProgress` gained an optional detail line beneath the label, ellipsised to keep the dialog
+  one line taller at most. No further work in this feature. Closes FR-008a.
+
+**Bugfix**: 2026-08-06 — BUG-009 Added T031 (pointer, closed). **No task reopened** — the stage
+model and its wording were correct; only how the service thinned them on the wire was not. See
+`../010-daemon-session-persistence/bugs/BUG-009.md`.

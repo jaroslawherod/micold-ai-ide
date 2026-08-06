@@ -992,12 +992,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 },
                 // FR-024: a stage push names the step in flight. Peeked, not removed — the
                 // operation is still running and its terminal reply still needs the pending op.
-                DaemonMsg::OperationProgress { req, stage } => {
+                DaemonMsg::OperationProgress { req, stage, detail } => {
                     if matches!(
                         app.pending_ops.get(&req),
                         Some(PendingOp::WorktreeCreate(_))
                     ) {
-                        app.core.update(Message::WorktreeCreateStageChanged(stage));
+                        app.core
+                            .update(Message::WorktreeCreateStageChanged(stage, detail));
                     }
                 }
                 DaemonMsg::OperationError {

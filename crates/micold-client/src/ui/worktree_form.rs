@@ -103,9 +103,11 @@ pub fn modal<'a>(
         fields = fields.push(Text::new(message, TypeRole::Caption, r).tint(r.error));
     }
 
-    // In-progress state while the daemon runs the create (T055). Git now runs on the daemon, which
-    // does not stream per-command/submodule progress, so this is a single continuous indicator until
-    // the daemon's reply closes the form (or reopens it with an error).
+    // In-progress state while the daemon runs the create (T055). The daemon reports the stage, and
+    // — for a stage long enough to have live output, i.e. a submodule fetch — its latest line at a
+    // rate-limited cadence (BUG-009, T123), so a multi-minute fetch reads as moving rather than
+    // frozen on one label. The indicator stands until the daemon's reply closes the form (or
+    // reopens it with an error).
     //
     // Feature 016 FR-024: name the step for the mode in flight — "Checking out existing branch"
     // rather than "Creating branch" — from the stage the daemon reports. Falls back to the
@@ -113,7 +115,7 @@ pub fn modal<'a>(
     // but the daemon has not started git yet.
     if is_creating {
         let label = form.stage_label().unwrap_or("Creating worktree…");
-        fields = fields.push(StageProgress::new(label, r));
+        fields = fields.push(StageProgress::new(label, r).detail(form.stage_detail.clone()));
     }
 
     // While a decision is pending, the prompt's own actions replace Create/Cancel — there is

@@ -21,7 +21,7 @@ use micold_core::protocol::messages::{
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     branch_candidates, create_worktree, preflight, remove_worktree, remove_worktree_dir,
-    BlockReason, CreateError, CreateProgressEvent, CreateStage, Leftover,
+    BlockReason, CreateError, CreateProgressEvent, Leftover,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
@@ -29,6 +29,7 @@ use tokio_util::codec::Framed;
 use crate::catalog::Catalog;
 use crate::hooks;
 use crate::logging;
+use crate::progress::ProgressThrottle;
 use crate::singleton::{self, Acquisition};
 use crate::state::DaemonState;
 use micold_core::endpoint;
@@ -133,6 +134,11 @@ pub async fn run() -> io::Result<()> {
 /// How often the restart supervisor polls live sessions for exits. Fast enough that a crash-restart
 /// feels immediate, cheap enough to be negligible at idle with a handful of sessions (US4).
 const SUPERVISION_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Minimum gap between two live-output lines forwarded for the *same* create stage (BUG-009, T123).
+/// A submodule fetch emits thousands of lines; the user needs to see it moving, not to read them.
+/// Fast enough to read as motion, slow enough that the wire cost is nil.
+const PROGRESS_DETAIL_MIN_GAP: std::time::Duration = std::time::Duration::from_millis(400);
 
 /// Spawn the restart-supervision loop (US4, FR-005). Ticks on [`SUPERVISION_INTERVAL`], drives the
 /// crash-loop policy for any session whose child exited, and broadcasts `CatalogChanged` when a
@@ -280,9 +286,15 @@ where
     // Writer task: drain this client's push channel to the wire. The channel already carries fully
     // formed frames — control messages (broadcasts, attach replies, pongs) and pushed grid frames —
     // in one ordered stream, so a grid delta never races ahead of the control it followed.
+    // A failed push is the earliest proof the peer is gone, so it is also where the client's
+    // attachments are released (FR-025a, BUG-009 T121). The ordinary release is `deregister` when
+    // `route` exits below; this one does not wait for whatever `route` is doing on this client's
+    // behalf to finish, which is what let a departed client keep refusing its own reconnect.
+    let writer_state = Arc::clone(&state);
     let writer = tokio::spawn(async move {
         while let Some(frame) = rx.recv().await {
             if sink.send(frame).await.is_err() {
+                writer_state.release_attachments(id);
                 break;
             }
         }
@@ -654,72 +666,96 @@ where
                 // Pushed through the client's own ordered frame channel — a clone of the sender
                 // moves into the blocking task, so the git work never touches the state lock and
                 // never blocks the runtime. A departed client simply drops the sends.
+                //
+                // BUG-009 (T120, FR-026a): the whole operation is *spawned*, not awaited here.
+                // `spawn_blocking` frees the runtime; it does not free this loop, and this loop is
+                // the only place this client's `Ping` is answered. Awaiting the join handle inline
+                // therefore made a working daemon silent for the length of a submodule fetch, and
+                // the client's 9 s liveness deadline reaped it — see `bugs/BUG-009.md`. Nothing in
+                // this arm may block the loop again: every reply below goes through the client's
+                // ordered frame channel, which is exactly what a departed client drops harmlessly.
                 let progress_tx = state.frame_sender(id);
-                let result = tokio::task::spawn_blocking(move || {
-                    let root = repo.join(".claude/worktrees");
-                    let target = root.join(&names.dir_name);
-                    let _ = std::fs::create_dir_all(&root);
-                    let target_exists = target.exists()
-                        && std::fs::read_dir(&target)
-                            .map(|mut d| d.next().is_some())
-                            .unwrap_or(false);
-                    // A stage emits several lines; only transitions are worth a frame.
-                    let mut last_stage: Option<CreateStage> = None;
-                    let mut on_progress = |event: CreateProgressEvent| {
-                        if last_stage == Some(event.stage) {
-                            return;
-                        }
-                        last_stage = Some(event.stage);
-                        if let Some(tx) = &progress_tx {
-                            let _ = tx.send(Frame::Control(DaemonMsg::OperationProgress {
-                                req,
-                                stage: event.stage,
-                            }));
-                        }
-                    };
-                    let r = create_worktree(
-                        &GitCli::new(),
-                        &repo,
-                        &target,
-                        &names,
-                        target_exists,
-                        &mode,
-                        &mut on_progress,
-                    );
-                    // `RolledBack` is the only outcome in which this attempt created anything at
-                    // `target`. `DuplicateDir` in particular means the directory was already
-                    // there — removing it would destroy the user's files (feature 016).
-                    if matches!(r, Err(CreateError::RolledBack(_))) {
-                        let _ = std::fs::remove_dir_all(&target);
-                    }
-                    r
-                })
-                .await;
-                match result {
-                    Ok(Ok(_worktree)) => {
-                        refresh_worktrees_and_broadcast(state, project).await;
-                        state.send(
-                            id,
-                            DaemonMsg::OperationOk {
-                                req,
-                                result: OperationResult::WorktreeCreated { dir_name },
-                            },
+                let task_state = Arc::clone(state);
+                tokio::spawn(async move {
+                    let state = &task_state;
+                    // Mutating worktree work is serialized per project. The inline `.await` used to
+                    // provide this as a side effect of blocking the loop; spawning would otherwise
+                    // let two creates interleave, and a second create's rollback removes `target`
+                    // (above) — which for a same-named racing pair is the *first* create's freshly
+                    // populated directory. Per project rather than globally: two projects have no
+                    // shared git state to race over. Recorded per T120.
+                    let gate = state.worktree_gate(&project);
+                    let _serialized = gate.lock().await;
+                    let result = tokio::task::spawn_blocking(move || {
+                        let root = repo.join(".claude/worktrees");
+                        let target = root.join(&names.dir_name);
+                        let _ = std::fs::create_dir_all(&root);
+                        let target_exists = target.exists()
+                            && std::fs::read_dir(&target)
+                                .map(|mut d| d.next().is_some())
+                                .unwrap_or(false);
+                        // A stage transition always gets a frame; within a stage the live output is
+                        // forwarded at a fixed rate (BUG-009, T123 — the rule and its reasoning
+                        // live in `ProgressThrottle`, with the clock injected so it is testable).
+                        let mut throttle = ProgressThrottle::new(PROGRESS_DETAIL_MIN_GAP);
+                        let mut on_progress = |event: CreateProgressEvent| {
+                            let stage = event.stage;
+                            let Some(detail) = throttle.admit(event, std::time::Instant::now())
+                            else {
+                                return;
+                            };
+                            if let Some(tx) = &progress_tx {
+                                let _ = tx.send(Frame::Control(DaemonMsg::OperationProgress {
+                                    req,
+                                    stage,
+                                    detail,
+                                }));
+                            }
+                        };
+                        let r = create_worktree(
+                            &GitCli::new(),
+                            &repo,
+                            &target,
+                            &names,
+                            target_exists,
+                            &mode,
+                            &mut on_progress,
                         );
+                        // `RolledBack` is the only outcome in which this attempt created anything
+                        // at `target`. `DuplicateDir` in particular means the directory was already
+                        // there — removing it would destroy the user's files (feature 016).
+                        if matches!(r, Err(CreateError::RolledBack(_))) {
+                            let _ = std::fs::remove_dir_all(&target);
+                        }
+                        r
+                    })
+                    .await;
+                    match result {
+                        Ok(Ok(_worktree)) => {
+                            refresh_worktrees_and_broadcast(state, project).await;
+                            state.send(
+                                id,
+                                DaemonMsg::OperationOk {
+                                    req,
+                                    result: OperationResult::WorktreeCreated { dir_name },
+                                },
+                            );
+                        }
+                        Ok(Err(e)) => {
+                            let (kind, message, detail) = describe_create_error(e);
+                            state.send(
+                                id,
+                                DaemonMsg::OperationError {
+                                    req,
+                                    kind,
+                                    message,
+                                    detail,
+                                },
+                            );
+                        }
+                        Err(join) => state.send(id, task_failed(req, "worktree create", &join)),
                     }
-                    Ok(Err(e)) => {
-                        let (kind, message, detail) = describe_create_error(e);
-                        state.send(
-                            id,
-                            DaemonMsg::OperationError {
-                                req,
-                                kind,
-                                message,
-                                detail,
-                            },
-                        );
-                    }
-                    Err(join) => state.send(id, task_failed(req, "worktree create", &join)),
-                }
+                });
             }
             // --- feature 016: read-only branch queries for the create form ---
             //
@@ -871,104 +907,116 @@ where
                     None
                 };
                 let dir2 = dir_name.clone();
-                let result = tokio::task::spawn_blocking(move || {
-                    let target = repo.join(".claude/worktrees").join(&dir2);
-                    let outcome = remove_worktree(
-                        &GitCli::new(),
-                        &repo,
-                        &target,
-                        branch_to_delete.as_deref(),
-                    )?;
-                    // Leftovers are NOT an error: git has already deregistered the worktree above,
-                    // so the delete did partly succeed. Failing the whole operation here skipped
-                    // the session cleanup and left the directory to come back as an unregistered
-                    // orphan — the "I deleted it and it reappeared" report.
-                    let leftovers = remove_worktree_dir(&target);
-                    Ok::<(bool, Vec<Leftover>), std::io::Error>((
-                        outcome.branch_delete_failed,
-                        leftovers,
-                    ))
-                })
-                .await;
-                match result {
-                    Ok(Ok((branch_delete_failed, leftovers))) => {
-                        // Gated on the git delete having succeeded (main `d88c7a1`): only now archive
-                        // the worktree's sessions durably and kill their live procs (outside the lock).
-                        match state.archive_and_remove_worktree_sessions(&project, &dir_name) {
-                            Ok(ptys) => {
-                                for pty in ptys {
-                                    let _ = pty.kill();
+                // Spawned rather than awaited here, for the same reason as `WorktreeCreate` above
+                // (BUG-009, T120/T124, FR-026a): `remove_dir_all` over a populated worktree —
+                // dependency trees, build output, initialized submodules — is unbounded work, and on
+                // a network filesystem it is slow enough to cross the client's liveness deadline on
+                // its own. It takes the same per-project gate, so a delete and a create on one
+                // project still serialize.
+                let task_state = Arc::clone(state);
+                tokio::spawn(async move {
+                    let state = &task_state;
+                    let gate = state.worktree_gate(&project);
+                    let _serialized = gate.lock().await;
+                    let result = tokio::task::spawn_blocking(move || {
+                        let target = repo.join(".claude/worktrees").join(&dir2);
+                        let outcome = remove_worktree(
+                            &GitCli::new(),
+                            &repo,
+                            &target,
+                            branch_to_delete.as_deref(),
+                        )?;
+                        // Leftovers are NOT an error: git has already deregistered the worktree
+                        // above, so the delete did partly succeed. Failing the whole operation here
+                        // skipped the session cleanup and left the directory to come back as an
+                        // unregistered orphan — the "I deleted it and it reappeared" report.
+                        let leftovers = remove_worktree_dir(&target);
+                        Ok::<(bool, Vec<Leftover>), std::io::Error>((
+                            outcome.branch_delete_failed,
+                            leftovers,
+                        ))
+                    })
+                    .await;
+                    match result {
+                        Ok(Ok((branch_delete_failed, leftovers))) => {
+                            // Gated on the git delete having succeeded (main `d88c7a1`): only now archive
+                            // the worktree's sessions durably and kill their live procs (outside the lock).
+                            match state.archive_and_remove_worktree_sessions(&project, &dir_name) {
+                                Ok(ptys) => {
+                                    for pty in ptys {
+                                        let _ = pty.kill();
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::warn!(%e, "archiving deleted worktree's sessions failed")
                                 }
                             }
-                            Err(e) => {
-                                tracing::warn!(%e, "archiving deleted worktree's sessions failed")
-                            }
-                        }
-                        state.invalidate_env_include(&cache_path);
-                        if leftovers.is_empty() {
-                            tracing::info!(
-                                project = %project.display(),
-                                worktree = %dir_name,
-                                branch_delete_failed,
-                                "worktree deleted"
-                            );
-                        } else {
-                            // WARN, not ERROR: git released the worktree and the sessions are
-                            // archived, so this is a partial success. Naming the blockers and their
-                            // owner is the whole point — `remove_dir_all` reports only the first
-                            // errno, which reached the user as a bare "Permission denied (os error
-                            // 13)" for a tree they had no way to identify (FR-023).
-                            tracing::warn!(
-                                project = %project.display(),
-                                worktree = %dir_name,
-                                branch_delete_failed,
-                                leftovers = %describe_leftovers(&leftovers),
-                                "worktree deregistered, but its directory could not be fully removed"
-                            );
-                        }
-                        refresh_worktrees_and_broadcast(state, project).await;
-                        state.send(
-                            id,
-                            DaemonMsg::OperationOk {
-                                req,
-                                result: OperationResult::WorktreeDeleted {
+                            state.invalidate_env_include(&cache_path);
+                            if leftovers.is_empty() {
+                                tracing::info!(
+                                    project = %project.display(),
+                                    worktree = %dir_name,
                                     branch_delete_failed,
-                                    leftovers,
+                                    "worktree deleted"
+                                );
+                            } else {
+                                // WARN, not ERROR: git released the worktree and the sessions are
+                                // archived, so this is a partial success. Naming the blockers and their
+                                // owner is the whole point — `remove_dir_all` reports only the first
+                                // errno, which reached the user as a bare "Permission denied (os error
+                                // 13)" for a tree they had no way to identify (FR-023).
+                                tracing::warn!(
+                                    project = %project.display(),
+                                    worktree = %dir_name,
+                                    branch_delete_failed,
+                                    leftovers = %describe_leftovers(&leftovers),
+                                    "worktree deregistered, but its directory could not be fully removed"
+                                );
+                            }
+                            refresh_worktrees_and_broadcast(state, project).await;
+                            state.send(
+                                id,
+                                DaemonMsg::OperationOk {
+                                    req,
+                                    result: OperationResult::WorktreeDeleted {
+                                        branch_delete_failed,
+                                        leftovers,
+                                    },
                                 },
-                            },
-                        );
+                            );
+                        }
+                        // Failed delete: sessions are left untouched (not killed, not archived) so an
+                        // FR-023-recoverable failure never becomes permanent loss. git's stderr rides along.
+                        // Logged at ERROR so it also lands in the recent-errors ring (FR-046) — this is
+                        // the only durable record of *why* a delete the user watched fail did fail.
+                        Ok(Err(e)) => {
+                            tracing::error!(
+                                project = %project.display(),
+                                worktree = %dir_name,
+                                error = %e,
+                                "worktree delete failed"
+                            );
+                            state.send(
+                                id,
+                                DaemonMsg::OperationError {
+                                    req,
+                                    kind: ErrorKind::GitFailed,
+                                    message: "failed to remove the worktree".into(),
+                                    detail: Some(e.to_string()),
+                                },
+                            )
+                        }
+                        Err(join) => {
+                            tracing::error!(
+                                project = %project.display(),
+                                worktree = %dir_name,
+                                error = %join,
+                                "worktree delete task failed"
+                            );
+                            state.send(id, task_failed(req, "worktree delete", &join))
+                        }
                     }
-                    // Failed delete: sessions are left untouched (not killed, not archived) so an
-                    // FR-023-recoverable failure never becomes permanent loss. git's stderr rides along.
-                    // Logged at ERROR so it also lands in the recent-errors ring (FR-046) — this is
-                    // the only durable record of *why* a delete the user watched fail did fail.
-                    Ok(Err(e)) => {
-                        tracing::error!(
-                            project = %project.display(),
-                            worktree = %dir_name,
-                            error = %e,
-                            "worktree delete failed"
-                        );
-                        state.send(
-                            id,
-                            DaemonMsg::OperationError {
-                                req,
-                                kind: ErrorKind::GitFailed,
-                                message: "failed to remove the worktree".into(),
-                                detail: Some(e.to_string()),
-                            },
-                        )
-                    }
-                    Err(join) => {
-                        tracing::error!(
-                            project = %project.display(),
-                            worktree = %dir_name,
-                            error = %join,
-                            "worktree delete task failed"
-                        );
-                        state.send(id, task_failed(req, "worktree delete", &join))
-                    }
-                }
+                });
             }
             ClientMsg::WorktreeRename {
                 req,
