@@ -15,7 +15,7 @@ use crate::app::NoticeLevel;
 use crate::ui::material::style;
 use iced::widget::container;
 use iced::{Element, Length, Padding};
-use micold_core::tokens::{elevation, shape, Rgb, Roles};
+use micold_core::tokens::{anatomy, elevation, shape, Rgb, Roles};
 
 /// A boxed container style function — each `impl Fn` from the style layer is a distinct opaque
 /// type, so the kinds are boxed behind one signature to be chosen at runtime.
@@ -232,6 +232,19 @@ impl<'a, M: 'a> From<Surface<'a, M>> for Element<'a, M> {
             )),
         };
         let mut widget = container(s.content).style(style);
+        // §7.4's width bounds, applied by the *kind* rather than by each dialog. A dialog narrower
+        // than 280dp reads as a tooltip; one that stretches to a wide window puts its action row
+        // an inch from its title. Neither is something a call site should have to remember, and
+        // the seven that build dialogs were each free to forget it.
+        if matches!(s.kind, Kind::Dialog) {
+            // Only the ceiling: the rendering stack's container has `max_width` and no matching
+            // floor, and the *floor* is the one a dialog reaches on its own — its content is a
+            // title and an action row, both wider than 280dp in every dialog this application has.
+            // Recorded rather than silently dropped: `anatomy::dialog::MIN_WIDTH` is asserted
+            // against the contract in `tokens_anatomy.rs`, so the number stays true even though
+            // nothing applies it here.
+            widget = widget.max_width(anatomy::dialog::MAX_WIDTH);
+        }
         if let Some(padding) = s.padding {
             widget = widget.padding(padding);
         }

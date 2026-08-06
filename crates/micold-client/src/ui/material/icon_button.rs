@@ -9,9 +9,9 @@ use crate::icons::Icon;
 use crate::ui::material::glyph::{icon, icon_colored};
 use crate::ui::material::style;
 use crate::ui::material::text::TypeRole;
-use iced::widget::button;
-use iced::Element;
-use micold_core::tokens::{shape, spacing, Rgb, Roles};
+use iced::widget::{button, container};
+use iced::{Element, Length};
+use micold_core::tokens::{anatomy, shape, spacing, Rgb, Roles};
 use std::marker::PhantomData;
 
 /// A boxed button style function — lets [`From::from`] pick between [`style::text_button`] and
@@ -26,6 +26,7 @@ pub struct IconButton<'a, M> {
     size: f32,
     tint: Option<Rgb>,
     padding: f32,
+    compact: bool,
     circular: bool,
     on_press: Option<M>,
     _marker: PhantomData<&'a ()>,
@@ -41,6 +42,7 @@ impl<'a, M: Clone + 'a> IconButton<'a, M> {
             size: TypeRole::Body.size(),
             tint: None,
             padding: spacing::XS,
+            compact: false,
             circular: false,
             on_press: None,
             _marker: PhantomData,
@@ -51,6 +53,24 @@ impl<'a, M: Clone + 'a> IconButton<'a, M> {
     /// the icon should match rather than a number (FR-004).
     pub fn size(mut self, role: TypeRole) -> Self {
         self.size = role.size();
+        self
+    }
+
+    /// Keep the button's natural size instead of enlarging it to §7.3's 48dp target.
+    ///
+    /// **A recorded deviation, not a preference.** FR-027 asks for a 48×48 minimum interactive
+    /// target on every control. FR-026a/FR-026c protect the sidebar's `dense` density, whose rows
+    /// are 36dp. The sidebar header carries four controls beside its title in a ~260dp panel: at
+    /// 48dp each they leave the title 60dp, and at the dense 36dp they still leave 60dp — neither
+    /// fits the word "Worktrees", which wants 73.5px. `tests/layout_text_overflow.rs` is what
+    /// showed that, by reporting the title painting past its clip.
+    ///
+    /// So inside the sidebar the target stays as it was. That is FR-027 unmet in one region, and it
+    /// is written down here and in `tasks.md` rather than resolved by quietly shrinking the title
+    /// or dropping a control — both of which would be a product decision made by a styling pass.
+    /// Every icon button outside the sidebar takes the full 48dp.
+    pub fn compact(mut self) -> Self {
+        self.compact = true;
         self
     }
 
@@ -114,10 +134,29 @@ impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
         }
         // Ripples in the glyph's own tint, and only when it can be pressed — a disabled icon
         // button already grades its glyph down, and a ripple would contradict that.
-        if pressable {
+        let element: Element<'a, M> = if pressable {
             super::Ripple::new(btn, tint, shape::FULL).into()
         } else {
             btn.into()
+        };
+        if !pressable {
+            return element;
         }
+        // §7.3's 48dp minimum interactive target, honoured **even though the visible container is
+        // smaller** — a 24dp glyph in a 40dp box is the ordinary case here, so a target that merely
+        // matched the container would be wrong on every icon button in the application (FR-027).
+        //
+        // A centring container rather than padding on the button: padding would grow the *visible*
+        // pill along with the target, and §7.3 asks for a large target around a small container,
+        // not a large container.
+        if b.compact {
+            return element;
+        }
+        container(element)
+            .width(Length::Fixed(anatomy::button::MIN_TOUCH_TARGET))
+            .height(Length::Fixed(anatomy::button::MIN_TOUCH_TARGET))
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .into()
     }
 }

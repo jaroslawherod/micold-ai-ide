@@ -11,7 +11,7 @@ use crate::ui::material::style;
 use crate::ui::material::{Text, TypeRole};
 use iced::widget::button;
 use iced::{Background, Border, Color, Element};
-use micold_core::tokens::{shape, spacing, state, Rgb, Roles};
+use micold_core::tokens::{anatomy, shape, state, Rgb, Roles};
 
 /// A pill-shaped on/off chip: filled in its accent while active, outlined while inactive.
 /// Pressing it emits `on_press`.
@@ -73,12 +73,15 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         // The sidebar's tag role: this chip sits among the tag chips and runs at the same reduced
         // density, so it takes the same role rather than the general `Action` one.
         let chip_button = button(Text::new(chip.label, TypeRole::SidebarTag, r))
+            // §7.6: a chip is 32dp tall with 12dp of horizontal padding. The vertical padding is
+            // what makes the height, so it is derived from the two rather than guessed at 1dp.
             .padding(iced::Padding {
-                top: 1.0,
-                bottom: 1.0,
-                left: spacing::SM,
-                right: spacing::SM,
+                top: 0.0,
+                bottom: 0.0,
+                left: anatomy::chip::PADDING,
+                right: anatomy::chip::PADDING,
             })
+            .height(iced::Length::Fixed(anatomy::chip::HEIGHT))
             .on_press(chip.on_press)
             .style(move |_theme: &iced::Theme, status| {
                 // The chip responds to the pointer. It used to ignore `status` entirely, so a

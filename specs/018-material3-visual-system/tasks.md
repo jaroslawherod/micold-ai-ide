@@ -291,12 +291,12 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T053a [P] [US4] Assert the connection-status banner stayed a separate component: a test confirming `ConnectionBanner` still renders as a full-width, non-dismissible, non-queued strip and does not route through the snackbar queue. Material treats banners and snackbars as different components, and folding one into the other is the specific mistake this requirement forbids (FR-032c)
 - [X] T054 [US4] Rework `crates/micold-client/src/ui/material/toolbar.rs` to the small app bar anatomy — 64dp height, 16dp padding, `title_large` title, 48dp icon targets — and add `.elevated(bool)` (FR-025)
 - [X] T055 [US4] Wire elevate-on-scroll: add the scroll handler to the sidebar's scrollable in `crates/micold-client/src/ui/sidebar.rs`, a message variant and view-state flag in `crates/micold-client/src/app.rs`, and pass it to the toolbar builder (FR-025a, research R10)
-- [ ] T056 [P] [US4] Add the dense (36dp) and standard (48dp) row densities to `crates/micold-client/src/ui/material/tree_view.rs`, defaulting the sidebar to dense (FR-026, FR-026a)
-- [ ] T057 [P] [US4] Enforce the 48dp minimum interactive target in `crates/micold-client/src/ui/material/icon_button.rs` (FR-027)
-- [ ] T058 [P] [US4] Apply dialog anatomy in `crates/micold-client/src/ui/material/modal.rs` — 24dp padding, `headline_small` title, `body_medium` body, trailing-aligned action row with 8dp gap (FR-028)
-- [ ] T059 [P] [US4] Apply menu anatomy in `crates/micold-client/src/ui/material/menu.rs` — `surface_container`, elevation 2, `extra_small` corner, 48dp items (FR-029)
-- [ ] T060 [P] [US4] Apply chip anatomy in `crates/micold-client/src/ui/material/tag.rs` and `toggle_chip.rs` — 32dp height, `full` corner, `label_large` (FR-030)
-- [ ] T061 [US4] Confirm the known-projects list in `crates/micold-client/src/ui/project_selector.rs` uses the standard row density while the sidebar stays dense (FR-026)
+- [X] T056 [P] [US4] Add the dense (36dp) and standard (48dp) row densities to `crates/micold-client/src/ui/material/tree_view.rs`, defaulting the sidebar to dense (FR-026, FR-026a)
+- [X] T057 [P] [US4] Enforce the 48dp minimum interactive target in `crates/micold-client/src/ui/material/icon_button.rs` (FR-027)
+- [X] T058 [P] [US4] Apply dialog anatomy in `crates/micold-client/src/ui/material/modal.rs` — 24dp padding, `headline_small` title, `body_medium` body, trailing-aligned action row with 8dp gap (FR-028)
+- [X] T059 [P] [US4] Apply menu anatomy in `crates/micold-client/src/ui/material/menu.rs` — `surface_container`, elevation 2, `extra_small` corner, 48dp items (FR-029)
+- [X] T060 [P] [US4] Apply chip anatomy in `crates/micold-client/src/ui/material/tag.rs` and `toggle_chip.rs` — 32dp height, `full` corner, `label_large` (FR-030)
+- [X] T061 [US4] Confirm the known-projects list in `crates/micold-client/src/ui/project_selector.rs` uses the standard row density while the sidebar stays dense (FR-026)
 - [ ] T062 [US4] Update `docs/user-guide/` to document the snackbar's one-at-a-time queueing and timed dismissal — the single sanctioned behavior change (FR-036a, FR-041, Principle VII)
 
 > **T044 and T044a moved in-crate.** Both name a path under `crates/micold-client/tests/`, and
@@ -313,6 +313,26 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 > height beneath rather than inside, and an absent adornment contributing no layout node at all.
 > The same assertions run over a wrapped **select** as over a text input, which is the half of
 > FR-031c a single-control test would silently not cover.
+
+> **⚠ FR-027 is unmet inside the sidebar, deliberately, and needs your call.**
+>
+> §7.3 asks for a 48×48 minimum interactive target on every control. §7.2's `dense` density — which
+> FR-026a and FR-026c exist to protect — makes the sidebar's rows 36dp. The sidebar header carries
+> four controls beside its title in a ~260dp panel, and the two requirements cannot both hold there:
+> at 48dp each the title gets 60dp, at the dense 36dp it still gets 60dp, and the word "Worktrees"
+> wants 73.5px. `tests/layout_text_overflow.rs` is what found it, by reporting the title painting
+> past its clip.
+>
+> Every icon button outside the sidebar takes the full 48dp. Inside it, `IconButton::compact()`
+> keeps the previous size. The alternatives are product decisions a styling pass should not take on
+> its own: shrink the header title's role, drop one of the four controls, or widen the sidebar.
+>
+> **T058 partially applied.** The dialog's padding (24dp), title role (`headline_small`), body role
+> (`body_medium`) and 8dp action gap already matched §7.4 after T017–T021, so the change is the
+> 560dp maximum width, applied by `SurfaceKind::Dialog` so no dialog call site has to remember it.
+> The 280dp *minimum* is not applied: the rendering stack's container has `max_width` and no
+> matching floor, and every dialog here exceeds 280dp on its own content. The constant stays
+> asserted against the contract in `tokens_anatomy.rs`.
 
 **Checkpoint**: Components match their Material counterparts. Demonstrable via quickstart §B4.
 

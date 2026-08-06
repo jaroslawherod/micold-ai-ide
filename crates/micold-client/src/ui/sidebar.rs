@@ -32,6 +32,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
             .into();
     let add_worktree = Tooltip::new(
         IconButton::new(Icon::AddWorktree, r)
+            .compact()
             .tint(r.primary)
             .on_press(Message::AddWorktreeOpened),
         "Add a worktree (new git branch)",
@@ -39,6 +40,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     );
     let hide = Tooltip::new(
         IconButton::new(Icon::HideSidebar, r)
+            .compact()
             .tint(r.on_surface_variant)
             .on_press(Message::SidebarToggled),
         "Hide sidebar",
@@ -119,6 +121,10 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     };
 
     let tree: Element<'_, Message> = TreeView::new(build_items(state, entries, r), r)
+        // The sidebar is the one list at `dense` (§7.2, FR-026a): 36dp rows rather than 48dp, so
+        // the worktree count visible without scrolling does not drop. A named step on the shared
+        // density scale, not a bespoke shrink (FR-026c).
+        .density(tokens::density::DENSE)
         .label_role(TypeRole::SidebarName)
         .into();
     let list: Element<'_, Message> = match hint {
@@ -172,6 +178,7 @@ pub fn collapsed_strip(scheme: micold_core::theme::ColorScheme) -> Element<'stat
     let r = tokens::roles(scheme);
     let show = Tooltip::new(
         IconButton::new(Icon::ShowSidebar, r)
+            .compact()
             .tint(r.on_surface_variant)
             .on_press(Message::SidebarToggled),
         "Show sidebar",
@@ -313,6 +320,9 @@ fn action_icon(
     r: Roles,
 ) -> Element<'static, Message> {
     let button = IconButton::new(glyph, r)
+        // Inside the sidebar's dense rows — see `IconButton::compact` for the contract conflict
+        // this resolves at the call site rather than in the component.
+        .compact()
         .size(TypeRole::SidebarName)
         .tint(tint)
         .on_press_maybe(active.then_some(message));
