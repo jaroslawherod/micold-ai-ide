@@ -496,9 +496,14 @@ Shared by both densities:
 | Label role         | `label_large`       | `label_large`             | `label_large`       | —                |
 | Icon size          | 18 (leading)        | 18                        | 18                  | 24               |
 | Elevation          | 0                   | 0                         | 0                   | 0                |
+| Label alignment    | centred in the height | centred                 | centred             | centred          |
 
 The minimum touch target is honored even where the visible container is smaller — an icon button's
 24dp glyph in a 40dp container still presents a 48dp hit area.
+
+The label-alignment row is FR-030a applied here: 40dp of height around a 20dp `label_large` line is
+20dp of slack by construction, and a height that does not say where its content sits resolves it
+against the top edge. Stated for the same reason §7.6's chip row states it.
 
 Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`.
 
@@ -526,7 +531,7 @@ Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`
 | Surface         | `surface_container`, elevation 2             |
 | Shape           | `extra_small` (4); popovers `medium` (12)    |
 | Vertical padding| 8                                            |
-| Item height     | 48                                           |
+| Item height     | 48, with the item's content centred in it    |
 | Item padding    | 12 horizontal                                |
 | Item label      | `label_large`, `on_surface`                  |
 | Item icon       | 24, `on_surface_variant`                     |

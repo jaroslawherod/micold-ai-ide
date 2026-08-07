@@ -12,9 +12,9 @@
 
 use crate::ui::material::style;
 use crate::ui::material::text::{Text, TypeRole};
-use iced::widget::button;
-use iced::{Element, Length, Padding};
-use micold_core::tokens::{shape, Roles};
+use iced::widget::{button, container};
+use iced::{Alignment, Element, Length, Padding};
+use micold_core::tokens::{density, shape, Roles};
 
 /// Each `impl Fn` returned by the style layer is a distinct opaque type, so the variants are boxed
 /// behind one signature to be chosen at runtime.
@@ -136,7 +136,25 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
 
 impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
     fn from(b: Button<'a, M>) -> Self {
-        let mut widget = button(b.content).style(b.variant.style(b.roles));
+        // §7.3's 40dp, the first row of the variant table and the same for all three. It was stated
+        // in this file's own documentation ("Feature 018 assigns each variant a height from the
+        // density scale") and applied nowhere: `density::BUTTON_BASE` was referenced by no call
+        // site, and a filled button laid out at 30dp — its label plus the rendering stack's default
+        // padding. Found by `anatomy_size.rs`, which is the check BUG-002 added for exactly this
+        // shape: a figure that is right in the token module and never reaches the component.
+        //
+        // The centring wrapper is not optional, and FR-030a is why. Fixing a height above the
+        // content's creates slack, and `button` lays its content out under `limits.height(Fixed)`,
+        // which sets the minimum with the maximum — so the content node is stretched to 40dp and
+        // draws at the top of it unless something says otherwise. That was BUG-001 exactly, one
+        // component over. A wrapper rather than the content's own `align_y` because the content is
+        // an arbitrary `Element` here, not a `Text` this type can reach into.
+        let content = container(b.content)
+            .height(Length::Fill)
+            .align_y(Alignment::Center);
+        let mut widget = button(content)
+            .height(Length::Fixed(density::BUTTON_BASE))
+            .style(b.variant.style(b.roles));
         if let Some(padding) = b.padding {
             widget = widget.padding(padding);
         }

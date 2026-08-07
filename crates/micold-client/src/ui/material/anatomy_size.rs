@@ -20,18 +20,24 @@
 //!
 //! # How, and why twice
 //!
-//! Each component is laid out under two differently-sized limits. That is what separates the three
+//! Each component is laid out under two differently-sized limits. That is what separates the
 //! outcomes an axis can have, which no single measurement can:
 //!
-//! - **`Fixed`** — the same number under both, equal to the anatomy constant. §7.3's 48dp target,
-//!   §7.6's 32dp chip, §7.1's 64dp bar.
-//! - **`Fill`** — tracks the limit. Intended for the app bar's width; a defect anywhere a contract
-//!   states a number.
+//! - **`Fixed`** — the same number under both, equal to the anatomy constant. §7.1's 64dp bar,
+//!   §7.3's 48dp target and 40dp button, §7.5's 48dp menu item, §7.6's 32dp chip, §7.7's 56dp field.
+//! - **`Fill`** — tracks the limit. Intended for the app bar's width and a menu item's; a defect
+//!   anywhere a contract states a number.
 //! - **`Content`** — the same number under both, and smaller than the room offered. A chip's width,
-//!   a compact icon button.
+//!   a compact icon button, and §7.2's tree row, whose height floor is deliberately not applied.
+//! - **`AtLeast` / `AtMost`** — §7.8's snackbar, the one entry the contract bounds rather than
+//!   fixes.
 //!
 //! One measurement cannot tell `Fixed(48)` from `Fill` (offer exactly 48 and they agree) nor `Fill`
-//! from `Content` (offer a tight box and they agree). Two, at different sizes, tell all three apart.
+//! from `Content` (offer a tight box and they agree). Two, at different sizes, tell them apart.
+//!
+//! Some figures belong to a component's *row* rather than to the component — §7.2's row, §7.5's
+//! item — so an entry may name a path into the laid-out tree. Reading the root there would measure
+//! the list.
 //!
 //! # In-crate, like its neighbours
 //!
@@ -42,9 +48,12 @@ use iced::advanced::layout;
 use iced::advanced::widget::Tree;
 use iced::{Element, Length, Size};
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, anatomy, Roles};
+use micold_core::tokens::{self, anatomy, density, Roles};
 
-use super::{IconButton, ToggleChip, Toolbar};
+use super::{
+    menu, Button, ButtonVariant, IconButton, MenuItem, Snackbar, Text, TextField, ToggleChip,
+    Toolbar, TreeItem, TreeView, TypeRole,
+};
 use crate::icons::Icon;
 use crate::showcase::state::Message;
 
@@ -62,6 +71,31 @@ fn roles() -> Roles {
     tokens::roles(ColorScheme::Light)
 }
 
+/// `Snackbar` borrows its notification, so the specimens need ones that outlive the `Element`.
+///
+/// Two, because §7.8 states a minimum height and a maximum width and one message cannot exercise
+/// both: a short message sits at the height floor and nowhere near the width cap, and a long one
+/// pushes the cap while clearing the floor by so much that the floor becomes vacuous.
+static SHORT: std::sync::OnceLock<micold_core::notify::Notification> = std::sync::OnceLock::new();
+static LONG: std::sync::OnceLock<micold_core::notify::Notification> = std::sync::OnceLock::new();
+
+fn short_notice() -> &'static micold_core::notify::Notification {
+    SHORT.get_or_init(|| {
+        micold_core::notify::Notification::new(micold_core::notify::Level::Info, "Created")
+    })
+}
+
+fn long_notice() -> &'static micold_core::notify::Notification {
+    LONG.get_or_init(|| {
+        micold_core::notify::Notification::new(
+            micold_core::notify::Level::Info,
+            "Created the worktree, checked out the branch, copied the environment include script \
+             into place, and started a session in it — which is deliberately far more text than \
+             600dp of one line can hold.",
+        )
+    })
+}
+
 /// What an axis of a component is allowed to do.
 #[derive(Clone, Copy)]
 enum Extent {
@@ -71,19 +105,38 @@ enum Extent {
     Fill,
     /// Sized by what it holds: the same under both limits, and smaller than either.
     Content,
+    /// At least this many dp, and content-sized above it — §7.8's snackbar minimum height.
+    AtLeast(f32),
+    /// Content-sized, but never past this — §7.8's snackbar maximum width. Asserted under the
+    /// roomy limit only, since the snug one is below the cap and would pass vacuously.
+    AtMost(f32),
 }
 
-/// The size `build` resolves to inside `bounds`.
-fn laid_out(element: Element<'_, Message>, bounds: Size) -> Size {
+/// The size the node at `path` resolves to when `element` is laid out inside `bounds`.
+///
+/// `path` walks the laid-out tree by child index, empty meaning the root. Some anatomy figures
+/// belong to a component's *row* rather than to the component — §7.2's row height inside a tree,
+/// §7.5's item height inside a menu — and reading the root would measure the list instead of the
+/// thing the contract names.
+fn laid_out(element: Element<'_, Message>, bounds: Size, path: &[usize]) -> Size {
     let mut element = element;
     let renderer = super::test_support::renderer();
     let mut tree = Tree::new(element.as_widget());
     let limits = layout::Limits::new(Size::ZERO, bounds);
-    element
+    let node = element
         .as_widget_mut()
-        .layout(&mut tree, &renderer, &limits)
-        .bounds()
-        .size()
+        .layout(&mut tree, &renderer, &limits);
+
+    let mut current = &node;
+    for (depth, &index) in path.iter().enumerate() {
+        current = current.children().get(index).unwrap_or_else(|| {
+            panic!(
+                "no child {index} at depth {depth} of {path:?} — the component's tree changed \
+                 shape, so this entry is measuring something other than what it names"
+            )
+        });
+    }
+    current.bounds().size()
 }
 
 /// Why `measured` is wrong for an axis declared `expected`, or `None` if it is right.
@@ -132,6 +185,15 @@ fn violation(
                  and smaller than either box."
             )
         }),
+        Extent::AtLeast(dp) => (roomy < dp - TOLERANCE || snug < dp - TOLERANCE)
+            .then(|| format!("{seen}, but its anatomy entry states a minimum of {dp}dp.")),
+        Extent::AtMost(dp) => (roomy > dp + TOLERANCE).then(|| {
+            format!(
+                "{seen}, but its anatomy entry caps it at {dp}dp. (Judged under the roomy \
+                     limit only: the snug one is already below the cap, so it cannot show a \
+                     missing one.)"
+            )
+        }),
     }
 }
 
@@ -142,8 +204,20 @@ fn assert_anatomy_size(
     width: Extent,
     height: Extent,
 ) {
-    let roomy = laid_out(build(), ROOMY);
-    let snug = laid_out(build(), SNUG);
+    assert_anatomy_size_at(component, build, &[], width, height)
+}
+
+/// As [`assert_anatomy_size`], measuring the node at `path` rather than the root — for a figure
+/// the contract gives to a component's row rather than to the component (§7.2, §7.5).
+fn assert_anatomy_size_at(
+    component: &str,
+    build: impl Fn() -> Element<'static, Message>,
+    path: &[usize],
+    width: Extent,
+    height: Extent,
+) {
+    let roomy = laid_out(build(), ROOMY, path);
+    let snug = laid_out(build(), SNUG, path);
 
     let complaints: Vec<String> = [
         violation(
@@ -245,6 +319,117 @@ fn an_app_bar_is_64dp_tall_and_spans_its_window() {
     );
 }
 
+/// §7.3: the filled, outlined and text variants are 40dp tall. All three, because the height is the
+/// variant table's first row and nothing about it varies between them — a variant that acquired its
+/// own height would be §7.2's density scale reinvented one component down.
+#[test]
+fn a_button_is_40dp_tall_whichever_variant_it_is() {
+    for (name, variant) in [
+        ("a filled button", ButtonVariant::Filled),
+        ("an outlined button", ButtonVariant::Outlined),
+        ("a text button", ButtonVariant::Text),
+    ] {
+        assert_anatomy_size(
+            name,
+            move || {
+                Button::with_content(
+                    Text::new("Open", TypeRole::Action, roles()),
+                    variant,
+                    roles(),
+                )
+                .on_press(Message::NoOp)
+                .into()
+            },
+            Extent::Content,
+            Extent::Fixed(density::BUTTON_BASE),
+        );
+    }
+}
+
+/// §7.5: a menu item is 48dp tall and spans the panel it sits in.
+///
+/// Measured on the item, not the column: the column is as tall as its items and would pass on any
+/// item height at all. `item_column` is the shared stack behind both `MenuOverlay` and
+/// `ContextMenu`, so one entry covers both.
+#[test]
+fn a_menu_item_is_48dp_tall_and_spans_its_panel() {
+    assert_anatomy_size_at(
+        "a menu item",
+        || {
+            menu::item_column(
+                vec![MenuItem::new(Icon::About, "About", Message::NoOp)],
+                roles(),
+            )
+        },
+        &[0],
+        Extent::Fill,
+        Extent::Fixed(density::MENU_ITEM_BASE),
+    );
+}
+
+/// §7.7: the filled text field is 56dp tall and spans the form column it sits in.
+#[test]
+fn a_text_field_is_56dp_tall_and_spans_its_column() {
+    assert_anatomy_size(
+        "a text field",
+        || TextField::new("Branch", "", roles()).into(),
+        Extent::Fill,
+        Extent::Fixed(density::TEXT_FIELD_BASE),
+    );
+}
+
+/// §7.8: a snackbar is at least 48dp tall and never wider than 600dp.
+///
+/// A minimum and a maximum rather than a size, and two specimens because one message cannot
+/// exercise both — see [`short_notice`]. Measured on the panel (child 0), which is the box §7.8
+/// describes; the root adds the margin that floats it off the window edge.
+#[test]
+fn a_snackbar_clears_48dp_and_stays_within_600dp() {
+    assert_anatomy_size_at(
+        "a snackbar with a short message",
+        || Snackbar::new(short_notice(), roles()).into(),
+        &[0],
+        Extent::AtMost(anatomy::snackbar::MAX_WIDTH),
+        Extent::AtLeast(anatomy::snackbar::MIN_HEIGHT),
+    );
+    assert_anatomy_size_at(
+        "a snackbar with a message far past the cap",
+        || Snackbar::new(long_notice(), roles()).into(),
+        &[0],
+        Extent::AtMost(anatomy::snackbar::MAX_WIDTH),
+        Extent::AtLeast(anatomy::snackbar::MIN_HEIGHT),
+    );
+}
+
+/// §7.2's row height is **deliberately not applied**, and this is what holds that decision in
+/// place rather than leaving it to a code comment.
+///
+/// The contract disagrees with itself here: §7.2 gives the dense density a 36dp row, and the same
+/// paragraph says the density exists so the count of worktrees visible without scrolling does not
+/// drop materially (FR-011). Rows are ~23.6dp untagged today; imposing 36 costs about 30% of what
+/// fits on screen, which is the outcome that clause exists to prevent. The decision is recorded at
+/// `tree_view.rs:227-237` and in tasks.md's T042 note: the purpose wins, the number does not apply,
+/// and the density still governs the row's horizontal padding and icon gap.
+///
+/// So the assertion is `Content` — a row sized by what it holds. Declaring it that way is the point
+/// of the `Extent` vocabulary: this is not an oversight the gate failed to catch, it is a decision
+/// the gate now states. Changing the decision means changing this entry, in the open.
+#[test]
+fn a_tree_row_is_sized_by_its_content_not_by_section_7_2s_floor() {
+    assert_anatomy_size(
+        "a tree row",
+        || {
+            TreeView::new(
+                vec![TreeItem::new(0, "feat-short", roles().on_surface)],
+                roles(),
+            )
+            .into()
+        },
+        Extent::Fill,
+        Extent::Content,
+    );
+}
+
 /// The gate can fail, shown against the exact chain BUG-002 was: a container that states 48dp and
 /// then hands both axes to `center_x`/`center_y`, which set the length as well as aligning.
 ///
@@ -261,8 +446,8 @@ fn the_gate_can_fail() {
             .into()
     };
 
-    let roomy = laid_out(sabotage(), ROOMY);
-    let snug = laid_out(sabotage(), SNUG);
+    let roomy = laid_out(sabotage(), ROOMY, &[]);
+    let snug = laid_out(sabotage(), SNUG, &[]);
     let complaint = violation(
         "the sabotage",
         "width",

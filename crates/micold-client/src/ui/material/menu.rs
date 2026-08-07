@@ -20,7 +20,7 @@ use crate::ui::material::{menu_panel, IconButton, Text, TypeRole};
 use iced::widget::{button, column, row};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
-use micold_core::tokens::{motion::duration, shape, spacing, Roles};
+use micold_core::tokens::{density, motion::duration, shape, spacing, Roles};
 
 /// One entry in a menu. Generic over the message type for reuse.
 pub struct MenuItem<M> {
@@ -67,23 +67,28 @@ const CONTEXT_MENU_WIDTH: f32 = 160.0;
 /// open off-screen (feature 015).
 ///
 /// Derived from the same tokens the panel is built from: the panel's own [`spacing::XS`] padding
-/// on both sides, each item's [`spacing::SM`] button padding plus one line of its label, and
-/// [`spacing::XS`] between items. Deliberately rounds the line height **up** — erring large keeps
-/// the panel comfortably inside the window rather than flush against the edge.
+/// on both sides, [`density::MENU_ITEM_BASE`] per item, and [`spacing::XS`] between items.
+///
+/// The item height is now read from the token rather than rebuilt from padding plus a line box.
+/// While §7.5's 48dp went unapplied this estimate reproduced the *actual* 36dp by restating the
+/// arithmetic that produced it, so it stayed right by tracking the defect — and would have gone
+/// wrong the moment the height was fixed. One number, in one place, is what stops that: the panel
+/// and its clamping estimate cannot now disagree about how tall an item is.
 pub fn menu_panel_size(items: usize) -> (u16, u16) {
-    // The label's own line height, so the estimate follows the type scale rather than restating
-    // it. This used to be the font size plus a guessed 6dp of leading; the role states the real
-    // number, which happens to be the same 20dp — an estimate that was right by luck is now right
-    // by construction, and follows if the role is ever re-valued.
-    let line = TypeRole::Action.line_height_dp().ceil() as u16;
-    let item = line + spacing::SM as u16 * 2;
+    let item = density::MENU_ITEM_BASE as u16;
     let gaps = (items.saturating_sub(1)) as u16 * spacing::XS as u16;
     let height = spacing::XS as u16 * 2 + items as u16 * item + gaps;
     (PANEL_WIDTH as u16, height)
 }
 
 /// The vertical stack of clickable menu entries shared by [`MenuOverlay`] and [`ContextMenu`].
-fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) -> Element<'a, M> {
+///
+/// `pub(super)` for the anatomy-size gate, which needs an item's laid-out height and cannot get it
+/// from either public entry point: both yield a `cdk::overlay::Surface` rather than an `Element`,
+/// and both wrap the items in a panel whose padding would have to be subtracted back out by hand.
+/// Measuring the column directly is the difference between asserting §7.5's figure and asserting
+/// arithmetic about it. Same reason `terminal_pane::scrollbar_metrics` is reachable from tests.
+pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) -> Element<'a, M> {
     let mut list = column![].spacing(spacing::XS).width(Length::Fill);
     for item in items {
         let mut content = row![].spacing(spacing::SM).align_y(Alignment::Center);
@@ -96,10 +101,24 @@ fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) -> Element<
         // Menu items are buttons built here rather than through `material::Button`, so the ripple
         // is composed explicitly — FR-024c wants every interactive surface to ripple, and "it is
         // not a `Button` type" is not a reason a user would accept for one row not responding.
+        // §7.5's 48dp item, which the contract has always stated and this stack never applied —
+        // items were `spacing::SM` padding around one `label_large` line, landing at 36dp.
+        // `density::MENU_ITEM_BASE` existed for this and was used only by `typeahead.rs`.
+        //
+        // The row already states `align_y(Center)`, and here that is enough: `button` stretches its
+        // content node to the fixed height, so the row *is* 48dp tall and centres its children
+        // inside it. That is the difference from BUG-002's app bar, where the container imposing
+        // the height was the one that had to say so.
         list = list.push(super::Ripple::new(
             button(content)
                 .width(Length::Fill)
-                .padding(spacing::SM)
+                .height(Length::Fixed(density::MENU_ITEM_BASE))
+                .padding(iced::Padding {
+                    top: 0.0,
+                    bottom: 0.0,
+                    left: spacing::SM,
+                    right: spacing::SM,
+                })
                 .style(style::text_button(r))
                 .on_press(item.message),
             r.on_surface,
