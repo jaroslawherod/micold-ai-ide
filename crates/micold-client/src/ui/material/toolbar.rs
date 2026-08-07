@@ -72,10 +72,24 @@ impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
 
         // §7.1's small app bar: a fixed 64dp with 16dp of horizontal padding. Vertical padding is
         // the height's business now — the bar is a fixed box and the row centres inside it.
+        //
+        // `align_y` is what makes that last clause true, and it was missing (BUG-001's sweep,
+        // T088). The row's own `align_y` above centres the row's children *against each other*,
+        // inside the cross size the flex layout computed from them; a container lays its child out
+        // under loose limits and then aligns it, so with no alignment the row went to the top of
+        // the 64dp and took the title with it.
+        //
+        // Nothing looked wrong, and it is worth being precise about why: the shell's own bar
+        // happens to hold a full-height action (the project switcher), which stretches the row to
+        // the full 64dp, and a row that already fills its container cannot be misaligned by one.
+        // The bar was therefore correct by accident — correct for as long as some child fills.
+        // A bar with only a title sat 18dp high of centre, which is what the gate measured. Same
+        // class as the chip's label, one level up the tree.
         let elevated = t.elevated;
         let bar = container(bar)
             .width(Length::Fill)
             .height(Length::Fixed(anatomy::app_bar::HEIGHT))
+            .align_y(Alignment::Center)
             .padding(iced::Padding {
                 top: 0.0,
                 bottom: 0.0,

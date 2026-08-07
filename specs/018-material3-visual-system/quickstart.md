@@ -122,6 +122,10 @@ cargo test -p micold-core                      # tokens exercised with no render
 - [ ] **Count worktrees visible without scrolling, against the same repo before the change.** Must
       not have dropped materially (FR-026a) — this is the guard on the density decision.
 - [ ] Icon buttons are comfortable to hit; the target extends beyond the visible glyph (FR-027).
+- [ ] Any chip — a sidebar tag filter, a worktree-form toggle: its label sits on the pill's centre
+      line, with the same empty band above it as below (FR-030a). The app bar's title likewise sits
+      on the bar's centre line. Both were BUG-001; the automated gate is
+      `material/content_placement.rs`, and this is the half a person has to look at.
 - [ ] Dialog actions are grouped at the **trailing** edge with the defined spacing (FR-028).
 - [ ] Trigger a notification: it appears as a **floating snackbar**, not an inline strip (FR-032).
 - [ ] Trigger several rapidly: **exactly one visible**, others follow in turn (FR-032a).
