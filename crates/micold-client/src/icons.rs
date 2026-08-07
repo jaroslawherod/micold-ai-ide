@@ -173,6 +173,13 @@ pub enum IconSurface {
     Badge,
     /// Unavailable / danger markers — tinted with the `error` accent.
     Unavailable,
+    /// A menu item's leading glyph (§7.5) — tinted `on_surface_variant`.
+    ///
+    /// Quieter than its label, which is `on_surface`: the glyph identifies the row and the label
+    /// says what it does. Its own context rather than a reuse of `Badge` — the tone is the same
+    /// today, and the reasons are not, so a change to what a badge looks like must not silently
+    /// restyle every menu in the application.
+    MenuItem,
 }
 
 impl IconSurface {
@@ -182,6 +189,7 @@ impl IconSurface {
         IconSurface::PrimaryButton,
         IconSurface::Badge,
         IconSurface::Unavailable,
+        IconSurface::MenuItem,
     ];
 }
 
@@ -197,6 +205,7 @@ pub const fn icon_role(surface: IconSurface, roles: Roles) -> Rgb {
         IconSurface::PrimaryButton => roles.on_primary,
         IconSurface::Badge => roles.on_surface_variant,
         IconSurface::Unavailable => roles.error,
+        IconSurface::MenuItem => roles.on_surface_variant,
     }
 }
 

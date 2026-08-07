@@ -43,6 +43,8 @@ fn every_icon_tint_is_legible_on_its_surface() {
             (IconSurface::PrimaryButton, r.primary),
             (IconSurface::Badge, r.surface_variant),
             (IconSurface::Unavailable, r.surface),
+            // A menu item's glyph sits on the menu panel, which is `surface_container` (§7.5).
+            (IconSurface::MenuItem, r.surface_container),
         ];
         for (surface, background) in cases {
             let ratio = contrast(icon_role(surface, r), background);
@@ -62,10 +64,11 @@ fn icon_role_maps_each_surface_to_its_expected_foreground() {
         assert_eq!(icon_role(IconSurface::PrimaryButton, r), r.on_primary);
         assert_eq!(icon_role(IconSurface::Badge, r), r.on_surface_variant);
         assert_eq!(icon_role(IconSurface::Unavailable, r), r.error);
+        assert_eq!(icon_role(IconSurface::MenuItem, r), r.on_surface_variant);
     }
 }
 
 #[test]
 fn all_surfaces_are_covered() {
-    assert_eq!(IconSurface::ALL.len(), 4, "surface contexts");
+    assert_eq!(IconSurface::ALL.len(), 5, "surface contexts");
 }

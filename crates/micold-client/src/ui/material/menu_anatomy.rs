@@ -98,6 +98,43 @@ fn a_menu_items_leading_icon_is_24dp() {
     );
 }
 
+/// §7.5: the item's leading icon is `on_surface_variant`.
+///
+/// The other half of the same table row, and the half that stayed unapplied when the 24dp landed —
+/// which is this bug's own shape repeated inside its own fix, so it is asserted rather than left to
+/// a reviewer. `on_surface` is the label's tone; a leading glyph is the quieter of the two, and
+/// `IconSurface` is where that decision belongs rather than in a literal at the call site.
+///
+/// An item that states its own tint keeps it: the switcher's active marker is a `Badge` by
+/// intent (FR-006 of feature 008), and this is the default, not an override.
+#[test]
+fn a_menu_items_leading_icon_is_on_surface_variant() {
+    let r = roles();
+    let item = MenuItem::new(Icon::About, "About", Message::NoOp);
+
+    assert_eq!(
+        menu::leading_tint(&item, r),
+        r.on_surface_variant,
+        "§7.5 tints a menu item's leading icon `on_surface_variant`; `on_surface` is its label's \
+         tone, which is the louder of the two",
+    );
+}
+
+/// An item that states a tint is not overridden by the default above.
+#[test]
+fn an_item_that_states_its_own_tint_keeps_it() {
+    let r = roles();
+    let marker = MenuItem {
+        icon_tint: Some(crate::icons::icon_role(
+            crate::icons::IconSurface::Unavailable,
+            r,
+        )),
+        ..MenuItem::new(Icon::Unavailable, "Unavailable", Message::NoOp)
+    };
+
+    assert_eq!(menu::leading_tint(&marker, r), r.error);
+}
+
 /// §7.5: an item's content is inset 12dp at both ends.
 ///
 /// Both ends, not one: a single-ended check passes on a row that is pushed sideways, and the

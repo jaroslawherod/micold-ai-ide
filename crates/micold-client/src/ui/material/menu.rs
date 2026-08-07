@@ -12,7 +12,7 @@
 
 use std::time::Duration;
 
-use crate::icons::Icon;
+use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
@@ -32,7 +32,7 @@ use micold_core::tokens::{anatomy, density, motion::duration, shape, spacing, Rg
 pub struct MenuItem<M> {
     /// Optional leading icon, drawn at [`anatomy::menu::ITEM_ICON`].
     pub icon: Option<Icon>,
-    /// Tint for the leading icon. `None` takes the panel's `on_surface`; the switcher's active
+    /// Tint for the leading icon. `None` takes §7.5's `on_surface_variant`; the switcher's active
     /// marker states its own (FR-006 of feature 008).
     pub icon_tint: Option<Rgb>,
     /// The item label.
@@ -91,6 +91,16 @@ const PANEL_WIDTH: f32 = 240.0;
 /// The width of the right-click context-menu panel (narrower than the toolbar dropdown).
 const CONTEXT_MENU_WIDTH: f32 = 160.0;
 
+/// The tint of an item's leading glyph: whatever the item states, or §7.5's default.
+///
+/// A function rather than an expression inside the loop so it can be asserted directly
+/// (`menu_anatomy`). The tint is not observable from the laid-out tree and rasterising a glyph to
+/// read one colour would be a heavy way to ask a one-line question.
+pub(super) fn leading_tint<M>(item: &MenuItem<M>, r: Roles) -> Rgb {
+    item.icon_tint
+        .unwrap_or_else(|| icon_role(IconSurface::MenuItem, r))
+}
+
 /// §7.5's panel padding, as a menu wants it: 8dp above the first item and below the last, and
 /// nothing at either side, so an item's state layer runs the full width of the panel.
 pub(super) fn panel_padding() -> iced::Padding {
@@ -139,11 +149,8 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
             // §7.5's 24dp, not the label's size. The glyph used to be `TypeRole::Action.size()` —
             // 14dp — so it took its size from the text beside it rather than from the row that
             // states one, and `anatomy::menu::ITEM_ICON` was read by nothing.
-            content = content.push(icon(
-                glyph,
-                anatomy::menu::ITEM_ICON,
-                item.icon_tint.unwrap_or(r.on_surface),
-            ));
+            let tint = leading_tint(&item, r);
+            content = content.push(icon(glyph, anatomy::menu::ITEM_ICON, tint));
         }
         // A menu item is something you press, so its label is `Action` — Material's `label_large`,
         // the same 14dp at medium weight. It fills, so trailing content sits at the trailing edge
