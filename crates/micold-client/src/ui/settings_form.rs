@@ -7,7 +7,7 @@ use iced::widget::{column, row};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing};
+use micold_core::tokens::{self};
 
 /// The failure category + diagnostic text for the most recent environment-include resolution
 /// attempt, or `None` when it succeeded (or the feature is disabled) — FR-012/FR-013.
@@ -53,7 +53,7 @@ pub fn modal<'a>(
         .on_input(Message::SettingsEnvIncludeTimeoutChanged)
         .on_submit(Message::SettingsSaved);
 
-    let mut fields = column![
+    let mut fields = material::dialog::fields(column![
         Text::new("Settings", TypeRole::Headline, r),
         // No free-standing label above the field: it carries its own now (§7.7, FR-031a). Leaving
         // this one would have shown the field's name twice — once above the container and once
@@ -65,8 +65,7 @@ pub fn modal<'a>(
         env_include_enabled_checkbox,
         env_include_path_input,
         env_include_timeout_input,
-    ]
-    .spacing(spacing::MD);
+    ]);
 
     if let Some((label, diagnostic)) = failure_label_and_diagnostic(env_include_outcome) {
         fields = fields.push(Text::new(label, TypeRole::Caption, r).tint(r.error));
@@ -79,15 +78,17 @@ pub fn modal<'a>(
         fields = fields.push(Text::new(error.clone(), TypeRole::Caption, r).tint(r.error));
     }
 
-    let actions = row![
+    let actions = material::dialog::actions(row![
         Button::filled("Save", r).on_press(Message::SettingsSaved),
         Button::outlined("Cancel", r).on_press(Message::SettingsCancelled),
-    ]
-    .spacing(spacing::SM);
+    ]);
 
-    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
-        .padding(spacing::LG)
-        .width(Length::Fixed(420.0));
+    let dialog = material::Surface::new(
+        material::dialog::body(fields, actions),
+        SurfaceKind::Dialog,
+        r,
+    )
+    .width(Length::Fixed(420.0));
 
     dialog.into()
 }

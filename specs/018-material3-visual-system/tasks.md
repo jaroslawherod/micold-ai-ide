@@ -968,7 +968,7 @@ FR-029a, FR-029b, US4 acceptance scenario 11 and SC-008c.
   > file's own subject matter one level up. `the_in_crate_gates_are_found_and_actually_excluded` now
   > checks the names against the source list rather than against the parse.
 
-- [ ] T113 Apply, or waive in `spec.md`, the **ten live deviations** the gate above recorded. Each is a component that exists, a number §7 states, and a component using a different one — or the right one under a name that will not follow when §7 changes. Listed in `anatomy_call_sites.rs`'s `RECORDED` under `gap::UNAPPLIED`, which pins the count so the list can only shrink. Two shapes, and the second is the more dangerous:
+- [X] T113 Apply, or waive in `spec.md`, the **ten live deviations** the gate above recorded. Each is a component that exists, a number §7 states, and a component using a different one — or the right one under a name that will not follow when §7 changes. Listed in `anatomy_call_sites.rs`'s `RECORDED` under `gap::UNAPPLIED`, which pins the count so the list can only shrink. Two shapes, and the second is the more dangerous:
 
   **A different number.** §7.3's button padding — 24 filled, 24 outlined, 12 text — against iced's `DEFAULT_PADDING` of 10, which `Button` never overrides; §7.3's 8dp icon-button padding against `icon_button.rs`'s `spacing::XS` (4); and §7.4's `BODY_TO_ACTIONS`, which is 24 in the contract and 16 in every dialog, because the action row is pushed into the body's column and takes its `spacing::MD`. That last one is the only deviation here that §7 explains the *reason* for — the gap is wider than `TITLE_TO_BODY` on purpose, "so the actions read as a separate region rather than as more body" — so it is the one where the number carries a visible intent that 16 defeats.
 
@@ -977,6 +977,42 @@ FR-029a, FR-029b, US4 acceptance scenario 11 and SC-008c.
   Applying them changes what the application looks like — every button and every dialog — so it wants the layout-snapshot regeneration and the §B4 manual pass, not a drive-by edit (FR-027 – FR-030, §7.3 – §7.6, SC-008b)
 
   > Twelve when the gate landed, ten after the rebase onto BUG-003. §7.5's `ITEM_PADDING` and `VERTICAL_PADDING` were on this list and are now applied by T105, and `ITEM_ICON` — recorded as carried by the type scale — is applied by T105 too. `a_recorded_gap_that_became_bound_is_stale` is what reported all three, which is the half of this gate that keeps the list honest in the direction that matters: an entry describing a state that has stopped being true is a waiver for a regression nobody would notice.
+  >
+  > **It was thirteen, and the three extra are the finding.** `button::ICON_BUTTON_GLYPH`,
+  > `button::LEADING_ICON` and `text_field::TRAILING_ICON` were recorded as *carried elsewhere*, on
+  > the reasoning that a glyph is sized by the type scale and a dp figure for one is a second
+  > spelling. That reasoning was wrong, and T103 had already disproved it one component over: `icon`
+  > takes a number, and the role-sized glyph is the defect, not the design. Measured before touching
+  > anything, all three drew **14dp** — the body text's size — against §7.3's 24 and 18 and §7.7's
+  > 24. Three requirements were sitting waived on a false premise, which is a worse state than the
+  > ten that were honestly recorded, and is the failure mode a categorised allowlist exists to make
+  > visible rather than to hide.
+  >
+  > Applied, red first for every figure that had a component to be red against:
+  > a filled button inset its label 10dp against §7.3's 24, an icon button 4dp against 8, both
+  > glyph families 14dp against 24 and 18, and a dialog's action row sat 16dp below its body against
+  > §7.4's 24. The five whose numbers already coincided — the two 1dp outlines and §7.4's padding,
+  > title-to-body and action gaps — **could not be shown red**, and that is the point of them: only
+  > the binding was missing, so only `anatomy_call_sites.rs` could see it.
+  >
+  > Two components gained a slot rather than a constant, because the figure belongs to the component
+  > and not to the call site. `Button::leading(icon, tint)` owns §7.3's 18dp and replaces the two
+  > hand-built `row![Glyph, Text]` buttons in `project_selector.rs`; `material/dialog.rs` owns §7.4's
+  > four figures and replaces the `column![..].spacing(spacing::MD)` / `fields.push(actions)` shape
+  > that all nine dialogs repeated. `Surface` defaults the dialog padding by *kind*, which is the
+  > argument it already makes for §7.4's width bounds: "the seven that build dialogs were each free
+  > to forget it."
+  >
+  > `text_field::TRAILING_ICON` ends as the one figure fixed without being bound. The slot takes an
+  > `IconButton`, so it now draws §7.3's 24dp through `button::ICON_BUTTON_GLYPH` — the measurement
+  > is right and a second reference would be the two-names-one-measurement `anatomy.rs`'s own header
+  > warns about. Recorded as `CARRIED_ELSEWHERE` with a reason that is true for the first time.
+  >
+  > `dialog::body` adds a nesting level, so six anchors and one press path in `covered_states.rs`
+  > needed re-pointing, and the fixture moves accordingly: the app bar's ⋮ goes from a 22 × 26.2 pill
+  > around a 14dp glyph to 40 × 47.2 around a 24dp one. **`RECORDED` now holds no live deviation at
+  > all** — every figure §7 states of a component this application has built is applied by it, and
+  > the count test says so by name.
 
 - [X] ~~T114 Give §7.2's row height an FR entry in `spec.md`'s accepted-gaps list~~ — **superseded by BUG-005 (Phase 16).** There is no gap to record: the height was never a decision, it was a floor hung on a spacer that is void at depth 0, so it reached nested rows only. §7.2 is applied now, `density::LIST_ROW_BASE` is bound, and its `gap::WAIVED` entry in `anatomy_call_sites.rs` is deleted rather than reworded. Closed by T119 (FR-026, FR-026d, §7.2)
 

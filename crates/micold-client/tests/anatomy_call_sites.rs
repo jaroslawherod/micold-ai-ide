@@ -21,7 +21,7 @@
 //! renderer, no layout pass and no fixture.
 //!
 //! `anatomy_size.rs` is the complement, not a substitute. It measures a laid-out box, so it covers
-//! the figures that *are* a box: nine sizes, out of §7's forty-six. Paddings, gaps, icon sizes and
+//! the figures that *are* a box: nine sizes, out of §7's forty-eight. Paddings, gaps, icon sizes and
 //! outline widths are not a component's bounds and no layout assertion reaches them; a binding is
 //! the only evidence available that they arrived anywhere at all.
 //!
@@ -101,14 +101,15 @@ mod gap {
 /// This is not a place to park a figure that has not been wired up yet — every entry states which
 /// of the four kinds above it is, and [`a_recorded_gap_that_became_bound_is_stale`] fails if one is
 /// quietly joined up later. The rule the gate enforces is T097's wording: a figure must not sit in
-/// the state where the requirement is *neither met nor waived*. Ten of these are `UNAPPLIED` and are
-/// therefore only half-way out of that state — recorded, not met — and are tracked in
-/// `specs/018-material3-visual-system/tasks.md` under T113.
+/// the state where the requirement is *neither met nor waived*. **None of these are `UNAPPLIED`**:
+/// since T113 every figure §7 states of a component this application has built is applied by it.
 ///
-/// It has already shrunk once without anyone editing it deliberately. BUG-003's T103 and T105
-/// applied §7.5's `ITEM_PADDING`, `VERTICAL_PADDING` and `ITEM_ICON` while this gate was in review,
-/// and [`a_recorded_gap_that_became_bound_is_stale`] is what reported it — three entries describing
-/// a state that had stopped being true.
+/// The list shrank twice without anyone editing it deliberately, and both times
+/// [`a_recorded_gap_that_became_bound_is_stale`] is what reported it. BUG-003's T103 and T105
+/// applied §7.5's `ITEM_PADDING`, `VERTICAL_PADDING` and `ITEM_ICON` while the gate was in review;
+/// T113 then applied the twelve that were left. An entry describing a state that has stopped being
+/// true is a waiver for a regression nobody would notice, which is why that half of the gate earns
+/// its place.
 const RECORDED: &[(&str, &str, &str)] = &[
     // -- Waived in spec.md ------------------------------------------------------------------
     (
@@ -118,33 +119,11 @@ const RECORDED: &[(&str, &str, &str)] = &[
          applies MAX_WIDTH and names MIN_WIDTH in the comment saying why it does not",
     ),
     // -- Carried by another token system ----------------------------------------------------
-    // Glyphs are font glyphs, sized by the type scale: `Glyph::new(icon, TypeRole::…, roles)`.
-    // A dp figure for an icon is therefore a number the type scale already owns.
-    (
-        "anatomy::button::LEADING_ICON",
-        gap::CARRIED_ELSEWHERE,
-        "18dp — a leading icon inside a labelled button is a `Glyph` sized by its `TypeRole`",
-    ),
-    (
-        "anatomy::button::ICON_BUTTON_GLYPH",
-        gap::CARRIED_ELSEWHERE,
-        "24dp — `icon_button.rs` sizes its glyph `TypeRole::Body.size()`, overridable by `.size(role)`",
-    ),
-    (
-        "anatomy::chip::ICON",
-        gap::CARRIED_ELSEWHERE,
-        "18dp — see `chip::PADDING_WITH_ICON`: the slot does not exist, and would be a `Glyph` if it did",
-    ),
-    (
-        "anatomy::dialog::ICON",
-        gap::CARRIED_ELSEWHERE,
-        "24dp — the optional centred icon above a dialog title, a `Glyph` where any dialog poses one",
-    ),
-    (
-        "anatomy::text_field::TRAILING_ICON",
-        gap::CARRIED_ELSEWHERE,
-        "24dp — `text_field.rs`'s trailing slot takes an `IconButton`, which sizes its own glyph",
-    ),
+    // Both of these are one measurement with two names in the contract, and the name that is
+    // applied is the other one. That is the *only* honest form of this category: before T113 it
+    // was also claimed for the icon sizes, on the theory that a glyph is sized by the type scale.
+    // It is not — `icon(glyph, dp, tint)` takes a number, and the role-sized version was the
+    // defect BUG-003's T103 named. Three figures sat waived here on a false premise.
     (
         "anatomy::app_bar::ICON_TARGET",
         gap::CARRIED_ELSEWHERE,
@@ -152,12 +131,32 @@ const RECORDED: &[(&str, &str, &str)] = &[
          `button::MIN_TOUCH_TARGET` is the constant they apply, so the figure is honoured and this \
          is its second spelling. BUG-002 is what it looks like when the honouring stops",
     ),
+    (
+        "anatomy::text_field::TRAILING_ICON",
+        gap::CARRIED_ELSEWHERE,
+        "24dp — §7.7 restates §7.3's icon-button glyph for the field's trailing slot, and that slot \
+         takes an `IconButton`, which applies `button::ICON_BUTTON_GLYPH` (also 24). True only \
+         since T113: the slot drew 14dp before it, so this was a live deviation wearing this \
+         category's label",
+    ),
     // -- Describes something not built ------------------------------------------------------
     (
         "anatomy::chip::PADDING_WITH_ICON",
         gap::NOT_BUILT,
         "8dp — `ToggleChip` has no leading-icon slot at all, so there is no chip with an icon whose \
          padding could differ",
+    ),
+    (
+        "anatomy::chip::ICON",
+        gap::NOT_BUILT,
+        "18dp — the same absent slot as `chip::PADDING_WITH_ICON`. Recorded as carried by the type \
+         scale until T113, which was wrong twice over: there is no glyph, and a glyph would not be \
+         role-sized",
+    ),
+    (
+        "anatomy::dialog::ICON",
+        gap::NOT_BUILT,
+        "24dp — §7.4's icon above the title is optional and no dialog in the application poses one",
     ),
     (
         "anatomy::menu::DIVIDER",
@@ -169,64 +168,6 @@ const RECORDED: &[(&str, &str, &str)] = &[
         gap::NOT_BUILT,
         "4dp — `Toolbar` has no leading-icon slot; its leading element is the title, which takes \
          `app_bar::PADDING`",
-    ),
-    // -- Live deviations (T113) -------------------------------------------------------------
-    // Two shapes, and the second is the more dangerous: a component whose number is right today
-    // under a name that will not follow when §7 is re-valued. That is `type_scale::BODY` again.
-    (
-        "anatomy::button::PADDING_FILLED",
-        gap::UNAPPLIED,
-        "§7.3 states 24; `Button` sets no padding, so a filled button takes iced's DEFAULT_PADDING \
-         of 10",
-    ),
-    (
-        "anatomy::button::PADDING_OUTLINED",
-        gap::UNAPPLIED,
-        "§7.3 states 24; as PADDING_FILLED — iced's 10",
-    ),
-    (
-        "anatomy::button::PADDING_TEXT",
-        gap::UNAPPLIED,
-        "§7.3 states 12; iced's 10, or `spacing::SM`/`XS` where a call site passes `.padding(..)`",
-    ),
-    (
-        "anatomy::button::PADDING_ICON",
-        gap::UNAPPLIED,
-        "§7.3 states 8; `icon_button.rs` defaults to `spacing::XS` (4)",
-    ),
-    (
-        "anatomy::button::OUTLINE",
-        gap::UNAPPLIED,
-        "§7.3 states 1; `style.rs` writes the literal 1.0 — the right number, joined to nothing",
-    ),
-    (
-        "anatomy::chip::OUTLINE",
-        gap::UNAPPLIED,
-        "§7.6 states 1; `toggle_chip.rs` writes the literal 1.0 — the right number, joined to nothing",
-    ),
-    (
-        "anatomy::dialog::PADDING",
-        gap::UNAPPLIED,
-        "§7.4 states 24; all seven dialogs pass `spacing::LG`, which is 24 — right number, joined \
-         to nothing",
-    ),
-    (
-        "anatomy::dialog::TITLE_TO_BODY",
-        gap::UNAPPLIED,
-        "§7.4 states 16; the dialog column's `spacing::MD` is 16 — right number, joined to nothing",
-    ),
-    (
-        "anatomy::dialog::BODY_TO_ACTIONS",
-        gap::UNAPPLIED,
-        "§7.4 states 24, and this one is a real difference: the action row is pushed into the same \
-         column as the body, so it takes that column's `spacing::MD` (16). §7.4 makes it wider than \
-         TITLE_TO_BODY on purpose, \"so the actions read as a separate region rather than as more \
-         body\" — which is exactly what 16 does not do",
-    ),
-    (
-        "anatomy::dialog::ACTION_GAP",
-        gap::UNAPPLIED,
-        "§7.4 states 8; the action row's `spacing::SM` is 8 — right number, joined to nothing",
     ),
 ];
 
@@ -513,21 +454,22 @@ fn every_recorded_gap_names_a_real_figure_once_with_a_real_category() {
 /// entry rather than fixed, and the gate would stay green while §7 emptied out. Lowering this
 /// number is the work; raising it needs a deliberate edit here and a reason in the commit.
 ///
-/// Twelve when this gate was written, ten after BUG-003 applied §7.5's item and panel padding.
+/// Twelve when this gate was written, ten after BUG-003 applied §7.5's item and panel padding, and
+/// zero since T113. Zero is the number that makes the rest of the list mean something: every
+/// remaining entry is a figure with no component to reach, not one a component is ignoring.
 #[test]
-fn the_live_deviations_are_the_ten_that_are_tracked() {
+fn no_figure_is_a_live_deviation() {
     let live: Vec<&str> = RECORDED
         .iter()
         .filter(|(_, kind, _)| *kind == gap::UNAPPLIED)
         .map(|(name, _, _)| *name)
         .collect();
-    assert_eq!(
-        live.len(),
-        10,
-        "the recorded live deviations are now {}, not 10:\n  {}\n\nIf one was fixed, drop its \
-         `RECORDED` entry and lower this number. If one was added, it belongs in the code rather \
-         than in this list — the point of the list is that it shrinks (T113).",
-        live.len(),
+    assert!(
+        live.is_empty(),
+        "these figures are recorded as live deviations:\n  {}\n\nSince T113 there are none, and a \
+         new one belongs in the code rather than in this list. `RECORDED` is for a figure with no \
+         component to reach — waived, carried by another name, or describing something not built — \
+         not for one a component is ignoring.",
         live.join("\n  ")
     );
 }

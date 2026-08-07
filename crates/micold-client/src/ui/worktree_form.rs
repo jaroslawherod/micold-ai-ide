@@ -31,7 +31,7 @@ pub fn modal<'a>(
 
     let heading = Text::new("New worktree", TypeRole::Headline, r);
 
-    let mut fields = column![heading, source_switch(form, r)].spacing(spacing::MD);
+    let mut fields = material::dialog::fields(column![heading, source_switch(form, r)]);
 
     // Source-specific inputs (feature 016, FR-010): the original type/ticket/name fields, or the
     // existing-branch picker.
@@ -125,9 +125,12 @@ pub fn modal<'a>(
         state => resolution_panel(state, r),
     };
 
-    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
-        .padding(spacing::LG)
-        .width(Length::Fixed(520.0));
+    let dialog = material::Surface::new(
+        material::dialog::body(fields, actions),
+        SurfaceKind::Dialog,
+        r,
+    )
+    .width(Length::Fixed(520.0));
 
     dialog.into()
 }

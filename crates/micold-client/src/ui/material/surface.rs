@@ -245,8 +245,14 @@ impl<'a, M: 'a> From<Surface<'a, M>> for Element<'a, M> {
             // nothing applies it here.
             widget = widget.max_width(anatomy::dialog::MAX_WIDTH);
         }
-        if let Some(padding) = s.padding {
-            widget = widget.padding(padding);
+        // §7.4's padding, defaulted by the *kind* for the same reason the width bounds above are:
+        // nine call sites each spelled it `spacing::LG`, which is 24 and therefore looked right,
+        // and `anatomy::dialog::PADDING` was referenced by nothing. A call site that states its own
+        // padding still wins — the project selector deliberately pads tighter to fit its list.
+        match (s.padding, matches!(s.kind, Kind::Dialog)) {
+            (Some(padding), _) => widget = widget.padding(padding),
+            (None, true) => widget = widget.padding(anatomy::dialog::PADDING),
+            (None, false) => {}
         }
         if let Some(width) = s.width {
             widget = widget.width(width);

@@ -130,7 +130,7 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
                 text_color: if active { on } else { muted },
                 border: Border {
                     color: if active { fill } else { outline },
-                    width: if active { 0.0 } else { 1.0 },
+                    width: if active { 0.0 } else { anatomy::chip::OUTLINE },
                     radius: shape::FULL.into(),
                 },
                 ..Default::default()

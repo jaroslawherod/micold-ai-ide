@@ -9,7 +9,7 @@ use iced::widget::{column, row};
 use iced::Element;
 use iced::Length;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing};
+use micold_core::tokens::{self};
 
 /// The confirm-forget dialog for the project shown by `display_name` as a modal surface, as the dialog body; `ui::view` wraps it
 /// in the shared [`Modal`](crate::ui::material::Modal) transition.
@@ -25,7 +25,7 @@ pub fn modal<'a>(
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
-    let mut fields = column![
+    let mut fields = material::dialog::fields(column![
         Text::new(format!("Forget “{display_name}”?"), TypeRole::Headline, r),
         Text::new(
             "This removes the project from your list and discards what the app remembers about it \
@@ -35,8 +35,7 @@ pub fn modal<'a>(
             r
         )
         .muted(),
-    ]
-    .spacing(spacing::MD);
+    ]);
 
     // FR-002a: only warn about stopping sessions when there actually are running ones.
     if running_sessions > 0 {
@@ -55,15 +54,17 @@ pub fn modal<'a>(
         );
     }
 
-    let actions = row![
+    let actions = material::dialog::actions(row![
         Button::filled("Forget", r).on_press(Message::ProjectForgetConfirmed),
         Button::outlined("Cancel", r).on_press(Message::ProjectForgetCancelled),
-    ]
-    .spacing(spacing::SM);
+    ]);
 
-    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
-        .padding(spacing::LG)
-        .width(Length::Fixed(460.0));
+    let dialog = material::Surface::new(
+        material::dialog::body(fields, actions),
+        SurfaceKind::Dialog,
+        r,
+    )
+    .width(Length::Fixed(460.0));
 
     dialog.into()
 }

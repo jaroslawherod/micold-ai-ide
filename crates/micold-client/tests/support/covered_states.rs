@@ -188,7 +188,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // than to the number.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[3, 0, 0, 5],
+                    path: &[3, 0, 0, 1],
                 },
             ],
         },
@@ -213,7 +213,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // free-standing `Type` label inside the control's own container.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[3, 0, 0, 3],
+                    path: &[3, 0, 0, 1],
                 },
             ],
         },
@@ -288,7 +288,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // own, and it pushes the actions down.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[3, 0, 0, 6],
+                    path: &[3, 0, 0, 1],
                 },
             ],
         },
@@ -363,7 +363,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "example".to_string(),
                     ..WorktreeForm::default()
                 });
-                StateUnderTest::new(state).pressing(&[3, 0, 0, 2])
+                StateUnderTest::new(state).pressing(&[3, 0, 0, 0, 2])
             },
             anchors: &[
                 Anchor {
@@ -372,13 +372,13 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.type-select",
-                    path: &[3, 0, 0, 2],
+                    path: &[3, 0, 0, 0, 2],
                 },
                 // Same form as `add-worktree-dialog-new-branch`; opening the menu adds an overlay
                 // layer, not a field.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[3, 0, 0, 5],
+                    path: &[3, 0, 0, 1],
                 },
             ],
         },
@@ -415,7 +415,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // field's own container.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[3, 0, 0, 7],
+                    path: &[3, 0, 0, 1],
                 },
             ],
         },
