@@ -171,12 +171,19 @@ meet.
 |---|---|---|
 | `typeahead_query` | `String` | the gallery example's own search text |
 | `typeahead_highlight` | `Option<usize>` | same rule as the form's |
+| `typeahead_open` | `bool` | whether its list is showing. **False at rest** — the entry starts closed, as the picker does. *(Added by BUG-001; FR-020a.)* |
 
 | New message | Payload |
 |---|---|
 | `TypeaheadQueryChanged` | `String` |
 | `TypeaheadHighlightMoved` | direction |
 | `TypeaheadPicked` | `usize` |
+| `TypeaheadFocused` | — |
+| `TypeaheadDismissed` | — |
+
+The open rule is `WorktreeForm.branch_list_open`'s, applied to the same messages: reaching the field
+opens, a query change opens, a pick closes, a dismissal closes. Stated as "the same rule" rather than
+restated, because the gallery having its **own** open rule is precisely the defect BUG-001 records.
 
 `Message` loses its `Copy` derive as a direct consequence (R16); `Clone`, `Debug`, `PartialEq` and
 `Eq` are kept. Sample rows come from `showcase::samples` as fixed data, so the gallery stays

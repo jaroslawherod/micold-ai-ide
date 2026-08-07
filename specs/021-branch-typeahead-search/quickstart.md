@@ -164,6 +164,17 @@ gate does not allow a component without one. What User Story 3 adds is that it i
 it and it narrows and emphasises over its sample data, with no repository involved. Toggle the scheme
 and confirm both. Its caption names the states exercised live.
 
+**The open/close rule (BUG-001, FR-020a).** The entry drives the component's own rule rather than
+posing a state, so confirm all four:
+
+1. On launch the entry's list is **closed** — a search field and nothing beneath it. This is the state
+   the branch picker rests in; the entry used to be pinned open and never showed it.
+2. Press the field. The list opens **before anything is typed**, floating over the page without moving
+   the entries around it (FR-001b).
+3. Press a row. The list closes and the marker stays on the row that was chosen.
+4. Reopen it, then press somewhere else on the page — or press Escape. The list closes, and the search
+   text and the choice both survive.
+
 ---
 
 ## Recording the pass
@@ -171,3 +182,16 @@ and confirm both. Its caption names the states exercised live.
 §B is evidence, so it is recorded the way features 006, 010 and 020 recorded theirs: note the date,
 the platform, and any step that did not behave as written. A step that fails is a defect, not a note —
 §B describes what the feature does, not what it usually does.
+
+### §B8's open/close rule (BUG-001)
+
+| Recorded | |
+|---|---|
+| Date | 2026-08-07 · Linux |
+| The rule itself — closed at rest, opens on reach, opens on typing, closes on a pick, closes on a dismissal | **yes** — five tests in `crates/micold-client/tests/showcase_state.rs`, each observed failing before the reducer existed |
+| The showcase binary launches and renders with the entry rewired | **yes** |
+| §B8 steps 1–4 confirmed **on screen** | **not yet recorded** — the four steps are a visual check and need a human at the display |
+
+The split is deliberate rather than a shortcut. The rule is a decision about state, so it lives in the
+reducer where a test can drive it (Principle I); what `controls.rs` does with the answer is the thin
+glue the GUI-wiring exception covers, and that half is what §B8's four steps confirm.

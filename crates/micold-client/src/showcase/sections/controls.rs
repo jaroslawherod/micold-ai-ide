@@ -267,13 +267,22 @@ pub fn typeahead<'a>(s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Me
             // Labelled like the branch picker it stands for. Its search box is a text field, so an
             // empty query rests the label exactly as an empty input does.
             .label("Branch")
-            // Always open, because the list is the half worth looking at and this page exists to be
-            // looked at. In the application the caller opens it on focus instead.
-            .open(true)
+            // Openness comes from the reducer, which applies the branch picker's own rule — reach it
+            // to open, pick or dismiss to close (FR-020a).
+            //
+            // This was `open(true)` until BUG-001. The constant was right for the static pose the
+            // entry started as: a closed field shows nothing, and the list is the half worth looking
+            // at. It stopped being right the moment the entry became live, because a pinned state
+            // reads as "this is how the component behaves" rather than "this is the part worth
+            // looking at" — and permanently-open is the opposite of what the picker does. The page
+            // now costs one press to show the list and in exchange documents the whole rule.
+            .open(s.typeahead_open())
             .highlighted(s.typeahead_highlight())
             .selected(s.typeahead_selected())
             .empty_message("Nothing matches that search.")
+            .on_focus(Message::TypeaheadFocused)
             .on_move(Message::TypeaheadHighlightMoved)
+            .on_dismiss(Message::TypeaheadDismissed)
             .on_pick(Message::TypeaheadPicked),
             roles,
         )],

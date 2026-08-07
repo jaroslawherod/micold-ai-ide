@@ -180,7 +180,12 @@ User Story 2 — the gallery example works with literal matching alone.
 
 - [X] T051 [US3] Drop `Copy` from `showcase::state::Message` (keeping `Clone`, `Debug`, `PartialEq`, `Eq`), add the query/highlight fields and the three new message variants per [data-model.md §4](./data-model.md#4-showcase-state--micold_clientshowcasestate) and [research R16](./research.md#r16), in `crates/micold-client/src/showcase/state.rs`, making T049 pass
 - [X] T052 [US3] Repair every site the `Copy` removal breaks in `crates/micold-client/src/showcase/gallery.rs` and `crates/micold-client/src/showcase/sections/`
-- [X] T053 [US3] Make the entry live — wire the sample rows through the real matching logic and the showcase's own query state — in `crates/micold-client/src/showcase/sections/controls.rs` (FR-020)
+- [X] ⚠️ Reopened T053 [US3] Make the entry live — wire the sample rows through the real matching logic and the showcase's own query state — in `crates/micold-client/src/showcase/sections/controls.rs` (FR-020) *(reopened — BUG-001)*
+
+  > **Half done.** The rows were made live; the **open state** was left as T029's static pose
+  > (`.open(true)`), so the entry demonstrates a state the branch selector never rests in and never
+  > shows FR-001b's open-on-reach rule. Closed again by T074 below, which retires the pose. The
+  > matching half was correct and stays done.
 - [X] T054 [US3] Set `interactive: true` and the `live` list on the entry in `crates/micold-client/src/showcase/catalogue.rs`, making T050 pass
 - [X] T055 [P] [US3] Document the component — what it is for, its builder API, and that a new picker consumes it rather than rebuilding it — in `docs/development/component-library.md`
 - [X] T056 [US3] Run [quickstart.md](./quickstart.md) §B8 and record the pass
@@ -392,3 +397,36 @@ Appended by `/speckit-converge`. Each item is remaining work found by assessing 
 - [X] T064 Add this feature's emphasis pairings to the AA-contrast gate — `primary` on `surface`, `primary` on `secondary_container` (emphasis on the selected row's tonal fill), and `on_surface_variant` on `surface` (a disabled row) — in `crates/micold-core/tests/tokens.rs`, so "legible in both appearances" is measured rather than assumed, per FR-011 (missing)
 - [X] T065 Settle emphasis weight: `EmphasisedLabel` shapes every segment with the renderer's default font, so emphasis is colour alone. FR-011c permits "colour role and/or type weight", but [contracts/typeahead-component.md §4.3](./contracts/typeahead-component.md) says "plus type weight" — either add the weight step in `crates/micold-client/src/ui/material/typeahead.rs` or amend C4.3 to what shipped, per plan: contract C4.3 (partial)
 - [X] T066 [P] Record the `rich_text` → custom-widget deviation in the Deviations section of this file: the plan's Technical Context and T024 both name `rich_text`/`span` as the emphasis mechanism, and a custom `EmphasisedLabel` was built instead because truncation has to happen at layout time. The reason already sits at `crates/micold-client/src/ui/material/typeahead.rs`; the other five deviations are recorded here and this one is not, per plan: Technical Context (partial)
+
+---
+
+## Phase 9: Bugfix — BUG-001
+
+Appended by `/speckit-bugfix-patch`, after the convergence pass above. The gallery's Typeahead entry
+holds its result list permanently open, so the one page that exists to teach the component shows a
+state the branch selector is never in at rest and never shows FR-001b's open-on-reach rule. See
+`bugs/BUG-001.md`.
+
+**One false completion.** T053 is reopened above. It made the entry's *rows* live and left T029's
+`.open(true)` pose in place; T074 retires the pose and closes it again. T029 itself is untouched —
+posing the list open was correct for a static entry, which is what T029 built.
+
+**Tests first (Constitution Principle I).** The open/close rule is a decision about state, so it
+lands in `showcase/state.rs` under `tests/showcase_state.rs`, exactly as the query, highlight and
+pick rules already do — not in the render glue, which `tests/showcase_glue.rs` holds to deciding
+nothing.
+
+- [X] T072 [US3] Failing reducer tests first, in `crates/micold-client/tests/showcase_state.rs`: a fresh showcase has its type-ahead list **closed** (extend `a_fresh_showcase_is_at_rest`, which is the existing home for "nothing is mid-transition on launch"); reaching the field opens it; typing opens it; picking a row closes it; dismissing closes it. Confirm each fails before T073 (FR-020a, SC-007a, Principle I)
+- [X] T073 [US3] Add `typeahead_open: bool` (false at rest), a `typeahead_open()` accessor, and the `TypeaheadFocused` / `TypeaheadDismissed` message variants in `crates/micold-client/src/showcase/state.rs`, making T072 pass. The rule MUST mirror `app.rs`'s branch-picker arms rather than invent a second one — `AddWorktreeBranchFocused` → open, `AddWorktreeBranchQueryChanged` → open, `AddWorktreeBranchSelected` → close, `AddWorktreeBranchDismissed` → close — because a gallery whose open rule differed from the application's would be the same class of defect this bug is (FR-020a)
+- [X] T074 [US3] Retire T029's pose in `crates/micold-client/src/showcase/sections/controls.rs`: `.open(…)` from the reducer, `.on_focus(Message::TypeaheadFocused)`, `.on_dismiss(Message::TypeaheadDismissed)`, and pick closing through the existing `TypeaheadPicked`. Replace the "Always open, because the list is the half worth looking at" comment with what the entry now shows and why — the comment is the record of the decision being reversed. Closes the reopened T053 (FR-020a)
+- [X] T075 [P] [US3] Add the open/close line to the entry's `live` captions in `crates/micold-client/src/showcase/catalogue.rs`, so the page describes the behaviour it now has rather than leaving its most conspicuous one unnamed — the gap that let `tests/showcase_captions.rs` stay green through this defect (FR-020a)
+- [ ] T076 [US3] Update [quickstart.md](./quickstart.md) §B8 to have the reviewer confirm the list is **closed** on launch, opens on a press in the field, closes on a pick and closes on a press outside — then run it and record the pass (FR-020a, SC-007a)
+
+  > **§B8 written; the visual pass is not recorded.** The four steps are in the quickstart and the
+  > binary was launched and renders with the entry rewired, but confirming what is on screen needs a
+  > human at the display, so the record says so rather than claiming a pass nobody watched. The rule
+  > itself is not waiting on this: it is driven by five tests in `tests/showcase_state.rs`, and only
+  > the glue that applies the answer is what §B8 checks.
+
+**Bugfix**: 2026-08-07 — BUG-001 Updated from bugfix patch: reopened T053, added T072–T076. T053's
+reopen is kept visible rather than erased; its matching half stays done and only its pose is retired.

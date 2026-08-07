@@ -136,6 +136,11 @@ involved at all.
    shown, **Then** its field, its results, and its match marking are legible in both.
 4. **Given** the branch selector's search, **When** its behavior is compared to the gallery entry's,
    **Then** they are the same component rather than two implementations that happen to look alike.
+5. **Given** the gallery is freshly launched, **When** the developer finds the type-ahead entry,
+   **Then** its list is **closed** — the state the branch selector is in at rest — and it opens when
+   the field is reached, closes when a row is picked, and closes when it is dismissed, so the page
+   shows the rule from FR-001b rather than a state the application never rests in. *(Added by
+   BUG-001.)*
 
 ---
 
@@ -289,6 +294,13 @@ individually legible.
   branches, worktrees, or git.
 - **FR-020**: The component MUST be catalogued in the component gallery with a live, typeable example,
   rendered correctly in both light and dark appearance.
+- **FR-020a**: That example MUST exercise the component's **own** open-and-close rule — the one
+  FR-001b states — rather than holding the list in a state the application never rests in. It MUST
+  start closed, open when its field is reached, and close on a pick and on a dismissal. More
+  generally: a live entry MUST NOT pin a state the application cannot leave, because a developer
+  reading the gallery to learn what a component does will take what the page shows for what the
+  component does. *(Added by BUG-001. FR-020 asks for "live, typeable" and nothing more, which a
+  permanently-open list satisfies to the letter while teaching the opposite of FR-001b.)*
 - **FR-021**: The matching and ranking behavior in FR-003 through FR-008 (including FR-006a), the
   match positions that FR-009, FR-010, and FR-011d read, **and the keyboard rules in FR-017 and
   FR-017a** MUST all be determined by logic that is exercisable without rendering the interface. What
@@ -335,6 +347,17 @@ individually legible.
   few branches — search adds a shortcut, it does not add a required step.
 - **SC-007**: The type-ahead exists once in the codebase: any future picker needing this behavior adopts
   the shared component without copying it.
+- **SC-007a**: Every state the gallery's type-ahead entry shows is a state the branch selector can be
+  in, and every state the branch selector rests in is reachable from the entry — verified by driving
+  the entry through open, closed, picked and dismissed and finding no state pinned. *(Added by
+  BUG-001.)*
+
+**Bugfix**: 2026-08-07 — BUG-001 added FR-020a, User Story 3 acceptance scenario 5 and SC-007a. No
+existing requirement was wrong: FR-001b states the open-on-focus rule and the branch selector follows
+it. What was missing was any requirement that the *gallery* demonstrate it — FR-020 asks for a "live,
+typeable" example and stops there, so a list pinned open satisfied it while showing the opposite rule
+on the one page that exists to teach the component. The lesson generalises past this entry: "live"
+has to mean the states are exercised, not that one of them is staged well.
 
 ## Assumptions
 

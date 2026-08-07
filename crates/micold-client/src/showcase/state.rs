@@ -69,6 +69,10 @@ pub enum Message {
     TypeaheadHighlightMoved(Direction),
     /// Row `i` of its current results was chosen.
     TypeaheadPicked(usize),
+    /// Its search field was reached, so a closed list should open (FR-001b, FR-020a).
+    TypeaheadFocused,
+    /// Its list should close without taking anything.
+    TypeaheadDismissed,
 }
 
 /// The showcase's whole state.
@@ -110,6 +114,14 @@ pub struct Showcase {
     /// identity for the same reason, and a gallery that demonstrated the other behaviour would be
     /// demonstrating something the application does not do.
     typeahead_selected: Option<String>,
+    /// Whether its result list is showing (feature 021, FR-020a).
+    ///
+    /// **False at rest**, which is the whole point of it existing. The entry used to be handed a
+    /// constant `true`, so the page showed a state the branch picker is never in and never showed the
+    /// transition that gets it there — BUG-001. The rule applied below is
+    /// `WorktreeForm.branch_list_open`'s, not a second one invented here: a gallery whose open rule
+    /// differed from the application's would be the same defect in a new place.
+    typeahead_open: bool,
 }
 
 impl Showcase {
@@ -131,6 +143,7 @@ impl Showcase {
             typeahead_query: String::new(),
             typeahead_highlight: None,
             typeahead_selected: None,
+            typeahead_open: false,
         }
     }
 
@@ -174,6 +187,11 @@ impl Showcase {
     /// Its keyboard position among the current results.
     pub fn typeahead_highlight(&self) -> Option<usize> {
         self.typeahead_highlight
+    }
+
+    /// Whether its result list is showing.
+    pub fn typeahead_open(&self) -> bool {
+        self.typeahead_open
     }
 
     /// Where the chosen row sits among the results showing right now, if it is among them at all.
@@ -258,6 +276,10 @@ impl Showcase {
             Message::NoOp => {}
             Message::TypeaheadQueryChanged(text) => {
                 self.typeahead_query = text;
+                // Typing into a dismissed field brings the list back, exactly as
+                // `AddWorktreeBranchQueryChanged` does — otherwise the developer types into a box
+                // that answers nothing.
+                self.typeahead_open = true;
                 // The results have just changed under the highlight, so it is re-seated rather than
                 // left pointing into a list that may be shorter — the same rule the branch picker's
                 // reducer follows, because it is the same bug either would otherwise have.
@@ -286,7 +308,12 @@ impl Showcase {
                     .typeahead_rows()
                     .get(index)
                     .map(|row| row.label.clone());
+                // Picking is terminal: the choice registers and the list closes in one step, which
+                // is what `AddWorktreeBranchSelected` does.
+                self.typeahead_open = false;
             }
+            Message::TypeaheadFocused => self.typeahead_open = true,
+            Message::TypeaheadDismissed => self.typeahead_open = false,
         }
     }
 }

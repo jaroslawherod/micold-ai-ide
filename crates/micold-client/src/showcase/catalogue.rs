@@ -313,6 +313,7 @@ pub const COMPONENTS: &[Entry] = &[
         // what has just been typed, so all of it is exercised rather than staged.
         posed: &[],
         live: &[
+            "press the field to open the list; picking, Escape or a press outside closes it",
             "type to narrow the list and see the matched characters picked out",
             "clear the search with the ✕",
             "↑ / ↓ move the highlight, Enter takes the row it is on",

@@ -215,7 +215,7 @@ Sliced by the spec's user-story priorities, each slice independently testable an
 |---|---|---|
 | **1 (US1, P1)** | literal matching + ranking, the keyboard rule, the component in both halves, **its gallery entry and cdk exemption**, the picker rewritten, emphasis, match-aware truncation, disabled + selected row treatments, the widened overlay gate, the generic-component gate, user-guide section | `mise run test` green — including `showcase_completeness.rs`; quickstart §B1, §B3–§B5a, §B6–§B7 |
 | **2 (US2, P2)** | subsequence and single-edit tiers, the 3-character floor, tier-shaped emphasis, the no-match message, the ranking corpus | quickstart §B2 |
-| **3 (US3, P3)** | the gallery entry made **live and typeable**, `Copy` removal, both-scheme posing, component-library docs | `tests/showcase_captions.rs`; quickstart §B8 |
+| **3 (US3, P3)** | the gallery entry made **live and typeable** — and driven through the component's **own open/close rule** rather than pinned open (FR-020a, added by BUG-001) — `Copy` removal, both-scheme posing, component-library docs | `tests/showcase_captions.rs`; quickstart §B8 |
 
 Slice 1 is a complete, useful feature on its own: substring search with emphasis over a long branch
 list. It is deliberately the largest slice, because the completeness gate does not let a component
@@ -233,6 +233,13 @@ is worth paying. Slice 2 is additive inside `micold-core` plus one message for t
 | Removing `Copy` from the showcase `Message` ripples | Contained to `showcase/`; the compiler finds every site, and the showcase's gates run in the same suite. |
 | FR-012a changes behaviour feature 016 shipped | It is a deliberate, recorded supersession ([R13a](./research.md#r13a)), not a side effect. Feature 016's tests that assert the old refusal path are rewritten rather than deleted, so the invariant they guarded is still guarded — one layer earlier. |
 | The SC-003 corpus could be tuned until it passes | The corpus is committed data covering all three tiers, and the assertion is on the rate. Tuning it to pass is a visible diff to a named file, not an invisible threshold change. |
+| A gallery entry built as a **pose** in one slice, then made **live** in a later one, keeps whichever half of the pose the later slice did not think to retire | The two slices are three phases apart, and the later task is worded around what it *adds* ("wire the sample rows through the real matching logic") rather than around what the pose still holds. The staged state is then invisible: `showcase_captions.rs` checks that a caption names the states exercised live, which cannot notice a state that is staged **and undescribed**. Handled by FR-020a, which states the property directly — a live entry pins no state the application cannot leave — and by SC-007a, which is checked by driving the entry rather than by reading its caption. Found the hard way: BUG-001, where `.open(true)` survived from the static pose into the live entry and made the page teach the opposite of FR-001b. |
+
+**Bugfix**: 2026-08-07 — BUG-001 Updated from bugfix patch: named the open/close rule in slice 3's
+deliverables, and recorded above the risk class that produced the defect — a pose-then-liven sequence
+across slices, and the gate class (a caption check, which reads what the entry *says* rather than
+what it *does*) that could not see it. No change of approach: slice 3 was the right home for the
+work, and it delivered the half its task named.
 
 ## Complexity Tracking
 
