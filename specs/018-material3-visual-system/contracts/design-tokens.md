@@ -458,6 +458,13 @@ through its chainable builder API (feature 017). No bespoke one-off widget.
 | Title role         | `title_large`, color `on_surface`       |
 | Icon color         | `on_surface_variant`                    |
 | Icon target        | 48 × 48                                 |
+| Divider at rest    | 1, `outline_variant`; absent once elevated |
+| Bottom edge        | height + divider = **65** — the offset any panel anchored below the bar derives from (FR-029a) |
+
+**Why the bottom edge is a row.** The height is stated above and the divider is drawn by the same
+component, so what a surface hanging *below* the bar has to clear is neither figure alone. Nothing
+said so, and two components each answered it by eye with the same wrong number (BUG-003). A panel's
+offset is not that panel's own anatomy; it is this row, read.
 
 ### 7.2 List and tree rows (FR-026, FR-026a)
 
@@ -535,8 +542,16 @@ Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`
 | Item padding    | 12 horizontal                                |
 | Item label      | `label_large`, `on_surface`                  |
 | Item icon       | 24, `on_surface_variant`                     |
+| Between items   | nothing — items abut; a gap is what a divider is for |
 | Divider         | 1dp `outline_variant`                        |
+| Panel top edge  | §7.1's bottom edge, for a panel anchored below the app bar (FR-029a) |
 | States          | full state-layer set (§5)                     |
+
+**One row, built once (FR-029b).** Every figure in this table describes *the* menu item, not "a menu
+item per panel". The overflow menu, context menus and the project switcher's project list are the
+same row carrying different content, and BUG-003 is what the alternative costs: the item height was
+applied to one of two hand-built copies, so two panels hanging off the same bar shipped 12dp apart.
+A panel gives an item leading or trailing content; it does not rebuild one.
 
 ### 7.6 Chips and tags (FR-030)
 

@@ -41,6 +41,12 @@ use micold_core::session::SessionId;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
 
+/// Where the sidebar's own context menus open: just inside the sidebar, below the app bar.
+///
+/// A fixed point rather than the cursor — these menus are opened from a row whose position the view
+/// does not know — and the one place it is stated, rather than the two literals it was (T107).
+const SIDEBAR_MENU_ANCHOR: (u16, u16) = (24, 96);
+
 // The icon font and the two primitives that draw a glyph moved into the component library with
 // everything else that decides an appearance (FR-001). Re-exported here for `main`, which
 // registers the font at startup, and for the tests that assert what the font file advertises.
@@ -295,23 +301,36 @@ pub fn view<'a>(
 
     // The worktree right-click context menu, anchored near the sidebar (feature 008, FR-013).
     // Only present while a worktree's menu is open.
+    //
+    // Clamped, like the project menu above and unlike its own past self (018's BUG-003, T107). The
+    // anchor is a fixed point rather than the cursor, so it never *starts* off-screen — but the
+    // panel it positions is now 48dp per item where it was 36, a four-item menu having grown from
+    // 152dp to 200, and nothing was stopping it running off the bottom of a short window.
     let worktree_menu: Option<cdk::overlay::Surface<'a, Message>> =
         state.worktree_menu_open.as_ref().map(|dir| {
-            material::MenuOverlay::new(
-                worktree_menu_items(dir, &state.worktree_display_name(dir)),
-                Message::WorktreeMenuDismissed,
-                roles,
-            )
-            .anchor(iced::Point::new(24.0, 96.0))
-            .into()
+            let items = worktree_menu_items(dir, &state.worktree_display_name(dir));
+            let (x, y) = crate::app::clamp_menu_anchor(
+                SIDEBAR_MENU_ANCHOR,
+                material::menu_panel_size(items.len()),
+                state.window_size,
+            );
+            material::MenuOverlay::new(items, Message::WorktreeMenuDismissed, roles)
+                .anchor(iced::Point::new(x as f32, y as f32))
+                .into()
         });
 
-    // The session right-click context menu (bugfix BUG-003). Only present while a session's menu
-    // is open.
+    // The session right-click context menu (feature 010's BUG-003). Only present while a session's
+    // menu is open. Same anchor and the same clamping as the worktree menu above.
     let session_menu: Option<cdk::overlay::Surface<'a, Message>> =
         state.session_menu_open.map(|id| {
-            material::MenuOverlay::new(session_menu_items(id), Message::SessionMenuDismissed, roles)
-                .anchor(iced::Point::new(24.0, 96.0))
+            let items = session_menu_items(id);
+            let (x, y) = crate::app::clamp_menu_anchor(
+                SIDEBAR_MENU_ANCHOR,
+                material::menu_panel_size(items.len()),
+                state.window_size,
+            );
+            material::MenuOverlay::new(items, Message::SessionMenuDismissed, roles)
+                .anchor(iced::Point::new(x as f32, y as f32))
                 .into()
         });
 

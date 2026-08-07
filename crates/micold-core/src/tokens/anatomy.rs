@@ -33,6 +33,20 @@ pub mod app_bar {
     pub const LEADING_ICON_PADDING: f32 = 4.0;
     /// The interactive target of each action, honoured regardless of the glyph's size.
     pub const ICON_TARGET: f32 = 48.0;
+    /// The hairline the bar draws beneath itself **at rest**. Once the bar is elevated its own
+    /// shadow does that job and the divider is gone (§7.1), so this is the bar's resting extent.
+    pub const DIVIDER: f32 = 1.0;
+    /// What a surface hanging below the bar has to clear (FR-029a).
+    ///
+    /// Neither figure above answers that on its own, which is the whole of BUG-003: the overflow
+    /// menu and the project switcher each carried `const TOP_OFFSET: f32 = 52.0; // approx. toolbar
+    /// height` — an eyeballed copy of a bar that was content-sized when it was written, kept when
+    /// §7.1 pinned the bar at 64. Both panels opened 13dp inside the bar, over the triggers they
+    /// came from. A panel's offset is not that panel's anatomy; it is this constant, read.
+    ///
+    /// Deliberately the **resting** edge. A panel that clears the divider clears the elevated bar
+    /// too, which is 1dp shorter — erring by a hairline outwards, never inwards.
+    pub const BOTTOM_EDGE: f32 = HEIGHT + DIVIDER;
 }
 
 /// §7.2 — list and tree rows, at the two named densities.

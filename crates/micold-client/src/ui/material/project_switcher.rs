@@ -10,21 +10,19 @@
 //! ([`cdk::overlay`](crate::ui::cdk::overlay), FR-008) — this module builds the panel and says
 //! where it wants to sit.
 
-use super::{menu_panel, Tooltip};
+use super::{menu, menu_panel, MenuItem, Tooltip};
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
 use crate::ui::material::{Text, TypeRole};
-use iced::widget::{button, column, mouse_area, row};
+use iced::widget::{button, row};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
-use micold_core::tokens::{shape, spacing, Roles};
+use micold_core::tokens::{anatomy, shape, spacing, Roles};
 
 /// The width of the switcher panel.
 const PANEL_WIDTH: f32 = 260.0;
-/// Vertical offset so the panel clears the toolbar (approx. toolbar height).
-const TOP_OFFSET: f32 = 52.0;
 
 /// One project row rendered in the switcher panel. Generic over the message type for reuse.
 pub struct ProjectRow<M> {
@@ -118,6 +116,52 @@ impl<'a, M: Clone + 'a> ProjectSwitcherOverlay<'a, M> {
     }
 }
 
+/// The vertical stack of project rows, with the trailing "Add project…" affordance.
+///
+/// `pub(super)` for the §7.5 anatomy tests, which need a row's laid-out box and cannot get it from
+/// the public entry point: that yields a `cdk::overlay::Surface` rather than an `Element`, and wraps
+/// the rows in a panel whose padding would have to be subtracted back out by hand. Same reason
+/// `menu::item_column` is reachable.
+/// A project row **is** a menu item (FR-029b): a leading marker, a label, a trailing count, a
+/// trailing badge and a right-press. It used to be a hand-built copy of [`menu::item_column`] — the
+/// same `button`, the same `text_button` style, the same `Ripple`, written out a second time — and
+/// what that cost is BUG-003. §7.5's 48dp item height was applied to the original and the copy
+/// stayed at 36dp, so the two panels hanging off the app bar disagreed about how tall a row is, and
+/// every remaining figure in §7.5 would have had to be applied twice to reach both.
+pub(super) fn row_column<'a, M: Clone + 'a>(
+    rows: Vec<ProjectRow<M>>,
+    on_add: M,
+    r: Roles,
+) -> Element<'a, M> {
+    let active_tint = icon_role(IconSurface::Badge, r);
+    let error_tint = icon_role(IconSurface::Unavailable, r);
+    let add_tint = icon_role(IconSurface::AppBarAction, r);
+
+    let mut items: Vec<MenuItem<M>> = rows
+        .into_iter()
+        .map(|pr| MenuItem {
+            icon: pr.is_active.then_some(Icon::ActiveMarker),
+            icon_tint: Some(active_tint),
+            label: pr.label,
+            // Unavailable projects are shown but cannot be activated (FR-008 of feature 008).
+            message: pr.available.then_some(pr.on_select),
+            trailing_text: (pr.running_count > 0).then(|| format!("{} running", pr.running_count)),
+            trailing_icon: (!pr.available).then_some((Icon::Unavailable, error_tint)),
+            // Right-click opens the row's context menu (feature 015). Offered even for unavailable
+            // projects — those are precisely the ones a user wants to forget.
+            on_context: pr.on_context,
+        })
+        .collect();
+
+    // Trailing "Add project…" row opens the existing folder browser (FR-009).
+    items.push(MenuItem {
+        icon_tint: Some(add_tint),
+        ..MenuItem::new(Icon::OpenProject, "Add project…", on_add)
+    });
+
+    menu::item_column(items, r)
+}
+
 impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Option<Surface<'a, M>> {
     fn from(m: ProjectSwitcherOverlay<'a, M>) -> Self {
         let ProjectSwitcherOverlay {
@@ -132,72 +176,22 @@ impl<'a, M: Clone + 'a> From<ProjectSwitcherOverlay<'a, M>> for Option<Surface<'
             return None;
         }
 
-        let active_tint = icon_role(IconSurface::Badge, r);
-        let error_tint = icon_role(IconSurface::Unavailable, r);
-        let add_tint = icon_role(IconSurface::AppBarAction, r);
-
-        let mut list = column![].spacing(spacing::XS).width(Length::Fill);
-        for pr in rows {
-            let mut content = row![].spacing(spacing::SM).align_y(Alignment::Center);
-            if pr.is_active {
-                content = content.push(icon(
-                    Icon::ActiveMarker,
-                    TypeRole::Label.size(),
-                    active_tint,
-                ));
-            }
-            content = content.push(Text::new(pr.label, TypeRole::Action, r).width(Length::Fill));
-            if pr.running_count > 0 {
-                content = content.push(
-                    Text::new(format!("{} running", pr.running_count), TypeRole::Label, r).muted(),
-                );
-            }
-            if !pr.available {
-                content = content.push(icon(Icon::Unavailable, TypeRole::Label.size(), error_tint));
-            }
-            let mut entry = button(content)
-                .width(Length::Fill)
-                .padding(spacing::SM)
-                .style(style::text_button(r));
-            // Unavailable projects are shown but cannot be activated (FR-008).
-            if pr.available {
-                entry = entry.on_press(pr.on_select);
-            }
-            // Right-click opens the row's context menu (feature 015). Offered even for
-            // unavailable projects — those are precisely the ones a user wants to forget.
-            let entry = super::Ripple::new(entry, r.on_surface, shape::FULL);
-            let row: Element<'_, M> = match pr.on_context {
-                Some(msg) => mouse_area(entry).on_right_press(msg).into(),
-                None => entry.into(),
-            };
-            list = list.push(row);
-        }
-
-        // Trailing "Add project…" row opens the existing folder browser (FR-009).
-        list = list.push(super::Ripple::new(
-            button(
-                row![
-                    icon(Icon::OpenProject, TypeRole::Action.size(), add_tint),
-                    Text::new("Add project…", TypeRole::Action, r),
-                ]
-                .spacing(spacing::SM)
-                .align_y(Alignment::Center),
-            )
-            .width(Length::Fill)
-            .padding(spacing::SM)
-            .style(style::text_button(r))
-            .on_press(on_add),
-            r.on_surface,
-            shape::FULL,
-        ));
-
-        let panel = menu_panel(list, Length::Fixed(PANEL_WIDTH), r, true);
+        let panel = menu_panel(
+            row_column(rows, on_add, r),
+            Length::Fixed(PANEL_WIDTH),
+            r,
+            true,
+            menu::panel_padding(),
+        );
         Some(
             Surface::new(
                 Layer::Popover,
                 panel,
+                // §7.1's bottom edge, read rather than restated (FR-029a). This module carried its
+                // own `TOP_OFFSET = 52.0`, word for word the same guess `menu.rs` did, so the
+                // switcher opened 13dp inside the bar exactly as the overflow menu did (BUG-003).
                 Anchor::TopEnd {
-                    top: TOP_OFFSET,
+                    top: anatomy::app_bar::BOTTOM_EDGE,
                     end: spacing::SM,
                 },
             )

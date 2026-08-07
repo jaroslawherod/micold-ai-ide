@@ -48,6 +48,14 @@ use support::covered_states::covered_states;
 #[path = "gates/containment.rs"]
 mod containment;
 
+// --- The panel-placement gate (BUG-003) ---------------------------------------------------------
+
+// The same arrangement, for the same reason: a separate gate, sharing this binary's record cache.
+// It asserts about two independent components — a panel and the app bar it hangs from — which is
+// the one relationship none of the other gates is scoped to read.
+#[path = "gates/panel_placement.rs"]
+mod panel_placement;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).
@@ -507,18 +515,14 @@ fn a_state_that_presses_a_control_records_the_control_it_opened() {
 ///
 /// Required to stay true: a stale entry fails the test below, on the same reasoning FR-014 applies
 /// to coverage. An exemption nobody re-reads is how a gate quietly becomes narrower than it looks.
-const SCHEME_DEPENDENT: &[(&[usize], &str)] = &[
-    (
-        &[1, 0, 0, 0, 0],
-        "the row containing the resolved theme's own name — \"Micold Light\" versus \"Micold \
-         Dark\" — which shrinks to fit its label, so it is one word narrower in the dark scheme",
-    ),
-    (
-        &[1, 0, 0, 0, 0, 1],
-        "the theme-name text itself. Same cause as its parent: the string differs by scheme, so \
-         its measured width does too. Nothing moved.",
-    ),
-];
+/// **Empty, and that is a result rather than an omission** (BUG-003). It held two entries: the
+/// overflow menu's theme-mode row and its label, whose string names the resolved scheme and so
+/// measured one word narrower in the dark one. Both went stale when §7.5's item row landed — a menu
+/// item's label now fills the width its 12dp ends leave it, so the node is the same size whatever
+/// the string inside it says. The geometry stopped depending on the content, which is what the
+/// exemption was for. The staleness assertion below is what turned that into a required edit rather
+/// than a widening nobody noticed.
+const SCHEME_DEPENDENT: &[(&[usize], &str)] = &[];
 
 fn scheme_exempt(path: &[usize]) -> bool {
     SCHEME_DEPENDENT.iter().any(|(p, _)| *p == path)

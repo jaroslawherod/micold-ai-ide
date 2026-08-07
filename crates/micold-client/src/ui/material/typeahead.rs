@@ -304,6 +304,7 @@ fn menu_element<'a, M: Clone + 'a>(
             Length::Fill,
             r,
             true,
+            spacing::XS,
         );
     }
 
@@ -327,7 +328,10 @@ fn menu_element<'a, M: Clone + 'a>(
     let capped = iced::widget::container(super::Scrollable::new(list, r).height(Length::Shrink))
         .max_height(density::MENU_ITEM_BASE * MAX_ROWS_BEFORE_SCROLL);
 
-    super::menu_panel(capped, Length::Fill, r, true)
+    // `spacing::XS`, not §7.5's panel padding: the type-ahead's rows are the third copy of
+    // the item row and T108 decides whether they become the shared one. Until then it keeps the
+    // padding it had, rather than acquiring half of a change it is not part of.
+    super::menu_panel(capped, Length::Fill, r, true, spacing::XS)
 }
 
 impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {

@@ -363,16 +363,8 @@ pub fn pane<'a>(
             .push(
                 ContextMenu::new(
                     vec![
-                        MenuItem {
-                            icon: None,
-                            label: "Copy".to_string(),
-                            message: Message::TerminalCopyRequested,
-                        },
-                        MenuItem {
-                            icon: None,
-                            label: "Paste".to_string(),
-                            message: Message::TerminalPasteRequested,
-                        },
+                        MenuItem::labeled("Copy", Message::TerminalCopyRequested),
+                        MenuItem::labeled("Paste", Message::TerminalPasteRequested),
                     ],
                     (x, y),
                     Message::TerminalContextMenuClosed,

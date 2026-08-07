@@ -296,7 +296,7 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T056 [P] [US4] Add the dense (36dp) and standard (48dp) row densities to `crates/micold-client/src/ui/material/tree_view.rs`, defaulting the sidebar to dense (FR-026, FR-026a)
 - [X] T057 [P] [US4] Enforce the 48dp minimum interactive target in `crates/micold-client/src/ui/material/icon_button.rs` (FR-027) *(reopened 2026-08-07 — BUG-002: the 48dp was written and then overwritten; closed the same day by T091)*
 - [X] T058 [P] [US4] Apply dialog anatomy in `crates/micold-client/src/ui/material/modal.rs` — 24dp padding, `headline_small` title, `body_medium` body, trailing-aligned action row with 8dp gap (FR-028)
-- [X] T059 [P] [US4] Apply menu anatomy in `crates/micold-client/src/ui/material/menu.rs` — `surface_container`, elevation 2, `extra_small` corner, 48dp items (FR-029)
+- [X] T059 [P] [US4] Apply menu anatomy in `crates/micold-client/src/ui/material/menu.rs` — `surface_container`, elevation 2, `extra_small` corner, 48dp items (FR-029) *(reopened 2026-08-07 — BUG-003: closed on the surface and shape half of §7.5 alone. The 48dp items did not arrive until T098, five phases later, and three further figures in the same table — 8dp panel padding, 12dp item padding, 24dp item icon — plus the 4dp gap the contract does not have are still unapplied today. Closed by T105.)*
 - [X] T060 [P] [US4] Apply chip anatomy in `crates/micold-client/src/ui/material/tag.rs` and `toggle_chip.rs` — 32dp height, `full` corner, `label_large`, **label centred within the height** (FR-030, FR-030a) *(reopened 2026-08-07 — BUG-001; closed the same day by T085)*
 
   > `tag.rs` was done and stayed done: a `Tag` sets no height, so its container is its line box and
@@ -762,3 +762,141 @@ module and reached no component. Both now apply. One further finding is **not** 
 four tasks and is left for the next converge: §7.2's row height is a deliberate, justified deviation
 (`tree_view.rs:227-237`, and the T042 note above), but unlike its five siblings it has no FR entry
 in `spec.md`'s accepted-gaps list. It is the only accepted gap recorded solely in a code comment.
+
+---
+
+## Phase 14: BUG-003 — two panels over the app bar, and one item row built twice
+
+Reported 2026-08-07 from a screenshot of the running application: the overflow menu opens 13dp
+*inside* the app bar, clipping the ⋮ it was opened from. The project switcher does the same, from
+its own copy of the same constant, and its rows are still 36dp where the menu's are 48. See
+`bugs/BUG-003.md`.
+
+**One false completion.** T059 closed §7.5 on its surface and shape alone; four of its spatial
+figures were never applied and the item height arrived five phases later under T098. Reopened above,
+closed by T105.
+
+**Guards first, in this order** — the gate in T101 is vacuous until T100 gives it something to
+read, and T103's figures cannot be asserted from `tests/` at all.
+
+- [X] T100 Cover the two panels. Two entries in `tests/support/covered_states.rs` and nothing else (feature 019 FR-016): `toolbar-overflow-menu-open` and `project-switcher-open`, each anchored on the app bar, on the trigger the panel hangs from, and on the panel itself, so a failure names them. Neither panel has ever appeared in a fixture line — `worktree-menu-open` is the sidebar's context menu at a hard-coded point and `add-worktree-dialog-type-menu-open` is the select dropdown, so nothing in the fixture has ever exercised `TOP_OFFSET` (feature 019 FR-016, SC-008c)
+
+  > `toolbar-overflow-menu-open` and `project-switcher-open`, each anchored on the app bar, on its
+  > own trigger and on its panel. One correction to the bug report while writing them: the overflow
+  > panel was **not** absent from the fixture. A closed `MenuOverlay` still yields a surface, so it
+  > has been recorded at `1032, 52, 240 × 264` in nearly every state since the fixture landed. What
+  > was missing is a state in which either panel is *open* — and any assertion at all about where a
+  > panel sits, which is T101.
+
+- [X] T101 Failing test first: a gate under `tests/gates/` asserting that no floating panel is laid out over the app bar and none extends past the window, over every covered state. Compiled into the `layout_snapshot` binary as `containment` is, so it shares that binary's record cache rather than re-resolving every state in a second process. It must **assert**, not compare against the fixture: a snapshot adopts a defect older than itself as its expected value, which is what T093 had to correct after BUG-002. Confirm it fails against both panels at 13dp before anything is fixed (SC-008c, FR-029a)
+
+  > `tests/gates/panel_placement.rs`, compiled into the `layout_snapshot` binary. Confirmed red
+  > first, and far redder than expected: **17 panels across 16 states**, because the closed overflow
+  > menu is laid out in all of them. *"the panel at 0/1/0 starts at y=52.0, which is 13.0px inside
+  > the app bar (the bar and its divider end at 65.0)"*. An anchored panel is identified
+  > structurally — a layer's own child, smaller than the window on both axes — so a panel added
+  > later is covered without anyone remembering to add it. `the_gate_can_fail` rebuilds a panel at
+  > the old offset from a synthetic record, so the check stays demonstrably able to fail now that
+  > both panels are fixed.
+
+- [X] T102 Give §7.1's bottom edge a constant to be read from. `anatomy::app_bar` gains the divider and the bottom edge the contract now states, `tokens_anatomy.rs` asserts both, and `material/toolbar.rs` draws its separator from the constant instead of the literal `1.0` it hardcodes today. This is the number FR-029a requires the panels to derive from, so it has to exist before either of them can stop stating its own (FR-029a, SC-008, §7.1)
+
+  > `anatomy::app_bar::DIVIDER` (1.0) and `BOTTOM_EDGE` (65.0), asserted in `tokens_anatomy.rs`,
+  > and `toolbar.rs` now draws its separator from the constant instead of a literal `1.0`. §7.1
+  > gained the two rows they come from, including *why* the bottom edge is a row of its own: what a
+  > surface hanging below the bar must clear is neither figure alone, nothing said so, and two
+  > components each answered it by eye with the same wrong number.
+
+- [X] T103 Failing tests first for §7.5's unapplied figures, in-crate beside `anatomy_size.rs` (`material` is `pub(crate)`, so `tests/` cannot construct any of this): a menu item's leading icon is `anatomy::menu::ITEM_ICON`, its content is inset by `anatomy::menu::ITEM_PADDING` on both sides, and a panel puts `anatomy::menu::VERTICAL_PADDING` above the first item and below the last with the items abutting between. Confirm all four red — 14dp icons, 8dp insets, 4dp padding, 4dp gaps (FR-029, SC-008b, §7.5)
+
+  > `src/ui/material/menu_anatomy.rs`, six tests, all four figures confirmed red first: a 14dp
+  > leading icon against §7.5's 24, an 8dp content inset against 12, 4dp of panel padding against 8,
+  > and 4dp between items where the contract has nothing. The sixth pins `menu_panel_size` to the
+  > panel it estimates, and was green throughout — the one thing §7.5's arithmetic had right.
+  >
+  > It also found a gap in the in-crate harness, not in the application: `test_support::renderer()`
+  > loaded the two Roboto faces and **not the icon face**, so a 14dp glyph resolved through the
+  > host's fallback and measured 8.4dp. `tests/support/layout.rs` had the identical defect and fixed
+  > it in feature 019; this is the same fix on the in-crate side, and without it the icon assertion
+  > would have been reading whatever font this machine happens to offer.
+
+- [X] T104 Unify the item row (FR-029b). `MenuItem` gains what the switcher's rows need and nothing more — a leading marker, trailing text, a trailing badge icon, an optional press (an unavailable project is shown and not selectable, FR-008 of feature 008) and an optional right-press — and `project_switcher.rs` builds `MenuItem`s instead of assembling its own `button`/`Ripple`/`text_button` stack. Its trigger stays its own: `MenuTrigger` and `ProjectSwitcherTrigger` genuinely differ, the rows do not. Behaviour is unchanged — every message, the unavailable badge, the running count, the "Add project…" affordance and the right-press all survive, which is what `tests/project_switcher.rs` and `tests/switcher_forget_menu.rs` are for (FR-029b, Principle VIII)
+
+  > `MenuItem` gains `icon_tint`, `trailing_text`, `trailing_icon`, `on_context`, and an optional
+  > `message` — five fields, which is what a switcher row is. `project_switcher::row_column` is now
+  > a `map` into `MenuItem`s followed by `menu::item_column`; its hand-built `button` /
+  > `text_button` / `Ripple` / `mouse_area` stack is gone, and so is the second `TOP_OFFSET`.
+  > Appearance is preserved deliberately: the active marker keeps its `Badge` tint and the
+  > unavailable badge its error tint, through `icon_tint` and `trailing_icon` rather than by the
+  > row knowing what a project is. `MenuItem::labeled` covers the terminal's icon-less copy/paste
+  > items, which were the only struct literals in the tree.
+
+- [X] T105 Apply the rest of §7.5 to the now-single row, closing T059: `VERTICAL_PADDING` on the panel, `ITEM_PADDING` horizontally in an item, `ITEM_ICON` for the leading glyph, and the inter-item gap removed. `menu_panel_size` must move with all of them — it is correct today and each of these silently invalidates the anchor clamping that keeps a cursor-anchored menu on screen (FR-029, §7.5)
+
+  > §7.5 applied in full, closing T059: `VERTICAL_PADDING` above the first item and below the last,
+  > `ITEM_PADDING` at both ends of an item, `ITEM_ICON` for the leading glyph, and the 4dp gap
+  > removed. `menu_panel` now takes its padding from the caller — a menu pads vertically and not at
+  > all at the sides, so an item's state layer runs edge to edge, while the sidebar's filter
+  > accordion holds arbitrary content and still pads all four. `menu_panel_size` follows the same
+  > tokens and stays exact.
+  >
+  > One consequence worth recording: the item's label now fills, which is what makes the trailing
+  > 12dp measurable — and it made both `SCHEME_DEPENDENT` exemptions in `layout_snapshot.rs` go
+  > **stale**, because the theme-mode row's width no longer depends on the string inside it. The
+  > list is now empty. The staleness assertion is what turned that into a required edit rather than
+  > an exemption nobody re-read.
+
+- [X] T106 Derive both offsets and delete both copies of `TOP_OFFSET`, making T101 green. The menu and the switcher read §7.1's bottom edge from T102's constant; neither states a number of its own (FR-029a, SC-008c)
+
+  > Both panels read `anatomy::app_bar::BOTTOM_EDGE`; neither states a number. The gate went green
+  > on all 17. Measured, from the regenerated fixture: the overflow panel moves from
+  > `1032, 52, 240 × 264` to `1032, 65, 240 × 256` — its top edge is now exactly the bar's bottom
+  > edge — and the switcher from `1012, 52, 260 × 84` to `1012, 65, 260 × 112`.
+
+- [X] T107 [P] Sweep for the same shape elsewhere: a constant that restates another component's dimension by eye. `menu.rs`'s `CONTEXT_MENU_WIDTH`/`PANEL_WIDTH`, the two context menus anchored at a literal `Point::new(24.0, 96.0)` with no clamping at all (`ui/mod.rs`), and `typeahead.rs`'s panel are the candidates. Fix or record each, so FR-029a's class is closed rather than its one instance (FR-029a)
+
+  > One finding, fixed. The worktree and session context menus were anchored at a literal
+  > `Point::new(24.0, 96.0)` **twice, with no clamping at all**, while the project menu beside them
+  > clamps through `clamp_menu_anchor`. Both now clamp against `menu_panel_size(items.len())`, and
+  > the point is stated once as `SIDEBAR_MENU_ANCHOR`. It had not bitten yet and was about to: a
+  > four-item worktree menu grew from 152dp to 200dp when items became 48dp.
+  >
+  > The other candidates are clean. `PANEL_WIDTH` and `CONTEXT_MENU_WIDTH` are the panels' own
+  > anatomy, derived from the labels they must hold and documented as such — not a restatement of
+  > another component's figure, which is the shape FR-029a is about.
+
+- [X] T108 [P] Decide the type-ahead row. It is the third hand-built copy of the item row and FR-029b does not name it: its rows carry a keyboard highlight and a scroll cap that a menu item has no notion of. Either fold it into the unified row with those as item state, or record in `spec.md` why it stays separate. It must not stay in the current state, where the requirement is neither met nor waived (FR-029b)
+
+  > Recorded as deliberately separate, in FR-029b itself rather than in a comment. The type-ahead's
+  > row is not this row: its label is an `EmphasisedLabel` of match spans rather than a string, it
+  > carries a keyboard-highlight state on top of selection and disablement (`style::menu_row` takes
+  > all three), its leading slot reserves space when nothing is selected so every label starts at
+  > the same x, and it ripples at `shape::SMALL` — and not at all when the row is unpressable. It
+  > shares §7.5's height, padding and surface through the same tokens. What it does not share is the
+  > row, and folding four states into `MenuItem` to say so would be the duplication argument run
+  > backwards.
+
+- [X] T109 Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt`; the diff is the proof, and it is the first time either panel has been in it (SC-008c, feature 019 FR-003)
+
+  > Regenerated. The diff is the proof, and it is the first time either panel has appeared in the
+  > fixture as an *open* one. Both panels move down 13dp onto the bar's bottom edge; menu items go
+  > from 36dp to 48dp with 12dp ends and 24dp glyphs; the switcher's rows change from 36dp to the
+  > same 48dp, which is the half of BUG-003 that no gate could have reported before T103.
+
+- [ ] T110 Confirm in the running application per quickstart §B4, with the overflow menu and the switcher open in turn: the trigger stays fully visible, both panels begin below the bar's divider, and their rows are the same height (SC-008c, FR-029b)
+
+  > **Not done, and deliberately abandoned rather than pushed through.** Unlike BUG-002's, this
+  > confirmation needs the application *driven*: the panel does not exist until something presses
+  > the ⋮. The only route available from a shell here is `xdotool` against an XWayland window plus
+  > `mise run screenshot`, and both act on the owner's live desktop — the attempt moved their
+  > pointer and raised a GNOME "Remote Desktop / Allow Remote Interaction" consent dialog over their
+  > work. That is not a cost this task is worth, so it stops here for a person to do in one click.
+  >
+  > What stands in its place, and what it does not cover: the geometry is pinned by T100's two
+  > covered states, asserted by T101's gate on every state, and asserted figure by figure by T103's
+  > six §7.5 checks. Between them they hold every claim in this task — panel below the divider,
+  > trigger unobstructed, both panels' rows equal — as *layout*. What none of them reads is the
+  > drawn pixels, which is `content_placement`'s job and is not extended here.
+
+**Bugfix**: 2026-08-07 — BUG-003 Updated from bugfix patch: reopened T059, added T100–T110, added
+FR-029a, FR-029b, US4 acceptance scenario 11 and SC-008c.

@@ -31,7 +31,14 @@ pub fn block_on<F: Future>(f: F) -> F::Output {
     }
 }
 
-/// The CPU rasteriser, with both shipped Roboto faces loaded.
+/// The CPU rasteriser, with every shipped face loaded — both Roboto weights **and the icon face**.
+///
+/// The icon face is every bit as load-bearing as the text ones, and it was missing: an icon is a
+/// glyph from `Material Symbols Outlined`, shaped and measured like any other text. Without it a
+/// 14dp icon resolved through the host's fallback and measured 8.4dp, so any in-crate test reading
+/// an icon's box was reading whatever font the machine happened to offer. `tests/support/layout.rs`
+/// had the identical gap and closed it; this is the same fix on the in-crate side, found by
+/// BUG-003's §7.5 checks, which measure a menu item's leading glyph.
 ///
 /// `Some("tiny-skia")` is load-bearing rather than cosmetic: `iced_wgpu`'s `Headless::new` returns
 /// `None` on its first line when the hint is not `"wgpu"`, before it constructs an instance or
@@ -45,6 +52,7 @@ pub fn renderer() -> iced::Renderer {
             .expect("the global font system lock was poisoned");
         fonts.load_font(Cow::Borrowed(super::ROBOTO_REGULAR_BYTES));
         fonts.load_font(Cow::Borrowed(super::ROBOTO_MEDIUM_BYTES));
+        fonts.load_font(Cow::Borrowed(super::glyph::MATERIAL_SYMBOLS_BYTES));
     });
 
     block_on(<iced::Renderer as Headless>::new(
