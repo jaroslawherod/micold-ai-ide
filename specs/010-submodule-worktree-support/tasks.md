@@ -351,14 +351,45 @@ does not dead-end at a requirement with no task.
   moving rather than frozen on "Setting up submodules"). No work in this feature. Closes FR-004a;
   restores FR-004/SC-002 and FR-006/SC-003 for fetches slower than the deadline, which is where they
   were silently not holding.
-- [ ] T023 [US2] Re-run quickstart.md §2 and §3 against the daemon architecture, using a repository
+- [X] T023 [US2] Re-run quickstart.md §2 and §3 against the daemon architecture, using a repository
   whose submodule fetch genuinely exceeds 9 s. T014/T017/T020 passed against a repo that fetched
   faster than that, which is exactly why this went unnoticed for the life of the feature: the manual
   validations were honest and the fixture was too quick to reach the failure. Not closed by T022's
   automated coverage — that proves the connection survives, not that the form reads well over
   minutes.
+  **Done — run 2026-08-06 against the real GUI**, on an isolated instance (own `XDG_RUNTIME_DIR` /
+  data dir / `HOME`, own X server) so it could not disturb a live one. Fixture: a superproject whose
+  submodule is a local repo large enough that `git submodule update --init --recursive` takes
+  **11.8 s** — deliberately past the 9 s liveness deadline, since a faster fixture is what hid this
+  for the life of the feature.
+  - **§2 — PASS.** "Setting up submodules" showed a live `Cloning into '…'` line beneath it
+    throughout; at t=11 s the create was still running with **no disconnect banner and no
+    read-only/takeover banner** (this is the moment BUG-009 fired); at t=14 s the worktree appeared
+    in the sidebar. On disk: worktree registered, branch created, submodule checked out at its
+    recorded commit with all content. FR-004/FR-004a, SC-001, SC-002 confirmed end to end.
+  - **§3 — FAILED on its first row, then fixed.** Rollback (row 2) and retry-after-fixing (row 3)
+    both passed exactly as specified — no directory, no branch, nothing registered, and the same
+    name created cleanly once the URL was repaired. But the error read only *"git failed to create
+    the worktree: git submodule update --init --recursive failed"*, naming neither the failing
+    submodule nor the reason, so **SC-003 was not met**. Root cause in
+    `micold-core/src/git.rs::submodule_update_init_recursive`: git's own output was streamed to the
+    progress callback and **retained nowhere**, so the returned error carried a fixed string. T021
+    had fixed the *client* half of this (it appends `OperationError::detail` to the message) — there
+    was simply nothing in the detail to append. Fixed here: the streaming loop retains the output
+    and builds the message from it, deduplicated (git retries a failed clone and repeats each
+    `fatal:` verbatim) and capped at four distinct lines. The error now reads
+    *"…failed: fatal: repository '…' does not exist; fatal: clone of '…' into submodule path
+    '…/vendor/broken' failed; Failed to clone 'vendor/broken'. Retry scheduled; …"*. Re-run in the
+    GUI: all three §3 rows pass. Tests: `micold-core/tests/submodule_failure_detail.rs` (real git,
+    real broken submodule, red first — it reproduced the fixed string exactly) plus three unit tests
+    on the message builder including the deduplication and the say-nothing fallback.
+  **Still not closed by this run**: FR-006's *structured* three-way category (network / auth /
+  unreachable-commit) remains unbuilt, as T021 recorded — the user now gets git's words, not a
+  classification. That was a scope decision then and is unchanged now.
 
-**Bugfix**: 2026-08-06 — BUG-009 Added T022 (pointer, closed) and T023 (re-validation, open). **No
+**Bugfix**: 2026-08-06 — BUG-009 Added T022 (pointer, closed) and T023 (re-validation, **closed
+2026-08-06**; §2 passed, §3 failed its first row and the defect it exposed — a submodule failure
+message that carried none of git's words — was fixed in `micold-core/src/git.rs` under this task). **No
 task reopened**: T005/T012 are correct for the in-process architecture they were written against,
 and T014/T017/T020 are stale rather than wrong. See
 `../010-daemon-session-persistence/bugs/BUG-009.md`.

@@ -344,7 +344,19 @@ impl Git for GitCli {
 
         // Both senders above were moved into the reader threads, so this loop ends once both
         // threads finish (all output drained) and their senders drop.
+        //
+        // The lines are *also* retained here, not merely forwarded (FR-006/SC-003, found by
+        // `010-submodule-worktree-support` T023's manual validation). Streaming them to `on_line`
+        // makes them visible *while* the fetch runs; on failure they are the only place that says
+        // which submodule failed and why — `git submodule update` reports both on its own output
+        // and communicates nothing through its exit status but "something went wrong". Without
+        // this, every failure reached the user as one fixed sentence: the progress had scrolled
+        // past, and the error carried no words of git's own.
+        let mut retained: Vec<String> = Vec::new();
         for line in rx {
+            if retained.len() < FAILURE_CONTEXT_LINES {
+                retained.push(line.clone());
+            }
             on_line(line);
         }
         let _ = stdout_handle.join();
@@ -354,10 +366,89 @@ impl Git for GitCli {
         if status.success() {
             Ok(())
         } else {
-            Err(io::Error::other(
-                "git submodule update --init --recursive failed",
-            ))
+            Err(io::Error::other(failure_message(&retained)))
         }
+    }
+}
+
+/// How many of a failed fetch's output lines are retained for its error message. Generous, because
+/// [`failure_message`] discards most of them again — this only has to be wide enough to still hold
+/// the interesting ones after git's own repetition.
+const FAILURE_CONTEXT_LINES: usize = 12;
+
+/// How many *distinct* lines survive into the message. `git submodule update` retries a failed
+/// clone once, so the same two `fatal:` lines arrive twice; after deduplication three or four lines
+/// carry everything the user needs — the submodule path and the reason — and this is a message
+/// rendered in a dialog, not a log.
+const FAILURE_MESSAGE_LINES: usize = 4;
+
+/// Build the failure message for a `git submodule update` that exited non-zero, from the output it
+/// produced. Falls back to the bare summary when git said nothing at all — a message with a dangling
+/// colon and no content would be worse than the summary alone.
+fn failure_message(lines: &[String]) -> String {
+    const SUMMARY: &str = "git submodule update --init --recursive failed";
+    let mut context: Vec<&str> = Vec::new();
+    for line in lines {
+        let line = line.trim();
+        // Deduplicated, not just capped: git's automatic retry repeats each `fatal:` verbatim, and a
+        // message that says the same thing twice reads as noise rather than as detail.
+        if line.is_empty() || context.contains(&line) {
+            continue;
+        }
+        context.push(line);
+        if context.len() == FAILURE_MESSAGE_LINES {
+            break;
+        }
+    }
+    if context.is_empty() {
+        return SUMMARY.to_string();
+    }
+    format!("{SUMMARY}: {}", context.join("; "))
+}
+
+#[cfg(test)]
+mod failure_message_tests {
+    use super::*;
+
+    #[test]
+    fn git_s_own_words_are_carried_into_the_message() {
+        let msg = failure_message(&[
+            "Cloning into '/w/vendor/broken'...".into(),
+            "fatal: repository '/nope' does not exist".into(),
+            "fatal: clone of '/nope' into submodule path '/w/vendor/broken' failed".into(),
+        ]);
+        assert!(msg.contains("vendor/broken"), "{msg}");
+        assert!(msg.contains("does not exist"), "{msg}");
+    }
+
+    #[test]
+    fn git_s_retry_does_not_double_the_message() {
+        // `submodule update` retries a failed clone once and repeats both `fatal:` lines verbatim.
+        let fatal = "fatal: repository '/nope' does not exist";
+        let clone = "fatal: clone of '/nope' into submodule path '/w/vendor/broken' failed";
+        let msg = failure_message(&[
+            fatal.into(),
+            clone.into(),
+            "Failed to clone 'vendor/broken'. Retry scheduled".into(),
+            fatal.into(),
+            clone.into(),
+            "Failed to clone 'vendor/broken' a second time, aborting".into(),
+        ]);
+        assert_eq!(msg.matches("does not exist").count(), 1, "{msg}");
+        assert!(msg.contains("vendor/broken"), "{msg}");
+    }
+
+    #[test]
+    fn a_silent_failure_falls_back_to_the_summary_alone() {
+        // No dangling colon, no empty tail — the summary has to stand on its own.
+        assert_eq!(
+            failure_message(&[]),
+            "git submodule update --init --recursive failed"
+        );
+        assert_eq!(
+            failure_message(&["   ".into(), "".into()]),
+            "git submodule update --init --recursive failed"
+        );
     }
 }
 
