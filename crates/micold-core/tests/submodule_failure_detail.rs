@@ -114,13 +114,20 @@ fn a_failed_submodule_fetch_names_the_submodule_and_the_reason() {
         .expect_err("a submodule pointing at a missing repository must fail");
     let text = err.to_string();
 
-    // The two things SC-003 says the user must be able to identify without opening a log.
+    // The two things SC-003 says the user must be able to identify without opening a log: *which*
+    // submodule, and *why*. The "why" is asserted as "git's own diagnostic came through", not as a
+    // particular sentence — which sentence git reaches depends on the platform. On Linux it gets far
+    // enough to say the repository does not exist; on Windows the per-repo `protocol.file.allow` is
+    // not honoured in the submodule's own clone, so it stops earlier at `transport 'file' not
+    // allowed`. Both are git explaining itself, which is the requirement; pinning either one would
+    // pin the fixture's plumbing rather than the behaviour under test. Pre-fix the message was a
+    // fixed summary carrying no `fatal:` and no submodule path, so both assertions still go red.
     assert!(
         text.contains("vendor/broken"),
         "the error must name the failing submodule; got: {text}"
     );
     assert!(
-        text.contains("does not exist"),
+        text.contains("fatal:"),
         "the error must carry git's own reason; got: {text}"
     );
 }
