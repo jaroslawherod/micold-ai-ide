@@ -528,3 +528,13 @@ the dialog's 280dp floor is recorded but not applied (FR-046).
 composition `p95` 1.07 ms → 1.12 ms (+4.7%) on the baseline reference scene, against a ~0.02 ms
 noise floor. Token lookups, type-role resolution, and the extra widgets `FormField` puts in the
 tree. Figures and method in `quickstart.md` §B8.
+
+---
+
+## Phase 8: Convergence
+
+Appended by `/speckit-converge` after the close-out above. Both items are the same root cause:
+T050 changed what the progress indicator *is*, and left the gallery describing the one it replaced.
+
+- [ ] T084 Rewrite the `stage_progress` caption in `crates/micold-client/src/showcase/sections/surfaces.rs` (~line 183). It currently tells the reader that the indicator's "fill is a fixed value rather than a real fraction", that "it does not animate, so it asks for no frames (FR-023)", and that "the indeterminate indicator that *will* need one arrives with feature 018" — three statements that T050 made false, in the one document whose entire job is to describe what each component does. A gallery that describes the component it replaced is worse than one that says nothing: a reader has no reason to doubt it, and the next person to reach for a progress indicator will believe the fill is static. Say what it is now — an indeterminate bar whose segment travels on `long_2`, driven through `Progress`, which asks for a frame on every frame it exists per T049/T050, FR-031f (contradicts)
+- [ ] T085 Decide what the gallery does about an indicator that never stops. `StageProgress` is posed permanently on the Components page — twice, since BUG-009 added the live-line pose — and `Bar` requests a frame on every frame it is mounted, so that page holds the render loop awake for as long as it is open. The catalogue records `live: &[]` and `interactive: false`, meaning "nothing here to exercise", and the section has no run control, unlike the motion section where every animation is replayable on demand. This is the showcase-side shape of exactly what T079 gated in the application, and no `showcase_*` test asserts the gallery ever idles. The showcase is a development-only binary, so this is not SC-017 proper — but the choice should be *made*: give the pose a run control the way motion entries have one, or record in the catalogue and the caption that this component animates continuously by nature and the page is knowingly exempt per FR-039a, SC-017, T050 (partial)
