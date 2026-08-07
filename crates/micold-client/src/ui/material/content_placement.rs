@@ -323,6 +323,39 @@ fn the_app_bars_title_is_centred_within_the_bar() {
     );
 }
 
+/// §7.3: a button's label is centred within the 40dp, not resting against its top edge.
+///
+/// New with the height. `Button` stated no height until the convergence pass that applied §7.3's
+/// 40dp, and the moment it did it joined this module's class by construction: a 20dp `label_large`
+/// line inside 40dp is 20dp of slack with nothing deciding where it goes, which is FR-030a's
+/// obligation and BUG-001's shape. The centring wrapper in `button.rs` is what this reads.
+#[test]
+fn a_buttons_label_is_centred_within_its_40dp() {
+    let r = roles();
+    // The filled variant, so its own `primary` container is the backdrop and only the label inks.
+    let backdrop = style::color(r.primary);
+    let on = style::color(r.on_primary);
+
+    let button: Element<'_, Message> = super::Button::with_content(
+        Text::new(Cow::Borrowed(LABEL), TypeRole::Action, r),
+        super::ButtonVariant::Filled,
+        r,
+    )
+    .on_press(Message::NoOp)
+    .into();
+    let ink = ink_of(button, Size::new(400.0, 400.0), backdrop, on, None);
+    let reference = reference_ink(TypeRole::Action, backdrop, on);
+    let ((top_shift, bottom_shift), expected) = shift_against_centred(ink, reference);
+
+    assert!(
+        (top_shift - expected).abs() < TOLERANCE && (bottom_shift - expected).abs() < TOLERANCE,
+        "a button's label is not centred in its {height}dp: its ink sits {top_shift:.1}dp below \
+         where the same label sits at the top of its line box, and centring would be \
+         {expected:.1}dp (§7.3, FR-030a)",
+        height = micold_core::tokens::density::BUTTON_BASE,
+    );
+}
+
 /// The worktree tag has no height of its own, so it has no slack and no alignment question — which
 /// is why BUG-001 spared it. Asserted rather than assumed: giving `Tag` a height later would
 /// reintroduce exactly this defect, and this is what would notice.

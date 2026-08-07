@@ -691,3 +691,74 @@ are reopened above and closed by T091.
 
 **Bugfix**: 2026-08-07 — BUG-002 Updated from bugfix patch: reopened T057 and T088, added
 T090–T095, added SC-008b. All closed the same day; both reopens are kept visible rather than erased.
+
+---
+
+## Phase 13: Convergence
+
+- [X] T096 Extend `crates/micold-client/src/ui/material/anatomy_size.rs` to every component whose anatomy entry states a size, not the three it covers today (app bar 64, chip 32, icon-button target 48×48). The remaining six: §7.2's list and tree rows at `density::LIST_ROW_BASE` standard and dense, §7.3's 40dp button height at `density::BUTTON_BASE`, §7.5's 48dp menu item at `density::MENU_ITEM_BASE`, §7.7's 56dp field and select at `density::TEXT_FIELD_BASE`, and §7.8's snackbar minimum height and maximum width. Declare each axis `Fixed`/`Fill`/`Content` as the existing entries do, so a component that is *meant* to be content-sized stays distinguishable from one that lost its figure. Expect T097 and T098 to fail against it, which is the point — this task is the check, not the fixes per SC-008b (partial)
+
+  > Nine components now, up from three: the icon-button target (48×48), the chip (32), the app bar
+  > (64 tall, `Fill` wide), the button (40), the menu item (48 tall, `Fill` wide), the text field
+  > (56), the snackbar (`AtLeast` 48 / `AtMost` 600), and the tree row — declared `Content`, which
+  > is the recorded decision rather than an oversight (see below). `Extent` gained `AtLeast`/`AtMost`
+  > for §7.8's minimum and maximum, and `laid_out` gained a path into the tree, because §7.2's and
+  > §7.5's figures belong to a *row* and reading the root would measure the list instead.
+  >
+  > Confirmed red exactly where converge predicted: "a filled button's height measured 30dp … but
+  > its anatomy entry states 40dp", "a menu item's height measured 36dp … states 48dp". Everything
+  > else came back green, including the text field's 56 and the snackbar's bounds — so this is two
+  > components adrift, not general drift.
+  >
+  > Two entries needed care. The snackbar takes **two** specimens: one message cannot exercise a
+  > height floor and a width cap at once. `menu::item_column` became `pub(super)` — both public
+  > entry points yield an overlay `Surface` rather than an `Element`, so measuring an item through
+  > them would mean subtracting panel padding by hand, which asserts arithmetic instead of §7.5.
+
+- [X] T097 Apply §7.3's 40dp height to the filled, outlined and text variants in `crates/micold-client/src/ui/material/button.rs`, or record the deviation in `spec.md` as an accepted fidelity gap alongside FR-042/043/043a/044/045/046. The component sets no height at all: `From<Button>` passes through only the caller's optional padding, so the three variants are content-sized and `density::BUTTON_BASE` (40.0) is referenced nowhere in the client, while `button.rs:123` states the opposite — "Feature 018 assigns each variant a height from the density scale". The comment and the code cannot both stand. It must not stay in the current state, where the requirement is neither met nor waived per FR-027, §7.3 (partial)
+
+  > Applied. `Button` set no height at all: a filled button laid out at 30dp — its label plus the
+  > rendering stack's default padding — while `density::BUTTON_BASE` (40.0) was referenced by no
+  > call site and `button.rs:123` claimed the opposite. The comment was right about the intent and
+  > the code had never carried it out.
+  >
+  > **The height obliged an alignment**, and that is FR-030a rather than a preference: `button` lays
+  > its content out under `limits.height(Fixed(40))`, which sets the minimum with the maximum, so
+  > the content node stretches to 40dp and draws at its top edge unless something says otherwise —
+  > BUG-001 exactly, one component over. A centring wrapper rather than the content's own `align_y`,
+  > because `with_content` takes an arbitrary `Element` this type cannot reach into. §7.3 gained the
+  > label-alignment row, and `content_placement.rs` gained the button, since it now belongs to that
+  > module's class by construction.
+
+- [X] T098 Apply §7.5's 48dp item height in `crates/micold-client/src/ui/material/menu.rs`, or record the deviation as an accepted fidelity gap. Items are sized by `spacing::SM` padding plus one `label_large` line (`menu_panel_size`, `menu.rs:78-81`), which lands near 36dp; `density::MENU_ITEM_BASE` exists for this and is applied only by `typeahead.rs:245`. Note that `menu_panel_size`'s anchor-clamping estimate is derived from the same arithmetic, so it moves with the height rather than after it per FR-029, §7.5 (partial)
+
+  > Applied, at `density::MENU_ITEM_BASE`. Items were `spacing::SM` padding around one `label_large`
+  > line — 36dp against §7.5's 48 — and the token existed for this, used only by `typeahead.rs`.
+  >
+  > No centring wrapper needed here, and the difference from T097 is worth stating: the item's
+  > content is a `row!` that already declares `align_y(Center)`, and `button` stretches that row to
+  > the full 48dp, so the row centres its own children inside a height it actually has. BUG-002's
+  > app bar was the other case — there the container *imposing* the height was the one that had to
+  > speak.
+  >
+  > `menu_panel_size` now reads the same token instead of rebuilding the height from padding plus a
+  > line box. While §7.5 went unapplied that arithmetic reproduced the real 36dp by restating the
+  > defect, so it was right by tracking it — and would have gone wrong the moment the height landed,
+  > silently breaking the anchor clamping that keeps a cursor-anchored menu on screen.
+
+- [X] T099 Justify or remove the desktop-screenshot tooling added under BUG-002 — `scripts/screenshot-session.py`, `docs/development/screenshots.md`, and `mise.toml`'s `screenshot` task. No FR or SC asks for it; it was written because quickstart Part B's visual items could not otherwise be captured on a GNOME/Wayland session, and is now referenced from Part B's preamble and T095. Either record it in the spec as support for the manual walkthrough, or drop it and return Part B to unaided inspection. It is not a gate and nothing in CI calls it (unrequested)
+
+  > Recorded, not removed. `spec.md`'s verification-split paragraph now names `mise run screenshot`
+  > as support for the recorded manual walkthrough, states that it is **not** a gate and moves no
+  > criterion out of the automated list, and says why it exists: BUG-002 was reported from two
+  > screenshots and nearly closed without one, because no route on a stock GNOME/Wayland session can
+  > take a screenshot from a shell. quickstart Part B's preamble already pointed at it; the spec is
+  > what makes it requested rather than merely present.
+
+
+**Convergence**: 2026-08-07 — Phase 13 closed. SC-008b's coverage went from three sized components
+to nine, which is what surfaced T097 and T098: two contract figures that were correct in the token
+module and reached no component. Both now apply. One further finding is **not** covered by these
+four tasks and is left for the next converge: §7.2's row height is a deliberate, justified deviation
+(`tree_view.rs:227-237`, and the T042 note above), but unlike its five siblings it has no FR entry
+in `spec.md`'s accepted-gaps list. It is the only accepted gap recorded solely in a code comment.
