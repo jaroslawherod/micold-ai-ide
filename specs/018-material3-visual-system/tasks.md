@@ -898,5 +898,20 @@ read, and T103's figures cannot be asserted from `tests/` at all.
   > trigger unobstructed, both panels' rows equal — as *layout*. What none of them reads is the
   > drawn pixels, which is `content_placement`'s job and is not extended here.
 
-**Bugfix**: 2026-08-07 — BUG-003 Updated from bugfix patch: reopened T059, added T100–T110, added
+- [X] T111 Apply §7.5's *other* half of the item-icon row — the `on_surface_variant` tint — or record the deviation. The 24dp landed under T105 and the tone did not, which is this bug's own shape repeated inside its own fix: a figure in the table that reaches no component (FR-029, §7.5)
+
+  > `IconSurface::MenuItem`, tinted `on_surface_variant`, and `menu::leading_tint` is what the row
+  > calls — a function rather than an expression in the loop, so it can be asserted without
+  > rasterising a glyph to read one colour. Confirmed red first: `on_surface` (28,27,30) against
+  > §7.5's (73,69,78).
+  >
+  > Its own `IconSurface` context rather than a reuse of `Badge`, which already resolves to the same
+  > role. The tone is the same today and the reasons are not, so a change to what a badge looks like
+  > must not silently restyle every menu in the application. `icon_roles.rs` gains the mapping, the
+  > contrast pair — a menu glyph sits on `surface_container`, not `surface` — and the count.
+  >
+  > An item that states a tint still keeps it, asserted separately: the switcher's active marker is
+  > a `Badge` by intent (FR-006 of feature 008) and this is a default, not an override.
+
+**Bugfix**: 2026-08-07 — BUG-003 Updated from bugfix patch: reopened T059, added T100–T111, added
 FR-029a, FR-029b, US4 acceptance scenario 11 and SC-008c.
