@@ -542,9 +542,15 @@ control plane you can read by eye is the justification for carrying two encoding
    `windows-sys` 0.61.2 but **never executed on Windows**; `portable-pty`'s `kill()` is known-broken
    there; the `0x03`→ConPTY interrupt path is well-sourced but untested. *Mitigation*: CI must cover
    all three platforms before W5 closes (Principle VI's gate already requires this).
-4. **Claude Code hook behaviour is a moving target.** The `Notification` subtypes did not fire during
-   testing. *Mitigation*: the unknown state is a first-class value, so an unfired signal degrades
-   rather than lies.
+4. **Claude Code hook behaviour is a moving target — along *two* axes, shape and size.** The
+   `Notification` subtypes did not fire during testing. *Mitigation*: the unknown state is a
+   first-class value, so an unfired signal degrades rather than lies. **Payload size is the second
+   axis, and it bit twice before it was named**: BUG-001 was the hook's *shape* (the matcher/hooks
+   wrapper), BUG-010 its *size* (a `PostToolUse` body embeds the edited file, so it reaches ~95 KiB
+   against a 64 KiB bound). Both were assumptions about an external interface encoded in `hooks.rs`
+   and never measured. *Mitigation*: `contracts/hooks.md`'s "Verification required before
+   implementation" table now carries size alongside shape, and rule 5's bound must be justified
+   against measured payloads rather than chosen (FR-016g).
 5. **259 tests, not 63 — and the workspace split now *forces* every one to move to an owning crate.**
    *Mitigation*: W6 tracks redistribution with a per-test disposition record (FR-041 forbids silent
    deletion); W0 gates on `cargo test --workspace` staying green through the crate move.
@@ -629,6 +635,14 @@ silence-based keepalive imposes on any long client-initiated operation (serve th
 busy; liveness is not a side effect of progress output) and with the transport-close release of
 attachments, and added Risk 9 (a silence-inferred liveness protocol acquires a failure mode with
 every slow operation added to it). See `bugs/BUG-009.md`.
+
+**Bugfix**: 2026-08-07 — BUG-010 Updated from bugfix patch: widened Risk 4 from "hook *behaviour* is
+a moving target" to name its two axes — shape (BUG-001) and size (BUG-010) — since both were
+unmeasured assumptions about the same external interface encoded in the same file. The Principle IV
+mitigation list (bind loopback, per-session token, no capability beyond activity) is unchanged and
+still holds; what changed is that "bounded bodies", the fourth item in that argument, now has to be
+sized against measured payloads to count as a mitigation rather than a new failure mode (FR-016g,
+`contracts/hooks.md` rule 5). See `bugs/BUG-010.md`.
 
 **Bugfix**: 2026-07-28 — BUG-007 Updated from bugfix patch: annotated the exclusivity workstream's
 *Tests first* line with the missing symmetric clause (an accepted attach makes the window writable

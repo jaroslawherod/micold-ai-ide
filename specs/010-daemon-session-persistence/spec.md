@@ -415,6 +415,19 @@ a session survived; confirm it does not survive without the setting.
   **Bugfix**: 2026-07-27 — BUG-005 added this requirement; session rows carried an unconditional
   `check_circle` glyph left of the activity dot, which read as "done/OK" on failed and interrupted
   sessions alike. See `bugs/BUG-005.md`.
+- **FR-016g**: The activity-signal receiver MUST accept every signal the agent legitimately emits,
+  including signals whose payload size is set by the agent's own tool input and output rather than by
+  the signal envelope — an agent reporting on a large file sends a correspondingly large payload. Any
+  size bound the receiver enforces (for the memory guarantee it exists to provide) MUST be justified
+  against measured real payloads with headroom, MUST NOT be derived from an assumption about how
+  large a signal "ought" to be, and MUST NOT be treated as satisfied merely because it is finite.
+  A signal the receiver refuses MUST degrade under **H1** — the session reports **unknown** or holds
+  its prior state, never a state the refused signal would have contradicted — and MUST NOT surface as
+  an error inside the user's own agent session.
+  **Bugfix**: 2026-08-07 — BUG-010 added this requirement; the receiver's body bound was set to
+  64 KiB from the assumption that hook payloads are small JSON objects, but a `PostToolUse` payload
+  embeds the edited file's full contents, so every edit of a large file was rejected with `413` and
+  logged as a hook error inside the user's session. See `bugs/BUG-010.md`.
 - **FR-017**: Scrollback MUST be retained by the service up to the service-owned configured limit
   (FR-012a), including output produced while detached, and MUST be requestable by range so the client
   can scroll without holding all history.
@@ -664,6 +677,10 @@ plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
 - **SC-021**: A window whose attach to a project is accepted is writable on the first keystroke, in
   100% of cases, regardless of whether that project previously refused it or took it away — and
   shows no takeover affordance while it holds the project.
+- **SC-022**: An activity signal carrying a payload the size of a real large-file edit is accepted
+  and applied, and the agent logs no hook error — verified by an executable test that posts a payload
+  at that measured size, not by a walkthrough (BUG-008). A payload past the receiver's bound is still
+  refused, so the memory guarantee is proven to hold in the same test.
 
 ---
 
@@ -680,6 +697,13 @@ changes). See `bugs/BUG-005.md`.
 position, so a client that did not start a session can still drive it), FR-045a (discarding user
 input must be logged at the shipped verbosity and reach the FR-046 surface), a new Edge Case (a new
 client process attaching to a session it did not start), and SC-020. See `bugs/BUG-006.md`.
+
+**Bugfix**: 2026-08-07 — BUG-010 Added FR-016g (the activity receiver must accept every signal the
+agent legitimately emits, including payloads sized by the agent's own tool I/O; a size bound must be
+justified against measured payloads, and a refused signal degrades under H1 rather than erroring
+inside the user's session) and SC-022 (an agent-sized payload is accepted, proven executably, while
+an over-bound one is still refused). Same failure shape as BUG-001 — an unverified assumption about
+Claude Code's hook interface, there the payload *shape*, here its *size*. See `bugs/BUG-010.md`.
 
 **Bugfix**: 2026-07-28 — BUG-007 Added FR-024a (read-only state tracks current attachment ownership
 as the service reports it, so any accepted attach clears it), a fifth User-Story-5 acceptance

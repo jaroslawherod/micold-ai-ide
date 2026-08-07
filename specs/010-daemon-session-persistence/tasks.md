@@ -1478,3 +1478,82 @@ plumbing was correct for a loop that had nothing slow on it; the environment-inc
 with feature 011 and nothing owned the interaction. `mise run test` green (146 groups, 1183 tests),
 `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check` clean. See
 `bugs/BUG-009.md`.
+
+---
+
+## Phase 24: Bugfix BUG-010 — the hook receiver's body bound is smaller than a real hook payload
+
+**Goal**: make the activity receiver accept every payload `claude` legitimately sends (FR-016g), so
+editing a large file stops producing an `HTTP 413` hook error inside the user's own session — while
+keeping the bound a real bound, since it is part of why an HTTP listener was admitted at all.
+
+**Root cause**: `contracts/hooks.md` §Listener rule 5 mandated a body bound without sizing it. T045
+implemented the rule faithfully and had to pick a number, picking it from a plausible but unverified
+model of the payload (`hooks.rs:38` — "Hook payloads are small JSON objects", `MAX_BODY = 64 KiB`).
+A `PostToolUse` payload embeds the tool's entire input and response, so for `Edit`/`Write` it carries
+the edited file's full contents: measured largest 97,087 bytes across 3,332 real payloads from this
+project's transcripts. The two models disagree by more than an order of magnitude on exactly the
+files this repository edits most (its own `tasks.md` and `spec.md`).
+
+**No task reopened.** T045 built what rule 5 asked for; rule 5 was underspecified. The corrective
+work is new. Same failure shape as BUG-001 — an unverified assumption about Claude Code's hook
+interface encoded in `hooks.rs` — which is why the fix lands in the contract's verification table,
+not only in the constant.
+
+- [X] T126 [US2] Amend `contracts/hooks.md`: size §Listener rule 5's bound against measured payloads
+  and record the rationale (the bound is a memory guarantee, not a claim about normal payload size);
+  add rule 7 (nothing answered before authentication beyond `403`); add "A refused or undelivered
+  hook" to §State machine (no transition, H1 holds under refusal as well as absence); add payload
+  *size* to the "Verification required before implementation" table beside shape. **Done** as part of
+  the bugfix patch, and the code now matches it (T128–T130).
+- [X] T127 [US2] Regression test **first**, in `crates/micold-daemon/tests/hooks_receiver.rs`: a
+  `PostToolUse` body at realistic `Edit` size (≥ 97 KiB, the measured maximum) is accepted with `200`
+  and drives the FSM; and a body past the new bound is still refused with `413`, so the memory
+  guarantee is proven in the same test rather than merely raised out of reach (SC-022).
+  **Done** — two tests. `an_agent_sized_payload_is_accepted_and_an_over_bound_one_is_refused` builds
+  a realistically-shaped payload (`agent_sized_payload`, ~123 KB — asserted to exceed the measured
+  97,087 B maximum so the test cannot silently stop being a regression test), posts it as
+  `PostToolUse` *and* as `PreToolUse` (the arm that carries a `Working` transition, so acceptance and
+  application are both proven), then declares an over-bound `Content-Length` and asserts `413` with
+  no transition. `an_over_bound_body_from_an_unauthenticated_caller_is_forbidden_not_too_large`
+  covers T129. New `post_hook_declaring` helper states `Content-Length` independently of the bytes
+  sent, so the over-bound path is exercised without pushing megabytes through the socket.
+  **Red observed first**: `413` where `200` was expected — and the agent-sized POST did not even
+  receive a status, failing with `ConnectionReset`, which is what surfaced T130 as a real defect
+  rather than a hypothetical.
+- [X] T128 [US2] Raise `MAX_BODY` in `crates/micold-daemon/src/hooks.rs` to a megabyte-scale bound
+  with headroom over the measured maximum, and replace the doc comment's "hook payloads are small
+  JSON objects" with what the payload actually contains and why the bound sits where it does.
+  `MAX_HEAD` is unaffected — heads are genuinely small and 8 KiB is measured-adequate. **Done**:
+  64 KiB → **4 MiB** (~43× the measured maximum), with the doc comment rewritten to state that the
+  bound is a memory guarantee and *not* a claim about payload size, carrying the measurement that
+  makes it falsifiable. `MAX_BODY` is now `pub` so the test binds to the real bound rather than a
+  magic number that could drift away from it.
+- [X] T129 [US2] Move the `Content-Length` size check to **after** the token check, so an
+  unauthenticated caller cannot distinguish "too large" from "forbidden" (`contracts/hooks.md`
+  rule 7). **Done**: step 3 (authenticate) and step 4 (bound) swapped. The ordering constraint holds
+  — the check moved *after* auth but stays *before* the read loop, so nothing oversized is ever
+  buffered. Covered by `an_over_bound_body_from_an_unauthenticated_caller_is_forbidden_not_too_large`
+  (red at `413`, green at `403`).
+- [X] T130 [US2] Decide and record whether an over-bound request drains before responding.
+  **Decided: drain**, on evidence rather than taste — T127's red run showed the peer gets no status
+  at all (`ConnectionReset`), not merely a less graceful one, so the receiver was unable to tell a
+  caller *why* its hook failed. `drain()` reads and discards up to `MAX_DRAIN` (8 MiB) before
+  answering `413`. **Draining is not buffering**: bytes are dropped a chunk at a time, so it costs
+  O(chunk) memory regardless of how much arrives, and rule 6 still holds (nothing logged). Bounded by
+  time as well as bytes — `DRAIN_TIMEOUT` (2 s), because a peer that declares a large
+  `Content-Length` and then sends nothing without closing its write half would otherwise park the
+  handler forever. That hazard was found by the test hanging, not by review.
+
+**Bugfix**: 2026-08-07 — BUG-010 Added Phase 24 (T126–T130). **No task reopened** — T045's receiver
+implemented `contracts/hooks.md` rule 5 correctly; the rule itself carried no sizing basis, so the
+constant was chosen rather than measured. Added FR-016g and SC-022 to `spec.md`, widened plan Risk 4
+to name hook *size* alongside hook *shape*, and put payload size in the contract's verification
+table so the next assumption about this interface has to be measured too.
+
+Implemented 2026-08-07: **T126–T130 all done, none left open.** The red test widened the fix twice
+beyond what the report anticipated — the over-bound peer received no status at all rather than an
+ungraceful one (so draining is required, not merely nicer), and the first drain hung on a peer that
+declares more than it sends (so the drain needs a deadline, not just a byte cap). `mise run test`
+green (162 groups, 1,416 tests), `cargo clippy --workspace --all-targets -- -D warnings` and
+`cargo fmt --check` clean. See `bugs/BUG-010.md`.

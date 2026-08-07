@@ -122,8 +122,41 @@ constrained tightly (see plan.md Complexity Tracking):
 4. **MUST** expose no capability beyond reporting activity. It is not a route to project state,
    session input, or the catalog. A compromised token can lie about one session's activity signal
    and nothing else.
-5. **MUST** bound request bodies and reject oversized payloads.
-6. **MUST NOT** log request bodies — they carry transcript paths and prompt metadata (FR-047).
+5. **MUST** bound request bodies and reject oversized payloads — with the bound **sized against
+   measured real payloads**, not against an intuition about how large a hook "ought" to be. The bound
+   exists for one reason: stop a hostile or looping sender from making the daemon buffer without
+   limit. It is **not** a statement about normal payload size, and a bound that rejects normal
+   payloads has failed at its own job while appearing to do it (BUG-010).
+
+   **A hook payload is not small.** `PostToolUse` embeds the tool's entire input *and* response, so
+   for `Edit`/`Write` it carries the edited file's full contents (`tool_response.originalFile`, plus
+   `tool_input.old_string`/`new_string` or `content`). Payload size therefore scales with the user's
+   source tree, not with the hook envelope. Measured across 3,332 real `Edit`/`Write` payloads from
+   this project's own transcripts: largest **97,087 bytes (95 KiB)**, next two 68,227 B and 67,933 B.
+   `PreToolUse` and `UserPromptSubmit` grow the same way (a large edit's `tool_input`, a large pasted
+   prompt) and, unlike `PostToolUse`, both carry a `Working` transition — so a bound that clips them
+   loses signal, not just noise.
+
+   Size the bound in **megabytes**, and treat any future value as needing the same justification.
+   Only `hook_event_name` — a few dozen bytes — is ever read from the body, so the whole bound is a
+   memory guarantee and nothing else.
+
+   A payload the receiver does refuse **MUST** degrade under **H1**: the session holds its prior
+   state or reports `Unknown`, never a state the refused hook would have contradicted. See §State
+   machine, "A refused or undelivered hook".
+
+   An over-bound request **MUST** be drained before it is answered — read and discarded up to a hard
+   byte cap *and* a short deadline, never accumulated. Answering and closing mid-body costs the peer
+   the response entirely: it sees `ECONNRESET` on its remaining write and cannot report why the hook
+   failed. Both bounds are required; a byte cap alone parks the handler forever on a peer that
+   declares a large `Content-Length` and then sends nothing without closing its write half.
+6. **MUST NOT** log request bodies — they carry transcript paths and prompt metadata (FR-047). This
+   holds regardless of the bound in rule 5: a body rejected as oversized is not logged either, not
+   even its size-bearing prefix.
+7. **MUST** answer nothing before authentication beyond `403` — the size check in rule 5 included.
+   Rejecting an oversized body *before* checking the token tells an unauthenticated caller which
+   bound it crossed; it discloses nothing about the session, but it is a free disclosure with no
+   reason to exist (BUG-010).
 
 ---
 
@@ -164,6 +197,15 @@ constrained tightly (see plan.md Complexity Tracking):
 - **H1a** — Terminal-derived evidence is **monotone toward `Working` only**. Nothing observed on the
   PTY may move a session toward `AwaitingInput`; only hooks and process exit may. This keeps the one
   falsified class of inference structurally impossible rather than merely discouraged.
+**A refused or undelivered hook** (BUG-010). A hook the receiver answers with `4xx` — or that never
+arrives at all — produces **no transition**. The session holds whatever state it was in, which by the
+table above is always the *safe* direction: a lost `PreToolUse` or `UserPromptSubmit` leaves a session
+looking less busy than it is, a lost `Stop` leaves it looking busier. Neither invents an
+`AwaitingInput`, so **H1 holds under refusal as well as under absence**. A lost `PostToolUse` changes
+nothing by definition. This is a degradation guarantee, not a licence to refuse hooks: rule 5's bound
+must still admit every payload the agent legitimately sends, because the user sees the refusal as an
+error inside their own agent session even when the daemon's state stays correct.
+
 - **H4** — `Stop` means *the model turn ended*, not that a human is required. Auto-continuation or a
   blocking `Stop` hook can resume without user input, so `AwaitingInput` is a strong hint, not a
   guarantee. The UI wording should reflect that.
@@ -195,6 +237,7 @@ event-driven read rather than the current full-file rescan every 120 ms on the U
 |---|---|
 | `type: "http"` hooks accept custom `headers` | ✅ Confirmed (BUG-001) |
 | Each event's array entries need a `matcher`/`hooks` wrapper, not a bare hook object | ✅ Confirmed the hard way (BUG-001) — this was never listed as unverified and was simply wrong; see the Configuration section above |
+| **Payload *size*** — that a hook body fits any assumed bound | ✅ Measured the hard way (BUG-010): it does not. `PostToolUse` embeds the edited file, so payloads reach ~95 KiB in this repo and scale with the user's files. Never assume a size; measure. |
 | `Notification` subtype values | ⚠️ **Unverified** — did not fire during testing |
 | Hook delivery inside a PTY session | ✅ Observed: `SessionStart → UserPromptSubmit → PreToolUse → PostToolUse → Stop` |
 | `Stop` timing relative to turn end | ✅ Observed ~12 ms before the turn-end result |
