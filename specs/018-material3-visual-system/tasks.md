@@ -293,7 +293,14 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T053a [P] [US4] Assert the connection-status banner stayed a separate component: a test confirming `ConnectionBanner` still renders as a full-width, non-dismissible, non-queued strip and does not route through the snackbar queue. Material treats banners and snackbars as different components, and folding one into the other is the specific mistake this requirement forbids (FR-032c)
 - [X] T054 [US4] Rework `crates/micold-client/src/ui/material/toolbar.rs` to the small app bar anatomy — 64dp height, 16dp padding, `title_large` title, 48dp icon targets — and add `.elevated(bool)` (FR-025)
 - [X] T055 [US4] Wire elevate-on-scroll: add the scroll handler to the sidebar's scrollable in `crates/micold-client/src/ui/sidebar.rs`, a message variant and view-state flag in `crates/micold-client/src/app.rs`, and pass it to the toolbar builder (FR-025a, research R10)
-- [X] T056 [P] [US4] Add the dense (36dp) and standard (48dp) row densities to `crates/micold-client/src/ui/material/tree_view.rs`, defaulting the sidebar to dense (FR-026, FR-026a)
+- [X] ⚠️ Reopened T056 [P] [US4] Add the dense and standard row densities to `crates/micold-client/src/ui/material/tree_view.rs`, defaulting the sidebar to dense (FR-026, FR-026a, FR-026d) *(reopened 2026-08-07 — BUG-005; closed by T115)*
+
+  > Neither height is applied, and one of them never was. As landed in `8a044f5` the floor rode on
+  > the row's indent spacer, so it worked at depth ≥ 1 and was dropped at depth 0 — iced deletes a
+  > child whose size hint is void, and a depth-0 row's spacer is `Fixed(0)` wide. `1cb9873` then
+  > removed the floor outright, taking the height off nested rows too. Both densities now resolve
+  > to the same content height, which is the ad-hoc sizing FR-026 forbids. The figures also change:
+  > §7.2 moves from Material 2's 48dp base to Material 3's 56 / 72, so dense is 44 / 60.
 - [X] T057 [P] [US4] Enforce the 48dp minimum interactive target in `crates/micold-client/src/ui/material/icon_button.rs` (FR-027) *(reopened 2026-08-07 — BUG-002: the 48dp was written and then overwritten; closed the same day by T091)*
 - [X] T058 [P] [US4] Apply dialog anatomy in `crates/micold-client/src/ui/material/modal.rs` — 24dp padding, `headline_small` title, `body_medium` body, trailing-aligned action row with 8dp gap (FR-028)
 - [X] T059 [P] [US4] Apply menu anatomy in `crates/micold-client/src/ui/material/menu.rs` — `surface_container`, elevation 2, `extra_small` corner, 48dp items (FR-029) *(reopened 2026-08-07 — BUG-003: closed on the surface and shape half of §7.5 alone. The 48dp items did not arrive until T098, five phases later, and three further figures in the same table — 8dp panel padding, 12dp item padding, 24dp item icon — plus the 4dp gap the contract does not have are still unapplied today. Closed by T105.)*
@@ -395,6 +402,28 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
   which makes the spacer `Fixed(0)` and therefore void, and iced drops a void child outright. The
   floor had silently never applied to a top-level row. Fixing that is what made the conflict
   measurable.
+
+  > **⚠ Reopened for the record, 2026-08-07 — BUG-005. The measurement is sound; the conclusion
+  > does not follow from it.** Two errors, and the second is inside the first.
+  >
+  > **The 54.0 is an artifact of the bug this note describes.** Having found the floor on the wrong
+  > element, the arithmetic was done with it still there: a 36dp floor on the *name line* makes a
+  > tagged row 36 + 2 + 16 = 54. Applied to the **row**, a tagged row is `max(36, 41.6)` = 41.6 —
+  > unchanged. Measured on the same specimens: untagged 18.2 → 36.0, tagged 36.2 → 36.2, session
+  > (depth 1) 18.2 → 36.0. The reference scene grows 7.7%, not ~30%. There was never a conflict
+  > between §7.2 and FR-026a at that base; there was a floor attached to the wrong node.
+  >
+  > **"Byte-identical to the pre-change fixture" was true and proved nothing.** Every tree row in
+  > all sixteen covered states is depth 0, and depth 0 is precisely where the floor had never
+  > applied. The fixture could not have moved. Meanwhile every depth-1 row in the running
+  > application lost 34% of its height (36.0 → 23.6), and the gallery's `TreeView` sample lost 51%
+  > (48.0 → 23.6), unrecorded by anything. T116 adds the covered state that would have caught it.
+  >
+  > **And a `MUST` cannot be set aside here.** FR-026c requires the sidebar's rows to be the
+  > standard row at density −3; FR-026b's scale has four steps and admits no other value. "The
+  > purpose wins and the number does not apply" needed a spec amendment, not a code comment — and
+  > the amendment, taken on 2026-08-07, goes the other way: §7.2 follows Material 3 and FR-026a is
+  > the clause that gives ground. See `bugs/BUG-005.md`.
 - [X] T076b Make the `full` reference scene composable at all, in `crates/micold-client/src/ui/material/ripple.rs`, `ui/mod.rs` and `main.rs`. `scene_facts` hardcoded `ripple_animating: false` with a comment saying the ripple "arrives with this feature's own tasks" — it arrived at T032 and nothing came back for this, so `Scene::Full` refused every run and T076a's third figure was unobtainable. A ripple only starts from a press and §B8 requires the scene to compose itself, so `Ripple::operate` now offers its own state and a traversal presses the first idle one it finds. A traversal rather than a registry is what keeps this inside FR-024e: the requirement is that no central record of ripple state exists, not that the tree cannot be walked (FR-039b, FR-024e, SC-018)
 - [X] T076a **All three figures captured.** Figure 3 needed T083 first: six runs came out bimodal until the scene was re-verified during measurement rather than only while composing it. After T083, six consecutive runs landed within 0.12 ms. On the same machine that produced T000z's figure, capture the two post-change measurements: the **baseline** scene, and the **full** scene with a ripple mid-animation. Record both in `quickstart.md` §B8 alongside the pre-change figure. Compare: baseline-before vs baseline-after is like-for-like, and any gap there is a regression in rendering this feature did not add; baseline-after vs full is this feature's own cost. Neither gates the build; a regression is a review finding (FR-039b, FR-039c, SC-018)
 
@@ -949,7 +978,7 @@ FR-029a, FR-029b, US4 acceptance scenario 11 and SC-008c.
 
   > Twelve when the gate landed, ten after the rebase onto BUG-003. §7.5's `ITEM_PADDING` and `VERTICAL_PADDING` were on this list and are now applied by T105, and `ITEM_ICON` — recorded as carried by the type scale — is applied by T105 too. `a_recorded_gap_that_became_bound_is_stale` is what reported all three, which is the half of this gate that keeps the list honest in the direction that matters: an entry describing a state that has stopped being true is a waiver for a regression nobody would notice.
 
-- [ ] T114 Give §7.2's row height an FR entry in `spec.md`'s accepted-gaps list, alongside FR-042 – FR-046. Carried over from Phase 13's closing note and now recorded a second place — `anatomy_call_sites.rs` lists `density::LIST_ROW_BASE` as `gap::WAIVED` on the strength of a decision that exists only in `tree_view.rs`'s comment and in `anatomy_size.rs`'s `Content` declaration. It is the only accepted gap with no FR (FR-026, FR-011, §7.2)
+- [X] ~~T114 Give §7.2's row height an FR entry in `spec.md`'s accepted-gaps list~~ — **superseded by BUG-005 (Phase 16).** There is no gap to record: the height was never a decision, it was a floor hung on a spacer that is void at depth 0, so it reached nested rows only. §7.2 is applied now, `density::LIST_ROW_BASE` is bound, and its `gap::WAIVED` entry in `anatomy_call_sites.rs` is deleted rather than reworded. Closed by T119 (FR-026, FR-026d, §7.2)
 
 - [X] T115 Hold `anatomy::ALL` against the module's own source, and add the two figures it was already missing. T112's universe is `ALL` plus the density bases, so a constant absent from `ALL` is exempt from that gate without anyone exempting it — the same defect T112 exists to catch, one level further out. `tokens_anatomy.rs` guarded the list with a **count**, which is precisely the guard that cannot notice it (FR-025 – FR-032, SC-008, §7)
 
@@ -983,3 +1012,95 @@ item's content centred in it", and every menu label sat 8.4dp high of centre. Se
 - [X] T119 Regenerate the fixture. It had recorded `78.6` as the expected label position from the day the state was covered — the third time in four bugs that a snapshot has held a defect as its baseline (feature 019 FR-003)
 
 - [ ] T120 Extend `content_placement.rs` to the menu item. BUG-004 was catchable in geometry because the label's node is not stretched, but SC-008a exists for the case where it is, and the component this bug was in is still absent from the check built for its class (SC-008a)
+
+## Phase 17: BUG-005 — a tree row had no height, and the row that did was the wrong one
+
+Reported 2026-08-07, against `4cd33b6`. `tree_view.rs` sizes every row by its content at either
+density, so the two named densities are the same height as each other. The floor that used to exist
+rode on each row's indent spacer and so applied at depth ≥ 1 only; removing it in `1cb9873` took 34%
+off every sidebar session row and 51% off the gallery's `TreeView` sample, recorded by nothing. See
+`bugs/BUG-005.md`.
+
+**One false completion and one wrong resolution.** T056 states both heights and applies neither.
+T076's measurement is sound and its conclusion is not: the ~30% it computed is arithmetic about a
+floor on the name line, and a floor on the row costs 7.7%. Both are annotated above; T056 is
+reopened and closed by T124.
+
+**The spec moved, and by more than the fix needs.** BUG-005 recommended restoring §7.2's 36dp as a
+row minimum. The owner's decision on the report was to go further: §7.2's base is Material **2**'s
+48dp single-line list item, and this feature's subject is Material 3, whose list item is 56dp for
+one line and 72dp for two. Material's density scale is generic — four steps, 4dp each — so the
+dense column becomes 44 / 60, FR-026b and FR-026c are untouched, and FR-026a is amended to accept
+the ~⅓ drop in visible worktrees that Material's own figures cost. The height figures below are the
+new ones; the *shape* of the fix is unchanged by that decision.
+
+- [X] T121 Failing test first: extend `src/ui/material/anatomy_size.rs`'s tree-row entry to every axis the component varies on — both densities, a specimen at depth 0 **and** one at depth ≥ 1, and a specimen taller than the floor. Confirm it fails against today's component, and that the depth-0 and depth-1 specimens fail *differently* against the pre-`1cb9873` construction, which is the asymmetry a single specimen hid. The entry moves from `Extent::Content` to `Extent::Fixed(density::height(…))` for the one-line specimens and `Extent::AtLeast` for the tall one (FR-026, FR-026d, SC-008b, SC-008d, Principle I)
+- [X] T122 [P] Move §7.2's base onto Material 3's list item in `crates/micold-core/src/tokens/density.rs`: `LIST_ROW_BASE` 48 → 56, and a new `LIST_ROW_TWO_LINE_BASE` = 72. Update `crates/micold-core/tests/tokens_anatomy.rs` and `tokens_density.rs` to the new figures, keeping the assertions that every step lands on a whole dp and that dense < standard (FR-026b, FR-026c, SC-008)
+- [X] T123 [P] Grep every reader of `LIST_ROW_BASE` before changing it, so a two-line row reads the two-line base rather than inheriting the one-line figure. `anatomy::list_row`'s padding and icon-gap constants are unaffected (FR-026d)
+- [X] T124 Apply the height in `crates/micold-client/src/ui/material/tree_view.rs`, making T121 green and closing T056. Three properties, each of which was violated: the minimum goes on the **row**, not on its name line; it is carried by a spacer whose width stays `Shrink` so it can never go void (`snackbar.rs`'s idiom, and the trap this is the fourth instance of); and it does not consult `item.depth`. A row with tags takes the two-line figure, and a row taller than its figure still grows rather than clipping (FR-026, FR-026d, FR-026c)
+- [X] T125 Add a covered state with an **expanded worktree** to `crates/micold-client/tests/support/covered_states.rs`, so a depth ≥ 1 tree row exists in the fixture at all. Every one of the sixteen existing states holds only depth-0 rows, which is why `layout_snapshot.txt` was byte-identical across the regression. Registering it touches one place (019 FR-016), and 019 FR-008d now requires it (019 FR-008, SC-004)
+- [X] T126 Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`UPDATE_LAYOUT_SNAPSHOT=1`). The diff is the proof: every tree row moves to its density's figure, the new expanded-worktree scene records nested rows for the first time, and the standard-density known-projects list moves 48 → 56 (feature 019)
+- [X] T129 Fix the text-overflow gate's attribution, and delete the two `KNOWN_OVERFLOWS` entries it was propping up. Surfaced by T124: moving the rows to §7.2's height separated them from the collapsed filter panel's overhang, the coincidental overlap stopped, and the staleness assertion fired on an exemption that had gone quiet (019 FR-018a, FR-015)
+
+  > **The exemptions were never defects.** Measured, not argued: the text at issue is the sidebar's
+  > `"Short"` **row label**, painted at (32, 146.8) and clipped by its own widget to 164 × 15.6 — it
+  > fits with 135px to spare. It was being measured against a *filter-panel chip node* of 24.65dp
+  > that the collapsed, zero-height `Expand` had left lying at the same coordinates. Two unrelated
+  > subtrees at one point, and the deepest-containing-node rule handed the text to the wrong one.
+  >
+  > Proven by controlled experiment rather than inspection: reverting **only** `tree_view.rs` to its
+  > pre-fix state brings the "overflow" back at exactly the exempted path (`"Short"` wants 28.86px
+  > in 24.65px), and restoring the fix removes it — nothing else varied.
+  >
+  > `support::layout::text_overflows` now identifies the owner by the **clip the painter passed**,
+  > falling back to the deepest containing node only when no node matches it, so FR-018's motivating
+  > defect — a widget that clips to nothing of its own — is still caught. Verified both ways: with
+  > the *old* row heights restored and `KNOWN_OVERFLOWS` empty, the gate is clean, so the fix
+  > removed the false positive rather than moving it. `the_check_reports_an_overflow_when_one_exists`
+  > still passes, so the gate can still fail.
+  >
+  > `the_recorded_overflow_is_the_collapsed_filter_panel` is replaced by
+  > `a_collapsed_panel_overlapping_the_sidebar_is_not_reported_as_an_overflow`, which holds the
+  > property that was actually violated: collapsing that panel changes no text and no clip, so it
+  > must change nothing this gate reports.
+
+- [ ] T127 [P] Re-check the gallery in `mise run showcase`: `showcase/sections/surfaces.rs` poses three depth-1 rows at the default standard density, which have been rendering at 23.6dp against §7.2's 56. They are the most visible half of this bug and the page whose job is to be believed (feature 020)
+- [ ] T128 Confirm in the running application (`mise run run`): expand a worktree and check its session rows stand at the same dense height as the rows above them; check a tagged worktree row is at the two-line height with its chips unclipped; and record the new visible-worktree count in `quickstart.md` §B4 against the pre-change figure, since FR-026a now *permits* a decrease and the number should be written down rather than assumed (FR-026a, FR-026d)
+
+> **T121–T126 done, 2026-08-07.** In that order, red first.
+>
+> **T121** replaced one depth-0 specimen with nine across three tests, and all three were confirmed
+> failing against the unfixed component before a line of it was written — *"a one-line tree row at
+> depth 0, density 0's height measured 18.199999dp … but its anatomy entry states 56dp"*. The
+> count is the finding: the entry it replaced held a single specimen, at the one depth where the
+> height had never worked, and that is what let its absence read as a decision.
+>
+> **T122/T123** moved the base and found no non-test reader to update — `LIST_ROW_BASE` reached no
+> component at all, which is the same shape as BUG-002's `MIN_TOUCH_TARGET` and T097/T098's two
+> figures. The grep was worth running to establish that, not to fix anything.
+>
+> **T124** put the floor on the row with a `Shrink`-width spacer. The wrapper the old comment warned
+> against ("a wrapper would add a tree level and shift every recorded anchor beneath it") does
+> exactly that, and the warning was right — but the alternative it chose, hanging the floor on the
+> indent spacer, is what made the height depth-dependent. `layout_snapshot.rs` caught the shift **by
+> name** (*"anchor `sidebar.row.label` … points at a path that no longer resolves"*), which is what
+> named anchors are for; both were re-pointed rather than left to drift onto a neighbour.
+>
+> **T125/T126** — the fixture now records what it could not before. `main-shell-worktree-expanded`,
+> sidebar tree column: `Default` 44.0, `feat-short` (tagged) 60.0, **its session row 44.0**, the two
+> remaining tagged worktrees 60.0. The nested row stands at the same height as the top-level
+> one-line row above it, which is FR-026d visible in the fixture for the first time in this feature.
+>
+> Workspace: **446 passed, 0 failed**. `cargo clippy --workspace --all-targets -D warnings` clean,
+> `cargo fmt --check` clean.
+>
+> **T127 and T128 are not done and are not mine to close.** Both are Part B-class visual passes —
+> one needs the gallery scrolled to its `TreeView` section, the other needs a worktree expanded in
+> the running application, and neither is reachable without a person at the window. What can be
+> asserted instead has been: T121 covers the gallery's exact specimen (standard density, depths 0
+> and 1) and pins it at 56dp, and T125's covered state pins the application's session row at 44dp.
+> That is the automated half; the half that is about how it *looks* is still open.
+
+**Bugfix**: 2026-08-07 — BUG-005. T056 reopened, T076's conclusion annotated, T121–T128 added.
+Numbered from T121 because BUG-003 landed T100–T111 first; this phase was drafted as T100–T107
+against `4cd33b6` and renumbered on rebase.

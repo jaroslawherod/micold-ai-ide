@@ -50,6 +50,15 @@ const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 2];
 const TERMINAL_BOTTOM_BAR: &[usize] = &[0, 0, 1, 1, 1];
 const TERMINAL_MODE_TOGGLE: &[usize] = &[0, 0, 1, 1, 1, 0, 5];
 
+/// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
+/// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
+/// the `Default` project row, then `feat-short`, then its session, then the two remaining
+/// worktrees. Index 2 is that session.
+///
+/// Named because this is the node whose height differed from its siblings' for two days with no
+/// fixture able to say so — every other covered state stops at depth 0.
+const SIDEBAR_SESSION_ROW: &[usize] = &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2];
+
 /// Deliberately long, so the label/close-button relationship this gate was built to watch is under
 /// real pressure at the canonical window size (FR-008b, FR-018).
 const LONG_NAME: &str = "feat-a-deliberately-long-worktree-name-that-crowds-its-controls";
@@ -116,11 +125,17 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // close — named for what it is.
                 Anchor {
                     name: "sidebar.row.label",
-                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 0, 1],
+                    // Re-pointed under BUG-005 (T115): the row gained one level when §7.2's height
+                    // moved onto it, since a floor on a two-line row has to be a sibling of the
+                    // whole body rather than of one of its lines. `…/2/0` is now the height spacer
+                    // and `…/2/1` the content, so every path below the row gains a `1`. The gate
+                    // named this anchor rather than letting it drift onto a neighbouring node,
+                    // which is the whole reason anchors are named (019 FR-004).
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 1, 0, 1],
                 },
                 Anchor {
                     name: "sidebar.row.delete_button",
-                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 0, 2, 1],
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 1, 0, 2, 1],
                 },
                 // `Toolbar`'s leading `text(title)` (`material/toolbar.rs:46`). Named on both shell
                 // states rather than on all eleven: the toolbar is behind every dialog too, and an
@@ -454,6 +469,56 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "terminal.bottom_bar.mode_toggle",
                     path: TERMINAL_MODE_TOGGLE,
+                },
+            ],
+        },
+        // --- BUG-005's nested rows (T116) -------------------------------------------------------
+        //
+        // Every state above this line holds **only depth-0 tree rows**. That is not a small gap: a
+        // sidebar's whole reason to be a tree is that it nests, and the height of a nested row had
+        // come to differ from the height of a top-level one — §7.2's floor rode on each row's
+        // indent spacer, which is `Fixed(0)` wide at depth 0 and therefore void, so iced dropped it
+        // and the floor applied to nested rows alone. The fixture could not see any of it. When the
+        // floor was then deleted outright, taking 34% off every session row in the running
+        // application, `layout_snapshot.txt` came out byte-identical — and the byte-identity was
+        // reported as evidence that nothing had moved (T076).
+        //
+        // So this state exists to make a depth-1 row exist. 019's FR-008d is the requirement it
+        // now answers: a screen's collapsed form is not a sample of its expanded one.
+        CoveredState {
+            name: "main-shell-worktree-expanded",
+            build: || {
+                let session = Session::restored(
+                    SessionId::new(),
+                    SessionLocation::Worktree("feat-short".to_string()),
+                    SessionLabel::Named("feat/short".to_string()),
+                    TerminalMode::Regular,
+                );
+                let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
+                workspace.active = workspace.projects.first().map(|p| p.path.clone());
+
+                let mut state = with_project();
+                state.workspace = workspace;
+                // The one line this state is about. Without it the session exists in the workspace
+                // and the sidebar still draws a flat list of depth-0 rows.
+                state.expanded.insert("feat-short".to_string());
+                StateUnderTest::new(state)
+            },
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "toolbar.title",
+                    path: TOOLBAR_TITLE,
+                },
+                // The nested row itself. Named rather than left as a bare path because a failure
+                // here should say "the session row" — it is the node this whole state exists for,
+                // and the one whose height silently differed from its parent's for two days.
+                Anchor {
+                    name: "sidebar.session_row",
+                    path: SIDEBAR_SESSION_ROW,
                 },
             ],
         },

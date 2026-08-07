@@ -27,8 +27,11 @@
 //!   §7.3's 48dp target and 40dp button, §7.5's 48dp menu item, §7.6's 32dp chip, §7.7's 56dp field.
 //! - **`Fill`** — tracks the limit. Intended for the app bar's width and a menu item's; a defect
 //!   anywhere a contract states a number.
-//! - **`Content`** — the same number under both, and smaller than the room offered. A chip's width,
-//!   a compact icon button, and §7.2's tree row, whose height floor is deliberately not applied.
+//! - **`Content`** — the same number under both, and smaller than the room offered. A chip's width
+//!   and a compact icon button. §7.2's tree row was declared this too, and that was BUG-005: the
+//!   row's height applied at depth ≥ 1 and was dropped at depth 0, so the one depth-0 specimen this
+//!   entry held reported the component as content-sized and the height was deleted on the strength
+//!   of it. An entry that measures one instance of a component is not measuring the component.
 //! - **`AtLeast` / `AtMost`** — §7.8's snackbar, the one entry the contract bounds rather than
 //!   fixes.
 //!
@@ -401,33 +404,97 @@ fn a_snackbar_clears_48dp_and_stays_within_600dp() {
     );
 }
 
-/// §7.2's row height is **deliberately not applied**, and this is what holds that decision in
-/// place rather than leaving it to a code comment.
+/// A one-line tree row stands at §7.2's height for its density — **at every depth**, and at both
+/// densities (FR-026, FR-026d, SC-008d).
 ///
-/// The contract disagrees with itself here: §7.2 gives the dense density a 36dp row, and the same
-/// paragraph says the density exists so the count of worktrees visible without scrolling does not
-/// drop materially (FR-011). Rows are ~23.6dp untagged today; imposing 36 costs about 30% of what
-/// fits on screen, which is the outcome that clause exists to prevent. The decision is recorded at
-/// `tree_view.rs:227-237` and in tasks.md's T042 note: the purpose wins, the number does not apply,
-/// and the density still governs the row's horizontal padding and icon gap.
+/// Four specimens rather than one, and the count is the point. This entry used to hold a single
+/// depth-0 row and declare it `Content`, recording "§7.2's height is deliberately not applied" as a
+/// decision. It was not a decision, it was BUG-005: the height rode on each row's *indent spacer*,
+/// whose width is `depth × spacing::MD`, so at depth 0 that spacer was `Fixed(0)` wide, iced dropped
+/// it as void, and the floor applied to nested rows only. One specimen, taken at the one depth where
+/// the height had never worked, reported the component as uniformly content-sized — and the height
+/// was then deleted outright on the strength of it, which cost every session row in the sidebar 34%
+/// of its height with no gate anywhere able to notice.
 ///
-/// So the assertion is `Content` — a row sized by what it holds. Declaring it that way is the point
-/// of the `Extent` vocabulary: this is not an oversight the gate failed to catch, it is a decision
-/// the gate now states. Changing the decision means changing this entry, in the open.
+/// So: both densities, and depth 0 beside depth 1. A component that nests varies on depth, and an
+/// entry that measures one depth is measuring one instance of a component, not the component.
 #[test]
-fn a_tree_row_is_sized_by_its_content_not_by_section_7_2s_floor() {
-    assert_anatomy_size(
-        "a tree row",
-        || {
+fn a_one_line_tree_row_stands_at_its_densitys_height_at_every_depth() {
+    for step in [density::STANDARD, density::DENSE] {
+        let expected = density::height(density::LIST_ROW_BASE, step);
+        for depth in [0u16, 1, 2] {
+            assert_anatomy_size_at(
+                &format!("a one-line tree row at depth {depth}, density {step}"),
+                move || {
+                    TreeView::new(
+                        vec![TreeItem::new(depth, "feat-short", roles().on_surface)],
+                        roles(),
+                    )
+                    .density(step)
+                    .into()
+                },
+                &[0],
+                Extent::Fill,
+                Extent::Fixed(expected),
+            );
+        }
+    }
+}
+
+/// A tagged row takes §7.2's **two-line** height, because it is a two-line list item (FR-026d).
+#[test]
+fn a_tagged_tree_row_stands_at_the_two_line_height() {
+    for step in [density::STANDARD, density::DENSE] {
+        let expected = density::height(density::LIST_ROW_TWO_LINE_BASE, step);
+        assert_anatomy_size_at(
+            &format!("a tagged tree row at density {step}"),
+            move || {
+                TreeView::new(
+                    vec![TreeItem::new(0, "feat-short", roles().on_surface)
+                        .tags(vec![("feat".to_string(), roles().primary)])],
+                    roles(),
+                )
+                .density(step)
+                .into()
+            },
+            &[0],
+            Extent::Fill,
+            Extent::Fixed(expected),
+        );
+    }
+}
+
+/// The height is a **minimum**, not a cap: a row holding more than its figure grows (FR-026d).
+///
+/// The distinction is the whole of BUG-005. Read as a fixed height, §7.2's figure clips a tagged
+/// row's chips and conflicts with FR-026a; read as a minimum it does neither. `AtLeast` is what
+/// says so — a `Fixed` here would pass today and start clipping the moment a row grew a third line.
+#[test]
+fn a_tree_row_taller_than_its_density_grows_rather_than_clipping() {
+    let tall = |step: i8| {
+        move || -> Element<'static, Message> {
             TreeView::new(
-                vec![TreeItem::new(0, "feat-short", roles().on_surface)],
+                vec![
+                    TreeItem::new(0, "feat-short", roles().on_surface).tags(vec![
+                        ("feat".to_string(), roles().primary),
+                        ("issue".to_string(), roles().secondary),
+                    ]),
+                ],
                 roles(),
             )
+            .density(step)
             .into()
-        },
-        Extent::Fill,
-        Extent::Content,
-    );
+        }
+    };
+    for step in [density::STANDARD, density::DENSE] {
+        assert_anatomy_size_at(
+            &format!("a tree row taller than density {step}"),
+            tall(step),
+            &[0],
+            Extent::Fill,
+            Extent::AtLeast(density::height(density::LIST_ROW_TWO_LINE_BASE, step)),
+        );
+    }
 }
 
 /// The gate can fail, shown against the exact chain BUG-002 was: a container that states 48dp and

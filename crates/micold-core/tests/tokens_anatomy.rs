@@ -57,15 +57,45 @@ fn the_app_bar_is_the_small_variant() {
 fn the_two_row_densities_are_the_contract_heights() {
     assert_eq!(
         density::height(density::LIST_ROW_BASE, density::STANDARD),
-        48.0,
-        "the standard row is 48dp (§7.2)"
+        56.0,
+        "the standard one-line row is 56dp (§7.2) — Material 3's single-line list item"
     );
     assert_eq!(
         density::height(density::LIST_ROW_BASE, density::DENSE),
-        36.0,
-        "the dense row is 36dp (§7.2) — the sidebar's compactness as a named density step, not an \
-         ad-hoc shrink"
+        44.0,
+        "the dense one-line row is 44dp (§7.2) — the sidebar's compactness as a named density step, \
+         not an ad-hoc shrink"
     );
+}
+
+/// A row with a second line is Material's **two-line** list item, and §7.2 states its height
+/// directly rather than leaving it to be composed (FR-026d, BUG-005).
+#[test]
+fn the_two_line_row_densities_are_the_contract_heights() {
+    assert_eq!(
+        density::height(density::LIST_ROW_TWO_LINE_BASE, density::STANDARD),
+        72.0,
+        "the standard two-line row is 72dp (§7.2)"
+    );
+    assert_eq!(
+        density::height(density::LIST_ROW_TWO_LINE_BASE, density::DENSE),
+        60.0,
+        "the dense two-line row is 60dp (§7.2)"
+    );
+}
+
+/// A two-line row is taller than a one-line one at the same density — the property, not the two
+/// numbers, so the pair cannot drift into agreeing.
+#[test]
+#[allow(clippy::assertions_on_constants)]
+fn a_two_line_row_is_taller_than_a_one_line_row_at_the_same_density() {
+    for step in density::STEPS {
+        assert!(
+            density::height(density::LIST_ROW_TWO_LINE_BASE, step)
+                > density::height(density::LIST_ROW_BASE, step),
+            "two-line must exceed one-line at density {step}"
+        );
+    }
 }
 
 /// Each density carries its own horizontal padding and leading-icon gap.
@@ -344,7 +374,8 @@ fn the_listed_table_holds_every_constant() {
 #[test]
 fn no_component_height_becomes_fractional_at_any_density() {
     for (name, base) in [
-        ("list row", density::LIST_ROW_BASE),
+        ("one-line list row", density::LIST_ROW_BASE),
+        ("two-line list row", density::LIST_ROW_TWO_LINE_BASE),
         ("menu item", density::MENU_ITEM_BASE),
         ("text field", density::TEXT_FIELD_BASE),
         ("button", density::BUTTON_BASE),

@@ -224,20 +224,13 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // Minimal base indent (feature 008, FR-009): depth-0 rows sit flush with the
             // sidebar's small left padding; each level nests by one step.
             let indent = f32::from(item.depth) * spacing::MD;
-            // The indent spacer carries the density's height floor as well, so the row reaches its
-            // 36dp or 48dp without gaining a wrapper — a wrapper would add a tree level and shift
-            // every recorded anchor beneath it. A tagged row grows past the floor rather than being
-            // clipped by it, which is why this is a minimum and not a fixed height.
-            // **No height floor**, and that is the measured answer to a contract that disagrees
-            // with itself. §7.2 gives the dense density a 36dp row; the same paragraph says the
-            // density exists so "the count of worktrees visible without scrolling must not drop
-            // materially" (FR-011). These rows are 23.6dp untagged and 41.6dp tagged today, so
-            // imposing 36dp takes them to 36.0 and 54.0 — a ~30% drop in what fits on screen, which
-            // is the outcome the clause exists to prevent. Where the number and its stated purpose
-            // conflict, the purpose wins and the number is recorded in `tasks.md`.
-            //
-            // The density still governs this row: its horizontal padding and icon gap follow the
-            // step, which is the part that makes a dense row read as denser without costing rows.
+            // The indent spacer indents, and nothing else. It used to carry §7.2's height floor as
+            // well, and that was BUG-005: this spacer's width *is* the indent, so on a depth-0 row
+            // it is `Fixed(0)` — void — and iced drops a void child outright, floor and all. The
+            // height therefore applied to nested rows only, which looked from any single specimen
+            // like the component having no height at all, and it was then deleted on that reading.
+            // The floor now lives on the row (below), where it belongs and where depth cannot reach
+            // it (FR-026d).
             let mut line = row![Space::new().width(Length::Fixed(indent))]
                 .spacing(icon_gap)
                 .align_y(Alignment::Center)
@@ -294,9 +287,11 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             }
 
             // The row body: the name line, plus an optional second line of tag chips aligned
-            // beneath the label (feature 008, FR-001). A worktree with tags becomes two lines.
-            let body: Element<'a, M> = if item.tags.is_empty() {
-                line.into()
+            // beneath the label (feature 008, FR-001). A worktree with tags becomes two lines —
+            // and is, for §7.2's purposes, Material's *two-line* list item rather than a one-line
+            // row that happens to be taller.
+            let (content, base): (Element<'a, M>, f32) = if item.tags.is_empty() {
+                (line.into(), density::LIST_ROW_BASE)
             } else {
                 let tag_indent = indent + label_role.size() + spacing::SM;
                 let mut tag_row: Row<'a, M> = row![Space::new().width(Length::Fixed(tag_indent))]
@@ -305,8 +300,36 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 for (label, accent) in item.tags {
                     tag_row = tag_row.push(super::Tag::new(label, accent));
                 }
-                column![line, tag_row].spacing(2).width(Length::Fill).into()
+                (
+                    column![line, tag_row].spacing(2).width(Length::Fill).into(),
+                    density::LIST_ROW_TWO_LINE_BASE,
+                )
             };
+
+            // §7.2's row height, as a **minimum on the row** (FR-026d). Three things about this
+            // one line, each of which was wrong before:
+            //
+            // - It is on the *row*, not on the name line. Flooring the line makes a tagged row
+            //   `floor + gap + tags` instead of `max(floor, content)` — which is how BUG-005's
+            //   predecessor computed a ~30% cost for a change that costs 7.7%, and then deleted the
+            //   contract's figure to avoid the number it had just invented.
+            // - The spacer's **width stays `Shrink`**. A `Fixed(0)` on either axis makes a child
+            //   void and iced deletes it, taking the floor with it; that is what happened when the
+            //   floor rode on the indent spacer, and it is the fourth time this trap has bitten
+            //   here after `FormField`'s slots and the snackbar's own minimum height. `snackbar.rs`
+            //   solves it the same way and says so.
+            // - Nothing consults `item.depth`. A row's height is a property of its density and its
+            //   line count, and of nothing else.
+            //
+            // `Length::Shrink` on the row below keeps this a floor rather than a cap: a row holding
+            // more than its figure grows instead of clipping.
+            let body: Element<'a, M> = row![
+                Space::new().height(Length::Fixed(density::height(base, step))),
+                content
+            ]
+            .align_y(Alignment::Center)
+            .width(Length::Fill)
+            .into();
 
             // The whole row is a low-emphasis button when it has a press action, so selection
             // and hover feedback are consistent.
@@ -316,10 +339,10 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 // Material (FR-024c).
                 super::Ripple::new(
                     button(body)
-                        // §7.2's density: the row's height and its horizontal padding both follow
-                        // the step, so a dense row is shorter *and* tighter. A tagged row grows
-                        // past the floor rather than being clipped by it, which is why this is a
-                        // minimum and not a fixed height.
+                        // §7.2's horizontal padding follows the density, so a dense row is tighter
+                        // as well as shorter. Vertical padding is zero deliberately: the height is
+                        // the row's floor (above), and padding here would add to it rather than
+                        // fill it, putting the row above its density's figure for no stated reason.
                         .padding(iced::Padding {
                             top: 0.0,
                             bottom: 0.0,

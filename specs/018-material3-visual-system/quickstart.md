@@ -126,8 +126,20 @@ GNOME/Wayland session could take a screenshot from a shell.
 - [ ] **Scroll the sidebar** away from the top → app bar takes its elevated appearance; scroll back
       → it returns (FR-025a).
 - [ ] Sidebar rows all at the dense density; known-projects rows all at standard (FR-026).
-- [ ] **Count worktrees visible without scrolling, against the same repo before the change.** Must
-      not have dropped materially (FR-026a) — this is the guard on the density decision.
+- [ ] **Count worktrees visible without scrolling, against the same repo before the change**, and
+      **write the two numbers down here.** ~~Must not have dropped materially (FR-026a).~~ Since
+      BUG-005 this is a figure to record, not a threshold to pass: FR-026a now accepts the decrease
+      Material's own list heights cost — about a third — and forbids only buying compactness back
+      by departing from them. What to check is that the drop is *no worse* than the arithmetic
+      predicts (a one-line row at 48dp pitch, a tagged one at 64dp), because a bigger drop means
+      something took the two-line height when it should not have.
+- [ ] **Expand a worktree.** Its session rows stand at the same dense height as the top-level rows
+      above them, not squeezed beneath them; a worktree row carrying tag chips is at the two-line
+      height with its chips unclipped (FR-026d). This was BUG-005 — the row height rode on the
+      indent spacer, so it applied to nested rows only and was then deleted, taking a third of the
+      height off every session row. The automated gates are `material/anatomy_size.rs` (four
+      specimens: both densities, depth 0 and depth ≥ 1) and the expanded-worktree covered state;
+      this is the half a person has to look at.
 - [ ] Icon buttons are comfortable to hit; the target extends beyond the visible glyph (FR-027).
 - [ ] **The app bar's ⋮ sits on the bar's trailing edge**, with the project switcher immediately
       left of it — not adrift near the middle. Open a session and check the same of the terminal's

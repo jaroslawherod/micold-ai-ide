@@ -28,33 +28,32 @@ use support::layout as lay;
 /// If a real one is ever added: FR-019 forbids quietly fixing a defect surfaced while building the
 /// gate, and equally forbids tuning the gate until the defect stops showing. Record what was
 /// measured, keep the suite green, and require the entry to keep firing.
-/// **One entry as of 2026-08-04**, and it is a collapsed clip-reveal rather than a defect.
+/// **Empty since 2026-08-07 (BUG-005), and the two entries it held were never defects.**
 ///
-/// The sidebar's filter panel is `material::Expand`. Collapsed, it reports zero height while its
-/// children keep theirs, and the tag chips inside are laid out in a space that squeezes them — the
-/// chip labelled `"Short"` wants 28.9px in the 19.2px it is allowed. Nothing paints there:
-/// `Expand::draw` returns early below `HIDDEN`, which is the same reason `CLIP_REVEALED` exists in
-/// the containment gate.
+/// They were recorded as an artifact of the sidebar's collapsed filter panel: "the chip labelled
+/// `Short` wants 28.9px in the 19.2px it is allowed". Measurement says otherwise. The text drawn
+/// there is the sidebar's **`"Short"` worktree row label**, painted at (32, 146.8) and clipped by
+/// its own widget to 164 × 15.6 — it fits, with 135px to spare. What it was measured against was a
+/// *filter-panel chip node* of 24.65dp, which the collapsed panel had left lying at the same
+/// coordinates: zero-height container, children keeping their own boxes, overlapping whatever the
+/// sidebar drew beneath it. Two unrelated subtrees at one point, and the attribution rule handed
+/// the text to the wrong one.
 ///
-/// **Attribution is proven, not argued** — `the_recorded_overflow_is_the_collapsed_filter_panel`
-/// opens the panel and shows the same text comes clean. Closed: one overflow. Open: none. A real
-/// clipping defect would not care whether its container was expanded.
+/// That is the same class the rule had already been changed once to fix — *narrowest* containing
+/// node → *deepest* containing node. The change altered which stranger wins, not whether one can.
+/// `support::layout::text_overflows` now identifies the owner by the **clip the painter actually
+/// passed** and only falls back to the deepest containing node when no node matches it, which is
+/// what closed this for good; see the comment there for why neither signal works alone.
 ///
-/// Surfaced by upstream's typography change (feature 018 shipping Roboto with per-role weight and
-/// line height), which widened the label past what the collapsed chip allows. Recorded rather than
-/// fixed: FR-019 forbids this feature changing application source.
-/// **Keyed by node path, not by `(state, path)`.** Being inside a collapsed clip-reveal is a
-/// property of the widget, not of the screen it appears on — the same lesson T032 taught the
-/// containment gate, which had made FR-016 false in practice by demanding a second entry per new
-/// sidebar-bearing state.
-const KNOWN_OVERFLOWS: &[&str] = &[
-    "0/0/0/1/0/0/0/1/0/0/1/0/0/0",
-    // The same chip with the disconnection banner in the shell, which shifts the index by one —
-    // the check following structure rather than a hardcoded path, as in `CLIP_REVEALED`.
-    "0/0/0/2/0/0/0/1/0/0/1/0/0/0",
-    // Both moved up one when T053 took the notification strip out of the window column and made it
-    // a floating snackbar. The chip did not change; the column it sits under lost a sibling.
-];
+/// BUG-005 is what exposed it: giving tree rows §7.2's height moved them apart from the collapsed
+/// panel's overhang, the coincidental overlap stopped happening, and the staleness assertion below
+/// fired — an exemption that had gone quiet. It was right to fire. The entries were removed after
+/// the false positive was reproduced and its cause measured, not because they had become
+/// inconvenient.
+///
+/// If a real one is ever added, the rules above still hold: record what was measured, keep the
+/// suite green, and require the entry to keep firing.
+const KNOWN_OVERFLOWS: &[&str] = &[];
 
 /// Name an offending node by its anchor where one covers it, otherwise by its path (FR-004).
 ///
@@ -192,17 +191,24 @@ fn the_check_reports_an_overflow_when_one_exists() {
     );
 }
 
-/// The recorded overflow is the collapsed filter panel, and this is what proves it.
+/// An overlapping stranger cannot be blamed for text it never drew (BUG-005).
 ///
-/// A zero-height container squeezing its children is inference from a shape; the same shape could
-/// come from a genuinely too-narrow chip. So drive the one input that changes it and nothing else.
-/// Closed, the overflow is there; open, the same text fits. That is the difference between an
-/// artifact of a collapsed clip-reveal and a defect a user would meet.
+/// This replaces `the_recorded_overflow_is_the_collapsed_filter_panel`, which proved the *opposite*
+/// property — that closing the sidebar's filter panel produced an overflow and opening it removed
+/// one. It did, and the overflow was not real: the collapsed panel is a zero-height `Expand` whose
+/// children keep their own boxes, so a 24.65dp chip node came to rest on top of the sidebar's
+/// `"Short"` row label, and the label's text was measured against the chip. Closing the panel moved
+/// a stranger into place; it did not squeeze anything.
+///
+/// So the property worth holding is the one that was actually violated: the panel's collapsed state
+/// must make **no difference** to what this gate reports, because it changes no text and no clip.
+/// Driving the same single input proves it, and would fail again the moment attribution went back
+/// to picking a node by geometry alone.
 #[test]
-fn the_recorded_overflow_is_the_collapsed_filter_panel() {
+fn a_collapsed_panel_overlapping_the_sidebar_is_not_reported_as_an_overflow() {
     let mut renderer = lay::renderer();
 
-    let mut overflow_count = |filter_open: bool| -> usize {
+    let mut overflows = |filter_open: bool| -> Vec<lay::Overflow> {
         let mut state = (covered_states()[0].build)().state;
         state.sidebar_filter_open = filter_open;
         let element = micold_client::ui::view(
@@ -214,18 +220,20 @@ fn the_recorded_overflow_is_the_collapsed_filter_panel() {
             &micold_core::env_include::EnvIncludeOutcome::Disabled,
             &micold_client::ui::ConnectionStatus::Connected,
         );
-        lay::text_overflows(element, &mut renderer).len()
+        lay::text_overflows(element, &mut renderer)
     };
 
+    let closed = overflows(false);
     assert!(
-        overflow_count(false) > 0,
-        "the sidebar with its filter panel closed reports no overflow, so the KNOWN_OVERFLOWS \
-         entry cannot be attributed to the collapsed panel at all"
+        closed.is_empty(),
+        "collapsing the sidebar's filter panel reports {} overflow(s), but it changes no text and \
+         no clip — it only slides a zero-height container's children over the rows beneath. Text \
+         is being attributed to a node that did not draw it, which is what BUG-005 was: {closed:?}",
+        closed.len(),
     );
-    assert_eq!(
-        overflow_count(true),
-        0,
-        "text still overflows with the filter panel open, so this is a real clipping defect rather \
-         than an artifact of the collapsed reveal — it must be reported as a bug, not exempted"
+    assert!(
+        overflows(true).is_empty(),
+        "the sidebar reports an overflow with its filter panel open, which is a real finding rather \
+         than an attribution accident — report it as a bug"
     );
 }

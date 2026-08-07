@@ -27,8 +27,21 @@ pub const DENSE: i8 = -3;
 // All multiples of 4, so every step of the scale lands on a whole dp — `tests/tokens_scales.rs`
 // asserts no component resolves to a fractional height, because a half-pixel row renders blurred.
 
-/// List and tree rows.
-pub const LIST_ROW_BASE: f32 = 48.0;
+/// List and tree rows carrying **one** line — Material 3's single-line list item (contract §7.2).
+///
+/// 56, not 48: 48 is Material **2**'s single-line item, which is where this figure came from and
+/// which never matched this feature's subject. Corrected under BUG-005. The density scale is
+/// unaffected — it is a generic axis over any base, so `DENSE` is still `-3` and still four steps
+/// of 4dp — which is why moving the base costs nothing structurally.
+pub const LIST_ROW_BASE: f32 = 56.0;
+
+/// List and tree rows carrying a **second** line beneath the name — Material 3's two-line list
+/// item (contract §7.2). The sidebar's tagged worktree rows are these.
+///
+/// A separate base rather than "the one-line base plus whatever the second line needs": the row is
+/// a two-line list item, and Material states its height directly. Deriving it would put a fifth
+/// number on the density scale by the back door, which FR-026b forbids.
+pub const LIST_ROW_TWO_LINE_BASE: f32 = 72.0;
 /// Menu and context-menu items.
 pub const MENU_ITEM_BASE: f32 = 48.0;
 /// Text fields and the select control.

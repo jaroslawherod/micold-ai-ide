@@ -62,8 +62,15 @@ use micold_core::tokens::anatomy;
 ///
 /// `STEPS`, `STEP_DP`, `STANDARD` and `DENSE` are the scale's own machinery rather than a component
 /// measurement, and are not listed.
+///
+/// `LIST_ROW_BASE` was `gap::WAIVED` here until BUG-005: §7.2's row height reached no component, on
+/// a recorded decision that the contract disagreed with itself. It did not — the height had been
+/// hung on each row's indent spacer, which is void at depth 0, so it applied to nested rows alone
+/// and the arithmetic that condemned it was arithmetic about the wrong node. Both bases are bound
+/// now, by `tree_view.rs`, and the waiver is gone rather than reworded.
 const DENSITY_BASES: &[&str] = &[
     "density::LIST_ROW_BASE",
+    "density::LIST_ROW_TWO_LINE_BASE",
     "density::MENU_ITEM_BASE",
     "density::TEXT_FIELD_BASE",
     "density::BUTTON_BASE",
@@ -109,14 +116,6 @@ const RECORDED: &[(&str, &str, &str)] = &[
         gap::WAIVED,
         "FR-046 — §7.4's row says \"recorded, not applied\" in the contract itself. `surface.rs` \
          applies MAX_WIDTH and names MIN_WIDTH in the comment saying why it does not",
-    ),
-    (
-        "density::LIST_ROW_BASE",
-        gap::WAIVED,
-        "§7.2's 36dp dense row against FR-011's visible-worktree clause — the contract disagrees \
-         with itself and the recorded decision is that the purpose wins (`tree_view.rs`). \
-         `anatomy_size.rs` declares the row `Content` so the decision is a visible edit. Its \
-         missing entry in spec.md's accepted-gaps list is tasks.md's open converge finding",
     ),
     // -- Carried by another token system ----------------------------------------------------
     // Glyphs are font glyphs, sized by the type scale: `Glyph::new(icon, TypeRole::…, roles)`.

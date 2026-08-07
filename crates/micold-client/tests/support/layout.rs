@@ -813,30 +813,59 @@ pub fn text_overflows<'a, M: 'a>(
         }
     };
 
-    // The box the text belongs to is its layout node, not whatever clip the widget happened to
-    // pass. A widget that forgets to clip reports the whole viewport — precisely the defect — so
-    // comparing against the recorded clip would exonerate the bug being looked for.
+    // Which layout node does a piece of drawn text belong to? Geometry alone cannot say, and both
+    // of the obvious answers are wrong in a way this gate has now been bitten by once each.
     //
-    // "Its node" means the **deepest** node whose bounds contain the text's origin: the innermost
-    // box the text starts inside. An earlier version took the *narrowest* containing node, which
-    // is not the same thing and is wrong in both directions — an overlapping sibling in a stack
-    // can be narrower than the text's own node and steal the attribution, inventing an overflow
-    // that does not exist.
+    // **Not the clip alone.** A widget that forgets to clip reports the whole viewport, so an
+    // allowance taken from the clip would exonerate exactly the defect this gate exists to catch —
+    // feature 017's over-long worktree name painted across the control beside it.
+    //
+    // **Not the deepest containing node alone.** That is what this did until BUG-005, and it
+    // invents overflows: any node from an *unrelated subtree* that happens to overlap the text's
+    // origin and sits deeper in the tree steals the attribution, and the text is then measured
+    // against a box that never held it. Both `KNOWN_OVERFLOWS` entries were that — the sidebar's
+    // `"Short"` row label, drawn at (32, 146.8) and correctly clipped to its own 164dp box, blamed
+    // on a filter-panel chip node of 24.65dp that the collapsed panel had left lying at the same
+    // coordinates. The earlier switch from *narrowest* to *deepest* containing node was made to fix
+    // this same class and did not: it changed which unrelated node wins, not whether one can.
+    //
+    // So: **the clip identifies the owner, the node supplies the allowance.** A widget that clips
+    // properly clips to its own box, so the containing node whose bounds match `clip_bounds` is the
+    // one that drew the text — no overlapping stranger can match a clip it never passed. When no
+    // node matches, the widget did not clip to any box of its own (the defect above, or a clip
+    // inherited from an ancestor), and we fall back to the deepest containing node, which is the
+    // previous behaviour and still catches it.
     //
     // Text that overhangs so far that its origin falls outside its own node resolves to an
     // ancestor, which is wider, so this errs toward silence rather than toward crying wolf. That
     // is the right direction for a gate whose findings are meant to be trusted.
     let boxes = walk(Layout::new(&node), Layer::Base);
-    let containing_node = |p: iced::Point| -> Option<&LayoutRecord> {
+    let contains = |b: &LayoutRecord, p: iced::Point| {
+        p.x >= b.x - 0.5
+            && p.x <= b.x + b.width + 0.5
+            && p.y >= b.y - 0.5
+            && p.y <= b.y + b.height + 0.5
+    };
+    // A node "is" the clip when all four edges agree within the same normalisation noise the rest
+    // of this module tolerates. Matching on width alone would let a sibling of equal width but a
+    // different position claim it, which is the very substitution being ruled out.
+    let matches_clip = |b: &LayoutRecord, clip: &iced::Rectangle| {
+        (b.x - clip.x).abs() <= 0.5
+            && (b.y - clip.y).abs() <= 0.5
+            && (b.width - clip.width).abs() <= 0.5
+            && (b.height - clip.height).abs() <= 0.5
+    };
+    let owning_node = |p: iced::Point, clip: &iced::Rectangle| -> Option<&LayoutRecord> {
         boxes
             .iter()
-            .filter(|b| {
-                p.x >= b.x - 0.5
-                    && p.x <= b.x + b.width + 0.5
-                    && p.y >= b.y - 0.5
-                    && p.y <= b.y + b.height + 0.5
-            })
+            .filter(|b| contains(b, p) && matches_clip(b, clip))
             .max_by_key(|b| b.path.len())
+            .or_else(|| {
+                boxes
+                    .iter()
+                    .filter(|b| contains(b, p))
+                    .max_by_key(|b| b.path.len())
+            })
     };
 
     // Set `LAYOUT_OVERFLOW_DEBUG=1` to report every piece of drawn text with its attribution,
@@ -857,7 +886,7 @@ pub fn text_overflows<'a, M: 'a>(
                     ..
                 } = text
                 {
-                    let node = containing_node(*position);
+                    let node = owning_node(*position, clip_bounds);
                     let allowed = node
                         .map(|n| n.width)
                         .unwrap_or(f32::INFINITY)
