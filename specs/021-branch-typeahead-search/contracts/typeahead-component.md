@@ -216,3 +216,12 @@ and a non-empty `live` list — the caption must say which states are exercised 
 launch (feature 020, FR-022).
 **C6.3** The example is genuinely typeable: it filters and re-emphasises as the developer types
 (FR-020). This is why `showcase::state::Message` gives up `Copy` (research R16).
+
+**C6.4 — It exercises the open/close rule, it does not pose one.** *(Added by BUG-001; FR-020a.)*
+The entry starts **closed**, opens when its field is reached, and closes on a pick and on a
+dismissal — C3.2's rule, driven by the showcase's own reducer exactly as the picker's is driven by
+`app.rs`. It may not hold `open` at a constant. A constant is a pose, and once the entry became
+interactive its pose stopped reading as "here is the part worth looking at" and started reading as
+"this is how the component behaves", which for `open(true)` is the opposite of C3.2. The general
+form, which applies to every live catalogue entry and not only this one: **a live entry pins no state
+the application cannot leave.**

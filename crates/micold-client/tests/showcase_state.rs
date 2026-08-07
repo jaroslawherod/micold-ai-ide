@@ -32,6 +32,11 @@ fn a_fresh_showcase_is_at_rest() {
     let s = showcase();
     assert_eq!(s.scheme, ColorScheme::Light);
     assert!(s.open.is_none(), "nothing is open on launch");
+    assert!(
+        !s.typeahead_open(),
+        "the type-ahead's list starts closed — the state the branch picker rests in. An entry that \
+         could not be closed would teach the opposite of FR-001b (BUG-001, FR-020a)"
+    );
     for i in 0..ENTRIES {
         assert_eq!(s.replays(i), 0, "entry {i} starts with no replay behind it");
         assert!(!s.running(i), "entry {i} starts stopped (FR-023a)");
@@ -340,6 +345,59 @@ fn the_typeahead_marker_stays_on_the_row_that_was_chosen() {
         s.typeahead_rows()[s.typeahead_selected().unwrap()].label,
         chosen
     );
+}
+
+/// The entry opens the way the picker does: reaching the field is enough, before anything is typed.
+///
+/// The gallery example used to be handed `open(true)` and nothing else, so this transition existed in
+/// the application and nowhere on the page that documents the component (BUG-001).
+#[test]
+fn reaching_the_typeahead_field_opens_its_list() {
+    let mut s = showcase();
+    s.update(Message::TypeaheadFocused);
+    assert!(s.typeahead_open(), "reaching the field opens the list");
+}
+
+/// Typing opens it too, so a developer who starts typing into a dismissed field sees results again
+/// rather than typing into a box that answers nothing. `app.rs` opens on a query change for exactly
+/// this reason, and the rule here is that rule rather than a second one.
+#[test]
+fn typing_into_the_typeahead_opens_its_list() {
+    let mut s = showcase();
+    s.update(Message::TypeaheadDismissed);
+    s.update(Message::TypeaheadQueryChanged("log".into()));
+    assert!(s.typeahead_open(), "typing reopens a dismissed list");
+}
+
+/// Picking is terminal: the choice is registered *and* the list closes, in one step.
+#[test]
+fn picking_a_typeahead_row_closes_the_list() {
+    let mut s = showcase();
+    s.update(Message::TypeaheadFocused);
+    s.update(Message::TypeaheadPicked(1));
+    assert!(!s.typeahead_open(), "a pick closes the list");
+    assert_eq!(
+        s.typeahead_selected(),
+        Some(1),
+        "and still registers the choice — closing must not cost the selection"
+    );
+}
+
+/// Dismissing closes it and changes nothing else — the query and the choice both survive, so a
+/// developer who dismisses by accident has lost no work.
+#[test]
+fn dismissing_the_typeahead_closes_its_list() {
+    let mut s = showcase();
+    s.update(Message::TypeaheadFocused);
+    s.update(Message::TypeaheadQueryChanged("log".into()));
+    s.update(Message::TypeaheadPicked(0));
+    let chosen = s.typeahead_selected();
+
+    s.update(Message::TypeaheadFocused);
+    s.update(Message::TypeaheadDismissed);
+    assert!(!s.typeahead_open(), "dismissal closes the list");
+    assert_eq!(s.typeahead_query(), "log", "the search text survives");
+    assert_eq!(s.typeahead_selected(), chosen, "so does the choice");
 }
 
 /// Everything about the showcase a message could change.
