@@ -262,6 +262,81 @@ fn the_inventory_is_not_a_token_sample() {
     );
 }
 
+/// `ALL` holds **every** constant this module declares — read off the module's own source.
+///
+/// The count above is the guard that was here, and a count cannot notice the thing it is guarding
+/// against. BUG-003's fix added `app_bar::DIVIDER` and `app_bar::BOTTOM_EDGE` to the module and not
+/// to the table: `ALL.len()` still cleared 30, every whole-set property still passed, and the set it
+/// passed across was no longer the module. Two figures were exempt from every check without anyone
+/// exempting them.
+///
+/// It matters beyond this file. `ALL` is also the universe `micold-client`'s `anatomy_call_sites`
+/// gate walks when it asks whether each figure reaches a component — so a figure absent here is
+/// invisible to *that* gate too, which is the same defect one level out: not a wrong number, an
+/// absent one.
+///
+/// Reading the source is the only way to hold a hand-listed table against a module Rust offers no
+/// reflection over. It is a parse of two line shapes — `pub mod x {` and `pub const NAME:` — and it
+/// asserts it found a plausible number of them, because a parse that silently matches nothing would
+/// pass this test while checking nothing at all.
+#[test]
+fn the_listed_table_holds_every_constant() {
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tokens/anatomy.rs"),
+    )
+    .expect("the anatomy module must be readable from its own crate");
+
+    let mut declared: Vec<String> = Vec::new();
+    let mut module: Option<String> = None;
+    let mut depth = 0i32;
+    for line in source.lines() {
+        if let Some(name) = line
+            .strip_prefix("pub mod ")
+            .and_then(|rest| rest.strip_suffix(" {"))
+        {
+            module = Some(name.to_string());
+            depth = 1;
+            continue;
+        }
+        let Some(current) = module.as_deref() else {
+            continue;
+        };
+        depth += line.matches('{').count() as i32 - line.matches('}').count() as i32;
+        if depth <= 0 {
+            module = None;
+            continue;
+        }
+        if let Some(rest) = line.trim_start().strip_prefix("pub const ") {
+            if let Some(name) = rest.split(':').next() {
+                declared.push(format!("{current}::{name}"));
+            }
+        }
+    }
+
+    assert!(
+        declared.len() >= 30,
+        "the parse found only {} constants, so it is reading almost nothing and would pass whatever \
+         `ALL` contained",
+        declared.len()
+    );
+
+    let listed: std::collections::BTreeSet<&str> =
+        anatomy::ALL.iter().map(|(name, _)| *name).collect();
+    let missing: Vec<&String> = declared
+        .iter()
+        .filter(|name| !listed.contains(name.as_str()))
+        .collect();
+
+    assert!(
+        missing.is_empty(),
+        "{} constant(s) are declared in this module and absent from `ALL`, so every check that \
+         walks `ALL` — here and in the client's `anatomy_call_sites` gate — is walking a subset of \
+         the anatomy and calling it the whole of it:\n  {:?}",
+        missing.len(),
+        missing,
+    );
+}
+
 /// Every height in the anatomy lands on a whole dp at every density step.
 ///
 /// A fractional row height renders blurred, and the density scale is what makes it possible for one
