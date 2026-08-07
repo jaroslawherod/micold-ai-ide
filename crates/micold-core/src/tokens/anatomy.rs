@@ -51,7 +51,10 @@ pub mod app_bar {
 
 /// §7.2 — list and tree rows, at the two named densities.
 ///
-/// The heights come from [`density`](super::density): `LIST_ROW_BASE` at `STANDARD` and `DENSE`.
+/// The heights come from [`density`](super::density): `LIST_ROW_BASE` at `STANDARD` and `DENSE`
+/// for a one-line row, and `LIST_ROW_TWO_LINE_BASE` at the same two steps for a row carrying a
+/// second line beneath its name. Both are minimums on the row — a row holding more than its figure
+/// grows rather than clipping (FR-026d).
 /// What varies besides height is the horizontal padding and the gap after a leading icon, and those
 /// are per-density rather than per-list — a list that picked its own would be the third density
 /// FR-026b forbids.

@@ -470,14 +470,48 @@ offset is not that panel's own anatomy; it is this row, read.
 
 **Two named densities.** Every row uses one of these; no list invents a third.
 
-| Density    | Row height | Horizontal padding | Used by                                   |
-|------------|-----------:|-------------------:|-------------------------------------------|
-| `standard` | 48         | 16                 | known-projects list, all other lists       |
-| `dense`    | 36         | 8                  | the worktree sidebar tree                  |
+Both figures below are **minimum** row heights, not fixed ones. A row is free to be taller than its
+density when what it holds is taller — a worktree row's tag chips, a wrapped label — and is never
+clipped to the figure. A row is never *shorter* than it. This distinction is the whole of BUG-005:
+read as a fixed height, the one-line figure conflicts with the visible-count clause below; read as a
+minimum, it does not, and a two-line row keeps the height its own second line asks for.
 
-The `dense` density exists to preserve the sidebar's deliberate compactness (feature 009, FR-011):
-the count of worktrees visible without scrolling must not drop materially versus today's ~28dp
-rows. It is a named density drawn from Material's density levels, not an ad-hoc shrink.
+**One-line rows** — Material 3's single-line list item, carried down the density scale:
+
+| Density    | Min row height | Horizontal padding | Used by                                    |
+|------------|---------------:|-------------------:|--------------------------------------------|
+| `standard` | 56             | 16                 | known-projects list, all other lists       |
+| `dense`    | 44             | 8                  | the worktree sidebar tree                  |
+
+**Two-line rows** — Material 3's two-line list item, for a row carrying a second line beneath its
+name (the sidebar's tagged worktree rows, feature 008 FR-001):
+
+| Density    | Min row height |
+|------------|---------------:|
+| `standard` | 72             |
+| `dense`    | 60             |
+
+**Where the four numbers come from.** Material 3 specifies the list item at 56dp for one line, 72dp
+for two and 88dp for three. Material's density scale is a separate, generic axis — four steps
+0, −1, −2, −3, and `height = base + 4dp × step` — so the `dense` column is the `standard` one at
+step −3, which is what FR-026b and FR-026c require and what `density::height` computes. Nothing here
+is invented: the base is Material's list spec and the step is Material's density scale. Every figure
+is a multiple of 4, so no row resolves to a fractional height.
+
+**Superseded, and why.** ~~`standard` 48 / `dense` 36~~ were Material **2**'s single-line list item
+(48dp) on the same density scale, in a feature whose subject is Material 3. Corrected 2026-08-07
+under BUG-005, on the owner's decision that §7.2 follows Material 3's list specs.
+
+**The cost, stated rather than discovered.** The `dense` density exists to preserve the sidebar's
+deliberate compactness (feature 009, FR-011): before this feature the sidebar's rows sat at a ~28dp
+pitch — 23.6dp of content plus the column's 4dp gap, which is a *pitch* and not a row height, and
+the two must not be compared as though they were. At the figures above a one-line row's pitch
+becomes 48dp and a tagged row's 64dp — 74% and 40% more vertical space each, so between a quarter
+and two-fifths fewer worktrees fit without scrolling depending on how many carry tags. That is a
+material decrease, and FR-026a is amended to permit it rather than left to be violated quietly:
+where Material's published figures and the visible-count clause conflict, this contract now resolves
+it in Material's favour, which is the opposite of the resolution BUG-005 was reported against. See
+FR-026a and the BUG-005 note in `spec.md`.
 
 Shared by both densities:
 

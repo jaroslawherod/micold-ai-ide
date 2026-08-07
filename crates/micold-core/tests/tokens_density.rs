@@ -30,8 +30,8 @@ fn each_step_below_zero_subtracts_four_dp() {
             "density {step} on a {base}dp base"
         );
     }
-    assert_eq!(density::height(base, 0), 48.0);
-    assert_eq!(density::height(base, -3), 36.0);
+    assert_eq!(density::height(base, 0), 56.0);
+    assert_eq!(density::height(base, -3), 44.0);
 }
 
 /// No component resolves to a fractional height (FR-026b). A half-pixel row is a blurred row.
@@ -59,14 +59,19 @@ fn no_density_step_produces_a_fractional_height() {
 }
 
 /// The sidebar's dense row is an *application* of the scale, not a bespoke variant (FR-026c), and it
-/// lands on §7.2's stated 36dp.
+/// lands on §7.2's stated figures — 44dp for one line, 60dp for two.
 #[test]
 fn the_sidebar_dense_row_is_density_minus_three_on_the_standard_row() {
     assert_eq!(density::DENSE, -3);
     assert_eq!(density::STANDARD, 0);
     assert_eq!(
         density::height(density::LIST_ROW_BASE, density::DENSE),
-        36.0,
-        "the dense sidebar row must be the standard row at density -3 (contract §7.2)"
+        44.0,
+        "the dense one-line sidebar row must be the standard row at density -3 (contract §7.2)"
+    );
+    assert_eq!(
+        density::height(density::LIST_ROW_TWO_LINE_BASE, density::DENSE),
+        60.0,
+        "a tagged sidebar row is Material's two-line list item at the same step (contract §7.2)"
     );
 }
