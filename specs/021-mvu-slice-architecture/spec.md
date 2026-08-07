@@ -4,8 +4,9 @@
 
 **Created**: 2026-07-28
 
-**Status**: Draft — revised to a tiered structure with Q1 and Q2 resolved; baseline re-verified
-against `main` on 2026-08-07, ready to merge
+**Status**: Merged (PR #47) and since amended — five inconsistencies found by the planning phase's
+cross-artifact analysis are corrected in place, adding FR-015a and a daemon-connection feature. See
+the checklist's iteration-5 findings for what changed and why.
 
 **Input**: User description: "Refactor the application's internal architecture from a monolithic MVU core into a distributed, component-based MVU with an explicit service layer, without changing any user-visible behavior."
 
@@ -88,11 +89,12 @@ structuring model-view-update applications makes two claims that narrow what tha
   earns its cost at the granularity of a *page* — a screen with an independent lifecycle — not of a
   widget, panel or dialog that shares the surrounding screen's lifecycle.
 
-This application is a single screen. It has no pages. Giving each of seven features its own state,
-message vocabulary, reducer and outcome channel would therefore buy seven message-wrapping layers
-and a cross-feature effect protocol to pay for isolation the screen does not need — and would not
+This application is a single screen. It has no pages. Giving *every* feature its own state, message
+vocabulary, reducer and outcome channel would therefore buy one message-wrapping layer per feature
+and a cross-feature effect protocol, to pay for isolation the screen does not need — and would not
 retire the "which feature owns this?" question, only move it up a level and make the answer
-compiler-enforced.
+compiler-enforced. (The original description assumed seven such features; planning measurement
+found eight. The count is not what makes the argument — the absence of pages is.)
 
 Accordingly this feature pursues the same outcomes — one module per feature, a routing-only root,
 tests that need no application shell, and an overlay that costs one file — through **type-first
@@ -111,6 +113,16 @@ largest reduction of the monolith for the least commitment. Tier 3 is deliberate
 the evidence for *which* features deserve their own message vocabulary only exists once Tiers 1 and
 2 have landed — and if none do, Tier 3 stops at per-feature reducer modules and the feature is
 still complete.
+
+## Clarifications
+
+### Session 2026-08-07
+
+- Q: Does FR-025's "no observable behavior change" constrain runtime cost, and how should injected capabilities be dispatched? → A: Dynamic dispatch, no performance budget — FR-025 governs user-visible behavior only
+- Q: When SC-003's 500-line proxy and FR-005's actual requirement disagree, which governs acceptance? → A: FR-005 governs; the 500-line figure is indicative, not a gate
+- Q: Where should the capability fakes required by FR-019 live? → A: In the render-free core as ordinary public items, following the existing fake-implementation precedent
+- Q: Should SC-001/SC-002's "count the changed files" verification become a permanent automated guard, or stay a one-time manual measurement? → A: A permanent guard test, replacing the one-time count
+- Q: If the restructuring reveals that an existing test asserts genuinely wrong behavior, what happens? → A: Preserve the behavior and its assertion; file the bug separately and fix it after this feature
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -159,7 +171,8 @@ terminal, notifications and settings — then find the relevant arms inside one 
 Testing that behavior means constructing the entire application state.
 
 After this change, each feature — worktree, session/terminal, project/workspace, sidebar, settings,
-notifications, overlays — is one module holding that feature's types and the operations on them
+notifications, daemon connection, overlays — is one module holding that feature's types and the
+operations on them
 (Tier 1), with its share of the reducer in a module of its own (Tier 3). The maintainer reads one
 module and tests it against fakes without the rest of the application present.
 
@@ -281,6 +294,12 @@ only worktree data itself. The existing `worktree_delete` tests must pass unchan
   this change must load and behave identically after it.
 - **A migration step landed on its own.** Every intermediate step must leave the application
   buildable, runnable and green — no step may depend on a later one to compile.
+- **An existing test turns out to assert a latent bug.** The restructuring may surface behavior that
+  is wrong but faithfully asserted by the frozen suite. The bug and its assertion MUST both be
+  preserved, and the defect recorded as a separate bug report to be fixed in its own change after
+  this feature. FR-027 admits no exception here: its whole value is that a red suite unambiguously
+  means the restructuring broke something. A single "justified" assertion edit destroys that
+  signal for every step that follows it.
 
 ## Requirements *(mandatory)*
 
@@ -291,8 +310,12 @@ only worktree data itself. The existing `worktree_delete` tests must pass unchan
 - **FR-001**: Every custom type that today lives in the monolithic state file MUST move into a
   module named for that type or for the feature it serves, **together with** the helper functions
   that operate on it. For each named feature — worktree, session/terminal, project/workspace,
-  sidebar, settings, notifications, overlays — a maintainer MUST be able to name the single module
-  holding its data and its operations.
+  sidebar, settings, notifications, daemon connection, overlays — a maintainer MUST be able to name
+  the single module holding its data and its operations. (The daemon-connection feature was added
+  to this list during planning: measurement found nine message variants, their own state fields and
+  their own status projection, all of which meet every test this requirement applies. It concerns
+  the *client's* handling of its connection, which has always been client code, and so does not
+  reopen Q1's exclusion of the daemon process itself.)
 - **FR-001a**: A feature MUST NOT be split across parallel state / update / view files. A type and
   the functions over it MUST NOT be separated by module boundary.
 - **FR-002**: The root state, message type and reducer MUST contain composition and routing only,
@@ -307,9 +330,14 @@ only worktree data itself. The existing `worktree_delete` tests must pass unchan
   enforced on writes (FR-020) by guard test, not on reads by type.
 - **FR-004**: Every feature module MUST be unit-testable in isolation, constructing only that
   feature's types and using fakes for anything external.
-- **FR-004a**: The single long reducer MUST be split into per-feature reducer modules, each handling
-  the message variants belonging to one feature. The root reducer MUST retain routing only, per
-  FR-002.
+- **FR-004a**: The reducer MUST be split into per-feature reducer modules, each handling the message
+  variants belonging to one feature. The root reducer MUST retain routing only, per FR-002. This
+  applies to the reducer **wherever its arms live**: measurement during planning found not one long
+  reducer but two over the same message enum — a pure one in the monolithic state file and a larger,
+  effectful one in the shell file, split from each other by purity rather than by feature. Both are
+  in scope. A feature's pure and effectful arms MUST end up on the same feature boundary: the pure
+  arms in that feature's reducer module, the effectful arms in the shell module for the external
+  system they address (FR-019a).
 - **FR-004b**: Tier 3 MUST be able to conclude, for any given feature, that a reducer module over
   the shared state is sufficient and no nested state/message/reducer unit is warranted. Reaching
   that conclusion for every feature is a valid completion of the tier.
@@ -352,8 +380,19 @@ only worktree data itself. The existing `worktree_delete` tests must pass unchan
 #### Service layer and shell split
 
 - **FR-015**: Every I/O concern MUST be expressed as a narrow, single-purpose capability declared
-  in the render-free core: version control, persistence/store, folder scanning, clipboard, OS
-  theme probe, and environment-include resolution.
+  in the render-free core. The concerns this feature must account for are: version control,
+  persistence/store, folder scanning, clipboard, OS theme probe, and environment-include
+  resolution. **This list is not the full inventory of capabilities.** Three further ports already
+  exist and are already satisfactory — terminal backend, terminal handle and AI CLI provider — and
+  are listed here only to be explicit that they are in the inventory that SC-005 measures, while
+  requiring no work under this requirement.
+- **FR-015a**: Where the GUI framework makes a synchronous capability impossible — the operation
+  returns a deferred task rather than a value — the I/O concern MAY instead be expressed as an
+  explicit effect request in the outcome vocabulary (FR-021), interpreted by the shell. Such a
+  concern is still subject to FR-017 (non-shell code MUST NOT reach the framework directly) and to
+  FR-019/SC-005 (the request MUST be assertable in a test with zero real I/O). Clipboard access is
+  the known instance: all three of its call sites return a deferred task, so a synchronous port
+  cannot wrap them without blocking.
 - **FR-016**: Capabilities MUST be narrow enough that a consumer needing one operation is not
   forced to supply or fake unrelated ones.
 - **FR-017**: Non-shell code MUST depend only on declared capabilities and MUST NOT reference or
@@ -362,11 +401,22 @@ only worktree data itself. The existing `worktree_delete` tests must pass unchan
   supplied to the application.
 - **FR-019**: Every capability MUST have a usable fake implementation, and every behavior that
   depends on I/O MUST be testable through it without real filesystem, repository, clipboard or
-  operating-system access.
+  operating-system access. Fakes MUST live in the render-free core beside the capability they
+  satisfy, as ordinary public items — following the precedent already set by the existing fake
+  version-control implementation. They MUST NOT be hidden behind a compilation flag or moved to a
+  separate crate: a fake that any crate's tests can reach without configuration is worth more than
+  the dead code it costs, and the existing precedent should not be made inconsistent for one
+  feature's convenience.
 - **FR-019a**: The shell/I/O file MUST be split by the **external system each part addresses** —
   startup assembly, persistence, daemon synchronisation, subscriptions, environment-include
   resolution, operating-system theme — and MUST NOT be split by feature. This split is orthogonal
   to Tiers 1–3 and MUST be shippable independently of them.
+- **FR-019b**: Capabilities MAY be supplied by dynamic dispatch. Dispatch cost is explicitly **not**
+  constrained: every capability call is already gated behind real I/O — disk, a git subprocess, an
+  operating-system query — whose cost exceeds an indirect call by orders of magnitude, and no
+  capability is reachable from the rendering path. Threading capabilities as generic type parameters
+  to preserve static dispatch is therefore NOT required, and MUST NOT be adopted at the cost of
+  making the single assembly point of FR-018 harder to express.
 
 #### Cross-feature coordination (Tier 3)
 
@@ -387,12 +437,22 @@ only worktree data itself. The existing `worktree_delete` tests must pass unchan
 #### Behavior preservation and migration
 
 - **FR-025**: No observable application behavior may change: not visual layout, keybindings,
-  dismissal behavior, animation timing, notification behavior, or any user-facing text.
+  dismissal behavior, animation timing, notification behavior, or any user-facing text. "Observable"
+  means **user-visible behavior**, not runtime cost: this requirement sets no performance budget and
+  imposes no measurement obligation (see FR-019b). Animation *timing* is named above because it is
+  visible, and remains in scope.
 - **FR-026**: The persisted-state format MUST NOT change. Files written before this change MUST
   load and behave identically after it.
 - **FR-027**: The entire existing test suite MUST pass with no assertion modified. Tests may be
   *added*; existing expectations may not be relaxed, rewritten or deleted to accommodate the
-  restructuring.
+  restructuring. Tests MAY be **relocated** — moved to a different file, including out of an inline
+  test module and alongside the code they cover — provided each relocated assertion arrives
+  unchanged. Relocation is not modification. This is not a loophole but a necessity: a quarter of
+  the shell file is an inline test module, and those tests must travel with their subjects for the
+  file to be split at all. Relocation is the **only** admitted exception: an assertion that turns
+  out to encode a latent bug is still frozen (see Edge Cases), because a rule with one justified
+  exception no longer supports the inference this feature depends on — that a red suite means the
+  restructuring broke something.
 - **FR-028**: The migration MUST be expressible as incremental steps that can each ship
   independently, every one leaving the application buildable, runnable and green. (Determining the
   actual sequence is out of scope for this specification.)
@@ -432,15 +492,24 @@ only worktree data itself. The existing `worktree_delete` tests must pass unchan
 ### Measurable Outcomes
 
 - **SC-001**: Adding a new floating surface — modal or popover — touches exactly one new module
-  plus at most one registration line. Verified by performing the addition and counting changed
-  files; the count of central match statements a new surface must be added to is **zero**, down
-  from six.
+  plus at most one registration line, and the count of central match statements a new surface must
+  be added to is **zero**, down from six. Verified by a **permanent guard test**, not by a one-time
+  file count: the guard MUST fail if any registered surface becomes reachable from anywhere beyond
+  its own module and the single registration point.
 - **SC-002**: Adding a new feature touches exactly one new module plus at most one registration
-  line, with zero edits to any other feature's module.
+  line, with zero edits to any other feature's module. Verified by the same permanent guard
+  mechanism as SC-001.
+- **SC-002a**: The guards behind SC-001 and SC-002 MUST remain in the suite after this feature
+  ships. A one-time measurement proves the property on the day it is taken; only an executable
+  guard keeps it true. This matches how every other architectural line in this codebase is held.
 - **SC-003**: Neither of the two files that today hold the monolithic state/reducer and the
   shell/I/O remains among the largest source files in the repository, and neither contains logic
-  belonging to more than one feature. As a checkable proxy: the state file falls below 500 lines
-  and the shell file below 500 lines.
+  belonging to more than one feature. **This, per FR-005, is the criterion.** As an indicative
+  figure, both files are expected to land below roughly 500 lines — but the line count is a
+  progress signal, not a gate. A file that contains exactly one feature and is no longer among the
+  largest satisfies this criterion at any length. A module MUST NOT be split into arbitrary halves
+  to cross a numeric threshold: doing so would make the codebase worse while scoring the criterion
+  green, which is the opposite of what this feature is for.
 - **SC-004**: Every feature module has at least one test that constructs only that feature's types
   and exercises only its own operations.
 - **SC-004a**: For every feature named in FR-001, the plan records whether it became a feature
