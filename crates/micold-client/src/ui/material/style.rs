@@ -11,7 +11,7 @@ use iced::widget::{
 };
 use iced::{Background, Border, Color, Shadow, Theme};
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, elevation, shape, state, Rgb, Roles};
+use micold_core::tokens::{self, anatomy, elevation, shape, state, Rgb, Roles};
 
 /// Convert a token color into an iced color.
 pub fn color(c: Rgb) -> Color {
@@ -475,7 +475,9 @@ pub fn outlined(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
             text_color: text,
             border: Border {
                 color: border_color,
-                width: 1.0,
+                // §7.3's outline row. The literal was the right number joined to nothing: it would
+                // not have followed the contract, and nothing would have said so.
+                width: anatomy::button::OUTLINE,
                 radius: shape::FULL.into(),
             },
             ..button::Style::default()

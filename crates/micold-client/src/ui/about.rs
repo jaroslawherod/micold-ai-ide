@@ -6,7 +6,7 @@ use iced::widget::column;
 use iced::Element;
 use micold_core::metadata::AppMetadata;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing};
+use micold_core::tokens::{self};
 
 /// The About dialog as the dialog body; `ui::view` wraps it in the shared
 /// [`Modal`](crate::ui::material::Modal) transition.
@@ -19,19 +19,21 @@ pub fn modal<'a>(scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let meta = AppMetadata::from_env();
 
+    // The About box's single action is the last line of its column rather than a row of its own,
+    // so it takes §7.4's body-to-actions gap the same way a two-button dialog does.
     let dialog = crate::ui::material::Surface::new(
-        column![
-            Text::new(meta.name, TypeRole::Headline, r),
-            Text::new(format!("Version {}", meta.version), TypeRole::Caption, r).muted(),
-            Text::new(format!("License: {}", meta.license), TypeRole::Caption, r).muted(),
-            Text::new(meta.description, TypeRole::Body, r),
+        crate::ui::material::dialog::body(
+            crate::ui::material::dialog::fields(column![
+                Text::new(meta.name, TypeRole::Headline, r),
+                Text::new(format!("Version {}", meta.version), TypeRole::Caption, r).muted(),
+                Text::new(format!("License: {}", meta.license), TypeRole::Caption, r).muted(),
+                Text::new(meta.description, TypeRole::Body, r),
+            ]),
             Button::filled("Close", r).on_press(Message::AboutClosed),
-        ]
-        .spacing(spacing::MD),
+        ),
         SurfaceKind::Dialog,
         r,
-    )
-    .padding(spacing::LG);
+    );
 
     dialog.into()
 }

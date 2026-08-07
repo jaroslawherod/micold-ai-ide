@@ -18,6 +18,10 @@ mod activity_badge;
 mod anatomy_size;
 mod animation;
 mod button;
+/// §7.3's horizontal paddings, read off the laid-out button. `anatomy_size` covers the height and
+/// the touch target; a button is content-sized across, so no size check can see its inset.
+#[cfg(test)]
+mod button_anatomy;
 mod checkbox;
 mod connection_banner;
 /// Where a component puts its content inside a height taller than that content. In-crate for the
@@ -25,6 +29,11 @@ mod connection_banner;
 /// rather than the constants it was built from (BUG-001).
 #[cfg(test)]
 mod content_placement;
+pub(crate) mod dialog;
+/// §7.4's spatial figures, read off a laid-out dialog. Every one of them is a *gap*, which no
+/// size check can see.
+#[cfg(test)]
+mod dialog_anatomy;
 mod divider;
 mod ellipsized;
 mod filled_field;

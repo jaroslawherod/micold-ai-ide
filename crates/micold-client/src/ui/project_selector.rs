@@ -22,17 +22,9 @@ pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Mes
     let badge_tint = icon_role(IconSurface::Badge, r);
 
     let header = row![
-        Button::with_content(
-            row![
-                Glyph::new(Icon::NavigateUp, TypeRole::Action, r).tint(on_surface_tint),
-                Text::new("Up", TypeRole::Action, r),
-            ]
-            .spacing(spacing::XS)
-            .align_y(Alignment::Center),
-            ButtonVariant::Outlined,
-            r
-        )
-        .on_press(Message::SelectorNavigatedUp),
+        Button::outlined("Up", r)
+            .leading(Icon::NavigateUp, on_surface_tint)
+            .on_press(Message::SelectorNavigatedUp),
         Text::new(
             selector.current_dir.display().to_string(),
             TypeRole::Caption,
@@ -85,17 +77,9 @@ pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Mes
     };
 
     let actions = row![
-        Button::with_content(
-            row![
-                Glyph::new(Icon::OpenProject, TypeRole::Action, r).tint(on_primary_tint),
-                Text::new("Open this folder", TypeRole::Action, r),
-            ]
-            .spacing(spacing::XS)
-            .align_y(Alignment::Center),
-            ButtonVariant::Filled,
-            r
-        )
-        .on_press(Message::FolderChosen(selector.current_dir.clone())),
+        Button::filled("Open this folder", r)
+            .leading(Icon::OpenProject, on_primary_tint)
+            .on_press(Message::FolderChosen(selector.current_dir.clone())),
         Button::outlined("Cancel", r).on_press(Message::ProjectSelectorClosed),
     ]
     .spacing(spacing::SM);

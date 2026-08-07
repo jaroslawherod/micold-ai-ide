@@ -23,9 +23,9 @@ type ButtonStyleFn = Box<dyn Fn(&iced::Theme, button::Status) -> button::Style>;
 pub struct IconButton<'a, M> {
     glyph: Icon,
     roles: Roles,
-    size: f32,
+    size: Option<f32>,
     tint: Option<Rgb>,
-    padding: f32,
+    padding: Option<f32>,
     compact: bool,
     circular: bool,
     on_press: Option<M>,
@@ -33,15 +33,15 @@ pub struct IconButton<'a, M> {
 }
 
 impl<'a, M: Clone + 'a> IconButton<'a, M> {
-    /// Build an icon button for `glyph` themed by `roles`. Defaults: the body role's size,
-    /// `on_surface` tint, `spacing::XS` padding, no press action (disabled).
+    /// Build an icon button for `glyph` themed by `roles`. Defaults: §7.3's 24dp glyph,
+    /// `on_surface` tint, §7.3's 8dp inset, no press action (disabled).
     pub fn new(glyph: Icon, roles: Roles) -> Self {
         Self {
             glyph,
             roles,
-            size: TypeRole::Body.size(),
+            size: None,
             tint: None,
-            padding: spacing::XS,
+            padding: None,
             compact: false,
             circular: false,
             on_press: None,
@@ -52,8 +52,29 @@ impl<'a, M: Clone + 'a> IconButton<'a, M> {
     /// Size the glyph to a type role instead of the default body role — so a call site names what
     /// the icon should match rather than a number (FR-004).
     pub fn size(mut self, role: TypeRole) -> Self {
-        self.size = role.size();
+        self.size = Some(role.size());
         self
+    }
+
+    /// The glyph size actually used: the caller's role, else §7.3's
+    /// [`anatomy::button::ICON_BUTTON_GLYPH`] — except inside the sidebar, where FR-045's recorded
+    /// deviation keeps the body role's smaller glyph.
+    ///
+    /// **The sidebar keeps the small glyph for the same reason it keeps the small target**, and the
+    /// evidence is the same test. `tests/layout_text_overflow.rs` reports the collapsed sidebar's
+    /// control painting a 24dp glyph into a 15dp slot, and the expanded sidebar's header squeezing
+    /// "Worktrees" below the width it needs — four controls at 24dp take 40dp more than four at
+    /// 14dp, out of a ~260dp panel. So FR-045's gap covers the glyph as well as the target: §7.3
+    /// unmet in one region, written down rather than resolved by shrinking the title.
+    ///
+    /// Resolved here rather than in the builder so `.compact()` and `.size()` can be written in
+    /// either order without one silently undoing the other.
+    fn glyph_size(&self) -> f32 {
+        self.size.unwrap_or(if self.compact {
+            TypeRole::Body.size()
+        } else {
+            anatomy::button::ICON_BUTTON_GLYPH
+        })
     }
 
     /// Keep the button's natural size instead of enlarging it to §7.3's 48dp target.
@@ -74,11 +95,24 @@ impl<'a, M: Clone + 'a> IconButton<'a, M> {
         self
     }
 
-    /// Override the button's padding (defaults to `spacing::XS`) — widen the click target for a
-    /// button that otherwise sits in a dense row (e.g. `spacing::SM`).
+    /// Override the button's inset (defaults to §7.3's [`anatomy::button::PADDING_ICON`], or
+    /// `spacing::XS` when [`compact`](Self::compact)).
     pub fn padding(mut self, padding: f32) -> Self {
-        self.padding = padding;
+        self.padding = Some(padding);
         self
+    }
+
+    /// The inset actually used: the caller's, else §7.3's 8dp — except inside the sidebar, where
+    /// FR-045's recorded deviation keeps the tighter `spacing::XS`.
+    ///
+    /// Resolved here rather than in the builder so `.compact()` and `.padding()` can be written in
+    /// either order without one silently undoing the other.
+    fn inset(&self) -> f32 {
+        self.padding.unwrap_or(if self.compact {
+            spacing::XS
+        } else {
+            anatomy::button::PADDING_ICON
+        })
     }
 
     /// Render a fully-rounded (circular) hit area around the glyph instead of the default
@@ -116,9 +150,9 @@ impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
         // `text_color`, so the style fn could never reach the glyph and a disabled icon button
         // rendered at full strength — contradicting this type's own doc comment.
         let content = if b.on_press.is_none() {
-            icon_colored(b.glyph, b.size, style::disabled_color(tint))
+            icon_colored(b.glyph, b.glyph_size(), style::disabled_color(tint))
         } else {
-            icon(b.glyph, b.size, tint)
+            icon(b.glyph, b.glyph_size(), tint)
         };
         // `text_button`/`circular_icon_button` are each a distinct `impl Fn` opaque type, so an
         // `if`/`else` can't bind them to one local — box both branches to a common `dyn Fn`.
@@ -128,7 +162,7 @@ impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
             Box::new(style::text_button(b.roles))
         };
         let pressable = b.on_press.is_some();
-        let mut btn = button(content).padding(b.padding).style(style_fn);
+        let mut btn = button(content).padding(b.inset()).style(style_fn);
         if let Some(message) = b.on_press {
             btn = btn.on_press(message);
         }

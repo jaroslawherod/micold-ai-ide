@@ -8,7 +8,7 @@ use iced::widget::{column, row};
 use iced::Element;
 use iced::Length;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing};
+use micold_core::tokens::{self};
 
 /// The confirm-remove dialog for a session (shown by its sidebar `label`) as a modal surface, as the dialog body; `ui::view` wraps it
 /// in the shared [`Modal`](crate::ui::material::Modal) transition.
@@ -19,21 +19,22 @@ pub fn modal<'a>(label: &str, scheme: ColorScheme) -> Element<'a, Message> {
                    the underlying `claude` conversation itself is untouched, but the app will \
                    never show or resume it again.";
 
-    let fields = column![
+    let fields = material::dialog::fields(column![
         Text::new(format!("Remove “{label}”?"), TypeRole::Headline, r),
         Text::new(warning, TypeRole::Body, r).muted(),
-    ]
-    .spacing(spacing::MD);
+    ]);
 
-    let actions = row![
+    let actions = material::dialog::actions(row![
         Button::filled("Remove", r).on_press(Message::SessionRemoveConfirmed),
         Button::outlined("Cancel", r).on_press(Message::SessionRemoveCancelled),
-    ]
-    .spacing(spacing::SM);
+    ]);
 
-    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
-        .padding(spacing::LG)
-        .width(Length::Fixed(460.0));
+    let dialog = material::Surface::new(
+        material::dialog::body(fields, actions),
+        SurfaceKind::Dialog,
+        r,
+    )
+    .width(Length::Fixed(460.0));
 
     dialog.into()
 }

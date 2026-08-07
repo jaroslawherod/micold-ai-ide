@@ -8,7 +8,7 @@ use iced::widget::{column, row};
 use iced::{Element, Length};
 use micold_core::project::RenameError;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing};
+use micold_core::tokens::{self};
 
 /// The worktree-rename dialog as the dialog body; `ui::view` wraps it in the shared
 /// [`Modal`](crate::ui::material::Modal) transition.
@@ -20,7 +20,7 @@ pub fn modal<'a>(draft: &'a WorktreeRenameDraft, scheme: ColorScheme) -> Element
         .on_input(Message::WorktreeRenameTextChanged)
         .on_submit(Message::WorktreeRenameConfirmed);
 
-    let mut fields = column![
+    let mut fields = material::dialog::fields(column![
         Text::new("Rename worktree", TypeRole::Headline, r),
         Text::new(
             "Changes only the name shown in the sidebar — not the branch or folder.",
@@ -29,8 +29,7 @@ pub fn modal<'a>(draft: &'a WorktreeRenameDraft, scheme: ColorScheme) -> Element
         )
         .muted(),
         input,
-    ]
-    .spacing(spacing::MD);
+    ]);
 
     if let Some(error) = draft.error {
         let message = match error {
@@ -40,15 +39,17 @@ pub fn modal<'a>(draft: &'a WorktreeRenameDraft, scheme: ColorScheme) -> Element
         fields = fields.push(Text::new(message, TypeRole::Caption, r).tint(r.error));
     }
 
-    let actions = row![
+    let actions = material::dialog::actions(row![
         Button::filled("Rename", r).on_press(Message::WorktreeRenameConfirmed),
         Button::outlined("Cancel", r).on_press(Message::WorktreeRenameCancelled),
-    ]
-    .spacing(spacing::SM);
+    ]);
 
-    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
-        .padding(spacing::LG)
-        .width(Length::Fixed(420.0));
+    let dialog = material::Surface::new(
+        material::dialog::body(fields, actions),
+        SurfaceKind::Dialog,
+        r,
+    )
+    .width(Length::Fixed(420.0));
 
     dialog.into()
 }

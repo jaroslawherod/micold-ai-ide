@@ -9,7 +9,7 @@ use iced::widget::{column, row};
 use iced::Element;
 use iced::Length;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing};
+use micold_core::tokens::{self};
 
 /// Stack the confirm-delete dialog for the worktree `dir_name` (shown by its `friendly` display
 /// name — the rename override when set) as the dialog body; `ui::view` wraps it in the shared
@@ -31,11 +31,10 @@ pub fn modal<'a>(
          (.claude/worktrees/{dir_name}) and all of its sessions. This cannot be undone."
     );
 
-    let mut fields = column![
+    let mut fields = material::dialog::fields(column![
         Text::new(format!("Delete “{friendly}”?"), TypeRole::Headline, r),
         Text::new(warning, TypeRole::Body, r).muted(),
-    ]
-    .spacing(spacing::MD);
+    ]);
 
     // The branch-deletion choice (feature 013, FR-011): only offered when this worktree
     // actually has an associated branch to act on (edge case — an orphan/invalid worktree may
@@ -52,15 +51,17 @@ pub fn modal<'a>(
         );
     }
 
-    let actions = row![
+    let actions = material::dialog::actions(row![
         Button::filled("Delete", r).on_press(Message::WorktreeDeleteConfirmed),
         Button::outlined("Cancel", r).on_press(Message::WorktreeDeleteCancelled),
-    ]
-    .spacing(spacing::SM);
+    ]);
 
-    let dialog = material::Surface::new(fields.push(actions), SurfaceKind::Dialog, r)
-        .padding(spacing::LG)
-        .width(Length::Fixed(460.0));
+    let dialog = material::Surface::new(
+        material::dialog::body(fields, actions),
+        SurfaceKind::Dialog,
+        r,
+    )
+    .width(Length::Fixed(460.0));
 
     dialog.into()
 }

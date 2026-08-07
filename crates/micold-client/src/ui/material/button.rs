@@ -10,11 +10,13 @@
 //!
 //! Parity: each variant resolves to exactly the style its call sites use today (FR-005).
 
+use crate::icons::Icon;
+use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
 use crate::ui::material::text::{Text, TypeRole};
-use iced::widget::{button, container};
+use iced::widget::{button, container, row};
 use iced::{Alignment, Element, Length, Padding};
-use micold_core::tokens::{density, shape, Roles};
+use micold_core::tokens::{anatomy, density, shape, spacing, Rgb, Roles};
 
 /// Each `impl Fn` returned by the style layer is a distinct opaque type, so the variants are boxed
 /// behind one signature to be chosen at runtime.
@@ -48,6 +50,20 @@ impl Variant {
             Variant::Text => Box::new(style::text_button(roles)),
         }
     }
+
+    /// §7.3's horizontal padding for this variant — 24 for the two that draw a container, 12 for
+    /// the text variant, "because a text button has no container to balance against".
+    ///
+    /// Read from the contract rather than left to the rendering stack, which insets a button by its
+    /// own `DEFAULT_PADDING` of 10dp. That is what every labelled button in the application took
+    /// while all three of these constants were referenced by nothing.
+    fn padding(self) -> f32 {
+        match self {
+            Variant::Filled => anatomy::button::PADDING_FILLED,
+            Variant::Outlined => anatomy::button::PADDING_OUTLINED,
+            Variant::Text => anatomy::button::PADDING_TEXT,
+        }
+    }
 }
 
 /// A labelled button. Builder form (Principle VIII):
@@ -63,6 +79,7 @@ pub struct Button<'a, M> {
     on_press: Option<M>,
     padding: Option<Padding>,
     width: Option<Length>,
+    leading: Option<(Icon, Rgb)>,
 }
 
 impl<'a, M: Clone + 'a> Button<'a, M> {
@@ -94,6 +111,7 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
             roles,
             on_press: None,
             padding: None,
+            leading: None,
             width: None,
         }
     }
@@ -132,6 +150,22 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
         self.width = Some(width.into());
         self
     }
+
+    /// A leading icon before the label, drawn at §7.3's [`anatomy::button::LEADING_ICON`].
+    ///
+    /// The slot belongs to the component because the figure does. Two call sites built
+    /// `row![Glyph::new(icon, TypeRole::Action, r), Text::new(..)]` by hand, which sized the glyph
+    /// to the *label's* 14dp — the same shape as the icon button's own glyph, and as the menu item
+    /// BUG-003's T103 found. §7.3 gives a leading icon 18dp: smaller than an icon button's 24,
+    /// because it is an accent to a label rather than the whole content.
+    ///
+    /// `tint` is explicit rather than taken from the variant: the two call sites pass an
+    /// [`IconSurface`](crate::icons::IconSurface) role, and inferring it here would change what they
+    /// draw today.
+    pub fn leading(mut self, glyph: Icon, tint: Rgb) -> Self {
+        self.leading = Some((glyph, tint));
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
@@ -149,15 +183,36 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         // draws at the top of it unless something says otherwise. That was BUG-001 exactly, one
         // component over. A wrapper rather than the content's own `align_y` because the content is
         // an arbitrary `Element` here, not a `Text` this type can reach into.
-        let content = container(b.content)
+        //
+        // A leading icon joins the label here rather than at the call site, so §7.3's 18dp is the
+        // component's business — see [`Button::leading`].
+        let inner: Element<'a, M> = match b.leading {
+            Some((glyph, tint)) => {
+                row![icon(glyph, anatomy::button::LEADING_ICON, tint), b.content]
+                    .spacing(spacing::XS)
+                    .align_y(Alignment::Center)
+                    .into()
+            }
+            None => b.content,
+        };
+        let content = container(inner)
             .height(Length::Fill)
             .align_y(Alignment::Center);
         let mut widget = button(content)
             .height(Length::Fixed(density::BUTTON_BASE))
             .style(b.variant.style(b.roles));
-        if let Some(padding) = b.padding {
-            widget = widget.padding(padding);
-        }
+        // §7.3's horizontal padding, from the variant table. Vertical padding is zero because the
+        // height above is what makes the button 40dp — padding on this axis would add to a figure
+        // the contract fixes, and the centring wrapper is what places the content inside it.
+        //
+        // The caller's override still wins: today's list rows and terminal controls are `Button`s
+        // whose inset belongs to the row they sit in, not to §7.3.
+        widget = widget.padding(b.padding.unwrap_or(Padding {
+            top: 0.0,
+            bottom: 0.0,
+            left: b.variant.padding(),
+            right: b.variant.padding(),
+        }));
         if let Some(width) = b.width {
             widget = widget.width(width);
         }

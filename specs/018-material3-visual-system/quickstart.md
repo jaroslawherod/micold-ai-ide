@@ -154,6 +154,19 @@ GNOME/Wayland session could take a screenshot from a shell.
       on the bar's centre line. Both were BUG-001; the automated gate is
       `material/content_placement.rs`, and this is the half a person has to look at.
 - [ ] Dialog actions are grouped at the **trailing** edge with the defined spacing (FR-028).
+- [ ] **Open any confirm dialog** (delete a worktree, forget a project): the action row is separated
+      from the body by a visibly wider gap than the one between the title and the body, so the
+      actions read as their own region rather than as one more line of text (§7.4, T113). It was the
+      same 16dp as the title's until T113, because the row was pushed into the body's own column.
+- [ ] **Labelled buttons are no longer cramped**: a filled or outlined button carries 24dp either
+      side of its label, a text button 12dp (§7.3, T113). Every one of them took the rendering
+      stack's 10dp default until T113.
+- [ ] **Glyphs are the contract's size, not the body text's.** The app bar's ⋮, the terminal bar's
+      controls and a field's trailing action all draw at 24dp; the "Up" and "Open this folder"
+      buttons in the project selector carry an 18dp leading icon (§7.3, §7.7, T113). All of them
+      drew at 14dp — the body role's size — until T113, which is the same defect BUG-003's T103
+      found in the menu. The automated gate is `material/button_anatomy.rs`; this is the half a
+      person has to look at, and the one most likely to read as "too big" if the figures are wrong.
 - [ ] Trigger a notification: it appears as a **floating snackbar**, not an inline strip (FR-032).
 - [ ] Trigger several rapidly: **exactly one visible**, others follow in turn (FR-032a).
 - [ ] Trigger an error: it stays for the **long** duration and can still be dismissed manually
