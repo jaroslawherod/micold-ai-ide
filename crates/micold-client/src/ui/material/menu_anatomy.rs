@@ -216,6 +216,83 @@ fn a_menu_items_content_is_inset_by_12dp_at_both_ends() {
     );
 }
 
+/// §7.5: the item's content is **centred in its 48dp**, not resting against the top of it.
+///
+/// The half of that table row FR-030a exists for, and the half BUG-003 asserted around without ever
+/// asserting: an item 48dp tall around a 20dp label has 28dp of slack, and nothing in the previous
+/// fix decided where it went. Both figures beside it were right — the height, and the 12dp ends —
+/// which is what made this survive a change that measured the box from every other direction.
+///
+/// The reasoning that let it through is worth keeping, because it reads as correct: the row states
+/// `align_y(Center)`, and `button` does stretch its content node to the fixed height. But a `Row`
+/// centres its children **against each other**, inside the cross size the flex computed from them —
+/// 31.2dp, the icon's line box — and that band is then laid against the top of the stretched node.
+/// The label came out 8.4dp high of centre. It is BUG-001's app bar exactly, one component over, and
+/// the previous fix quoted that bug while missing that it applied to this row too.
+#[test]
+fn a_menu_items_content_is_centred_in_its_height() {
+    let item = bounds_at(panel(two_items()), &[0, 0]);
+    let icon = bounds_at(panel(two_items()), &[0, 0, 0, 0]);
+    let label = bounds_at(panel(two_items()), &[0, 0, 0, 1]);
+
+    let centre = |b: Rectangle| b.y + b.height / 2.0;
+    let (item_centre, icon_centre, label_centre) = (centre(item), centre(icon), centre(label));
+
+    assert!(
+        (label_centre - item_centre).abs() < TOLERANCE
+            && (icon_centre - item_centre).abs() < TOLERANCE,
+        "a menu item's box is centred on {item_centre}dp, its label on {label_centre}dp and its \
+         glyph on {icon_centre}dp. §7.5 states 48dp \"with the item's content centred in it\", and \
+         a height above its content obliges the anatomy to say where the content sits (FR-030a) — \
+         an unstated alignment is not \"centred by default\", it is \"against the top edge\"",
+    );
+}
+
+/// The type-ahead's result row is the same shape and had the same defect (BUG-004).
+///
+/// It is not the shared item row — FR-029b excludes it, and its label is an emphasised span list
+/// rather than a string — but "not the same component" is not "not the same mistake". Both put a
+/// `Row` inside a `button` with a fixed height, and both needed the row to fill that height before
+/// `align_y` meant anything. Asserted here rather than left as the fixed half nobody measures.
+#[test]
+fn a_typeahead_rows_content_is_centred_in_its_height() {
+    let row = super::typeahead::row_element(
+        super::TypeaheadRow {
+            label: "feat/short".to_string(),
+            spans: Vec::new(),
+            enabled: true,
+        },
+        false,
+        false,
+        Some(Message::NoOp),
+        roles(),
+    );
+
+    let outer = bounds_at(row, &[]);
+    let content = bounds_at(
+        super::typeahead::row_element(
+            super::TypeaheadRow {
+                label: "feat/short".to_string(),
+                spans: Vec::new(),
+                enabled: true,
+            },
+            false,
+            false,
+            Some(Message::NoOp),
+            roles(),
+        ),
+        &[0, 1],
+    );
+
+    let centre = |b: Rectangle| b.y + b.height / 2.0;
+    assert!(
+        (centre(content) - centre(outer)).abs() < TOLERANCE,
+        "a type-ahead row's box is centred on {}dp and its label on {}dp — the same 48dp row with          its content against the top edge that BUG-004 was in the menu",
+        centre(outer),
+        centre(content),
+    );
+}
+
 /// §7.5: the panel puts 8dp above the first item and below the last.
 #[test]
 fn a_menu_panel_pads_8dp_above_its_first_item_and_below_its_last() {

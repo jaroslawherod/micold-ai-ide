@@ -966,3 +966,20 @@ FR-029a, FR-029b, US4 acceptance scenario 11 and SC-008c.
   > and requires each to appear in `ALL`, confirmed red first on exactly those two. It asserts the
   > parse found at least thirty constants, because a parse that silently matches nothing would pass
   > while checking nothing — the failure mode this file exists to prevent, applied to itself.
+
+---
+
+## Phase 16: BUG-004 — the menu item's content sat against the top of its 48dp
+
+Reported from the running application immediately after BUG-003 shipped: §7.5 says "48, with the
+item's content centred in it", and every menu label sat 8.4dp high of centre. See `bugs/BUG-004.md`.
+
+- [X] T116 Failing test first: a menu item's content is centred in its height, measured on the item, its glyph and its label. Confirmed red at content centred on 23.6dp inside a box centred on 32dp (FR-029, FR-030a, §7.5)
+
+- [X] T117 Make the row's own box the 48dp — `height(Length::Fill)` — so `align_y(Center)` centres inside it rather than against the row's computed cross size. Correct the claim three commits carried forward: `button` does stretch the content node, and a `Row` still centres its children against each other inside that node's top band (FR-030a)
+
+- [X] T118 [P] Sweep every other fixed-height component for the row-versus-container distinction. `typeahead.rs`'s result row is the same shape and had the same defect — fixed, and `row_element` made `pub(super)` so `menu_anatomy` measures it rather than leaving the fixed half unchecked. `button.rs`, `icon_button.rs` and `toolbar.rs` are clean: all three use a container, which aligns its child inside its own box (FR-030a)
+
+- [X] T119 Regenerate the fixture. It had recorded `78.6` as the expected label position from the day the state was covered — the third time in four bugs that a snapshot has held a defect as its baseline (feature 019 FR-003)
+
+- [ ] T120 Extend `content_placement.rs` to the menu item. BUG-004 was catchable in geometry because the label's node is not stretched, but SC-008a exists for the case where it is, and the component this bug was in is still absent from the check built for its class (SC-008a)
