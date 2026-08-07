@@ -915,3 +915,38 @@ read, and T103's figures cannot be asserted from `tests/` at all.
 
 **Bugfix**: 2026-08-07 — BUG-003 Updated from bugfix patch: reopened T059, added T100–T111, added
 FR-029a, FR-029b, US4 acceptance scenario 11 and SC-008c.
+
+---
+
+## Phase 15: The binding gate
+
+- [X] T112 Gate that every figure in `anatomy::ALL` and every `density::*_BASE` is referenced by the rendering layer, or recorded with a reason — `crates/micold-client/tests/anatomy_call_sites.rs`. This is the check the last three anatomy defects were each missing, and it is the cheapest of them: it reads source text, with no renderer, no layout pass and no fixture. `tokens_anatomy.rs` proves a number was *transcribed*; `anatomy_size.rs` measures the nine figures that are a laid-out box; neither can see a padding, gap, icon size or outline width that reaches nothing. `type_role_call_sites.rs` is the same rule for typography and the precedent for this one (FR-025 – FR-032, §7)
+
+  > Confirmed red before the baseline was written: 24 of the 46 figures §7 then had reached no
+  > component. Twenty-one are recorded now, out of 48 — BUG-003 added §7.1's divider and bottom
+  > edge, both bound on arrival, and applied three of the twenty-four.
+  > Then confirmed red a second way, against a *regression* rather than an empty list — replacing
+  > `anatomy::chip::HEIGHT` with the literal `32.0` in `toggle_chip.rs` fails this gate and no
+  > other, because the chip still lays out at 32dp. That is the case `anatomy_size.rs` is blind to
+  > by construction: the right number under a name that will not follow when §7 is re-valued, which
+  > is `type_scale::BODY` all over again.
+  >
+  > The exclusion of the in-crate gates is read off their own `#[cfg(test)] mod` declarations in
+  > `material/mod.rs`, so a gate added later is excluded the day it lands. That parse was itself
+  > wrong first time — it built `material/anatomy_size.rs` while a scanned source is keyed
+  > `ui/material/anatomy_size.rs`, so every gate was read as production code and a figure named only
+  > by `anatomy_size.rs` counted as bound. The gate was green and guarding nothing, which is this
+  > file's own subject matter one level up. `the_in_crate_gates_are_found_and_actually_excluded` now
+  > checks the names against the source list rather than against the parse.
+
+- [ ] T113 Apply, or waive in `spec.md`, the **ten live deviations** the gate above recorded. Each is a component that exists, a number §7 states, and a component using a different one — or the right one under a name that will not follow when §7 changes. Listed in `anatomy_call_sites.rs`'s `RECORDED` under `gap::UNAPPLIED`, which pins the count so the list can only shrink. Two shapes, and the second is the more dangerous:
+
+  **A different number.** §7.3's button padding — 24 filled, 24 outlined, 12 text — against iced's `DEFAULT_PADDING` of 10, which `Button` never overrides; §7.3's 8dp icon-button padding against `icon_button.rs`'s `spacing::XS` (4); and §7.4's `BODY_TO_ACTIONS`, which is 24 in the contract and 16 in every dialog, because the action row is pushed into the body's column and takes its `spacing::MD`. That last one is the only deviation here that §7 explains the *reason* for — the gap is wider than `TITLE_TO_BODY` on purpose, "so the actions read as a separate region rather than as more body" — so it is the one where the number carries a visible intent that 16 defeats.
+
+  **The right number under another name.** §7.4's dialog padding (`spacing::LG`, 24), title-to-body gap (`spacing::MD`, 16) and action gap (`spacing::SM`, 8); §7.3's and §7.6's 1dp outlines, written as the literal `1.0` in `style.rs` and `toggle_chip.rs`. Nothing looks wrong today and nothing will, until §7 is re-valued and these do not move. This is exactly what `type_role_call_sites.rs` was written twice to stop.
+
+  Applying them changes what the application looks like — every button and every dialog — so it wants the layout-snapshot regeneration and the §B4 manual pass, not a drive-by edit (FR-027 – FR-030, §7.3 – §7.6, SC-008b)
+
+  > Twelve when the gate landed, ten after the rebase onto BUG-003. §7.5's `ITEM_PADDING` and `VERTICAL_PADDING` were on this list and are now applied by T105, and `ITEM_ICON` — recorded as carried by the type scale — is applied by T105 too. `a_recorded_gap_that_became_bound_is_stale` is what reported all three, which is the half of this gate that keeps the list honest in the direction that matters: an entry describing a state that has stopped being true is a waiver for a regression nobody would notice.
+
+- [ ] T114 Give §7.2's row height an FR entry in `spec.md`'s accepted-gaps list, alongside FR-042 – FR-046. Carried over from Phase 13's closing note and now recorded a second place — `anatomy_call_sites.rs` lists `density::LIST_ROW_BASE` as `gap::WAIVED` on the strength of a decision that exists only in `tree_view.rs`'s comment and in `anatomy_size.rs`'s `Content` declaration. It is the only accepted gap with no FR (FR-026, FR-011, §7.2)
