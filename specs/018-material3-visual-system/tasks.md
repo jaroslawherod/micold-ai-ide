@@ -950,3 +950,19 @@ FR-029a, FR-029b, US4 acceptance scenario 11 and SC-008c.
   > Twelve when the gate landed, ten after the rebase onto BUG-003. §7.5's `ITEM_PADDING` and `VERTICAL_PADDING` were on this list and are now applied by T105, and `ITEM_ICON` — recorded as carried by the type scale — is applied by T105 too. `a_recorded_gap_that_became_bound_is_stale` is what reported all three, which is the half of this gate that keeps the list honest in the direction that matters: an entry describing a state that has stopped being true is a waiver for a regression nobody would notice.
 
 - [ ] T114 Give §7.2's row height an FR entry in `spec.md`'s accepted-gaps list, alongside FR-042 – FR-046. Carried over from Phase 13's closing note and now recorded a second place — `anatomy_call_sites.rs` lists `density::LIST_ROW_BASE` as `gap::WAIVED` on the strength of a decision that exists only in `tree_view.rs`'s comment and in `anatomy_size.rs`'s `Content` declaration. It is the only accepted gap with no FR (FR-026, FR-011, §7.2)
+
+- [X] T115 Hold `anatomy::ALL` against the module's own source, and add the two figures it was already missing. T112's universe is `ALL` plus the density bases, so a constant absent from `ALL` is exempt from that gate without anyone exempting it — the same defect T112 exists to catch, one level further out. `tokens_anatomy.rs` guarded the list with a **count**, which is precisely the guard that cannot notice it (FR-025 – FR-032, SC-008, §7)
+
+  > Found while building a second copy of T112's scan, not knowing it had landed here in parallel —
+  > the duplicate was discarded and this is what was left of it that T112 does not already do.
+  >
+  > `app_bar::DIVIDER` and `app_bar::BOTTOM_EDGE` were added to the module by BUG-003 and not to
+  > `ALL`. Both *are* bound — `toolbar.rs` draws the divider from one, both panels read the other —
+  > so nothing was wrong in the application, which is what made it invisible: `ALL.len()` still
+  > cleared its `>= 30` floor, every whole-set property still passed, and T112's own note records
+  > them as "both bound on arrival" when its gate could not see either.
+  >
+  > `the_listed_table_holds_every_constant` parses the module for `pub mod x {` / `pub const NAME:`
+  > and requires each to appear in `ALL`, confirmed red first on exactly those two. It asserts the
+  > parse found at least thirty constants, because a parse that silently matches nothing would pass
+  > while checking nothing — the failure mode this file exists to prevent, applied to itself.

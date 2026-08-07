@@ -182,8 +182,17 @@ pub mod progress {
 /// checking one number at a time.
 ///
 /// Listed rather than derived because Rust has no reflection over modules — so the one risk is this
-/// falling behind, which `tests/tokens_anatomy.rs` guards with a count.
-pub const ALL: [(&str, f32); 42] = [
+/// falling behind, and a **count** cannot notice it: BUG-003's own fix added `app_bar::DIVIDER` and
+/// `BOTTOM_EDGE` to the module and not to this table, the count still matched the entries, and the
+/// entries no longer matched the module.
+///
+/// That is not a cosmetic gap. This list is the *universe* two gates walk — `tokens_anatomy`'s
+/// whole-set properties and `micold-client/tests/anatomy_call_sites.rs`, which asks whether each
+/// figure reaches a component. A figure missing here is exempt from both without anyone exempting
+/// it, which is the same shape as a figure nothing applies, one level further out.
+/// `tokens_anatomy::the_listed_table_holds_every_constant` now holds this against the module's own
+/// source, which is the only thing that can notice.
+pub const ALL: [(&str, f32); 44] = [
     ("app_bar::HEIGHT", app_bar::HEIGHT),
     ("app_bar::PADDING", app_bar::PADDING),
     (
@@ -191,6 +200,8 @@ pub const ALL: [(&str, f32); 42] = [
         app_bar::LEADING_ICON_PADDING,
     ),
     ("app_bar::ICON_TARGET", app_bar::ICON_TARGET),
+    ("app_bar::DIVIDER", app_bar::DIVIDER),
+    ("app_bar::BOTTOM_EDGE", app_bar::BOTTOM_EDGE),
     ("list_row::STANDARD_PADDING", list_row::STANDARD_PADDING),
     ("list_row::DENSE_PADDING", list_row::DENSE_PADDING),
     ("list_row::STANDARD_ICON_GAP", list_row::STANDARD_ICON_GAP),
