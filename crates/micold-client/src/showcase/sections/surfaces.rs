@@ -182,9 +182,30 @@ pub fn connection_banner<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Eleme
 
 /// `StageProgress` — the bar plus the step in flight.
 ///
-/// Its fill is a fixed value rather than a real fraction, which is why it needs no run control: it
-/// does not animate, so it asks for no frames (FR-023). The indeterminate indicator that *will* need
-/// one arrives with feature 018.
+/// **Indeterminate** since feature 018 (T050, FR-031f): the segment travels the track on `long_2`
+/// and claims nothing about how far along the work is. It used to sit at a fixed 40% fill, which
+/// asserts a completion fraction nothing can back up — the application does not learn whether the
+/// submodule stage runs at all until the branch and worktree already exist, so a user watching that
+/// bar had every reason to read "40% done" while it meant nothing.
+///
+/// # This page does not idle, and that is the accepted trade
+///
+/// An indeterminate bar animates for as long as it is mounted, and both poses below are mounted for
+/// as long as the Components section is on screen — so this page asks for a frame every frame,
+/// where the rest of the gallery comes to rest (T085).
+///
+/// It has **no run control**, and should not have one. The motion section gives each entry a replay
+/// button because those animations are *transient*: they play once, and you press replay to see the
+/// thing again. This one is continuous by definition. There is nothing to replay, and a paused
+/// indeterminate bar is a static bar — which is the exact misreading T050 removed, reintroduced in
+/// the one place whose job is to show what the component is.
+///
+/// So the cost is accepted rather than designed around. It is bounded to a development-only binary
+/// (`packaging_excludes_showcase.rs` keeps the gallery out of the shipped package), and the
+/// application's own quiescence is unaffected and separately gated —
+/// `tests/indeterminate_stops_with_its_operation.rs` holds the real field: there the indicator is
+/// mounted only while a create is in flight, so it stops within a frame of the operation ending
+/// (FR-039d, SC-017).
 pub fn stage_progress<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
         vec![

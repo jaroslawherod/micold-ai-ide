@@ -431,6 +431,11 @@ pub const COMPONENTS: &[Entry] = &[
         variants: &[],
         density: &[],
         posed: &["in progress", "with a live line"],
+        // Empty, and not an oversight (T085). `live` means "a state you have to *exercise* with the
+        // pointer or keyboard", and there is none here — but this component does animate, on its
+        // own, continuously, for as long as it is mounted. It is the one entry in the catalogue for
+        // which "not interactive" and "not moving" come apart. `sections::surfaces::stage_progress`
+        // records why it gets no run control and why the cost is accepted.
         live: &[],
         interactive: false,
         section: Section::Components,
