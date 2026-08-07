@@ -17,7 +17,7 @@ use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
 use crate::ui::material::{menu_panel, IconButton, Text, TypeRole};
-use iced::widget::{button, column, mouse_area, row};
+use iced::widget::{button, column, mouse_area, row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
 use micold_core::tokens::{anatomy, density, motion::duration, shape, spacing, Rgb, Roles};
@@ -32,6 +32,15 @@ use micold_core::tokens::{anatomy, density, motion::duration, shape, spacing, Rg
 pub struct MenuItem<M> {
     /// Optional leading icon, drawn at [`anatomy::menu::ITEM_ICON`].
     pub icon: Option<Icon>,
+    /// Hold the leading slot's width even when [`Self::icon`] is `None`, so every label in the
+    /// panel starts at the same x (FR-006a of feature 008).
+    ///
+    /// For a list where the glyph means something *about that row* — the switcher's active marker —
+    /// rather than identifying what the row does. A marker that appeared and also moved the label
+    /// would be doing two jobs, and the sideways shift is the louder of the two: a quiet indicator
+    /// of which project is active reads instead as a list that cannot keep its rows in line. The
+    /// type-ahead's rows have always reserved theirs, for the reason stated there.
+    pub reserve_icon: bool,
     /// Tint for the leading icon. `None` takes §7.5's `on_surface_variant`; the switcher's active
     /// marker states its own (FR-006 of feature 008).
     pub icon_tint: Option<Rgb>,
@@ -58,6 +67,7 @@ impl<M> MenuItem<M> {
     pub fn labeled(label: impl Into<String>, message: M) -> Self {
         Self {
             icon: None,
+            reserve_icon: false,
             icon_tint: None,
             label: label.into(),
             message: Some(message),
@@ -151,6 +161,11 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
             // states one, and `anatomy::menu::ITEM_ICON` was read by nothing.
             let tint = leading_tint(&item, r);
             content = content.push(icon(glyph, anatomy::menu::ITEM_ICON, tint));
+        } else if item.reserve_icon {
+            // The slot without the glyph — same width, same gap after it, so the label lands where
+            // a marked row's does (FR-006a). Not `Space::new()` alone: the width has to be §7.5's
+            // icon rather than a number that merely matches it today.
+            content = content.push(Space::new().width(Length::Fixed(anatomy::menu::ITEM_ICON)));
         }
         // A menu item is something you press, so its label is `Action` — Material's `label_large`,
         // the same 14dp at medium weight. It fills, so trailing content sits at the trailing edge

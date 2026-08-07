@@ -25,6 +25,10 @@ use super::layout::{Anchor, CoveredState, RevealingState, StateUnderTest};
 /// A fixed project path. Never canonicalised against a real directory.
 const PROJECT: &str = "/fixture/project";
 
+/// A second project, never active. Only the switcher's covered state needs one — it is what makes
+/// an *unmarked* row exist to be aligned against a marked one.
+const OTHER: &str = "/fixture/other-project";
+
 /// The toolbar's title, at the same path in every state: shell column → toolbar column → bar
 /// container → bar row → leading child.
 const TOOLBAR_TITLE: &[usize] = &[0, 0, 0, 0, 0, 0];
@@ -491,6 +495,13 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "project-switcher-open",
             build: || {
                 let mut state = with_project();
+                // A second, *inactive* project, so the panel holds a marked row and an unmarked one
+                // and the fixture records where each label starts (FR-006a of feature 008). With one
+                // project the list is all-marked, and a marker that shifted its neighbours sideways
+                // would have nothing to shift.
+                let mut workspace = super::workspace_with(vec![(PROJECT, vec![]), (OTHER, vec![])]);
+                workspace.active = workspace.projects.first().map(|p| p.path.clone());
+                state.workspace = workspace;
                 state.project_switcher_open = true;
                 StateUnderTest::new(state)
             },

@@ -70,6 +70,18 @@ fn bounds_at(element: Element<'_, Message>, path: &[usize]) -> Rectangle {
     layout.bounds()
 }
 
+/// One switcher row, as `ui::switcher_rows` builds them.
+fn switcher_row(label: &str, active: bool) -> super::ProjectRow<Message> {
+    super::ProjectRow {
+        label: label.to_string(),
+        is_active: active,
+        running_count: 0,
+        available: true,
+        on_select: Message::NoOp,
+        on_context: Some(Message::NoOp),
+    }
+}
+
 /// A menu panel holding `items`, as both public entry points build it.
 fn panel(items: Vec<MenuItem<Message>>) -> Element<'static, Message> {
     menu_panel(
@@ -133,6 +145,54 @@ fn an_item_that_states_its_own_tint_keeps_it() {
     };
 
     assert_eq!(menu::leading_tint(&marker, r), r.error);
+}
+
+/// FR-006a: a switcher row without the active marker starts its label where the marked row does.
+///
+/// The marker's slot is reserved rather than conditional. A marker that appeared *and* moved the
+/// label would be doing two jobs, and the second is the louder — a quiet indicator of which project
+/// is active would read as a list that cannot keep its rows in line. The type-ahead's rows have
+/// always worked this way; the switcher's did not, because its leading slot is per-item.
+#[test]
+fn a_switcher_row_without_the_marker_aligns_with_one_that_has_it() {
+    let rows = super::project_switcher::row_column(
+        vec![
+            switcher_row("active-project", true),
+            switcher_row("other-project", false),
+        ],
+        Message::NoOp,
+        roles(),
+    );
+
+    let mut element = rows;
+    let renderer = super::test_support::renderer();
+    let mut tree = Tree::new(element.as_widget());
+    let node = element.as_widget_mut().layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, ROOM),
+    );
+    let label_x = |row: usize| {
+        Layout::new(&node)
+            .children()
+            .nth(row)
+            .expect("the switcher's column must hold both rows")
+            .children()
+            .next()
+            .expect("a row holds its content")
+            .children()
+            .last()
+            .expect("a row's content ends with its label")
+            .bounds()
+            .x
+    };
+
+    let (marked, unmarked) = (label_x(0), label_x(1));
+    assert!(
+        (marked - unmarked).abs() < TOLERANCE,
+        "the active row's label starts at {marked}dp and an unmarked row's at {unmarked}dp, so the \
+         marker shifts every other label sideways instead of occupying a slot the rows all keep",
+    );
 }
 
 /// §7.5: an item's content is inset 12dp at both ends.
@@ -225,14 +285,7 @@ fn the_clamping_estimate_matches_the_panel_it_estimates() {
 #[test]
 fn a_switcher_row_is_the_same_row_as_a_menu_item() {
     let rows = super::project_switcher::row_column(
-        vec![super::ProjectRow {
-            label: "micold-ai-ide".to_string(),
-            is_active: true,
-            running_count: 2,
-            available: true,
-            on_select: Message::NoOp,
-            on_context: Some(Message::NoOp),
-        }],
+        vec![switcher_row("micold-ai-ide", true)],
         Message::NoOp,
         roles(),
     );
