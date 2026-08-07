@@ -141,6 +141,9 @@ pub(super) fn row_column<'a, M: Clone + 'a>(
         .into_iter()
         .map(|pr| MenuItem {
             icon: pr.is_active.then_some(Icon::ActiveMarker),
+            // Held on every row, marked or not, so the marker says which project is active without
+            // also deciding where that row's label starts (FR-006a).
+            reserve_icon: true,
             icon_tint: Some(active_tint),
             label: pr.label,
             // Unavailable projects are shown but cannot be activated (FR-008 of feature 008).
