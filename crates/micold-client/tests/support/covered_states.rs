@@ -17,6 +17,7 @@ use std::path::PathBuf;
 use micold_client::app::{BranchSource, Overlay, SettingsDraft, State, WorktreeForm};
 use micold_client::ui::ConnectionStatus;
 use micold_core::project::Availability;
+use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 
 use super::layout::{Anchor, CoveredState, RevealingState, StateUnderTest};
@@ -27,6 +28,13 @@ const PROJECT: &str = "/fixture/project";
 /// The toolbar's title, at the same path in every state: shell column → toolbar column → bar
 /// container → bar row → leading child.
 const TOOLBAR_TITLE: &[usize] = &[0, 0, 0, 0, 0, 0];
+
+/// The terminal's bottom status bar, and the mode toggle that anchors its trailing edge — the two
+/// nodes BUG-002 moved. Filled in from the recorded tree rather than derived by reading the view,
+/// the way `sidebar.row.label` above was; an anchor that does not resolve fails by name
+/// (`an_anchor_whose_path_does_not_resolve_fails_naming_it`), so a stale path here cannot go quiet.
+const TERMINAL_BOTTOM_BAR: &[usize] = &[0, 0, 1, 1, 1];
+const TERMINAL_MODE_TOGGLE: &[usize] = &[0, 0, 1, 1, 1, 0, 5];
 
 /// Deliberately long, so the label/close-button relationship this gate was built to watch is under
 /// real pressure at the canonical window size (FR-008b, FR-018).
@@ -379,6 +387,59 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "dialog.actions",
                     path: &[3, 0, 0, 7],
+                },
+            ],
+        },
+        // --- Added by BUG-002 -------------------------------------------------------------------
+        //
+        // The terminal's bottom status bar had **no geometry coverage at all**, and BUG-002 broke
+        // it: its two icon controls each claimed an equal share of the bar's free width, so the
+        // mode toggle — which its own call site anchors to the bar's bottom-right corner — sat
+        // hundreds of pixels inside that corner. The app bar's half of the same defect *was*
+        // recorded here, as a 499.9 × 64.0 icon button, and the gate was green on it: a snapshot
+        // records what it is shown. What it does do is fail the moment the geometry moves again,
+        // which is the half of this that no other check offers for this screen.
+        //
+        // `Regular` mode and no shell started, because that is the arrangement with the most in the
+        // bar: the restart action, the new-instance "+", and the mode toggle. A `Named` label
+        // rather than `Pending`, so the title's width is a fixed string rather than a placeholder
+        // that a future copy change would silently move.
+        CoveredState {
+            name: "session-terminal-bottom-bar",
+            build: || {
+                let session = Session::restored(
+                    SessionId::new(),
+                    SessionLocation::Worktree("feat-short".to_string()),
+                    SessionLabel::Named("feat/short".to_string()),
+                    TerminalMode::Regular,
+                );
+                let active = session.id;
+                let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
+                workspace.active = workspace.projects.first().map(|p| p.path.clone());
+
+                let mut state = with_project();
+                state.workspace = workspace;
+                state.active_session = Some(active);
+                StateUnderTest::new(state)
+            },
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "toolbar.title",
+                    path: TOOLBAR_TITLE,
+                },
+                // The bar itself, and the control BUG-002 moved. Named so a failure says "the mode
+                // toggle" rather than a bare path — the whole point of FR-004.
+                Anchor {
+                    name: "terminal.bottom_bar",
+                    path: TERMINAL_BOTTOM_BAR,
+                },
+                Anchor {
+                    name: "terminal.bottom_bar.mode_toggle",
+                    path: TERMINAL_MODE_TOGGLE,
                 },
             ],
         },

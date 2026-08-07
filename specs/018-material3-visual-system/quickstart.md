@@ -67,6 +67,13 @@ cargo test -p micold-core                      # tokens exercised with no render
 
 ## Part B — manual walkthrough
 
+Several items below are about *where* something sits, and those are far easier to settle from a
+captured frame than from memory, because a frame can be measured. `mise run screenshot out.png`
+takes one; see [`docs/development/screenshots.md`](../../docs/development/screenshots.md) for what
+it can and cannot capture (whole monitor, topmost window only). Added after BUG-002, which was
+reported from two screenshots and nearly closed without one because nothing on a stock
+GNOME/Wayland session could take a screenshot from a shell.
+
 ### B0. First-run identity check *(do this first)*
 
 `mise run run`.
@@ -122,6 +129,14 @@ cargo test -p micold-core                      # tokens exercised with no render
 - [ ] **Count worktrees visible without scrolling, against the same repo before the change.** Must
       not have dropped materially (FR-026a) — this is the guard on the density decision.
 - [ ] Icon buttons are comfortable to hit; the target extends beyond the visible glyph (FR-027).
+- [ ] **The app bar's ⋮ sits on the bar's trailing edge**, with the project switcher immediately
+      left of it — not adrift near the middle. Open a session and check the same of the terminal's
+      bottom bar: the mode toggle is in its bottom-right corner, the bar is a slim strip rather than
+      a block claiming height from the terminal above it (FR-027). This was BUG-002 — an icon
+      button whose 48dp target was silently replaced by `Fill`, so it took an equal share of the
+      row's free space. The automated gates are `material/anatomy_size.rs` (the size, at two window
+      sizes) and the `session-terminal-bottom-bar` covered state (the placement, at 1280×800); this
+      is the half a person has to look at.
 - [ ] Any chip — a sidebar tag filter, a worktree-form toggle: its label sits on the pill's centre
       line, with the same empty band above it as below (FR-030a). The app bar's title likewise sits
       on the bar's centre line. Both were BUG-001; the automated gate is

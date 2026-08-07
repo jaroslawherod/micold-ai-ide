@@ -294,7 +294,7 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T054 [US4] Rework `crates/micold-client/src/ui/material/toolbar.rs` to the small app bar anatomy — 64dp height, 16dp padding, `title_large` title, 48dp icon targets — and add `.elevated(bool)` (FR-025)
 - [X] T055 [US4] Wire elevate-on-scroll: add the scroll handler to the sidebar's scrollable in `crates/micold-client/src/ui/sidebar.rs`, a message variant and view-state flag in `crates/micold-client/src/app.rs`, and pass it to the toolbar builder (FR-025a, research R10)
 - [X] T056 [P] [US4] Add the dense (36dp) and standard (48dp) row densities to `crates/micold-client/src/ui/material/tree_view.rs`, defaulting the sidebar to dense (FR-026, FR-026a)
-- [X] T057 [P] [US4] Enforce the 48dp minimum interactive target in `crates/micold-client/src/ui/material/icon_button.rs` (FR-027)
+- [X] T057 [P] [US4] Enforce the 48dp minimum interactive target in `crates/micold-client/src/ui/material/icon_button.rs` (FR-027) *(reopened 2026-08-07 — BUG-002: the 48dp was written and then overwritten; closed the same day by T091)*
 - [X] T058 [P] [US4] Apply dialog anatomy in `crates/micold-client/src/ui/material/modal.rs` — 24dp padding, `headline_small` title, `body_medium` body, trailing-aligned action row with 8dp gap (FR-028)
 - [X] T059 [P] [US4] Apply menu anatomy in `crates/micold-client/src/ui/material/menu.rs` — `surface_container`, elevation 2, `extra_small` corner, 48dp items (FR-029)
 - [X] T060 [P] [US4] Apply chip anatomy in `crates/micold-client/src/ui/material/tag.rs` and `toggle_chip.rs` — 32dp height, `full` corner, `label_large`, **label centred within the height** (FR-030, FR-030a) *(reopened 2026-08-07 — BUG-001; closed the same day by T085)*
@@ -587,7 +587,7 @@ unaffected and stayed done.
   > and the second saying where the line box sits inside it. The misleading padding comment is
   > replaced.
 
-- [X] T088 [P] Sweep the other fixed-height components for the same shape — a container given `Length::Fixed(...)` whose content is smaller and whose alignment is unstated. `toolbar.rs:78` (64dp app bar) and `icon_button.rs:156-157` (48dp target) are the two other `Length::Fixed(anatomy::...)` sites; the icon button already centres, the app bar must be checked. Fix or record each, so BUG-001's class is closed rather than its one instance (FR-030a, SC-008a)
+- [X] T088 [P] Sweep the other fixed-height components for the same shape — a container given `Length::Fixed(...)` whose content is smaller and whose alignment is unstated. `toolbar.rs:78` (64dp app bar) and `icon_button.rs:156-157` (48dp target) are the two other `Length::Fixed(anatomy::...)` sites; the icon button already centres, the app bar must be checked. Fix or record each, so BUG-001's class is closed rather than its one instance (FR-030a, SC-008a) *(reopened 2026-08-07 — BUG-002: the sweep cleared `icon_button.rs` on a true observation and the wrong question; closed the same day by T091)*
 
   > **The sweep found a second instance, and it is the reason this task was worth running.** The app
   > bar's container states no `align_y`; the row's own `align_y(Center)` centres the row's children
@@ -619,3 +619,75 @@ unaffected and stayed done.
 
 **Bugfix**: 2026-08-07 — BUG-001 Updated from bugfix patch: reopened T060, added T086–T089. All
 five closed the same day; T060's reopen is kept visible rather than erased.
+
+---
+
+## Phase 12: BUG-002 — an icon button's touch target was `Fill × Fill`
+
+Reported 2026-08-07 against the *previous* bugfix phase's own sweep. Every non-`compact()`
+`IconButton` claimed a share of whatever free space its row had instead of §7.3's fixed 48 × 48, so
+the app bar's ⋮ and the terminal bar's mode toggle both floated well inside the trailing edges they
+are supposed to sit on. See `bugs/BUG-002.md`.
+
+**Two false completions.** T057 applied §7.3's figure and then discarded it on the next line.
+T088 — BUG-001's own sweep — inspected this exact site, wrote "the icon button already centres",
+and cleared it: true, and the wrong question. The centring call is what threw the size away. Both
+are reopened above and closed by T091.
+
+- [X] T090 Failing test first: assert a component lays out at the size its anatomy entry states, whatever room it is offered, and confirm it fails against today's `IconButton`. Lay each component out under **two differently-sized limits** — one measurement cannot separate `Fixed(48)` from `Fill`, since offering exactly 48dp makes them agree. Declare each axis, so an intended `Fill` (the app bar's width) is distinguishable from an accidental one. In-crate, as `content_placement` records: `material` is `pub(crate)` and an `IconButton` cannot be constructed from `tests/` at all (FR-027, SC-008b, Principle I)
+
+  > `src/ui/material/anatomy_size.rs`, six tests. Confirmed red first against the unfixed
+  > component: *"an icon button's width measured 1200dp in a 1200dp box and 400dp in a 400dp one,
+  > but its anatomy entry states 48dp — it is taking whatever room it is offered"*, and the same for
+  > its height. Covers the icon button (full, compact and disabled), the chip and the app bar;
+  > `the_gate_can_fail` rebuilds the `.width(Fixed(48)).center_x(Fill)` chain directly, so the check
+  > stays demonstrably able to fail after the component is fixed.
+
+- [X] T091 Restore the target in `crates/micold-client/src/ui/material/icon_button.rs`, making T090 green, and close T057 and T088 with it. `Container::center_x(w)` is `self.width(w).align_x(Center)` — it sets the length as well as aligning, so `.width(Fixed(48)).center_x(Fill)` silently discards the 48. Align without resizing (FR-027, SC-008b)
+
+  > `align_x(Center)`/`align_y(Center)` in place of `center_x(Fill)`/`center_y(Fill)`. Two lines,
+  > and the comment above them now says why the shorter builder is the wrong one here — that
+  > aliasing is the entire defect and is invisible at the call site.
+
+- [X] T092 [P] Sweep every other `center_x(`/`center_y(`/`center(` whose container also states a width or a height — the same overwrite is available at all of them (FR-027, SC-008b)
+
+  > Clean. Four other sites, none of them the same shape: `cdk/overlay.rs:146-148` and
+  > `terminal.rs:336-351` pass `Fill` to a container that is *meant* to fill, with no fixed size to
+  > discard; `activity_badge.rs:110` passes `Fixed(badge.size)` through `center_x` itself and states
+  > no separate width. The defect needs both halves — a stated size *and* a later call that takes an
+  > argument — and only the icon button had both.
+
+- [X] T093 Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt`; the diff is the proof. The fixture **held the defect as its expected value** and was green on it from the day it landed, which is what a snapshot does to a defect older than itself (SC-008b, feature 019 FR-003)
+
+  > The app bar's overflow trigger moves from `764.1, 0.0, 499.9 × 64.0` to
+  > `1216.0, 8.0, 48.0 × 48.0` — right edge at 1264, which is 1280 less §7.1's 16dp trailing
+  > padding, so it is now flush against the edge it belongs on. The project switcher follows it out
+  > to 1130.3 from the middle of the bar.
+
+- [X] T094 Give the terminal's bottom status bar geometry coverage — it had **none**, which is why only the app bar's half of this defect was recorded anywhere. One entry in `tests/support/covered_states.rs` and nothing else (feature 019 FR-016), in `Regular` mode with no shell started so the bar carries the most it can: the restart action, the new-instance "+", and the mode toggle (SC-008b, feature 019 FR-016)
+
+  > `session-terminal-bottom-bar`, anchored on the bar and on the mode toggle so a failure names
+  > them. Records the fix: the two icon controls sit at `1168.0, 48 × 48` and `1224.0, 48 × 48`,
+  > the second flush against the bar's trailing padding, with the row's single `Space::Fill` taking
+  > all 737.4dp of the slack they had been splitting. The bar is a 64dp strip at the window's
+  > bottom edge, not the half-height block the `Fill` height had made it.
+
+- [X] T095 Confirm it in the running application, per quickstart §B4 (FR-027, SC-008b)
+
+  > Confirmed 2026-08-07, and it took a new tool. Nothing on a stock GNOME/Wayland session can take
+  > a screenshot from a shell — `grim` needs a protocol Mutter does not implement, `import` is X11,
+  > `org.gnome.Shell.Screenshot` answers `AccessDenied`, and the portal opens a consent dialog. So
+  > `scripts/screenshot-session.py` pulls a frame off the monitor's PipeWire node via
+  > `org.gnome.Mutter.ScreenCast`, the API an RDP server uses underneath. `mise run screenshot`,
+  > documented in `docs/development/screenshots.md`.
+  >
+  > The frame holds both builds at once — installed 0.6.0 behind, worktree build in front. The ⋮ sits
+  > 417px inside the trailing edge before and 42px after, with the project chip immediately left of
+  > it rather than adrift near the middle. Figures in `bugs/BUG-002.md`.
+  >
+  > **The terminal's bottom bar was not looked at**: reaching it needs a session opened by hand and
+  > nothing here can drive input. It is pinned by T094's covered state and by T090's size gate, and
+  > that is the whole of its evidence.
+
+**Bugfix**: 2026-08-07 — BUG-002 Updated from bugfix patch: reopened T057 and T088, added
+T090–T095, added SC-008b. All closed the same day; both reopens are kept visible rather than erased.
