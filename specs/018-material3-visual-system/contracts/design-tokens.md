@@ -541,11 +541,19 @@ Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`
 | Shape           | `full`                                                    |
 | Horizontal padding | 12 (8 when a leading icon is present)                  |
 | Label role      | `label_large`                                             |
+| Label alignment | centred within the height; centred within the padded width (FR-030a) |
 | Icon size       | 18                                                        |
 | Unselected      | transparent container, 1dp `outline`, `on_surface_variant`|
 | Selected        | `secondary_container` fill, `on_secondary_container` label |
 | Worktree tag    | per-type fill and its paired text tone (§1.4), `label_small` in the sidebar |
 | States          | full state-layer set (§5), AA preserved under each (FR-024) |
+
+**Why alignment is a row here.** The height and the label role are stated independently above, and
+32 is deliberately taller than `label_large`'s 20dp line box — so the 12dp of slack has to go
+somewhere, and nothing else in this table says where. BUG-001 is what that omission produced: a
+chip built to every other row of this table, with all 12dp collected beneath the label. A component
+whose height is content-sized (the worktree tag, which sets no height) has no slack and no
+alignment question; one with a fixed height always does.
 
 ### 7.7 Text fields and select (FR-031, FR-031a – FR-031d)
 

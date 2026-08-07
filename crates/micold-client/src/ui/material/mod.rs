@@ -14,6 +14,11 @@ mod animation;
 mod button;
 mod checkbox;
 mod connection_banner;
+/// Where a component puts its content inside a height taller than that content. In-crate for the
+/// same reason as `form_field_anatomy`, and the first check that reads what a component *drew*
+/// rather than the constants it was built from (BUG-001).
+#[cfg(test)]
+mod content_placement;
 mod divider;
 mod ellipsized;
 mod filled_field;

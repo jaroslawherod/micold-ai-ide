@@ -297,7 +297,12 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T057 [P] [US4] Enforce the 48dp minimum interactive target in `crates/micold-client/src/ui/material/icon_button.rs` (FR-027)
 - [X] T058 [P] [US4] Apply dialog anatomy in `crates/micold-client/src/ui/material/modal.rs` — 24dp padding, `headline_small` title, `body_medium` body, trailing-aligned action row with 8dp gap (FR-028)
 - [X] T059 [P] [US4] Apply menu anatomy in `crates/micold-client/src/ui/material/menu.rs` — `surface_container`, elevation 2, `extra_small` corner, 48dp items (FR-029)
-- [X] T060 [P] [US4] Apply chip anatomy in `crates/micold-client/src/ui/material/tag.rs` and `toggle_chip.rs` — 32dp height, `full` corner, `label_large` (FR-030)
+- [X] T060 [P] [US4] Apply chip anatomy in `crates/micold-client/src/ui/material/tag.rs` and `toggle_chip.rs` — 32dp height, `full` corner, `label_large`, **label centred within the height** (FR-030, FR-030a) *(reopened 2026-08-07 — BUG-001; closed the same day by T085)*
+
+  > `tag.rs` was done and stayed done: a `Tag` sets no height, so its container is its line box and
+  > it has no slack to misplace. `toggle_chip.rs` applied the 32dp height and left the label drawn
+  > at the top of it — the height landed, the alignment the height implies did not. Closed by T087,
+  > behind T086's failing test (Principle I).
 - [X] T061 [US4] Confirm the known-projects list in `crates/micold-client/src/ui/project_selector.rs` uses the standard row density while the sidebar stays dense (FR-026)
 - [X] T062 [US4] Update `docs/user-guide/` to document the snackbar's one-at-a-time queueing and timed dismissal — the single sanctioned behavior change (FR-036a, FR-041, Principle VII)
 
@@ -541,3 +546,76 @@ T050 changed what the progress indicator *is*, and left the gallery describing t
 
 - [X] T084 Rewrite the `stage_progress` caption in `crates/micold-client/src/showcase/sections/surfaces.rs` (~line 183). It currently tells the reader that the indicator's "fill is a fixed value rather than a real fraction", that "it does not animate, so it asks for no frames (FR-023)", and that "the indeterminate indicator that *will* need one arrives with feature 018" — three statements that T050 made false, in the one document whose entire job is to describe what each component does. A gallery that describes the component it replaced is worse than one that says nothing: a reader has no reason to doubt it, and the next person to reach for a progress indicator will believe the fill is static. Say what it is now — an indeterminate bar whose segment travels on `long_2`, driven through `Progress`, which asks for a frame on every frame it exists per T049/T050, FR-031f (contradicts)
 - [X] T085 **Decided: documented exemption, no run control.** A replay button suits a *transient* animation — press it, see the thing again — and an indeterminate bar is continuous by definition; a paused one is a static bar, which is the exact misreading T050 removed. The caption and the catalogue entry now both record that this component animates for as long as it is mounted, that the Components page therefore does not idle, and that the cost is accepted because the gallery is a development-only binary the packaging gate keeps out of the shipped package. The application's own quiescence is unaffected and separately gated by `tests/indeterminate_stops_with_its_operation.rs`. Decide what the gallery does about an indicator that never stops. `StageProgress` is posed permanently on the Components page — twice, since BUG-009 added the live-line pose — and `Bar` requests a frame on every frame it is mounted, so that page holds the render loop awake for as long as it is open. The catalogue records `live: &[]` and `interactive: false`, meaning "nothing here to exercise", and the section has no run control, unlike the motion section where every animation is replayable on demand. This is the showcase-side shape of exactly what T079 gated in the application, and no `showcase_*` test asserts the gallery ever idles. The showcase is a development-only binary, so this is not SC-017 proper — but the choice should be *made*: give the pose a run control the way motion entries have one, or record in the catalogue and the caption that this component animates continuously by nature and the page is knowingly exempt per FR-039a, SC-017, T050 (partial)
+
+---
+
+## Phase 9: Bugfix — BUG-001
+
+Appended by `/speckit-bugfix-patch`, **after** the close-out above — the feature was closed and a
+defect in it was reported the same day, which is what a bugfix phase is for. A `ToggleChip`'s label
+sat against the top of the 32dp pill instead of on its centre line, so all 12dp of slack collected
+beneath the text. See `bugs/BUG-001.md`.
+
+**One false completion.** T060 was reopened above and closed again by T087: it had applied the
+height that created the slack without the alignment the height requires. Its `tag.rs` half was
+unaffected and stayed done.
+
+- [X] T086 Failing test first: assert a chip's label is centred within the chip's laid-out bounds — the empty band above the label equal to the one below it, within the layout's rounding — and confirm it fails against today's `ToggleChip`. Read the *laid-out node*, not the constants: `tests/tokens_anatomy.rs` already pins `chip::HEIGHT` and passed throughout this defect, because a constant cannot say where the label went. Follow `tests/gates/containment.rs`, which reads the layout tree and is pulled in via `#[path]` from `tests/layout_snapshot.rs` (FR-030a, SC-008a, Principle I)
+
+  > **Done, and both instructions in this task turned out to be wrong.** They are kept as written
+  > because the corrections are the finding.
+  >
+  > *Not in `tests/gates/`*: `material` is `pub(crate)`, so a `ToggleChip` cannot be constructed
+  > from an integration test at all — the gate lives in-crate as
+  > `src/ui/material/content_placement.rs`, the precedent `form_field_anatomy` and `style_snapshot`
+  > already set for exactly this reason.
+  >
+  > *Not the laid-out bounds*: a button lays its content out under `limits.height(Fixed(32))`,
+  > which sets the minimum with the maximum, so the label node is stretched to the full 32dp and
+  > its bounds *are* the pill's. The first version measured 0dp of band on both sides and passed a
+  > deliberately top-aligned sabotage as centred. The gate rasterises instead — it renders the chip
+  > over its own fill colour so only the label inks, and compares that ink against the same string
+  > drawn at the top of a 20dp line box. Confirmed red first: ink rows 4–14 of 32, identical to the
+  > reference, where centring is 6dp lower.
+
+- [X] T087 Centre the label in `crates/micold-client/src/ui/material/toggle_chip.rs`, making T086 green. Preferred shape: wrap the button's content in a centring container (`.center_y(Length::Fill)`), as `icon_button.rs:155-159` already does to centre a small container inside a larger fixed box — it does not depend on the label's metrics, and it leaves the 32dp height and the 12dp ends exactly as §7.6 states them. The alternative is the label's own `.height(Length::Fill).align_y(Vertical::Center)`, which `Text` supports. Correct the comment above the padding while there: "the vertical padding is what makes the height" is true of a content-sized `Tag` and false of a chip that sets its height, and that sentence is the reasoning that produced the bug (FR-030, FR-030a)
+
+  > Took the alternative rather than the preferred shape, and the corrected root cause is why: a
+  > centring container would place a node that is already the pill's full height, changing nothing.
+  > The glyphs are what sit high, so the alignment belongs on the text — `Text` now states
+  > `height(Fill)` and `align_y(Center)`, the first saying the node is the pill's height on purpose
+  > and the second saying where the line box sits inside it. The misleading padding comment is
+  > replaced.
+
+- [X] T088 [P] Sweep the other fixed-height components for the same shape — a container given `Length::Fixed(...)` whose content is smaller and whose alignment is unstated. `toolbar.rs:78` (64dp app bar) and `icon_button.rs:156-157` (48dp target) are the two other `Length::Fixed(anatomy::...)` sites; the icon button already centres, the app bar must be checked. Fix or record each, so BUG-001's class is closed rather than its one instance (FR-030a, SC-008a)
+
+  > **The sweep found a second instance, and it is the reason this task was worth running.** The app
+  > bar's container states no `align_y`; the row's own `align_y(Center)` centres the row's children
+  > against each other, not the row against a height imposed from outside. A bar holding only a
+  > title sat 18dp high of centre. `Toolbar` now states `align_y(Center)` on its container.
+  >
+  > It was invisible in the application because the shipped bar holds a full-height action, which
+  > stretches the row to the whole 64dp — a row that already fills its container cannot be
+  > misaligned by one. Correct *by accident*, and the layout fixture is unchanged by the fix for the
+  > same reason. Measured rather than read: the gate covers the bar alongside the chip.
+  >
+  > Everything else came back clean, and for a stateable reason: the icon button centres explicitly
+  > (`center_y(Fill)`); the menu row, type-ahead row, snackbar and tree rows all hand their fixed
+  > height a `row!` that states `align_y(Center)`; the filled field is a custom widget that places
+  > its children by arithmetic; `Tag` and the menu items are content-sized and have no slack. The
+  > class is "content whose placement is unstated", not "components with a fixed height".
+
+- [X] T089 Confirm it in the running application and the gallery: `mise run run` for the sidebar's tag filters and the worktree form's toggles, and the showcase's `material/toggle_chip.rs` entry for the inactive/active/accented row that surfaced this. The assertion a test cannot make is that the pill now reads as a chip rather than as a word pushed to its ceiling (FR-030a, quickstart §B4)
+
+  > Confirmed 2026-08-07 in the showcase (`mise run showcase`, the `material/toggle_chip.rs` entry):
+  > all three posed chips — inactive, active, accented-active — carry their label on the pill's
+  > centre line, against the reported screenshot where every one of them rode high. The `Toolbar`
+  > entry's "title only" bar was confirmed in the same pass, which is the app bar's fix seen rather
+  > than measured.
+  >
+  > Recorded as the showcase specifically rather than as a blanket pass: the showcase renders the
+  > same `ToggleChip` the sidebar's tag filters and the worktree form's toggles do, posed in all
+  > three states at once, which the running application cannot show on one screen.
+
+**Bugfix**: 2026-08-07 — BUG-001 Updated from bugfix patch: reopened T060, added T086–T089. All
+five closed the same day; T060's reopen is kept visible rather than erased.
