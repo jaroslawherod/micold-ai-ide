@@ -154,7 +154,17 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
     // items were 36dp and became 20dp of dead space per five items once they were 48.
     let mut list = column![].width(Length::Fill);
     for item in items {
-        let mut content = row![].spacing(spacing::SM).align_y(Alignment::Center);
+        // `height(Fill)` is what makes `align_y` mean what it says here. A `Row` centres its
+        // children against *each other*, inside the cross size the flex computes from them, and
+        // that band is then laid against the top of the node `button` stretched to 48dp — so the
+        // label came out 8.4dp high of centre while every other figure in §7.5 was right. Filling
+        // the height makes the row's own box the 48dp, and the centring then happens inside it.
+        // BUG-001's app bar, one component over: an unstated alignment is not "centred by default",
+        // it is "against the top edge" (FR-030a).
+        let mut content = row![]
+            .spacing(spacing::SM)
+            .align_y(Alignment::Center)
+            .height(Length::Fill);
         if let Some(glyph) = item.icon {
             // §7.5's 24dp, not the label's size. The glyph used to be `TypeRole::Action.size()` —
             // 14dp — so it took its size from the text beside it rather than from the row that
@@ -181,10 +191,8 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
         // is composed explicitly — FR-024c wants every interactive surface to ripple, and "it is
         // not a `Button` type" is not a reason a user would accept for one row not responding.
         //
-        // §7.5's 48dp height with §7.5's 12dp ends. The row already states `align_y(Center)`, and
-        // here that is enough: `button` stretches its content node to the fixed height, so the row
-        // *is* 48dp tall and centres its children inside it. That is the difference from BUG-002's
-        // app bar, where the container imposing the height was the one that had to say so.
+        // §7.5's 48dp height with §7.5's 12dp ends, and its content centred in both — see the row
+        // above for why `align_y` alone was not enough to deliver the second of those.
         let mut pressable = button(content)
             .width(Length::Fill)
             .height(Length::Fixed(density::MENU_ITEM_BASE))

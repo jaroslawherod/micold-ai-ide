@@ -213,7 +213,10 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
 /// [`Text`](super::Text), because part of it is emphasised; and it is set at `Body` rather than at
 /// `Action`, because `Action` is already the medium weight and emphasis would then have nowhere to
 /// step up to.
-fn row_element<'a, M: Clone + 'a>(
+/// `pub(super)` so `menu_anatomy` can measure a result row's content against its 48dp. It was the
+/// second half of BUG-004 and would otherwise be the fixed half nothing checks — which is how the
+/// first half survived BUG-003.
+pub(super) fn row_element<'a, M: Clone + 'a>(
     item: Row,
     highlighted: bool,
     selected: bool,
@@ -234,9 +237,14 @@ fn row_element<'a, M: Clone + 'a>(
 
     let label = EmphasisedLabel::<M>::new(item.label, item.spans, ROW_ROLE, base, accent);
 
+    // `height(Fill)` for the reason `material::menu`'s item row states: a `Row`'s `align_y`
+    // centres its children against each other inside the cross size the flex computed, and that
+    // band lands at the top of the node `button` stretched to 48dp. This row is the same shape and
+    // had the same defect — found while fixing the menu's (FR-030a).
     let content = row![marker(selected, r), label]
         .spacing(spacing::SM)
-        .align_y(alignment::Vertical::Center);
+        .align_y(alignment::Vertical::Center)
+        .height(Length::Fill);
 
     let pressable = button(content)
         .width(Length::Fill)
