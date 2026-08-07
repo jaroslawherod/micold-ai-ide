@@ -2,7 +2,7 @@
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-07-28
-**Last validated**: 2026-08-07 (iteration 4, pre-merge)
+**Last validated**: 2026-08-07 (iteration 5, post-plan cross-artifact analysis)
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -159,21 +159,70 @@ popover fields (`help_menu_open`, `project_switcher_open`, `sidebar_filter_open`
 FR-007's list exactly; `Overlay` at 10 variants and `ClosingOverlay` at 9; and the showcase binary
 still under 300 lines behind its packaging guard test.
 
+### Validation findings (iteration 5, 2026-08-07 — after `/speckit-plan`, before `/speckit-tasks`)
+
+Planning measured the codebase rather than trusting the spec's description of it, and a spec↔plan
+cross-check surfaced five inconsistencies. All five are corrected in the spec; none was a defect in
+the spec's *reasoning*, and none changed a success criterion's intent.
+
+1. **FR-004a named one reducer; there are two.** The spec described "the single long reducer",
+   meaning the pure one in the state file (778 lines). Measurement found a second in the shell file
+   at **1,253 lines** — larger — holding the same features' effectful arms, split from the first by
+   purity rather than by feature. FR-004a now says "wherever its arms live" and requires a feature's
+   pure and effectful arms to land on the same feature boundary. Had this gone uncorrected, a
+   conforming implementation could have split the smaller reducer, declared FR-004a met, and left
+   the larger monolith intact with SC-003's shell target unreachable.
+2. **FR-015 required a clipboard capability that cannot be built as specified.** All three clipboard
+   call sites go through a framework API returning a deferred task, not a value, so a synchronous
+   port cannot wrap them without blocking. Rather than dilute FR-015, **FR-015a** was added: where
+   the framework precludes a synchronous capability, the concern may be an explicit effect request
+   in the outcome vocabulary instead — still bound by FR-017 and still assertable with zero real I/O
+   under FR-019/SC-005. The requirement's intent (no non-shell code reaching I/O directly) is intact;
+   only its assumed mechanism was impossible.
+3. **An eighth feature had no home.** FR-001 enumerated seven; measurement found daemon connection —
+   nine message variants, its own state fields, its own status projection. Because SC-004a and
+   SC-010 are both scoped "for every feature named in FR-001", the eighth feature would have had no
+   success criterion at all. It is now named in FR-001, which brings both criteria over it
+   automatically. This does **not** reopen Q1: the daemon *process* stays out of scope; the client's
+   handling of its connection has always been client code.
+4. **FR-015's list read as exhaustive but was not.** It named six concerns while the spec elsewhere
+   states seven ports already exist. FR-015 now says explicitly that its list is the work to be done,
+   not the inventory, and names the three existing ports that SC-005 measures but that need no work.
+5. **FR-027 would have forbidden a necessary move.** A quarter of the shell file (851 of 3,567 lines)
+   is an inline test module whose tests must travel with their subjects for the file to be split at
+   all. FR-027 now states that relocation with the assertion unchanged is not modification. The
+   freeze on relaxing, rewriting or deleting assertions is untouched.
+
+Two further findings were judged not worth a spec edit and are recorded in the plan instead:
+SC-003's 500-line proxy can fail while FR-005's actual requirement passes (research.md §9 says raise
+it for a decision rather than split a coherent module to hit a number), and a surface-count
+off-by-one in an intermediate artifact.
+
+**On the process**: findings 1–3 were only reachable by measuring the code. The spec had been
+validated four times and passed every checklist item each time, because a checklist tests whether a
+document is coherent, not whether it is true of the codebase. Worth remembering for the next feature.
+
 ### Blocking status
 
-**Not blocking, and ready to merge.** All checklist items pass. The branch carries two docs-only
-commits against the current `origin/main`, touches no code, and is ready for `/speckit-plan`;
-`/speckit-clarify` is no longer required, as the two open questions are resolved in the spec's
-Resolved Decisions section.
+**Not blocking. Merged, planned, and ready for `/speckit-tasks`.** All checklist items pass. The
+spec merged as PR #47 (`44b9fd1`) and has since been amended in place with the five iteration-5
+corrections above.
 
-One caveat the merge should carry: the baseline figures are a snapshot of a moving target, and
-have now moved three times in ten days. They are dated in the spec for exactly that reason. Re-take
-them at plan time rather than trusting the table; the *ratios* and the argument hold, the absolute
-numbers will be low again by then.
+Both obligations the merge handed to the planning phase are now discharged:
 
-Two items for the planning phase to carry, neither a spec defect:
+- **FR-003 / SC-004a — the per-feature nesting record**: `research.md` §5. Every feature was tested
+  against the independent-lifecycle bar by grepping for external readers of its intermediate state.
+  Verdict: **one** nested unit (the worktree creation form, 22 of 130 variants, nothing outside its
+  own view reads it). Settings clears the same bar but is 7 variants over a flat draft, so it is
+  recorded as deferred with its rationale — which FR-004b explicitly permits.
+- **FR-028 / SC-009 — the migration sequence**: `research.md` §6. Twenty steps, each buildable,
+  runnable and green on its own, each its own commit so SC-009 is verifiable from history. Steps
+  1–16 contain no Tier 3 work, which is how SC-004b gets demonstrated.
 
-- FR-003 requires a per-feature record of nested-unit versus reducer-module, with evidence. That
-  record is a planning artifact and does not exist yet.
-- FR-028 requires an incremental migration sequence. The tier table fixes the coarse ordering; the
-  step-by-step sequence is still to be produced.
+The baseline caveat still stands and should be carried into implementation: the figures have moved
+four times now, most recently between two readings a day apart. `quickstart.md` therefore specifies
+re-measuring at each step rather than trusting any table.
+
+One item for implementation to carry, not a spec defect: SC-003's 500-line proxy can fail while
+FR-005's actual requirement passes. If a file lands at ~600 lines containing exactly one feature,
+raise it for a decision rather than splitting a coherent module to hit the number.
