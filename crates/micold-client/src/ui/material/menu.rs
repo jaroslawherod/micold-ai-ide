@@ -17,29 +17,60 @@ use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
 use crate::ui::material::{menu_panel, IconButton, Text, TypeRole};
-use iced::widget::{button, column, row};
+use iced::widget::{button, column, mouse_area, row};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
-use micold_core::tokens::{density, motion::duration, shape, spacing, Roles};
+use micold_core::tokens::{anatomy, density, motion::duration, shape, spacing, Rgb, Roles};
 
-/// One entry in a menu. Generic over the message type for reuse.
+/// One entry in a menu — a plain record the caller fills in, generic over the message type.
+///
+/// Everything past the first three fields is here because the **project switcher's rows are these
+/// rows** (FR-029b). Its list used to be a hand-built copy of [`item_column`] one module over, and
+/// what that cost is BUG-003: §7.5's 48dp item height was applied to this file and the copy stayed
+/// at 36, so two panels hanging off the same app bar shipped 12dp apart. A marker, a count, a badge
+/// and a right-press are four fields; they are not a second implementation.
 pub struct MenuItem<M> {
-    /// Optional leading icon.
+    /// Optional leading icon, drawn at [`anatomy::menu::ITEM_ICON`].
     pub icon: Option<Icon>,
+    /// Tint for the leading icon. `None` takes the panel's `on_surface`; the switcher's active
+    /// marker states its own (FR-006 of feature 008).
+    pub icon_tint: Option<Rgb>,
     /// The item label.
     pub label: String,
-    /// Message emitted when the item is activated.
-    pub message: M,
+    /// Message emitted when the item is activated. `None` shows the item without making it
+    /// pressable — an unavailable project is listed precisely so it can be seen and forgotten.
+    pub message: Option<M>,
+    /// Trailing supporting text, muted (the switcher's running-session count).
+    pub trailing_text: Option<String>,
+    /// Trailing badge glyph and its tint (the switcher's unavailable marker).
+    pub trailing_icon: Option<(Icon, Rgb)>,
+    /// Message emitted on right-press, opening the item's own context menu (feature 015).
+    pub on_context: Option<M>,
 }
 
 impl<M> MenuItem<M> {
-    /// A labeled item with a leading icon.
+    /// A labeled item with a leading icon — the common case, and every field a menu itself uses.
     pub fn new(icon: Icon, label: impl Into<String>, message: M) -> Self {
+        Self::labeled(label, message).icon(icon)
+    }
+
+    /// A labeled item with no leading icon (the terminal's copy/paste menu).
+    pub fn labeled(label: impl Into<String>, message: M) -> Self {
         Self {
-            icon: Some(icon),
+            icon: None,
+            icon_tint: None,
             label: label.into(),
-            message,
+            message: Some(message),
+            trailing_text: None,
+            trailing_icon: None,
+            on_context: None,
         }
+    }
+
+    /// Give the item a leading icon.
+    pub fn icon(mut self, icon: Icon) -> Self {
+        self.icon = Some(icon);
+        self
     }
 }
 
@@ -57,27 +88,36 @@ impl<M> MenuItem<M> {
 /// wrapping was a latent bug, not something this change introduced — `tests/layout_snapshot.rs` is
 /// what surfaced it, and is what will surface the next label that outgrows the panel.
 const PANEL_WIDTH: f32 = 240.0;
-/// Vertical offset so the panel clears the toolbar (approx. toolbar height).
-const TOP_OFFSET: f32 = 52.0;
 /// The width of the right-click context-menu panel (narrower than the toolbar dropdown).
 const CONTEXT_MENU_WIDTH: f32 = 160.0;
+
+/// §7.5's panel padding, as a menu wants it: 8dp above the first item and below the last, and
+/// nothing at either side, so an item's state layer runs the full width of the panel.
+pub(super) fn panel_padding() -> iced::Padding {
+    iced::Padding {
+        top: anatomy::menu::VERTICAL_PADDING,
+        bottom: anatomy::menu::VERTICAL_PADDING,
+        left: 0.0,
+        right: 0.0,
+    }
+}
 
 /// The approximate rendered size of a [`MenuOverlay`] panel holding `items` entries, as
 /// `(width, height)` in pixels — the input to anchor clamping so a cursor-anchored menu cannot
 /// open off-screen (feature 015).
 ///
-/// Derived from the same tokens the panel is built from: the panel's own [`spacing::XS`] padding
-/// on both sides, [`density::MENU_ITEM_BASE`] per item, and [`spacing::XS`] between items.
+/// Derived from the same tokens the panel is built from: [`anatomy::menu::VERTICAL_PADDING`] above
+/// the first item and below the last, and [`density::MENU_ITEM_BASE`] per item. Nothing between
+/// them — §7.5 gives an item a height and a divider, and gives the space between two items nothing.
 ///
-/// The item height is now read from the token rather than rebuilt from padding plus a line box.
-/// While §7.5's 48dp went unapplied this estimate reproduced the *actual* 36dp by restating the
-/// arithmetic that produced it, so it stayed right by tracking the defect — and would have gone
-/// wrong the moment the height was fixed. One number, in one place, is what stops that: the panel
-/// and its clamping estimate cannot now disagree about how tall an item is.
+/// Every figure is read rather than rebuilt. While §7.5's 48dp went unapplied this estimate
+/// reproduced the *actual* 36dp by restating the arithmetic that produced it, so it stayed right by
+/// tracking the defect — and would have gone wrong the moment the height was fixed.
+/// `menu_anatomy::the_clamping_estimate_matches_the_panel_it_estimates` is what now holds the two
+/// together, rather than the care of whoever edits one of them.
 pub fn menu_panel_size(items: usize) -> (u16, u16) {
     let item = density::MENU_ITEM_BASE as u16;
-    let gaps = (items.saturating_sub(1)) as u16 * spacing::XS as u16;
-    let height = spacing::XS as u16 * 2 + items as u16 * item + gaps;
+    let height = anatomy::menu::VERTICAL_PADDING as u16 * 2 + items as u16 * item;
     (PANEL_WIDTH as u16, height)
 }
 
@@ -89,41 +129,61 @@ pub fn menu_panel_size(items: usize) -> (u16, u16) {
 /// Measuring the column directly is the difference between asserting §7.5's figure and asserting
 /// arithmetic about it. Same reason `terminal_pane::scrollbar_metrics` is reachable from tests.
 pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) -> Element<'a, M> {
-    let mut list = column![].spacing(spacing::XS).width(Length::Fill);
+    // No `spacing`: §7.5 gives an item a height and a divider, and gives the gap between two items
+    // nothing, because there is none. The 4dp that used to sit here read as a loose panel while
+    // items were 36dp and became 20dp of dead space per five items once they were 48.
+    let mut list = column![].width(Length::Fill);
     for item in items {
         let mut content = row![].spacing(spacing::SM).align_y(Alignment::Center);
         if let Some(glyph) = item.icon {
-            content = content.push(icon(glyph, TypeRole::Action.size(), r.on_surface));
+            // §7.5's 24dp, not the label's size. The glyph used to be `TypeRole::Action.size()` —
+            // 14dp — so it took its size from the text beside it rather than from the row that
+            // states one, and `anatomy::menu::ITEM_ICON` was read by nothing.
+            content = content.push(icon(
+                glyph,
+                anatomy::menu::ITEM_ICON,
+                item.icon_tint.unwrap_or(r.on_surface),
+            ));
         }
         // A menu item is something you press, so its label is `Action` — Material's `label_large`,
-        // the same 14dp at medium weight. It used to state a size and get the default weight.
-        content = content.push(Text::new(item.label, TypeRole::Action, r));
+        // the same 14dp at medium weight. It fills, so trailing content sits at the trailing edge
+        // and the item's two 12dp ends are the same 12dp.
+        content = content.push(Text::new(item.label, TypeRole::Action, r).width(Length::Fill));
+        if let Some(text) = item.trailing_text {
+            content = content.push(Text::new(text, TypeRole::Label, r).muted());
+        }
+        if let Some((glyph, tint)) = item.trailing_icon {
+            content = content.push(icon(glyph, TypeRole::Label.size(), tint));
+        }
         // Menu items are buttons built here rather than through `material::Button`, so the ripple
         // is composed explicitly — FR-024c wants every interactive surface to ripple, and "it is
         // not a `Button` type" is not a reason a user would accept for one row not responding.
-        // §7.5's 48dp item, which the contract has always stated and this stack never applied —
-        // items were `spacing::SM` padding around one `label_large` line, landing at 36dp.
-        // `density::MENU_ITEM_BASE` existed for this and was used only by `typeahead.rs`.
         //
-        // The row already states `align_y(Center)`, and here that is enough: `button` stretches its
-        // content node to the fixed height, so the row *is* 48dp tall and centres its children
-        // inside it. That is the difference from BUG-002's app bar, where the container imposing
-        // the height was the one that had to say so.
-        list = list.push(super::Ripple::new(
-            button(content)
-                .width(Length::Fill)
-                .height(Length::Fixed(density::MENU_ITEM_BASE))
-                .padding(iced::Padding {
-                    top: 0.0,
-                    bottom: 0.0,
-                    left: spacing::SM,
-                    right: spacing::SM,
-                })
-                .style(style::text_button(r))
-                .on_press(item.message),
-            r.on_surface,
-            shape::FULL,
-        ));
+        // §7.5's 48dp height with §7.5's 12dp ends. The row already states `align_y(Center)`, and
+        // here that is enough: `button` stretches its content node to the fixed height, so the row
+        // *is* 48dp tall and centres its children inside it. That is the difference from BUG-002's
+        // app bar, where the container imposing the height was the one that had to say so.
+        let mut pressable = button(content)
+            .width(Length::Fill)
+            .height(Length::Fixed(density::MENU_ITEM_BASE))
+            .padding(iced::Padding {
+                top: 0.0,
+                bottom: 0.0,
+                left: anatomy::menu::ITEM_PADDING,
+                right: anatomy::menu::ITEM_PADDING,
+            })
+            .style(style::text_button(r));
+        // An item with no message is shown and not pressable — `on_press` is what makes a `button`
+        // interactive, so withholding it is the whole of "listed but not selectable".
+        if let Some(message) = item.message {
+            pressable = pressable.on_press(message);
+        }
+        let entry = super::Ripple::new(pressable, r.on_surface, shape::FULL);
+        let entry: Element<'a, M> = match item.on_context {
+            Some(message) => mouse_area(entry).on_right_press(message).into(),
+            None => entry.into(),
+        };
+        list = list.push(entry);
     }
     list.into()
 }
@@ -220,7 +280,13 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
         // Fade the panel box itself (scrim of its own surface colour). Where it lands is the
         // overlay's business; how wide and how padded it is, is this module's.
         let panel = super::fade(
-            menu_panel(item_column(items, r), Length::Fixed(PANEL_WIDTH), r, true),
+            menu_panel(
+                item_column(items, r),
+                Length::Fixed(PANEL_WIDTH),
+                r,
+                true,
+                panel_padding(),
+            ),
             open,
             FADE,
             super::SurfaceKind::Menu.tone(r),
@@ -233,10 +299,14 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
 
         let (layer, anchor) = match anchor {
             Some(point) => (Layer::ContextMenu, Anchor::Point(point)),
+            // Read, not restated: the bar's own height plus its divider (FR-029a). This was
+            // `TOP_OFFSET = 52.0 // approx. toolbar height`, written against a content-sized bar in
+            // feature 005 and left alone when §7.1 pinned the bar at 64 — so the panel opened 13dp
+            // inside the bar it hangs from, over the trigger it was opened from (BUG-003).
             None => (
                 Layer::Popover,
                 Anchor::TopEnd {
-                    top: TOP_OFFSET,
+                    top: anatomy::app_bar::BOTTOM_EDGE,
                     end: spacing::SM,
                 },
             ),
@@ -293,6 +363,7 @@ impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Surface<'a, M> {
             Length::Fixed(CONTEXT_MENU_WIDTH),
             r,
             true,
+            panel_padding(),
         );
         Surface::new(
             Layer::ContextMenu,

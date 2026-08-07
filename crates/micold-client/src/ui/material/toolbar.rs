@@ -104,11 +104,18 @@ impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
         if elevated {
             return bar.into();
         }
-        let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
-            .style(move |_theme: &iced::Theme| iced::widget::container::Style {
-                background: Some(Background::Color(style::separator(t.roles))),
-                ..Default::default()
-            });
+        // The hairline is §7.1's, and `anatomy::app_bar::BOTTOM_EDGE` is the bar plus this — the
+        // number every surface anchored below the bar now reads (FR-029a). Drawn from the constant
+        // so the two cannot drift apart.
+        let separator = container(
+            Space::new()
+                .width(Length::Fill)
+                .height(Length::Fixed(anatomy::app_bar::DIVIDER)),
+        )
+        .style(move |_theme: &iced::Theme| iced::widget::container::Style {
+            background: Some(Background::Color(style::separator(t.roles))),
+            ..Default::default()
+        });
 
         column![bar, separator].into()
     }

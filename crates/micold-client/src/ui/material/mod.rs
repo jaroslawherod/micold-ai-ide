@@ -37,6 +37,11 @@ mod form_field_anatomy;
 pub mod glyph;
 mod icon_button;
 mod menu;
+/// §7.5's *spatial* figures — the item's inset, the panel's padding, the leading glyph, and what
+/// sits between two items. `anatomy_size` reads sizes; these are positions, and nothing read them
+/// (BUG-003).
+#[cfg(test)]
+mod menu_anatomy;
 mod modal;
 mod navigation_drawer;
 mod progress;
@@ -194,14 +199,21 @@ impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
 /// every popover call site. `bordered` drops the outline for panels that already read as
 /// distinct without one (the filter accordion sits inline in the sidebar rather than floating,
 /// so its own outline would be redundant next to the sidebar's edge).
+///
+/// `padding` is stated by the caller rather than fixed here, because the panels this serves do not
+/// agree about it and pretending they do is how §7.5's 8dp went unapplied. A **menu** panel pads 8dp
+/// above its first item and below its last and nothing at either side — its items run edge to edge,
+/// which is what makes a full-width state layer possible. The filter accordion holds arbitrary
+/// content and pads it on all four sides. One number could satisfy either, not both.
 pub fn menu_panel<'a, M: 'a>(
     content: impl Into<Element<'a, M>>,
     width: impl Into<iced::Length>,
     roles: Roles,
     bordered: bool,
+    padding: impl Into<iced::Padding>,
 ) -> Element<'a, M> {
     container(content)
-        .padding(spacing::XS)
+        .padding(padding)
         .width(width)
         .style(move |theme: &iced::Theme| {
             let mut panel_style = style::menu_surface(roles)(theme);

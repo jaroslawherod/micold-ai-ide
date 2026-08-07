@@ -38,6 +38,14 @@ fn the_app_bar_is_the_small_variant() {
          supplies the rest of the gap"
     );
     assert_eq!(anatomy::app_bar::ICON_TARGET, 48.0);
+    assert_eq!(anatomy::app_bar::DIVIDER, 1.0);
+    assert_eq!(
+        anatomy::app_bar::BOTTOM_EDGE,
+        65.0,
+        "the bar plus its divider — what a panel anchored below the bar has to clear (FR-029a). \
+         Stated as a constant so no component has to add the two up by eye, which is what BUG-003 \
+         was: two components that each guessed 52"
+    );
 }
 
 // -------------------------------------------------------------------------------------------

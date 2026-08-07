@@ -29,6 +29,16 @@ const PROJECT: &str = "/fixture/project";
 /// container → bar row → leading child.
 const TOOLBAR_TITLE: &[usize] = &[0, 0, 0, 0, 0, 0];
 
+/// The app bar itself — §7.1's 64dp box, one level above the row that holds the title and the
+/// actions, and one below the column that adds its divider. It is the band BUG-003's panels were
+/// drawn across, so `gates/panel_placement.rs` is about this node and the states that open a panel
+/// name it (T100).
+const APP_BAR: &[usize] = &[0, 0, 0, 0];
+/// The overflow (⋮) trigger, trailing action of the bar. The panel that clipped it opens from here.
+const APP_BAR_OVERFLOW_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 3];
+/// The project-switcher trigger, immediately left of it (feature 008, FR-004).
+const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 2];
+
 /// The terminal's bottom status bar, and the mode toggle that anchors its trailing edge — the two
 /// nodes BUG-002 moved. Filled in from the recorded tree rather than derived by reading the view,
 /// the way `sidebar.row.label` above was; an anchor that does not resolve fails by name
@@ -440,6 +450,64 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "terminal.bottom_bar.mode_toggle",
                     path: TERMINAL_MODE_TOGGLE,
+                },
+            ],
+        },
+        // --- BUG-003's two panels (T100) --------------------------------------------------------
+        //
+        // Neither had a covered state, which is why nothing named the panel that opens over the app
+        // bar. The *geometry* was not absent — a closed `MenuOverlay` still yields a surface, so the
+        // overflow panel is laid out at `1032, 52, 240 × 264` in nearly every state already, and the
+        // fixture has recorded it there from the day it landed. What was missing is a state in which
+        // either panel is **open** (an open surface carries a dismissal backdrop, which is a layer of
+        // its own and shifts the panel's path), and any assertion at all about where a panel sits.
+        // The second half is `gates/panel_placement.rs`; this is the first.
+        CoveredState {
+            name: "toolbar-overflow-menu-open",
+            build: || {
+                let mut state = with_project();
+                state.help_menu_open = true;
+                StateUnderTest::new(state)
+            },
+            anchors: &[
+                // The three elements BUG-003 is *between*: the bar, the trigger the panel hangs
+                // from, and the panel. A failure that named only a path would say nothing about
+                // which of them moved.
+                Anchor {
+                    name: "app_bar",
+                    path: APP_BAR,
+                },
+                Anchor {
+                    name: "app_bar.overflow_trigger",
+                    path: APP_BAR_OVERFLOW_TRIGGER,
+                },
+                Anchor {
+                    name: "menu.panel",
+                    path: &[2, 0],
+                },
+            ],
+        },
+        CoveredState {
+            name: "project-switcher-open",
+            build: || {
+                let mut state = with_project();
+                state.project_switcher_open = true;
+                StateUnderTest::new(state)
+            },
+            anchors: &[
+                Anchor {
+                    name: "app_bar",
+                    path: APP_BAR,
+                },
+                Anchor {
+                    name: "app_bar.switcher_trigger",
+                    path: APP_BAR_SWITCHER_TRIGGER,
+                },
+                // Layer 3, not 2: the closed overflow menu is still a surface (layer 1), and an open
+                // surface's dismissal backdrop takes a layer of its own before the panel.
+                Anchor {
+                    name: "switcher.panel",
+                    path: &[3, 0],
                 },
             ],
         },

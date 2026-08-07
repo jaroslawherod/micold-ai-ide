@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use iced::{Element, Length};
 use micold_core::tokens::motion::duration;
-use micold_core::tokens::Roles;
+use micold_core::tokens::{spacing, Roles};
 
 /// How long the panel takes to open or close. Matches the menu fade — both are small panels
 /// answering a press on a toolbar control, and they would read as inconsistent if they differed.
@@ -46,7 +46,11 @@ impl<'a, M: Clone + 'a> Accordion<'a, M> {
 impl<'a, M: Clone + 'a> From<Accordion<'a, M>> for Element<'a, M> {
     fn from(a: Accordion<'a, M>) -> Self {
         super::expand(
-            super::menu_panel(a.content, Length::Shrink, a.roles, false),
+            // `spacing::XS` on all four sides, as before: this panel holds the sidebar's filter
+            // controls rather than a list of menu items, so §7.5's vertical-only padding — which
+            // exists so an item's state layer can run edge to edge — would leave its content flush
+            // against the sides.
+            super::menu_panel(a.content, Length::Shrink, a.roles, false, spacing::XS),
             a.open,
             REVEAL,
         )
