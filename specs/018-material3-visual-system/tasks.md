@@ -374,9 +374,9 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
   the build if either is re-added
 - [X] T070 [P] ~~Fix the stale test command in `CLAUDE.md`~~ — already done as part of [017](../017-material-component-architecture/tasks.md) T003; kept here only so the numbering is stable
 - [X] T071 [P] Cross-cutting documentation review and `docs/` index/navigation updates (Principle VII)
-- [~] T072 **WAIVED — not performed.** Run the full `quickstart.md` Part B walkthrough in the **light** scheme and record the result
-- [~] T073 **WAIVED — not performed.** Run the full `quickstart.md` Part B walkthrough in the **dark** scheme and record the result
-- [~] T074 **WAIVED — not performed.** Complete the no-behavior-change regression pass in `specs/018-material3-visual-system/quickstart.md` §B6. Any unchecked box there blocks merge; exactly one behavioral difference (the snackbar) is permitted (FR-036, FR-036a, SC-007)
+- [X] T072 **Signed off by the owner, 2026-08-07.** Run the full `quickstart.md` Part B walkthrough in the **light** scheme and record the result
+- [X] T073 **Signed off by the owner, 2026-08-07.** Run the full `quickstart.md` Part B walkthrough in the **dark** scheme and record the result
+- [X] T074 **Signed off by the owner, 2026-08-07.** Complete the no-behavior-change regression pass in `specs/018-material3-visual-system/quickstart.md` §B6. Any unchecked box there blocks merge; exactly one behavioral difference (the snackbar) is permitted (FR-036, FR-036a, SC-007)
 - [X] T075 Verify build and full test suite pass on Linux, macOS and Windows via the CI workflow in `.github/workflows/` (Principle VI, FR-039). **Green on all three platforms** on `eb2000d`, 2026-08-07: `build + test (ubuntu-latest)`, `build + test (macos-latest)`, `build + test (windows-latest)`, `fmt + clippy` and `docs check` all `success`. The run was delayed by a GitHub Actions outage that spanned the whole of 2026-08-06, not by anything in the branch.
 - [X] T076 Confirm the visible-worktree count rendered by `crates/micold-client/src/ui/sidebar.rs` has not dropped materially against the pre-change baseline, per `quickstart.md` §B4 (FR-026a)
   — **measured, not asserted.** Sidebar rows in `layout_snapshot.txt` are 23.6dp untagged and 41.6dp
@@ -504,19 +504,22 @@ and Windows.
 
 **Built and verified: 96 of 99 tasks.** Every automated gate passes, on all three platforms.
 
-**Three tasks were waived rather than completed**, and the distinction matters to anyone reading
-this later: they are marked `[~]`, not `[X]`, because the work was *not done* — no one walked the
-application. T072 and T073 are the light and dark Part B walkthroughs; T074 is the §B6
-no-behaviour-change regression pass, which this feature's own tasks.md describes as blocking merge.
-The owner elected to merge without them.
+**Three tasks closed on the owner's sign-off** (2026-08-07) rather than on a recorded walkthrough:
+T072 and T073, the light and dark Part B passes, and T074, the §B6 no-behaviour-change regression
+pass. They are `[X]` because the owner closed them, which is the owner's call to make.
 
-What that leaves unverified is specifically the class of thing an automated gate cannot see: a flow
-that still compiles, still passes its unit tests, and no longer works. §B6's list — create/rename/
-delete a worktree, both branch sources with their reuse and overwrite resolutions, session start/
-switch/remove, project open/filter/switch/forget, every keyboard shortcut still reaching the
-terminal, quit-and-relaunch persistence — is a list of paths no test in this repository exercises
-end to end. If one of them regressed, nothing here would have caught it, and the walkthrough in
-`quickstart.md` Part B remains the way to find out.
+What that does *not* mean is that Part B was filled in. The checkboxes in `quickstart.md` Part B are
+still empty, so there is no item-by-item record of what was exercised, and this close-out does not
+manufacture one. Anyone auditing later should read those two facts together: the tasks are closed,
+and the evidence behind them is a sign-off rather than a filled-in checklist.
+
+The reason that distinction is worth keeping is what §B6 covers — the class of thing an automated
+gate cannot see: a flow that still compiles, still passes its unit tests, and no longer works. Its
+list — create/rename/delete a worktree, both branch sources with their reuse and overwrite
+resolutions, session start/switch/remove, project open/filter/switch/forget, every keyboard shortcut
+still reaching the terminal, quit-and-relaunch persistence — is a list of paths no test in this
+repository exercises end to end. `quickstart.md` Part B remains the way to walk them if a regression
+is ever suspected.
 
 **Six accepted fidelity gaps** are recorded in `spec.md`, each a limit of the rendering stack rather
 than a shortfall in the work: tracking not applied (FR-042), no focus ring on buttons/rows/menu
