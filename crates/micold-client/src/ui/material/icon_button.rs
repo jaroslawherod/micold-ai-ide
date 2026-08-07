@@ -10,7 +10,7 @@ use crate::ui::material::glyph::{icon, icon_colored};
 use crate::ui::material::style;
 use crate::ui::material::text::TypeRole;
 use iced::widget::{button, container};
-use iced::{Element, Length};
+use iced::{Alignment, Element, Length};
 use micold_core::tokens::{anatomy, shape, spacing, Rgb, Roles};
 use std::marker::PhantomData;
 
@@ -149,14 +149,24 @@ impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
         // A centring container rather than padding on the button: padding would grow the *visible*
         // pill along with the target, and §7.3 asks for a large target around a small container,
         // not a large container.
+        //
+        // `align_x`/`align_y` rather than `center_x`/`center_y`, and that is BUG-002 in one line.
+        // `Container::center_x(w)` is `self.width(w).align_x(Center)` — it *sets the length* as well
+        // as aligning. `.width(Fixed(48)).center_x(Fill)` therefore reads as "48dp wide, contents
+        // centred" and means "as wide as there is room for, contents centred": the two calls that
+        // state §7.3's figure were dead, silently overwritten by the two that were meant only to
+        // centre. Every non-compact icon button in the application was `Fill × Fill`, so in any row
+        // holding a `Length::Fill` sibling it took an equal share of the free space and floated its
+        // glyph in the middle of it — which is what pushed the app bar's ⋮ and the terminal bar's
+        // mode toggle off their trailing edges. Aligning without resizing is the whole fix.
         if b.compact {
             return element;
         }
         container(element)
             .width(Length::Fixed(anatomy::button::MIN_TOUCH_TARGET))
             .height(Length::Fixed(anatomy::button::MIN_TOUCH_TARGET))
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center)
             .into()
     }
 }

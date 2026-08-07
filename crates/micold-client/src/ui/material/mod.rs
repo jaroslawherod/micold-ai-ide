@@ -10,6 +10,12 @@
 
 mod accordion;
 mod activity_badge;
+/// Whether a component lays out at the size its anatomy entry states, or grows into whatever room
+/// it is offered. The constants gate reads the numbers, the snapshot records the geometry, and
+/// `content_placement` reads the drawing — none of them asks whether the box is the stated size
+/// (BUG-002).
+#[cfg(test)]
+mod anatomy_size;
 mod animation;
 mod button;
 mod checkbox;
