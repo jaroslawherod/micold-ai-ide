@@ -46,6 +46,8 @@ libc = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 uuid = { workspace = true }
+# `hooks_receiver.rs` builds realistically-shaped hook payloads rather than hand-rolled JSON strings.
+serde_json = { workspace = true }
 # Integration tests drive real PTY sessions and read the interpreted grid directly.
 alacritty_terminal = { workspace = true }
 portable-pty = { workspace = true }

@@ -35,9 +35,35 @@ use micold_core::session::SessionId;
 /// hundred bytes; this is generous but bounds a hostile/looping sender.
 const MAX_HEAD: usize = 8 * 1024;
 
-/// Maximum request-body size accepted (contracts/hooks.md §5). Hook payloads are small JSON objects;
-/// anything larger is rejected with `413` rather than buffered.
-const MAX_BODY: usize = 64 * 1024;
+/// Maximum request-body size accepted (contracts/hooks.md §5). Anything larger is rejected with
+/// `413` rather than buffered.
+///
+/// **This bound is a memory guarantee, not a claim about payload size** (BUG-010). A hook payload is
+/// *not* small: `PostToolUse` embeds the tool's entire input and response, so for `Edit`/`Write` it
+/// carries the edited file's full contents (`tool_response.originalFile`, plus `tool_input`'s
+/// old/new strings or `content`). Its size therefore scales with the user's source tree, not with the
+/// hook envelope. Measured across 3,332 real payloads from this project's own transcripts: largest
+/// 97,087 bytes, next two 68,227 and 67,933 — all of them `specs/**` markdown, which is exactly what
+/// this repository edits most. The 64 KiB that shipped here was chosen from the assumption that hook
+/// payloads are small JSON objects, and rejected every one of those edits with a `413` that surfaced
+/// as an error inside the user's own `claude` session.
+///
+/// 4 MiB is ~43× the measured maximum, so it absorbs both a much larger file and upstream payload
+/// growth, while still bounding what one connection can make the daemon buffer. Only
+/// `hook_event_name` — a few dozen bytes — is ever read out of the body.
+pub const MAX_BODY: usize = 4 * 1024 * 1024;
+
+/// How much of an over-bound body to read and discard before answering `413`, so the peer's write
+/// completes and it can actually read the status line instead of hitting `ECONNRESET` (BUG-010).
+/// Draining is not buffering: bytes are discarded a chunk at a time, so this costs O(chunk) memory
+/// no matter how much arrives. The cap stops a sender that would keep writing forever.
+const MAX_DRAIN: usize = 8 * 1024 * 1024;
+
+/// How long the drain above may wait. A byte cap alone is not enough: a peer that declares a large
+/// `Content-Length` and then sends nothing (without closing its write half) would park the handler
+/// forever. Over loopback a legitimate sender pushes megabytes in milliseconds, so a short deadline
+/// costs a real hook nothing and bounds a stalled one.
+const DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// The shared token registry: session uuid → its per-session bearer secret.
 type Tokens = Arc<Mutex<HashMap<Uuid, String>>>;
@@ -186,12 +212,9 @@ async fn handle_connection(
         return respond(&mut stream, 404, "Not Found").await;
     };
 
-    if head.content_length > MAX_BODY {
-        return respond(&mut stream, 413, "Payload Too Large").await;
-    }
-
-    // 3. Authenticate BEFORE reading the body. A missing/mismatched token is a bare 403 that never
-    //    discloses whether the session exists (contract §3).
+    // 3. Authenticate BEFORE reading the body — and before the size check, so an unauthenticated
+    //    caller cannot distinguish "too large" from "forbidden" (contract §7). A missing/mismatched
+    //    token is a bare 403 that never discloses whether the session exists (contract §3).
     let authorized = {
         let tokens = tokens.lock().expect("hook tokens lock poisoned");
         matches!((tokens.get(&session_uuid), &head.bearer), (Some(expected), Some(got)) if expected == got)
@@ -200,7 +223,15 @@ async fn handle_connection(
         return respond(&mut stream, 403, "Forbidden").await;
     }
 
-    // 4. Read the (bounded) body. The head read may have already pulled some of it in.
+    // 4. Bound the body — after authentication, but still before a byte of it is buffered.
+    if head.content_length > MAX_BODY {
+        // Drain first: closing mid-body costs the peer the response entirely (it sees ECONNRESET on
+        // its remaining write), so it cannot report *why* the hook failed. Discarded, never buffered.
+        drain(&mut stream, buf.len() - head_end).await;
+        return respond(&mut stream, 413, "Payload Too Large").await;
+    }
+
+    // 5. Read the (bounded) body. The head read may have already pulled some of it in.
     let mut body = buf[head_end..].to_vec();
     while body.len() < head.content_length {
         let mut chunk = [0u8; 1024];
@@ -215,7 +246,7 @@ async fn handle_connection(
     }
     body.truncate(head.content_length);
 
-    // 5. Map the hook to an activity transition. The body is NEVER logged (contract §6).
+    // 6. Map the hook to an activity transition. The body is NEVER logged (contract §6).
     let body_str = std::str::from_utf8(&body).unwrap_or("");
     match classify_hook(body_str) {
         HookClass::Event(kind) => {
@@ -228,6 +259,26 @@ async fn handle_connection(
         HookClass::Ignored => respond(&mut stream, 200, "OK").await,
         HookClass::Invalid => respond(&mut stream, 400, "Bad Request").await,
     }
+}
+
+/// Read and discard up to [`MAX_DRAIN`] bytes of a body we are about to refuse, so the peer's write
+/// can complete and it reads our status rather than an `ECONNRESET` (BUG-010). `already` counts the
+/// body bytes the head read pulled in. Best-effort: a read error or a sender that exceeds the cap
+/// just means we answer and close, which is the behaviour this exists to improve on, not a failure.
+/// Bytes are dropped as they arrive — never accumulated, never logged (contract §6). Bounded by both
+/// [`MAX_DRAIN`] bytes and [`DRAIN_TIMEOUT`]; whichever comes first, we stop and answer.
+async fn drain(stream: &mut TcpStream, already: usize) {
+    let mut discarded = already;
+    let mut sink = [0u8; 8 * 1024];
+    let _ = tokio::time::timeout(DRAIN_TIMEOUT, async {
+        while discarded < MAX_DRAIN {
+            match stream.read(&mut sink).await {
+                Ok(0) | Err(_) => return,
+                Ok(n) => discarded += n,
+            }
+        }
+    })
+    .await;
 }
 
 /// Write a minimal HTTP/1.1 response with an empty body and close-after semantics.

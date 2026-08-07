@@ -85,13 +85,24 @@ fn activity(state: &DaemonState, id: SessionId) -> ActivitySignal {
 
 /// POST a hook body to the receiver and return the numeric HTTP status code.
 async fn post_hook(addr: &str, session: Uuid, token: Option<&str>, body: &str) -> u16 {
+    post_hook_declaring(addr, session, token, body.len(), body).await
+}
+
+/// As [`post_hook`], but with `Content-Length` stated independently of the body actually sent — so an
+/// over-bound request can be exercised without pushing megabytes through the socket (BUG-010).
+async fn post_hook_declaring(
+    addr: &str,
+    session: Uuid,
+    token: Option<&str>,
+    content_length: usize,
+    body: &str,
+) -> u16 {
     let mut stream = TcpStream::connect(addr).await.expect("connect");
     let auth = token
         .map(|t| format!("Authorization: Bearer {t}\r\n"))
         .unwrap_or_default();
     let request = format!(
-        "POST /hook/{session} HTTP/1.1\r\nHost: localhost\r\n{auth}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
+        "POST /hook/{session} HTTP/1.1\r\nHost: localhost\r\n{auth}Content-Length: {content_length}\r\nConnection: close\r\n\r\n{body}",
     );
     stream.write_all(request.as_bytes()).await.expect("write");
     stream.flush().await.expect("flush");
@@ -178,6 +189,137 @@ async fn a_wrong_token_is_forbidden_and_changes_nothing() {
     let status = post_hook(&addr, id.0, None, r#"{"hook_event_name":"Stop"}"#).await;
     assert_eq!(status, 403);
     assert_eq!(activity(&state, id), ActivitySignal::Unknown);
+
+    cat.kill().expect("kill");
+}
+
+/// A `PostToolUse`/`PreToolUse` body the size `claude` really sends for an `Edit`: the payload embeds
+/// the tool's whole input *and* response, so it carries the edited file's full contents twice over
+/// (`tool_response.originalFile` plus `tool_input.old_string`/`new_string`). `filler` bytes stand in
+/// for that file. Measured maximum across 3,332 real payloads from this project's own transcripts:
+/// 97,087 bytes (BUG-010).
+fn agent_sized_payload(event: &str, filler: usize) -> String {
+    let file = "x".repeat(filler);
+    serde_json::json!({
+        "session_id": Uuid::from_u128(SESSION_U128).to_string(),
+        "transcript_path": "/home/user/.claude/projects/-home-user-project/session.jsonl",
+        "cwd": "/home/user/project",
+        "permission_mode": "default",
+        "hook_event_name": event,
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": "/home/user/project/specs/tasks.md",
+            "old_string": file,
+            "new_string": file,
+        },
+        "tool_response": { "filePath": "/home/user/project/specs/tasks.md", "originalFile": file },
+    })
+    .to_string()
+}
+
+/// BUG-010 / SC-022 — a payload sized by the agent's own tool I/O is accepted and applied, and the
+/// bound that exists to stop unbounded buffering still refuses a payload past it. Both halves matter:
+/// raising the bound out of reach would satisfy the first and quietly abandon the second.
+#[tokio::test]
+async fn an_agent_sized_payload_is_accepted_and_an_over_bound_one_is_refused() {
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+    let (state, _project, _store) = state_with_session(id);
+    let cat = register_cat(&state, id);
+
+    let (receiver, listener) = HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test"))
+        .await
+        .expect("bind receiver");
+    let token = receiver.token_for(id);
+    let addr = listener.local_addr().unwrap().to_string();
+    let tokens = receiver.tokens();
+    tokio::spawn(micold_daemon::hooks::serve(
+        listener,
+        tokens,
+        Arc::clone(&state),
+    ));
+
+    // The reported symptom: `PostToolUse` after editing a large file. 40 KiB of file contents lands
+    // ~120 KB on the wire, past the 64 KiB bound that shipped and past the measured 97,087 B maximum.
+    let post_tool_use = agent_sized_payload("PostToolUse", 40 * 1024);
+    assert!(
+        post_tool_use.len() > 97_087,
+        "the payload must exceed the measured real-world maximum to be a regression test"
+    );
+    let status = post_hook(&addr, id.0, Some(&token), &post_tool_use).await;
+    assert_eq!(
+        status, 200,
+        "an agent-sized PostToolUse must not be refused"
+    );
+
+    // And an agent-sized payload that *does* carry a transition must still drive the FSM — a lost
+    // `PreToolUse` is signal loss, not just noise (contracts/hooks.md §State machine).
+    assert_eq!(activity(&state, id), ActivitySignal::Unknown);
+    let status = post_hook(
+        &addr,
+        id.0,
+        Some(&token),
+        &agent_sized_payload("PreToolUse", 40 * 1024),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(activity(&state, id), ActivitySignal::Working);
+
+    // The bound is still a bound: a declared length past it is refused before anything is buffered,
+    // and changes nothing.
+    let status = post_hook_declaring(
+        &addr,
+        id.0,
+        Some(&token),
+        micold_daemon::hooks::MAX_BODY + 1,
+        r#"{"hook_event_name":"Stop"}"#,
+    )
+    .await;
+    assert_eq!(
+        status, 413,
+        "a payload past the bound must still be refused"
+    );
+    assert_eq!(
+        activity(&state, id),
+        ActivitySignal::Working,
+        "a refused hook applies no transition (H1 holds under refusal)"
+    );
+
+    cat.kill().expect("kill");
+}
+
+/// BUG-010 — nothing is answered before authentication beyond `403` (contracts/hooks.md §Listener
+/// rule 7). An oversized body from a caller with the wrong token must be indistinguishable from any
+/// other unauthenticated request.
+#[tokio::test]
+async fn an_over_bound_body_from_an_unauthenticated_caller_is_forbidden_not_too_large() {
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+    let (state, _project, _store) = state_with_session(id);
+    let cat = register_cat(&state, id);
+
+    let (receiver, listener) = HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test"))
+        .await
+        .expect("bind receiver");
+    let _real_token = receiver.token_for(id);
+    let addr = listener.local_addr().unwrap().to_string();
+    let tokens = receiver.tokens();
+    tokio::spawn(micold_daemon::hooks::serve(
+        listener,
+        tokens,
+        Arc::clone(&state),
+    ));
+
+    let status = post_hook_declaring(
+        &addr,
+        id.0,
+        Some("not-the-token"),
+        micold_daemon::hooks::MAX_BODY + 1,
+        r#"{"hook_event_name":"Stop"}"#,
+    )
+    .await;
+    assert_eq!(
+        status, 403,
+        "the size check must not answer ahead of the token check"
+    );
 
     cat.kill().expect("kill");
 }
