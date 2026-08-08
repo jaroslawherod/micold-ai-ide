@@ -2103,31 +2103,25 @@ fn active_project_displaced(app: &App) -> bool {
 /// — it blocks every connection and has the most specific action — then a same-contract build
 /// mismatch (US6, FR-022a), then a per-project takeover (US5), then a plain disconnect. Each names
 /// the situation and offers a concrete action.
+/// Resolve this window's connection facts and let the feature decide which one the banner shows.
+///
+/// The precedence lives in `features::connection` so it is testable without a window; what is left
+/// here is the one thing that needs the shell: turning the active project into a displacement.
 fn connection_status(app: &App) -> micold_client::ui::ConnectionStatus {
-    use micold_client::ui::ConnectionStatus;
-    if let Some((client, daemon, daemon_build)) = &app.version_mismatch {
-        return ConnectionStatus::VersionMismatch {
-            client: *client,
-            daemon: *daemon,
-            daemon_build: daemon_build.clone(),
-        };
-    }
-    if let Some((client_build, daemon_build)) = &app.build_mismatch {
-        return ConnectionStatus::BuildMismatch {
-            client_build: client_build.clone(),
-            daemon_build: daemon_build.clone(),
-        };
-    }
-    if let Some(project) = app.core.workspace.active.as_ref() {
-        if let Some(by) = app.displaced.get(project) {
-            return ConnectionStatus::Displaced { by: by.clone() };
-        }
-    }
-    if app.disconnected {
-        ConnectionStatus::Disconnected
-    } else {
-        ConnectionStatus::Connected
-    }
+    let displaced_by = app
+        .core
+        .workspace
+        .active
+        .as_ref()
+        .and_then(|project| app.displaced.get(project))
+        .map(String::as_str);
+
+    micold_client::features::connection::connection_status(
+        app.version_mismatch.as_ref(),
+        app.build_mismatch.as_ref(),
+        displaced_by,
+        app.disconnected,
+    )
 }
 
 fn theme(app: &App) -> iced::Theme {
