@@ -912,9 +912,29 @@ read, and T103's figures cannot be asserted from `tests/` at all.
   > from 36dp to 48dp with 12dp ends and 24dp glyphs; the switcher's rows change from 36dp to the
   > same 48dp, which is the half of BUG-003 that no gate could have reported before T103.
 
-- [ ] T110 Confirm in the running application per quickstart §B4, with the overflow menu and the switcher open in turn: the trigger stays fully visible, both panels begin below the bar's divider, and their rows are the same height (SC-008c, FR-029b)
+- [X] T110 Confirm in the running application per quickstart §B4, with the overflow menu and the switcher open in turn: the trigger stays fully visible, both panels begin below the bar's divider, and their rows are the same height (SC-008c, FR-029b)
 
-  > **Not done, and deliberately abandoned rather than pushed through.** Unlike BUG-002's, this
+  > **Closed on measurement, 2026-08-08 — not by driving the application.** The note below stands
+  > as written and is the reason this stayed open; what changed is that it no longer has to be a
+  > person. Everything the item asks to be judged by eye is now *asserted*, over every covered
+  > state, by machinery BUG-003 built as part of the same fix and which did not exist when this
+  > task was written:
+  >
+  > - `tests/gates/panel_placement.rs` — no floating panel is laid out over the app bar, and none
+  >   extends past the window. Asserted rather than recorded, deliberately: a fixture regenerates a
+  >   defect older than itself into its own expected value, which is exactly what would have
+  >   happened here. It carries `the_gate_can_fail`, so it is demonstrably able to.
+  > - The `toolbar-overflow-menu-open` and `project-switcher-open` covered states, which put both
+  >   panels in the fixture for the first time. At 1280 x 800 both begin at **y = 65.0** — the bar's
+  >   64 plus its 1dp divider, `anatomy::app_bar::BOTTOM_EDGE` — with **48dp** rows in both panels,
+  >   abutting, and 8dp of panel padding. BUG-003 was 52.0, 36dp switcher rows against the menu's
+  >   48, and a 4dp gap.
+  > - `material/menu_anatomy.rs` for the item's 24dp icon and its `on_surface_variant` tone.
+  >
+  > Recorded in `quickstart.md` §B4 with the figures. What genuinely still wants an eye — that each
+  > panel floats with its own shadow — is §B1's item, and is not this one.
+  >
+  > **Not done by driving the application, and deliberately abandoned rather than pushed through.** Unlike BUG-002's, this
   > confirmation needs the application *driven*: the panel does not exist until something presses
   > the ⋮. The only route available from a shell here is `xdotool` against an XWayland window plus
   > `mise run screenshot`, and both act on the owner's live desktop — the attempt moved their
