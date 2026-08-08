@@ -22,7 +22,7 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{keyboard, Element, Event, Length, Point, Rectangle, Size, Vector};
-use micold_core::typeahead::{intent_for, Direction, Intent, Key};
+use micold_core::typeahead::{claims, intent_for, Direction, Intent, Key};
 
 use super::motion::Progress;
 
@@ -375,9 +375,12 @@ impl<M: Clone> Keys<'_, M> {
             Intent::Dismiss => self.on_dismiss.clone(),
         }?;
 
-        let claim = match key {
-            Key::Tab => Claim::PassOn,
-            _ => Claim::Taken,
+        // The rule is `claims`, not a `matches!` here. It was written out in this file and again
+        // in `material::select`, and the two had already come apart (feature 022, T030).
+        let claim = if claims(key) {
+            Claim::Taken
+        } else {
+            Claim::PassOn
         };
         Some((message, claim))
     }

@@ -6,7 +6,7 @@
 //! can reach it, and the widget is left translating events in and applying answers out — the same
 //! line `micold-client`'s `keymap.rs` draws for the terminal.
 
-use micold_core::typeahead::{intent_for, move_highlight, Direction, Intent, Key};
+use micold_core::typeahead::{claims, intent_for, move_highlight, Direction, Intent, Key};
 
 /// The common case: a list of five rows with the third highlighted and available.
 fn mid() -> (Option<usize>, usize, bool) {
@@ -171,4 +171,49 @@ fn tab_closes_the_list_because_focus_is_leaving_the_field() {
         Some(Intent::Dismiss),
         "an open list with no rows still has to close — it is showing the no-match message"
     );
+}
+
+/// The list keeps every key it acts on except Tab (feature 022, T030).
+///
+/// Stated as a table over *every* variant rather than as "Tab is special", so a key added to
+/// [`Key`] has to be given an answer here before this passes — the alternative is a new key
+/// silently inheriting whichever branch the `matches!` happened to fall into.
+#[test]
+fn the_list_claims_every_key_it_acts_on_except_tab() {
+    for (key, claimed) in [
+        (Key::Down, true),
+        (Key::Up, true),
+        (Key::Enter, true),
+        (Key::Escape, true),
+        (Key::Tab, false),
+        (Key::Other, true),
+    ] {
+        assert_eq!(
+            claims(key),
+            claimed,
+            "{key:?} is claimed={} against the expected {claimed}",
+            claims(key),
+        );
+    }
+}
+
+/// Tab is the exception *because* of what it does, and the pairing is the whole rule: it dismisses
+/// like Escape, and it travels on unlike Escape.
+///
+/// Asserted together because either half alone is satisfiable by a control that gets the other
+/// wrong — one that never dismissed on Tab would leave a list claiming Enter from whatever was
+/// tabbed to, and one that claimed it would leave a developer unable to tab past the picker.
+#[test]
+fn tab_dismisses_and_still_travels_on() {
+    assert_eq!(
+        intent_for(Key::Tab, Some(0), 3, true),
+        Some(Intent::Dismiss)
+    );
+    assert!(!claims(Key::Tab));
+
+    assert_eq!(
+        intent_for(Key::Escape, Some(0), 3, true),
+        Some(Intent::Dismiss)
+    );
+    assert!(claims(Key::Escape));
 }

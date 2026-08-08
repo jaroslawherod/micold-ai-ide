@@ -590,3 +590,25 @@ pub fn intent_for(
         Key::Other => None,
     }
 }
+
+/// Whether an open list **claims** `key`, or only acts on one that is on its way past.
+///
+/// The companion to [`intent_for`], and only meaningful for a key that has one: this answers what
+/// happens to the *event* once the list has decided what the key means.
+///
+/// Claiming is what stops a key doing two things at once — Enter taking a row must not also submit
+/// the dialog behind the list, and Escape closing the list must not also close the dialog. Tab is
+/// the single exception, and it is an exception on purpose: what Tab is *doing* is moving focus
+/// out, so the list dismisses and lets it through. Swallowing it would leave a developer unable to
+/// tab past the picker at all.
+///
+/// **Here rather than in either widget, because both controls need it and they answer keys by two
+/// different routes** (feature 022, T030 — FR-024, SC-008). The search picker's openness is its
+/// caller's, so `cdk::picker` publishes a message and reports the claim to the runtime; the
+/// select's is its own, so it acts in its own `update` and reports the claim itself. Each had
+/// written this rule out, and they had already come apart: the select applied the Tab exception
+/// and then never captured anything at all, so Escape closed its list *and* the dialog behind it.
+/// One `matches!` in two places is exactly enough room for that.
+pub fn claims(key: Key) -> bool {
+    !matches!(key, Key::Tab)
+}
