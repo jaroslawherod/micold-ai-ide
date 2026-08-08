@@ -4,7 +4,7 @@
 //! overlay (see [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
 
 use crate::app::{help_actions, Message, State};
-use crate::icons::{icon_role, Icon, IconSurface};
+use crate::icons::Icon;
 use crate::ui::material::{Button, MenuItem, MenuTrigger, Toolbar};
 use iced::Element;
 use micold_core::metadata::AppMetadata;
@@ -72,7 +72,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .map(|p| p.display_name.clone())
         .unwrap_or_else(|| "Select project".to_string());
     let switcher = Button::text(switcher_label, r)
-        .leading(Icon::OpenProject, icon_role(IconSurface::AccentButton, r))
+        .leading(Icon::OpenProject)
         .on_press(Message::ProjectSwitcherToggled);
     let menu = MenuTrigger::new(Icon::Menu, Message::HelpMenuToggled, r);
     Toolbar::new(meta.name, r)

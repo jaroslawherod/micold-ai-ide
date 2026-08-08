@@ -79,7 +79,7 @@ pub struct Button<'a, M> {
     on_press: Option<M>,
     padding: Option<Padding>,
     width: Option<Length>,
-    leading: Option<(Icon, Rgb)>,
+    leading: Option<(Icon, Option<Rgb>)>,
 }
 
 impl<'a, M: Clone + 'a> Button<'a, M> {
@@ -159,11 +159,30 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
     /// BUG-003's T103 found. §7.3 gives a leading icon 18dp: smaller than an icon button's 24,
     /// because it is an accent to a label rather than the whole content.
     ///
-    /// `tint` is explicit rather than taken from the variant: the two call sites pass an
-    /// [`IconSurface`](crate::icons::IconSurface) role, and inferring it here would change what they
-    /// draw today.
-    pub fn leading(mut self, glyph: Icon, tint: Rgb) -> Self {
-        self.leading = Some((glyph, tint));
+    /// The tint comes from the **variant**, like the label's does — `on_primary` on a filled
+    /// button, the accent on an outlined or text one. A leading icon is part of a button's content,
+    /// and content is one colour.
+    ///
+    /// It used to be a required argument, on the reasoning that "inferring it here would change what
+    /// they draw today". It would have, and that was the defect: three outlined buttons passed
+    /// `on_surface` beside a label the variant draws in `primary`, so each was one control in two
+    /// colours. No geometry gate could see it — the glyph was 18dp, in the leading slot, in the
+    /// wrong tone — and it was found by looking at the running application (018's BUG-007, T139).
+    ///
+    /// For the rare glyph whose colour *means* something on its own, use
+    /// [`leading_tinted`](Self::leading_tinted).
+    pub fn leading(mut self, glyph: Icon) -> Self {
+        self.leading = Some((glyph, None));
+        self
+    }
+
+    /// A leading icon in a stated tint, for a glyph carrying its own meaning — the destructive
+    /// `error` red on "Forget", which is saying something the label's accent does not.
+    ///
+    /// Deliberately the longer name: an override should read as one at the call site, so that the
+    /// ordinary case cannot be written by accident.
+    pub fn leading_tinted(mut self, glyph: Icon, tint: Rgb) -> Self {
+        self.leading = Some((glyph, Some(tint)));
         self
     }
 }
@@ -188,6 +207,9 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         // component's business — see [`Button::leading`].
         let inner: Element<'a, M> = match b.leading {
             Some((glyph, tint)) => {
+                // The variant's own content colour unless the call site meant something by the
+                // glyph's tone — one control, one colour, by default.
+                let tint = tint.unwrap_or_else(|| b.variant.content(b.roles));
                 row![icon(glyph, anatomy::button::LEADING_ICON, tint), b.content]
                     .spacing(spacing::XS)
                     .align_y(Alignment::Center)
