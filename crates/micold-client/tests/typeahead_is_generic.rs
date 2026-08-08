@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 /// The two halves of the component.
 fn component_sources() -> Vec<(String, String)> {
-    ["src/ui/cdk/typeahead.rs", "src/ui/material/typeahead.rs"]
+    ["src/ui/cdk/picker.rs", "src/ui/material/typeahead.rs"]
         .iter()
         .map(|rel| {
             let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);

@@ -16,4 +16,4 @@
 pub mod motion;
 pub mod overlay;
 pub mod ripple;
-pub mod typeahead;
+pub mod picker;

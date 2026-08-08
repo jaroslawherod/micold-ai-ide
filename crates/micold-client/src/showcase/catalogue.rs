@@ -716,12 +716,13 @@ pub const EXEMPTIONS: &[Exemption] = &[
                  section poses.",
     },
     Exemption {
-        module: "cdk/typeahead.rs",
-        component: "Typeahead",
+        module: "cdk/picker.rs",
+        component: "Picker",
         reason: "a behaviour-layer wrapper, for the same reason as the two above: it anchors a \
-                 result list to a field's own bounds, applies the keyboard rule and decides when \
-                 the list closes, and names no colour, size or spacing. Its field and its list \
-                 arrive already drawn — what they look like is `material/typeahead.rs`, which the \
-                 controls section poses.",
+                 list to a field's own bounds, applies the keyboard rule, decides when the list \
+                 closes and how long it stays while leaving, and names no colour, size or spacing. \
+                 Its field and its list arrive already drawn — what they look like is \
+                 `material/picker.rs`, which the controls section poses through both of the \
+                 controls built on it.",
     },
 ];
