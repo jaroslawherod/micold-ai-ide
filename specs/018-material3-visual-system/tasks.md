@@ -1047,7 +1047,21 @@ item's content centred in it", and every menu label sat 8.4dp high of centre. Se
 
 - [X] T119 Regenerate the fixture. It had recorded `78.6` as the expected label position from the day the state was covered — the third time in four bugs that a snapshot has held a defect as its baseline (feature 019 FR-003)
 
-- [ ] T120 Extend `content_placement.rs` to the menu item. BUG-004 was catchable in geometry because the label's node is not stretched, but SC-008a exists for the case where it is, and the component this bug was in is still absent from the check built for its class (SC-008a)
+- [X] T120 Extend `content_placement.rs` to the menu item. BUG-004 was catchable in geometry because the label's node is not stretched, but SC-008a exists for the case where it is, and the component this bug was in is still absent from the check built for its class (SC-008a)
+
+  > `a_menu_items_label_is_centred_within_its_row`. Added *after* the fix, so it was confirmed the
+  > only way that means anything: reverting `height(Fill)` in `menu.rs` makes it fail — ink 0.0dp
+  > below the reference where centring is 14.0dp — and restoring it makes it pass. A check written
+  > after a fix and never seen red is a check nobody has tested.
+  >
+  > Built without a leading icon on purpose: the glyph's line box is 31.2dp against the label's
+  > 20dp, and `ink_rows` returns the union of everything inked, so an item holding both would
+  > measure the glyph's band rather than the label's.
+  >
+  > It overlaps `menu_anatomy`'s geometric assertion deliberately. BUG-004 *was* catchable in the
+  > layout tree because the label's node is not stretched — but the chip's was too, until a `Fixed`
+  > height turned its label's bounds into the pill's and every band the geometry could measure into
+  > 0dp. The rasterising check is the one that survives that change.
 
 ## Phase 17: BUG-005 — a tree row had no height, and the row that did was the wrong one
 

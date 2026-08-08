@@ -231,6 +231,56 @@ fn a_toggle_chips_label_is_centred_within_the_pill() {
     );
 }
 
+/// §7.5: a menu item's label is centred within its 48dp row (BUG-004, T120).
+///
+/// The component this module was built for and did not cover. BUG-001 established the class — a
+/// height fixed above its content, with nothing stating where the content goes — and the menu item
+/// has been exactly that since §7.5's 48dp landed, while this file watched the chip, the app bar and
+/// the button. BUG-004 is what the omission cost: three commits asserted the item's height, its
+/// ends, its glyph and its tone, and none asked where its label sat inside the height. It sat 8.4dp
+/// high of centre until an owner looked at the running application.
+///
+/// **Built without a leading icon on purpose.** The glyph's line box is 31.2dp against the label's
+/// 20dp, so an item holding both inks a taller band than either — `ink_rows` returns the union, and
+/// the measurement would follow the glyph rather than the label. One label, one band, one figure.
+///
+/// Unlike the chip, this one *is* visible in the layout tree (the label's node is not stretched, so
+/// BUG-004 was catchable in geometry and `menu_anatomy` now catches it there). It is here anyway,
+/// because the geometric assertion holds only while the node stays unstretched — the chip's did too,
+/// until a `Fixed` height turned its label's bounds into the pill's bounds and every band it could
+/// measure into 0dp.
+#[test]
+fn a_menu_items_label_is_centred_within_its_row() {
+    let r = roles();
+    // The menu surface as the backdrop: an item's resting style is a text button, which paints no
+    // container of its own, so the only ink over this is the label.
+    let backdrop = style::color(r.surface_container);
+    let on = style::color(r.on_surface);
+
+    let item = super::menu::item_column(vec![super::MenuItem::labeled(LABEL, Message::NoOp)], r);
+    let ink = ink_of(item, Size::new(400.0, 400.0), backdrop, on, None);
+    let reference = reference_ink(TypeRole::Action, backdrop, on);
+    let (first, last, height) = ink;
+    let (ref_first, ref_last, ref_height) = reference;
+
+    assert_eq!(
+        height,
+        micold_core::tokens::density::MENU_ITEM_BASE as u32,
+        "the menu item did not resolve at §7.5's height, so this is measuring the wrong thing"
+    );
+
+    let ((top_shift, bottom_shift), expected) = shift_against_centred(ink, reference);
+
+    assert!(
+        (top_shift - expected).abs() < TOLERANCE && (bottom_shift - expected).abs() < TOLERANCE,
+        "a menu item's label is not centred in its row: its ink sits {top_shift:.1}dp below where \
+         the same label sits at the top of a {ref_height}dp line box, and centring it in a \
+         {height}dp item would put it {expected:.1}dp below. Ink rows {first}–{last} of {height}; \
+         reference {ref_first}–{ref_last} of {ref_height}. §7.5 states 48dp \"with the item's \
+         content centred in it\" (FR-030a)",
+    );
+}
+
 /// The gate can fail. A centring assertion that cannot tell a top-aligned label from a centred one
 /// is decoration, so this rebuilds the arrangement the chip had while BUG-001 was open — fixed
 /// height, zero vertical padding, no alignment — and measures it the same way.
