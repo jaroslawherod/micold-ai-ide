@@ -1,0 +1,14 @@
+# Pin one toolchain for both entry points into this repo.
+#
+# `mise run <task>` uses the toolchain from mise.toml (`rust = "stable"`), while
+# a bare `cargo` uses whatever rustup has as its default. Those were different
+# builds here (1.97.1 vs 1.97.0), and because cargo fingerprints include the
+# compiler version, alternating between them invalidated the other's artifacts
+# and rebuilt every dependency.
+#
+# That was survivable while each worktree had its own target dir. With the
+# shared target dir in scripts/build-lock.sh it is not: one alternation would
+# invalidate the artifacts of every worktree at once. Pinning keeps both entry
+# points on the same toolchain.
+[toolchain]
+channel = "stable"
