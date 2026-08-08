@@ -5,10 +5,7 @@
 //! values come from `src/tokens.rs` (contracts/design-tokens.md).
 
 use crate::app::NoticeLevel;
-use iced::overlay::menu;
-use iced::widget::{
-    button, checkbox as checkbox_widget, container, pick_list, scrollable, text, text_input,
-};
+use iced::widget::{button, checkbox as checkbox_widget, container, scrollable, text, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, anatomy, elevation, shape, state, Rgb, Roles};
@@ -228,62 +225,24 @@ pub fn menu_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
     elevated(r, elevation::MENU, shape::EXTRA_SMALL)
 }
 
-/// The closed field of a `pick_list`-backed `Select` (feature 013): an outlined box matching
-/// [`input`]'s look, with the outline switching to `primary` while hovered or open.
-pub fn select_field(r: Roles) -> impl Fn(&Theme, pick_list::Status) -> pick_list::Style {
-    move |_theme, status| pick_list::Style {
-        text_color: color(r.on_surface),
-        placeholder_color: color(r.on_surface_variant),
-        handle_color: color(r.on_surface_variant),
-        // No chrome of its own, exactly as [`field_input`]: the container and the active indicator
-        // belong to `FormField`, and a select that kept its own box would draw a second outline
-        // inside the filled container (FR-031c).
-        //
-        // Its open state used to be a 3dp `secondary` border. That affordance is gone with the
-        // border — §7.7 gives a filled field a bottom indicator instead, and `FormField` draws it.
-        //
-        // But the indicator cannot answer for this control: `pick_list` reports `Opened` here and
-        // to no parent, so `Select::active` has to be supplied by a caller that tracks openness,
-        // and none does (FR-043a, accepted gap #3). Deleting the border and stopping there left
-        // opening the list with *no* feedback at all, which is worse than the affordance it
-        // replaced.
-        //
-        // So the state layer answers instead, which is what §5 asks of every interactive surface
-        // anyway (FR-021): the content colour over the container at the state's opacity. It needs
-        // no parent to know anything, and it composes with the indicator rather than standing in
-        // for it.
-        background: Background::Color(match status {
-            pick_list::Status::Opened { .. } => state_fill(color(r.on_surface), state::PRESSED),
-            pick_list::Status::Hovered => state_fill(color(r.on_surface), state::HOVER),
-            pick_list::Status::Active => Color::TRANSPARENT,
-        }),
-        border: Border {
-            color: Color::TRANSPARENT,
-            width: 0.0,
-            radius: 0.0.into(),
-        },
-    }
-}
-
-/// The dropdown list of a `pick_list`-backed `Select` (feature 013): the same look as
-/// [`menu_surface`], with the current selection tinted `primary` (pick_list highlights it on
-/// open the same way it highlights hover, so this doubles as the "reopen shows the current
-/// selection" treatment, FR-003).
-pub fn select_menu(r: Roles) -> impl Fn(&Theme) -> menu::Style {
-    move |_theme| menu::Style {
-        background: Background::Color(color(r.surface)),
-        border: Border {
-            color: alpha(color(r.outline), 0.4),
-            width: 1.0,
-            radius: shape::EXTRA_SMALL.into(),
-        },
-        text_color: color(r.on_surface),
-        selected_text_color: color(r.on_primary),
-        selected_background: Background::Color(color(r.primary)),
-        // New in 0.14; the default zero shadow keeps the flat 0.13 look.
-        shadow: iced::Shadow::default(),
-    }
-}
+// `select_field` and `select_menu` were here, and are gone with the widget they were typed in
+// (feature 022, contract §5).
+//
+// Both were written against `pick_list`'s own types — `pick_list::Status` and `menu::Style` — so
+// neither could survive the widget leaving. Neither had to: the *look* they encoded is still wanted
+// and is now assembled from what the library already had, which is the whole of Principle VIII's
+// argument for the change.
+//
+// - `select_field`'s state layer is `state_fill(on_surface, …)` at the pressed or hover opacity,
+//   resolved by `material::select` itself. It reads the same two states — the difference is that
+//   the component now *knows* which it is in, where the closure knew and could tell nobody
+//   (FR-043a, accepted fidelity gap #3, closed).
+// - `select_field`'s text colours belong to the `Text` and the `Glyph` the trigger is built from,
+//   and its deliberately absent border to `field_container`, which already draws none.
+// - `select_menu` is [`menu_surface`] — literally, by way of `menu_panel`, which is the surface
+//   every floating popover in this application sits on. It was a second, hand-kept copy of it, and
+//   the copy had already drifted: a 1dp 40%-`outline` border and a flat shadow, where the shared
+//   surface has elevation 2 and none.
 
 /// A themed scrollbar for scrollable regions (e.g. the worktree sidebar): a subtle rail with a
 /// rounded `outline`-colored thumb that darkens on hover/drag. Visible whenever content overflows.

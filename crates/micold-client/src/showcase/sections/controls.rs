@@ -180,18 +180,23 @@ pub fn text_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
 
 /// `FormField` — the shared chrome, posed through every state that changes it.
 ///
-/// Posed **through a `Select`**, not around one. Every control in the library composes its own
-/// `FormField` now — `TextField` since T046, `Select` since T048 — so handing either to a second
-/// one would draw two containers and two indicators, and the gallery would be demonstrating a
-/// mistake. The chrome's states reach it instead through the builders the control forwards, which
-/// is exactly how a call site reaches them. The select is also the one control that cannot report
-/// focus, which is why the wrapper takes its active state as a parameter rather than asking.
+/// Posed **through a `TextField`**, not around one. Every control in the library composes its own
+/// `FormField` — `TextField` since T046, `Select` since T048 — so handing either to a second one
+/// would draw two containers and two indicators, and the gallery would be demonstrating a mistake.
+/// The chrome's states reach it instead through the builders the control forwards, which is exactly
+/// how a call site reaches them.
+///
+/// **Through a text field rather than the select it used to be** (feature 022, contract §3). The
+/// select was chosen originally because it was the control that could *not* report focus, so
+/// `active` had to be supplied and the gallery was the one caller that supplied it. The select now
+/// holds its own open state and `Select::active` is gone, which leaves the text field — which can
+/// report focus — as the control this state is posed through.
 ///
 /// The states are side by side because the differences between them are the whole component: at
 /// rest a muted hairline, active a thicker accent line, invalid the error role in *both* the
 /// indicator and the text beneath. Seeing them apart, each looks plausible.
 pub fn form_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
-    let control = || material::Select::new(samples::CHOICES, None, |_| Message::NoOp, roles);
+    let control = || material::TextField::new(samples::PLACEHOLDER, "", roles);
     arrange(
         vec![
             posed(

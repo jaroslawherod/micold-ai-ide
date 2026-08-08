@@ -83,6 +83,10 @@ pub enum Icon {
     /// A session's activity dot for a **spent** state — the session ended (FR-016d/FR-016e). An
     /// empty ring, the same outer diameter as [`Icon::ActivityWorking`] so rows stay aligned.
     ActivityEnded,
+    /// The trailing affordance of a select (feature 022, §7.7) — a downward chevron saying the
+    /// control opens a list. Distinct from [`Icon::ShowSidebar`]'s panel glyph: this one says
+    /// "there is more to choose from here", not "there is a panel to reveal".
+    SelectChevron,
 }
 
 impl Icon {
@@ -117,6 +121,7 @@ impl Icon {
         Icon::Close,
         Icon::ActivityWorking,
         Icon::ActivityEnded,
+        Icon::SelectChevron,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -157,6 +162,9 @@ impl Icon {
             // hollow in *this* font rather than merely by icon name.
             Icon::ActivityWorking => '\u{e837}',
             Icon::ActivityEnded => '\u{e836}',
+            // `expand_more` — Material's own chevron for "this opens a list", and what M3's filled
+            // select carries in its trailing slot.
+            Icon::SelectChevron => '\u{e5cf}',
         }
     }
 }

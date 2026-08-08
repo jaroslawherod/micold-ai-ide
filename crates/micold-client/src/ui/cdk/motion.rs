@@ -28,7 +28,13 @@ use std::time::{Duration, Instant};
 /// That is exactly what the central animator did — it stepped a fixed amount per 16ms clock tick —
 /// so keeping the arithmetic identical is what makes this feature's transitions look unchanged.
 /// Moving to elapsed-time interpolation is a visual change, and therefore feature 018's to make.
-const FRAME: Duration = Duration::from_millis(16);
+///
+/// Public since feature 022, for the in-crate component tests that have to *hand over* the frames
+/// the runtime would deliver — a picker's list only appears once its visibility track has been
+/// ticked, so a test that never ticks measures the frame before the one it means to. They need the
+/// same interval this steps by, and a second `from_millis(16)` beside a test would be a duration
+/// stated rather than named (`motion_tokens.rs`) as well as a number free to drift from this one.
+pub const FRAME: Duration = Duration::from_millis(16);
 
 /// The per-frame step that carries a track across its full `0.0..=1.0` range in `duration`.
 ///

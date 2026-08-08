@@ -37,6 +37,7 @@ fn expected(icon: Icon) -> char {
         Icon::Close => '\u{e5cd}',
         Icon::ActivityWorking => '\u{e837}',
         Icon::ActivityEnded => '\u{e836}',
+        Icon::SelectChevron => '\u{e5cf}',
     }
 }
 
@@ -60,8 +61,10 @@ fn all_covers_every_variant_without_duplicates() {
     // terminal-instance close action rather than double-counted), +1 for AddTerminalInstance
     // (feature 011), +2 for ActivityWorking/ActivityEnded (feature 010's session activity dots,
     // moved into the vocabulary by BUG-004), +1 for Search (feature 021's type-ahead field —
-    // a magnifier, distinct from Filter's funnel).
-    assert_eq!(Icon::ALL.len(), 29, "curated set size");
+    // a magnifier, distinct from Filter's funnel), +1 for SelectChevron (feature 022's select
+    // trailing affordance — `expand_more`, the glyph §7.7 gives the control and the one thing that
+    // tells a select from a text field at a glance).
+    assert_eq!(Icon::ALL.len(), 30, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

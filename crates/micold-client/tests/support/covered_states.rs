@@ -344,15 +344,16 @@ pub fn covered_states() -> &'static [CoveredState] {
         },
         // --- The one state that exercises the overlay pass (FR-009) -----------------------------
         // Until this existed the fixture contained **zero** `over` records. The overlay pass was
-        // written for `material::Select`, which wraps `pick_list` and lays its dropdown out through
-        // `Widget::overlay` where the base walk cannot see it — and then no covered state ever
-        // opened one. A pass that runs on every state and records nothing looks exactly like a pass
-        // that found nothing, which is the failure this feature exists to correct.
+        // written for `material::Select`, which lays its list out through `Widget::overlay` where
+        // the base walk cannot see it — and then no covered state ever opened one. A pass that runs
+        // on every state and records nothing looks exactly like a pass that found nothing, which is
+        // the failure this feature exists to correct.
         //
-        // `pick_list`'s open flag is private widget state with no accessor, so it is *caused*
-        // rather than set: `pressing` dispatches a left press at the control's centre, the way a
-        // person opens it. See `resolve_pressing` for why the entrance transition has to be settled
-        // first.
+        // The select's open flag is its own widget state with no accessor, so it is *caused* rather
+        // than set: `pressing` dispatches a left press at the control's centre, the way a person
+        // opens it. Still true after feature 022 replaced the `pick_list` this was written against
+        // — the control changed, its openness stayed its own. See `resolve_pressing` for why the
+        // entrance transition has to be settled first, and the list's arrival afterwards.
         CoveredState {
             name: "add-worktree-dialog-type-menu-open",
             build: || {

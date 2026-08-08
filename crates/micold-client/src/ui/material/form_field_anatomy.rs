@@ -319,16 +319,29 @@ fn a_select_gets_the_same_chrome_as_a_text_input() {
     //
     // The *shape* rather than the heights, and that is the whole point of this assertion: the
     // container is `Length::Fixed`, so a field carrying a second container inside it measures 56dp
-    // exactly like one that is not. Only the tree tells them apart.
+    // exactly like one that is not. Only the structure tells them apart.
+    //
+    // **The structure is read off the laid-out tree, not the widget tree** (feature 022). It used
+    // to compare `tree_shape` against a wrapped text input's, which worked while the select was a
+    // single leaf — a `pick_list` — sitting in the control slot exactly as a text input does. The
+    // select assembles its own trigger now (a value, a spacer and a chevron) and does it inside
+    // `Widget::layout`, so its *widget* tree is empty until it is laid out and its control slot is
+    // legitimately deeper than an input's. Comparing arity there would now be comparing the two
+    // controls' insides, which is not what this is about. What it is about — one container, one
+    // indicator, four slots — is exactly what the laid-out bands say.
     let (input_bounds, input_bands) =
         layout_of(FormField::new(input(), r).label("Type").into(), 400.0);
+    let box_slots = laid_out(select(r).label("Type").into(), 400.0).children()[0]
+        .children()
+        .len();
     assert_eq!(
-        tree_shape(&select(r).label("Type").into()),
-        tree_shape(&FormField::new(input(), r).label("Type").into()),
-        "a labelled select's tree is not the shape a labelled text input's is — the select is \
-         wearing chrome the text input does not (a `FormField` around a control that composes its \
-         own draws two containers and two indicators, and its content overflows the fixed 56dp \
-         container it is nested in)"
+        (bare_bands.len(), box_slots),
+        (2, 4),
+        "a labelled select resolves to {} bands with {box_slots} slots in the first, against the \
+         shared chrome's two bands of four — the select is wearing chrome the text input does not \
+         (a `FormField` around a control that composes its own draws two containers and two \
+         indicators, and its content overflows the fixed 56dp container it is nested in)",
+        bare_bands.len(),
     );
     assert_eq!(
         (

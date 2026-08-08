@@ -359,8 +359,8 @@ fn the_action_row_anchors_are_action_rows() {
 ///
 /// This was added after the fixture was found to contain **zero** `over` lines. The overlay pass
 /// had been implemented, documented and shipped, and every covered state ran through it — and none
-/// of them opened anything laid out that way, because the only widget in this application that uses
-/// `Widget::overlay` is `material::Select`'s dropdown and no covered state had one open.
+/// of them opened anything laid out that way, because the only thing in this application laid out
+/// that way is a picker's floating list and no covered state had one open.
 ///
 /// Nothing failed. A pass that records nothing is indistinguishable from a pass that found nothing,
 /// so the coverage claim in FR-009 was true about the code and false about the fixture. That is the
@@ -381,9 +381,9 @@ fn the_overlay_pass_records_something_somewhere() {
     assert!(
         !with_overlays.is_empty(),
         "no covered state produces a single overlay record, so the overlay pass is running over \
-         every state and recording nothing. It is the only thing that can see a `pick_list` \
-         dropdown — `material::Select`'s menu is laid out through `Widget::overlay` and is \
-         invisible to the base walk — so this reads as coverage while covering nothing. Register a \
+         every state and recording nothing. It is the only thing that can see a picker's list — \
+         `material::Select`'s menu is laid out through `Widget::overlay` and is invisible to the \
+         base walk — so this reads as coverage while covering nothing. Register a \
          state that opens one (`StateUnderTest::pressing`), or, if no such widget is left in the \
          application, delete the pass rather than leaving it as evidence of something it no longer \
          does."
