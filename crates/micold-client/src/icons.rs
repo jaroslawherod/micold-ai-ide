@@ -181,6 +181,14 @@ pub enum IconSurface {
     Badge,
     /// Unavailable / danger markers — tinted with the `error` accent.
     Unavailable,
+    /// The leading glyph of a **text or outlined button** (§7.3) — tinted `primary`, the accent
+    /// both those variants give their label.
+    ///
+    /// Its own context because the glyph and the label of one control must agree: a text button
+    /// draws its label in the accent, so a leading glyph tinted `AppBarAction`'s `on_surface`
+    /// makes one control two colours. Found by the visual pass on the project switcher, which no
+    /// geometry gate could see — the glyph was in exactly the right box, in the wrong tone.
+    AccentButton,
     /// A menu item's leading glyph (§7.5) — tinted `on_surface_variant`.
     ///
     /// Quieter than its label, which is `on_surface`: the glyph identifies the row and the label
@@ -197,6 +205,7 @@ impl IconSurface {
         IconSurface::PrimaryButton,
         IconSurface::Badge,
         IconSurface::Unavailable,
+        IconSurface::AccentButton,
         IconSurface::MenuItem,
     ];
 }
@@ -213,6 +222,7 @@ pub const fn icon_role(surface: IconSurface, roles: Roles) -> Rgb {
         IconSurface::PrimaryButton => roles.on_primary,
         IconSurface::Badge => roles.on_surface_variant,
         IconSurface::Unavailable => roles.error,
+        IconSurface::AccentButton => roles.primary,
         IconSurface::MenuItem => roles.on_surface_variant,
     }
 }
