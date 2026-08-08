@@ -83,50 +83,12 @@ pub use crate::features::worktree_form::{
     BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
 
-/// An open project right-click context menu (feature 015): which project it acts on, and where
-/// to draw it. The anchor is the pointer position at the moment of the right-click, in window
-/// pixels, so the menu opens under the cursor like a normal desktop context menu.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectMenu {
-    /// The project the menu acts on.
-    pub path: PathBuf,
-    /// The menu panel's top-left corner, in window pixels (the click point).
-    pub anchor: (u16, u16),
-}
-
-/// Clamp a context-menu anchor so the whole panel stays inside the window (feature 015).
-///
-/// `menu` and `window` are `(width, height)` in pixels. The panel is drawn from its top-left
-/// corner, so an anchor near the right/bottom edge would otherwise push it off-screen; this
-/// slides it back just far enough to fit. A window smaller than the menu, or a window size not
-/// known yet (either dimension `0`), leaves the anchor untouched — clamping against a bogus
-/// size would be worse than not clamping at all.
-pub fn clamp_menu_anchor(anchor: (u16, u16), menu: (u16, u16), window: (u16, u16)) -> (u16, u16) {
-    if window.0 == 0 || window.1 == 0 {
-        return anchor;
-    }
-    (
-        anchor.0.min(window.0.saturating_sub(menu.0)),
-        anchor.1.min(window.1.saturating_sub(menu.1)),
-    )
-}
-
-/// One row in the top-bar project switcher (feature 008), computed purely from the workspace
-/// so the switcher's contents (active marker, running count, unavailable state) are
-/// unit-testable without the GUI (FR-005–FR-008).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SwitcherEntry {
-    /// The project's path (payload for selecting/activating it).
-    pub path: PathBuf,
-    /// The project's display name.
-    pub label: String,
-    /// Whether this is the currently active project (FR-006).
-    pub is_active: bool,
-    /// Number of running background sessions this project holds (FR-007).
-    pub running_count: usize,
-    /// Whether the folder is available; unavailable projects are shown but not selectable (FR-008).
-    pub available: bool,
-}
+// Moved to `crate::features::project` (feature 021, T017). Re-exported so this step changes no
+// call site; the re-export goes away in T023 when imports are updated.
+//
+// `SelectKind` is named by T017 but did not travel: it sat in this stretch of the file and is
+// terminal text selection, not a project concern. See `features/project.rs`.
+pub use crate::features::project::{clamp_menu_anchor, ProjectMenu, RenameDraft, SwitcherEntry};
 
 // Moved to `crate::features::sidebar` (feature 021, T016). Re-exported so this step changes no
 // call site; the re-export goes away in T023 when imports are updated.
@@ -166,17 +128,6 @@ pub struct SettingsDraft {
     pub env_include_timeout: String,
     /// The last validation error shown after a rejected save.
     pub error: Option<String>,
-}
-
-/// In-progress rename state, present only while the rename dialog is open.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenameDraft {
-    /// The project being renamed, identified by its (canonical) path.
-    pub path: PathBuf,
-    /// The current editable text in the dialog.
-    pub text: String,
-    /// The last validation error, if the user tried to confirm an invalid name (FR-020).
-    pub error: Option<RenameError>,
 }
 
 /// In-progress worktree-rename state, present only while the worktree-rename dialog is open

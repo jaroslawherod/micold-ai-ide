@@ -75,3 +75,4 @@ Re-measure at each phase checkpoint and append a row.
 | Baseline (T002) | 3,567 | 2,434 | Start of work |
 | T015 (worktree form) | 3,567 | 2,198 | −236; first extraction |
 | T016 (sidebar) | 3,567 | 2,122 | −76; two of eight features out |
+| T017 (project) | 3,567 | 2,073 | −49; `SelectKind` left behind, see T021 |
