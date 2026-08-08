@@ -49,6 +49,34 @@ run = "{{config_root}}/scripts/build-lock.sh cargo test -p micold-core --all-tar
 description = "Build the release GUI binary [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client"
 
+[tasks.sweep]
+description = "Reclaim space in the shared target dir (default: artifacts unused for 7 days) [build-locked]"
+run = """
+command -v cargo-sweep >/dev/null 2>&1 || cargo install cargo-sweep --locked
+
+# Sweeping deletes by age, and the oldest artifacts in a shared target dir are
+# usually dependencies that a running build is still linking against -- so a
+# sweep under a live compiler costs that build a rebuild. The lock below only
+# covers mise tasks; a bare `cargo` in a worktree is not covered, hence this
+# check. SWEEP_FORCE=1 skips it.
+if [ -z "${SWEEP_FORCE:-}" ] && pgrep -x cargo >/dev/null 2>&1; then
+  echo "sweep: a cargo build is running -- wait for it, or set SWEEP_FORCE=1" >&2
+  exit 1
+fi
+
+# cargo-sweep reads target-dir from .cargo/config.toml itself, so it finds
+# target-shared unaided. Do NOT pass that directory as its [PATH] argument:
+# [PATH] is a *project* path and cargo-sweep will look for a Cargo.toml in it.
+#
+# SWEEP_ARGS overrides the default, e.g.
+#   SWEEP_ARGS='--dry-run --time 7' mise run sweep     # show what would go
+#   SWEEP_ARGS='--maxsize 50GB'     mise run sweep     # bound the directory
+#   SWEEP_ARGS='--installed'        mise run sweep     # drop old toolchains
+args="${SWEEP_ARGS:-"--time 7"}"
+echo "sweep: cargo sweep $args"
+{{config_root}}/scripts/build-lock.sh cargo sweep $args
+"""
+
 [tasks.deb]
 description = "Build the Debian .deb package for the host arch (installs cargo-deb if missing) [build-locked]"
 run = """

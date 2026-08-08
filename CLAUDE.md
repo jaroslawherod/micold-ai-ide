@@ -28,6 +28,12 @@ right `cargo` invocation each time:
 - `mise run build` — build the release GUI binary (`cargo build --release -p micold-client`).
 - `mise run deb` — build the Debian `.deb` package for the host arch (installs `cargo-deb` first
   if missing).
+- `mise run sweep` — reclaim space in `target-shared/`, dropping artifacts unused for 7 days
+  (installs `cargo-sweep` first if missing). It refuses to run while a `cargo` build is, since the
+  oldest artifacts in a shared directory are usually dependencies a live build is still linking
+  against; `SWEEP_FORCE=1` overrides. `SWEEP_ARGS` replaces the default, e.g.
+  `SWEEP_ARGS='--dry-run --time 7'` to preview, or `SWEEP_ARGS='--maxsize 50GB'` to bound the
+  directory by size instead of age.
 
 The first `mise run <task>` in a fresh worktree/clone requires trusting the repo's `mise.toml`
 once via `mise trust` (mise refuses untrusted configs by default).
@@ -62,3 +68,7 @@ design, since they stay in the foreground for as long as the app is open.
 
 `.cargo/config.toml` also caps rust-lld at `--threads=4`; it otherwise sizes its pool from the CPU
 count, which put ~68 linker threads on one NVMe queue.
+
+Sharing removes the *multiplication* — one directory instead of one per branch — but not the
+growth: every branch that builds here leaves artifacts behind and cargo never collects them, so
+`target-shared/` creeps up on a disk that has run out once already. `mise run sweep` bounds it.
