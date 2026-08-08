@@ -85,7 +85,7 @@ use iced::{alignment, keyboard, Background, Element, Event, Length, Rectangle, S
 use micold_core::tokens::{anatomy, shape, state, Roles};
 use micold_core::typeahead::{intent_for, move_highlight, Intent};
 
-use super::picker::{menu_element, Row, GAP};
+use super::picker::{animated_menu, menu_element, Row, EXIT, GAP};
 use super::style;
 use super::text::TypeRole;
 use crate::icons::Icon;
@@ -341,13 +341,23 @@ where
     // No empty message: a select's options are fixed by the call site, so an empty list is a
     // call-site error rather than a search that found nothing (picker-base §3).
     let panel = menu_element(rows, view.highlight, s.chosen(), None, Some(&pick), r);
+    // The list arrives and leaves rather than appearing and vanishing (FR-018, FR-019), by the same
+    // call the search picker makes — so the two transitions are one definition and cannot drift.
+    // Neither duration nor curve is named here; both are `material::picker`'s (FR-020, SC-007).
+    //
+    // `ListWatch` sits *outside* the transition rather than under it. A press has to be observable
+    // for as long as the list is genuinely there, and a wrapper that is mid-fade is exactly the
+    // thing that might stop delegating — whereas refusing input to a list on its way out is
+    // `cdk::picker`'s job and it already does it (FR-022).
     let menu: Element<'a, M> = Element::new(ListWatch {
-        content: panel,
+        content: animated_menu(panel, view.open, r),
         acted: view.acted,
     });
 
     // One child, and it is the shared base — so the select adds no second floating mechanism.
-    Picker::new(field, menu, view.open, GAP).into()
+    // `.exit(EXIT)` tells that base how long to keep producing an overlay at all, so the animation
+    // and the thing being animated cannot disagree about when the list is gone.
+    Picker::new(field, menu, view.open, GAP).exit(EXIT).into()
 }
 
 impl<'a, T, M> Widget<M, iced::Theme, iced::Renderer> for Select<'a, T, M>
