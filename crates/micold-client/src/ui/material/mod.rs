@@ -55,6 +55,11 @@ mod menu_anatomy;
 mod modal;
 mod navigation_drawer;
 mod picker;
+/// The transition both lists arrive and leave by, asserted against **each other** and against
+/// §6.3 rather than each against the contract. In-crate for the same reason as `picker_parity`
+/// (feature 022, FR-021, SC-007).
+#[cfg(test)]
+mod picker_motion;
 /// The two pickers' lists, compared against **each other** rather than each against the contract.
 /// In-crate because neither control is reachable from `tests/`; see the module's own docs for why
 /// the comparison is of geometry (feature 022, SC-001).

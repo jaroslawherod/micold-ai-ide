@@ -134,8 +134,15 @@ impl<'a> Mounted<'a> {
     }
 
     /// Hand over the frames the visibility track needs to reach wherever the last event sent it.
+    ///
+    /// Two frames were enough until T027 gave the select the shared transition: opening is
+    /// immediate, but a *closed* list now keeps being produced for the whole of `picker::EXIT` so
+    /// that there is something left to fade (FR-019). So this settles the exit rather than a fixed
+    /// couple of ticks — derived from the duration rather than written down as a number beside it,
+    /// because a harness holding its own copy of a timing is how two definitions start.
     fn settle(&mut self) {
-        for _ in 0..2 {
+        let frames = (super::picker::EXIT.as_secs_f32() / FRAME.as_secs_f32()).ceil() as u32 + 1;
+        for _ in 0..frames {
             self.frame += 1;
             let at = self.origin + FRAME * self.frame;
             let _ = self.send(

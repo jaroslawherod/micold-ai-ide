@@ -175,12 +175,25 @@ both, the code here is one call — which is why this P2 story lands after the P
 
 ### Tests for User Story 2 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T026 [P] [US2] Write a failing test that both pickers' transitions come from **one** definition and that its durations are §6.3's `short_3` and `short_2` — no second literal, and no curve restated over `Motion`'s defaults — in `crates/micold-client/src/ui/material/picker_motion.rs` (FR-021, SC-007)
+- [X] T026 [P] [US2] Write a failing test that both pickers' transitions come from **one** definition and that its durations are §6.3's `short_3` and `short_2` — no second literal, and no curve restated over `Motion`'s defaults — in `crates/micold-client/src/ui/material/picker_motion.rs` (FR-021, SC-007)
 
 ### Implementation for User Story 2
 
-- [ ] T027 [US2] Wire the select's list through `picker::animated_menu` and pass the exit duration to the base, in `crates/micold-client/src/ui/material/select.rs`, making T026 pass (FR-018, FR-019)
+- [X] T027 [US2] Wire the select's list through `picker::animated_menu` and pass the exit duration to the base, in `crates/micold-client/src/ui/material/select.rs`, making T026 pass (FR-018, FR-019)
 - [ ] T028 [US2] Run [quickstart.md](./quickstart.md) §B2 against **both** pickers in both schemes and record the pass, including the interrupted-transition and press-during-exit cases
+
+  > **Blocked on eyes at a display**, like T011 and T025. The machine-checkable half is
+  > `src/ui/material/picker_motion.rs`. It establishes the two halves that are observable without a
+  > rasteriser: that both lists keep being produced for the *same* number of frames after closing,
+  > and that the number is `short_2`'s; and that neither control names a duration, a motion token or
+  > a curve of its own, so there is one definition rather than two that agree today.
+  >
+  > What it cannot reach is everything the transition actually looks like. `scale` and `fade`
+  > transform **drawing only** — which is FR-023 holding by construction, and is also why a
+  > comparison of rectangles is blind to the animation. So the grow-and-fade itself, the enter
+  > duration, both curves, and whether a reversal mid-flight resumes from where it is rather than
+  > snapping (FR-021) are unrun rather than assumed. The press-during-exit case *is* covered, in
+  > `tests/picker_visibility.rs`, but through the base rather than through either control.
 
 **Checkpoint**: both stories independently demonstrable.
 
