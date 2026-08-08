@@ -21,7 +21,7 @@ use micold_core::theme::{
 use micold_core::typeahead::{move_highlight, Direction};
 use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// The labels of the actions revealed under the "Help" menu, in display order.
@@ -99,17 +99,9 @@ pub use crate::features::sidebar::{
     DEFAULT_LOCATION_LABEL,
 };
 
-/// The kind of text selection to begin (feature 006, FR-013): single click = character range,
-/// double = semantic (word), triple = whole line.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SelectKind {
-    /// Character-range selection (single click-drag).
-    Simple,
-    /// Semantic (word) selection (double click).
-    Semantic,
-    /// Whole-line selection (triple click).
-    Lines,
-}
+// Moved to `crate::features::session` (feature 021, T021, reassigned there from T017). Re-exported
+// so this step changes no call site; the re-export goes away in T023.
+pub use crate::features::session::SelectKind;
 
 // Moved to `crate::features::settings` (feature 021, T018). Re-exported so this step changes no
 // call site; the re-export goes away in T023 when imports are updated.
@@ -1608,147 +1600,6 @@ impl State {
                 map.retain(|dir, _| names.contains(dir));
             }
         }
-    }
-
-    /// Session ids of the active project hosted by the worktree `dir_name` (feature 008
-    /// delete): the sessions the binary must terminate before removing the worktree (FR-020).
-    pub fn sessions_in_worktree(&self, dir_name: &str) -> Vec<SessionId> {
-        self.active_sessions()
-            .iter()
-            .filter(|s| s.location.is_worktree(dir_name))
-            .map(|s| s.id)
-            .collect()
-    }
-
-    /// Sessions hosted by the active project (FR-011), **including archived ones** — used by
-    /// callers that need the raw record (e.g. [`Self::sessions_in_worktree`], which only cares
-    /// about location, not visibility). Sidebar-rendering call sites
-    /// ([`Self::sidebar_entries`], [`Self::worktree_tree`]) additionally filter out archived
-    /// sessions themselves (bugfix BUG-003, FR-015a), so a closed session disappears from the
-    /// sidebar. Empty when no project is active.
-    pub fn active_sessions(&self) -> &[Session] {
-        self.workspace
-            .active
-            .as_ref()
-            .and_then(|path| self.workspace.sessions.get(path))
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
-    }
-
-    /// Switch the active project **without stopping any session** (feature 008, FR-001/FR-002).
-    ///
-    /// Order is load-bearing (see data-model.md I1): (1) record the current (outgoing)
-    /// foreground BEFORE activation, so the outgoing project is captured — not the incoming
-    /// one; (2) activate the target, which leaves everything unchanged and returns `false` if
-    /// the project is unknown/unavailable (FR-008); (3) restore the incoming project's
-    /// foreground (stored → first running → `None`) (FR-003); (4) surface a notice if any of
-    /// its sessions were restarted while it was inactive (FR-011 / SC-007). No session
-    /// lifecycle is mutated. Returns whether the switch happened.
-    pub fn switch_active(&mut self, path: &Path) -> bool {
-        self.record_foreground(); // STEP 1 — before activation
-        if !self.workspace.activate(path) {
-            // STEP 2 — rejected: leave active project, sessions, and foreground untouched.
-            return false;
-        }
-        self.restore_after_activation(path); // STEPS 3 + 4
-        true
-    }
-
-    /// Record the current active project's foreground session for later restore (FR-003).
-    ///
-    /// Public so callers that move `active` themselves (the `FolderChosen` handler, via
-    /// `Workspace::open_or_activate`) can capture the outgoing foreground BEFORE activation
-    /// and then call [`restore_after_activation`](Self::restore_after_activation) (I1).
-    pub fn record_foreground(&mut self) {
-        if let (Some(active), Some(id)) = (self.workspace.active.clone(), self.active_session) {
-            self.foreground_by_project.insert(active, id);
-        }
-    }
-
-    /// Finish a switch once `path` is already the active project (steps 3 + 4 of
-    /// [`switch_active`](Self::switch_active)): restore its foreground session and surface any
-    /// background-restart notice. Pair with a preceding [`record_foreground`](Self::record_foreground).
-    pub fn restore_after_activation(&mut self, path: &Path) {
-        let key = canonicalize_best_effort(path);
-        self.active_session = self.restore_foreground(&key); // STEP 3
-                                                             // BUG-001 / focus-model.md: switching (or opening) a project does not carry terminal focus
-                                                             // across — re-focusing the restored session is a fresh explicit action (or a select/start).
-        self.terminal_focused = false;
-        // `default_expanded` is not keyed per project (unlike `expanded`, which is pruned by
-        // worktree `dir_name` in `set_worktrees`) — reset it explicitly so a Default entry
-        // expanded in one project doesn't render pre-expanded in another (feature 010).
-        self.default_expanded = false;
-        // Feature 014 (FR-010e): same reasoning as `default_expanded` directly above — view state
-        // switched on for one project must not render in another. Deliberately unlike
-        // `sidebar_filters`, which survives a switch: the filter accordion is collapsed by
-        // default, so a sticky reveal would show unexplained agent rows with its cause out of
-        // sight. Nothing is remembered per project, so switching back does not restore it.
-        self.show_agent_worktrees = false;
-        self.arm_notice(&key); // STEP 4
-    }
-
-    /// The session to display when entering `key`: the stored foreground if it still exists
-    /// and is running, else the project's first running session, else `None` (FR-003).
-    fn restore_foreground(&self, key: &Path) -> Option<SessionId> {
-        let sessions = self.workspace.sessions.get(key)?;
-        if let Some(&stored) = self.foreground_by_project.get(key) {
-            if sessions.iter().any(|s| s.id == stored && s.is_active()) {
-                return Some(stored);
-            }
-        }
-        sessions.iter().find(|s| s.is_active()).map(|s| s.id)
-    }
-
-    /// If any session of the just-activated project was restarted while inactive, raise the
-    /// return notice and consume those markers (FR-011 / SC-007).
-    fn arm_notice(&mut self, key: &Path) {
-        let restarted: Vec<SessionId> = self
-            .workspace
-            .sessions
-            .get(key)
-            .map(|list| {
-                list.iter()
-                    .map(|s| s.id)
-                    .filter(|id| self.restarted_while_inactive.contains(id))
-                    .collect()
-            })
-            .unwrap_or_default();
-        if !restarted.is_empty() {
-            for id in &restarted {
-                self.restarted_while_inactive.remove(id);
-            }
-            // Reported through the global surface. The previous dedicated `notice` field was
-            // drawn only by `shell::view`, which is the *else* branch of
-            // `if state.active_session.is_some()` — and returning to a project restores its
-            // foreground session, so the banner was unreachable in exactly the case it exists
-            // for (FR-011 / SC-007).
-            self.notify_info("A background session was restarted while you were away.");
-        }
-    }
-
-    /// Mark a session as auto-restarted while its owning project was inactive (feature 008,
-    /// FR-011). No-op when the session's project is the active one (that restart is visible
-    /// live and needs no return notice) or the id is unknown.
-    pub fn note_background_restart(&mut self, id: SessionId) {
-        let owner = self
-            .workspace
-            .find_session(id)
-            .map(|(path, _)| path.to_path_buf());
-        if let Some(owner) = owner {
-            if self.workspace.active.as_deref() != Some(owner.as_path()) {
-                self.restarted_while_inactive.insert(id);
-            }
-        }
-    }
-
-    /// Mutable access to a session of the active project by id.
-    fn session_mut(&mut self, id: SessionId) -> Option<&mut Session> {
-        let path = self.workspace.active.clone()?;
-        self.workspace
-            .sessions
-            .get_mut(&path)?
-            .iter_mut()
-            .find(|s| s.id == id)
     }
 }
 
