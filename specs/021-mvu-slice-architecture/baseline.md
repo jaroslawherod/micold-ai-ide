@@ -82,3 +82,46 @@ Re-measure at each phase checkpoint and append a row.
 | T021 (session) | 3,567 | 1,727 | −149; at the phase checkpoint's ~1,700 target |
 | T022 (connection) | 3,561 | 1,727 | first `main.rs` movement; source was `ui/mod.rs` |
 | T023 (re-exports gone) | 3,561 | 1,689 | −38; every call site imports from `features::*` |
+
+## T025 — SC-010 review at the Tier 1 checkpoint
+
+SC-010: *"A maintainer can answer 'where does this feature live?' by naming a single module, for
+every feature named in FR-001."* FR-001 names nine. Eight pass; one does not, by design.
+
+| FR-001 feature | Single module? | Where |
+|---|---|---|
+| worktree | yes | `features/worktree.rs` |
+| session / terminal | yes | `features/session.rs` |
+| project / workspace | yes | `features/project.rs` |
+| sidebar | yes | `features/sidebar.rs` |
+| settings | **partial** | `features/settings.rs`; validation still in `main.rs`'s `SettingsSaved` arm |
+| notifications | yes | `features/notifications.rs` |
+| daemon connection | yes | `features/connection.rs` |
+| overlays | **no** | still enumerated in `app.rs` — Tier 2 (T026–T040) is what gives it a module |
+
+`features/worktree_form.rs` is a ninth module beyond FR-001's list: the creation form is the one
+feature whose intermediate state nothing else reads (research.md §5), so it is a module in its own
+right rather than part of `features/worktree.rs`.
+
+**So SC-010 is not yet met, and Tier 1 was never going to meet it.** Overlays are Tier 2's subject
+and settings' validation is Tier 3's; both are named in the criterion, so the criterion closes at
+the end of the feature rather than at this checkpoint. Recording it as passing here would have
+required either ignoring `overlays` in FR-001's list or calling `app.rs` a module for it.
+
+### Line count against the baseline
+
+`app.rs` **2,434 → 1,689**, a 31% reduction, against a Phase 3 checkpoint expectation of "roughly
+1,700 lines (types out, both reducers still in)". Both reducers are indeed still in: `State::update`
+in `app.rs` and `update_inner` in `main.rs` are untouched, and together they are most of what
+remains.
+
+`main.rs` 3,567 → 3,561. Essentially flat, as expected — Tier 1 does not touch the shell, and the
+six lines are `connection_status` losing its inlined precedence to `features/connection.rs`.
+
+### Three counts worth carrying forward
+
+- **Visibility widenings**: 4 (`rematch_branches`, `reset_branch_search`, `worktree_tags`,
+  `session_mut`), all private → `pub(crate)`, all pointed at T062.
+- **Dead code found and removed**: 1 (`app::Notification`, never constructed).
+- **Task mis-groupings corrected**: 3 (`SelectKind` T017→T021; the three sidebar projections
+  T019→`features/sidebar.rs`; `sidebar_entries`, which T016 left behind).
