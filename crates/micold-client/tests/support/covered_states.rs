@@ -46,11 +46,16 @@ const APP_BAR_OVERFLOW_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 3];
 /// `IconButton` since BUG-007, which is why the two paths now differ only in their last index.
 const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 2];
 
-// A dialog's layer index moved 3 → 4 at BUG-007. The switcher's panel is a `MenuOverlay` now, and a
-// menu panel is pushed whether or not it is open — it owns its own fade, so it has to outlive the
-// flag that opened it — so every state carries one more inert layer than it did. The paths below
-// that begin at a layer were re-pointed by that one place; the two that were not are
-// `menu.panel` and `switcher.panel`, whose own states already counted the closed sibling.
+// A layer index is **two per open-able surface** since BUG-008, and the paths below that begin at
+// one were re-pointed twice on the way here. First BUG-007 made the switcher a `MenuOverlay`, which
+// is pushed whether or not it is open — it owns its own fade, so it must outlive the flag that
+// opened it — giving every state one more layer. Then BUG-008 made a surface's *backdrop*
+// unconditional too, because a backdrop that came and went renumbered the panels above it and they
+// inherited each other's transitions.
+//
+// So the arithmetic is now stated rather than discovered: base, then a backdrop and a panel for
+// each surface `ui::view` pushes, in `stack_order`. A dialog sits above the two popovers, at layer
+// 6; the overflow menu's panel is 2 and the switcher's is 4.
 
 /// The terminal's bottom status bar, and the mode toggle that anchors its trailing edge — the two
 /// nodes BUG-002 moved. Filled in from the recorded tree rather than derived by reading the view,
@@ -197,7 +202,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // than to the number.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[4, 0, 0, 1],
+                    path: &[6, 0, 0, 1],
                 },
             ],
         },
@@ -222,7 +227,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // free-standing `Type` label inside the control's own container.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[4, 0, 0, 1],
+                    path: &[6, 0, 0, 1],
                 },
             ],
         },
@@ -297,7 +302,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // own, and it pushes the actions down.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[4, 0, 0, 1],
+                    path: &[6, 0, 0, 1],
                 },
             ],
         },
@@ -373,7 +378,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "example".to_string(),
                     ..WorktreeForm::default()
                 });
-                StateUnderTest::new(state).pressing(&[4, 0, 0, 0, 2])
+                StateUnderTest::new(state).pressing(&[6, 0, 0, 0, 2])
             },
             anchors: &[
                 Anchor {
@@ -382,13 +387,13 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.type-select",
-                    path: &[4, 0, 0, 0, 2],
+                    path: &[6, 0, 0, 0, 2],
                 },
                 // Same form as `add-worktree-dialog-new-branch`; opening the menu adds an overlay
                 // layer, not a field.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[4, 0, 0, 1],
+                    path: &[6, 0, 0, 1],
                 },
             ],
         },
@@ -425,7 +430,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // field's own container.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[4, 0, 0, 1],
+                    path: &[6, 0, 0, 1],
                 },
             ],
         },
@@ -593,7 +598,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // surface's dismissal backdrop takes a layer of its own before the panel.
                 Anchor {
                     name: "switcher.panel",
-                    path: &[3, 0],
+                    path: &[4, 0],
                 },
             ],
         },

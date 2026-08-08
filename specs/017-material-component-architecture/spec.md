@@ -101,6 +101,7 @@ A developer opens a menu, a context menu, the project-switcher popover, the sele
 #### One overlay
 
 - **FR-008**: All floating surfaces MUST be built on **one** overlay primitive owning positioning, backdrop, dismissal and stacking order. The application currently has five independent implementations — the modal, the overflow menu, the context menu, the project-switcher popover and the select dropdown — which is why their behavior has diverged.
+- **FR-008a**: The number of layers a surface occupies MUST NOT depend on the surface's own state. A backdrop is present whether or not it has anything to catch; an open surface and a closed one take the same room in the stack. The widget layer identifies per-child state **positionally**, so a surface that changes its own layer count renumbers every surface above it, and each of those inherits the state that used to live at its new index — including, since [018](../018-material3-visual-system/spec.md)'s FR-011 work, a transition already in flight. *(Added by BUG-002: a backdrop existed only while its surface was dismissible, so closing the ⋮ menu slid the project switcher's panel onto the menu panel's old index and played the menu's exit on it. A panel nobody opened, closing. FR-010's ordering was correct throughout — the switcher was above the menu at both indices — which is why an ordering gate could not see it.)*
 - **FR-009**: Dismissal MUST be unified rather than configured per surface. Every non-modal floating surface MUST dismiss on outside click, on Escape, and when the content beneath it scrolls. Modal dialogs MUST dismiss on Escape and on scrim click, unless explicitly declared non-dismissible because losing input would destroy work.
 - **FR-010**: Overlapping floating surfaces MUST render in a defined stacking order.
 
@@ -155,6 +156,8 @@ A developer opens a menu, a context menu, the project-switcher popover, the sele
 - **SC-008**: With the application idle, zero frames are requested and CPU use is indistinguishable from the pre-change build over a sustained window; after pressing every interactive element, no animation state remains held.
 - **SC-009**: Token values are asserted from the render-free core, which has no rendering dependency, in the standard whole-workspace test run.
 - **SC-010**: Every component whose layout is derived from an animated value re-lays-out while that value changes and stops when it settles, proven by a test that fails the build when such a component advances its state without asking for a re-layout. The baseline being fixed is two: the `Expand` reveal and the navigation drawer's slide. *(Added by BUG-001.)*
+
+**Bugfix**: 2026-08-08 — BUG-002 added FR-008a. FR-008 unified where a surface floats and how it dismisses; what it left unsaid is that a surface must occupy a *fixed* number of layers, because the rendering stack keys per-child state by index. Harmless while nothing floating owned an animation, and visible the moment 018 gave the menu panel its own fade: two panels swapped transitions across a dismissal. The ordering gate was green throughout — the defect is in the relationship between two states, which no snapshot of either can see.
 
 **Bugfix**: 2026-07-29 — BUG-001 added FR-025a and SC-010: animating a *size* obliges a component to have that size re-laid-out, which no requirement previously stated.
 
