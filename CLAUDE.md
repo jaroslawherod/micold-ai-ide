@@ -32,9 +32,33 @@ right `cargo` invocation each time:
 The first `mise run <task>` in a fresh worktree/clone requires trusting the repo's `mise.toml`
 once via `mise trust` (mise refuses untrusted configs by default).
 
-mise also manages its own Rust toolchain, which is generally a *different patch release* from
-whatever `rustc` is on `PATH`. Both use the same `target/` directory, and cargo fingerprints
-include the compiler version — so alternating between `mise run <task>` and a bare `cargo`
-invocation invalidates the other's artifacts and rebuilds every dependency (a few minutes, and a
-`target/` that grows fast). Pick one and stay with it for a work session; prefer the `mise` tasks,
-per above.
+mise's Rust toolchain and whatever `rustc` is on `PATH` used to resolve to different patch
+releases, and because cargo fingerprints include the compiler version, alternating between
+`mise run <task>` and a bare `cargo` rebuilt every dependency. `rust-toolchain.toml` now pins both
+entry points to `stable`, so they agree and you can move between them freely.
+
+## One target directory, one build at a time
+
+`.cargo/config.toml` sets `target-dir = "target-shared"`. That path is relative, so it resolves
+against the config file's own directory, and cargo merges configs from every ancestor directory —
+so every worktree under `.claude/worktrees/` compiles into the single `target-shared/` beside the
+main checkout, under `mise run` and under a bare `cargo` alike. Build output is there, not in
+`target/`; `scripts/build-lock.sh --print-target-dir` resolves the path.
+
+Sharing it is what keeps this machine usable, and the mechanism is cargo's own: it takes an
+exclusive lock on the target directory, so a second build prints `Blocking waiting for file lock on
+build directory` and waits instead of running alongside the first. `jobs = 4` caps a single cargo
+process but does not compose across worktrees — four agents building at once meant sixteen jobs,
+which oversubscribed RAM, spilled to a swap file on the same NVMe as the target dirs, and left the
+machine stalled on I/O rather than short of CPU.
+
+**So expect to wait behind another worktree's build, and leave it that way.** Pointing
+`CARGO_TARGET_DIR` somewhere private to skip the wait restores the pile-up.
+
+`mise run` tasks also pass through `scripts/build-lock.sh`, which takes a lock in the shared git
+dir and names the holder while you wait. `MICOLD_NO_BUILD_LOCK=1` skips that lock for a one-off
+run; cargo's own lock still applies. The interactive tasks (`run`, `showcase`, `daemon`) skip it by
+design, since they stay in the foreground for as long as the app is open.
+
+`.cargo/config.toml` also caps rust-lld at `--threads=4`; it otherwise sizes its pool from the CPU
+count, which put ~68 linker threads on one NVMe queue.
