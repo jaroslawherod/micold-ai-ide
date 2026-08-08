@@ -1,7 +1,8 @@
-//! Two components of the same kind measure the same (BUG-007, SC-008e).
+//! An app-bar action is a shared button, and the panels hanging from the bar are one panel
+//! (BUG-007, SC-008e).
 //!
-//! The fifth gate, and the first to read two components **of one kind against each other** rather
-//! than either against a figure.
+//! The fifth gate, and the first to read a component against **its siblings of the same kind**
+//! rather than against a figure of its own.
 //!
 //! Every check before it compares a component to something written down:
 //!
@@ -16,9 +17,9 @@
 //!   from. Two panels differing from each other by 20dp both clear the bar.
 //!
 //! So a fork is invisible to all of them: both copies are internally consistent, and the second
-//! answers to no figure at all. The missing question is the symmetric one — the app bar has two
-//! action controls and two panels hang from it, and each pair should be one component drawn twice
-//! (FR-029c).
+//! answers to no figure at all. The missing question is the symmetric one — the app bar's actions
+//! and the panels hanging from it are each a set whose members a *component* is supposed to decide,
+//! so a member matching none of the component shapes is the fork showing (FR-029c).
 //!
 //! **Compiled into the `layout_snapshot` binary** for the reason `containment` and
 //! `panel_placement` give: cargo makes one process per file directly under `tests/`, and a separate
@@ -27,7 +28,7 @@
 use crate::support::covered_states::covered_states;
 use crate::support::layout::{self as lay, LayoutRecord};
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::anatomy;
+use micold_core::tokens::{anatomy, density};
 
 /// Geometry is a structural property; one scheme establishes it. The dark pass exists for colour.
 const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
@@ -60,20 +61,31 @@ fn app_bar_actions(records: &[LayoutRecord]) -> Vec<&LayoutRecord> {
         .collect()
 }
 
-/// The glyph a control draws: the deepest, last-laid-out descendant of `root`.
+/// The glyph a control draws: its **leading** leaf — deepest, and leftmost among the deepest.
 ///
-/// A glyph is a leaf, and an icon button's leaf is its glyph — the chain is container → ripple →
-/// button → text. Read this way rather than by a fixed path so the two controls may differ in how
-/// many wrappers they carry and still be compared on the thing a person sees.
+/// Read structurally rather than by a fixed path, so the two shapes may carry different numbers of
+/// wrappers (an icon button nests container → ripple → button → glyph; a labelled button nests
+/// button → container → row → glyph, text) and still be compared on the thing a person sees.
+///
+/// "Leftmost among the deepest" is the part that matters: a labelled action's glyph and its label
+/// are siblings at the same depth, so depth alone would just as happily hand back the **text** and
+/// measure a word where the contract states a glyph size.
 fn glyph_of<'a>(records: &'a [LayoutRecord], root: &LayoutRecord) -> Option<&'a LayoutRecord> {
-    records
+    let deepest = records
         .iter()
         .filter(|r| {
             r.layer == root.layer
                 && r.path.len() > root.path.len()
                 && r.path.starts_with(&root.path)
         })
-        .max_by_key(|r| r.path.len())
+        .map(|r| r.path.len())
+        .max()?;
+    records
+        .iter()
+        .filter(|r| {
+            r.layer == root.layer && r.path.len() == deepest && r.path.starts_with(&root.path)
+        })
+        .min_by(|a, b| a.x.total_cmp(&b.x))
 }
 
 /// Every anchored panel in a state: a layer's own child, smaller than the window on both axes.
@@ -94,65 +106,84 @@ fn same(a: f32, b: f32) -> bool {
     (a - b).abs() <= TOLERANCE
 }
 
-/// The app bar's action controls are one component drawn twice (FR-029c, SC-008e).
+/// Every app-bar action is one of the contract's two action shapes (FR-029c, SC-008e).
 ///
-/// Target **and** glyph, because they fail independently: a hand-built control can reach 48×48 by
-/// padding a 14dp glyph, which satisfies §7.1's target row and still reads as a different control
-/// beside a 24dp one.
+/// **Not "both are the same size"**, which was this test's first form and was wrong: the bar
+/// carries an icon-only action (the ⋮ menu) *and* a labelled one (the project switcher, which names
+/// the project it switches away from), and §7 gives those two different figures on purpose. A rule
+/// that flattened them would forbid a labelled action outright.
+///
+/// What both shapes share is that a **component** decides them. So the rule is conformance to the
+/// closed set:
+///
+/// - an icon-only action is §7.1's [`anatomy::app_bar::ICON_TARGET`] square, drawing §7.3's
+///   [`anatomy::button::ICON_BUTTON_GLYPH`] — what `IconButton` builds; and
+/// - a labelled action stands at §7.3's button height and leads with
+///   [`anatomy::button::LEADING_ICON`] — what `Button::leading` builds.
+///
+/// Height and glyph are checked separately because they fail separately, and BUG-007 failed both
+/// at once: a hand-assembled 28dp box drawing its glyph at the *label's* 14dp role matched neither
+/// shape, and no per-component gate could say so — §7.1 describes *the* app-bar action, and nothing
+/// said that control was one.
 #[test]
-fn the_app_bars_action_controls_measure_the_same() {
+fn every_app_bar_action_is_one_of_the_contracts_action_shapes() {
     let renderer = lay::renderer();
     let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
-    let mut differing: Vec<String> = Vec::new();
+    let mut wrong: Vec<String> = Vec::new();
 
     for (covered, records) in covered_states().iter().zip(all.iter()) {
-        let actions = app_bar_actions(records);
-        let Some(first) = actions.first() else {
-            continue;
-        };
-        for other in actions.iter().skip(1) {
-            if !same(first.width, other.width) || !same(first.height, other.height) {
-                differing.push(format!(
-                    "{}: the action at {} is {:.1} × {:.1} where the one at {} is {:.1} × {:.1}",
-                    covered.name,
-                    lay::path_token(&other.path),
-                    other.width,
-                    other.height,
-                    lay::path_token(&first.path),
-                    first.width,
-                    first.height,
-                ));
-                continue;
-            }
-            let (Some(a), Some(b)) = (glyph_of(records, first), glyph_of(records, other)) else {
+        for action in app_bar_actions(records) {
+            let Some(glyph) = glyph_of(records, action) else {
                 continue;
             };
-            if !same(a.width, b.width) || !same(a.height, b.height) {
-                differing.push(format!(
-                    "{}: the action at {} draws a {:.1} × {:.1} glyph where the one at {} draws \
-                     {:.1} × {:.1}",
+            // Which shape this action is claiming to be: a square at §7.1's target is the icon
+            // button; anything wider carries a label beside its glyph.
+            let icon_only = same(action.width, anatomy::app_bar::ICON_TARGET);
+            let (height, glyph_size, shape) = if icon_only {
+                (
+                    anatomy::app_bar::ICON_TARGET,
+                    anatomy::button::ICON_BUTTON_GLYPH,
+                    "an icon-only action (§7.1's target, §7.3's icon-button glyph)",
+                )
+            } else {
+                (
+                    density::BUTTON_BASE,
+                    anatomy::button::LEADING_ICON,
+                    "a labelled action (§7.3's button height and leading-icon slot)",
+                )
+            };
+            if !same(action.height, height) {
+                wrong.push(format!(
+                    "{}: the action at {} is {} and stands {:.1}dp tall, not {:.1}",
                     covered.name,
-                    lay::path_token(&other.path),
-                    b.width,
-                    b.height,
-                    lay::path_token(&first.path),
-                    a.width,
-                    a.height,
+                    lay::path_token(&action.path),
+                    shape,
+                    action.height,
+                    height,
+                ));
+            }
+            if !same(glyph.width, glyph_size) {
+                wrong.push(format!(
+                    "{}: the action at {} is {} and draws a {:.1}dp glyph, not {:.1}",
+                    covered.name,
+                    lay::path_token(&action.path),
+                    shape,
+                    glyph.width,
+                    glyph_size,
                 ));
             }
         }
     }
 
     assert!(
-        differing.is_empty(),
-        "{} app-bar action control(s) differ from the one beside them. Every trailing action is \
-         the shared icon button at §7.1's {} × {} target (FR-029c) — a control that assembles its \
-         own button, style, ripple and target answers to no contract row, which is how BUG-007 \
-         shipped a 28dp trigger with a 14dp glyph next to a 48dp one with a 24dp glyph.\n  {}",
-        differing.len(),
-        anatomy::app_bar::ICON_TARGET,
-        anatomy::app_bar::ICON_TARGET,
-        differing.join("\n  "),
+        wrong.is_empty(),
+        "{} app-bar action(s) match neither shape §7 defines for one. A trailing action is a \
+         shared button — `IconButton` where it carries no label, `Button::text(..).leading(..)` \
+         where it does — and never a `button` assembled at the call site with a style, a ripple \
+         and a glyph size of its own (FR-029c). That is how BUG-007 shipped a 28dp control drawing \
+         its glyph at its label's 14dp role, beside a 48dp one drawing 24dp.\n  {}",
+        wrong.len(),
+        wrong.join("\n  "),
     );
 }
 

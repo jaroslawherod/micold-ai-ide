@@ -4,8 +4,8 @@
 //! overlay (see [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
 
 use crate::app::{help_actions, Message, State};
-use crate::icons::Icon;
-use crate::ui::material::{IconButton, MenuItem, MenuTrigger, Toolbar, Tooltip};
+use crate::icons::{icon_role, Icon, IconSurface};
+use crate::ui::material::{Button, MenuItem, MenuTrigger, Toolbar};
 use iced::Element;
 use micold_core::metadata::AppMetadata;
 use micold_core::theme::{ColorScheme, ThemePreference};
@@ -59,19 +59,21 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
 pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let meta = AppMetadata::from_env();
-    // The switcher is an icon button, the same one the overflow menu hangs from (018 FR-029c). It
-    // used to be a bespoke icon+label button, which is what made it a 28dp target with a 14dp glyph
-    // beside a 48dp target with a 24dp one (BUG-007). The active project's name it used to print
-    // moves into the tooltip: FR-006 is carried by the panel's active marker, and was already.
-    let switcher_tip = match state.workspace.active_project() {
-        Some(project) => format!("Project: {}", project.display_name),
-        None => "Select project".to_string(),
-    };
-    let switcher = Tooltip::new(
-        IconButton::new(Icon::OpenProject, r).on_press(Message::ProjectSwitcherToggled),
-        switcher_tip,
-        r,
-    );
+    // The switcher names the project it will switch away from, so it is a **labelled** button, and
+    // it is the shared one: `Button::text` with §7.3's leading-icon slot (018 FR-029c). It used to
+    // assemble that shape itself — its own `button`, its own style, its own ripple, and
+    // `row![icon(.., Action.size()), Text]` for the content — which is how it drew a 14dp glyph in
+    // a 28dp box beside the overflow trigger's 24dp glyph in 48dp (BUG-007). Every figure it now
+    // draws is §7.3's, because the component owns them: the 40dp height, the 12dp ends, the 18dp
+    // glyph the leading slot applies whatever the label's role, and the press ripple.
+    let switcher_label = state
+        .workspace
+        .active_project()
+        .map(|p| p.display_name.clone())
+        .unwrap_or_else(|| "Select project".to_string());
+    let switcher = Button::text(switcher_label, r)
+        .leading(Icon::OpenProject, icon_role(IconSurface::AppBarAction, r))
+        .on_press(Message::ProjectSwitcherToggled);
     let menu = MenuTrigger::new(Icon::Menu, Message::HelpMenuToggled, r);
     Toolbar::new(meta.name, r)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from
