@@ -67,6 +67,22 @@ fn pairs(r: &Roles) -> Vec<(&'static str, Rgb, Rgb)> {
         r.on_surface_variant,
         r.surface,
     ));
+
+    // The select's trigger, at rest (feature 022, FR-029). Its container is
+    // `surface_container_highest` rather than `surface` — the filled field's, not the page's — so
+    // neither pair above covers it, and the chevron is the one glyph in the application whose only
+    // background is that container. `pick_list` drew both of these too and nothing measured them:
+    // the colours came from a style closure that named roles and was never read back.
+    out.push((
+        "select_value/field",
+        r.on_surface,
+        r.surface_container_highest,
+    ));
+    out.push((
+        "select_chevron/field",
+        r.on_surface_variant,
+        r.surface_container_highest,
+    ));
     out
 }
 
@@ -176,4 +192,37 @@ fn the_sidebar_stays_denser_than_the_text_it_nests_under() {
     );
     assert!(typography::SIDEBAR_TAG.size < typography::LABEL_MEDIUM.size);
     assert_eq!(typography::SIDEBAR_SESSION, typography::SIDEBAR_NAME);
+}
+
+/// The select's trigger **under its own state layer** (feature 022, T031 — FR-029).
+///
+/// §5 draws hover and open as `on_surface` over the container at the state's opacity, and §7.7
+/// asks the select to carry both that way — so the background its value and chevron are read
+/// against is not the container but the container *with the layer on it*. Two of the three colours
+/// in that sum are the same role, which is exactly the arrangement where contrast quietly falls:
+/// the layer moves the background toward the foreground.
+///
+/// Checked as the composite actually drawn, in both schemes, like the tag chips above. The at-rest
+/// pair is in [`pairs`]; this is the two states a person puts the control into to use it.
+#[test]
+fn the_selects_state_layers_stay_legible() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = roles(scheme);
+        for (state, opacity) in [
+            ("hovered", micold_core::tokens::state::HOVER as f64),
+            ("open", micold_core::tokens::state::PRESSED as f64),
+        ] {
+            let background = composite(r.on_surface, r.surface_container_highest, opacity);
+            for (what, fg) in [("value", r.on_surface), ("chevron", r.on_surface_variant)] {
+                let ratio = contrast(fg, background);
+                assert!(
+                    ratio >= AA_NORMAL,
+                    "{scheme:?} select {what} while {state}: contrast {ratio:.2} < {AA_NORMAL}. \
+                     The state layer is `on_surface` over the field container, so it pulls the \
+                     background toward the text it sits under — a layer opacity or a container \
+                     role that moved would show up here first (FR-029)"
+                );
+            }
+        }
+    }
 }

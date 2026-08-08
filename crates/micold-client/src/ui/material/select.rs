@@ -83,7 +83,7 @@ use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::widget::{container, row, Space};
 use iced::{alignment, keyboard, Background, Element, Event, Length, Rectangle, Size, Vector};
 use micold_core::tokens::{anatomy, shape, state, Roles};
-use micold_core::typeahead::{intent_for, move_highlight, Intent};
+use micold_core::typeahead::{claims, intent_for, move_highlight, Intent};
 
 use super::picker::{animated_menu, menu_element, Row, EXIT, GAP};
 use super::style;
@@ -444,6 +444,12 @@ where
         match event {
             Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
                 if self.keyboard(tree, key, shell) {
+                    // Claiming has to be *reported*, not merely decided. Returning early stops this
+                    // widget looking at the key again and does nothing whatever to the runtime — so
+                    // without this the select closed on Escape and the dialog behind it closed on
+                    // the same press. `cdk::picker` had always captured for the other control;
+                    // this is the half that had gone missing (T030, contract §1.4).
+                    shell.capture_event();
                     return;
                 }
             }
@@ -599,10 +605,11 @@ where
             Intent::Dismiss => {
                 state.open = false;
                 state.highlight = None;
-                // Tab dismisses and **passes on**, so focus still moves — the one key where the two
-                // answers come apart, and `intent_for`'s own docs say why. Swallowing it would
-                // leave a developer unable to tab past the select at all.
-                !matches!(key, keyboard::Key::Named(keyboard::key::Named::Tab))
+                // Tab dismisses and **passes on**, so focus still moves. The rule is
+                // `typeahead::claims` rather than a `matches!` here, because `cdk::picker` needs
+                // the same answer for the other control and a second copy is what let this one
+                // drift (feature 022, T030).
+                claims(key_for(key))
             }
         }
     }

@@ -213,13 +213,26 @@ the durability half of the request.
 
 ### Tests for User Story 3 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T029 [P] [US3] Write a failing test that exercises each shared behaviour through **both** controls from one test body — two constructions, one set of assertions — in `crates/micold-client/src/ui/material/picker_parity.rs` (SC-008, FR-024, FR-025)
+- [X] T029 [P] [US3] Write a failing test that exercises each shared behaviour through **both** controls from one test body — two constructions, one set of assertions — in `crates/micold-client/src/ui/material/picker_parity.rs` (SC-008, FR-024, FR-025)
 
 ### Implementation for User Story 3
 
-- [ ] T030 [US3] Resolve whatever T029 finds still duplicated rather than shared, across `crates/micold-client/src/ui/material/picker.rs`, `typeahead.rs` and `select.rs` (FR-024, FR-025, FR-028)
-- [ ] T031 [P] [US3] Add the select's new colour pairings — the trigger's state layers over the field container, and the chevron's `on_surface_variant` — to the AA-contrast gate in `crates/micold-core/tests/tokens.rs`, so "legible in both schemes" is measured rather than assumed (FR-029)
-- [ ] T032 [US3] Verify the architecture gates pass **together** — `cdk_no_appearance.rs`, `material_boundary.rs`, `material_builder_api.rs`, `component_api_opacity.rs`, `one_overlay_implementation.rs`, `typeahead_is_generic.rs`, `idle_requests_no_frames.rs`, `logical_state_ownership.rs`, `anatomy_size.rs`, `content_placement.rs`, `showcase_completeness.rs`, `showcase_captions.rs` — with **no budget raised and no exception added**. This feature should end stricter than it started: one sanction removed, none added (contract [picker-base §4](./contracts/picker-base.md))
+- [X] T030 [US3] Resolve whatever T029 finds still duplicated rather than shared, across `crates/micold-client/src/ui/material/picker.rs`, `typeahead.rs` and `select.rs` (FR-024, FR-025, FR-028)
+
+  > **T029 found a defect, not only a duplication.** Both controls end in `intent_for`, but each had
+  > written out the *claim* half — which keys the list keeps and which travel on — and they had
+  > already come apart. `cdk::picker` reported the claim to the runtime; `Select::update` decided it,
+  > returned early, and never called `shell.capture_event()` at all. So Escape closed the select's
+  > list **and** the dialog behind it on the same press, and Enter would have picked a row and
+  > submitted the dialog.
+  >
+  > The resolution is `micold_core::typeahead::claims`, beside `intent_for` where the rest of the key
+  > rule lives, called by both routes — and the missing `capture_event`. The fix landed in
+  > `cdk/picker.rs` and `select.rs` rather than in `picker.rs` and `typeahead.rs` as this task
+  > anticipated: the duplication was in the *behaviour* halves, which is where the two controls
+  > genuinely diverge, not in the presentation they already share.
+- [X] T031 [P] [US3] Add the select's new colour pairings — the trigger's state layers over the field container, and the chevron's `on_surface_variant` — to the AA-contrast gate in `crates/micold-core/tests/tokens.rs`, so "legible in both schemes" is measured rather than assumed (FR-029)
+- [X] T032 [US3] Verify the architecture gates pass **together** — `cdk_no_appearance.rs`, `material_boundary.rs`, `material_builder_api.rs`, `component_api_opacity.rs`, `one_overlay_implementation.rs`, `typeahead_is_generic.rs`, `idle_requests_no_frames.rs`, `logical_state_ownership.rs`, `anatomy_size.rs`, `content_placement.rs`, `showcase_completeness.rs`, `showcase_captions.rs` — with **no budget raised and no exception added**. This feature should end stricter than it started: one sanction removed, none added (contract [picker-base §4](./contracts/picker-base.md))
 
 **Checkpoint**: all three stories independently functional.
 
