@@ -536,27 +536,13 @@ pub enum Message {
     LogoutSurvivalOutcome(String),
 }
 
-/// How prominently a [`Notification`] is presented.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NoticeLevel {
-    /// Something happened that the user should know about, but nothing failed.
-    Info,
-    /// An action the user asked for could not be completed.
-    Error,
-}
-
-/// A transient, user-visible message not owned by any modal.
-///
-/// Exists because every feature that needed to report a failure invented its own error field
-/// with a single modal-specific render site, and those sites became unreachable as the UI grew
-/// (a session that fails to start, a folder that is refused). Notifications render
-/// unconditionally in [`crate::ui::view`], outside every branch that can bypass them, so a
-/// message pushed here cannot be silently swallowed.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Notification {
-    pub level: NoticeLevel,
-    pub message: String,
-}
+// Moved to `crate::features::notifications` (feature 021, T020). Re-exported so this step changes
+// no call site; the re-export goes away in T023 when imports are updated.
+//
+// `Notification` did NOT move -- it was deleted. Nothing ever constructed it; every real
+// notification is a `micold_core::notify::Notification` on the queue, which is what the snackbar
+// renders. Two names for one concept is what T020 asked to avoid, and one of them was dead.
+pub use crate::features::notifications::NoticeLevel;
 
 /// Root application state for the single main window.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -611,7 +597,7 @@ pub struct State {
     /// notification. Cleared when the user returns to the owner.
     pub restarted_while_inactive: BTreeSet<SessionId>,
     /// Global messages, newest last. Rendered unconditionally so no failure can be swallowed by
-    /// an unreachable render path — see [`Notification`]. Never persisted.
+    /// an unreachable render path — see [`notify::Notification`]. Never persisted.
     ///
     /// A message stays until the user dismisses it or it is evicted by newer ones. Nothing
     /// clears these implicitly: a report that vanishes on unrelated activity (a background
@@ -739,7 +725,7 @@ impl State {
         }
     }
 
-    /// Surface a failed action to the user (see [`Notification`]).
+    /// Surface a failed action to the user (see [`notify::Notification`]).
     ///
     /// Use this for anything the user asked for that could not be completed. Do not add a new
     /// error field with its own render site — that is the pattern that produced the silent
@@ -757,11 +743,8 @@ impl State {
         // Dedup and the retention cap moved into the queue with the rest of the discipline, so
         // this is now only the level translation: `NoticeLevel` stays the *banner's* vocabulary
         // (FR-032c keeps that a separate component) while the queue speaks the core's.
-        let level = match level {
-            NoticeLevel::Info => notify::Level::Info,
-            NoticeLevel::Error => notify::Level::Error,
-        };
-        self.notify.push(notify::Notification::new(level, message));
+        self.notify
+            .push(notify::Notification::new(level.to_queue_level(), message));
     }
 
     /// Open a modal overlay, closing any lightweight popover first. The two are meant to be
