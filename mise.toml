@@ -2,17 +2,32 @@
 rust = "stable"
 uv = "latest"
 
+# Every cargo task below goes through scripts/build-lock.sh, which points cargo
+# at one shared target directory beside the main checkout instead of a ~30 GB
+# target/ per worktree.
+#
+# The batch tasks additionally take a lock in the shared git dir, so only one of
+# them compiles at a time *across every worktree*. `jobs = 4` in
+# .cargo/config.toml only caps a single cargo process; four worktrees building
+# at once still means sixteen jobs, which oversubscribes RAM and stalls the
+# machine on swap I/O. Set MICOLD_NO_BUILD_LOCK=1 to bypass the lock for a
+# one-off run.
+#
+# The interactive tasks below pass --no-lock: they share the target directory,
+# but stay in the foreground for as long as you use the app, and holding the
+# build lock for that whole time would block every other worktree.
+
 [tasks.run]
 description = "Run the GUI client (feature 010: spawns/attaches the session daemon)"
-run = "cargo run -p micold-client"
+run = "{{config_root}}/scripts/build-lock.sh --no-lock cargo run -p micold-client"
 
 [tasks.showcase]
 description = "Run the component showcase (feature 020): every shared component on one page"
-run = "cargo run -p micold-client --bin micold-showcase"
+run = "{{config_root}}/scripts/build-lock.sh --no-lock cargo run -p micold-client --bin micold-showcase"
 
 [tasks.daemon]
 description = "Run the session daemon directly (normally auto-spawned by the client)"
-run = "cargo run -p micold-daemon"
+run = "{{config_root}}/scripts/build-lock.sh --no-lock cargo run -p micold-daemon"
 
 [tasks.screenshot]
 description = "Capture the desktop to a PNG, for the manual visual passes (quickstart Part B)"
@@ -23,22 +38,22 @@ description = "Build the 20-worktree reference scene for the frame-time measurem
 run = "scripts/reference-scene.sh"
 
 [tasks.test]
-description = "Test the whole workspace (core + client + daemon), matching CI"
-run = "cargo test --workspace"
+description = "Test the whole workspace (core + client + daemon), matching CI [build-locked]"
+run = "{{config_root}}/scripts/build-lock.sh cargo test --workspace"
 
 [tasks.test-core]
-description = "Test the render-free core only (fast, no GUI / no iced)"
-run = "cargo test -p micold-core --all-targets"
+description = "Test the render-free core only (fast, no GUI / no iced) [build-locked]"
+run = "{{config_root}}/scripts/build-lock.sh cargo test -p micold-core --all-targets"
 
 [tasks.build]
-description = "Build the release GUI binary"
-run = "cargo build --release -p micold-client"
+description = "Build the release GUI binary [build-locked]"
+run = "{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client"
 
 [tasks.deb]
-description = "Build the Debian .deb package for the host arch (installs cargo-deb if missing)"
+description = "Build the Debian .deb package for the host arch (installs cargo-deb if missing) [build-locked]"
 run = """
 command -v cargo-deb >/dev/null 2>&1 || cargo install cargo-deb --locked
-cargo deb -p micold-client
+{{config_root}}/scripts/build-lock.sh cargo deb -p micold-client
 echo 'Built:'
-ls -1 target/debian/*.deb
+ls -1 "$({{config_root}}/scripts/build-lock.sh --print-target-dir)"/debian/*.deb
 """

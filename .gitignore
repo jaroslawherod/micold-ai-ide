@@ -3,6 +3,8 @@
 
 # Rust
 /target/
+# Shared across the main checkout and every worktree (see scripts/build-lock.sh)
+/target-shared/
 **/*.rs.bk
 *.pdb
 

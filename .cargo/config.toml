@@ -8,5 +8,33 @@
 [build]
 jobs = 4
 
+# One target directory for the main checkout and every worktree beneath it,
+# instead of a ~30 GB target/ per branch. A relative path here resolves against
+# *this config file's* directory, and cargo merges configs from every ancestor
+# directory, so a worktree under .claude/worktrees/ inherits this same absolute
+# path -- including when it is driven by a bare `cargo`, which never sees
+# mise.toml or scripts/build-lock.sh.
+#
+# This is also the load-bearing half of the build serialisation: cargo takes an
+# exclusive lock on the target directory ("Blocking waiting for file lock on
+# build directory"), so sharing one directory means two worktrees cannot compile
+# at the same time no matter how the build was started.
+#
+# A worktree created *outside* the main checkout would not inherit this config;
+# scripts/build-lock.sh exports the same path for that case.
+target-dir = "target-shared"
+
 [env]
 RUST_TEST_THREADS = "4"
+
+# Cap the linker's thread pool as well. rust-lld is the default linker on this
+# target and sizes its pool from the CPU count (17 threads on a 16-thread host),
+# so `jobs = 4` alone still allows ~68 linker threads against a single NVMe
+# queue. Note this trims I/O fan-out and thread churn rather than memory: about
+# 79% of rust-lld's ~1.7 GB RSS is mmap'd input objects, which is reclaimable
+# page cache, not anonymous memory.
+#
+# The flag is scoped to this triple because `--threads` is an lld option; a
+# build that swaps in GNU ld would reject it.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-Wl,--threads=4"]
