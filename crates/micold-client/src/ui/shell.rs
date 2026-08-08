@@ -4,28 +4,12 @@
 
 use crate::app::{Message, State};
 use crate::icons::{icon_role, Icon, IconSurface};
-use crate::ui::material::{self, Button, ButtonVariant, Glyph, SurfaceKind, Text, TypeRole};
+use crate::ui::material::{self, Button, Glyph, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::project::Availability;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing, Rgb, Roles};
-
-/// An icon + text label laid out as a horizontal button/badge content, both at the same role.
-fn labeled<'a>(
-    glyph: Icon,
-    tint: Rgb,
-    role: TypeRole,
-    label: &str,
-    r: Roles,
-) -> iced::widget::Row<'a, Message> {
-    row![
-        Glyph::new(glyph, role, r).tint(tint),
-        Text::new(label.to_string(), role, r)
-    ]
-    .spacing(spacing::XS)
-    .align_y(Alignment::Center)
-}
+use micold_core::tokens::{self, spacing};
 
 /// Render the shell body for the current workspace state.
 pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
@@ -47,18 +31,9 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                     r
                 ),
                 Text::new(project.path.display().to_string(), TypeRole::Caption, r).muted(),
-                Button::with_content(
-                    labeled(
-                        Icon::OpenProject,
-                        on_surface_tint,
-                        TypeRole::Action,
-                        "Open another project",
-                        r
-                    ),
-                    ButtonVariant::Outlined,
-                    r
-                )
-                .on_press(Message::ProjectSelectorOpened),
+                Button::outlined("Open another project", r)
+                    .leading(Icon::OpenProject, on_surface_tint)
+                    .on_press(Message::ProjectSelectorOpened),
             ]
             .spacing(spacing::SM),
             SurfaceKind::Plain,
@@ -76,18 +51,9 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                     r
                 )
                 .muted(),
-                Button::with_content(
-                    labeled(
-                        Icon::OpenProject,
-                        on_primary_tint,
-                        TypeRole::Action,
-                        "Open a project",
-                        r
-                    ),
-                    ButtonVariant::Filled,
-                    r
-                )
-                .on_press(Message::ProjectSelectorOpened),
+                Button::filled("Open a project", r)
+                    .leading(Icon::OpenProject, on_primary_tint)
+                    .on_press(Message::ProjectSelectorOpened),
             ]
             .spacing(spacing::MD),
             SurfaceKind::Plain,
@@ -121,41 +87,26 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             // The active project is marked with a check icon; unavailable folders with an
             // error icon — both replacing the former text decorations (FR-005).
             let reopen = if available {
-                Button::with_content(
-                    labeled(
-                        Icon::OpenProject,
-                        on_primary_tint,
-                        TypeRole::Action,
-                        "Open",
-                        r,
-                    ),
-                    ButtonVariant::Filled,
-                    r,
-                )
-                .on_press(Message::KnownProjectReopened(project.path.clone()))
+                Button::filled("Open", r)
+                    .leading(Icon::OpenProject, on_primary_tint)
+                    .on_press(Message::KnownProjectReopened(project.path.clone()))
             } else {
                 Button::filled("Unavailable", r)
             };
 
             // Renaming affects only the stored name, so it is allowed even when the folder
             // is unavailable (FR-017, FR-018).
-            let rename = Button::with_content(
-                labeled(Icon::Rename, on_surface_tint, TypeRole::Action, "Rename", r),
-                ButtonVariant::Outlined,
-                r,
-            )
-            .on_press(Message::RenameStarted(project.path.clone()));
+            let rename = Button::outlined("Rename", r)
+                .leading(Icon::Rename, on_surface_tint)
+                .on_press(Message::RenameStarted(project.path.clone()));
 
             // Forget removes the project (and its remembered metadata) from the list. Enabled for
             // every entry — including Unavailable ones, for which it is the primary way to clear a
             // stale entry (feature 014, FR-001/FR-011). The trash icon is error-tinted to signal
             // the destructive-to-metadata action; the confirmation dialog is the real safeguard.
-            let forget = Button::with_content(
-                labeled(Icon::Delete, error_tint, TypeRole::Action, "Forget", r),
-                ButtonVariant::Outlined,
-                r,
-            )
-            .on_press(Message::ProjectForgetRequested(project.path.clone()));
+            let forget = Button::outlined("Forget", r)
+                .leading(Icon::Delete, error_tint)
+                .on_press(Message::ProjectForgetRequested(project.path.clone()));
 
             let mut entry = row![].spacing(spacing::SM).align_y(Alignment::Center);
             if is_active {
