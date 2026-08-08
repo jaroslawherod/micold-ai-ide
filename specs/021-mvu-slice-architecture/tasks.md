@@ -96,7 +96,7 @@ split a feature across parallel state/update/view files (FR-001a).
 Each test constructs only its own feature's types, so each fails to compile until its module exists.
 All are separate files, so all are parallelizable.
 
-- [ ] T007 [P] [US2] Isolation test for the worktree-creation form in `crates/micold-client/tests/features_worktree_form.rs`
+- [X] T007 [P] [US2] Isolation test for the worktree-creation form in `crates/micold-client/tests/features_worktree_form.rs`
 - [ ] T008 [P] [US2] Isolation test for sidebar types in `crates/micold-client/tests/features_sidebar.rs`
 - [ ] T009 [P] [US2] Isolation test for project/workspace types in `crates/micold-client/tests/features_project.rs`
 - [ ] T010 [P] [US2] Isolation test for settings types in `crates/micold-client/tests/features_settings.rs`
