@@ -149,8 +149,8 @@ land as four separate commits so a bisect finds one of them, not a monolithic ov
 
 ### Tests for User Story 1 — write first, observe failing ⚠️
 
-- [ ] T026 [P] [US1] Registration guard in `crates/micold-client/tests/overlay_registration.rs` — a surface that exists but is not registered MUST fail the build or this test, never be discovered by hand at runtime (FR-010, contract R2)
-- [ ] T027 [P] [US1] Dismissal-ordering test in `crates/micold-client/tests/overlay_dispatch_ordering.rs` covering contract obligations D1 (popover closes before modal on Escape), D2 (opening a modal closes popovers) and D3 (closing the filter panel leaves filters intact), asserted against the generic dispatch rather than the special-case match
+- [X] T026 [P] [US1] Registration guard in `crates/micold-client/tests/overlay_registration.rs` — a surface that exists but is not registered MUST fail the build or this test, never be discovered by hand at runtime (FR-010, contract R2) — **guards the seven popovers, not the `Overlay` enum.** R2's premise ("forgetting one of eight edit sites") does not hold for the enum: those sites are matches over a closed enum, so `rustc` already enforces coverage — verified by removing an arm three ways, each of which failed to compile before any test ran. The popovers are loose `State` fields with no such protection, and the two dismissal paths clear different subsets of them (4 of 7 and 6 of 7). The guard makes every combination a recorded decision; three probes confirm it fires
+- [X] T027 [P] [US1] Dismissal-ordering test in `crates/micold-client/tests/overlay_dispatch_ordering.rs` covering contract obligations D1 (~~popover closes before modal on Escape~~ — **the contract had D1 backwards**; the popover branch is guarded on no modal being open, so the modal wins whenever both are, and FR-012 says preserve what exists. Contract corrected, test asserts the code), D2 (opening a modal closes popovers) and D3 (closing the filter panel leaves filters intact), asserted against the public entry points rather than the special-case match, so the migration must leave it passing unmodified
 
 ### Implementation for User Story 1
 
