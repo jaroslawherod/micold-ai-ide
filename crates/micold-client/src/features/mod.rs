@@ -14,5 +14,6 @@
 //!
 //! Modules are declared here as each is extracted from `crate::app`, one migration step at a time.
 
+pub mod project;
 pub mod sidebar;
 pub mod worktree_form;
