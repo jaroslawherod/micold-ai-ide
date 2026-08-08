@@ -72,7 +72,7 @@ rather than aspirational
 
 - [X] T004 Add an assertion-freeze check to `scripts/check-assertions-frozen.sh` that fails when `git diff <base>...HEAD -- crates/*/tests/` removes or alters a line matching `assert`, allowing pure relocation (the identical assertion re-added elsewhere in the same diff), per FR-027
 - [X] T005 [P] Wire T004 into CI in `.github/workflows/ci.yml` as a non-blocking advisory job first, so its false-positive rate is known before it gates merges
-- [ ] T006 [P] Confirm the baseline suite is green on Linux, macOS and Windows via CI before any change lands
+- [X] T006 [P] Confirm the baseline suite is green on Linux, macOS and Windows via CI before any change lands — discharged on PR #98, run 31261847685: `build + test` passed on ubuntu, macos and windows. Needed a pull request to exist at all, since `.github/workflows/ci.yml` triggers only on `push: main` or `pull_request`; a feature-branch push runs nothing. The same run caught `fmt + clippy` failing on drift the local loop had not been checking
 
 **Checkpoint**: Behavior drift and assertion tampering are both detectable. Extraction can start.
 
@@ -91,13 +91,20 @@ compile and pass without the application shell (SC-004).
 back from `app.rs` in the same commit so no call site changes, and keep the whole suite green. Never
 split a feature across parallel state/update/view files (FR-001a).
 
+**Commit shape — corrected during T016.** The isolation test and its extraction go in **one**
+commit. Splitting them, as T007/T015 did, leaves the test commit importing a module that does not
+exist yet: `809e7ae` does not compile, which violates SC-009 ("verified by the step's own commit").
+The test is still written and observed failing first — that ordering is what TDD asks for — but
+Red is recorded in the commit message rather than in the history. Run `cargo fmt --all` before
+committing; CI's `fmt + clippy` job checks it and the first extractions did not.
+
 ### Tests for User Story 2 — write first, observe failing ⚠️
 
 Each test constructs only its own feature's types, so each fails to compile until its module exists.
 All are separate files, so all are parallelizable.
 
 - [X] T007 [P] [US2] Isolation test for the worktree-creation form in `crates/micold-client/tests/features_worktree_form.rs`
-- [ ] T008 [P] [US2] Isolation test for sidebar types in `crates/micold-client/tests/features_sidebar.rs`
+- [X] T008 [P] [US2] Isolation test for sidebar types in `crates/micold-client/tests/features_sidebar.rs`
 - [ ] T009 [P] [US2] Isolation test for project/workspace types in `crates/micold-client/tests/features_project.rs`
 - [ ] T010 [P] [US2] Isolation test for settings types in `crates/micold-client/tests/features_settings.rs`
 - [ ] T011 [P] [US2] Isolation test for worktree types in `crates/micold-client/tests/features_worktree.rs`
@@ -111,7 +118,7 @@ All are separate files, so all are parallelizable.
 Sequential — every task edits `app.rs`, so none of these are parallelizable against each other.
 
 - [X] T015 [US2] Move `WorktreeForm`, `WorktreeFormStatus`, `BranchSource`, `ResolutionState` and their impls from `crates/micold-client/src/app.rs:86–326` to `crates/micold-client/src/features/worktree_form.rs` (~240 lines)
-- [ ] T016 [US2] Move `SidebarEntry`, `DefaultNode`, `WorktreeNode`, `TagFilter`, `matches_filters`, `worktree_location_label` from `crates/micold-client/src/app.rs:372–456` to `crates/micold-client/src/features/sidebar.rs` (~85 lines)
+- [X] T016 [US2] Move `SidebarEntry`, `DefaultNode`, `WorktreeNode`, `TagFilter`, `matches_filters`, `worktree_location_label` from `crates/micold-client/src/app.rs:372–456` to `crates/micold-client/src/features/sidebar.rs` (~85 lines) — `DEFAULT_LOCATION_LABEL` travelled with them: it is the project-root half of the same location tooltip, and leaving it behind would split the feature (FR-001)
 - [ ] T017 [US2] Move `ProjectMenu`, `clamp_menu_anchor`, `SwitcherEntry`, `RenameDraft`, `SelectKind` from `crates/micold-client/src/app.rs:327–371, 457–497` to `crates/micold-client/src/features/project.rs` (~85 lines)
 - [ ] T018 [US2] Move `SettingsDraft` from `crates/micold-client/src/app.rs:469–484` to `crates/micold-client/src/features/settings.rs` (~16 lines)
 - [ ] T019 [US2] Move `WorktreeRenameDraft` and the worktree helpers `worktree_tree`, `filtered_worktree_tree`, `visible_worktrees`, `has_visible_worktrees`, `worktree_tags`, `worktree_display_name`, `available_tag_filters` from `crates/micold-client/src/app.rs:498–510, 2156–2245, 2276+` to `crates/micold-client/src/features/worktree.rs` (~105 lines)
