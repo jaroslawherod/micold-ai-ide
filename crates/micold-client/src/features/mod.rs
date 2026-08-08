@@ -16,6 +16,7 @@
 
 pub mod notifications;
 pub mod project;
+pub mod session;
 pub mod settings;
 pub mod sidebar;
 pub mod worktree;

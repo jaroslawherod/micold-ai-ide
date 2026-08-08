@@ -79,3 +79,4 @@ Re-measure at each phase checkpoint and append a row.
 | T018 (settings) | 3,567 | 2,063 | −10; validation stays in `main.rs` until Tier 3 |
 | T019 (worktree) | 3,567 | 1,893 | −170; projections split worktree/sidebar by feature |
 | T020 (notifications) | 3,567 | 1,876 | −17; a dead duplicate `Notification` deleted |
+| T021 (session) | 3,567 | 1,727 | −149; at the phase checkpoint's ~1,700 target |
