@@ -103,6 +103,12 @@ list with no pagination (an ordinary project's branch count, not a mirror of a m
   still lives under `.claude/worktrees/` and binds a branch; the "Default" project-root exception
   is not involved. Notably, the "branch already checked out" block (FR-021) is what keeps the
   worktree↔branch binding one-to-one.
+  **Amended for BUG-001**: the block is repository-wide, not app-wide — git refuses a second
+  checkout no matter who holds the branch, including worktrees this app does not manage and does
+  not list. `BlockReason` therefore names three holders rather than two (`CheckedOutInProjectRoot`,
+  `CheckedOutAt { path, owner }`, `CheckedOutOutsideApp { path }`), split by `reconcile()`'s own
+  parent test so "described as one of your worktrees" and "shown in your worktree list" are the
+  same set (FR-021a/FR-021b, research R1a).
 - [x] **IV. Local-First Storage (NON-NEGOTIABLE)**: PASS, and load-bearing here. Remote *branch
   awareness* is derived entirely from `refs/remotes` already in the local repository; FR-020
   forbids contacting a remote and the UI discloses that the view reflects the last fetch. Nothing

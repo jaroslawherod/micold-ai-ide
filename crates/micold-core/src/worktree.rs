@@ -53,12 +53,52 @@ fn is_agent_id(s: &str) -> bool {
 ///
 /// Derived from names only — never stored on [`Worktree`], never persisted — so it cannot drift
 /// out of sync with the names it is derived from (FR-009, contracts/agent-worktree-classification.md).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WorktreeOwner {
     /// Created by the user, through the app or by hand. Always listed.
     User,
     /// Created by an AI assistant for a sub-task. Hidden unless the reveal control is on (FR-002).
     Agent,
+}
+
+/// Classify a worktree's owner from its names alone (feature 014, FR-005).
+///
+/// The single implementation of the naming half of FR-005, shared by [`Worktree::owner`] and by
+/// [`BlockReason`]'s classification — a second copy would let "this worktree is hidden" and "the
+/// branch is held by a hidden worktree" disagree about the same directory (BUG-001).
+///
+/// Either identifier suffices (OR, not AND): the directory survives when git no longer registers
+/// the worktree, the branch survives when the directory was renamed, and a detached worktree has no
+/// branch at all — all three must still classify (FR-007).
+fn classify_owner(dir_name: &str, branch: Option<&str>) -> WorktreeOwner {
+    let dir_match = dir_name
+        .strip_prefix(AGENT_DIR_PREFIX)
+        .is_some_and(is_agent_id);
+    let branch_match = branch
+        .and_then(|b| b.strip_prefix(AGENT_BRANCH_PREFIX))
+        .is_some_and(is_agent_id);
+    if dir_match || branch_match {
+        WorktreeOwner::Agent
+    } else {
+        WorktreeOwner::User
+    }
+}
+
+/// The directory this project's worktrees live in — the one location the app manages.
+///
+/// A function rather than a repeated `join` so [`discover`]'s "what the sidebar lists" and
+/// [`checked_out_branches`]'s "whose worktree is this" ask the same question of the same path
+/// (BUG-001, contract `branch-conflict.md` §1 rule 2).
+pub fn worktrees_root(repo: &Path) -> PathBuf {
+    repo.join(".claude/worktrees")
+}
+
+/// A path's last component, for naming a holder the user can see in the sidebar. Falls back to the
+/// whole path when there is no final component (a root, or a path ending in `..`).
+pub fn folder_name(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string())
 }
 
 /// An isolated worktree under `.claude/worktrees/`, bound to a dedicated branch (FR-006).
@@ -93,23 +133,7 @@ impl Worktree {
     /// Pure, total, health-blind, and stateless: no I/O, defined for `branch: None` and every
     /// [`WorktreeStatus`], and nothing is cached (FR-007, FR-009).
     pub fn owner(&self) -> WorktreeOwner {
-        // Either identifier suffices (OR, not AND): the directory survives when git no longer
-        // registers the worktree, the branch survives when the directory was renamed, and a
-        // detached worktree has no branch at all — all three must still classify (FR-007).
-        let dir_match = self
-            .dir_name
-            .strip_prefix(AGENT_DIR_PREFIX)
-            .is_some_and(is_agent_id);
-        let branch_match = self
-            .branch
-            .as_deref()
-            .and_then(|b| b.strip_prefix(AGENT_BRANCH_PREFIX))
-            .is_some_and(is_agent_id);
-        if dir_match || branch_match {
-            WorktreeOwner::Agent
-        } else {
-            WorktreeOwner::User
-        }
+        classify_owner(&self.dir_name, self.branch.as_deref())
     }
 
     /// `true` iff [`Self::owner`] is [`WorktreeOwner::Agent`] — the predicate the sidebar's
@@ -249,16 +273,66 @@ pub enum BranchOrigin {
     Remote { remote: String },
 }
 
-/// Why a branch cannot back a new worktree (feature 016, FR-021).
+/// Why a branch cannot back a new worktree (feature 016, FR-021/FR-021a/FR-021b).
 ///
-/// Two variants rather than one path-carrying variant so the UI can phrase the project-root case
-/// in the user's language instead of showing them the repository path as if it were a worktree.
+/// Three variants rather than one path-carrying variant so each holder is described in terms the
+/// user can act on, instead of every holder being rendered as a folder name. That mattered more
+/// than it looked: git refuses a second checkout no matter who holds the branch, so this enum also
+/// has to cover holders the app does not manage and never lists (BUG-001, research R1a).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BlockReason {
-    /// Checked out in another worktree, at this path.
-    CheckedOutAt { path: PathBuf },
+    /// Checked out in another worktree **this app manages** — a direct child of
+    /// `.claude/worktrees/`, i.e. one [`discover`] returns and the sidebar can show. `owner`
+    /// separates a user's worktree from an agent's, which is hidden unless the reveal control is
+    /// on (feature 014, FR-002): the holder is still the app's, so it is named as such, but the
+    /// message has to say the list is currently omitting it.
+    CheckedOutAt { path: PathBuf, owner: WorktreeOwner },
+    /// Checked out in a worktree git knows about that this app does **not** manage — another
+    /// tool's worktree directory, or a folder anywhere else on disk. Never appears in the sidebar,
+    /// so the message must give the path rather than the folder name (FR-021a).
+    CheckedOutOutsideApp { path: PathBuf },
     /// Checked out as the repository's own current branch.
     CheckedOutInProjectRoot,
+}
+
+impl BlockReason {
+    /// The user-facing sentence explaining who holds `branch` (FR-021/FR-021a/FR-021b, SC-006).
+    ///
+    /// Lives in core, not in the two renderers, for two reasons. It is the part of the block a
+    /// user actually reads, so it needs tests, and Principle I keeps logic out of the `iced`
+    /// layer. And the client's pre-flight refusal and the daemon's create-time refusal describe
+    /// the same fact — before BUG-001 they described it in two hand-written wordings that could
+    /// drift apart, and did.
+    ///
+    /// Each holder is phrased for what the user can do about it: a listed worktree by the folder
+    /// name that is its sidebar row; a hidden one by that name plus how to bring it into view; an
+    /// unmanaged one by its full path, since no amount of looking in the sidebar will find it.
+    pub fn explain(&self, branch: &str) -> String {
+        match self {
+            BlockReason::CheckedOutInProjectRoot => {
+                format!("'{branch}' is currently checked out in the project itself.")
+            }
+            BlockReason::CheckedOutAt {
+                path,
+                owner: WorktreeOwner::User,
+            } => format!(
+                "'{branch}' is already checked out in the worktree '{}'.",
+                folder_name(path)
+            ),
+            BlockReason::CheckedOutAt {
+                path,
+                owner: WorktreeOwner::Agent,
+            } => format!(
+                "'{branch}' is already checked out in the agent worktree '{}', which the sidebar \
+                 hides until you turn on \"Show agent worktrees\".",
+                folder_name(path)
+            ),
+            BlockReason::CheckedOutOutsideApp { path } => format!(
+                "'{branch}' is already checked out in a worktree outside this app: {}.",
+                path.display()
+            ),
+        }
+    }
 }
 
 /// One row of the existing-branch picker (feature 016, FR-010–FR-012).
@@ -287,16 +361,22 @@ impl fmt::Display for BranchCandidate {
         if let BranchOrigin::Remote { remote } = &self.origin {
             write!(f, " · {remote}")?;
         }
+        // A row is one line, so it names the KIND of holder. The location that makes an unmanaged
+        // holder findable belongs in the inline explanation, which has room for it — and a row
+        // must never print a folder name for a holder the sidebar cannot show (BUG-001).
         match &self.blocked_by {
             Some(BlockReason::CheckedOutInProjectRoot) => {
                 f.write_str(" · in use by the project checkout")
             }
-            Some(BlockReason::CheckedOutAt { path }) => {
-                let holder = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| path.display().to_string());
-                write!(f, " · in use by {holder}")
+            Some(BlockReason::CheckedOutAt {
+                owner: WorktreeOwner::Agent,
+                ..
+            }) => f.write_str(" · in use by a hidden agent worktree"),
+            Some(BlockReason::CheckedOutAt { path, .. }) => {
+                write!(f, " · in use by {}", folder_name(path))
+            }
+            Some(BlockReason::CheckedOutOutsideApp { .. }) => {
+                f.write_str(" · in use outside this app")
             }
             None => Ok(()),
         }
@@ -442,15 +522,29 @@ fn sort_candidates(candidates: &mut [BranchCandidate]) {
 /// Reads the RAW porcelain records rather than [`reconcile`]: `reconcile` keeps only worktrees
 /// under `.claude/worktrees/`, which discards the repository's own main checkout — the very
 /// record FR-021's project-root case needs (research R1).
+///
+/// But raw means *raw*, and that is the half research R1 missed: the records also carry worktrees
+/// this app does not manage, which `reconcile` drops and the sidebar therefore never shows. They
+/// must still block — git refuses the second checkout wherever the branch is held — so the fix is
+/// to describe them honestly rather than to stop seeing them (BUG-001, research R1a).
+///
+/// The app-managed test is [`reconcile`]'s own, applied to the same [`worktrees_root`], so the set
+/// of holders called "one of your worktrees" is exactly the set [`discover`] returns.
 fn checked_out_branches(records: &[WorktreeRecord], repo: &Path) -> Vec<(String, BlockReason)> {
+    let root = worktrees_root(repo);
     records
         .iter()
         .filter_map(|rec| {
             let branch = rec.branch.clone()?;
             let reason = if rec.path == repo {
                 BlockReason::CheckedOutInProjectRoot
-            } else {
+            } else if rec.path.parent() == Some(root.as_path()) {
                 BlockReason::CheckedOutAt {
+                    path: rec.path.clone(),
+                    owner: classify_owner(&folder_name(&rec.path), rec.branch.as_deref()),
+                }
+            } else {
+                BlockReason::CheckedOutOutsideApp {
                     path: rec.path.clone(),
                 }
             };
@@ -557,7 +651,7 @@ pub fn branch_candidates(git: &dyn Git, repo: &Path) -> io::Result<Vec<BranchCan
 pub fn discover(git: &dyn Git, repo: &Path) -> Vec<Worktree> {
     let porcelain = git.worktree_list_porcelain(repo).unwrap_or_default();
     let records = parse_worktrees(&porcelain);
-    let root = repo.join(".claude/worktrees");
+    let root = worktrees_root(repo);
     let on_disk = list_dir_names(&root);
     reconcile(&records, &root, &on_disk, &|p| p.exists())
 }

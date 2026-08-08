@@ -3,7 +3,7 @@
 //! contract `branch-picker.md` §2).
 
 use micold_core::git::FakeGit;
-use micold_core::worktree::{branch_candidates, BlockReason, BranchOrigin};
+use micold_core::worktree::{branch_candidates, BlockReason, BranchOrigin, WorktreeOwner};
 use std::path::PathBuf;
 
 fn repo() -> PathBuf {
@@ -24,6 +24,23 @@ fn mixed() -> FakeGit {
         .with_remote_branch("/repo", "upstream", "feat/vendor")
         .with_worktree("/repo", "/repo", "main")
         .with_worktree("/repo", "/repo/.claude/worktrees/feat-held", "feat/held")
+}
+
+/// The two holders BUG-001 found — a worktree outside `.claude/worktrees/`, and an agent-owned one
+/// inside it — kept in their own fixture rather than folded into [`mixed`]. Widening the shared
+/// fixture would have rewritten every count and ordering expectation built on it, and those
+/// expectations are the suite's record of what the listing already does (FR-027).
+fn hidden_holders() -> FakeGit {
+    FakeGit::new()
+        .with_repo("/repo")
+        .with_branch("/repo", "fix/paw")
+        .with_branch("/repo", "feat/agent-held")
+        .with_worktree("/repo", "/repo/.git-paw/worktrees/fix-paw", "fix/paw")
+        .with_worktree(
+            "/repo",
+            "/repo/.claude/worktrees/agent-deadbeefdeadbeef",
+            "feat/agent-held",
+        )
 }
 
 #[test]
@@ -67,7 +84,8 @@ fn branches_held_elsewhere_are_marked_unavailable_with_the_right_reason() {
     assert_eq!(
         held.blocked_by,
         Some(BlockReason::CheckedOutAt {
-            path: PathBuf::from("/repo/.claude/worktrees/feat-held")
+            path: PathBuf::from("/repo/.claude/worktrees/feat-held"),
+            owner: WorktreeOwner::User,
         })
     );
 
@@ -77,6 +95,42 @@ fn branches_held_elsewhere_are_marked_unavailable_with_the_right_reason() {
 
     let free = candidates.iter().find(|c| c.name == "feat/login").unwrap();
     assert!(free.is_available());
+}
+
+/// BUG-001: the two holders the sidebar cannot show are marked with reasons of their own, so the
+/// UI never describes them as a worktree the user could go and find (FR-021a, FR-021b).
+#[test]
+fn holders_the_sidebar_cannot_show_are_marked_with_their_own_reasons() {
+    let candidates = branch_candidates(&hidden_holders(), &repo()).unwrap();
+    let reason = |name: &str| {
+        candidates
+            .iter()
+            .find(|c| c.name == name)
+            .unwrap()
+            .blocked_by
+            .clone()
+    };
+
+    // Not one of the app's worktrees, so not described as one.
+    assert_eq!(
+        reason("fix/paw"),
+        Some(BlockReason::CheckedOutOutsideApp {
+            path: PathBuf::from("/repo/.git-paw/worktrees/fix-paw"),
+        })
+    );
+
+    // The app's own, but hidden by default — so it keeps `CheckedOutAt` and carries the owner.
+    assert_eq!(
+        reason("feat/agent-held"),
+        Some(BlockReason::CheckedOutAt {
+            path: PathBuf::from("/repo/.claude/worktrees/agent-deadbeefdeadbeef"),
+            owner: WorktreeOwner::Agent,
+        })
+    );
+
+    // FR-012 holds for these too: marked, not omitted.
+    assert!(candidates.iter().any(|c| c.name == "fix/paw"));
+    assert!(candidates.iter().any(|c| c.name == "feat/agent-held"));
 }
 
 #[test]
@@ -115,6 +169,32 @@ fn row_labels_read_as_the_contract_specifies() {
     assert_eq!(label("feat/reporting"), "feat/reporting · origin");
     assert_eq!(label("feat/held"), "feat/held · in use by feat-held");
     assert_eq!(label("main"), "main · in use by the project checkout");
+}
+
+/// BUG-001: a row is one line, so it names the KIND of holder. The location that makes an
+/// unmanaged holder findable goes in the inline explanation, which has room for it. What a row
+/// must never print is a folder name for something the sidebar cannot show
+/// (contract `branch-picker.md` §2).
+#[test]
+fn rows_for_holders_the_sidebar_cannot_show_name_the_kind_not_a_folder() {
+    let candidates = branch_candidates(&hidden_holders(), &repo()).unwrap();
+    let label = |name: &str| {
+        candidates
+            .iter()
+            .find(|c| c.name == name)
+            .unwrap()
+            .to_string()
+    };
+
+    assert_eq!(label("fix/paw"), "fix/paw · in use outside this app");
+    assert_eq!(
+        label("feat/agent-held"),
+        "feat/agent-held · in use by a hidden agent worktree"
+    );
+    assert!(
+        !label("fix/paw").contains("fix-paw"),
+        "a row must not print a folder name the sidebar cannot show"
+    );
 }
 
 #[test]

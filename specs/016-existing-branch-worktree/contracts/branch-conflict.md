@@ -26,16 +26,42 @@ the prompt, once inside `create_worktree` to re-verify (§4).
 > Use the raw `WorktreeRecord`s, **not** `reconcile()`. `reconcile()` filters to
 > `.claude/worktrees/` children and so discards the repository's own main checkout — the exact
 > record FR-021's second case needs (research R1).
+>
+> But raw means *raw*: the records also include worktrees this app does not manage — another
+> tool's worktree tree, a folder anywhere else on disk — which `reconcile()` drops and the sidebar
+> therefore never shows. Blocking on them is right; describing them as though they were the app's
+> own is not. Apply `reconcile()`'s own parent test to each blocking record and pick the
+> `BlockReason` variant from the answer (research R1a, BUG-001).
 
 ### Classification order — first match wins
 
 | # | Condition | Result |
 |---|---|---|
 | 1 | `target_exists`, or a record's `path` equals `target_path` | `DirectoryTaken { dir }` |
-| 2 | a record's `branch` equals `branch` | `Blocked { branch, reason }` — `reason` is `CheckedOutInProjectRoot` when that record is the repo root, else `CheckedOutAt { path }` |
+| 2 | a record's `branch` equals `branch` | `Blocked { branch, reason }` — see the holder table below |
 | 3 | `branch_exists` is true | `LocalAvailable { branch }` |
 | 4 | `refs/remotes/<r>/<branch>` exists for one or more `r` | `RemoteOnly { branch, remotes }` — **all** matching remotes, sorted |
 | 5 | otherwise | `Free` |
+
+### Rule 2 — which holder, and how it is described
+
+Decided from the blocking record's `path` alone, first match wins (FR-021, FR-021a, FR-021b):
+
+| # | The record's path | `BlockReason` | Shown as |
+|---|---|---|---|
+| a | equals `repo` | `CheckedOutInProjectRoot` | "checked out in the project itself" |
+| b | parent is `repo/.claude/worktrees` | `CheckedOutAt { path, owner }` | the folder name — this holder is in the sidebar |
+| b′ | …and `owner` is `Agent` | `CheckedOutAt { path, owner: Agent }` | the folder name **plus** that it is a hidden assistant worktree and how to reveal it |
+| c | anything else | `CheckedOutOutsideApp { path }` | "outside this app", with the **full path** |
+
+Case (b)'s test is `reconcile()`'s, so the set of holders described as "one of your worktrees" is
+exactly the set the sidebar renders. Case (b′)'s `owner` comes from the same name-derived rule as
+`Worktree::owner()` (feature 014, FR-005) — the holder really is the app's, so it is named as such;
+only the current view omits it, and the message says so. Case (c) is the one BUG-001 found: git
+enforces the block whatever the holder is, but a folder name for a worktree that can never appear
+in the list sends the user searching for nothing.
+
+None of the three offers reuse or overwrite. The distinction is entirely in the explanation.
 
 Rule 1 precedes everything because no branch choice can resolve a directory clash (FR-022).
 Rule 2 precedes 3 because a checked-out branch is neither reusable nor overwritable (FR-021).

@@ -60,12 +60,23 @@ Why a branch cannot back a new worktree.
 
 | Variant | Fields | Message shape |
 |---|---|---|
-| `CheckedOutAt` | `path: PathBuf` | Names the worktree directory holding it. |
+| `CheckedOutAt` | `path: PathBuf`, `owner: WorktreeOwner` | A worktree **this app manages** — directly under `.claude/worktrees/`, so the sidebar can show it. Named by folder name. `owner` is `Agent` for an assistant-created worktree, which the sidebar hides by default: the message then also says how to reveal it (FR-021b). |
+| `CheckedOutOutsideApp` | `path: PathBuf` | A worktree git knows about that this app does **not** manage — anywhere outside `.claude/worktrees/`. Named by **full path**, and said to be outside the app (FR-021a). |
 | `CheckedOutInProjectRoot` | — | The repository's own main checkout (FR-021, second case). |
 
-Both are derived from the same `worktree list --porcelain` records (research R1); the split exists
-so the UI can phrase the project-root case in the user's language rather than showing them the
-repo path as if it were a worktree.
+All three are derived from the same `worktree list --porcelain` records (research R1, R1a). The
+split exists so each holder is described in terms the user can act on: the project-root case in the
+user's language rather than as a repo path; the unmanaged case by a location they can navigate to,
+rather than a folder name that reads exactly like a sidebar row and is not one (BUG-001).
+
+**Which variant applies** is the same test `reconcile()` uses to decide what the sidebar shows —
+`record.path.parent() == Some(repo/.claude/worktrees)` — so "named as one of your worktrees" and
+"appears in your worktree list" cannot disagree. `owner` is derived from the folder and branch
+names by the same rule as `Worktree::owner()` (feature 014, FR-005), shared rather than duplicated.
+
+> `path` is always **absolute**. It is the one thing that makes an unmanaged holder findable, and a
+> repo-relative rendering would be useless for the holder that sits outside the repository
+> altogether — the sibling-directory case in BUG-001.
 
 ### `BranchSituation` (new)
 

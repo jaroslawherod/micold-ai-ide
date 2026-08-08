@@ -83,7 +83,7 @@ A developer started work on another machine (or it arrived from a colleague or f
 
 ### User Story 5 - Understand when an existing branch cannot be used (Priority: P5)
 
-Some existing branches cannot be reused or overwritten at all — most commonly because the branch is already checked out somewhere else (in another of the app's worktrees, or as the repository's own current branch), which git does not permit to be checked out twice. Rather than a raw git failure, the user wants a clear explanation naming where the branch is already in use, so they can go to that location instead of guessing.
+Some existing branches cannot be reused or overwritten at all — most commonly because the branch is already checked out somewhere else, which git does not permit to be checked out twice. The holder is not always somewhere the user can see: it may be another of the app's worktrees, the repository's own current branch, an assistant-created worktree the app is currently hiding, or a worktree created by some other tool entirely, living outside the directory this app manages. Rather than a raw git failure — or, worse, a folder name that looks like a worktree in the list but is not in it — the user wants an explanation that identifies where the branch is in use well enough to actually go there.
 
 **Why this priority**: This is a correctness and comprehension safeguard around the choices above rather than new capability. Without it the feature still works for the common case; with it the confusing failure mode disappears.
 
@@ -93,7 +93,9 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 
 1. **Given** an existing branch is already checked out in another worktree managed by the app, **When** the user attempts to create a worktree deriving that branch name, **Then** the app explains that the branch is already in use and identifies the worktree using it, and does not offer reuse or overwrite.
 2. **Given** an existing branch is the repository's own currently checked-out branch, **When** the user attempts to create a worktree deriving that branch name, **Then** the app explains that the branch is in use by the project's main checkout, and does not offer reuse or overwrite.
-3. **Given** any of the above blocked cases, **When** the message is shown, **Then** the repository is unchanged and the user can amend their inputs and try again without restarting the flow.
+3. **Given** an existing branch is checked out in a worktree the app does not manage — one outside the directory the app creates its worktrees in, such as another tool's worktree directory or an unrelated folder elsewhere on disk — **When** the user attempts to create a worktree on that branch, **Then** the app explains that the holder is outside the app and gives its full location, so the user does not search the worktree list for a folder name that will never appear there.
+4. **Given** an existing branch is checked out in an assistant-created worktree while the reveal control is off, **When** the user attempts to create a worktree on that branch, **Then** the app explains that the holder is a hidden assistant worktree and how to reveal it, rather than naming a worktree that is absent from the list as shown.
+5. **Given** any of the above blocked cases, **When** the message is shown, **Then** the repository is unchanged and the user can amend their inputs and try again without restarting the flow.
 
 ---
 
@@ -107,6 +109,9 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 - **A worktree created by reuse is later deleted with "also delete the branch" selected**: the branch is deleted, as it would be for any other worktree — reuse does not make a branch permanently undeletable.
 - **The same branch name exists on more than one remote**: the user is shown which remote each candidate comes from and picks explicitly; the app does not silently choose one.
 - **A selected existing branch produces a worktree directory name that is already taken**: the directory conflict is reported before anything is created, and the user can choose a different branch or resolve the directory.
+- **The branch is held by a worktree outside the app's own worktree directory** (another tool's worktree tree, or a folder anywhere else on disk): creation is blocked as for any other holder, but the explanation says the holder is outside the app and gives its full location. Naming it by folder name alone would describe something the worktree list can never show (BUG-001).
+- **The branch is held by an assistant-created worktree while those are hidden**: creation is blocked, and the explanation says the holder is a hidden assistant worktree and how to reveal it. The holder is one of the app's own, so it is named as such — it is only the current view that omits it.
+- **The repository's worktree list changes while the form is open**: the holder shown in a blocked explanation is whatever the pre-flight check observed; the check runs again at the moment of action, so a holder that has since released the branch does not block creation.
 - **The repository has no remotes at all**: only local branches are considered; nothing in the flow requires a remote to exist.
 
 ## Requirements *(mandatory)*
@@ -144,7 +149,9 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 
 #### Blocked cases, parity, and reporting
 
-- **FR-021**: When the existing branch is already checked out — in another worktree managed by the app, or as the repository's own current checkout — the system MUST block creation with an explanation naming where the branch is in use, and MUST NOT offer reuse or overwrite.
+- **FR-021**: When the existing branch is already checked out anywhere the repository knows about, the system MUST block creation with an explanation identifying where the branch is in use, and MUST NOT offer reuse or overwrite. There are three kinds of holder and the explanation MUST distinguish them: another worktree managed by the app, the repository's own current checkout, and a worktree the repository knows about that the app does not manage.
+- **FR-021a**: When the holder is a worktree the app does not manage — one living outside the directory the app creates its worktrees in — the explanation MUST say that it is outside the app, and MUST identify it by its full location rather than by a bare folder name. A bare folder name is indistinguishable from an entry in the app's worktree list, which sends the user looking for something that is not there (BUG-001).
+- **FR-021b**: When the holder is a worktree the app manages but is not currently showing — an assistant-created worktree while the reveal control is off — the explanation MUST say that the holder is hidden and how to reveal it, rather than naming a worktree the user cannot see (BUG-001).
 - **FR-022**: A pre-existing target directory MUST continue to block creation as it does today, and MUST be reported without offering the existing-branch choice.
 - **FR-023**: A worktree created by reusing, overwriting, or continuing from a remote branch MUST be indistinguishable from any other worktree in subsequent use — listing, sessions, and deletion (including the option to delete the branch) behave identically.
 - **FR-024**: Progress and outcome reporting for creation MUST cover the reuse, overwrite, and remote-continuation paths, naming the step being performed, consistent with the reporting shown for conflict-free creation.
@@ -166,7 +173,7 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 - **SC-003**: 100% of reuse operations preserve the existing branch's commits — no commit reachable from the branch before creation is unreachable from it afterward, including when the creation subsequently fails.
 - **SC-004**: No branch is ever discarded without the user having seen and confirmed an explicit warning naming the branch and stating that its commits will be discarded.
 - **SC-005**: 100% of worktrees created by continuing from a remote branch start at that remote branch's tip and track it, verified by comparing the new branch's position and upstream against the remote branch.
-- **SC-006**: 100% of attempts to create a worktree on a branch that is already checked out elsewhere produce an explanation that names the location holding it, rather than an unexplained failure.
+- **SC-006**: 100% of attempts to create a worktree on a branch that is already checked out elsewhere produce an explanation the user can act on — one that identifies the holder well enough to reach it: a listed worktree named, a hidden worktree named together with how to reveal it, or an unmanaged worktree given by its full location. Naming a holder that has no corresponding entry in the app's worktree list, and no way to find it, counts as a failure of this criterion even though a location was printed (BUG-001).
 - **SC-007**: Cancelling at any point in the flow leaves the repository unchanged, verified by comparing the branch list, the worktree list, and the target directory before and after.
 - **SC-008**: Creating a worktree whose branch name does not exist anywhere is unaffected — the same number of steps, the same prompts, and the same outcome as before this feature.
 

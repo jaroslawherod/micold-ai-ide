@@ -26,6 +26,40 @@ second case needs. Pre-flight must read the raw records.
 
 ---
 
+## R1a — What "raw records" actually contains (correction to R1, BUG-001)
+
+**Decision**: Keep R1's command and its use of raw records, and classify each blocking record by
+*where it lives* before describing it: repo root → `CheckedOutInProjectRoot`; a direct child of
+`.claude/worktrees/` → `CheckedOutAt { path, owner }`; anything else →
+`CheckedOutOutsideApp { path }`.
+
+**Rationale**: R1 concluded that the raw records "answer **both halves** of FR-021". That framing is
+where the bug entered. The raw records are not {main checkout} ∪ {app worktrees}; they are *every*
+worktree git knows about, at any path. In a repository that also carries another tool's worktree
+tree, or a worktree checked out in a sibling directory, the extra records are neither half of
+FR-021 — and `reconcile()` drops exactly those, so the sidebar never shows them. Blocking on them is
+correct (git will refuse the second checkout regardless), but reporting them with the vocabulary of
+an app-managed worktree, reduced to a folder basename, describes a sidebar row that does not exist.
+The fix is not to narrow the records — R1's reason for reading them raw still stands — but to make
+the *description* carry the distinction the records already contain.
+
+`owner` on the app-managed variant closes the same gap one layer in: a holder under
+`.claude/worktrees/` is genuinely the app's, but an agent-owned one is hidden by default (feature
+014, FR-002), so naming it without saying it is hidden reproduces the identical symptom.
+
+**Alternatives considered**:
+- Filter the blocking check through `reconcile()` so only app-managed holders block — wrong, and
+  dangerous: git refuses the checkout anyway, so the app would promise a create it cannot perform
+  and surface a raw git failure instead of a pre-flight explanation. Rejected.
+- Keep the two variants and put the full path in the message for every holder — the app's own
+  worktrees are best named by the folder name the sidebar shows, and a path for those is noise.
+  The variants exist precisely so each holder is described in its own terms. Rejected.
+- Have the client shorten an unmanaged holder's path to repo-relative — reads better for a holder
+  inside the repository, useless for one outside it, and the client has no repository path in scope
+  at that point. Rejected in favour of an absolute path everywhere.
+
+---
+
 ## R2 — Creating a worktree on a branch that already exists
 
 **Decision**: `git worktree add <path> <branch>` — positional branch, no `-b`.
