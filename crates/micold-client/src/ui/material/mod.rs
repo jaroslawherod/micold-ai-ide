@@ -53,6 +53,7 @@ mod menu;
 mod menu_anatomy;
 mod modal;
 mod navigation_drawer;
+mod picker;
 mod progress;
 mod project_switcher;
 mod resize_handle;
@@ -138,7 +139,8 @@ pub use text_field::TextField;
 pub use toggle_chip::ToggleChip;
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
-pub use typeahead::{Row as TypeaheadRow, Typeahead};
+pub use picker::Row as TypeaheadRow;
+pub use typeahead::Typeahead;
 
 /// The application's theme, derived from the active colour scheme.
 ///

@@ -69,7 +69,7 @@ const SANCTIONED: &[(&str, &str, &str)] = &[
 /// Empty is the correct state. An entry means: this surface genuinely cannot be a
 /// `cdk::overlay::Surface`, and here is why.
 const CDK_OVERLAY_IMPLEMENTORS: &[(&str, &str)] = &[(
-    "ui/cdk/typeahead.rs",
+    "ui/cdk/picker.rs",
     "the result list must anchor to the search field's own on-screen bounds inside a content-sized \
      dialog, where a window-level surface has nothing to anchor against — the same constraint that \
      sanctions `select.rs`'s `pick_list`, and the one that defeated the hand-rolled dropdown \

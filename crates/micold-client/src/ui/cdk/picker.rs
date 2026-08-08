@@ -16,17 +16,38 @@
 //!
 //! Contract: `specs/021-branch-typeahead-search/contracts/typeahead-component.md` §3.
 
+use std::time::Duration;
+
 use iced::advanced::layout::{self, Layout};
-use iced::advanced::widget::{Operation, Tree};
+use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{keyboard, Element, Event, Length, Point, Rectangle, Size, Vector};
 use micold_core::typeahead::{intent_for, Direction, Intent, Key};
+
+use super::motion::Progress;
+
+/// At or below this the list counts as gone: it is not drawn, it takes no input, and `overlay()`
+/// stops producing it. The same figure the material layer's own wrappers call hidden, so "invisible"
+/// and "absent" land on the same frame rather than a frame apart.
+const HIDDEN: f32 = 0.001;
+
+/// How much of the list is still on screen.
+///
+/// Separate from the fade and the scale the material layer wraps the panel in, and deliberately so.
+/// Those decide what the list *looks like* on its way out; this decides whether there is anything to
+/// look at — which is `overlay()`'s question, and `overlay()` is this module's. Keeping them in one
+/// place would mean either this file learning what a duration means, or the material layer deciding
+/// whether an overlay exists.
+#[derive(Debug, Clone, Copy)]
+struct Visibility {
+    progress: Progress,
+}
 
 /// A field with a floating list of results beneath it.
 ///
 /// Composed rather than drawn: both halves arrive as already-built elements, so this module never
 /// learns what either looks like.
-pub struct Typeahead<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
+pub struct Picker<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
     field: Element<'a, M, Theme, Renderer>,
     menu: Element<'a, M, Theme, Renderer>,
     open: bool,
@@ -34,13 +55,14 @@ pub struct Typeahead<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
     rows: usize,
     highlighted_enabled: bool,
     gap: f32,
+    exit: Duration,
     on_move: Option<Box<dyn Fn(Direction) -> M + 'a>>,
     on_pick: Option<M>,
     on_dismiss: Option<M>,
     on_focus: Option<M>,
 }
 
-impl<'a, M: Clone + 'a, Theme, Renderer> Typeahead<'a, M, Theme, Renderer> {
+impl<'a, M: Clone + 'a, Theme, Renderer> Picker<'a, M, Theme, Renderer> {
     /// A `field`, and the `menu` shown beneath it while `open`.
     ///
     /// `gap` is the distance between the two, in pixels. It arrives from the caller because how far
@@ -59,6 +81,7 @@ impl<'a, M: Clone + 'a, Theme, Renderer> Typeahead<'a, M, Theme, Renderer> {
             rows: 0,
             highlighted_enabled: false,
             gap,
+            exit: Duration::ZERO,
             on_move: None,
             on_pick: None,
             on_dismiss: None,
@@ -77,6 +100,17 @@ impl<'a, M: Clone + 'a, Theme, Renderer> Typeahead<'a, M, Theme, Renderer> {
         self.highlight = highlight;
         self.rows = rows;
         self.highlighted_enabled = highlighted_enabled;
+        self
+    }
+
+    /// How long the list keeps existing after it closes, so it has something left to animate away.
+    ///
+    /// A bare `Duration` crossing into the behaviour layer, for the same reason `gap` is a bare
+    /// number: how long a thing takes is appearance, and the material layer resolves it from the
+    /// motion tokens before handing it over. Left unset the list still survives a frame — long
+    /// enough to refuse the press that closed it, not long enough to see.
+    pub fn exit(mut self, exit: Duration) -> Self {
+        self.exit = exit;
         self
     }
 
@@ -105,11 +139,23 @@ impl<'a, M: Clone + 'a, Theme, Renderer> Typeahead<'a, M, Theme, Renderer> {
     }
 }
 
-impl<M, Theme, Renderer> Widget<M, Theme, Renderer> for Typeahead<'_, M, Theme, Renderer>
+impl<M, Theme, Renderer> Widget<M, Theme, Renderer> for Picker<'_, M, Theme, Renderer>
 where
     M: Clone,
     Renderer: renderer::Renderer,
 {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<Visibility>()
+    }
+
+    /// A list built open is already there; one built closed has never been. Neither animates its
+    /// *existence* into being on mount — only a change of `open` does.
+    fn state(&self) -> tree::State {
+        tree::State::new(Visibility {
+            progress: Progress::new(if self.open { 1.0 } else { 0.0 }),
+        })
+    }
+
     /// Two children, always — the menu keeps its widget state across a close and reopen, which is
     /// what stops a scrolled list from forgetting where it was.
     fn children(&self) -> Vec<Tree> {
@@ -148,6 +194,15 @@ where
         shell: &mut Shell<'_, M>,
         viewport: &Rectangle,
     ) {
+        // How much of the list is left, advanced once per frame. Before the field sees the event,
+        // because a frame tick is not the field's business and this must not depend on what the
+        // field does with it.
+        let target = if self.open { 1.0 } else { 0.0 };
+        tree.state
+            .downcast_mut::<Visibility>()
+            .progress
+            .on_frame(event, target, self.exit, shell);
+
         // Reaching the field is a press on it, not a focus event: the rendering stack's text input
         // keeps focus to itself and publishes nothing when it gains it, so a press inside the
         // field's own bounds is the signal available here. Only while closed — a press on an
@@ -235,9 +290,16 @@ where
         _viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, M, Theme, Renderer>> {
-        if !self.open {
+        // Not `if !self.open`. A list that vanished the instant it closed would have nothing left
+        // to fade, which is the defect this replaces — so the question is whether any of it is still
+        // on screen, not whether the caller still wants it (contract picker-base §C1.5).
+        let visibility = tree.state.downcast_ref::<Visibility>().progress.value();
+        if visibility <= HIDDEN {
             return None;
         }
+        // Below its own threshold on the way out the list is present but inert. `leaving` is what
+        // carries that to the overlay, which is where the events actually arrive.
+        let leaving = !self.open;
 
         let bounds = layout.bounds();
         let field = Rectangle {
@@ -252,6 +314,7 @@ where
             state,
             field,
             gap: self.gap,
+            leaving,
             on_dismiss: self.on_dismiss.clone(),
             keys: Keys {
                 highlight: self.highlight,
@@ -324,6 +387,8 @@ struct Menu<'a, 'b, M, Theme, Renderer> {
     /// The field's on-screen rectangle — everything below is measured from it.
     field: Rectangle,
     gap: f32,
+    /// Whether the list is on its way out. A leaving list is drawn and animated but takes no input.
+    leaving: bool,
     on_dismiss: Option<M>,
     keys: Keys<'b, M>,
 }
@@ -385,6 +450,17 @@ where
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, M>,
     ) {
+        // A leaving list is inert (FR-022). It is on screen only in the sense that it is still
+        // fading, so a press landing where a row used to be must do nothing and Enter must take
+        // nothing — otherwise closing the list opens a window in which it looks gone and still acts.
+        //
+        // Window events are the exception, and a load-bearing one: the frame tick arrives that way,
+        // and content that stopped receiving it would freeze half-faded and never finish leaving.
+        // The same carve-out `material::animation`'s wrappers make, for the same reason.
+        if self.leaving && !matches!(event, Event::Window(_)) {
+            return;
+        }
+
         // The keyboard first, and only the keys the rule claims. Capturing the event is what stops
         // Enter also submitting the dialog behind the list.
         if let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event {
@@ -447,14 +523,14 @@ where
     }
 }
 
-impl<'a, M, Theme, Renderer> From<Typeahead<'a, M, Theme, Renderer>>
+impl<'a, M, Theme, Renderer> From<Picker<'a, M, Theme, Renderer>>
     for Element<'a, M, Theme, Renderer>
 where
     M: Clone + 'a,
     Theme: 'a,
     Renderer: renderer::Renderer + 'a,
 {
-    fn from(t: Typeahead<'a, M, Theme, Renderer>) -> Self {
+    fn from(t: Picker<'a, M, Theme, Renderer>) -> Self {
         Element::new(t)
     }
 }

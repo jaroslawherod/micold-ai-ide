@@ -256,7 +256,7 @@ fn a_menu_items_content_is_centred_in_its_height() {
 /// `align_y` meant anything. Asserted here rather than left as the fixed half nobody measures.
 #[test]
 fn a_typeahead_rows_content_is_centred_in_its_height() {
-    let row = super::typeahead::row_element(
+    let row = super::picker::row_element(
         super::TypeaheadRow {
             label: "feat/short".to_string(),
             spans: Vec::new(),
@@ -270,7 +270,7 @@ fn a_typeahead_rows_content_is_centred_in_its_height() {
 
     let outer = bounds_at(row, &[]);
     let content = bounds_at(
-        super::typeahead::row_element(
+        super::picker::row_element(
             super::TypeaheadRow {
                 label: "feat/short".to_string(),
                 spans: Vec::new(),
