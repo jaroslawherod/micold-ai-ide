@@ -73,6 +73,14 @@ pub enum Message {
     TypeaheadFocused,
     /// Its list should close without taking anything.
     TypeaheadDismissed,
+    /// The select example's choice changed (feature 022, FR-031).
+    ///
+    /// A message of its own rather than [`Self::NoOp`], because a select whose pick went nowhere
+    /// would demonstrate opening and then silently refuse the one thing a person opened it *for* —
+    /// the marker would stay on the old row and the trigger would keep the old value. Openness is
+    /// the widget's and needs nothing here; the choice is not, and is the whole of what this entry
+    /// has to hold.
+    SelectChosen(String),
 }
 
 /// The showcase's whole state.
@@ -102,6 +110,13 @@ pub struct Showcase {
     /// The fabricated terminal grid `TerminalPane` renders from, so a component that would otherwise
     /// need a live session is present rather than omitted (FR-006).
     grid: GridCache,
+    /// The select example's current choice (feature 022, FR-031). `None` at rest, so the page looks
+    /// the same on every launch (FR-022) and the placeholder is what a reader meets first.
+    ///
+    /// By **label**, like the type-ahead's, though for a weaker reason: a select's options are fixed
+    /// by its call site and cannot narrow under the marker. Held the same way anyway, so the two
+    /// entries do not answer "what is chosen" two different ways on one page.
+    select_choice: Option<String>,
     /// The type-ahead example's own search text (feature 021, FR-020). Empty at rest, so the page
     /// looks the same on every launch (FR-022).
     typeahead_query: String,
@@ -140,6 +155,7 @@ impl Showcase {
             running: vec![false; entries],
             shown: vec![true; entries],
             grid: super::samples::grid(),
+            select_choice: None,
             typeahead_query: String::new(),
             typeahead_highlight: None,
             typeahead_selected: None,
@@ -180,6 +196,11 @@ impl Showcase {
     }
 
     /// The type-ahead example's search text.
+    /// The select example's current choice, if one has been made.
+    pub fn select_choice(&self) -> Option<&str> {
+        self.select_choice.as_deref()
+    }
+
     pub fn typeahead_query(&self) -> &str {
         &self.typeahead_query
     }
@@ -312,6 +333,10 @@ impl Showcase {
                 // is what `AddWorktreeBranchSelected` does.
                 self.typeahead_open = false;
             }
+            // Nothing closes the list here: the select closed it itself before this message was
+            // published, because its openness is its own (data-model §2.2). An arm that also set an
+            // `open` flag would be a second answer to a question the widget has already answered.
+            Message::SelectChosen(choice) => self.select_choice = Some(choice),
             Message::TypeaheadFocused => self.typeahead_open = true,
             Message::TypeaheadDismissed => self.typeahead_open = false,
         }

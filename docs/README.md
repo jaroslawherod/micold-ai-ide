@@ -32,8 +32,8 @@ verified in CI.
 
 - [The component library](development/component-library.md) — the two rendering layers, the rule
   that feature modules compose components rather than styling widgets, how that rule is enforced in
-  CI, what to do when adding a component, and how to build a searchable picker on the shared
-  `Typeahead`.
+  CI, what to do when adding a component, and how to build a picker — searching or choosing — on the
+  shared foundation both of the existing ones stand on.
 - [The layout snapshot](development/layout-snapshot.md) — the three checks that pin *where things
   are*: the geometry fixture, the text-overflow gate and the containment invariant. What each one
   catches, what none of them do (colour, pixels, scrolling, mid-animation, and the typeface until
