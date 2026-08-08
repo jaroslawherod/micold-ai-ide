@@ -100,19 +100,29 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
         dismisses(self.kind, trigger)
     }
 
-    /// The backdrop layer, if this surface has one: the thing that stops input reaching the window
-    /// beneath, and that turns an outside click into a dismissal.
-    fn backdrop(&mut self) -> Option<Element<'a, M>> {
+    /// The backdrop layer: the thing that stops input reaching the window beneath, and that turns
+    /// an outside click into a dismissal.
+    ///
+    /// **Always a layer, even when it has nothing to catch** — and that is not a wasted frame, it
+    /// is the identity of every surface above it (BUG-008). `iced::widget::stack` keeps per-child
+    /// state *by index*, so a backdrop that comes and goes with its own surface's openness
+    /// renumbers the panels stacked over it. Feature 018 gave a menu panel its own fade; a panel
+    /// that changes index inherits the state at its new index, so closing the ⋮ menu slid the
+    /// project switcher's panel onto the menu panel's old index and played the menu's exit on it.
+    /// A panel nobody opened, closing.
+    ///
+    /// When there is nothing to catch the layer is a bare `Space`: no press handler, so it takes no
+    /// input, and `Length::Fill` on both axes rather than a zero size so the stack's own sizing sees
+    /// the same shape either way.
+    fn backdrop(&mut self) -> Element<'a, M> {
         let dismisser = self
             .on_dismiss
             .clone()
             .filter(|_| self.dismisses_on(Trigger::OutsideClick));
 
-        // No tint and nothing to dismiss: a layer that neither blocks nor closes is just a wasted
-        // stack frame.
         let scrim = self.scrim.take();
         if scrim.is_none() && dismisser.is_none() {
-            return None;
+            return Space::new().width(Length::Fill).height(Length::Fill).into();
         }
         let tinted = scrim.is_some();
 
@@ -129,7 +139,11 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
 
         // A tinted backdrop also blocks: the window beneath is dimmed precisely because it is not
         // available. An invisible backdrop only catches presses, leaving hover and scroll alone.
-        Some(if tinted { opaque(catcher) } else { catcher })
+        if tinted {
+            opaque(catcher)
+        } else {
+            catcher
+        }
     }
 
     /// The positioned panel layer.
@@ -246,7 +260,9 @@ impl<'a, M: Clone + 'a> From<Overlay<'a, M>> for Element<'a, M> {
         let mut layers = vec![base];
         for index in order {
             let mut surface = surfaces[index].take().expect("each surface placed once");
-            layers.extend(surface.backdrop());
+            // Two layers per surface, always — the backdrop first even when it catches nothing, so
+            // that a surface opening never renumbers the panels above it (BUG-008).
+            layers.push(surface.backdrop());
             layers.push(surface.positioned());
         }
         stack(layers).into()
