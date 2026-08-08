@@ -5,8 +5,18 @@
 //! pin the five situations, their precedence, and the guarantee that classifying mutates nothing.
 
 use micold_core::git::FakeGit;
-use micold_core::worktree::{preflight, BlockReason, BranchSituation, CreateError, CreateMode};
+use micold_core::worktree::{
+    preflight, BlockReason, BranchSituation, CreateError, CreateMode, WorktreeOwner,
+};
 use std::path::{Path, PathBuf};
+
+/// The app-managed holder shape, which is the common case in these tests.
+fn held_at(path: impl Into<PathBuf>) -> BlockReason {
+    BlockReason::CheckedOutAt {
+        path: path.into(),
+        owner: WorktreeOwner::User,
+    }
+}
 
 fn repo() -> PathBuf {
     PathBuf::from("/repo")
@@ -76,9 +86,136 @@ fn a_branch_checked_out_in_another_worktree_is_blocked_and_names_it() {
         s,
         BranchSituation::Blocked {
             branch: "feat/login".to_string(),
-            reason: BlockReason::CheckedOutAt { path: holder },
+            reason: held_at(holder),
         }
     );
+}
+
+/// BUG-001 / FR-021a. `worktree list --porcelain` reports every worktree git knows about, not only
+/// the ones under `.claude/worktrees/` — another tool's worktree tree, a folder anywhere else on
+/// disk. Blocking on those is right (git refuses the second checkout regardless), but they are not
+/// the app's, `reconcile()` drops them, and the sidebar never shows them. Describing one as
+/// `CheckedOutAt` is what sent the user hunting for a worktree that is not in the list.
+#[test]
+fn a_branch_held_by_a_worktree_the_app_does_not_manage_is_blocked_as_outside_the_app() {
+    for holder in [
+        // Another tool's worktree directory, inside the repository.
+        "/repo/.git-paw/worktrees/feat-login",
+        // A plain sibling directory, outside the repository altogether.
+        "/elsewhere/feat-login",
+        // Nested one level too deep to be a `.claude/worktrees/` child — `reconcile()` tests the
+        // immediate parent, and so must this.
+        "/repo/.claude/worktrees/nested/feat-login",
+    ] {
+        let holder = PathBuf::from(holder);
+        let git = FakeGit::new()
+            .with_repo("/repo")
+            .with_branch("/repo", "feat/login")
+            .with_worktree("/repo", &holder, "feat/login");
+
+        let s = preflight(&git, &repo(), &target(), "feat/login", false).unwrap();
+        assert_eq!(
+            s,
+            BranchSituation::Blocked {
+                branch: "feat/login".to_string(),
+                reason: BlockReason::CheckedOutOutsideApp {
+                    path: holder.clone()
+                },
+            },
+            "{} is not one of the app's worktrees",
+            holder.display()
+        );
+    }
+}
+
+/// BUG-001 / FR-021b. An agent-owned holder IS one of the app's worktrees, so it stays
+/// `CheckedOutAt` — but the sidebar hides it by default, so the reason carries the owner and the
+/// message can say how to reveal it.
+#[test]
+fn a_branch_held_by_an_agent_worktree_is_blocked_and_says_who_owns_it() {
+    let holder = PathBuf::from("/repo/.claude/worktrees/agent-deadbeefdeadbeef");
+    let git = FakeGit::new()
+        .with_repo("/repo")
+        .with_branch("/repo", "feat/login")
+        .with_worktree("/repo", &holder, "feat/login");
+
+    let s = preflight(&git, &repo(), &target(), "feat/login", false).unwrap();
+    assert_eq!(
+        s,
+        BranchSituation::Blocked {
+            branch: "feat/login".to_string(),
+            reason: BlockReason::CheckedOutAt {
+                path: holder,
+                owner: WorktreeOwner::Agent,
+            },
+        }
+    );
+}
+
+/// The branch name is the other half of feature 014's rule (FR-005/FR-007): a worktree whose
+/// directory was renamed is still agent-owned if its branch says so.
+#[test]
+fn an_agent_holder_is_recognised_by_its_branch_when_its_directory_was_renamed() {
+    let holder = PathBuf::from("/repo/.claude/worktrees/renamed-by-hand");
+    let git = FakeGit::new()
+        .with_repo("/repo")
+        .with_branch("/repo", "worktree-agent-deadbeefdeadbeef")
+        .with_worktree("/repo", &holder, "worktree-agent-deadbeefdeadbeef");
+
+    let s = preflight(
+        &git,
+        &repo(),
+        &target(),
+        "worktree-agent-deadbeefdeadbeef",
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        s,
+        BranchSituation::Blocked {
+            branch: "worktree-agent-deadbeefdeadbeef".to_string(),
+            reason: BlockReason::CheckedOutAt {
+                path: holder,
+                owner: WorktreeOwner::Agent,
+            },
+        }
+    );
+}
+
+/// The classification split must be `reconcile()`'s, so "described as one of your worktrees" and
+/// "appears in your worktree list" are the same set. Asserted against `discover()` itself rather
+/// than against a restatement of the rule, which could drift (BUG-001, contract §1 rule 2).
+#[test]
+fn only_holders_the_sidebar_would_list_are_described_as_the_apps_own() {
+    for holder in [
+        "/repo/.claude/worktrees/feat-login-old",
+        "/repo/.git-paw/worktrees/feat-login",
+        "/elsewhere/feat-login",
+    ] {
+        let holder = PathBuf::from(holder);
+        let git = FakeGit::new()
+            .with_repo("/repo")
+            .with_branch("/repo", "feat/login")
+            .with_worktree("/repo", &holder, "feat/login");
+
+        let listed = micold_core::worktree::discover(&git, &repo())
+            .iter()
+            .any(|w| w.path == holder);
+        let described_as_ours = matches!(
+            preflight(&git, &repo(), &target(), "feat/login", false).unwrap(),
+            BranchSituation::Blocked {
+                reason: BlockReason::CheckedOutAt { .. },
+                ..
+            }
+        );
+        assert_eq!(
+            described_as_ours,
+            listed,
+            "{} is described as the app's own but {} in the worktree list",
+            holder.display(),
+            if listed { "is" } else { "is not" }
+        );
+    }
 }
 
 #[test]
@@ -171,6 +308,96 @@ fn the_same_name_on_several_remotes_reports_all_of_them() {
             remotes: vec!["origin".to_string(), "upstream".to_string()]
         }
     );
+}
+
+// ---------------------------------------------------------------------------------------
+// How each holder is explained (SC-006, FR-021/FR-021a/FR-021b)
+// ---------------------------------------------------------------------------------------
+
+/// The app's own worktree is named by its folder, because that IS the sidebar row to go to.
+#[test]
+fn a_listed_holder_is_explained_by_its_folder_name() {
+    assert_eq!(
+        held_at("/repo/.claude/worktrees/feat-login-old").explain("feat/login"),
+        "'feat/login' is already checked out in the worktree 'feat-login-old'."
+    );
+}
+
+#[test]
+fn the_project_checkout_is_explained_without_a_path() {
+    let sentence = BlockReason::CheckedOutInProjectRoot.explain("main");
+    assert_eq!(
+        sentence,
+        "'main' is currently checked out in the project itself."
+    );
+    assert!(!sentence.contains('/'), "no path belongs here: {sentence}");
+}
+
+/// BUG-001 / SC-006. The regression guard: an unmanaged holder must never be described by its
+/// folder name alone, because that reads exactly like a sidebar row and there is no such row.
+#[test]
+fn an_unmanaged_holder_is_explained_by_its_full_path_and_said_to_be_outside_the_app() {
+    let sentence = BlockReason::CheckedOutOutsideApp {
+        path: PathBuf::from("/repo/.git-paw/worktrees/fix-olx"),
+    }
+    .explain("fix/olx");
+
+    assert!(
+        sentence.contains("/repo/.git-paw/worktrees/fix-olx"),
+        "the full path is the only thing that leads the user to it: {sentence}"
+    );
+    assert!(
+        sentence.contains("outside this app"),
+        "must say the holder is not one of ours: {sentence}"
+    );
+}
+
+/// BUG-001 / FR-021b. A hidden holder IS one of the app's, so it keeps its folder name — but the
+/// sentence has to account for the row not being on screen.
+#[test]
+fn a_hidden_agent_holder_is_named_and_says_how_to_reveal_it() {
+    let sentence = BlockReason::CheckedOutAt {
+        path: PathBuf::from("/repo/.claude/worktrees/agent-deadbeefdeadbeef"),
+        owner: WorktreeOwner::Agent,
+    }
+    .explain("feat/login");
+
+    assert!(
+        sentence.contains("agent-deadbeefdeadbeef"),
+        "the holder is the app's, so name it: {sentence}"
+    );
+    assert!(
+        sentence.contains("Show agent worktrees"),
+        "must say how to bring it into view: {sentence}"
+    );
+}
+
+/// SC-006 as a property over every holder: whatever the shape, the explanation names the branch
+/// and gives the user something to go on beyond "it failed".
+#[test]
+fn every_holder_explanation_names_the_branch_and_locates_the_holder() {
+    let reasons = [
+        BlockReason::CheckedOutInProjectRoot,
+        held_at("/repo/.claude/worktrees/feat-login-old"),
+        BlockReason::CheckedOutAt {
+            path: PathBuf::from("/repo/.claude/worktrees/agent-deadbeefdeadbeef"),
+            owner: WorktreeOwner::Agent,
+        },
+        BlockReason::CheckedOutOutsideApp {
+            path: PathBuf::from("/elsewhere/feat-login"),
+        },
+    ];
+    for reason in reasons {
+        let sentence = reason.explain("feat/login");
+        assert!(
+            sentence.contains("feat/login"),
+            "{reason:?} does not name the branch: {sentence}"
+        );
+        assert!(
+            sentence.ends_with('.'),
+            "{reason:?} is not a sentence: {sentence}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -367,7 +594,7 @@ fn a_blocked_branch_reports_who_holds_it_rather_than_a_raw_git_failure() {
         err,
         CreateError::BranchInUse {
             branch: "feat/login".to_string(),
-            reason: BlockReason::CheckedOutAt { path: holder },
+            reason: held_at(holder),
         }
     );
 }

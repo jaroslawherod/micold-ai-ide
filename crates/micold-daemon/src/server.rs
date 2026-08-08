@@ -21,7 +21,7 @@ use micold_core::protocol::messages::{
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     branch_candidates, create_worktree, preflight, remove_worktree, remove_worktree_dir,
-    BlockReason, CreateError, CreateProgressEvent, Leftover,
+    CreateError, CreateProgressEvent, Leftover,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
@@ -1281,23 +1281,13 @@ fn reject_non_repo(
 /// carrying git's stderr verbatim (T050, FR-034).
 fn describe_create_error(err: CreateError) -> (ErrorKind, String, Option<String>) {
     match err {
-        // Feature 016 (FR-021): name the holder rather than reporting a bare failure.
-        CreateError::BranchInUse { branch, reason } => (
-            ErrorKind::Busy,
-            match reason {
-                BlockReason::CheckedOutInProjectRoot => {
-                    format!("the branch '{branch}' is checked out in the project itself")
-                }
-                BlockReason::CheckedOutAt { path } => {
-                    let holder = path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| path.display().to_string());
-                    format!("the branch '{branch}' is already checked out in '{holder}'")
-                }
-            },
-            None,
-        ),
+        // Feature 016 (FR-021): name the holder rather than reporting a bare failure. The sentence
+        // comes from core, so a block caught here at create time reads exactly as the same block
+        // caught by the client's pre-flight — two hand-written wordings is how BUG-001's holder
+        // taxonomy came to be wrong in one place and right in neither.
+        CreateError::BranchInUse { branch, reason } => {
+            (ErrorKind::Busy, reason.explain(&branch), None)
+        }
         // Feature 016 (FR-009): the branch changed between the user's answer and the act.
         CreateError::SituationChanged => (
             ErrorKind::Refused,

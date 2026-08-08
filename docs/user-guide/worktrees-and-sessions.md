@@ -229,6 +229,8 @@ came from:
 | `feat/login` | A local branch, ready to use. |
 | `feat/reporting · origin` | Exists on `origin`, not yet on this machine. |
 | `feat/login · in use by feat-login` | Already checked out in that worktree — not available. |
+| `feat/login · in use by a hidden agent worktree` | Held by an assistant's worktree, which the sidebar hides by default. |
+| `fix/olx · in use outside this app` | Held by a worktree the app doesn't manage — see below. |
 | `main · in use by the project checkout` | The project's own current branch — not available. |
 
 A branch that is in use elsewhere stays in the list — dimmed, and not selectable. It is shown
@@ -267,9 +269,23 @@ from the remote branch of the same name).
 ### When a branch can't be used
 
 A branch that is already checked out somewhere can't back a second worktree — git allows a branch
-in only one place at a time. The app says so and names where it is: another worktree, or the
-project's own checkout. Neither reuse nor overwrite is offered. Open that location to continue
-there, or pick a different name.
+in only one place at a time. The app says so and identifies where it is. Neither reuse nor
+overwrite is offered: open that location to continue there, or pick a different branch.
+
+Where it is can be one of four places, and the message tells you which:
+
+- **Another of your worktrees** — named by its folder, which is its row in the sidebar.
+- **The project's own checkout** — the branch the project directory itself is on.
+- **A hidden assistant worktree** — one of the app's own, but not currently listed. Turn on
+  **Show agent worktrees** in the sidebar to see it.
+- **A worktree outside this app** — one git knows about that this app doesn't manage: another
+  tool's worktree directory (`.git-paw/worktrees/…` and the like), or a checkout in some unrelated
+  folder. These never appear in the sidebar however you filter, so the message gives the **full
+  path** instead of a folder name. `git worktree list` in the project directory shows all of them.
+
+That last case is worth knowing about if a branch looks perfectly ordinary and is refused anyway.
+It usually means a worktree you created outside the app — or a tool you used before this one —
+still holds it. Removing that worktree (`git worktree remove <path>`) releases the branch.
 
 ## Managing a worktree (right-click)
 

@@ -49,7 +49,14 @@ annotated with `blocked_by` from the same `worktree list --porcelain` records pr
 | local, available | `feat/login` |
 | remote-only, available | `feat/reporting · origin` |
 | blocked by a worktree | `feat/login · in use by feat-login` |
+| blocked by a hidden assistant worktree | `feat/login · in use by a hidden agent worktree` |
+| blocked by a worktree outside the app | `fix/olx · in use outside this app` |
 | blocked by the project checkout | `main · in use by the project checkout` |
+
+A row is one line in a list, so it says only *which kind* of holder — the location that makes an
+unmanaged or hidden holder findable belongs in the inline explanation (§3), which has room for it.
+What a row must never do is print a bare folder name for a holder that is not in the sidebar
+(BUG-001).
 
 The label is the `Display` impl of `BranchCandidate` — `Select` requires
 `Clone + ToString + PartialEq`, so no widget change is needed.
@@ -117,8 +124,9 @@ it.
 
 1. Listing maps local and remote refs to candidates with the right `origin`; `origin/HEAD` is
    dropped; local+remote duplicates collapse to `Local` (FR-011, FR-019).
-2. `blocked_by` is set for branches held by a `.claude/worktrees/` worktree and for the branch held
-   by the project's own checkout, with the right `BlockReason` variant each (FR-012).
+2. `blocked_by` is set with the right `BlockReason` variant for each of the four holder kinds in
+   `branch-conflict.md` §1 — a `.claude/worktrees/` worktree, an agent-owned one, one outside
+   `.claude/worktrees/`, and the project's own checkout (FR-012, FR-021a, FR-021b).
 3. Ordering matches §2 exactly for a mixed fixture.
 4. Labels match §2's table for all four row shapes.
 5. Empty/all-blocked repositories produce the two distinct explanations, never an empty list

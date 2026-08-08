@@ -178,7 +178,7 @@ Single Rust crate: render-free core in `src/` (`--no-default-features`), `gui`-o
 
 ### Tests for User Story 5 (MANDATORY — Constitution Principle I) ⚠️
 
-- [X] T053 [P] [US5] Failing tests: `Blocked` distinguishes `CheckedOutInProjectRoot` from `CheckedOutAt { path }` and carries the holder's path, in `tests/branch_conflict.rs`
+- [ ] T053 [P] [US5] Failing tests: `Blocked` distinguishes `CheckedOutInProjectRoot` from `CheckedOutAt { path }` and carries the holder's path, in `tests/branch_conflict.rs` — **reopened by BUG-001**: two variants is one too few; superseded by T064
 - [X] T054 [P] [US5] Failing test: a `Blocked` or `DirectoryTaken` situation offers no actionable resolution and returns to `Idle` on dismiss, leaving inputs intact, in `tests/app_state.rs`
 
 ### Implementation for User Story 5
@@ -201,6 +201,32 @@ Single Rust crate: render-free core in `src/` (`--no-default-features`), `gui`-o
 - [X] T061 Run `mise run test` and `cargo test --features gui` and confirm the full suite is green
 - [ ] T062 Verify build and tests pass on Linux, macOS, and Windows via the matrix in `.github/workflows/ci.yml` (Constitution Principle VI)
 - [ ] T063 Run all seven [quickstart.md](./quickstart.md) scenarios manually, including Scenario 4's offline check (the GUI-wiring validation Principle I's exception requires)
+
+---
+
+## Phase 9: BUG-001 — a holder that is named but not listed
+
+**Goal**: A branch held by a worktree the sidebar cannot show is still blocked, but the explanation
+identifies the holder in terms the user can act on (FR-021, FR-021a, FR-021b, SC-006).
+
+**Independent Test**: In a repository carrying a worktree outside `.claude/worktrees/`, select the
+branch that worktree holds and confirm the message says the holder is outside the app and gives its
+full path — not a bare folder name.
+
+### Tests for BUG-001 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T064 [P] Failing tests: `preflight()` classifies all four holder shapes in `contracts/branch-conflict.md` §1 — repo root, a `.claude/worktrees/` child, an agent-owned `.claude/worktrees/` child, and a record anywhere else — into the right `BlockReason`, carrying the holder's absolute path, in `tests/branch_conflict.rs` (supersedes T053)
+- [X] T065 [P] Failing tests: `branch_candidates()` annotates `blocked_by` with the same four shapes, and the `Display` row labels match `contracts/branch-picker.md` §2, in `tests/branch_candidates.rs`
+- [X] T066 [P] Failing test: the classification split uses `reconcile()`'s parent test, so a holder described as one of the app's worktrees is one `discover()` would return — a nested path under `.claude/worktrees/a/b` is `CheckedOutOutsideApp`, not `CheckedOutAt`, in `tests/branch_conflict.rs`
+
+### Implementation for BUG-001
+
+- [X] T067 Add `CheckedOutOutsideApp { path }` and `owner: WorktreeOwner` on `CheckedOutAt`; classify by the worktrees-root parent test in `checked_out_branches()`, in `micold-core/src/worktree.rs`
+- [X] T068 Extract the name-derived owner rule shared by `Worktree::owner()` and the new classification into one function, so the two cannot drift (feature 014, FR-005/FR-009), in `micold-core/src/worktree.rs`
+- [X] T069 [P] Word the three holders in `block_sentence()` — folder name, folder name plus the reveal hint, and "outside this app" with the full path — in `micold-client/src/ui/worktree_form.rs`
+- [X] T070 [P] Word the same three in the daemon's `describe_create_error()`, in `micold-daemon/src/server.rs`
+- [X] T071 [P] Row labels for the two new shapes in `Display for BranchCandidate`, in `micold-core/src/worktree.rs`
+- [X] T072 Document the unmanaged and hidden holders in `docs/user-guide/worktrees-and-sessions.md` (Principle VII)
 
 ---
 

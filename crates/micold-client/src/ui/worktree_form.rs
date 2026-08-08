@@ -20,7 +20,7 @@ use iced::{Element, Length};
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
-use micold_core::worktree::{BlockReason, BranchOrigin, BranchSituation, CreateMode};
+use micold_core::worktree::{BranchOrigin, BranchSituation, CreateMode};
 
 /// The add-worktree form as the dialog body; `ui::view` wraps it in the shared
 /// [`Modal`](crate::ui::material::Modal) transition.
@@ -86,12 +86,7 @@ pub fn modal<'a>(
         if form.source == BranchSource::Existing {
             if let Some(reason) = &candidate.blocked_by {
                 fields = fields.push(
-                    Text::new(
-                        block_sentence(&candidate.name, reason),
-                        TypeRole::Caption,
-                        r,
-                    )
-                    .tint(r.error),
+                    Text::new(reason.explain(&candidate.name), TypeRole::Caption, r).tint(r.error),
                 );
             }
         }
@@ -278,22 +273,6 @@ fn default_actions<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
     .into()
 }
 
-/// One sentence naming who holds a branch (feature 016, FR-021).
-fn block_sentence(branch: &str, reason: &BlockReason) -> String {
-    match reason {
-        BlockReason::CheckedOutInProjectRoot => {
-            format!("'{branch}' is currently checked out in the project itself.")
-        }
-        BlockReason::CheckedOutAt { path } => {
-            let holder = path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| path.display().to_string());
-            format!("'{branch}' is already checked out in the worktree '{holder}'.")
-        }
-    }
-}
-
 /// The conflict prompt and its confirmation (feature 016, contract `branch-conflict.md` §3).
 fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Message> {
     let cancel = |label: &str| {
@@ -402,7 +381,7 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
 
             // FR-021 (US5): explain and name the holder — no reuse, no overwrite offered.
             BranchSituation::Blocked { branch, reason } => column![
-                Text::new(block_sentence(branch, reason), TypeRole::Body, r).tint(r.error),
+                Text::new(reason.explain(branch), TypeRole::Body, r).tint(r.error),
                 Text::new(
                     "A branch can only be checked out in one place at a time. Open that \
                      location to continue there, or choose a different name.",
