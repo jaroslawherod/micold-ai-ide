@@ -10,18 +10,16 @@
 //! `FolderChosen`) therefore carry no reducer effect here — they are documented no-ops
 //! handled entirely in `src/main.rs`.
 
-use micold_core::naming::{display_name, parse_tags, ConventionalType, Tag};
+use micold_core::naming::ConventionalType;
 use micold_core::notify;
-use micold_core::project::{canonicalize_best_effort, Availability, FolderEntry, RenameError};
+use micold_core::project::{canonicalize_best_effort, Availability, FolderEntry};
 use micold_core::selector::Selector;
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
 use micold_core::theme::{
     observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference,
 };
 use micold_core::typeahead::{move_highlight, Direction};
-use micold_core::worktree::{
-    BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree, WorktreeStatus,
-};
+use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -120,18 +118,9 @@ pub enum SelectKind {
 // this feature stays split until Tier 3 moves reducer code.
 pub use crate::features::settings::SettingsDraft;
 
-/// In-progress worktree-rename state, present only while the worktree-rename dialog is open
-/// (feature 008, FR-013/FR-014). Mirrors [`RenameDraft`] but is keyed by worktree `dir_name`
-/// and only ever changes the displayed name — never the folder or branch.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorktreeRenameDraft {
-    /// The worktree being renamed, by `dir_name`.
-    pub dir_name: String,
-    /// The current editable display name.
-    pub text: String,
-    /// The last validation error, if the user tried to confirm an invalid name.
-    pub error: Option<RenameError>,
-}
+// Moved to `crate::features::worktree` (feature 021, T019). Re-exported so this step changes no
+// call site; the re-export goes away in T023 when imports are updated.
+pub use crate::features::worktree::WorktreeRenameDraft;
 
 /// Every user interaction that can change application state.
 ///
@@ -1777,165 +1766,6 @@ impl State {
             .get_mut(&path)?
             .iter_mut()
             .find(|s| s.id == id)
-    }
-
-    /// The display name for a worktree (FR-017): the user's rename override when present,
-    /// otherwise the friendly name derived from the directory name. Never touches the folder
-    /// or branch on disk (FR-007, FR-014).
-    pub fn worktree_display_name(&self, dir_name: &str) -> String {
-        self.workspace
-            .worktree_name(dir_name)
-            .map(str::to_string)
-            .unwrap_or_else(|| display_name(dir_name))
-    }
-
-    /// The tags for a worktree: the derived type + issue tags, plus a status tag when the
-    /// worktree is not `Valid` (FR-002, FR-003, FR-011).
-    fn worktree_tags(worktree: &Worktree) -> Vec<Tag> {
-        let mut tags = parse_tags(&worktree.dir_name);
-        if worktree.status != WorktreeStatus::Valid {
-            tags.push(Tag::Status(worktree.status));
-        }
-        // Feature 014 (FR-010b). Injected here rather than in `parse_tags`, which only sees the
-        // directory name and so cannot consult the branch. Only ever *seen* when the reveal
-        // control is on, since a hidden worktree produces no row at all.
-        if worktree.is_agent_owned() {
-            tags.push(Tag::Agent);
-        }
-        tags
-    }
-
-    /// The worktrees currently shown to the user (feature 014, FR-002/FR-003): all of them while
-    /// the reveal control is on, only user-owned ones while it is off.
-    ///
-    /// The single source every worktree surface reads from — [`Self::worktree_tree`],
-    /// [`Self::available_tag_filters`], and the sidebar's empty-state hint — so hiding, counting,
-    /// and filtering agree by construction instead of via three separate filters that can drift
-    /// (contracts/agent-worktree-classification.md).
-    ///
-    /// Note what does NOT read this: `set_worktrees`'s pruning and [`Self::sessions_in_worktree`]
-    /// reason about *existence*, not visibility. A hidden worktree still exists, and its rename
-    /// override must survive.
-    pub fn visible_worktrees(&self) -> impl Iterator<Item = &Worktree> {
-        let show_all = self.show_agent_worktrees;
-        self.worktrees
-            .iter()
-            .filter(move |w| show_all || !w.is_agent_owned())
-    }
-
-    /// Whether any worktree is currently visible (feature 014, FR-003). Drives the sidebar's
-    /// choice between "No worktrees yet" and "No worktrees match the filter": a project whose only
-    /// worktrees are agent-owned has none *visible*, so it must get the former — offering a
-    /// "Clear filters" action when no filter is active would be nonsense (research R7).
-    ///
-    /// Lives here rather than in the `gui`-only sidebar so the decision is testable
-    /// (Principle I).
-    pub fn has_visible_worktrees(&self) -> bool {
-        self.visible_worktrees().next().is_some()
-    }
-
-    /// Build the sidebar tree: worktrees (top level) each joined with their sessions and
-    /// expansion state (FR-002, FR-003). Sessions are matched to worktrees by `dir_name`.
-    /// Sourced from [`Self::visible_worktrees`], so agent-owned worktrees produce no row while
-    /// hidden (feature 014, FR-002).
-    pub fn worktree_tree(&self) -> Vec<WorktreeNode> {
-        let sessions = self.active_sessions();
-        self.visible_worktrees()
-            .map(|worktree| WorktreeNode {
-                display_name: self.worktree_display_name(&worktree.dir_name),
-                tags: Self::worktree_tags(worktree),
-                expanded: self.expanded.contains(&worktree.dir_name),
-                sessions: sessions
-                    .iter()
-                    .filter(|s| s.location.is_worktree(&worktree.dir_name) && !s.archived)
-                    .cloned()
-                    .collect(),
-                worktree: worktree.clone(),
-            })
-            .collect()
-    }
-
-    /// The worktree tree narrowed to the active tag filters (feature 008, FR-025). With no
-    /// filter active this equals [`Self::worktree_tree`]. Used by the sidebar to render only
-    /// matching worktrees; a subsequent add/rename/delete re-runs this so the list stays
-    /// consistent (FR-028).
-    pub fn filtered_worktree_tree(&self) -> Vec<WorktreeNode> {
-        self.worktree_tree()
-            .into_iter()
-            .filter(|node| matches_filters(&node.tags, &self.sidebar_filters))
-            .collect()
-    }
-
-    /// The full sidebar location list (feature 010): the "Default" entry first, then worktree
-    /// entries narrowed to the active tag filters (`filtered_worktree_tree`). Empty when no
-    /// project is open (contracts/sidebar-default-entry.md invariant 1) — mirrors how
-    /// `worktree_tree` is empty with no active project. The Default entry is exempt from tag
-    /// filtering (FR-011, research.md R4): it is included unconditionally whenever a project is
-    /// open, regardless of `sidebar_filters`.
-    pub fn sidebar_entries(&self) -> Vec<SidebarEntry> {
-        if self.workspace.active.is_none() {
-            return Vec::new();
-        }
-        let default_sessions: Vec<Session> = self
-            .active_sessions()
-            .iter()
-            .filter(|s| s.location == SessionLocation::Default && !s.archived)
-            .cloned()
-            .collect();
-        let mut entries = vec![SidebarEntry::Default(DefaultNode {
-            display_name: "Default",
-            expanded: self.default_expanded,
-            sessions: default_sessions,
-        })];
-        entries.extend(
-            self.filtered_worktree_tree()
-                .into_iter()
-                .map(SidebarEntry::Worktree),
-        );
-        entries
-    }
-
-    /// The distinct tag filters offered for the current worktrees (feature 008, FR-024): a
-    /// `Type` per conventional type present, `HasIssue` if any worktree embeds an issue key,
-    /// and `Untyped` if any worktree lacks a type. Order: types first, then HasIssue, Untyped.
-    ///
-    /// Sourced from [`Self::visible_worktrees`] (feature 014, FR-003): a hidden agent worktree
-    /// must not conjure a chip — its machine name has no conventional type, so it would otherwise
-    /// offer an `Untyped` filter matching nothing the user can see (research R7).
-    pub fn available_tag_filters(&self) -> Vec<TagFilter> {
-        let mut types = BTreeSet::new();
-        let mut has_issue = false;
-        let mut has_untyped = false;
-        for worktree in self.visible_worktrees() {
-            let tags = Self::worktree_tags(worktree);
-            let mut typed = false;
-            for tag in &tags {
-                match tag {
-                    Tag::Type(t) => {
-                        types.insert(*t);
-                        typed = true;
-                    }
-                    Tag::Issue(_) => has_issue = true,
-                    Tag::Status(_) => {}
-                    // Feature 014: label only, never a filter (research R5). Note what the empty
-                    // arm implies: carrying no `Type`, a REVEALED agent worktree still counts as
-                    // untyped and so can be matched by an `Untyped` chip — correct, and required
-                    // by FR-010d (filters apply to revealed rows exactly as to user-created ones).
-                    Tag::Agent => {}
-                }
-            }
-            if !typed {
-                has_untyped = true;
-            }
-        }
-        let mut out: Vec<TagFilter> = types.into_iter().map(TagFilter::Type).collect();
-        if has_issue {
-            out.push(TagFilter::HasIssue);
-        }
-        if has_untyped {
-            out.push(TagFilter::Untyped);
-        }
-        out
     }
 }
 

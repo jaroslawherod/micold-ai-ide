@@ -17,4 +17,5 @@
 pub mod project;
 pub mod settings;
 pub mod sidebar;
+pub mod worktree;
 pub mod worktree_form;
