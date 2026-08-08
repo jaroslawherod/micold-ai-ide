@@ -52,13 +52,31 @@ per-surface branch exists anywhere else.
 
 | # | Obligation | Requirement |
 |---|---|---|
-| D1 | When a popover and a modal are both open, Escape closes the **popover** first | FR-012 |
+| D1 | Escape belongs to a popover when no modal is open; when a modal *is* open, it belongs to the **modal**, whatever popovers float above it | FR-012 |
 | D2 | Opening a modal closes all lightweight popovers | FR-012 |
 | D3 | Dismissal MUST NOT alter state the dismissal does not own — closing the sidebar filter panel leaves active filters intact | FR-013 |
 
-D1 is currently implemented as a hand-written check placed ahead of the `Overlay` match
-(`ui/mod.rs:554`). It must survive as an explicit, tested rule of the generic dispatch, not
-disappear with the special-case match.
+**D1 was stated backwards here until T027 tested it.** The original wording read "when a popover
+and a modal are both open, Escape closes the popover first", which is what the code *looks* like it
+does:
+
+```rust
+if state.overlay == Overlay::None && state.sidebar_filter_open { ...popover... }
+match state.overlay { ...modal... }
+```
+
+The popover branch comes first textually. But it is guarded on no modal being open, so the modal
+wins whenever both are. FR-012 requires preserving the existing priority, so the table above now
+describes the code rather than the misreading, and `overlay_dispatch_ordering.rs` holds it.
+
+A second claim at that branch is also half true: the comment says `open_overlay` makes the
+combination unreachable. It stops a modal opening *over* a popover, but `SidebarFilterMenuToggled`
+sets its flag with no regard for `overlay`, so a popover can still be opened over a modal. The
+state is representable and is handled deliberately.
+
+Left as-is deliberately. Reversing the tie-break may well be the better behaviour, but it is a
+behaviour change and FR-012 is not the requirement that authorises one — it says preserve. If the
+priority should flip, that is its own change with its own argument.
 
 ## Exit-animation snapshot
 
