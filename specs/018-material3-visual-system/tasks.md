@@ -1230,15 +1230,33 @@ becomes `MenuOverlay`, `ProjectRow` becomes `MenuItem`, and `project_switcher.rs
 (FR-029c). The fix is subtraction; the only thing being *added* is the gate that would have caught
 it (SC-008e).
 
-- [X] T131 Failing test first: a same-kind gate in `crates/micold-client/tests/gates/` asserting the two app-bar action triggers measure identically (target box and glyph box) and the two bar-anchored panels measure identically (width and leading edge), read from the same laid-out tree the placement gate uses. Confirm it fails today with the switcher at 28×69.7 and a 14dp glyph against the overflow's 48×48 and 24dp, and the panels at 260 against 240 (SC-008e, FR-029c)
-- [X] T132 Replace `ProjectSwitcherTrigger` with `IconButton::new(Icon::OpenProject, r).on_press(Message::ProjectSwitcherToggled)` in `ui/toolbar.rs`, wrapped in the existing shared `Tooltip`. The tooltip carries the **active project's name** rather than the static "Project selector", so the fact the label was showing stays reachable without a click; FR-006 is already satisfied by the panel's active marker (FR-029c, 008 FR-004)
+- [X] T131 Failing test first: a same-kind gate in `crates/micold-client/tests/gates/` reading the app bar's actions and the bar-anchored panels as *sets*. Every action must match one of the two shapes §7 defines — the icon button's square target with its 24dp glyph, or the text button's 40dp height with §7.3's 18dp leading slot — and every bar-anchored panel must share one width and one trailing edge. Confirm it fails today: the switcher at 69.7×28 with a 14dp glyph matches neither shape, and the panels are 260 against 240 (SC-008e, FR-029c)
+
+  > **Proven able to fail, not merely observed passing.** Deleting `.leading(..)` from the
+  > switcher's button turns it red in all 17 covered states, naming the label's width (43.7dp,
+  > 86.2dp where the project name is longer) where §7.3 states an 18dp glyph — because `glyph_of`
+  > takes the *leading* leaf and a label with no glyph beside it leaves the label leading. Restored,
+  > it is green again.
+  >
+  > **The first form of this test asserted the two actions were the same size, and that was
+  > wrong** — it would have forbidden a labelled action outright, which is exactly the product
+  > decision a gate has no business making. A closed set of component shapes still fails the
+  > hand-assembled control (28dp is neither 48 nor 40; a 14dp glyph is neither 24 nor 18) without
+  > deciding whether an action may carry words.
+- [X] T132 Replace `ProjectSwitcherTrigger` with the shared **labelled** button in `ui/toolbar.rs` — `Button::text(active project name, r).leading(Icon::OpenProject, icon_role(AppBarAction, r)).on_press(Message::ProjectSwitcherToggled)`. The label stays: it is the quickest way to see which project is active without opening the panel. What changes is that §7.3's 40dp height, 12dp ends, 18dp leading glyph and ripple are the component's rather than the call site's (FR-029c, 008 FR-004)
+
+  > **Corrected on the owner's word, 2026-08-08.** The first attempt read "regular icon button" as
+  > icon-only and moved the name into a tooltip — a product change nobody asked for, made while
+  > fixing an assembly problem. `IconLabel`'s doc is the distinction that was missed: a labelled
+  > icon sizes its glyph at the label's role, and a *button's* leading slot is §7.3's 18dp whatever
+  > the label is. The switcher wanted the second, which `Button::leading` has owned all along.
 - [X] T133 Replace `ProjectSwitcherOverlay` with `MenuOverlay` in `ui/mod.rs`, building `MenuItem`s directly from `state.switcher_entries()` — active marker with `reserve_icon`, running count as trailing text, unavailable badge as trailing icon, `on_context` for the forget menu, and the trailing "Add project…" item. The panel gains the shared width, the shared anchor and the shared enter/exit fade by construction (FR-029c, FR-029a)
 - [X] T134 Delete `src/ui/material/project_switcher.rs` and its re-exports (`ProjectRow`, `ProjectSwitcherOverlay`, `ProjectSwitcherTrigger`) from `material/mod.rs`. `row_column`'s `pub(super)` reason disappears with it; check `menu_anatomy`'s §7.5 measurements still reach every row they did (FR-029c)
 - [X] T135 [P] Follow the deleted types through the showcase: `showcase/catalogue.rs`'s three entries and `showcase/sections/floating.rs`'s two specimens. The switcher panel is now a `MenuOverlay` specimen; the separate trigger entry becomes an app-bar `IconButton` or is dropped as a duplicate of `MenuTrigger` (feature 020)
 - [X] T136 [P] Follow them through the tests that name them: `tests/project_switcher.rs`, `switcher_forget_menu.rs`, `showcase_state.rs`, `one_overlay_implementation.rs`, `type_role_call_sites.rs`, `anatomy_call_sites.rs` and `tests/support/covered_states.rs`. Behaviour assertions stay; only the constructor they drive changes (Principle I)
-- [X] T137 Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`UPDATE_LAYOUT_SNAPSHOT=1`). The diff is the proof: `app_bar.switcher_trigger` moves 69.7 × 28 → 48 × 48 with a 24dp glyph, and `switcher.panel` moves 260 → 240 wide, its leading edge landing on the overflow panel's (feature 019, SC-008e)
-- [X] T138 [P] Update `docs/user-guide/project-selection.md`: the switcher is now an icon button, so the top bar no longer names the active project — say where the name is instead (the panel's marker, the tooltip). `icons.md` needed no change: its two switcher rows are the open-folder glyph, which is now the trigger itself, and the active marker, which is where it always was. Same change, same commit, per the documentation rule (FR-041)
-- [ ] T139 Confirm in the running application (`mise run run`): both trailing controls the same size, hover and ripple identical, the switcher panel fading in and out like the ⋮ menu, its left edge flush with the ⋮ panel's, right-click on a project row still reaching "Forget project", and the tooltip naming the active project (SC-008e, US4 scenario 13)
+- [X] T137 Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`UPDATE_LAYOUT_SNAPSHOT=1`). The diff is the proof: `app_bar.switcher_trigger` moves to §7.3's 40dp height with an 18dp leading glyph, and `switcher.panel` moves 260 → 240 wide, its leading edge landing on the overflow panel's (feature 019, SC-008e)
+- [X] T138 [P] Update `docs/user-guide/project-selection.md`: the switcher is a button showing the folder glyph and the active project's name. `icons.md` needed no change — its two switcher rows are the open-folder glyph, which is now the button's leading icon, and the active marker, which is where it always was. Same change, same commit, per the documentation rule (FR-041)
+- [ ] T139 Confirm in the running application (`mise run run`): the switcher naming the active project beside its folder glyph and standing level with the ⋮ button, hover and ripple on both, the switcher panel fading in and out like the ⋮ menu with its left edge flush with that panel's, and right-click on a project row still reaching "Forget project" (SC-008e, US4 scenario 13)
 
 **Bugfix**: 2026-08-08 — BUG-007. T131–T139 added. Numbered from T131 because the composite-gate
 phase above took T129 and T130 while this branch was open.

@@ -43,10 +43,10 @@ entry; it never creates a duplicate.
 
 ## Switching projects from the top bar
 
-Next to the menu button in the top bar is the **project switcher** — an icon button (the
-open-folder glyph), and the quickest way to change your active project without opening the
-folder browser or scrolling the main-window list. Hover it and the tooltip names the project
-you are in; click it to drop down a panel listing your known projects. Each row shows:
+Next to the menu button in the top bar is the **project switcher** — a button showing a folder
+icon and the name of your active project, and the quickest way to change projects without
+opening the folder browser or scrolling the main-window list. Click it to drop down a panel
+listing your known projects. Each row shows:
 
 - the project's name, with the **active** project marked;
 - a **running** count when the project has terminal sessions running in the background

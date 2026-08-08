@@ -458,7 +458,7 @@ through its chainable builder API (feature 017). No bespoke one-off widget.
 | Title role         | `title_large`, color `on_surface`       |
 | Icon color         | `on_surface_variant`                    |
 | Icon target        | 48 × 48                                 |
-| Action control     | the shared icon button — every trailing action, including the project switcher, is one (FR-029c) |
+| Action control     | a shared button: `IconButton` at the target above where it carries no label, the text button with §7.3's leading-icon slot where it does — never one assembled at the call site (FR-029c) |
 | Divider at rest    | 1, `outline_variant`; absent once elevated |
 | Bottom edge        | height + divider = **65** — the offset any panel anchored below the bar derives from (FR-029a) |
 
@@ -605,10 +605,12 @@ A panel gives an item leading or trailing content; it does not rebuild one.
 
 **And one panel, and one trigger (FR-029c).** The same sentence one level out, because BUG-003
 closed the row and left the frame around it forked. The width, surface, offset and transition rows
-above describe *the* panel; the control that opens one is §7.1's action control, which is the shared
-icon button. BUG-007 is what that alternative costs: a 28dp trigger with a 14dp glyph beside a 48dp
-trigger with a 24dp one, a 260dp panel beside a 240dp one from the same edge, and an exit transition
-that reached one of them — because the fade is written in the shared panel and the copy predates it.
+above describe *the* panel; the control that opens one is §7.1's action control, which is a shared
+button — which one depending on whether it carries a label, both figures being §7.3's either way.
+BUG-007 is what the alternative costs: a hand-assembled 28dp trigger drawing its glyph at its
+label's 14dp role beside a 48dp trigger drawing 24dp, a 260dp panel beside a 240dp one from the same
+edge, and an exit transition that reached one of them — because the fade is written in the shared
+panel and the copy predates it.
 
 ### 7.6 Chips and tags (FR-030)
 
