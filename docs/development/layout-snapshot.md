@@ -100,21 +100,27 @@ Both colour schemes are resolved. Only light is recorded; dark is asserted struc
 rather than duplicated, with two declared geometric exemptions that must each keep firing.
 
 Both the base widget tree and widget-attached overlays are walked. The second pass matters: dialogs
-and menus are composed in-tree and the base walk already sees them, but `material::Select` wraps a
-`pick_list`, whose dropdown is laid out separately and is invisible to the base walk.
+and menus are composed in-tree and the base walk already sees them, but a **picker** floats its list
+through `Widget::overlay`, and that list is laid out separately and is invisible to the base walk.
 
 **That pass ran over every state and recorded nothing for most of this feature's life.** The only
-widget reached through `Widget::overlay` is that dropdown, and no covered state opened one, so the
-fixture held zero `over` records while the pass was documented as covering them — a check quietly
-narrower than it looked, which is the failure this whole feature exists to correct, arrived at from
-the opposite direction. `add-worktree-dialog-type-menu-open` now opens one, and
+widget reached through `Widget::overlay` was the select's dropdown, and no covered state opened one,
+so the fixture held zero `over` records while the pass was documented as covering them — a check
+quietly narrower than it looked, which is the failure this whole feature exists to correct, arrived
+at from the opposite direction. `add-worktree-dialog-type-menu-open` now opens one, and
 `the_overlay_pass_records_something_somewhere` fails if no state does.
 
-Opening it is not a state you can set. `pick_list`'s open flag is private widget-tree state with no
-accessor, so `StateUnderTest::pressing` *causes* it: a left press at the control's centre, the way a
-person opens it. That press has to be preceded by settling the dialog's entrance transition — a
-modal mounts at progress zero on purpose and swallows every event that is not a redraw until it has
-appeared, so a press into a freshly built tree reaches nothing at all.
+Opening it is not a state you can set, and that survived the select becoming this library's own
+control (feature 022). Its open flag is private widget-tree state with no accessor — deliberately, so
+that no screen has to hold it — so `StateUnderTest::pressing` *causes* it: a left press at the
+control's centre, the way a person opens it. That press has to be preceded by settling the dialog's
+entrance transition — a modal mounts at progress zero on purpose and swallows every event that is not
+a redraw until it has appeared, so a press into a freshly built tree reaches nothing at all.
+
+It also has to be **followed** by settling frames. A picker floats its list for as long as its own
+visibility track says there is any of it left, and that track only moves on a redraw — so a press
+with no frames after it opens a list that does not exist yet, and the fixture loses every `over`
+record.
 
 ## What is not covered
 

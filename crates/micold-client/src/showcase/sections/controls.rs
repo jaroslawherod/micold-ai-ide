@@ -223,26 +223,39 @@ pub fn form_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
     )
 }
 
-/// `Select` — nothing selected and a choice made, both labelled.
+/// `Select` — one live control, driven (feature 022, FR-031).
 ///
-/// The unset pose is the one that shows the rule a select shares with a text field: with a label,
-/// an empty control rests it on the value's line and draws **no** placeholder underneath, because
-/// the resting label is the placeholder. The placeholder-only form — for the rare select with no
-/// name to give it — is posed by `form_field`'s `no label`.
+/// It used to be two frozen instances, "unset" and "selected", and it had to be: a
+/// `pick_list`-backed select could not be driven from here, so picking went to `NoOp` and the only
+/// way to show a chosen value was to build one already holding it.
 ///
-/// Its dropdown panel is opened by the rendering stack rather than by the gallery, so it is exercised
-/// live like hover and focus: click it and the menu appears.
-pub fn select<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
-    let control = |selected: Option<&'a str>| {
-        material::Select::new(samples::CHOICES, selected, |_| Message::NoOp, roles)
-            .placeholder("Choose a theme…")
-            .label("Theme")
-    };
+/// The select is the library's own now, so the value is the gallery's to hold and the openness is
+/// the widget's to hold — which means unset is simply what this rests at, and selected is one press
+/// away. Keeping the frozen pair alongside would put a second, unmoving answer next to the live one
+/// on the same page, which is the shape feature 021's FR-020a rules out.
+///
+/// Picking goes to [`Message::SelectChosen`] rather than [`Message::NoOp`], because a select that
+/// opened and then refused the choice would demonstrate the half of itself a person did not open it
+/// for. Nothing here closes the list: the widget has already done that.
+///
+/// The unset pose it replaces showed the rule a select shares with a text field — with a label, an
+/// empty control rests it on the value's line and draws **no** placeholder underneath, because the
+/// resting label is the placeholder. That is still on the page: it is what this shows until someone
+/// picks, and the placeholder-only form is posed by `form_field`'s `no label`.
+pub fn select<'a>(s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
-        vec![
-            posed("unset", control(None), roles),
-            posed("selected", control(Some(samples::CHOICES[1])), roles),
-        ],
+        vec![posed(
+            "press it, then pick",
+            material::Select::new(
+                samples::CHOICES,
+                s.select_choice(),
+                |choice: &str| Message::SelectChosen(choice.to_string()),
+                roles,
+            )
+            .placeholder("Choose a theme…")
+            .label("Theme"),
+            roles,
+        )],
         Layout::Inline,
     )
 }

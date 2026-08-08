@@ -200,11 +200,12 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
         //
         // The clear action appears only when there is something to clear, so an empty field
         // carries no action that would do nothing.
-        // `.active(open)` is the half the select cannot manage. §7.7 wants the active indicator to
-        // follow **open** rather than focus (FR-043a), and `pick_list` reports its open state to
-        // its own style closure and to nobody else — so `Select::active` must be supplied and in
-        // practice is not. This control's openness is already a caller-held value, so the
-        // indicator follows it for real. The accepted gap stands for the select and closes here.
+        // `.active(open)` — §7.7 wants the active indicator to follow **open** rather than focus
+        // (FR-043a), and this control's openness is already a caller-held value, so the indicator
+        // follows it directly. This was once the half the select could not manage, because
+        // `pick_list` reported its open state to its own style closure and to nobody else; the
+        // select holds its own openness now and answers the same requirement from it, so accepted
+        // fidelity gap #3 is closed rather than merely worked around here (feature 022, FR-013).
         let mut input = super::TextField::new(placeholder, query, r)
             .leading_icon(Icon::Search)
             .active(open)

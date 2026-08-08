@@ -308,8 +308,21 @@ pub const COMPONENTS: &[Entry] = &[
         component: "Select",
         variants: &[],
         density: &[],
-        posed: &["unset", "selected"],
-        live: &["hover", "pressed", "focus", "the open dropdown"],
+        // Nothing is posed, and that is a change made by feature 022. Two frozen instances used to
+        // stand for "unset" and "selected", because a `pick_list`-backed select could not be driven
+        // — picking went to `NoOp` and nothing moved. It can be now: the value is the gallery's and
+        // the openness is the widget's, so unset *is* the resting state and selected is one press
+        // away. A pose of a state a live instance passes through on its own is a second, frozen
+        // answer to a question the live one already answers (feature 021's FR-020a, BUG-001).
+        posed: &[],
+        live: &[
+            "press the trigger to open the list; pressing it again closes it",
+            "press a row to choose it — the value and the marker both follow",
+            "Escape or a press outside closes it, taking nothing",
+            "↑ / ↓ move the highlight from the current choice, Enter takes the row it is on",
+            "Tab closes the list and still moves focus on",
+            "hover and the open state are the same layer at two opacities",
+        ],
         interactive: true,
         section: Section::Components,
         layout: Layout::Inline,

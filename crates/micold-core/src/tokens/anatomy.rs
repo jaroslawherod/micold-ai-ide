@@ -150,8 +150,12 @@ pub mod text_field {
     pub const PADDING: f32 = 16.0;
     /// The bottom active indicator at rest.
     pub const INDICATOR: f32 = 1.0;
-    /// The bottom active indicator when the field is focused — or, for the select, when it is open,
-    /// since a `pick_list` cannot report focus (FR-043a).
+    /// The bottom active indicator when the field is focused — or, for the select, when it is open.
+    ///
+    /// §7.7 asks for **open** rather than focus there, and the select answers it from its own state
+    /// (feature 022, FR-013). It used to be that it *could* not: a `pick_list` reported `Opened` to
+    /// its own style closure and to nobody else, which is what accepted fidelity gap #3 recorded
+    /// before that gap closed.
     ///
     /// Thicker than [`INDICATOR`] on purpose: a filled field has no border to recolour, so this
     /// difference *is* the focus affordance. Equal values would leave focus invisible.

@@ -20,9 +20,10 @@
 //! # Why "active" is a parameter and not a question this asks
 //!
 //! The state that thickens the indicator and takes the accent differs by control: **focus** for a
-//! text input, **open** for the select, which cannot report focus at all (FR-043a). The rendered
-//! result is identical and only the trigger differs, so the wrapper is *told* which. A wrapper that
-//! assumed focus would leave the select's indicator permanently at rest.
+//! text input, **open** for the select and the search picker's list. §7.7 asks for exactly that, and
+//! both controls now answer it — the select from its own state, the search picker from its caller's
+//! (feature 022, FR-013). The rendered result is identical and only the trigger differs, so the
+//! wrapper is *told* which. A wrapper that assumed focus would leave both indicators at rest.
 //!
 //! # Every slot is always emitted, filled or not
 //!

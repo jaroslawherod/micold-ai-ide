@@ -694,18 +694,28 @@ moves inside that control's container" now has a sibling: the branch picker's `B
 the same way, into the type-ahead's own container. It is the same requirement (FR-031a) reaching a
 control that did not exist when the requirement was written, not a new one.
 
-The type-ahead also settles what the select could not. §7.7 asks for the active indicator to respond
-to **open** rather than focus (FR-043a), and `pick_list` reports `Opened` to its own style closure
-and to no parent — so `Select::active` must be supplied by a caller, and no caller tracks it.
+The type-ahead also settled what the select could not. §7.7 asks for the active indicator to respond
+to **open** rather than focus (FR-043a), and `pick_list` reported `Opened` to its own style closure
+and to no parent — so `Select::active` had to be supplied by a caller, and no caller tracked it.
 `Typeahead` takes `.open(bool)` from a caller that already holds that state, so it passes it to the
-field as the active flag and the indicator follows it. The accepted gap stands for the select and is
-closed for the type-ahead.
+field as the active flag and the indicator follows it.
 
-**The select is therefore not left mute.** Removing its 3dp open-state border because a filled field
-has no border, and leaving the indicator unable to answer for it, would have made opening the list
-produce no feedback at all — worse than the affordance it replaced. Its open and hover states are
-carried by the **state layer** instead (§5, FR-021), which is what every other interactive surface
-already uses and needs no parent to know anything.
+**The select is a first-class control here now (feature 022, FR-032).** It is no longer the
+rendering stack's `pick_list` behind a style closure: it is a widget of this library's own, floating
+the same list the type-ahead floats, from the same `material::picker`. What that changes for this
+section is the sentence above. Openness is the widget's own state, so nothing has to be supplied and
+`Select::active` is gone from the builder entirely — the indicator answers from the control's own
+knowledge of being open. **Accepted fidelity gap #3 is closed and removed from §9.**
+
+Its open and hover states are *also* carried by the **state layer** (§5, FR-021), and both are
+wanted: the indicator says which control the list belongs to, the layer says the control is being
+used. The layer was written when it was standing in for an indicator that could not answer; it stays
+because it is what every other interactive surface does, not because the indicator still cannot.
+
+What remains true, and is a different thing from gap #3: this control has no **focus** state, because
+nothing in this application's rendering stack gives a non-text widget one — that is gap #2 (FR-043),
+which covers buttons, rows, menu items and chips alike, and the select is simply one more of them.
+§7.7 asks the indicator to follow *open* rather than focus, and it does.
 
 ### 7.8 Snackbar (FR-032, FR-032a, FR-032b)
 
@@ -778,13 +788,20 @@ spacing tokens.
 
 ## 9. What this contract does not cover
 
+> **Gap #3 was here and is closed** (feature 022, FR-032, SC-005). It read: *the stack's select
+> reports only active, hovered and open, with no focus concept to observe, so its active indicator is
+> driven by the open state instead.* The select is this library's own control now, its openness is
+> its own state, and the indicator answers from it — see §7.7. The list is three entries.
+>
+> **The numbers do not shift up.** #4 stays #4, here and in `form_field.rs`, `state.rs` and
+> `anatomy.rs`, which name these by number in prose. Renumbering would silently repoint every one of
+> those at a different gap, which is a worse outcome than a list that counts 1, 2, 4.
+
+
 - **Tracking / letter-spacing at render time** — recorded in §2.2, deliberately unapplied (§2.3).
   Accepted fidelity gap #1 (FR-042).
 - **Keyboard focus on non-text widgets** — the rendering stack has no focused state for buttons,
   rows, menu items or chips (§5). Accepted fidelity gap #2 (FR-043).
-- **Keyboard focus on the select control** — the stack's select reports only active, hovered and
-  open, with no focus concept to observe, so its active indicator is driven by the **open** state
-  instead (§7.7). Accepted fidelity gap #3 (FR-043a).
 - **The text field label's float transition** — the stack's text input has no label concept, so the
   label snaps between resting and floating rather than animating (§7.7). Accepted fidelity gap #4
   (FR-044).

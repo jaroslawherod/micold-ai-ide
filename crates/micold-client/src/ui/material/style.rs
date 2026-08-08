@@ -566,7 +566,8 @@ pub fn field_container(r: Roles) -> impl Fn(&Theme) -> container::Style {
 /// focused and invalid is invalid, and showing it in the accent would say the opposite.
 ///
 /// "Active" is deliberately not "focused": it is **focus** for a text input and **open** for the
-/// select, which cannot report focus at all (FR-043a). The wrapper is told which; it never assumes.
+/// select and for the search picker's list — §7.7 asks for open there, and both controls answer it
+/// from state they hold themselves (FR-043a, feature 022). The wrapper is told which; it never assumes.
 pub fn field_indicator(r: Roles, active: bool, error: bool) -> (Color, f32) {
     let thickness = if active {
         tokens::anatomy::text_field::INDICATOR_ACTIVE

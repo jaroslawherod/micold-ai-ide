@@ -3,7 +3,31 @@
 **Modules**: `src/ui/material/select.rs` (new), `src/ui/material/mod.rs` (export), `src/ui/
 worktree_form.rs` (first consumer), `src/ui/style.rs` (`select_field`/`select_menu`).
 
-> **Implementation note (second revision — current)**: the inline-panel design below (this
+> **Third revision (current — feature 022)**: the `pick_list` wrapper described below has been
+> replaced by a select this library writes itself, over the shared picker base
+> (`specs/022-dedicated-select-component/contracts/picker-base.md`). The second revision's reasoning
+> was right when it was written and is worth keeping exactly for that: `pick_list` implemented
+> `Widget::overlay()` and this codebase had nothing that did, so it was the only thing that could
+> position a dropdown from its trigger's own on-screen bounds inside `Modal`'s content-sized dialog.
+> What changed is not the reasoning but the premise. Feature 021 built `cdk::picker` for the branch
+> type-ahead, which solves that same positioning problem and is this library's to style — so the
+> select's list can be the *same* list the type-ahead floats, row for row, instead of the rendering
+> stack's menu behind a style closure that nothing else could see into.
+>
+> What that costs and buys, plainly: `style::select_field` and `style::select_menu` are **gone**,
+> because both were written against `pick_list`'s own types and neither could outlive the widget;
+> the look they encoded is assembled from what the library already had, and `select_menu` turned out
+> to be a hand-kept second copy of `menu_surface` that had already drifted from it. `Select::active`
+> is gone from the builder, because the control holds its own openness now and the indicator answers
+> from it — which is accepted fidelity gap #3 closing. `AddWorktreeTypeSelected` is unchanged, and
+> `src/app.rs` still gains nothing for this control.
+>
+> Everything below this note is history. The `pick_list` entry in
+> `tests/one_overlay_implementation.rs`'s `SANCTIONED` list was **removed** rather than left
+> standing, and that gate fails the build while a sanction that no longer applies is still listed —
+> so this supersession is enforced rather than remembered.
+
+> **Implementation note (second revision — superseded, kept for history)**: the inline-panel design below (this
 > contract's first revision) shipped, then was reported as reading wrong in review: the list
 > visibly pushed the rest of the form down instead of floating above it like every other
 > dropdown in the app. It was replaced by wrapping iced's own built-in `pick_list` widget instead

@@ -240,14 +240,33 @@ the durability half of the request.
 
 ## Phase 6: Polish, Gallery & Documentation
 
-- [ ] T033 [P] Set `interactive: true` and a non-empty `live` list on the `Select` entry in `crates/micold-client/src/showcase/catalogue.rs`, naming the states a developer can exercise — press to open, pick, dismiss, keyboard (`showcase_captions.rs`, FR-031)
-- [ ] T034 [P] Make the gallery's select entry drive the real rule in `crates/micold-client/src/showcase/sections/controls.rs`. It MUST NOT be posed open: feature 021's FR-020a, added by BUG-001, binds every live entry — a live entry pins no state the application cannot leave
-- [ ] T035 [P] Update `specs/018-material3-visual-system/contracts/design-tokens.md` §7.7 (the select is a first-class control, no longer mute) and **§9 (remove accepted fidelity gap #3 — the list drops from four entries to three)** (FR-032, SC-005)
-- [ ] T036 [P] Document the select and the shared picker base — what each is for, and that a third picker consumes the base rather than rebuilding it — in `docs/development/component-library.md` (Principle VII, FR-033, FR-028)
-- [ ] T037 [P] Add a superseding note to `specs/013-create-worktree-refinement/contracts/material-select.md` in that file's own established style, recording that `pick_list` was the only thing that could anchor a dropdown inside a content-sized dialog when it was written, and no longer is
-- [ ] T038 Cross-cutting documentation review — links, navigation and index entries across `docs/`, including `docs/README.md` (Principle VII)
+- [X] T033 [P] Set `interactive: true` and a non-empty `live` list on the `Select` entry in `crates/micold-client/src/showcase/catalogue.rs`, naming the states a developer can exercise — press to open, pick, dismiss, keyboard (`showcase_captions.rs`, FR-031)
+- [X] T034 [P] Make the gallery's select entry drive the real rule in `crates/micold-client/src/showcase/sections/controls.rs`. It MUST NOT be posed open: feature 021's FR-020a, added by BUG-001, binds every live entry — a live entry pins no state the application cannot leave
+- [X] T035 [P] Update `specs/018-material3-visual-system/contracts/design-tokens.md` §7.7 (the select is a first-class control, no longer mute) and **§9 (remove accepted fidelity gap #3 — the list drops from four entries to three)** (FR-032, SC-005)
+- [X] T036 [P] Document the select and the shared picker base — what each is for, and that a third picker consumes the base rather than rebuilding it — in `docs/development/component-library.md` (Principle VII, FR-033, FR-028)
+- [X] T037 [P] Add a superseding note to `specs/013-create-worktree-refinement/contracts/material-select.md` in that file's own established style, recording that `pick_list` was the only thing that could anchor a dropdown inside a content-sized dialog when it was written, and no longer is
+- [X] T038 Cross-cutting documentation review — links, navigation and index entries across `docs/`, including `docs/README.md` (Principle VII)
 - [ ] T039 Confirm `mise run test` passes on Linux, macOS and Windows via `.github/workflows/ci.yml` (Principle VI)
+
+  > **Pending a pull request.** The three-platform matrix only runs on a PR, so this cannot be
+  > answered from a branch. Locally on Linux: 164 test binaries, 0 failed, 1495 tests. Worth noting
+  > *why* the local run is weaker evidence than usual here — every worktree on this machine shares
+  > one `CARGO_TARGET_DIR`, and cargo gives the same `-C metadata` hash to the same crate built from
+  > different worktrees, so they can overwrite each other's test binaries. CI on a clean checkout is
+  > the arbiter, not this.
 - [ ] T040 Run [quickstart.md](./quickstart.md) end to end and record the full pass — the date, the platform, and **which half was machine-checked**. §B1 and §B2 are this feature's two headline claims and neither can be automated; a green suite is not this feature working
+
+  > **Blocked on eyes at a display** — the fourth and last of these, with T011, T025 and T028, and
+  > the one that subsumes them. The task's own wording is the finding: a green suite is not this
+  > feature working. What the machine established is that the two lists resolve to the *same* node
+  > tree (`picker_parity.rs`), that they leave over the same number of frames and that neither
+  > control names a timing (`picker_motion.rs`), that the trigger's anatomy and its indicator hold
+  > (`select_anatomy.rs`, the indicator read off rasterised pixels), and that both controls claim
+  > the same keys. What it cannot establish is either headline claim: whether the two lists *look*
+  > indistinguishable side by side (§B1, SC-001), and whether the transition looks right — the
+  > grow-and-fade, the enter duration, both curves, and a reversal mid-flight resuming rather than
+  > snapping (§B2, FR-021). `scale` and `fade` transform drawing only, and nothing in this crate's
+  > test renderer rasterises them.
 
 ---
 

@@ -97,7 +97,24 @@ Point 5 is the one most often got wrong. The resize handle used to emit `Sidebar
 drag itself let all of that be deleted; what remained was the single message that carried a
 decision.
 
-## Searching a long list: `Typeahead`
+## Pickers: one foundation, two controls
+
+A **picker** is a field with a list of choices anchored beneath it. There are two — `Typeahead` for
+searching a long list, `Select` for choosing from a fixed one — and everything they have in common is
+one place rather than two similar places.
+
+| | Shared, in `material::picker` / `cdk::picker` | Each control's own |
+|---|---|---|
+| Look | the row, the panel it sits on, the grow-and-fade transition | the field: a search box, or a trigger with a chevron |
+| Behaviour | anchoring, flipping, dismissal, the keyboard rule | where the answer to a key *goes* |
+| Timings | `short_3` in, `short_2` out, §6.3's menu rows | — |
+
+Neither control states a duration or a curve. If you are writing a third picker, you do not either:
+call `picker::animated_menu` and pass `picker::EXIT` to the base, and it matches the other two by
+construction. `src/ui/material/picker_parity.rs` builds both existing controls and compares their
+lists rectangle for rectangle, so "they look the same" is measured rather than intended.
+
+### Searching a long list: `Typeahead`
 
 Any picker over more entries than fit on screen consumes `material::Typeahead` rather than building
 a second one. It is the branch picker's control, but nothing about it is branch-shaped — a check
@@ -135,10 +152,37 @@ candidate — plus the four messages. The branch picker's version of that mappin
 lines in `ui/worktree_form.rs`, and it is the only place branch vocabulary and component vocabulary
 meet.
 
-The behaviour half, `cdk::typeahead`, is the third module allowed to write its own
-`Widget::overlay()`, and `tests/one_overlay_implementation.rs` holds it to saying why: the result
-list anchors to the field's own on-screen bounds so it works inside a content-sized dialog, and it
-draws rows that emphasise individual characters, which the rendering stack's own menu cannot.
+The behaviour half, `cdk::picker`, is the **only** module in the library allowed to write its own
+`Widget::overlay()`, and `tests/one_overlay_implementation.rs` holds it to saying why: the list
+anchors to the field's own on-screen bounds so it works inside a content-sized dialog, and it draws
+rows that emphasise individual characters, which the rendering stack's own menu cannot. Both pickers
+go through it, so adding a third adds no second mechanism.
+
+### Choosing from a fixed list: `Select`
+
+```rust
+material::Select::new(&ConventionalType::ALL, self.chosen, Message::TypeChosen, roles)
+    .label("Type")
+    .placeholder("Select…")
+    .into()
+```
+
+Shorter than the type-ahead's, and the difference is the interesting part: **there is no `.open()`,
+no `.highlighted()`, and no dismiss or move message.** A select holds its own openness and its own
+keyboard position, because nothing outside it is coupled to either — its options are fixed by the
+call site, so there is no query for the list to be a function of. The type-ahead is the other way
+round for exactly that reason: its rows *are* a function of caller-held state, so its openness is the
+caller's too.
+
+That asymmetry is deliberate and is what closed accepted fidelity gap #3. §7.7 wants the active
+indicator thickened while the list is **open**, and the previous select — built on the rendering
+stack's `pick_list` — reported its open state to its own style closure and to nobody else, so
+`Select::active` had to be supplied by a caller and none was. Openness being the widget's own is what
+lets the indicator answer from the control's own knowledge, and `active` left the builder with it.
+
+So: if the list's contents depend on something the screen holds, the screen holds the openness too.
+If they do not, the widget holds it. Do not make a new picker symmetric with the other one for
+symmetry's sake — that is the mistake this arrangement exists to avoid.
 
 ## Where the boundary genuinely bends
 
@@ -146,10 +190,14 @@ Two things sit outside the library on purpose, and both are documented at their 
 
 - **The terminal grid.** It draws cells from a VT model, not components, and is a feature module for
   that reason.
-- **Widget-attached dropdowns.** `Select` is built on iced's `pick_list`, whose overlay is
-  positioned by the rendering stack from the trigger's on-screen bounds. That is what makes it work
-  inside a content-sized dialog, where a window-level floating surface has nothing to anchor
-  against.
+~~**Widget-attached dropdowns.** `Select` is built on iced's `pick_list`, whose overlay is
+positioned by the rendering stack from the trigger's on-screen bounds.~~ **No longer an exception.**
+It was one for a real reason — a dropdown inside a content-sized dialog has nothing window-level to
+anchor against, and `pick_list` was the only thing that could position from the trigger's own bounds.
+`cdk::picker` does that now and is ours to style, so the select is a component like any other and the
+sanction that named it was **deleted** rather than left standing. The gate that holds the list to one
+entry is what forced that: `tests/one_overlay_implementation.rs` fails while a sanction that no
+longer applies is still listed.
 
-If you find yourself wanting a third exception, the gates will tell you — and the honest move is to
-extend a component rather than add an entry to a `REMAINING` list.
+So the list is one exception, not two. If you find yourself wanting a second, the gates will tell you
+— and the honest move is to extend a component rather than add an entry to a `REMAINING` list.
