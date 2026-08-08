@@ -113,22 +113,12 @@ pub enum SelectKind {
     Lines,
 }
 
-/// In-progress Settings form state, present only while the Settings overlay is open (feature
-/// 006, FR-020). The scrollback field is edited as text and validated/parsed on save.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SettingsDraft {
-    /// The editable scrollback-limit value (parsed/validated on save).
-    pub scrollback_lines: String,
-    /// Whether environment-include is enabled (feature 011, FR-001).
-    pub env_include_enabled: bool,
-    /// The editable environment-include script path (FR-002).
-    pub env_include_script_path: String,
-    /// The editable environment-include timeout, in seconds as text (parsed/validated on save,
-    /// FR-003).
-    pub env_include_timeout: String,
-    /// The last validation error shown after a rejected save.
-    pub error: Option<String>,
-}
+// Moved to `crate::features::settings` (feature 021, T018). Re-exported so this step changes no
+// call site; the re-export goes away in T023 when imports are updated.
+//
+// The draft's validation did NOT come with it — it lives in `main.rs`'s `SettingsSaved` arm, so
+// this feature stays split until Tier 3 moves reducer code.
+pub use crate::features::settings::SettingsDraft;
 
 /// In-progress worktree-rename state, present only while the worktree-rename dialog is open
 /// (feature 008, FR-013/FR-014). Mirrors [`RenameDraft`] but is keyed by worktree `dir_name`
