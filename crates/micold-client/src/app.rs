@@ -10,6 +10,15 @@
 //! `FolderChosen`) therefore carry no reducer effect here — they are documented no-ops
 //! handled entirely in `src/main.rs`.
 
+use crate::features::notifications::NoticeLevel;
+use crate::features::project::{ProjectMenu, RenameDraft, SwitcherEntry};
+use crate::features::session::SelectKind;
+use crate::features::settings::SettingsDraft;
+use crate::features::sidebar::TagFilter;
+use crate::features::worktree::WorktreeRenameDraft;
+use crate::features::worktree_form::{
+    BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
+};
 use micold_core::naming::ConventionalType;
 use micold_core::notify;
 use micold_core::project::{canonicalize_best_effort, Availability, FolderEntry};
@@ -74,45 +83,6 @@ pub enum Overlay {
     /// project is held in [`State::forget_target`].
     ConfirmForgetProject,
 }
-
-// Moved to `crate::features::worktree_form` (feature 021, T015). Re-exported so this step
-// changes no call site; the re-export goes away in T023 when imports are updated.
-pub use crate::features::worktree_form::{
-    BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
-};
-
-// Moved to `crate::features::project` (feature 021, T017). Re-exported so this step changes no
-// call site; the re-export goes away in T023 when imports are updated.
-//
-// `SelectKind` is named by T017 but did not travel: it sat in this stretch of the file and is
-// terminal text selection, not a project concern. See `features/project.rs`.
-pub use crate::features::project::{clamp_menu_anchor, ProjectMenu, RenameDraft, SwitcherEntry};
-
-// Moved to `crate::features::sidebar` (feature 021, T016). Re-exported so this step changes no
-// call site; the re-export goes away in T023 when imports are updated.
-//
-// `DEFAULT_LOCATION_LABEL` travelled with `worktree_location_label` even though T016 does not name
-// it: the two are the sidebar's location tooltip, one for the project root and one for everything
-// else, and leaving the constant behind would split a feature across two files (FR-001).
-pub use crate::features::sidebar::{
-    matches_filters, worktree_location_label, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
-    DEFAULT_LOCATION_LABEL,
-};
-
-// Moved to `crate::features::session` (feature 021, T021, reassigned there from T017). Re-exported
-// so this step changes no call site; the re-export goes away in T023.
-pub use crate::features::session::SelectKind;
-
-// Moved to `crate::features::settings` (feature 021, T018). Re-exported so this step changes no
-// call site; the re-export goes away in T023 when imports are updated.
-//
-// The draft's validation did NOT come with it — it lives in `main.rs`'s `SettingsSaved` arm, so
-// this feature stays split until Tier 3 moves reducer code.
-pub use crate::features::settings::SettingsDraft;
-
-// Moved to `crate::features::worktree` (feature 021, T019). Re-exported so this step changes no
-// call site; the re-export goes away in T023 when imports are updated.
-pub use crate::features::worktree::WorktreeRenameDraft;
 
 /// Every user interaction that can change application state.
 ///
@@ -527,14 +497,6 @@ pub enum Message {
     /// The logout-survival enable flow finished; carries a ready-to-show message (info or error).
     LogoutSurvivalOutcome(String),
 }
-
-// Moved to `crate::features::notifications` (feature 021, T020). Re-exported so this step changes
-// no call site; the re-export goes away in T023 when imports are updated.
-//
-// `Notification` did NOT move -- it was deleted. Nothing ever constructed it; every real
-// notification is a `micold_core::notify::Notification` on the queue, which is what the snackbar
-// renders. Two names for one concept is what T020 asked to avoid, and one of them was dead.
-pub use crate::features::notifications::NoticeLevel;
 
 /// Root application state for the single main window.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

@@ -27,8 +27,10 @@ use std::time::Instant;
 use iced::advanced::widget::Tree;
 use iced::advanced::{layout, mouse, Layout, Shell};
 use iced::{window, Event, Size};
-use micold_client::app::{Message, State, WorktreeFormStatus};
-use micold_client::ui::{self, ConnectionStatus};
+use micold_client::app::{Message, State};
+use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::worktree_form::WorktreeFormStatus;
+use micold_client::ui;
 
 /// The window the view is laid out in. Large enough that nothing is clipped away unrendered.
 const VIEWPORT: Size = Size {

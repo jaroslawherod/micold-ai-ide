@@ -1,6 +1,7 @@
 //! T017 — sidebar tree building + expand/collapse (FR-002/003).
 
-use micold_client::app::{Message, SidebarEntry, State, TagFilter};
+use micold_client::app::{Message, State};
+use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionLocation};
@@ -116,9 +117,9 @@ fn state_with_named_worktrees(dirs: &[(&str, WorktreeStatus)]) -> State {
 }
 
 fn node<'a>(
-    state: &'a [micold_client::app::WorktreeNode],
+    state: &'a [micold_client::features::sidebar::WorktreeNode],
     dir: &str,
-) -> &'a micold_client::app::WorktreeNode {
+) -> &'a micold_client::features::sidebar::WorktreeNode {
     state.iter().find(|n| n.worktree.dir_name == dir).unwrap()
 }
 
@@ -196,19 +197,22 @@ fn worktree_location_label_is_relative_to_project_root() {
     let root = PathBuf::from("/repo");
     let wt = worktree("feat-a", WorktreeStatus::Valid);
     assert_eq!(
-        micold_client::app::worktree_location_label(&root, &wt),
+        micold_client::features::sidebar::worktree_location_label(&root, &wt),
         ".claude/worktrees/feat-a"
     );
 }
 
 #[test]
 fn default_location_label_is_a_fixed_project_root_string() {
-    assert_eq!(micold_client::app::DEFAULT_LOCATION_LABEL, "Project root");
+    assert_eq!(
+        micold_client::features::sidebar::DEFAULT_LOCATION_LABEL,
+        "Project root"
+    );
 }
 
 // --- Feature 008 US4: tag filtering ---
 
-fn dirs(tree: &[micold_client::app::WorktreeNode]) -> Vec<String> {
+fn dirs(tree: &[micold_client::features::sidebar::WorktreeNode]) -> Vec<String> {
     tree.iter().map(|n| n.worktree.dir_name.clone()).collect()
 }
 

@@ -5,7 +5,8 @@
 //! under it, what survives a query being cleared, and what a blocked branch is allowed to do. None
 //! of that is glue, so none of it may live where only a person clicking around could find it out.
 
-use micold_client::app::{BranchSource, Message, State, WorktreeForm};
+use micold_client::app::{Message, State};
+use micold_client::features::worktree_form::{BranchSource, WorktreeForm};
 use micold_core::naming::ConventionalType;
 use micold_core::typeahead::Direction;
 use micold_core::worktree::{BlockReason, BranchCandidate, BranchOrigin};

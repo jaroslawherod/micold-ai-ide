@@ -19,7 +19,8 @@ use iced::advanced::widget::Tree;
 use iced::{Element, Size};
 
 use micold_client::app::State;
-use micold_client::ui::{self, ConnectionStatus};
+use micold_client::features::connection::ConnectionStatus;
+use micold_client::ui;
 use micold_core::env_include::EnvIncludeOutcome;
 
 use support::layout::{self as lay, Layer};

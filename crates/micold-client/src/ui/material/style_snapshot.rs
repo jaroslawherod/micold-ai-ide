@@ -30,7 +30,7 @@
 use std::fmt::Write as _;
 
 use super::style;
-use crate::app::NoticeLevel;
+use crate::features::notifications::NoticeLevel;
 use iced::widget::{button, checkbox, container, scrollable, text_input};
 use iced::Theme;
 use micold_core::naming::ConventionalType;

@@ -4,7 +4,7 @@
 //! every surface draws from one place (SC-007). Nothing here holds decision logic; the
 //! values come from `src/tokens.rs` (contracts/design-tokens.md).
 
-use crate::app::NoticeLevel;
+use crate::features::notifications::NoticeLevel;
 use iced::widget::{button, checkbox as checkbox_widget, container, scrollable, text, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
 use micold_core::theme::ColorScheme;

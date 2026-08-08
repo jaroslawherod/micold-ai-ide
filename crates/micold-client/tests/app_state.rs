@@ -1,6 +1,8 @@
 //! T011 — extended app base state: defaults + new message wiring (feature 005).
 
-use micold_client::app::{on_escape, Message, Overlay, State, TagFilter, WorktreeFormStatus};
+use micold_client::app::{on_escape, Message, Overlay, State};
+use micold_client::features::sidebar::TagFilter;
+use micold_client::features::worktree_form::WorktreeFormStatus;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionLifecycle, SessionLocation};
@@ -633,7 +635,7 @@ fn env_include_field_changes_leave_other_draft_fields_untouched() {
 // (contract `branch-conflict.md` §3, `branch-picker.md` §5).
 // =======================================================================================
 
-use micold_client::app::{BranchSource, ResolutionState, WorktreeForm};
+use micold_client::features::worktree_form::{BranchSource, ResolutionState, WorktreeForm};
 use micold_core::worktree::{
     BlockReason, BranchCandidate, BranchOrigin, BranchSituation, CreateMode,
 };

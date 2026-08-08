@@ -2,7 +2,8 @@
 //! FR-013/FR-014). Editing changes only the worktree's displayed name in the sidebar — never
 //! the folder on disk or the git branch. Mirrors the project rename dialog.
 
-use crate::app::{Message, WorktreeRenameDraft};
+use crate::app::Message;
+use crate::features::worktree::WorktreeRenameDraft;
 use crate::ui::material::{self, Button, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};
 use iced::{Element, Length};

@@ -218,7 +218,7 @@ fn a_collapsed_panel_overlapping_the_sidebar_is_not_reported_as_an_overflow() {
             0,
             None,
             &micold_core::env_include::EnvIncludeOutcome::Disabled,
-            &micold_client::ui::ConnectionStatus::Connected,
+            &micold_client::features::connection::ConnectionStatus::Connected,
         );
         lay::text_overflows(element, &mut renderer)
     };

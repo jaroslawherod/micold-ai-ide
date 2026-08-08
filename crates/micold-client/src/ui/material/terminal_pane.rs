@@ -5,7 +5,8 @@
 //! Adapted from `iced_term 0.6.0` `view.rs` (MIT © Ilya Shvyryalkin). Key/mouse input and the
 //! full focus gate land in feature 006 US2/US3; this file covers colour rendering + click focus.
 
-use crate::app::{route_key, KeyRouting, Message, SelectKind};
+use crate::app::{route_key, KeyRouting, Message};
+use crate::features::session::SelectKind;
 use crate::grid::GridCache;
 use crate::keymap;
 use crate::selection::Selection;

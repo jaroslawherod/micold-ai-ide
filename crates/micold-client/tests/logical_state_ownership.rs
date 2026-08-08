@@ -15,7 +15,8 @@
 //! core, because it is what arms a row's delete button. A widget owning it privately would be a
 //! widget deciding whether a destructive action is available.
 
-use micold_client::app::{Message, Overlay, State, TagFilter, SIDEBAR_MIN_WIDTH};
+use micold_client::app::{Message, Overlay, State, SIDEBAR_MIN_WIDTH};
+use micold_client::features::sidebar::TagFilter;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::theme::ThemePreference;

@@ -53,10 +53,7 @@ const SIDEBAR_MENU_ANCHOR: (u16, u16) = (24, 96);
 pub use material::glyph::{icon, icon_colored, MATERIAL_SYMBOLS, MATERIAL_SYMBOLS_BYTES};
 pub use material::{ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES};
 
-// `ConnectionStatus` moved to `crate::features::connection` (feature 021, T022) together with the
-// precedence decision that picks between its variants. Re-exported so this step changes no call
-// site; the re-export goes away in T023 when imports are updated.
-pub use crate::features::connection::ConnectionStatus;
+use crate::features::connection::ConnectionStatus;
 
 /// The persistent connection-status strip, shown between the toolbar and the notification stack.
 /// Empty (zero-height) when connected, so it never crowds a healthy session.
@@ -242,7 +239,7 @@ pub fn view<'a>(
     // of the context-menu layer rather than of the order these are built in.
     let project_menu: Option<cdk::overlay::Surface<'a, Message>> =
         state.project_menu_open.as_ref().map(|menu| {
-            let (x, y) = crate::app::clamp_menu_anchor(
+            let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(1),
                 state.window_size,
@@ -270,7 +267,7 @@ pub fn view<'a>(
     let worktree_menu: Option<cdk::overlay::Surface<'a, Message>> =
         state.worktree_menu_open.as_ref().map(|dir| {
             let items = worktree_menu_items(dir, &state.worktree_display_name(dir));
-            let (x, y) = crate::app::clamp_menu_anchor(
+            let (x, y) = crate::features::project::clamp_menu_anchor(
                 SIDEBAR_MENU_ANCHOR,
                 material::menu_panel_size(items.len()),
                 state.window_size,
@@ -285,7 +282,7 @@ pub fn view<'a>(
     let session_menu: Option<cdk::overlay::Surface<'a, Message>> =
         state.session_menu_open.map(|id| {
             let items = session_menu_items(id);
-            let (x, y) = crate::app::clamp_menu_anchor(
+            let (x, y) = crate::features::project::clamp_menu_anchor(
                 SIDEBAR_MENU_ANCHOR,
                 material::menu_panel_size(items.len()),
                 state.window_size,

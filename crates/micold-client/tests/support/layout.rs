@@ -442,7 +442,7 @@ pub struct CoveredState {
 /// Everything `ui::view` needs, owned so the covered state can hand it over as one value.
 pub struct StateUnderTest {
     pub state: micold_client::app::State,
-    pub connection: micold_client::ui::ConnectionStatus,
+    pub connection: micold_client::features::connection::ConnectionStatus,
     /// A node to press before recording. See [`StateUnderTest::pressing`].
     pub press_at: Option<&'static [usize]>,
 }
@@ -451,12 +451,15 @@ impl StateUnderTest {
     pub fn new(state: micold_client::app::State) -> Self {
         Self {
             state,
-            connection: micold_client::ui::ConnectionStatus::Connected,
+            connection: micold_client::features::connection::ConnectionStatus::Connected,
             press_at: None,
         }
     }
 
-    pub fn connection(mut self, connection: micold_client::ui::ConnectionStatus) -> Self {
+    pub fn connection(
+        mut self,
+        connection: micold_client::features::connection::ConnectionStatus,
+    ) -> Self {
         self.connection = connection;
         self
     }

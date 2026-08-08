@@ -14,7 +14,7 @@ use crate::ui::material::{Text, TypeRole};
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 
-use crate::app::NoticeLevel;
+use crate::features::notifications::NoticeLevel;
 use crate::ui::material::style;
 use micold_core::tokens::{spacing, Roles};
 

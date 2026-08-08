@@ -9,7 +9,7 @@ use iced::{Element, Length};
 use micold_core::naming::ConventionalType;
 use micold_core::tokens::{spacing, Roles};
 
-use crate::app::NoticeLevel;
+use crate::features::notifications::NoticeLevel;
 use crate::icons::Icon;
 use crate::showcase::catalogue::Layout;
 use crate::showcase::gallery::{arrange, posed};
