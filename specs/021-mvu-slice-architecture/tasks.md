@@ -57,7 +57,7 @@ A task that needs a later task to compile is a planning error, not an acceptable
 
 **Purpose**: Scaffolding and a baseline to measure against
 
-- [ ] T001 Create `crates/micold-client/src/features/mod.rs` with an empty module tree and declare `mod features;` in `crates/micold-client/src/lib.rs`
+- [X] T001 Create `crates/micold-client/src/features/mod.rs` with an empty module tree and declare `mod features;` in `crates/micold-client/src/lib.rs`
 - [ ] T002 [P] Record the pre-change baseline in `specs/021-mvu-slice-architecture/baseline.md`: per-file line counts from `find crates -name '*.rs' -exec wc -l {} + | sort -rn | head -10`, `State` field count, `Message` variant count, and the current commit SHA
 - [ ] T003 [P] Create `docs/development/architecture.md` with section headings only — tier structure, where a feature lives, adding a floating surface, adding a capability, the read/write asymmetry
 
