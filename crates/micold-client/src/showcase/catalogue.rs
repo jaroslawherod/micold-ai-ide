@@ -493,7 +493,7 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::terminal::terminal_pane,
     },
     // ---- floating surfaces and their triggers -----------------------------------------------
-    // `MenuItem`, `ProjectRow` and `TreeItem` are deliberately absent: they are *records* the caller
+    // `MenuItem` and `TreeItem` are deliberately absent: they are *records* the caller
     // fills in, not components — no element conversion, public fields — and the builder-API gate
     // already partitions them out of the library's component set. They are visible on the page all the
     // same, inside the menus, the switcher and the tree that consume them.
@@ -532,6 +532,8 @@ pub const COMPONENTS: &[Entry] = &[
         posed: &[
             "open, anchored to the window's top-right — it hangs below the app bar in the \
 application, so in this page it opens away from the trigger",
+            "the project switcher's list: the same panel, with an active row, a running count and \
+an unavailable row",
         ],
         live: &["hover and press its items", "Escape dismisses it"],
         interactive: true,
@@ -563,35 +565,6 @@ application, so in this page it opens away from the trigger",
         section: Section::Components,
         layout: Layout::Inline,
         render: sections::floating::menu_trigger,
-    },
-    Entry {
-        module: "material/project_switcher.rs",
-        component: "ProjectSwitcherOverlay",
-        variants: &[],
-        density: &[],
-        posed: &[
-            "open, anchored to the window's top-right",
-            "active row",
-            "running count",
-            "unavailable row",
-        ],
-        live: &["hover and press its rows", "Escape dismisses it"],
-        interactive: true,
-        section: Section::Components,
-        layout: Layout::Inline,
-        render: sections::floating::project_switcher_overlay,
-    },
-    Entry {
-        module: "material/project_switcher.rs",
-        component: "ProjectSwitcherTrigger",
-        variants: &[],
-        density: &[],
-        posed: &[],
-        live: &["hover", "pressed", "focus"],
-        interactive: true,
-        section: Section::Components,
-        layout: Layout::Inline,
-        render: sections::floating::project_switcher_trigger,
     },
     Entry {
         module: "material/mod.rs",

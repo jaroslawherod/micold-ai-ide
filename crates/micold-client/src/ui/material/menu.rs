@@ -1,5 +1,11 @@
 //! `Menu` — a reusable overflow/dropdown menu primitive (Constitution Principle VIII).
 //!
+//! Both panels that hang from the app bar are this one: the overflow menu and the project
+//! switcher's list differ in the items they carry and in nothing else (018 FR-029c). The switcher
+//! had its own panel and its own trigger until BUG-007, and every difference between the two was a
+//! difference nobody chose — a 260dp panel beside this 240dp one, a 28dp trigger beside a 48dp one,
+//! and no exit fade, because the fade is written here.
+//!
 //! Split into a [`MenuTrigger`] (an icon button that lives in the toolbar) and a [`MenuOverlay`]
 //! that floats the item panel **above** the rest of the window (Angular-Material `mat-menu` style)
 //! — so opening it never reflows the toolbar. Reused for the toolbar's overflow menu; any future

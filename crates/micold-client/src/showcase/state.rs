@@ -33,7 +33,8 @@ pub enum Floating {
     Menu,
     /// A cursor-anchored context menu (`material::ContextMenu`).
     ContextMenu,
-    /// The project switcher panel (`material::ProjectSwitcherOverlay`).
+    /// The project switcher's list — the same `material::MenuOverlay`, carrying the switcher's
+    /// rows (018 FR-029c).
     ProjectSwitcher,
 }
 

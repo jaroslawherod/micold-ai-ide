@@ -77,7 +77,7 @@ fn every_optional_input_is_a_chainable_builder_step() {
 }
 
 /// The partition has to be clean: a struct is either a component (built, chained, converted) or a
-/// record the caller fills in (`MenuItem`, `ProjectRow`, `TreeItem`). A struct that is both would give
+/// record the caller fills in (`MenuItem`, `TreeItem`). A struct that is both would give
 /// call sites two ways to configure the same thing, which is how variants drift apart.
 #[test]
 fn nothing_is_both_a_component_and_a_record() {

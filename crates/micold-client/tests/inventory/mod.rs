@@ -15,7 +15,7 @@
 //!
 //! A **component** is a `pub struct` declared under `src/ui/material/` or `src/ui/cdk/` that either
 //! converts into something (`From<Self> for …`) or is one of the documented [`TERMINAL_TYPES`]. A
-//! struct with neither is a plain record the caller fills in (`MenuItem`, `ProjectRow`, `TreeItem`).
+//! struct with neither is a plain record the caller fills in (`MenuItem`, `TreeItem`).
 //! Nothing about that changed in the move.
 //!
 //! # Two things the move made load-bearing
