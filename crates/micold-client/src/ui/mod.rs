@@ -53,49 +53,10 @@ const SIDEBAR_MENU_ANCHOR: (u16, u16) = (24, 96);
 pub use material::glyph::{icon, icon_colored, MATERIAL_SYMBOLS, MATERIAL_SYMBOLS_BYTES};
 pub use material::{ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES};
 
-/// The daemon-connection state, as it concerns the *active* project (US5, FR-024/027). Computed by
-/// the binary (the connection is binary-owned runtime state) and passed to [`view`] so the shell can
-/// show a persistent status banner. `Connected` renders nothing.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConnectionStatus {
-    /// The service is reachable and this window holds the active project.
-    Connected,
-    /// The service connection is down; displayed content may be stale and is auto-reconnecting.
-    Disconnected,
-    /// Another window took over the active project (`by` = its build/identity). This window is
-    /// read-only until the user takes it back (FR-024), or until an attach of its own is accepted
-    /// (FR-024a) — the service decides who holds a project, so its acceptance ends this state
-    /// whether or not the user pressed the takeover button.
-    Displaced {
-        /// The taking-over window's identity string, **as of the takeover or refusal that raised
-        /// this state**. It is a point-in-time label, not a live one: it is never re-derived, so a
-        /// window that has since exited can still be named here. That is tolerable because the
-        /// label's job is to explain *why* this window is read-only, and the reason is historical
-        /// by nature — but it must not be read as a claim that the named window is running now
-        /// (BUG-007, T118).
-        by: String,
-    },
-    /// The running service speaks a different contract version (US6, FR-021/022). Names both versions
-    /// and offers a one-click restart of the service.
-    VersionMismatch {
-        /// This client's protocol version.
-        client: u32,
-        /// The running daemon's protocol version.
-        daemon: u32,
-        /// The running daemon's build string.
-        daemon_build: String,
-    },
-    /// The running service is a same-contract different build — most releases don't touch the wire
-    /// protocol, so this is the common shape a `.deb` upgrade takes (US6, FR-022a, BUG-002). Offers
-    /// the same one-click restart as [`ConnectionStatus::VersionMismatch`], but without implying any
-    /// risk to live sessions: the contract still matches, so nothing is actually incompatible.
-    BuildMismatch {
-        /// This client's build string.
-        client_build: String,
-        /// The running daemon's build string.
-        daemon_build: String,
-    },
-}
+// `ConnectionStatus` moved to `crate::features::connection` (feature 021, T022) together with the
+// precedence decision that picks between its variants. Re-exported so this step changes no call
+// site; the re-export goes away in T023 when imports are updated.
+pub use crate::features::connection::ConnectionStatus;
 
 /// The persistent connection-status strip, shown between the toolbar and the notification stack.
 /// Empty (zero-height) when connected, so it never crowds a healthy session.
