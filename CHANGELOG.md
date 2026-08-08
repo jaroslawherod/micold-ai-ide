@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.7.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.6.0...micold-ai-ide-v0.7.0) (2026-08-08)
+
+
+### Features
+
+* **cdk:** add the per-instance ripple primitive ([383f1ba](https://github.com/jaroslawherod/micold-ai-ide/commit/383f1baa39b86c7710cc6a4f0d76384563b8ca5d))
+* **core:** add the component anatomy and the notification queue ([a1f36b5](https://github.com/jaroslawherod/micold-ai-ide/commit/a1f36b56f200fd25a0cedf604dae02871c66dcc7))
+* **picker:** search the branch list by typing ([#67](https://github.com/jaroslawherod/micold-ai-ide/issues/67)) ([86ed059](https://github.com/jaroslawherod/micold-ai-ide/commit/86ed05928f6b508844c19c7fafb5bdf78f273d32))
+* **probe:** make the full reference scene composable, and record §B8's figures ([a75fc8a](https://github.com/jaroslawherod/micold-ai-ide/commit/a75fc8ab8a4358d640fcda9450c29552db7bf605))
+* **ui:** apply the component anatomy, and record where it cannot hold ([8a044f5](https://github.com/jaroslawherod/micold-ai-ide/commit/8a044f5e430f8f0e462ce701050bb9db47a1e28c))
+* **ui:** draw the filled field instead of composing it ([8542aec](https://github.com/jaroslawherod/micold-ai-ide/commit/8542aec1b76bf50934ffabb808a170ff32a73fd7))
+* **ui:** draw the ripple and compose it into every pressable surface ([37478ff](https://github.com/jaroslawherod/micold-ai-ide/commit/37478ff080aede31f6620cf6af07b5568dd37b46))
+* **ui:** ease every transition on its own curve ([86015c1](https://github.com/jaroslawherod/micold-ai-ide/commit/86015c1c2868f5d351b1929e2495f372474c0690))
+* **ui:** give form controls the shared Material chrome they each reinvented ([781ae1b](https://github.com/jaroslawherod/micold-ai-ide/commit/781ae1b1eff4c444cc86821f7f533460284e3307))
+* **ui:** let the select know it is open, and float the picker's own list ([1a27c44](https://github.com/jaroslawherod/micold-ai-ide/commit/1a27c44521d5459952189fa50c318ba5f2090e27))
+* **ui:** move each field's name inside its own container ([41aa88e](https://github.com/jaroslawherod/micold-ai-ide/commit/41aa88e0338edc24a0ca022815b4a8322520304d))
+* **ui:** raise the app bar when content passes beneath it ([846e8f4](https://github.com/jaroslawherod/micold-ai-ide/commit/846e8f4b6f79cdc14c9e9cd6f622fb4a05fd2b83))
+* **ui:** show one notification at a time, floating over the content ([d1a01c1](https://github.com/jaroslawherod/micold-ai-ide/commit/d1a01c1c5aafd95cf73862e3438fd3dd72659756))
+* **ui:** stop the progress bar claiming a fraction it cannot know ([c8ef4c7](https://github.com/jaroslawherod/micold-ai-ide/commit/c8ef4c7b8e7ed26775ccb78e9214b62fa1a1a181))
+* **ui:** time every transition by name, and fix two things you could see ([57d425d](https://github.com/jaroslawherod/micold-ai-ide/commit/57d425d0c91749a3962bac7fdb7a26f67ba0e7e2))
+
+
+### Bug Fixes
+
+* **core:** keep git's own words when a submodule fetch fails ([e6c8dc6](https://github.com/jaroslawherod/micold-ai-ide/commit/e6c8dc6fdb4f5bccc2cb19c02f1ec5d2454682b0))
+* **daemon:** accept the hook payloads claude actually sends ([ff7740f](https://github.com/jaroslawherod/micold-ai-ide/commit/ff7740ff7ce6026ac795407ae3665acedcff313c))
+* **daemon:** keep a connection answering while it is busy creating a worktree ([bc3545b](https://github.com/jaroslawherod/micold-ai-ide/commit/bc3545b1fc83c217b8f2edbaf3f2190a2eb72aea))
+* **daemon:** take a session start off the connection loop too ([afa5c62](https://github.com/jaroslawherod/micold-ai-ide/commit/afa5c625759844e2d86949f1b32b2a8c62519ba7))
+* **probe:** keep checking the scene while the frames are being counted ([c9d09c4](https://github.com/jaroslawherod/micold-ai-ide/commit/c9d09c4c3ea8d06ebad797093707c8603ea9550a))
+* **scripts:** make the screenshot script executable, so its mise task runs ([d385efd](https://github.com/jaroslawherod/micold-ai-ide/commit/d385efdba88990c24198f20ade116e667c257d3c))
+* **showcase:** give the gallery's fields the labels the contract asks for ([ef2d259](https://github.com/jaroslawherod/micold-ai-ide/commit/ef2d259b3bf7d5815dcd5e9d3c1b52e9c7523f8f))
+* **showcase:** let the type-ahead's list open and close as the picker's does ([b86c15f](https://github.com/jaroslawherod/micold-ai-ide/commit/b86c15f6d1e1ce46bc55e07e08e99bccb951ff08))
+* **ui:** apply the §7 figures that reached no component, and the three that hid behind a wrong reason ([58049b3](https://github.com/jaroslawherod/micold-ai-ide/commit/58049b30f2892aac3d3cfcae54bed32e7fea439c))
+* **ui:** apply the button and menu-item heights the contract has always stated ([4cd33b6](https://github.com/jaroslawherod/micold-ai-ide/commit/4cd33b69088c59a5a3094deccab3365196189482))
+* **ui:** centre a chip's label in its pill, and the app bar's title in its bar ([e17845a](https://github.com/jaroslawherod/micold-ai-ide/commit/e17845a99269209e78833fb68de434fa3f6a49d0))
+* **ui:** centre a menu item's content in the 48dp §7.5 gives it ([e712302](https://github.com/jaroslawherod/micold-ai-ide/commit/e71230225df629a080958dcf666f5a848f150cac))
+* **ui:** clip the ripple to the shape it is pressing, not to its bounding box ([b71819b](https://github.com/jaroslawherod/micold-ai-ide/commit/b71819b65ca90f014318c5f1e55ee004c46851f5))
+* **ui:** converge phase 7 — the pulse pressed every ripple, not one ([5ef566d](https://github.com/jaroslawherod/micold-ai-ide/commit/5ef566d5023121210a36362806d3b5a785c0d0a2))
+* **ui:** finish the ripple's frame chain, and stop three wrappers swallowing what they wrap ([60001e8](https://github.com/jaroslawherod/micold-ai-ide/commit/60001e8e917336a063f2b5de2bb399dc99f3ba8b))
+* **ui:** give a tree row the height §7.2 states, on the row and at every depth ([9acb6d2](https://github.com/jaroslawherod/micold-ai-ide/commit/9acb6d2a457990ffe52f7b9af92b9311197b5963))
+* **ui:** give an icon button back the 48dp target it stated and never applied ([da1c41e](https://github.com/jaroslawherod/micold-ai-ide/commit/da1c41e13b023340d7e4d9197f83cbafb8509447))
+* **ui:** give the field's label the resting position it never had ([1ee9018](https://github.com/jaroslawherod/micold-ai-ide/commit/1ee90184a8528bd26703d26f558e54494c925b5f))
+* **ui:** give the shell's five labelled buttons the leading icon §7.3 sizes ([b3d6932](https://github.com/jaroslawherod/micold-ai-ide/commit/b3d6932aa17cc9e2c9b30dc22c4c50e618a0215e))
+* **ui:** keep a field's shape stable, and delete the input style nothing draws ([9769fee](https://github.com/jaroslawherod/micold-ai-ide/commit/9769fee2e80e93369cd592377b8e14558dda762c))
+* **ui:** keep the sidebar's row count, and stop a void spacer hiding it ([1cb9873](https://github.com/jaroslawherod/micold-ai-ide/commit/1cb98734d9682d164494f60b46f0284e87c60692))
+* **ui:** keep the switcher's marker slot on rows that have no marker ([c71b229](https://github.com/jaroslawherod/micold-ai-ide/commit/c71b22990eda03c250665bda1d8ef03dbbfa2df1))
+* **ui:** let a fade and a scrim take the corner radius of what they cover ([14ce98d](https://github.com/jaroslawherod/micold-ai-ide/commit/14ce98db5788c882632a5bbac044c2f5452d5fbf))
+* **ui:** open both panels below the app bar, and build their rows once ([53db6ec](https://github.com/jaroslawherod/micold-ai-ide/commit/53db6ecf830f517429108355c128ac9ae160c93b))
+* **ui:** rewind the eased clock whenever a transition is retargeted ([b6b19a5](https://github.com/jaroslawherod/micold-ai-ide/commit/b6b19a59c722042250f3692ec2e7a45c5eb90187))
+* **ui:** start a tag chip where its label starts, not where an arithmetic guessed ([430ba24](https://github.com/jaroslawherod/micold-ai-ide/commit/430ba24cfdb9ff3d81e72d18385493041a5a6a60))
+* **ui:** stop the select going mute, and give the type-ahead its label ([f8570f2](https://github.com/jaroslawherod/micold-ai-ide/commit/f8570f22c46dfdff8949de489b98d55d49aee2e5))
+* **ui:** tint a menu item's glyph the tone §7.5 gives it, not its label's ([e648643](https://github.com/jaroslawherod/micold-ai-ide/commit/e6486438201d924d5e91f9fd129a865d836f35e6))
+* **ui:** veil a fading surface in its own tone, not in `surface` ([3e71761](https://github.com/jaroslawherod/micold-ai-ide/commit/3e717611dc7f2d8147e5b1076ef637a606732b5d))
+
 ## [0.6.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.5.0...micold-ai-ide-v0.6.0) (2026-08-04)
 
 
