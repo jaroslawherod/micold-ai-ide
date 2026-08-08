@@ -513,6 +513,17 @@ where Material's published figures and the visible-count clause conflict, this c
 it in Material's favour, which is the opposite of the resolution BUG-005 was reported against. See
 FR-026a and the BUG-005 note in `spec.md`.
 
+The **second line** row is feature 008's tag chips (FR-001). It is stated here because BUG-006 was
+an indent computed as `indent + one icon + one gap` against a row that is `indent → twisty → gap →
+icon → gap → label`: a different expression that happened to land within 4dp in the sidebar and 47dp
+out in the gallery. A figure with nothing stating its intent is the shape all of this section's bugs
+have had — §7.3 and §7.5 gained their alignment rows for the same reason.
+
+The **leading icon slot** is fixed for the same reason the twisty's is: a glyph's advance is the
+face's business, not the layout's, and `AddWorktree` measures 14dp where the role says 16. Without
+the slot the label's column moves with whichever glyph a row carries, and no arithmetic below it can
+be right for every row at once.
+
 Shared by both densities:
 
 | Property           | Value                                                       |
@@ -520,6 +531,8 @@ Shared by both densities:
 | Leading icon gap   | 16 (standard) / 8 (dense)                                    |
 | Primary text       | `body_medium` (standard) / `sidebar_name` = `body_small` (dense) |
 | Supporting text    | `body_small`, color `on_surface_variant`                     |
+| Second line        | starts at the label's own x — the leading run is followed, never restated |
+| Leading icon slot  | fixed at the primary text's size, so the column does not follow glyph advances |
 | Shape              | `full` for the selection pill; `none` for the row hit area   |
 | Selected           | `secondary_container` fill + `on_secondary_container` text   |
 | States             | full state-layer set (§5)                                     |

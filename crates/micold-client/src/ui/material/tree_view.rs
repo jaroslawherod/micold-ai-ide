@@ -224,6 +224,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // Minimal base indent (feature 008, FR-009): depth-0 rows sit flush with the
             // sidebar's small left padding; each level nests by one step.
             let indent = f32::from(item.depth) * spacing::MD;
+            let has_tags = !item.tags.is_empty();
             // The indent spacer indents, and nothing else. It used to carry §7.2's height floor as
             // well, and that was BUG-005: this spacer's width *is* the indent, so on a depth-0 row
             // it is `Fixed(0)` — void — and iced drops a void child outright, floor and all. The
@@ -256,9 +257,32 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             }
 
             if let Some(glyph) = item.icon {
-                line = line.push(icon(glyph, label_role.size(), item.tint));
+                // A **fixed slot**, not the glyph's own width. A glyph's advance is whatever the
+                // face gives it — `AddWorktree` measures 14dp where the role says 16 — so a
+                // free-width icon makes the label's column depend on which glyph a row happens to
+                // carry. Two things follow from pinning it: labels line up down the column whether
+                // or not their glyphs are the same width (the property the twisty slot beside it
+                // already states), and the second line's indent below becomes arithmetic over
+                // tokens rather than over font metrics, which is what BUG-006 was.
+                //
+                // `width` then `align_x` rather than `center_x`, which would set the length as
+                // well and discard the slot — BUG-002's exact shape.
+                line = line.push(
+                    container(icon(glyph, label_role.size(), item.tint))
+                        .width(Length::Fixed(label_role.size()))
+                        .align_x(Alignment::Center),
+                );
             }
 
+            // A badge's width is a caller's element rather than a token, so it cannot be folded
+            // into the second line's indent below. It never has to be: a badge marks a *session*
+            // row and tags mark a *worktree* row, and no row is both. Stated rather than assumed,
+            // because the day one is both the chips would drift and nothing would say why.
+            debug_assert!(
+                !(item.badge.is_some() && has_tags),
+                "a row carrying both a badge and tags cannot align its second line: the badge's \
+                 width is not a token this component knows"
+            );
             // The per-session activity dot sits between the icon and the name (feature 010 US2).
             if let Some(badge) = item.badge {
                 line = line.push(badge);
@@ -293,10 +317,50 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             let (content, base): (Element<'a, M>, f32) = if item.tags.is_empty() {
                 (line.into(), density::LIST_ROW_BASE)
             } else {
-                let tag_indent = indent + label_role.size() + spacing::SM;
-                let mut tag_row: Row<'a, M> = row![Space::new().width(Length::Fixed(tag_indent))]
+                // Where the label starts, derived from the same leading run the line above is
+                // built from rather than guessed at (BUG-006, feature 008 FR-001).
+                //
+                // The old expression was `indent + label_role.size() + spacing::SM` — one icon and
+                // one gap — against a row that is `indent → twisty → gap → icon → gap → label`.
+                // It was never a near-miss of the right formula; it was a different formula that
+                // happened to land within 4dp in the sidebar (no leading icon, 8dp gaps, a 12dp
+                // label role) and 47dp out in the gallery. Being right in one corner of its own
+                // matrix is what kept it invisible.
+                //
+                // Each term below is the width of a child actually pushed above, in order:
+                let tag_indent = {
+                    // The indent spacer is `Fixed(indent)`, and at depth 0 that is `Fixed(0)` —
+                    // *void*, so iced drops it and the gap that would have followed it with it.
+                    // The same rule that hid §7.2's row height in BUG-005, here deciding whether
+                    // the leading run starts with a spacer at all.
+                    let lead = if indent > 0.0 { indent + icon_gap } else { 0.0 };
+                    // A twisty is a button carrying `spacing::XS` on every side; the slot that
+                    // stands in for it on a row that cannot expand is the bare glyph width.
+                    let twisty = if item.expandable.is_some() {
+                        twisty_size + 2.0 * spacing::XS
+                    } else {
+                        twisty_size
+                    };
+                    let leading_icon = if item.icon.is_some() {
+                        label_role.size() + icon_gap
+                    } else {
+                        0.0
+                    };
+                    lead + twisty + icon_gap + leading_icon
+                };
+                // The indent is **padding**, not a leading spacer child. A spacer would sit one
+                // `spacing::XS` to the left of the first chip — the row's own between-chip gap
+                // applies after it — so the chips would land 4dp right of the label however
+                // carefully `tag_indent` was computed. Padding also cannot go void at depth 0.
+                let mut tag_row: Row<'a, M> = Row::new()
                     .spacing(spacing::XS)
-                    .align_y(Alignment::Center);
+                    .align_y(Alignment::Center)
+                    .padding(iced::Padding {
+                        top: 0.0,
+                        right: 0.0,
+                        bottom: 0.0,
+                        left: tag_indent,
+                    });
                 for (label, accent) in item.tags {
                     tag_row = tag_row.push(super::Tag::new(label, accent));
                 }
