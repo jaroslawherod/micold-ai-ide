@@ -13,3 +13,5 @@
 //! vocabulary of its own.
 //!
 //! Modules are declared here as each is extracted from `crate::app`, one migration step at a time.
+
+pub mod worktree_form;
