@@ -173,6 +173,25 @@ GNOME/Wayland session could take a screenshot from a shell.
       drew at 14dp — the body role's size — until T113, which is the same defect BUG-003's T103
       found in the menu. The automated gate is `material/button_anatomy.rs`; this is the half a
       person has to look at, and the one most likely to read as "too big" if the figures are wrong.
+- [x] **The overflow menu and the project switcher begin below the app bar** — the trigger stays
+      fully visible, the bar's divider is not covered, and both panels' rows are the same height as
+      each other and as §7.5's item (BUG-003, T110). **Closed on measurement, 2026-08-08**, because
+      the thing this asked a person to judge is now asserted on every run and was not when it was
+      written. From `layout_snapshot.txt` at the canonical 1280 x 800, both panels:
+
+      | | overflow menu | switcher | contract |
+      |---|---:|---:|---|
+      | Panel top edge | 65.0 | 65.0 | `app_bar::BOTTOM_EDGE` = 64 + 1 divider |
+      | Item height | 48 | 48 | §7.5's 48, and equal to each other |
+      | Item pitch | 48 | 48 | abutting, §7.5 states no gap |
+      | Panel vertical padding | 8 | 8 | §7.5's 8 |
+
+      BUG-003's defect was a top edge of 52 — 13dp inside the bar — with 36dp switcher rows against
+      the menu's 48 and a 4dp gap between items. The gate is
+      `tests/gates/panel_placement.rs`, which asserts no floating panel is laid out over the bar
+      **over every covered state** rather than recording it, plus `material/menu_anatomy.rs` for the
+      item's icon size and tone. What is left for a person is colour and shadow, which §B1 already
+      covers.
 - [ ] Trigger a notification: it appears as a **floating snackbar**, not an inline strip (FR-032).
 - [ ] Trigger several rapidly: **exactly one visible**, others follow in turn (FR-032a).
 - [ ] Trigger an error: it stays for the **long** duration and can still be dismissed manually
