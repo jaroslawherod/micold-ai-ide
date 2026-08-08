@@ -142,6 +142,30 @@ fn laid_out(element: Element<'_, Message>, bounds: Size, path: &[usize]) -> Size
     current.bounds().size()
 }
 
+/// The **absolute x** of the node at `path`, accumulated down the walk.
+///
+/// [`laid_out`] returns a size and throws the position away, which is all an anatomy entry needs.
+/// BUG-006 is about two nodes agreeing on where they start, so it needs the other half.
+fn laid_out_x(element: Element<'_, Message>, bounds: Size, path: &[usize]) -> f32 {
+    let mut element = element;
+    let renderer = super::test_support::renderer();
+    let mut tree = Tree::new(element.as_widget());
+    let limits = layout::Limits::new(Size::ZERO, bounds);
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &limits);
+
+    let mut current = &node;
+    let mut x = current.bounds().x;
+    for (depth, &index) in path.iter().enumerate() {
+        current = current.children().get(index).unwrap_or_else(|| {
+            panic!("no child {index} at depth {depth} of {path:?} — the row's shape changed")
+        });
+        x += current.bounds().x;
+    }
+    x
+}
+
 /// Why `measured` is wrong for an axis declared `expected`, or `None` if it is right.
 ///
 /// Returned rather than asserted so [`the_gate_can_fail`] can watch it fire against a deliberately
@@ -532,4 +556,50 @@ fn the_gate_can_fail() {
         "the failure names the size but not the cause, so it does not tell the next reader what to \
          look for: {complaint}"
     );
+}
+
+/// A tagged row's second line starts where its label starts (BUG-006, feature 008 FR-001).
+///
+/// Four specimens, because the indent was computed by an arithmetic that is right in one corner of
+/// this matrix and wrong in the rest — which is exactly why nobody noticed. The sidebar's own
+/// configuration (dense, no leading icon) is the corner where the formula's two errors cancel to
+/// four pixels; the gallery's (standard, leading icon) is where they compound to forty-seven.
+///
+/// Both densities and both icon states, so a formula that happens to fit one cannot pass.
+#[test]
+fn a_tagged_rows_chips_start_where_its_label_starts() {
+    for step in [density::STANDARD, density::DENSE] {
+        for depth in [0u16, 1] {
+            for with_icon in [false, true] {
+                for expandable in [false, true] {
+                    let build = move || -> Element<'static, Message> {
+                        let mut it = TreeItem::new(depth, "feat-short", roles().on_surface)
+                            .tags(vec![("feat".to_string(), roles().primary)]);
+                        if with_icon {
+                            it = it.with_icon(Icon::AddWorktree);
+                        }
+                        if expandable {
+                            it = it.expandable(true, Message::NoOp);
+                        }
+                        TreeView::new(vec![it], roles()).density(step).into()
+                    };
+                    // The row's content is `column![line, tag_row]`; the label is the line's last
+                    // leading child and the first chip is the tag row's first child; its indent is
+                    // padding rather than a leading spacer. The label's index moves with the row's shape, which is
+                    // whole point: the second line must follow it rather than restate it.
+                    let label_index = usize::from(depth > 0) + 1 + usize::from(with_icon);
+                    let label_x = laid_out_x(build(), ROOMY, &[0, 1, 0, label_index]);
+                    let chip_x = laid_out_x(build(), ROOMY, &[0, 1, 1, 0]);
+                    assert!(
+                        (label_x - chip_x).abs() <= TOLERANCE,
+                        "at density {step}, depth {depth}, icon {with_icon}, expandable \
+                         {expandable}: the label starts at {label_x}dp and its tag chips at \
+                         {chip_x}dp, {}dp adrift. Feature 008's FR-001 puts the chips beneath the \
+                         label, and `tag_indent` restates the leading run instead of following it.",
+                        (label_x - chip_x).abs(),
+                    );
+                }
+            }
+        }
+    }
 }
