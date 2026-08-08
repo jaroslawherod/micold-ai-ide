@@ -45,6 +45,7 @@ mod form_field;
 mod form_field_anatomy;
 pub mod glyph;
 mod icon_button;
+mod icon_label;
 mod menu;
 /// §7.5's *spatial* figures — the item's inset, the panel's padding, the leading glyph, and what
 /// sits between two items. `anatomy_size` reads sizes; these are positions, and nothing read them
@@ -117,6 +118,7 @@ pub use filter_panel::FilterTrigger;
 pub use form_field::FormField;
 pub use glyph::Glyph;
 pub use icon_button::IconButton;
+pub use icon_label::IconLabel;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use navigation_drawer::NavigationDrawer;

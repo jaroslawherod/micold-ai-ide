@@ -1176,3 +1176,27 @@ new ones; the *shape* of the fix is unchanged by that decision.
 **Bugfix**: 2026-08-07 — BUG-005. T056 reopened, T076's conclusion annotated, T121–T128 added.
 Numbered from T121 because BUG-003 landed T100–T111 first; this phase was drafted as T100–T107
 against `4cd33b6` and renumbered on rebase.
+
+---
+
+## Phase 18: The composite gate — the hole between the binding gate and the boundary
+
+The binding gate (T112) asks whether each §7 figure reaches *a* component. `material_boundary.rs`
+asks whether a feature module names a *styled* widget, and deliberately exempts layout primitives
+because a row has nothing to style. Between the two sits `row![Glyph::new(..), Text::new(..)]`: it
+names no styled widget, reaches no styling layer, picks no raw size, and every figure it draws
+wrong is still bound somewhere else. Both gates stay green.
+
+That is how `shell.rs` shipped five buttons whose leading glyph was 14dp against §7.3's 18 — the
+defect the manual §B4 pass found by reading, after every automated gate had passed. This phase
+turns that reading into a rule.
+
+- [ ] T129 Extract the labelled icon into `crates/micold-client/src/ui/material/icon_label.rs`. Two feature modules built it by hand, identically — the "git" badge in `project_selector.rs` and in `shell.rs`'s known list. The type states the distinction the defect turned on: here the glyph takes the **label's** role, because a labelled icon is text with a picture in front of it; `Button::leading` is not that, and applies §7.3's 18dp whatever the label's role (Principle VIII, §7.3)
+
+- [ ] T130 Gate that no feature module composes a `Glyph` and a `Text` as siblings in a row or column of its own — `crates/micold-client/tests/composite_call_sites.rs`. Scans the same two roots as `material_boundary.rs` (`src/ui/` minus the library layers, plus all of `src/showcase/`), blanking nested macro bodies so a violation is reported once and against the inner row (FR-027, §7.3, SC-001)
+
+  > **Scope, stated as a limit rather than a claim.** A list row with a leading status marker is
+  > not caught, and should not be: in `shell.rs`'s known-projects entry the glyph and the name are
+  > separate children of a §7.2 row, not a composite handed on as one thing, and §7.2's geometry
+  > has its own gates. A rule that also banned list rows could not reach zero without a `ListRow`
+  > component — and a gate that cannot reach zero is a budget, not a rule.

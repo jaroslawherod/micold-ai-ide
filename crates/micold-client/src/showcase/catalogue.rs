@@ -201,6 +201,18 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::atoms::tag,
     },
     Entry {
+        module: "material/icon_label.rs",
+        component: "IconLabel",
+        variants: &[],
+        density: &[],
+        posed: &["Label role", "Body role", "untinted"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::atoms::icon_label,
+    },
+    Entry {
         module: "material/activity_badge.rs",
         component: "ActivityBadge",
         variants: &["Working", "Attention", "Ended"],
