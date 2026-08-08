@@ -77,3 +77,4 @@ Re-measure at each phase checkpoint and append a row.
 | T016 (sidebar) | 3,567 | 2,122 | −76; two of eight features out |
 | T017 (project) | 3,567 | 2,073 | −49; `SelectKind` left behind, see T021 |
 | T018 (settings) | 3,567 | 2,063 | −10; validation stays in `main.rs` until Tier 3 |
+| T019 (worktree) | 3,567 | 1,893 | −170; projections split worktree/sidebar by feature |
