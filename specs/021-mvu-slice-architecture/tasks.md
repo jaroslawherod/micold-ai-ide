@@ -71,7 +71,7 @@ A task that needs a later task to compile is a planning error, not an acceptable
 rather than aspirational
 
 - [X] T004 Add an assertion-freeze check to `scripts/check-assertions-frozen.sh` that fails when `git diff <base>...HEAD -- crates/*/tests/` removes or alters a line matching `assert`, allowing pure relocation (the identical assertion re-added elsewhere in the same diff), per FR-027
-- [X] T005 [P] Wire T004 into CI in `.github/workflows/ci.yml` as a non-blocking advisory job first, so its false-positive rate is known before it gates merges
+- [X] T005 [P] Wire T004 into CI in `.github/workflows/ci.yml` as a non-blocking advisory job first, so its false-positive rate is known before it gates merges — **it earned its keep on PR #98**: two false positives on this feature's own diff (a relocated constant's import path changing, and rustfmt rewrapping an assertion past the width limit). Both fixed by comparing whole balanced assertion statements instead of lines; four probes (delete / weaken / rewrap / no-op) verify it still flags what it should. Had this job been blocking from the start, T023 would have been stuck behind a check that was wrong
 - [X] T006 [P] Confirm the baseline suite is green on Linux, macOS and Windows via CI before any change lands — discharged on PR #98, run 31261847685: `build + test` passed on ubuntu, macos and windows. Needed a pull request to exist at all, since `.github/workflows/ci.yml` triggers only on `push: main` or `pull_request`; a feature-branch push runs nothing. The same run caught `fmt + clippy` failing on drift the local loop had not been checking
 
 **Checkpoint**: Behavior drift and assertion tampering are both detectable. Extraction can start.
