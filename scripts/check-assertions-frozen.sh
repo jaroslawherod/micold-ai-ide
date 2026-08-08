@@ -47,39 +47,115 @@ if [ -z "$DIFF" ]; then
   exit 0
 fi
 
-# An "assertion line" is any line mentioning assert!/assert_eq!/assert_ne!/debug_assert*, plus
-# #[should_panic], which encodes an expectation just as load-bearing as an assert.
-ASSERT_RE='(^|[^a-zA-Z_])(assert|assert_eq|assert_ne|debug_assert|debug_assert_eq|debug_assert_ne)!|#\[should_panic'
+# Comparison is by whole assertion *statement*, not by line, and the reason is worth stating.
+#
+# The first version of this check compared assertion lines. Two things a relocation does defeat
+# that, and both showed up on this feature's own pull request during the advisory period (T005) --
+# which is exactly what the advisory period was for:
+#
+#   1. The module path changes. `app::DEFAULT_LOCATION_LABEL` becomes
+#      `features::sidebar::DEFAULT_LOCATION_LABEL` when the constant moves, and the expectation is
+#      identical.
+#   2. rustfmt rewraps it. A one-line `assert_eq!(path::CONST, "x");` that grows past the width
+#      limit becomes four lines, only the first of which contains the word `assert`.
+#
+# A tempting fix -- squash the added side into one blob and substring-search each removed assertion
+# line in it -- is worse than the bug. A multi-line `assert!(` contributes only the fragment
+# `assert!(` to the removed set, which is a substring of literally any added assertion, so deleting
+# a multi-line assertion outright would pass. That was verified, not assumed.
+#
+# So: extract balanced `assert*!( ... )` invocations from each side of the diff and compare those.
+# Paths are normalised away, but only *snake_case* segments -- those are crate and module names.
+# CamelCase segments stay, so `Level::Info` does not collapse to `Info` and swapping one enum for
+# another is still a change.
+CHECK=$(cat <<'PYCHECK'
+import re, sys
+from collections import Counter
 
-# Normalise so a relocated assertion matches its original: strip the diff marker, then strip
-# leading indentation (re-indenting on a move is not a change of expectation).
-normalise() { sed -E 's/^.//; s/^[[:space:]]+//'; }
+diff = sys.stdin.read()
 
-REMOVED=$(printf '%s\n' "$DIFF" | grep -E '^-' | grep -vE '^---' | grep -E "$ASSERT_RE" | normalise | sort || true)
-ADDED=$(printf '%s\n' "$DIFF" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$ASSERT_RE" | normalise | sort || true)
+def side(marker, skip):
+    out = []
+    for line in diff.splitlines():
+        if line.startswith(skip):
+            continue
+        if line.startswith(marker):
+            out.append(line[1:])
+    return "\n".join(out)
 
-if [ -z "$REMOVED" ]; then
-  echo "assertion freeze: OK — no assertion removed"
-  exit 0
-fi
+MACRO = re.compile(r"(?<![A-Za-z0-9_])(debug_assert|assert)(_eq|_ne)?!")
+PANIC = re.compile(r"#\[should_panic[^\]]*\]")
+OPEN = {"(": ")", "[": "]", "{": "}"}
 
-# comm -23: present in REMOVED, absent from ADDED. Those are the genuine losses.
-LOST=$(comm -23 <(printf '%s\n' "$REMOVED") <(printf '%s\n' "$ADDED") || true)
+def extract(text):
+    """Every assertion in `text`, as a balanced source span. Unbalanced tails (a partially
+    modified multi-line assertion) fall back to the rest of the text, which still differs from
+    an intact one -- erring toward flagging."""
+    found = []
+    for m in PANIC.finditer(text):
+        found.append(m.group(0))
+    for m in MACRO.finditer(text):
+        i = m.end()
+        while i < len(text) and text[i] not in OPEN:
+            if not text[i].isspace():
+                break
+            i += 1
+        if i >= len(text) or text[i] not in OPEN:
+            found.append(text[m.start():m.end()])
+            continue
+        close, depth, j, in_str, esc = OPEN[text[i]], 0, i, False, False
+        while j < len(text):
+            c = text[j]
+            if in_str:
+                if esc:
+                    esc = False
+                elif c == "\\":
+                    esc = True
+                elif c == '"':
+                    in_str = False
+            elif c == '"':
+                in_str = True
+            elif c in OPEN:
+                depth += 1
+            elif c in ")]}":
+                depth -= 1
+                if depth == 0:
+                    j += 1
+                    break
+            j += 1
+        found.append(text[m.start():j])
+    return found
 
-if [ -z "$LOST" ]; then
-  COUNT=$(printf '%s\n' "$REMOVED" | grep -c . || true)
-  echo "assertion freeze: OK — ${COUNT} assertion(s) moved, all reappear unchanged"
-  exit 0
-fi
+def norm(a):
+    a = re.sub(r"([a-z_][a-z0-9_]*::)+", "", a)
+    return re.sub(r"\s+", "", a)
 
-COUNT=$(printf '%s\n' "$LOST" | grep -c . || true)
-echo "assertion freeze: FAILED — ${COUNT} assertion(s) removed and not reinstated" >&2
-echo >&2
-printf '%s\n' "$LOST" | sed 's/^/  - /' >&2
-echo >&2
-echo "FR-027 freezes the existing suite for the duration of feature 021." >&2
-echo "Tests may be ADDED or RELOCATED; expectations may not be relaxed, rewritten or deleted." >&2
-echo >&2
-echo "If a test turns out to assert a latent bug, the bug and its assertion both stay:" >&2
-echo "file it separately and fix it in its own change (spec.md, Edge Cases)." >&2
-exit 1
+removed = Counter(norm(a) for a in extract(side("-", "---")))
+added = Counter(norm(a) for a in extract(side("+", "+++")))
+
+if not removed:
+    print("assertion freeze: OK \u2014 no assertion removed")
+    sys.exit(0)
+
+lost = removed - added
+if not lost:
+    print(f"assertion freeze: OK \u2014 {sum(removed.values())} assertion(s) moved, all reappear unchanged")
+    sys.exit(0)
+
+n = sum(lost.values())
+print(f"assertion freeze: FAILED \u2014 {n} assertion(s) removed and not reinstated", file=sys.stderr)
+print(file=sys.stderr)
+for a, count in lost.items():
+    shown = a if len(a) <= 160 else a[:157] + "..."
+    print(f"  - {shown}" + (f"  (x{count})" if count > 1 else ""), file=sys.stderr)
+print(file=sys.stderr)
+print("FR-027 freezes the existing suite for the duration of feature 021.", file=sys.stderr)
+print("Tests may be ADDED or RELOCATED; expectations may not be relaxed, rewritten or deleted.", file=sys.stderr)
+print(file=sys.stderr)
+print("If a test turns out to assert a latent bug, the bug and its assertion both stay:", file=sys.stderr)
+print("file it separately and fix it in its own change (spec.md, Edge Cases).", file=sys.stderr)
+sys.exit(1)
+PYCHECK
+)
+
+printf '%s\n' "$DIFF" | python3 -c "$CHECK"
