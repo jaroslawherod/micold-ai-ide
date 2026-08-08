@@ -218,7 +218,7 @@ fn a_buttons_leading_icon_is_the_18dp_its_row_states() {
     let r = roles();
     let build = || -> Element<'static, Message> {
         Button::filled("Open this folder", r)
-            .leading(Icon::OpenProject, r.on_primary)
+            .leading(Icon::OpenProject)
             .on_press(Message::NoOp)
             .into()
     };

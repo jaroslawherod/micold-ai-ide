@@ -15,9 +15,10 @@ use micold_core::tokens::{self, spacing};
 pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
     let r = tokens::roles(scheme);
 
-    // Foreground tints per surface context (FR-004, FR-007).
-    let on_surface_tint = icon_role(IconSurface::AppBarAction, r);
-    let on_primary_tint = icon_role(IconSurface::PrimaryButton, r);
+    // Foreground tints per surface context (FR-004, FR-007). A *button's* leading glyph is not
+    // among them any more: it takes the variant's own content colour, so a call site cannot pair a
+    // primary label with an on-surface glyph the way three of them did. What remains here are the
+    // glyphs whose tone carries its own meaning.
     let badge_tint = icon_role(IconSurface::Badge, r);
     let error_tint = icon_role(IconSurface::Unavailable, r);
 
@@ -32,7 +33,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                 ),
                 Text::new(project.path.display().to_string(), TypeRole::Caption, r).muted(),
                 Button::outlined("Open another project", r)
-                    .leading(Icon::OpenProject, on_surface_tint)
+                    .leading(Icon::OpenProject)
                     .on_press(Message::ProjectSelectorOpened),
             ]
             .spacing(spacing::SM),
@@ -52,7 +53,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                 )
                 .muted(),
                 Button::filled("Open a project", r)
-                    .leading(Icon::OpenProject, on_primary_tint)
+                    .leading(Icon::OpenProject)
                     .on_press(Message::ProjectSelectorOpened),
             ]
             .spacing(spacing::MD),
@@ -88,7 +89,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             // error icon — both replacing the former text decorations (FR-005).
             let reopen = if available {
                 Button::filled("Open", r)
-                    .leading(Icon::OpenProject, on_primary_tint)
+                    .leading(Icon::OpenProject)
                     .on_press(Message::KnownProjectReopened(project.path.clone()))
             } else {
                 Button::filled("Unavailable", r)
@@ -97,7 +98,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             // Renaming affects only the stored name, so it is allowed even when the folder
             // is unavailable (FR-017, FR-018).
             let rename = Button::outlined("Rename", r)
-                .leading(Icon::Rename, on_surface_tint)
+                .leading(Icon::Rename)
                 .on_press(Message::RenameStarted(project.path.clone()));
 
             // Forget removes the project (and its remembered metadata) from the list. Enabled for
@@ -105,7 +106,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             // stale entry (feature 014, FR-001/FR-011). The trash icon is error-tinted to signal
             // the destructive-to-metadata action; the confirmation dialog is the real safeguard.
             let forget = Button::outlined("Forget", r)
-                .leading(Icon::Delete, error_tint)
+                .leading_tinted(Icon::Delete, error_tint)
                 .on_press(Message::ProjectForgetRequested(project.path.clone()));
 
             let mut entry = row![].spacing(spacing::SM).align_y(Alignment::Center);

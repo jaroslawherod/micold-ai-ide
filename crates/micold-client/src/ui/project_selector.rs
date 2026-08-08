@@ -17,13 +17,12 @@ use micold_core::tokens::{self, spacing};
 /// [`Modal`](crate::ui::material::Modal) transition.
 pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
-    let on_surface_tint = icon_role(IconSurface::AppBarAction, r);
-    let on_primary_tint = icon_role(IconSurface::PrimaryButton, r);
+    // No button-glyph tints: `Button::leading` takes the variant's content colour (018's BUG-007).
     let badge_tint = icon_role(IconSurface::Badge, r);
 
     let header = row![
         Button::outlined("Up", r)
-            .leading(Icon::NavigateUp, on_surface_tint)
+            .leading(Icon::NavigateUp)
             .on_press(Message::SelectorNavigatedUp),
         Text::new(
             selector.current_dir.display().to_string(),
@@ -75,7 +74,7 @@ pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Mes
 
     let actions = row![
         Button::filled("Open this folder", r)
-            .leading(Icon::OpenProject, on_primary_tint)
+            .leading(Icon::OpenProject)
             .on_press(Message::FolderChosen(selector.current_dir.clone())),
         Button::outlined("Cancel", r).on_press(Message::ProjectSelectorClosed),
     ]
