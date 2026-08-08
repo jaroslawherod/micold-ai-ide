@@ -133,6 +133,12 @@ GNOME/Wayland session could take a screenshot from a shell.
       by departing from them. What to check is that the drop is *no worse* than the arithmetic
       predicts (a one-line row at 48dp pitch, a tagged one at 64dp), because a bigger drop means
       something took the two-line height when it should not have.
+
+      **Recorded 2026-08-08** against the 676.8dp tree viewport at the canonical 1280 x 800:
+      one-line rows **24 -> 14** visible (-42%), tagged rows **14 -> 10** (-29%). Read off the
+      owner's screenshot of the running application at 1:1, where the selected session row's pill
+      measures 44px exactly and so pins the scale. Both figures sit inside the quarter-to-two-fifths
+      FR-026a permits.
 - [ ] **Expand a worktree.** Its session rows stand at the same dense height as the top-level rows
       above them, not squeezed beneath them; a worktree row carrying tag chips is at the two-line
       height with its chips unclipped (FR-026d). This was BUG-005 — the row height rode on the
