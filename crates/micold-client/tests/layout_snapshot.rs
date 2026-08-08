@@ -56,6 +56,14 @@ mod containment;
 #[path = "gates/panel_placement.rs"]
 mod panel_placement;
 
+// --- The sibling-parity gate (BUG-007) ----------------------------------------------------------
+
+// The same arrangement again. It asserts about two components of the **same** kind — the app bar's
+// two action controls, and the two panels that hang from it — which is the relationship a fork
+// hides in: both copies are internally consistent, and the second answers to no contract row.
+#[path = "gates/sibling_parity.rs"]
+mod sibling_parity;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).

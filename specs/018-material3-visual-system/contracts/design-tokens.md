@@ -458,6 +458,7 @@ through its chainable builder API (feature 017). No bespoke one-off widget.
 | Title role         | `title_large`, color `on_surface`       |
 | Icon color         | `on_surface_variant`                    |
 | Icon target        | 48 × 48                                 |
+| Action control     | the shared icon button — every trailing action, including the project switcher, is one (FR-029c) |
 | Divider at rest    | 1, `outline_variant`; absent once elevated |
 | Bottom edge        | height + divider = **65** — the offset any panel anchored below the bar derives from (FR-029a) |
 
@@ -592,6 +593,8 @@ Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`
 | Between items   | nothing — items abut; a gap is what a divider is for |
 | Divider         | 1dp `outline_variant`                        |
 | Panel top edge  | §7.1's bottom edge, for a panel anchored below the app bar (FR-029a) |
+| Panel width     | 240 for a panel anchored below the app bar; 160 for a cursor-anchored context menu (FR-029c) |
+| Panel transition| §6's menu enter and exit — the panel plays both, so every panel of the kind does (FR-029c) |
 | States          | full state-layer set (§5)                     |
 
 **One row, built once (FR-029b).** Every figure in this table describes *the* menu item, not "a menu
@@ -599,6 +602,13 @@ item per panel". The overflow menu, context menus and the project switcher's pro
 same row carrying different content, and BUG-003 is what the alternative costs: the item height was
 applied to one of two hand-built copies, so two panels hanging off the same bar shipped 12dp apart.
 A panel gives an item leading or trailing content; it does not rebuild one.
+
+**And one panel, and one trigger (FR-029c).** The same sentence one level out, because BUG-003
+closed the row and left the frame around it forked. The width, surface, offset and transition rows
+above describe *the* panel; the control that opens one is §7.1's action control, which is the shared
+icon button. BUG-007 is what that alternative costs: a 28dp trigger with a 14dp glyph beside a 48dp
+trigger with a 24dp one, a 260dp panel beside a 240dp one from the same edge, and an exit transition
+that reached one of them — because the fade is written in the shared panel and the copy predates it.
 
 ### 7.6 Chips and tags (FR-030)
 

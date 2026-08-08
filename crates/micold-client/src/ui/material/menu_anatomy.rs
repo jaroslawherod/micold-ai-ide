@@ -70,14 +70,21 @@ fn bounds_at(element: Element<'_, Message>, path: &[usize]) -> Rectangle {
     layout.bounds()
 }
 
-/// One switcher row, as `ui::switcher_rows` builds them.
-fn switcher_row(label: &str, active: bool) -> super::ProjectRow<Message> {
-    super::ProjectRow {
+/// One switcher row, as `ui::view` builds them — a [`MenuItem`], which is the whole point: the
+/// switcher's list stopped being a component of its own at BUG-007, so a row of it is expressible
+/// here without naming anything the switcher owns.
+fn switcher_row(label: &str, active: bool) -> MenuItem<Message> {
+    MenuItem {
+        icon: active.then_some(Icon::ActiveMarker),
+        reserve_icon: true,
+        icon_tint: Some(crate::icons::icon_role(
+            crate::icons::IconSurface::Badge,
+            roles(),
+        )),
         label: label.to_string(),
-        is_active: active,
-        running_count: 0,
-        available: true,
-        on_select: Message::NoOp,
+        message: Some(Message::NoOp),
+        trailing_text: None,
+        trailing_icon: None,
         on_context: Some(Message::NoOp),
     }
 }
@@ -155,12 +162,11 @@ fn an_item_that_states_its_own_tint_keeps_it() {
 /// always worked this way; the switcher's did not, because its leading slot is per-item.
 #[test]
 fn a_switcher_row_without_the_marker_aligns_with_one_that_has_it() {
-    let rows = super::project_switcher::row_column(
+    let rows = menu::item_column(
         vec![
             switcher_row("active-project", true),
             switcher_row("other-project", false),
         ],
-        Message::NoOp,
         roles(),
     );
 
@@ -361,11 +367,7 @@ fn the_clamping_estimate_matches_the_panel_it_estimates() {
 /// them through one *test* is what keeps them there.
 #[test]
 fn a_switcher_row_is_the_same_row_as_a_menu_item() {
-    let rows = super::project_switcher::row_column(
-        vec![switcher_row("micold-ai-ide", true)],
-        Message::NoOp,
-        roles(),
-    );
+    let rows = menu::item_column(vec![switcher_row("micold-ai-ide", true)], roles());
 
     let mut element = rows;
     let renderer = super::test_support::renderer();

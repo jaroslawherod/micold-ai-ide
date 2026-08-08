@@ -113,7 +113,7 @@ the code is deliberate — two scanners that happen to agree today drift silentl
 check would keep passing while its idea of the library diverged.
 
 A **component** is a `pub struct` under `src/ui/material/` or `src/ui/cdk/` that either converts into
-something (`From<Self> for …`) or is a documented terminal type. `MenuItem`, `ProjectRow` and `TreeItem`
+something (`From<Self> for …`) or is a documented terminal type. `MenuItem` and `TreeItem`
 are **records** — public fields, no conversion — so they are not components and need no entry. They are
 visible on the page anyway, inside the menus, switcher and tree that consume them.
 

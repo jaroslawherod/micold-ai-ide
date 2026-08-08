@@ -61,7 +61,6 @@ mod picker;
 #[cfg(test)]
 mod picker_parity;
 mod progress;
-mod project_switcher;
 mod resize_handle;
 mod ripple;
 mod scrollable;
@@ -135,7 +134,6 @@ pub use modal::Modal;
 pub use navigation_drawer::NavigationDrawer;
 pub use picker::Row as TypeaheadRow;
 pub use progress::StageProgress;
-pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};
 pub use resize_handle::ResizeHandle;
 pub use ripple::{pulse as ripple_pulse, Ripple};
 pub use scrollable::Scrollable;
@@ -215,7 +213,7 @@ impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
 }
 
 /// The themed surface every floating popover's inner panel sits on (`MenuOverlay`,
-/// `ContextMenu`, `ProjectSwitcherOverlay`, the sidebar's filter accordion): padded content on
+/// `ContextMenu`, the sidebar's filter accordion): padded content on
 /// the `menu_surface` background, at `width` (pass `Length::Shrink` for a natural-width panel
 /// like the filter accordion, or `Length::Fixed(...)` for a fixed-width dropdown). Factors out
 /// what was otherwise the identical `container(...).padding(...).style(...)` chain repeated at

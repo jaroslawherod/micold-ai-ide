@@ -34,7 +34,7 @@ mod worktree_form;
 mod worktree_rename;
 
 use crate::app::{Message, Overlay, State};
-use crate::icons::Icon;
+use crate::icons::{icon_role, Icon, IconSurface};
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length, Subscription};
 use micold_core::session::SessionId;
@@ -247,32 +247,52 @@ pub fn view<'a>(
     .open(state.help_menu_open)
     .into();
 
-    // The project switcher panel. Rows are built purely from the workspace: active marker,
+    // The project switcher panel — the same `MenuOverlay` the ⋮ menu is, carrying different items
+    // (018 FR-029c). Rows are built purely from the workspace: active marker,
     // running-background-session count, and unavailable badge. Mutually exclusive with the
     // overflow menu (handled in the reducer).
-    let switcher_rows: Vec<material::ProjectRow<Message>> = state
+    //
+    // It was its own component until BUG-007, and every difference between the two was a difference
+    // nobody chose: a 260dp panel beside a 240dp one from the same edge, and no exit transition at
+    // all, because the fade lives in the shared panel.
+    let mut switcher_items: Vec<material::MenuItem<Message>> = state
         .switcher_entries()
         .into_iter()
-        .map(|e| material::ProjectRow {
+        .map(|e| material::MenuItem {
+            icon: e.is_active.then_some(Icon::ActiveMarker),
+            // Held on every row, marked or not, so the marker says which project is active without
+            // also deciding where that row's label starts (008 FR-006a).
+            reserve_icon: true,
+            icon_tint: Some(icon_role(IconSurface::Badge, roles)),
             label: e.label,
-            is_active: e.is_active,
-            running_count: e.running_count,
-            available: e.available,
-            on_select: Message::KnownProjectReopened(e.path.clone()),
-            // Right-click a project row to reach its "Forget project" menu (feature 015). The
-            // trailing "Add project…" row is added by the component itself and carries none.
+            // Unavailable projects are shown but cannot be activated (008 FR-008).
+            message: e
+                .available
+                .then(|| Message::KnownProjectReopened(e.path.clone())),
+            trailing_text: (e.running_count > 0).then(|| format!("{} running", e.running_count)),
+            trailing_icon: (!e.available).then_some((
+                Icon::Unavailable,
+                icon_role(IconSurface::Unavailable, roles),
+            )),
+            // Right-click a project row to reach its "Forget project" menu (feature 015). Offered
+            // even for unavailable projects — those are precisely the ones a user wants to forget.
             on_context: Some(Message::ProjectMenuToggled(e.path)),
         })
         .collect();
-    let switcher: Option<cdk::overlay::Surface<'a, Message>> =
-        material::ProjectSwitcherOverlay::new(
-            switcher_rows,
+    // Trailing "Add project…" row opens the existing folder browser (008 FR-009). A row, not a
+    // project, so it carries no context menu.
+    switcher_items.push(material::MenuItem {
+        icon_tint: Some(icon_role(IconSurface::AppBarAction, roles)),
+        ..material::MenuItem::new(
+            Icon::OpenProject,
+            "Add project…",
             Message::ProjectSelectorOpened,
-            Message::ProjectSwitcherToggled,
-            roles,
         )
-        .open(state.project_switcher_open)
-        .into();
+    });
+    let switcher: cdk::overlay::Surface<'a, Message> =
+        material::MenuOverlay::new(switcher_items, Message::ProjectSwitcherToggled, roles)
+            .open(state.project_switcher_open)
+            .into();
 
     // The right-clicked project's context menu, at the cursor (feature 015), like a normal desktop
     // context menu: the panel's top-left corner sits at the click point. The anchor is clamped at
@@ -438,7 +458,7 @@ pub fn view<'a>(
 
     cdk::overlay::Overlay::new(base)
         .push(overflow_menu)
-        .push_maybe(switcher)
+        .push(switcher)
         .push_maybe(project_menu)
         .push_maybe(worktree_menu)
         .push_maybe(session_menu)

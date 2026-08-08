@@ -5,7 +5,7 @@
 
 use crate::app::{help_actions, Message, State};
 use crate::icons::Icon;
-use crate::ui::material::{MenuItem, MenuTrigger, ProjectSwitcherTrigger, Toolbar};
+use crate::ui::material::{IconButton, MenuItem, MenuTrigger, Toolbar, Tooltip};
 use iced::Element;
 use micold_core::metadata::AppMetadata;
 use micold_core::theme::{ColorScheme, ThemePreference};
@@ -59,12 +59,19 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
 pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let meta = AppMetadata::from_env();
-    let switcher_label = state
-        .workspace
-        .active_project()
-        .map(|p| p.display_name.clone())
-        .unwrap_or_else(|| "Select project".to_string());
-    let switcher = ProjectSwitcherTrigger::new(switcher_label, Message::ProjectSwitcherToggled, r);
+    // The switcher is an icon button, the same one the overflow menu hangs from (018 FR-029c). It
+    // used to be a bespoke icon+label button, which is what made it a 28dp target with a 14dp glyph
+    // beside a 48dp target with a 24dp one (BUG-007). The active project's name it used to print
+    // moves into the tooltip: FR-006 is carried by the panel's active marker, and was already.
+    let switcher_tip = match state.workspace.active_project() {
+        Some(project) => format!("Project: {}", project.display_name),
+        None => "Select project".to_string(),
+    };
+    let switcher = Tooltip::new(
+        IconButton::new(Icon::OpenProject, r).on_press(Message::ProjectSwitcherToggled),
+        switcher_tip,
+        r,
+    );
     let menu = MenuTrigger::new(Icon::Menu, Message::HelpMenuToggled, r);
     Toolbar::new(meta.name, r)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from

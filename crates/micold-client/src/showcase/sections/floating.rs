@@ -12,7 +12,7 @@
 use iced::{Element, Length};
 use micold_core::tokens::{spacing, Roles};
 
-use crate::icons::Icon;
+use crate::icons::{icon_role, Icon, IconSurface};
 use crate::showcase::catalogue::Layout;
 use crate::showcase::gallery::{arrange, posed};
 use crate::showcase::samples;
@@ -31,16 +31,24 @@ fn menu_items() -> Vec<material::MenuItem<Message>> {
 
 /// The invented project rows the switcher shows: an active one, one with running sessions, and one
 /// whose folder is gone.
-fn project_rows() -> Vec<material::ProjectRow<Message>> {
+///
+/// `MenuItem`s, because that is what the switcher's list is made of — it stopped being a component
+/// of its own at BUG-007, and the rows here are built exactly as `ui::view` builds them.
+fn project_rows(roles: Roles) -> Vec<material::MenuItem<Message>> {
     samples::PROJECTS
         .iter()
         .enumerate()
-        .map(|(row, (label, running, available))| material::ProjectRow {
+        .map(|(row, (label, running, available))| material::MenuItem {
+            icon: (row == 0).then_some(Icon::ActiveMarker),
+            reserve_icon: true,
+            icon_tint: Some(icon_role(IconSurface::Badge, roles)),
             label: (*label).to_string(),
-            is_active: row == 0,
-            running_count: *running,
-            available: *available,
-            on_select: Message::NoOp,
+            message: available.then_some(Message::NoOp),
+            trailing_text: (*running > 0).then(|| format!("{running} running")),
+            trailing_icon: (!*available).then_some((
+                Icon::Unavailable,
+                icon_role(IconSurface::Unavailable, roles),
+            )),
             on_context: Some(Message::NoOp),
         })
         .collect()
@@ -91,19 +99,14 @@ pub fn surfaces<'a>(
         );
     }
 
-    // The switcher converts into `Option<Surface>` — an empty project list has no panel to show. That
-    // asymmetry is the library's, and the gallery honours it rather than unwrapping around it.
+    // The project switcher's list — the same `MenuOverlay` above, carrying the switcher's rows
+    // instead of the overflow menu's. Posed under the same entry for that reason.
     if open == Some(Floating::ProjectSwitcher) {
-        let panel: Option<cdk::overlay::Surface<'a, Message>> =
-            material::ProjectSwitcherOverlay::new(
-                project_rows(),
-                Message::NoOp,
-                Message::Dismissed,
-                roles,
-            )
-            .open(true)
-            .into();
-        out.extend(panel);
+        out.push(
+            material::MenuOverlay::new(project_rows(roles), Message::Dismissed, roles)
+                .open(true)
+                .into(),
+        );
     }
 
     if open == Some(Floating::Modal) {
@@ -151,14 +154,27 @@ pub fn modal<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Messa
     )
 }
 
-/// `MenuOverlay` — the toolbar's overflow panel.
+/// `MenuOverlay` — the toolbar's overflow panel, and the project switcher's list, which is the
+/// same panel carrying different items (018 FR-029c). Two openers under one entry so the pair can
+/// be compared where they used to be two components that could not be.
 pub fn menu_overlay<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
-        vec![posed(
-            "open it",
-            opener("Open the menu panel", Floating::Menu, roles),
-            roles,
-        )],
+        vec![
+            posed(
+                "open it",
+                opener("Open the menu panel", Floating::Menu, roles),
+                roles,
+            ),
+            posed(
+                "the same panel, the switcher's rows",
+                opener(
+                    "Open the project switcher",
+                    Floating::ProjectSwitcher,
+                    roles,
+                ),
+                roles,
+            ),
+        ],
         Layout::Inline,
     )
 }
@@ -175,53 +191,12 @@ pub fn context_menu<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a
     )
 }
 
-/// `ProjectSwitcherOverlay` — the known-projects panel, with an active row, a running count and an
-/// unavailable row, all from the invented project list.
-pub fn project_switcher_overlay<'a>(
-    _s: &'a Showcase,
-    roles: Roles,
-    _i: usize,
-) -> Element<'a, Message> {
-    arrange(
-        vec![posed(
-            "open it",
-            opener(
-                "Open the project switcher",
-                Floating::ProjectSwitcher,
-                roles,
-            ),
-            roles,
-        )],
-        Layout::Inline,
-    )
-}
-
 /// `MenuTrigger` — the icon button that opens a menu panel.
 pub fn menu_trigger<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
         vec![posed(
             "default",
             material::MenuTrigger::new(Icon::Menu, Message::Opened(Floating::Menu), roles),
-            roles,
-        )],
-        Layout::Inline,
-    )
-}
-
-/// `ProjectSwitcherTrigger` — the toolbar button naming the active project.
-pub fn project_switcher_trigger<'a>(
-    _s: &'a Showcase,
-    roles: Roles,
-    _i: usize,
-) -> Element<'a, Message> {
-    arrange(
-        vec![posed(
-            "default",
-            material::ProjectSwitcherTrigger::new(
-                samples::PROJECTS[0].0,
-                Message::Opened(Floating::ProjectSwitcher),
-                roles,
-            ),
             roles,
         )],
         Layout::Inline,
