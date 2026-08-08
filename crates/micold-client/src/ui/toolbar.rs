@@ -72,7 +72,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .map(|p| p.display_name.clone())
         .unwrap_or_else(|| "Select project".to_string());
     let switcher = Button::text(switcher_label, r)
-        .leading(Icon::OpenProject, icon_role(IconSurface::AppBarAction, r))
+        .leading(Icon::OpenProject, icon_role(IconSurface::AccentButton, r))
         .on_press(Message::ProjectSwitcherToggled);
     let menu = MenuTrigger::new(Icon::Menu, Message::HelpMenuToggled, r);
     Toolbar::new(meta.name, r)

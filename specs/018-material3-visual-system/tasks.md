@@ -1256,7 +1256,34 @@ it (SC-008e).
 - [X] T136 [P] Follow them through the tests that name them: `tests/project_switcher.rs`, `switcher_forget_menu.rs`, `showcase_state.rs`, `one_overlay_implementation.rs`, `type_role_call_sites.rs`, `anatomy_call_sites.rs` and `tests/support/covered_states.rs`. Behaviour assertions stay; only the constructor they drive changes (Principle I)
 - [X] T137 Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`UPDATE_LAYOUT_SNAPSHOT=1`). The diff is the proof: `app_bar.switcher_trigger` moves to §7.3's 40dp height with an 18dp leading glyph, and `switcher.panel` moves 260 → 240 wide, its leading edge landing on the overflow panel's (feature 019, SC-008e)
 - [X] T138 [P] Update `docs/user-guide/project-selection.md`: the switcher is a button showing the folder glyph and the active project's name. `icons.md` needed no change — its two switcher rows are the open-folder glyph, which is now the button's leading icon, and the active marker, which is where it always was. Same change, same commit, per the documentation rule (FR-041)
-- [ ] T139 Confirm in the running application (`mise run run`): the switcher naming the active project beside its folder glyph and standing level with the ⋮ button, hover and ripple on both, the switcher panel fading in and out like the ⋮ menu with its left edge flush with that panel's, and right-click on a project row still reaching "Forget project" (SC-008e, US4 scenario 13)
+- [X] T139 Confirm in the running application: the switcher naming the active project beside its folder glyph and standing level with the ⋮ button, hover and ripple on both, the switcher panel opening like the ⋮ menu with its left edge flush with that panel's, and right-click on a project row still reaching "Forget project" (SC-008e, US4 scenario 13)
 
-**Bugfix**: 2026-08-08 — BUG-007. T131–T139 added. Numbered from T131 because the composite-gate
-phase above took T129 and T130 while this branch was open.
+  > **Run 2026-08-08 without a person at a display**, by the `visual-pass` route: the client on a
+  > private Xvfb `:77` under lavapipe, driven with `xdotool`, captured with `import`. Isolated with
+  > `XDG_DATA_HOME`/`XDG_CONFIG_HOME`/`XDG_RUNTIME_DIR` pointed at a scratch dir seeded with two
+  > invented projects, so it could not reach the owner's daemon or catalogue — confirmed by the
+  > instance failing to connect to its own socket until the runtime path was shortened.
+  >
+  > **Passed.** The switcher draws the folder glyph and `micold-ai-ide` on one line, level with the
+  > ⋮ and carrying the text button's state layer on hover. Both panels, cropped at *identical*
+  > geometry and stacked, share a leading edge, a surface tone, a corner and a row pitch — and the
+  > unmarked row's label starts where the marked row's does (FR-006a, visible rather than inferred).
+  > Right-click on a project row opens "Forget project" at the cursor, above the switcher panel,
+  > with the switcher still open behind it.
+  >
+  > **One defect found, and fixed in the same change.** The switcher's glyph was `on_surface`
+  > (`#DDD8DD`) beside a label the text button draws in `primary` (`#BDACE9`) — one control in two
+  > colours. Sampled rather than eyeballed. `IconSurface::AccentButton` now carries §7.3's accent
+  > for a text/outlined button's leading glyph, and the re-measured pair agrees. **No geometry gate
+  > could have caught this**: the glyph was in exactly the right box, in the wrong tone.
+  >
+  > **Left unrun**, per the route's own limits: the *mid-flight* look of the panel's fade. A
+  > screenshot pipeline cannot reliably catch a chosen frame of a short transition, and lavapipe's
+  > frame pacing says nothing about the owner's GPU. That the panel fades at all is structural —
+  > it is `MenuOverlay`'s own transition, covered by `overlay_transition_identity`.
+  >
+  > **A pre-existing mismatch of the same kind, deliberately not fixed here**: `ui/shell.rs:35` and
+  > `ui/project_selector.rs:26` pass `on_surface` to an *outlined* button's leading slot, whose
+  > label is also `primary`. Same two-colour control, four call sites, none of them this feature's
+  > subject. `shell.rs:108` is **not** one of them — its `error` tint on a Delete action is a
+  > deliberate semantic override, which is why `leading` must keep taking a tint at all.
