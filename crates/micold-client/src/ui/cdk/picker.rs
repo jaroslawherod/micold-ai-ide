@@ -328,6 +328,25 @@ where
     }
 }
 
+/// The rendering stack's key, as the render-free rule names it.
+///
+/// Public, and deliberately: a picker whose openness is its own answers these keys in its **own**
+/// `update` rather than through [`Picker`]'s message hooks — the select does, because it has no
+/// caller to send `on_move` or `on_dismiss` to. Both routes end in
+/// [`intent_for`](micold_core::typeahead::intent_for), and this is the only step before it, so a
+/// second copy of the mapping would be the one place the two controls could come to disagree about
+/// what a key even *is* (FR-024, SC-008).
+pub fn key_for(key: &keyboard::Key) -> Key {
+    match key {
+        keyboard::Key::Named(keyboard::key::Named::ArrowDown) => Key::Down,
+        keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Key::Up,
+        keyboard::Key::Named(keyboard::key::Named::Enter) => Key::Enter,
+        keyboard::Key::Named(keyboard::key::Named::Escape) => Key::Escape,
+        keyboard::Key::Named(keyboard::key::Named::Tab) => Key::Tab,
+        _ => Key::Other,
+    }
+}
+
 /// The keyboard's inputs and outputs, carried into the overlay so the rule is applied where the
 /// events actually arrive — overlays see them before the widget tree does, which is what lets the
 /// list claim its four keys and leave every other one to the field.
@@ -348,14 +367,7 @@ impl<M: Clone> Keys<'_, M> {
     /// unable to tab past the picker at all. Every other key the rule names is the list's alone:
     /// capture is what stops Enter also submitting the dialog behind it.
     fn message_for(&self, key: &keyboard::Key) -> Option<(M, Claim)> {
-        let key = match key {
-            keyboard::Key::Named(keyboard::key::Named::ArrowDown) => Key::Down,
-            keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Key::Up,
-            keyboard::Key::Named(keyboard::key::Named::Enter) => Key::Enter,
-            keyboard::Key::Named(keyboard::key::Named::Escape) => Key::Escape,
-            keyboard::Key::Named(keyboard::key::Named::Tab) => Key::Tab,
-            _ => Key::Other,
-        };
+        let key = key_for(key);
 
         let message = match intent_for(key, self.highlight, self.rows, self.highlighted_enabled)? {
             Intent::Move(direction) => self.on_move.map(|f| f(direction)),

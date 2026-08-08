@@ -54,12 +54,22 @@ mod menu_anatomy;
 mod modal;
 mod navigation_drawer;
 mod picker;
+/// The two pickers' lists, compared against **each other** rather than each against the contract.
+/// In-crate because neither control is reachable from `tests/`; see the module's own docs for why
+/// the comparison is of geometry (feature 022, SC-001).
+#[cfg(test)]
+mod picker_parity;
 mod progress;
 mod project_switcher;
 mod resize_handle;
 mod ripple;
 mod scrollable;
 mod select;
+/// The select's own anatomy, and the two behaviours nothing outside it can observe — its indicator
+/// answering for itself, and its highlight seeded from the current choice. In-crate for the same
+/// reason as `form_field_anatomy` (feature 022, FR-013).
+#[cfg(test)]
+mod select_anatomy;
 mod snackbar;
 /// The one place design tokens become rendering types. Internal by intent (FR-002): a feature
 /// module that could reach it could render an off-spec variant of a shared component, which is
@@ -121,6 +131,7 @@ pub use icon_button::IconButton;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use navigation_drawer::NavigationDrawer;
+pub use picker::Row as TypeaheadRow;
 pub use progress::StageProgress;
 pub use project_switcher::{ProjectRow, ProjectSwitcherOverlay, ProjectSwitcherTrigger};
 pub use resize_handle::ResizeHandle;
@@ -139,7 +150,6 @@ pub use text_field::TextField;
 pub use toggle_chip::ToggleChip;
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
-pub use picker::Row as TypeaheadRow;
 pub use typeahead::Typeahead;
 
 /// The application's theme, derived from the active colour scheme.

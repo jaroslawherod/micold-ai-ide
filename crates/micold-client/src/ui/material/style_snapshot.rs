@@ -31,7 +31,7 @@ use std::fmt::Write as _;
 
 use super::style;
 use crate::app::NoticeLevel;
-use iced::widget::{button, checkbox, container, pick_list, scrollable, text_input};
+use iced::widget::{button, checkbox, container, scrollable, text_input};
 use iced::Theme;
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
@@ -131,16 +131,12 @@ fn render_all() -> String {
             writeln!(s, "text_input[{st_name}] = {:?}", input(&theme, st)).unwrap();
         }
 
-        // --- Select ----------------------------------------------------------
-        let field = style::select_field(r);
-        for (st_name, st) in [
-            ("active", pick_list::Status::Active),
-            ("hovered", pick_list::Status::Hovered),
-            ("opened", pick_list::Status::Opened { is_hovered: false }),
-        ] {
-            writeln!(s, "pick_list[{st_name}] = {:?}", field(&theme, st)).unwrap();
-        }
-        writeln!(s, "pick_list.menu = {:?}", style::select_menu(r)(&theme)).unwrap();
+        // The select's three `pick_list` status poses and its `pick_list.menu` line were here, and
+        // left with the widget (feature 022, contract §5). Nothing replaces them, and that is the
+        // point: the select's state layer is `state_fill` — already recorded through the shared
+        // state-layer checks — and its list is `menu_panel`, already recorded as `container.menu`.
+        // Re-recording them under a select-shaped name would put one appearance in the fixture
+        // twice, which is how two entries for one decision come to disagree.
 
         // --- Checkbox: status x checked ---------------------------------------
         let cb = style::checkbox(r);
@@ -274,7 +270,6 @@ fn snapshot_covers_both_schemes_and_every_component() {
         "button.text[hovered]",
         "button.circular_icon[active]",
         "text_input[focused]",
-        "pick_list[opened]",
         "checkbox[hovered,checked=true]",
         "scrollable[dragged,v=true]",
         "container.dialog",

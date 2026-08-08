@@ -92,10 +92,7 @@ impl<'a> Harness<'a> {
 
     /// Whether an overlay is produced right now.
     fn has_overlay(&mut self) -> bool {
-        let limits = iced::advanced::layout::Limits::new(
-            Size::ZERO,
-            Size::new(400.0, 400.0),
-        );
+        let limits = iced::advanced::layout::Limits::new(Size::ZERO, Size::new(400.0, 400.0));
         let node = self
             .picker
             .layout(&mut self.tree, &self.renderer, &limits)
@@ -104,7 +101,13 @@ impl<'a> Harness<'a> {
         let present = {
             let layout = iced::advanced::Layout::new(&node);
             self.picker
-                .overlay(&mut self.tree, layout, &self.renderer, &viewport, Vector::ZERO)
+                .overlay(
+                    &mut self.tree,
+                    layout,
+                    &self.renderer,
+                    &viewport,
+                    Vector::ZERO,
+                )
                 .is_some()
         };
         present
@@ -114,13 +117,8 @@ impl<'a> Harness<'a> {
     fn frame(&mut self) -> bool {
         let mut messages = Vec::new();
         let mut shell = Shell::new(&mut messages);
-        let limits = iced::advanced::layout::Limits::new(
-            Size::ZERO,
-            Size::new(400.0, 400.0),
-        );
-        let node = self
-            .picker
-            .layout(&mut self.tree, &self.renderer, &limits);
+        let limits = iced::advanced::layout::Limits::new(Size::ZERO, Size::new(400.0, 400.0));
+        let node = self.picker.layout(&mut self.tree, &self.renderer, &limits);
         let layout = iced::advanced::Layout::new(&node);
         let viewport = Rectangle::with_size(Size::new(400.0, 400.0));
         self.picker.update(
@@ -218,8 +216,7 @@ fn a_leaving_list_publishes_nothing_for_a_press() {
 
     let mut messages: Vec<Msg> = Vec::new();
     let mut shell = Shell::new(&mut messages);
-    let limits =
-        iced::advanced::layout::Limits::new(Size::ZERO, Size::new(400.0, 400.0));
+    let limits = iced::advanced::layout::Limits::new(Size::ZERO, Size::new(400.0, 400.0));
     let node = h.picker.layout(&mut h.tree, &h.renderer, &limits);
     let layout = iced::advanced::Layout::new(&node);
     let viewport = Rectangle::with_size(Size::new(400.0, 400.0));
@@ -229,7 +226,9 @@ fn a_leaving_list_publishes_nothing_for_a_press() {
         .overlay(&mut h.tree, layout, &h.renderer, &viewport, Vector::ZERO)
         .expect("precondition: an overlay while leaving");
 
-    let overlay_node = overlay.as_overlay_mut().layout(&h.renderer, Size::new(400.0, 400.0));
+    let overlay_node = overlay
+        .as_overlay_mut()
+        .layout(&h.renderer, Size::new(400.0, 400.0));
     let overlay_layout = iced::advanced::Layout::new(&overlay_node);
     let inside = overlay_layout.bounds().center();
 
@@ -258,8 +257,7 @@ fn a_leaving_list_publishes_nothing_for_a_key() {
 
     let mut messages: Vec<Msg> = Vec::new();
     let mut shell = Shell::new(&mut messages);
-    let limits =
-        iced::advanced::layout::Limits::new(Size::ZERO, Size::new(400.0, 400.0));
+    let limits = iced::advanced::layout::Limits::new(Size::ZERO, Size::new(400.0, 400.0));
     let node = h.picker.layout(&mut h.tree, &h.renderer, &limits);
     let layout = iced::advanced::Layout::new(&node);
     let viewport = Rectangle::with_size(Size::new(400.0, 400.0));
@@ -269,7 +267,9 @@ fn a_leaving_list_publishes_nothing_for_a_key() {
         .overlay(&mut h.tree, layout, &h.renderer, &viewport, Vector::ZERO)
         .expect("precondition: an overlay while leaving");
 
-    let overlay_node = overlay.as_overlay_mut().layout(&h.renderer, Size::new(400.0, 400.0));
+    let overlay_node = overlay
+        .as_overlay_mut()
+        .layout(&h.renderer, Size::new(400.0, 400.0));
     let overlay_layout = iced::advanced::Layout::new(&overlay_node);
 
     overlay.as_overlay_mut().update(

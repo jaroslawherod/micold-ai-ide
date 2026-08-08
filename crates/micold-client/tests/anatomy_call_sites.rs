@@ -104,12 +104,13 @@ mod gap {
 /// the state where the requirement is *neither met nor waived*. **None of these are `UNAPPLIED`**:
 /// since T113 every figure §7 states of a component this application has built is applied by it.
 ///
-/// The list shrank twice without anyone editing it deliberately, and both times
+/// The list shrank three times without anyone editing it deliberately, and every time
 /// [`a_recorded_gap_that_became_bound_is_stale`] is what reported it. BUG-003's T103 and T105
 /// applied §7.5's `ITEM_PADDING`, `VERTICAL_PADDING` and `ITEM_ICON` while the gate was in review;
-/// T113 then applied the twelve that were left. An entry describing a state that has stopped being
-/// true is a waiver for a regression nobody would notice, which is why that half of the gate earns
-/// its place.
+/// T113 then applied the twelve that were left; and feature 022's select bound
+/// `text_field::TRAILING_ICON` by giving its chevron the figure directly rather than by way of an
+/// `IconButton`. An entry describing a state that has stopped being true is a waiver for a
+/// regression nobody would notice, which is why that half of the gate earns its place.
 const RECORDED: &[(&str, &str, &str)] = &[
     // -- Waived in spec.md ------------------------------------------------------------------
     (
@@ -119,25 +120,22 @@ const RECORDED: &[(&str, &str, &str)] = &[
          applies MAX_WIDTH and names MIN_WIDTH in the comment saying why it does not",
     ),
     // -- Carried by another token system ----------------------------------------------------
-    // Both of these are one measurement with two names in the contract, and the name that is
-    // applied is the other one. That is the *only* honest form of this category: before T113 it
-    // was also claimed for the icon sizes, on the theory that a glyph is sized by the type scale.
-    // It is not — `icon(glyph, dp, tint)` takes a number, and the role-sized version was the
-    // defect BUG-003's T103 named. Three figures sat waived here on a false premise.
+    // This is one measurement with two names in the contract, and the name that is applied is the
+    // other one. That is the *only* honest form of this category: before T113 it was also claimed
+    // for the icon sizes, on the theory that a glyph is sized by the type scale. It is not —
+    // `icon(glyph, dp, tint)` takes a number, and the role-sized version was the defect BUG-003's
+    // T103 named. Three figures sat waived here on a false premise.
+    //
+    // `text_field::TRAILING_ICON` sat here too, until feature 022. It was honest while the only
+    // thing in a field's trailing slot was an `IconButton` carrying `button::ICON_BUTTON_GLYPH` —
+    // but the select's chevron is a `Glyph` rather than a button, so it has to name §7.7's figure
+    // itself. The figure is bound now, and the gate is what noticed.
     (
         "anatomy::app_bar::ICON_TARGET",
         gap::CARRIED_ELSEWHERE,
         "48dp — §7.1 restates §7.3's target for the bar. The bar's actions are `IconButton`s and \
          `button::MIN_TOUCH_TARGET` is the constant they apply, so the figure is honoured and this \
          is its second spelling. BUG-002 is what it looks like when the honouring stops",
-    ),
-    (
-        "anatomy::text_field::TRAILING_ICON",
-        gap::CARRIED_ELSEWHERE,
-        "24dp — §7.7 restates §7.3's icon-button glyph for the field's trailing slot, and that slot \
-         takes an `IconButton`, which applies `button::ICON_BUTTON_GLYPH` (also 24). True only \
-         since T113: the slot drew 14dp before it, so this was a live deviation wearing this \
-         category's label",
     ),
     // -- Describes something not built ------------------------------------------------------
     (

@@ -228,7 +228,6 @@ pub(super) fn menu_element<'a, M: Clone + 'a>(
     super::menu_panel(capped, Length::Fill, r, true, spacing::XS)
 }
 
-
 /// A single-line label whose matched characters are drawn in the emphasis treatment, truncated so
 /// that the emphasis stays visible (FR-009, FR-010, FR-011c, FR-011d).
 ///
@@ -472,6 +471,33 @@ where
     }
 }
 
+/// The list, wrapped in the transition that brings it in and takes it away (FR-018, FR-019).
+///
+/// Grow-and-fade: the panel arrives from `MIN_SCALE` at full transparency and settles at its own
+/// size, and leaves the way it came but faster. Both wrappers are the library's existing ones, and
+/// **neither curve is stated here** — `Motion`'s defaults are already `standard_decelerate` in and
+/// `standard_accelerate` out, which is exactly what §6.3 gives a menu. Restating them would create a
+/// second definition that can drift from the first.
+///
+/// `scale` transforms *drawing only* — it delegates layout, events and the overlay to its child — so
+/// "nothing outside the list moves while it animates" (FR-023) holds by construction rather than by
+/// care. The fade veils toward the menu surface's own tone, as `MenuOverlay` does, because veiling
+/// toward the plain surface leaves a rectangle two tones too dark over an elevated panel.
+pub(super) fn animated_menu<'a, M: Clone + 'a>(
+    panel: Element<'a, M>,
+    open: bool,
+    r: Roles,
+) -> Element<'a, M> {
+    let faded = super::fade(panel, open, ENTER, super::SurfaceKind::Menu.tone(r))
+        .exiting_over(EXIT)
+        .rounded(super::SurfaceKind::Menu.shape())
+        .animate_in();
+    super::scale(faded, open, ENTER)
+        .exiting_over(EXIT)
+        .animate_in()
+        .into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -527,32 +553,4 @@ mod tests {
         let rejoined: String = out.iter().map(|(s, _)| s.as_str()).collect();
         assert_eq!(rejoined, "main");
     }
-}
-
-
-/// The list, wrapped in the transition that brings it in and takes it away (FR-018, FR-019).
-///
-/// Grow-and-fade: the panel arrives from `MIN_SCALE` at full transparency and settles at its own
-/// size, and leaves the way it came but faster. Both wrappers are the library's existing ones, and
-/// **neither curve is stated here** — `Motion`'s defaults are already `standard_decelerate` in and
-/// `standard_accelerate` out, which is exactly what §6.3 gives a menu. Restating them would create a
-/// second definition that can drift from the first.
-///
-/// `scale` transforms *drawing only* — it delegates layout, events and the overlay to its child — so
-/// "nothing outside the list moves while it animates" (FR-023) holds by construction rather than by
-/// care. The fade veils toward the menu surface's own tone, as `MenuOverlay` does, because veiling
-/// toward the plain surface leaves a rectangle two tones too dark over an elevated panel.
-pub(super) fn animated_menu<'a, M: Clone + 'a>(
-    panel: Element<'a, M>,
-    open: bool,
-    r: Roles,
-) -> Element<'a, M> {
-    let faded = super::fade(panel, open, ENTER, super::SurfaceKind::Menu.tone(r))
-        .exiting_over(EXIT)
-        .rounded(super::SurfaceKind::Menu.shape())
-        .animate_in();
-    super::scale(faded, open, ENTER)
-        .exiting_over(EXIT)
-        .animate_in()
-        .into()
 }

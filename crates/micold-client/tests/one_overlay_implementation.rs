@@ -7,11 +7,12 @@
 //! - **Hand-rolled implementations: zero.** Four surfaces — the modal, the overflow menu, the
 //!   context menu and the project-switcher popover — each carried their own positioning, backdrop
 //!   and dismissal code. All four now sit on `cdk::overlay`. That is the five-to-one story.
-//! - **Delegations to the rendering stack's own overlay system: two.** A `pick_list` (the select
-//!   dropdown) and a `tooltip` implement `Widget::overlay()` themselves, so the stack positions
-//!   them from the trigger's on-screen bounds. Neither was ever a hand-rolled implementation to
-//!   remove, and both need to work inside a content-sized dialog, where a window-level surface has
-//!   nothing to anchor against.
+//! - **Delegations to the rendering stack's own overlay system: one.** A `tooltip` implements
+//!   `Widget::overlay()` itself, so the stack positions it from the trigger's on-screen bounds. It
+//!   was never a hand-rolled implementation to remove, and it needs to work inside a content-sized
+//!   dialog, where a window-level surface has nothing to anchor against. There were two: the select
+//!   wrapped a `pick_list` for exactly that reason until feature 022 gave the application a
+//!   floating mechanism of its own, at which point the sanction went with the widget.
 //!
 //! So the honest shape is: one primitive for window-level surfaces, plus a **closed list** of
 //! widget-attached delegations. This file closes the list.
@@ -42,13 +43,10 @@ const WIDGET_ATTACHED: &[&str] = &["pick_list", "combo_box", "tooltip"];
 /// without striking its entry off fails too — a stale exception reads as sanctioned precedent for
 /// the next one.
 const SANCTIONED: &[(&str, &str, &str)] = &[
-    (
-        "ui/material/select.rs",
-        "pick_list",
-        "the dropdown must anchor to its trigger inside a content-sized dialog, where a \
-         window-level surface has nothing to anchor against — a hand-rolled version of this is \
-         what revealed the list inline",
-    ),
+    // `ui/material/select.rs` / `pick_list` was here until feature 022, and its removal is what the
+    // staleness check below is *for*: the select is now built on `cdk::picker`, which anchors to the
+    // trigger's own bounds for the same reason the sanction gave — so the exception has nothing left
+    // to except, and leaving it listed would read as precedent for the next delegation.
     (
         "ui/material/mod.rs",
         "tooltip",
@@ -72,8 +70,8 @@ const CDK_OVERLAY_IMPLEMENTORS: &[(&str, &str)] = &[(
     "ui/cdk/picker.rs",
     "the result list must anchor to the search field's own on-screen bounds inside a content-sized \
      dialog, where a window-level surface has nothing to anchor against — the same constraint that \
-     sanctions `select.rs`'s `pick_list`, and the one that defeated the hand-rolled dropdown \
-     before it. The stack's own menu cannot serve either: it draws every row as a single flat \
+     sanctioned `select.rs`'s `pick_list` until this replaced it, and the one that defeated the \
+     hand-rolled dropdown before that. The stack's own menu cannot serve either: it draws every row as a single flat \
      `Text`, and these rows must emphasise the characters that matched (feature 021, FR-009)",
 )];
 

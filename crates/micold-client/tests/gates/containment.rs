@@ -109,12 +109,35 @@ const CLIP_REVEALED: &[&str] = &["0/0/0/1/0/0/0/1/0", "0/0/0/2/0/0/0/1/0"];
 /// the tree renumbered around it.
 const SCROLL_CONTENT: &[&str] = &["0/0/0/1/0/0/0/2/0"];
 
+/// The **select's open list**, overflowing its own eight-row cap (feature 022).
+///
+/// Kept apart from [`SCROLL_CONTENT`] for the same reason that list is kept apart from
+/// [`CLIP_REVEALED`]: they are different sites of the same mechanism, each with its own attribution
+/// proof, and one list would leave "which scrollable is this?" unanswered by anything but the path.
+///
+/// It arrived with the widget rather than with a new covered state.
+/// `add-worktree-dialog-type-menu-open` has always opened a list of all ten conventional types, and
+/// the list has always capped at `MAX_ROWS_BEFORE_SCROLL` — but until feature 022 that list was
+/// `pick_list`'s, which scrolls inside a single node and shows the overflow to nobody. The select
+/// floats `material::picker`'s list now, which is the same `Scrollable` the sidebar uses, so the
+/// overflow is a node outside a node exactly as the sidebar's is: ten 48dp rows inside an eight-row
+/// viewport, overhanging by 96dp.
+///
+/// **This list grew during a feature whose brief was to remove exceptions, and that is worth saying
+/// plainly.** Nothing was widened to make anything pass: the overhang is a `Scrollable` doing what
+/// the one above already does, and the alternative — a list that does not scroll — would leave two
+/// of the ten types unreachable. `the_recorded_picker_overflow_is_the_open_option_list` proves the
+/// attribution from the records rather than from the shape.
+const PICKER_LIST_CONTENT: &[&str] = &["0/0/0/0/0/0/0"];
+
 /// Every overhang this gate does not treat as a finding, with the reason it is allowed.
 fn clips_deliberately(child_path: &str) -> Option<&'static str> {
     if CLIP_REVEALED.contains(&child_path) {
         Some("CLIP_REVEALED")
     } else if SCROLL_CONTENT.contains(&child_path) {
         Some("SCROLL_CONTENT")
+    } else if PICKER_LIST_CONTENT.contains(&child_path) {
+        Some("PICKER_LIST_CONTENT")
     } else {
         None
     }
@@ -151,6 +174,7 @@ fn no_layout_node_escapes_its_parent() {
     let silent: Vec<&&str> = CLIP_REVEALED
         .iter()
         .chain(SCROLL_CONTENT)
+        .chain(PICKER_LIST_CONTENT)
         .filter(|path| !fired.contains(**path))
         .collect();
     assert!(
@@ -374,6 +398,91 @@ fn the_recorded_scroll_overflow_is_the_sidebar_list() {
             !few.contains(&path.to_string()),
             "{path} escapes its parent with only three worktrees, so the overhang is not the list \
              outgrowing its viewport and the attribution recorded in SCROLL_CONTENT is wrong"
+        );
+    }
+}
+
+/// The picker exemption is the **type list** outgrowing its own cap, proved from the records.
+///
+/// The sidebar's proof above varies the input — three worktrees against thirty — and shows the node
+/// comes clean when the list fits. That lever does not exist here: a select's options are fixed by
+/// its call site, and this one's are `ConventionalType::ALL`, so there is no "few types" to resolve.
+///
+/// What is available instead is arithmetic the records already carry. If the exempted node is the
+/// open list's content, then it holds exactly one child per conventional type, its height is exactly
+/// those children stacked, and its parent — the cap — is shorter than it. Any other node at that
+/// path fails at least one of the three. That is weaker than driving the input, and saying so is the
+/// point: it is why this has its own test rather than being folded into the one above, where the
+/// weaker proof would have quietly become the standard for both.
+#[test]
+fn the_recorded_picker_overflow_is_the_open_option_list() {
+    use micold_core::naming::ConventionalType;
+
+    const STATE: &str = "add-worktree-dialog-type-menu-open";
+
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+    let records = covered_states()
+        .iter()
+        .zip(all.iter())
+        .find(|(covered, _)| covered.name == STATE)
+        .map(|(_, records)| records)
+        .unwrap_or_else(|| {
+            panic!(
+                "no covered state named {STATE} — the exemption below is about \
+                                   that state's open list, so without it nothing proves the \
+                                   attribution"
+            )
+        });
+
+    let over = |path: &str| {
+        records
+            .iter()
+            .find(|r| r.layer == lay::Layer::Overlay && lay::path_token(&r.path) == path)
+    };
+
+    for path in PICKER_LIST_CONTENT {
+        let content = over(path).unwrap_or_else(|| {
+            panic!(
+                "{path} is exempted as a picker list's content and no such overlay node was \
+                    resolved in {STATE}; the tree renumbered around it"
+            )
+        });
+        let rows: Vec<_> = records
+            .iter()
+            .filter(|r| {
+                r.layer == lay::Layer::Overlay
+                    && r.path.len() == content.path.len() + 1
+                    && r.path.starts_with(&content.path)
+            })
+            .collect();
+
+        assert_eq!(
+            rows.len(),
+            ConventionalType::ALL.len(),
+            "{path} holds {} children against {} conventional types, so it is not the open type \
+             list's content and the exemption is attributed to the wrong node",
+            rows.len(),
+            ConventionalType::ALL.len(),
+        );
+
+        let stacked: f32 = rows.iter().map(|r| r.height).sum();
+        assert!(
+            (content.height - stacked).abs() < TOLERANCE,
+            "{path} is {:.1}px tall against {stacked:.1}px of rows — a list's content is exactly \
+             its rows, so this node is holding something else as well",
+            content.height,
+        );
+
+        let cap = over(&lay::path_token(&content.path[..content.path.len() - 1]))
+            .expect("the exempted node has a parent");
+        assert!(
+            content.height > cap.height + TOLERANCE,
+            "{path} is {:.1}px inside a {:.1}px parent, so nothing is overflowing and the \
+             exemption is covering a list that fits — which means the eight-row cap has stopped \
+             applying, and with it the scrolling this exemption exists for",
+            content.height,
+            cap.height,
         );
     }
 }

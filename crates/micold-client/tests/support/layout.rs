@@ -280,9 +280,15 @@ pub fn walk(layout: Layout<'_>, layer: Layer) -> Vec<LayoutRecord> {
 /// widget-attached overlay (FR-009).
 ///
 /// Two passes, because this application builds overlays two ways. Dialogs and menus are composed
-/// in-tree and the base walk already sees them; `material::Select` wraps `pick_list`, a genuine
-/// `Widget::overlay` implementor whose dropdown is laid out separately and is invisible to the base
-/// walk (research R5).
+/// in-tree and the base walk already sees them; the two **pickers** — the select and the branch
+/// search — float their lists from `cdk::picker`'s `Widget::overlay`, which the rendering stack
+/// positions from the field's own on-screen bounds and which the base walk cannot see.
+///
+/// Feature 022 was expected to *remove* this pass along with `pick_list` (contract §5 says the list
+/// "is composed in-tree now"). It does not: the select stopped wrapping `pick_list` and started
+/// using this application's own floating mechanism, which is still an overlay — that is the point
+/// of it, since a list inside a content-sized dialog has nothing else to anchor to. So the pass
+/// stays, and what changed is only *whose* overlay it walks.
 pub fn resolve<'a, M: 'a>(element: Element<'a, M>, renderer: &iced::Renderer) -> Vec<LayoutRecord> {
     resolve_pressing(element, renderer, None)
 }
@@ -372,6 +378,27 @@ pub fn resolve_pressing<'a, M: 'a>(
         );
 
         node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+
+        // …and settle again, because a picker's list does not exist the instant it is opened.
+        // `cdk::picker` returns an overlay for as long as its own visibility track says there is
+        // any of the list on screen, and that track only moves on a frame tick — so a list opened
+        // between ticks is still at zero and `overlay()` correctly reports nothing. The rendering
+        // stack delivers the tick because the track asks for one; here it has to be handed over,
+        // exactly as the pre-press settle above hands over the dialog's entrance.
+        for frame in SETTLE_FRAMES..SETTLE_FRAMES * 2 {
+            let mut shell = Shell::new(&mut settle_messages);
+            element.as_widget_mut().update(
+                &mut tree,
+                &iced::Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * frame)),
+                Layout::new(&node),
+                mouse::Cursor::Unavailable,
+                renderer,
+                &mut clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(WINDOW),
+            );
+        }
+        node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
     }
 
     let mut records = walk(Layout::new(&node), Layer::Base);
@@ -436,14 +463,16 @@ impl StateUnderTest {
 
     /// Press the node at `path` before recording, to open a dropdown that lives in widget state.
     ///
-    /// `material::Select` wraps `pick_list`, whose open/closed flag is private widget-tree state
-    /// with no public accessor — it cannot be set, only *caused*. A left press with the cursor
-    /// inside the control's bounds is the documented way in (`pick_list.rs`, `ButtonPressed`), so
-    /// the covered state drives the widget the way a person would rather than reaching into it.
+    /// `material::Select` owns its open flag, in its own widget-tree state and with no public
+    /// accessor — it cannot be set, only *caused*. That is deliberate (feature 022, data-model
+    /// §2.2): a dropdown's openness means nothing with the screen switched off, so no screen holds
+    /// it and no message opens it. A left press with the cursor inside the control's bounds is
+    /// therefore the only way in, which is the right way in — the covered state drives the widget
+    /// the way a person would rather than reaching into it.
     ///
     /// This is what makes the overlay pass produce anything. Dialogs and menus elsewhere in this
-    /// application are composed in-tree and the base walk already sees them; a `pick_list` dropdown
-    /// is laid out through `Widget::overlay` and is invisible until it is open.
+    /// application are composed in-tree and the base walk already sees them; a picker's list is
+    /// laid out through `Widget::overlay` and is invisible until it is open.
     pub fn pressing(mut self, path: &'static [usize]) -> Self {
         self.press_at = Some(path);
         self

@@ -112,23 +112,49 @@ itself with nothing supplying it; confirm all four placements.
 
 > In-crate, because `material` is `pub(crate)` and a `Select` cannot be constructed from `tests/`.
 
-- [ ] T012 [P] [US1] Write a failing anatomy gate for the select's trigger — container height, label resting vs floating, the trailing chevron's size and role, and the indicator at rest vs open — in `crates/micold-client/src/ui/material/select_anatomy.rs`, following `text_field_anatomy.rs` (contract [select-component §1](./contracts/select-component.md), FR-002, FR-003, FR-004)
-- [ ] T013 [P] [US1] Write a failing test that the select's open list and the search picker's are the **same** in row height, row padding, marker slot and panel treatment — asserted by building both and comparing, not by restating the figures — in `crates/micold-client/src/ui/material/picker_parity.rs` (SC-001, FR-007, FR-008, FR-009)
-- [ ] T014 [P] [US1] Write a failing test that opening seeds the highlight from the current choice, so the list opens with the current value marked and reachable — in `crates/micold-client/src/ui/material/select_anatomy.rs`. This is feature 013's FR-003, which `pick_list` gave for free and which must not leave with it (contract [select-component §2](./contracts/select-component.md))
-- [ ] T015 [P] [US1] Observe `crates/micold-client/tests/one_overlay_implementation.rs`'s staleness check **failing** once `select.rs` no longer calls `pick_list` while the `SANCTIONED` entry still lists it — the gate firing before T021 satisfies it
+- [X] T012 [P] [US1] Write a failing anatomy gate for the select's trigger — container height, label resting vs floating, the trailing chevron's size and role, and the indicator at rest vs open — in `crates/micold-client/src/ui/material/select_anatomy.rs`, following `text_field_anatomy.rs` (contract [select-component §1](./contracts/select-component.md), FR-002, FR-003, FR-004)
+- [X] T013 [P] [US1] Write a failing test that the select's open list and the search picker's are the **same** in row height, row padding, marker slot and panel treatment — asserted by building both and comparing, not by restating the figures — in `crates/micold-client/src/ui/material/picker_parity.rs` (SC-001, FR-007, FR-008, FR-009)
+- [X] T014 [P] [US1] Write a failing test that opening seeds the highlight from the current choice, so the list opens with the current value marked and reachable — in `crates/micold-client/src/ui/material/select_anatomy.rs`. This is feature 013's FR-003, which `pick_list` gave for free and which must not leave with it (contract [select-component §2](./contracts/select-component.md))
+- [X] T015 [P] [US1] Observe `crates/micold-client/tests/one_overlay_implementation.rs`'s staleness check **failing** once `select.rs` no longer calls `pick_list` while the `SANCTIONED` entry still lists it — the gate firing before T021 satisfies it
 
 ### Implementation for User Story 1
 
-- [ ] T016 [US1] Rewrite `crates/micold-client/src/ui/material/select.rs`: `SelectState { open, highlight }` in tree state, a pressable trigger row (value or placeholder, spacer, chevron, state layer, ripple) composed inside `FormField`, options converted to `picker::Row` with empty spans, and the list built from `material::picker` and floated by `cdk::picker`. Remove the `active(bool)` builder method (contract [select-component §1, §3](./contracts/select-component.md), [data-model §2](./data-model.md), FR-001, FR-005, FR-010, FR-011, FR-012, FR-014)
-- [ ] T017 [US1] Seed the highlight from `selected` on open in `crates/micold-client/src/ui/material/select.rs`, making T014 pass
-- [ ] T018 [US1] Drive the active indicator from the component's **own** open flag in `crates/micold-client/src/ui/material/select.rs`, making T012's open-state case pass — this is accepted fidelity gap #3 closing structurally (FR-013)
-- [ ] T019 [US1] Retire `pick_list` from `crates/micold-client/src/ui/material/style.rs`: `select_field` and `select_menu` are typed in `pick_list::Status` and `menu::Style`. Keep the look, drop the signatures — or drop the functions entirely if `menu_panel` and the shared state layers already cover them (contract [select-component §5](./contracts/select-component.md))
-- [ ] T020 [US1] Remove the three `pick_list` status poses and the `pick_list.menu` line from `crates/micold-client/src/ui/material/style_snapshot.rs` and regenerate its fixture
-- [ ] T021 [US1] Remove the `select.rs` / `pick_list` entry from `SANCTIONED` in `crates/micold-client/tests/one_overlay_implementation.rs` (making T015 pass) and drop `pick_list` from `WRAPPED_WIDGETS` in `crates/micold-client/tests/material_boundary.rs`
-- [ ] T022 [US1] Dissolve the `pick_list` special-casing in `crates/micold-client/tests/support/layout.rs`, `crates/micold-client/tests/support/covered_states.rs` and `crates/micold-client/tests/layout_snapshot.rs`, and regenerate the layout fixture. The dropdown is composed in-tree now, so the base walk sees it like any other element — **this task removes machinery, it does not add any** (contract §5)
-- [ ] T023 [US1] Move the `form_field` gallery fixture's active-state pose off `Select` and onto `TextField`, which can report focus, in `crates/micold-client/src/ui/material/form_field_anatomy.rs` and `crates/micold-client/src/showcase/sections/controls.rs` — the one call site `active(bool)` had (contract §3)
-- [ ] T024 [US1] Confirm `selecting_a_type_sets_the_form_value` and `type_selection_is_ignored_while_creating` in `crates/micold-client/tests/app_state.rs` pass **unmodified**, and that `crates/micold-client/src/ui/worktree_form.rs`'s call is unchanged — the regression check on FR-030 (SC-009)
+- [X] T016 [US1] Rewrite `crates/micold-client/src/ui/material/select.rs`: `SelectState { open, highlight }` in tree state, a pressable trigger row (value or placeholder, spacer, chevron, state layer, ripple) composed inside `FormField`, options converted to `picker::Row` with empty spans, and the list built from `material::picker` and floated by `cdk::picker`. Remove the `active(bool)` builder method (contract [select-component §1, §3](./contracts/select-component.md), [data-model §2](./data-model.md), FR-001, FR-005, FR-010, FR-011, FR-012, FR-014)
+- [X] T017 [US1] Seed the highlight from `selected` on open in `crates/micold-client/src/ui/material/select.rs`, making T014 pass
+- [X] T018 [US1] Drive the active indicator from the component's **own** open flag in `crates/micold-client/src/ui/material/select.rs`, making T012's open-state case pass — this is accepted fidelity gap #3 closing structurally (FR-013)
+- [X] T019 [US1] Retire `pick_list` from `crates/micold-client/src/ui/material/style.rs`: `select_field` and `select_menu` are typed in `pick_list::Status` and `menu::Style`. Keep the look, drop the signatures — or drop the functions entirely if `menu_panel` and the shared state layers already cover them (contract [select-component §5](./contracts/select-component.md))
+- [X] T020 [US1] Remove the three `pick_list` status poses and the `pick_list.menu` line from `crates/micold-client/src/ui/material/style_snapshot.rs` and regenerate its fixture
+- [X] T021 [US1] Remove the `select.rs` / `pick_list` entry from `SANCTIONED` in `crates/micold-client/tests/one_overlay_implementation.rs` (making T015 pass) and drop `pick_list` from `WRAPPED_WIDGETS` in `crates/micold-client/tests/material_boundary.rs`
+- [X] T022 [US1] Dissolve the `pick_list` special-casing in `crates/micold-client/tests/support/layout.rs`, `crates/micold-client/tests/support/covered_states.rs` and `crates/micold-client/tests/layout_snapshot.rs`, and regenerate the layout fixture. The dropdown is composed in-tree now, so the base walk sees it like any other element — **this task removes machinery, it does not add any** (contract §5)
+
+  > **The premise is wrong, and the machinery stays.** "Composed in-tree now" is not what happened:
+  > the select stopped wrapping `pick_list` and started using `cdk::picker`, which is *also* a
+  > `Widget::overlay` implementor — that is the whole reason it was built, since a list inside a
+  > content-sized dialog has nothing else to anchor to. So the overlay pass, `resolve_pressing` and
+  > `StateUnderTest::pressing` are all still load-bearing, and the select's open flag is still
+  > private state that can only be *caused*. What this task actually did is rewrite the three files'
+  > commentary to describe the control that is there now, and regenerate the fixture.
+  >
+  > It also **added** two things rather than removing any, both recorded here because the task said
+  > it would not:
+  > - `resolve_pressing` now settles frames *after* the press as well as before it. A picker's list
+  >   exists only once its visibility track has moved, and the track moves on a frame tick — so
+  >   without this the fixture would have lost every `over` record and `the_overlay_pass_records_
+  >   something_somewhere` would have failed.
+  > - `tests/gates/containment.rs` gained `PICKER_LIST_CONTENT`, one path: the open type list is ten
+  >   48dp rows inside an eight-row viewport, so the shared `Scrollable` overhangs exactly as the
+  >   sidebar's does. `pick_list` scrolled inside a single node and showed that to nobody. It has its
+  >   own attribution test rather than joining `SCROLL_CONTENT`.
+- [X] T023 [US1] Move the `form_field` gallery fixture's active-state pose off `Select` and onto `TextField`, which can report focus, in `crates/micold-client/src/ui/material/form_field_anatomy.rs` and `crates/micold-client/src/showcase/sections/controls.rs` — the one call site `active(bool)` had (contract §3)
+- [X] T024 [US1] Confirm `selecting_a_type_sets_the_form_value` and `type_selection_is_ignored_while_creating` in `crates/micold-client/tests/app_state.rs` pass **unmodified**, and that `crates/micold-client/src/ui/worktree_form.rs`'s call is unchanged — the regression check on FR-030 (SC-009)
 - [ ] T025 [US1] Run [quickstart.md](./quickstart.md) §B1, §B3–§B6 in both schemes and record the pass
+
+  > **Blocked on eyes at a display**, like T011. The machine-checkable half is done and is in
+  > `src/ui/material/select_anatomy.rs` (the trigger, the chevron, the label's two positions, and
+  > the indicator answering for itself — the last read off rasterised pixels) and in
+  > `picker_parity.rs`, which asserts the two lists resolve to the *same* node tree rather than each
+  > matching a figure. Whether the two look identical at a display, and whether all four placements
+  > are right, is not something those can answer.
 
 **Checkpoint**: the select is ours, `pick_list` is gone, and the two lists are indistinguishable —
 shippable on its own, with the transition on the search picker only.

@@ -138,7 +138,10 @@ fn code_only(src: &str) -> String {
 const WRAPPED_WIDGETS: &[&str] = &[
     "button",
     "text_input",
-    "pick_list",
+    // `pick_list` was here until feature 022. It leaves because nothing wraps it any more: the
+    // select is the library's own control now, so naming the stack widget in a feature module is
+    // no longer a boundary crossing — it is a reference to something this application does not use
+    // at all (contract §5).
     "checkbox",
     "scrollable",
     "progress_bar",
