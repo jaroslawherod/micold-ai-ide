@@ -1,9 +1,9 @@
 //! Sidebar hide/show + adjustable-width state (feature 005 UI enhancement).
 
 use micold_client::app::{
-    on_escape, Message, Overlay, SidebarEntry, State, TagFilter, SIDEBAR_DEFAULT_WIDTH,
-    SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
+    on_escape, Message, Overlay, State, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
 };
+use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::worktree::{Worktree, WorktreeStatus};

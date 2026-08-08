@@ -1,7 +1,8 @@
 //! The left navigation sidebar: worktrees (top level) → sessions (sub-items), built from the
 //! shared [`tree_view`] primitive (FR-002, FR-003, Constitution Principle VIII).
 
-use crate::app::{Message, State, TagFilter};
+use crate::app::{Message, State};
+use crate::features::sidebar::TagFilter;
 use crate::icons::Icon;
 use crate::ui::material::{
     self, Accordion, ActivityBadge, Button, ButtonVariant, Divider, FilterTrigger, HoverReveal,
@@ -377,7 +378,7 @@ fn row_actions_cluster(
 /// ordered [`TreeItem`]s, each followed by its sessions when expanded.
 fn build_items(
     state: &State,
-    entries: Vec<crate::app::SidebarEntry>,
+    entries: Vec<crate::features::sidebar::SidebarEntry>,
     r: Roles,
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
@@ -386,11 +387,11 @@ fn build_items(
 
     for entry in entries {
         let node = match entry {
-            crate::app::SidebarEntry::Default(node) => {
+            crate::features::sidebar::SidebarEntry::Default(node) => {
                 items.extend(build_default_item(state, &node, r));
                 continue;
             }
-            crate::app::SidebarEntry::Worktree(node) => node,
+            crate::features::sidebar::SidebarEntry::Worktree(node) => node,
         };
         let wt = &node.worktree;
         // No leading git icon (FR-010); a non-Valid worktree is cued by an error-tinted name
@@ -416,7 +417,7 @@ fn build_items(
             );
         // Location tooltip (feature 010, FR-010): the worktree's path relative to the project.
         if let Some(root) = project_root {
-            item = item.row_tooltip(crate::app::worktree_location_label(root, wt));
+            item = item.row_tooltip(crate::features::sidebar::worktree_location_label(root, wt));
         }
 
         // Always reserve the action cluster's width so hovering never reflows the row; each row
@@ -481,7 +482,7 @@ fn session_tree_item(
 /// that motivated the fade-on-hover treatment for the potentially-many worktree rows).
 fn build_default_item(
     state: &State,
-    node: &crate::app::DefaultNode,
+    node: &crate::features::sidebar::DefaultNode,
     r: Roles,
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
@@ -507,7 +508,7 @@ fn build_default_item(
         .expandable(node.expanded, Message::DefaultExpansionToggled)
         .trailing_element(start_session)
         // Location tooltip (FR-010): fixed, since the Default entry is always the project root.
-        .row_tooltip(crate::app::DEFAULT_LOCATION_LABEL);
+        .row_tooltip(crate::features::sidebar::DEFAULT_LOCATION_LABEL);
     items.push(item);
 
     if node.expanded {

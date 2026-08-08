@@ -13,9 +13,10 @@
 
 use std::path::PathBuf;
 
-use micold_client::app::{
-    ClosingOverlay, Overlay, RenameDraft, SettingsDraft, WorktreeRenameDraft,
-};
+use micold_client::app::{ClosingOverlay, Overlay};
+use micold_client::features::project::RenameDraft;
+use micold_client::features::settings::SettingsDraft;
+use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_core::selector::Selector;
 
 /// One snapshot of every kind, with the overlay each is a snapshot *of*.

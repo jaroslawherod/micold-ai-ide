@@ -11,7 +11,7 @@
 //!
 //! Parity: each kind resolves to exactly the style function its call sites use today (FR-005).
 
-use crate::app::NoticeLevel;
+use crate::features::notifications::NoticeLevel;
 use crate::ui::material::style;
 use iced::widget::container;
 use iced::{Element, Length, Padding};

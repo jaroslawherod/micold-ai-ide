@@ -81,3 +81,4 @@ Re-measure at each phase checkpoint and append a row.
 | T020 (notifications) | 3,567 | 1,876 | −17; a dead duplicate `Notification` deleted |
 | T021 (session) | 3,567 | 1,727 | −149; at the phase checkpoint's ~1,700 target |
 | T022 (connection) | 3,561 | 1,727 | first `main.rs` movement; source was `ui/mod.rs` |
+| T023 (re-exports gone) | 3,561 | 1,689 | −38; every call site imports from `features::*` |

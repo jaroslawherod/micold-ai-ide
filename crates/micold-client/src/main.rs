@@ -9,9 +9,10 @@
 
 use iced::time::every;
 use iced::{Subscription, Task};
-use micold_client::app::{
-    BranchSource, ClosingOverlay, Message, Overlay, ResolutionState, SelectKind, State,
-    WorktreeForm, WorktreeFormStatus,
+use micold_client::app::{ClosingOverlay, Message, Overlay, State};
+use micold_client::features::session::SelectKind;
+use micold_client::features::worktree_form::{
+    BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
 use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
@@ -2107,7 +2108,7 @@ fn active_project_displaced(app: &App) -> bool {
 ///
 /// The precedence lives in `features::connection` so it is testable without a window; what is left
 /// here is the one thing that needs the shell: turning the active project into a displacement.
-fn connection_status(app: &App) -> micold_client::ui::ConnectionStatus {
+fn connection_status(app: &App) -> micold_client::features::connection::ConnectionStatus {
     let displaced_by = app
         .core
         .workspace
@@ -2709,7 +2710,7 @@ fn scan(dir: PathBuf) -> Message {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use micold_client::app::SettingsDraft;
+    use micold_client::features::settings::SettingsDraft;
     use micold_core::protocol::messages::{ActivitySignal, ProjectSnapshot, SessionSummary};
 
     // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
@@ -3256,7 +3257,7 @@ mod tests {
         );
         assert_eq!(
             connection_status(&app),
-            micold_client::ui::ConnectionStatus::Connected,
+            micold_client::features::connection::ConnectionStatus::Connected,
             "and no takeover affordance may be offered for a project we hold (SC-021)"
         );
     }
@@ -3489,7 +3490,7 @@ mod tests {
         // `connection_status` is decision/branching logic (Constitution I) picking which of five
         // mutually-possible states wins — pins the precedence directly rather than relying on it
         // only being exercised incidentally elsewhere (convergence finding F1, BUG-002).
-        use micold_client::ui::ConnectionStatus;
+        use micold_client::features::connection::ConnectionStatus;
 
         let mut app = App {
             core: State::default(),

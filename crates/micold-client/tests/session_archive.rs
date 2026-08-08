@@ -2,7 +2,8 @@
 //! rather than deleting it outright, and archived sessions are excluded from whatever the
 //! sidebar renders from (`State::active_sessions()`).
 
-use micold_client::app::{SidebarEntry, State};
+use micold_client::app::State;
+use micold_client::features::sidebar::SidebarEntry;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{
     Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,

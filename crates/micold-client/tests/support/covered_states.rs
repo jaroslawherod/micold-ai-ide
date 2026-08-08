@@ -14,8 +14,10 @@
 
 use std::path::PathBuf;
 
-use micold_client::app::{BranchSource, Overlay, SettingsDraft, State, WorktreeForm};
-use micold_client::ui::ConnectionStatus;
+use micold_client::app::{Overlay, State};
+use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::settings::SettingsDraft;
+use micold_client::features::worktree_form::{BranchSource, WorktreeForm};
 use micold_core::project::Availability;
 use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use micold_core::worktree::{Worktree, WorktreeStatus};

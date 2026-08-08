@@ -7,7 +7,8 @@
 //! and the hand-off into the existing `ProjectForgetRequested` flow. Rendering is build-verified
 //! and validated by quickstart.md.
 
-use micold_client::app::{clamp_menu_anchor, Message, Overlay, State};
+use micold_client::app::{Message, Overlay, State};
+use micold_client::features::project::clamp_menu_anchor;
 use std::path::PathBuf;
 
 // --- Opening, closing, and replacing the menu ---

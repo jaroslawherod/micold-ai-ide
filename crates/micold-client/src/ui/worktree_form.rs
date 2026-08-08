@@ -7,7 +7,10 @@
 //! branch-name collision from a dead-end error into a decision panel rendered in place of the
 //! normal actions, so cancelling leaves every input where the user left it (FR-007).
 
-use crate::app::{BranchSource, Message, ResolutionState, WorktreeForm, WorktreeFormStatus};
+use crate::app::Message;
+use crate::features::worktree_form::{
+    BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
+};
 use crate::ui::material::{
     self, Button, Select, StageProgress, SurfaceKind, Text, TextField, ToggleChip, TypeRole,
     TypeaheadRow,
