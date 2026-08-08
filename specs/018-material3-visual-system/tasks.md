@@ -1114,8 +1114,30 @@ new ones; the *shape* of the fix is unchanged by that decision.
   > property that was actually violated: collapsing that panel changes no text and no clip, so it
   > must change nothing this gate reports.
 
-- [ ] T127 [P] Re-check the gallery in `mise run showcase`: `showcase/sections/surfaces.rs` poses three depth-1 rows at the default standard density, which have been rendering at 23.6dp against §7.2's 56. They are the most visible half of this bug and the page whose job is to be believed (feature 020)
-- [ ] T128 Confirm in the running application (`mise run run`): expand a worktree and check its session rows stand at the same dense height as the rows above them; check a tagged worktree row is at the two-line height with its chips unclipped; and record the new visible-worktree count in `quickstart.md` §B4 against the pre-change figure, since FR-026a now *permits* a decrease and the number should be written down rather than assumed (FR-026a, FR-026d)
+- [X] T127 [P] Re-check the gallery in `mise run showcase`: `showcase/sections/surfaces.rs` poses three depth-1 rows at the default standard density, which have been rendering at 23.6dp against §7.2's 56. They are the most visible half of this bug and the page whose job is to be believed (feature 020)
+- [X] T128 Confirm in the running application (`mise run run`): expand a worktree and check its session rows stand at the same dense height as the rows above them; check a tagged worktree row is at the two-line height with its chips unclipped; and record the new visible-worktree count in `quickstart.md` §B4 against the pre-change figure, since FR-026a now *permits* a decrease and the number should be written down rather than assumed (FR-026a, FR-026d)
+
+  > **Both closed on the owner's screenshots, 2026-08-08, measured rather than eyeballed.** The
+  > images were captured by the owner; the figures below are read off them at 1:1 — in each case a
+  > selection pill gives an exact height and pins the scale, so nothing here rests on an impression.
+  >
+  > **T127, the gallery** (`standard` density). Selected two-line row **72px** against §7.2's 72;
+  > one-line pitch **60.0px** against 56 + the column's 4dp gap; content centred, block centre 166.0
+  > against pill centre 165.5. These are the rows that had been drawing at 23.6dp.
+  >
+  > **T128, the running application** (`dense`). `Default` one-line row **44**; the tagged worktree
+  > row **60** with its chip unclipped; and the one this bug was about — the **session row at depth
+  > 1, 44px exactly**, the same height as the top-level one-line row above it, where `1cb9873` had
+  > left it at 23.6 and the original floor gave it 36. Content centred: label centre 137.0 against
+  > pill centre 137.5.
+  >
+  > **§B4's count, recorded rather than estimated.** Against the 676.8dp tree viewport: one-line
+  > rows 24 → **14** visible (−42%), tagged rows 14 → **10** (−29%). Inside the quarter-to-two-fifths
+  > FR-026a now permits, and written into `quickstart.md` §B4 as the figure that clause asks for.
+  >
+  > **One defect found, and it is not this feature's.** The gallery screenshot shows a tag chip
+  > ~47px left of the label it is meant to sit beneath. Filed as BUG-006; see there for why the
+  > sidebar is unaffected.
 
 > **T121–T126 done, 2026-08-07.** In that order, red first.
 >
