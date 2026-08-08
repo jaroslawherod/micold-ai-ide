@@ -161,6 +161,43 @@ pub fn tag<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message
     )
 }
 
+/// `IconLabel` — a glyph and a label as one unit, posed at the three roles it is used at.
+///
+/// The gallery is where the distinction this type exists for is visible: the glyph tracks the
+/// label's role, so a `Label`-role instance carries a smaller picture than a `Body`-role one. A
+/// button's leading icon does *not* behave this way — §7.3 fixes it at 18dp whatever the label
+/// says — and the button section poses that separately.
+pub fn icon_label<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![
+            posed(
+                "Label role",
+                material::IconLabel::<Message>::new(Icon::Git, "git", TypeRole::Label, roles)
+                    .tint(roles.primary)
+                    .muted(),
+                roles,
+            ),
+            posed(
+                "Body role",
+                material::IconLabel::<Message>::new(Icon::Git, "git", TypeRole::Body, roles)
+                    .tint(roles.primary),
+                roles,
+            ),
+            posed(
+                "untinted",
+                material::IconLabel::<Message>::new(
+                    Icon::Settings,
+                    "settings",
+                    TypeRole::Body,
+                    roles,
+                ),
+                roles,
+            ),
+        ],
+        Layout::Inline,
+    )
+}
+
 /// `ActivityBadge` — one instance per signal, including the ones that deliberately render nothing, so
 /// "this signal is invisible on purpose" is on the page rather than inferred from an absence.
 pub fn activity_badge<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {

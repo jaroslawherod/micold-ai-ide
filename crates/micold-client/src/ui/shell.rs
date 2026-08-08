@@ -4,7 +4,7 @@
 
 use crate::app::{Message, State};
 use crate::icons::{icon_role, Icon, IconSurface};
-use crate::ui::material::{self, Button, Glyph, SurfaceKind, Text, TypeRole};
+use crate::ui::material::{self, Button, Glyph, IconLabel, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::project::Availability;
@@ -124,12 +124,9 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             // Git repositories carry a "git" badge in the known list too (FR-006).
             if project.is_git_repo {
                 entry = entry.push(
-                    row![
-                        Glyph::new(Icon::Git, TypeRole::Label, r).tint(badge_tint),
-                        Text::new("git", TypeRole::Label, r).muted(),
-                    ]
-                    .spacing(spacing::XS)
-                    .align_y(Alignment::Center),
+                    IconLabel::new(Icon::Git, "git", TypeRole::Label, r)
+                        .tint(badge_tint)
+                        .muted(),
                 );
             }
 

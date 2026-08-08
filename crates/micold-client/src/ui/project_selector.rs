@@ -5,10 +5,10 @@
 use crate::app::Message;
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::material::{
-    self, Button, ButtonVariant, Glyph, Scrollable, SurfaceKind, Text, TypeRole,
+    self, Button, ButtonVariant, IconLabel, Scrollable, SurfaceKind, Text, TypeRole,
 };
 use iced::widget::{column, row};
-use iced::{Alignment, Element, Length};
+use iced::{Element, Length};
 use micold_core::selector::{Selector, SelectorStatus};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
@@ -57,12 +57,9 @@ pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Mes
                             .align_y(iced::Alignment::Center);
                     if entry.is_git_repo {
                         label = label.push(
-                            row![
-                                Glyph::new(Icon::Git, TypeRole::Label, r).tint(badge_tint),
-                                Text::new("git", TypeRole::Label, r).muted(),
-                            ]
-                            .spacing(spacing::XS)
-                            .align_y(Alignment::Center),
+                            IconLabel::new(Icon::Git, "git", TypeRole::Label, r)
+                                .tint(badge_tint)
+                                .muted(),
                         );
                     }
                     list = list.push(
