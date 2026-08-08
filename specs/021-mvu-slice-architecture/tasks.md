@@ -104,7 +104,7 @@ All are separate files, so all are parallelizable.
 - [ ] T012 [P] [US2] Isolation test for notification types in `crates/micold-client/tests/features_notifications.rs`
 - [ ] T013 [P] [US2] Isolation test for session types in `crates/micold-client/tests/features_session.rs`
 - [ ] T014 [P] [US2] Isolation test for daemon-connection types in `crates/micold-client/tests/features_connection.rs`
-- [ ] T014a [P] [US2] Render-free guard in `crates/micold-client/tests/features_are_render_free.rs` asserting no module under `crates/micold-client/src/features/` names the rendering framework in code — comments excepted, matching the existing convention in `app.rs` (FR-006). Follows the mechanism of `crates/micold-client/tests/{material_boundary,cdk_no_appearance}.rs`. **This is a regression lock, not a migration**: the property holds today and the guard exists to keep it holding across eight extractions. Q2's decision to site feature modules in the client rests entirely on it
+- [X] T014a [P] [US2] Render-free guard in `crates/micold-client/tests/features_are_render_free.rs` asserting no module under `crates/micold-client/src/features/` names the rendering framework in code — comments excepted, matching the existing convention in `app.rs` (FR-006). Follows the mechanism of `crates/micold-client/tests/{material_boundary,cdk_no_appearance}.rs`. **This is a regression lock, not a migration**: the property holds today and the guard exists to keep it holding across eight extractions. Q2's decision to site feature modules in the client rests entirely on it
 
 ### Implementation for User Story 2 (part 1)
 
