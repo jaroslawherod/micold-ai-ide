@@ -8,7 +8,9 @@
 //! If a later change makes this file need another feature's types to compile, that feature
 //! boundary has eroded and the isolation SC-004 asserts is gone.
 
-use micold_client::features::worktree_form::{BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus};
+use micold_client::features::worktree_form::{
+    BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
+};
 use micold_core::naming::ConventionalType;
 
 #[test]
@@ -41,7 +43,10 @@ fn a_typed_name_makes_the_form_submittable() {
 fn resolution_state_reports_whether_it_is_prompting() {
     let idle = ResolutionState::default();
 
-    assert!(!idle.is_prompting(), "the default state prompts for nothing");
+    assert!(
+        !idle.is_prompting(),
+        "the default state prompts for nothing"
+    );
     assert!(
         idle.situation().is_none(),
         "with nothing to resolve there is no situation"
