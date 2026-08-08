@@ -82,6 +82,24 @@ jobs:
         run: cargo test --workspace
 
   # Constitution Principle VII: documentation ships and is verified in CI.
+  # Feature 021 (FR-027): the restructuring treats the existing suite as its behavior
+  # specification, which only works while the assertions are frozen. Advisory for now --
+  # `continue-on-error` lets its false-positive rate be observed on real pull requests before
+  # it is allowed to block a merge (task T074 promotes it).
+  assertions:
+    name: assertion freeze (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # needs history to diff against the base ref
+      - name: Assertions frozen since base
+        run: |
+          BASE="origin/${{ github.base_ref || 'main' }}"
+          git fetch --quiet origin "${{ github.base_ref || 'main' }}"
+          scripts/check-assertions-frozen.sh "$BASE"
+
   docs:
     name: docs check
     runs-on: ubuntu-latest

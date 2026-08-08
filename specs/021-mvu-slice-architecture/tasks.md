@@ -71,7 +71,7 @@ A task that needs a later task to compile is a planning error, not an acceptable
 rather than aspirational
 
 - [X] T004 Add an assertion-freeze check to `scripts/check-assertions-frozen.sh` that fails when `git diff <base>...HEAD -- crates/*/tests/` removes or alters a line matching `assert`, allowing pure relocation (the identical assertion re-added elsewhere in the same diff), per FR-027
-- [ ] T005 [P] Wire T004 into CI in `.github/workflows/ci.yml` as a non-blocking advisory job first, so its false-positive rate is known before it gates merges
+- [X] T005 [P] Wire T004 into CI in `.github/workflows/ci.yml` as a non-blocking advisory job first, so its false-positive rate is known before it gates merges
 - [ ] T006 [P] Confirm the baseline suite is green on Linux, macOS and Windows via CI before any change lands
 
 **Checkpoint**: Behavior drift and assertion tampering are both detectable. Extraction can start.
