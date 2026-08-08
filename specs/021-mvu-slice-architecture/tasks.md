@@ -110,7 +110,7 @@ All are separate files, so all are parallelizable.
 
 Sequential — every task edits `app.rs`, so none of these are parallelizable against each other.
 
-- [ ] T015 [US2] Move `WorktreeForm`, `WorktreeFormStatus`, `BranchSource`, `ResolutionState` and their impls from `crates/micold-client/src/app.rs:86–326` to `crates/micold-client/src/features/worktree_form.rs` (~240 lines)
+- [X] T015 [US2] Move `WorktreeForm`, `WorktreeFormStatus`, `BranchSource`, `ResolutionState` and their impls from `crates/micold-client/src/app.rs:86–326` to `crates/micold-client/src/features/worktree_form.rs` (~240 lines)
 - [ ] T016 [US2] Move `SidebarEntry`, `DefaultNode`, `WorktreeNode`, `TagFilter`, `matches_filters`, `worktree_location_label` from `crates/micold-client/src/app.rs:372–456` to `crates/micold-client/src/features/sidebar.rs` (~85 lines)
 - [ ] T017 [US2] Move `ProjectMenu`, `clamp_menu_anchor`, `SwitcherEntry`, `RenameDraft`, `SelectKind` from `crates/micold-client/src/app.rs:327–371, 457–497` to `crates/micold-client/src/features/project.rs` (~85 lines)
 - [ ] T018 [US2] Move `SettingsDraft` from `crates/micold-client/src/app.rs:469–484` to `crates/micold-client/src/features/settings.rs` (~16 lines)
