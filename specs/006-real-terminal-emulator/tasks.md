@@ -345,6 +345,62 @@ original scope was met. Added Phase 10 (T053–T056) for the sub-line scroll acc
 
 ---
 
+## Phase 12: Bugfix BUG-003 — a session spawns at the 100×30 seed and is never told the real size
+
+**Goal**: Make the *start* of a session convey the visible terminal size, and make that size state the
+session service owns rather than a command it can only deliver to a running process (FR-014a, SC-011,
+`010-daemon-session-persistence` FR-020a).
+
+### Tests for BUG-003 (MANDATORY — Constitution Principle I) ⚠️
+
+> Write these FIRST and ensure they FAIL before implementation.
+
+- [X] T060 [BUG-003] Write a failing daemon test in `crates/micold-daemon/tests/session_start.rs`: a
+  size requested for a session that has **no live process** is adopted by the subsequent spawn —
+  request 220×60, `start_session`, assert the spawned grid is 220×60 and not the 100×30 seed. Extend
+  it to the two spawn sites the first assertion does not reach: the crash respawn
+  (`respawn_primary`) and an additional Regular-terminal instance (`open_shell`) must come up at the
+  same recorded size (FR-014a, FR-020a, SC-011).
+- [X] T061 [BUG-003] Write a failing client test in `crates/micold-client/src/main.rs`'s
+  `#[cfg(test)]` module, over a real `Outbox` (the T100 pattern): selecting a session with a known
+  pane size queues `ClientMsg::SessionResize { cols, rows }` **before** `ClientMsg::SessionStart`,
+  and the same holds for the create path (`OperationOk { SessionCreated }`) and
+  `TerminalRestartRequested`. Closes the gap left by
+  `terminal_resized_remembers_the_pane_size_for_future_spawns`, which asserts `App::last_grid` is
+  stored and never that anything reads it (FR-014a).
+
+### Implementation for BUG-003
+
+- [X] T062 [BUG-003] In `crates/micold-daemon/src/state.rs`, give `DaemonState` a per-session
+  desired size that exists independently of a live process: record it on every `SessionResize`
+  (moved out of `server.rs`'s inline loop into a `resize_session` method so both the wire handler and
+  the tests drive one path), and seed `start_session`, `respawn_primary` and `open_shell` from it
+  instead of passing `initial_size: None`. Retain it across stop/start and detach; drop it when the
+  session is archived. Make T060 pass (FR-020a, FR-014a).
+- [X] T063 [BUG-003] In `crates/micold-client/src/main.rs`, actually read `App::last_grid`: send
+  `ClientMsg::SessionResize` from it immediately before the `SessionStart` in `view_and_start` and in
+  the `Message::SessionSelected` arm, so a session is started at the pane's real size rather than
+  corrected afterwards. Make T061 pass (FR-014a).
+- [X] T064 [BUG-003] Run the quickstart's sizing check on a display (Principle I visual pass): start
+  and select sessions in a maximised window without resizing it, and confirm the process's first
+  output fills the pane in both a fresh session and a resumed one (SC-011). *(Run 2026-08-09 via the
+  `visual-pass` skill — Xvfb `:77` at 1600×1400 + lavapipe, against a private daemon and catalog
+  (`XDG_RUNTIME_DIR` / `XDG_DATA_HOME` in a temp dir) so the user's live sessions were untouched. A
+  session started with **no resize after launch** came up with the AI CLI's interface spanning the
+  whole pane, and `stty size` on the spawned process's pty read **69 rows × 165 columns** — the pane,
+  not the 100×30 seed. Covers the fresh-start half of SC-011 on one platform; the resumed-session and
+  cross-platform halves rest on T060/T061 and the daemon suite.)*
+
+**Checkpoint**: A session started, resumed, selected or created in a window the user never resizes
+fills its pane from the first frame; a crash respawn and a second terminal instance come back at the
+same size.
+
+**Bugfix**: 2026-08-09 — BUG-003 Updated from bugfix patch. T029 (emit `TerminalResized` on layout
+change) is *not* reopened — it implements FR-015's change path exactly as specified, and the defect is
+the absence of a start-time path, which FR-014a adds. Added Phase 12 (T060–T064).
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

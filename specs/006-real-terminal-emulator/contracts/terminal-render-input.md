@@ -32,6 +32,14 @@ Canvas render over `content.grid.display_iter()`:
 
 - **Auto-resize**: when the widget's layout size changes, publish `Message::TerminalResized {
   cols, rows }` computed from `layout / cell metrics`. (FR-014/FR-015)
+- **Size at start (BUG-003, FR-014a).** A change is not the only trigger, and the widget is not the
+  only source. The last published `(cols, rows)` MUST be retained by the app and sent to the session
+  service **before** the `SessionStart` of any session being started, resumed, selected, or created —
+  otherwise a session started while the pane sat still is spawned at the service's default and never
+  corrected. The service MUST record a size per session whether or not that session has a live
+  process, and seed every spawn from it (initial start, crash respawn, additional terminal instance),
+  falling back to its default only for a session no size has ever been reported for. See
+  `010-daemon-session-persistence` FR-020a and its `contracts/protocol.md` `SessionResize` entry.
 - **Focus gate**: `if !state.is_focused { return Status::Ignored }` — unfocused events fall
   through to the app. (FR-009)
 - **Keyboard** (focused): build `KeyInput` from the iced event; `keymap::encode(input, mode)`:

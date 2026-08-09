@@ -626,19 +626,7 @@ where
                 session,
                 cols,
                 rows,
-            } => {
-                // Resize every one of the session's processes so a later attach-switch shows a
-                // correctly-sized grid, not the 100×30 spawn seed. PTY resize happens outside the
-                // state lock (the handles are cloned Arcs).
-                for pty in state.session_ptys(session) {
-                    if let Err(err) = pty.resize(cols, rows) {
-                        tracing::warn!(session = %session.0, %err, "resize failed");
-                    }
-                    // Force the stream to re-frame at the new size even for a process that doesn't
-                    // redraw on SIGWINCH (the framer treats a size change as structural → full frame).
-                    pty.signals().mark_dirty();
-                }
-            }
+            } => state.resize_session(session, cols, rows),
             ClientMsg::SessionKill { session } | ClientMsg::SessionStop { session } => {
                 // Stop the session's processes and drop it from the live registry (kill happens
                 // outside the state lock inside remove_session). TODO(T053): archive the durable

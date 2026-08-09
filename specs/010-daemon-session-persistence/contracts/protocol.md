@@ -284,7 +284,7 @@ Audit of the arms, as of 2026-08-06:
 | `SettingsSet`, `WorktreeRename`, `Project*`, `SessionDelete` | No — catalog + a small atomic file write | Left inline |
 | `Ping`, `Attach`, `Detach`, `SetViewedSession`, `SessionInput`, `Scrollback*` | No — lock-only or bounded | Left inline |
 
-#### Spawning a session start owes two more things (T125)
+#### Spawning a session start owes three more things (T125; the third added by BUG-003 of `006-real-terminal-emulator`)
 
 The worktree arms only had to preserve their own reply. A session start is different: other messages
 are *about* the thing it is creating, and the inline version made them safe by accident.
@@ -305,8 +305,21 @@ are *about* the thing it is creating, and the inline version made them safe by a
   so work finishing elsewhere reports to it rather than reaching in — the general shape for any
   future spawned work that the loop's own state depends on.
 
-Both are covered by `crates/micold-daemon/tests/busy_session_start.rs`, whose slow operation is a
-real environment-include script that sleeps.
+- **A size must be recorded, not delivered** (BUG-003 of `006-real-terminal-emulator`, FR-020a). Same
+  shape as held input, and it was missed for the same reason: `SessionResize` used to walk the
+  session's live PTYs and do nothing when there were none, so a size arriving before (or during) a
+  spawned start was discarded and the process came up at the daemon's own 100×30 seed. A size is
+  **state of the session**, not a command to a process: `DaemonState::resize_session` records
+  `(cols, rows)` per session whether or not it is live, and every spawn site — `start_session`,
+  `respawn_primary`, `open_shell` — seeds from that record, falling back to the seed only for a
+  session no client ever sized. It outlives stop, detach and disconnect (the spec's "Resize while
+  detached" edge case) and is dropped when the session is archived. Clients help by stating the size
+  *before* `SessionStart` rather than relying on a later change, but the daemon must not depend on
+  that ordering.
+
+The first two are covered by `crates/micold-daemon/tests/busy_session_start.rs`, whose slow operation
+is a real environment-include script that sleeps; the size rule is covered by
+`a_session_spawns_at_the_size_last_requested_for_it` in `tests/session_start.rs`.
 
 ---
 

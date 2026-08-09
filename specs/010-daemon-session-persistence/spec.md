@@ -286,7 +286,10 @@ a session survived; confirm it does not survive without the setting.
   bounded by the configured limit, oldest content is discarded first, and the service does not grow
   without bound.
 - **Resize while detached**: nothing is attached, so no viewer dimensions exist — the session keeps a
-  defined size and adopts the attaching client's size on attach.
+  defined size and adopts the attaching client's size on attach. *(BUG-003 of
+  `006-real-terminal-emulator`: this was specified here and built nowhere — the service kept no size
+  of its own, so a reported size reached live PTYs only and every spawn used a hardcoded default. Now
+  a requirement, FR-020a, and it covers the not-yet-spawned case as well as the detached one.)*
 - **Two windows, one project, one dies**: the holder of a project crashes without a clean release —
   the project must become attachable again without restarting the service.
 - **Deleting a worktree with a live session in it**: the operation must be refused or must stop the
@@ -438,6 +441,17 @@ a session survived; confirm it does not survive without the setting.
 - **FR-020**: Input, resize, kill, and start actions MUST be dispatched without the user interface
   waiting on a response; rendering, scrolling, and selection MUST be served from local state so no
   interaction stalls on communication with the service.
+- **FR-020a** (bugfix BUG-003 of `006-real-terminal-emulator`): A session's viewport size MUST be
+  state the service holds **per session**, not a command that only a running process can receive. The
+  service MUST record the size a client reports whether or not that session currently has a process —
+  including while a start it has already accepted is still in flight — and MUST use the recorded size
+  as the initial size of **every** process it spawns for that session: the first start, a resume, a
+  crash respawn (FR-005), and any additional terminal instance. The recorded size MUST survive stop,
+  detach, and disconnect (the "Resize while detached" edge case: the session keeps a defined size and
+  adopts the attaching client's size on attach) and MUST be dropped only when the session is archived.
+  The service's own default applies only to a session no client has ever reported a size for. A size
+  that reaches the service and is silently discarded because no process existed to receive it is a
+  violation of this requirement, not an accepted race.
 
 ### Connection, versioning, and exclusivity
 
@@ -681,6 +695,11 @@ plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
   and applied, and the agent logs no hook error — verified by an executable test that posts a payload
   at that measured size, not by a walkthrough (BUG-008). A payload past the receiver's bound is still
   refused, so the memory guarantee is proven to hold in the same test.
+- **SC-023** (bugfix BUG-003 of `006-real-terminal-emulator`): A size reported for a session that has
+  no process — including one whose start is still in flight — is the size that session's process is
+  spawned at, in 100% of cases; the service's default size appears only for a session no size was ever
+  reported for. Proven by an executable test, not a walkthrough, and covering the crash respawn and
+  additional-terminal-instance spawn paths as well as the first start.
 
 ---
 
@@ -808,3 +827,14 @@ configured) never reached a daemon-spawned session, even though the client (`mic
 resolves this correctly for its own launch path. FR-012b added (env-include is a service-owned
 setting the daemon MUST apply at every spawn site, mirroring FR-012a's scrollback precedent). See
 `bugs/BUG-003.md`.
+
+**Bugfix**: 2026-08-09 — BUG-003 of `006-real-terminal-emulator` (not this feature's own BUG-003
+above) The service held no notion of a session's size: `SessionResize` was applied to whatever PTYs
+happened to be live and otherwise discarded, and all three spawn sites used a hardcoded 100×30, so a
+session started after a client reported its size — routine, since starts are asynchronous — ran at
+that default in a much larger pane. FR-020a added (viewport size is per-session service state,
+recorded with or without a live process, seeding every spawn incl. respawn and extra terminal
+instances, surviving detach, dropped on archive) and SC-023 added; the "Resize while detached" edge
+case annotated to record that it specified this behaviour and nothing implemented it.
+`contracts/protocol.md`'s `SessionResize` entry updated accordingly. See
+`../006-real-terminal-emulator/bugs/BUG-003.md`.

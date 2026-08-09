@@ -611,6 +611,17 @@ control plane you can read by eye is the justification for carrying two encoding
    about it arrived, owning state only it may touch — becomes an explicit obligation, and each one
    is a silent failure if missed. Spawning a git command owed one (its reply); spawning a session
    start owed four.
+   **Widened 2026-08-09 (BUG-003 of `006-real-terminal-emulator`)**: five. `SessionResize` was the
+   obligation nobody counted, and it is the one that shows the audit was not exhaustive: the two
+   found in 2026-08-06 were both about a message arriving *before* the session existed, and this is
+   a third of exactly that shape — a size reported for a session with no PTY was applied to an empty
+   list of processes and lost, so the spawn used the daemon's own default and the terminal ran at
+   100×30 in a pane three times that. The generalisable half is narrower than "spawned work owes
+   things" and worth stating on its own: **a message that mutates a session's configuration must be
+   recorded as state, not delivered as a command**, or it is undeliverable exactly when the session
+   is youngest. Held input (T125) solved this by buffering and replaying; size is simpler — record it
+   and read it at spawn (FR-020a) — but both exist because the arm was written against a session that
+   was already live.
 
 ---
 
@@ -649,3 +660,10 @@ sized against measured payloads to count as a mitigation rather than a new failu
 again, asserted client-side rather than on the wire), and widened Risk 8's generalisation — re-read
 authoritative state on every reply that carries it, not only on connect, and make sure the client's
 copy can move in both directions. See `bugs/BUG-007.md`.
+
+**Bugfix**: 2026-08-09 — BUG-003 of `006-real-terminal-emulator` Updated from bugfix patch: widened
+Risk 9 with a fifth obligation a spawned start owes (a session's size must be *recorded as state*,
+not delivered as a command to a process that may not exist yet), which is also the general rule for
+any future per-session configuration message. `DaemonState` gains a per-session `(cols, rows)` beside
+its live registry, and the three spawn sites (`start_session`, `respawn_primary`, `open_shell`) read
+it instead of passing `None`. See `../006-real-terminal-emulator/bugs/BUG-003.md`.

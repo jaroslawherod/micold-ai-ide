@@ -1557,3 +1557,32 @@ ungraceful one (so draining is required, not merely nicer), and the first drain 
 declares more than it sends (so the drain needs a deadline, not just a byte cap). `mise run test`
 green (162 groups, 1,416 tests), `cargo clippy --workspace --all-targets -- -D warnings` and
 `cargo fmt --check` clean. See `bugs/BUG-010.md`.
+
+---
+
+## Phase 25: Bugfix BUG-003 of `006-real-terminal-emulator` — the service keeps no size, so every spawn is 100×30
+
+**Goal**: Make a session's viewport size service-owned state that exists without a live process and
+seeds every spawn (FR-020a, SC-023). The client half of the same bug lives in
+`006-real-terminal-emulator` Phase 12 (T060–T064).
+
+- [X] T131 [BUG-003/006] Failing test in `crates/micold-daemon/tests/session_start.rs`: a size
+  requested for a session with **no live process** is the size its spawn comes up at (220×60, not the
+  100×30 seed), and the same holds for the crash respawn and for an additional shell instance opened
+  later. Sits beside `busy_session_start.rs`'s held-input tests — same hazard class, third instance
+  (protocol.md §5 "Spawning a session start owes three more things").
+- [X] T132 [BUG-003/006] In `crates/micold-daemon/src/state.rs`, hold `(cols, rows)` per session in
+  `Inner`, independent of the live registry: `resize_session` (lifted out of `server.rs`'s inline
+  `ClientMsg::SessionResize` loop, so the wire path and the tests share one entry point) records it
+  and then resizes whatever PTYs exist; `start_session`, `respawn_primary` and `open_shell` pass it
+  as `initial_size` instead of `None`. Retained across stop/detach/disconnect, dropped with the
+  session's live entry only on archive (`remove_live_by_ids`). Makes T131 pass (FR-020a).
+
+**Checkpoint**: A client that states a size for a session before starting it — or while its start is
+still in flight — gets a process at that size, and so does every later process of that session.
+
+**Bugfix**: 2026-08-09 — BUG-003 of `006-real-terminal-emulator` Updated from bugfix patch. **No task
+reopened** — T053's spawn sites and the `SessionResize` arm implement what was specified; the spec
+never made session size service-owned state (its "Resize while detached" edge case said so and no FR
+carried it). Added FR-020a and SC-023 to `spec.md`, the third bullet to `contracts/protocol.md`'s
+spawned-start section, and Phase 25 (T131–T132). See `../006-real-terminal-emulator/bugs/BUG-003.md`.
