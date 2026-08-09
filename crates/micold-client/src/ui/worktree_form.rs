@@ -7,7 +7,7 @@
 //! branch-name collision from a dead-end error into a decision panel rendered in place of the
 //! normal actions, so cancelling leaves every input where the user left it (FR-007).
 
-use crate::app::{FieldId, Message};
+use crate::app::{FieldId, Message, State};
 use crate::features::worktree_form::{
     BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
@@ -18,6 +18,7 @@ use crate::ui::material::{
 };
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
+use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
@@ -460,4 +461,26 @@ fn preview<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
         .into(),
         Err(_) => Space::new().height(Length::Fixed(0.0)).into(),
     }
+}
+
+/// This dialog's body, built from the state that opened it — `None` when the surface is open but
+/// the live state it renders is absent, so nothing is drawn rather than an empty dialog.
+///
+/// The uniform shape every registered dialog has, and the reason `ui::view` no longer needs a
+/// match: the registration line in [`crate::overlay::registry`] names this beside the surface it
+/// draws, so a dialog says where its own state lives instead of a central arm saying it for them
+/// all (feature 021, T035 — FR-008, FR-009).
+pub fn dialog<'a>(
+    state: &'a State,
+    scheme: ColorScheme,
+    _env_include_outcome: &'a EnvIncludeOutcome,
+) -> Option<Element<'a, Message>> {
+    state.worktree_form.as_ref().map(|form| {
+        modal(
+            form,
+            state.worktree_error.as_deref(),
+            scheme,
+            state.focused_field,
+        )
+    })
 }

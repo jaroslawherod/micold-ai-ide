@@ -3,11 +3,12 @@
 //! its catalog entry and per-project state (name, worktree-name overrides, session records).
 //! Nothing on disk (the folder, its files, or any git worktrees) is deleted; the dialog says so.
 
-use crate::app::Message;
+use crate::app::{Message, State};
 use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
 use iced::Element;
 use iced::Length;
+use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self};
 
@@ -67,4 +68,31 @@ pub fn modal<'a>(
     .width(Length::Fixed(460.0));
 
     dialog.into()
+}
+
+/// This dialog's body, built from the state that opened it — `None` when the surface is open but
+/// the live state it renders is absent, so nothing is drawn rather than an empty dialog.
+///
+/// The uniform shape every registered dialog has, and the reason `ui::view` no longer needs a
+/// match: the registration line in [`crate::overlay::registry`] names this beside the surface it
+/// draws, so a dialog says where its own state lives instead of a central arm saying it for them
+/// all (feature 021, T035 — FR-008, FR-009).
+pub fn dialog<'a>(
+    state: &'a State,
+    scheme: ColorScheme,
+    _env_include_outcome: &'a EnvIncludeOutcome,
+) -> Option<Element<'a, Message>> {
+    state.forget_target.as_ref().map(|path| {
+        // The display name and running-session count are read from the catalog/sessions at
+        // render time; the count (FR-002a) is exactly the set the binary will stop.
+        let display_name = state
+            .workspace
+            .projects
+            .iter()
+            .find(|p| &p.path == path)
+            .map(|p| p.display_name.clone())
+            .unwrap_or_else(|| micold_core::project::default_display_name(path));
+        let running = state.workspace.running_session_count(path);
+        modal(&display_name, running, scheme)
+    })
 }

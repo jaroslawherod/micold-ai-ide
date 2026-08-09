@@ -1,10 +1,10 @@
 //! iced rendering layer for the main window. Bin-only; compiled with the `gui` feature.
 
-mod about;
+pub(crate) mod about;
 pub mod cdk;
-mod confirm_delete;
-mod confirm_forget;
-mod confirm_session_remove;
+pub(crate) mod confirm_delete;
+pub(crate) mod confirm_forget;
+pub(crate) mod confirm_session_remove;
 mod focus;
 /// The component library. `pub(crate)` rather than private to `ui`, so the component showcase
 /// (feature 020, `crate::showcase`) can compose the very same components the application renders —
@@ -20,9 +20,9 @@ pub(crate) mod material;
 /// traversal that can reach a ripple's per-instance state — and nothing else from the library.
 pub use material::ripple_pulse;
 pub use material::target_offset_delta;
-mod project_selector;
-mod rename;
-mod settings_form;
+pub(crate) mod project_selector;
+pub(crate) mod rename;
+pub(crate) mod settings_form;
 mod shell;
 mod sidebar;
 // The application's theme — the only thing the styling layer exposes beyond the component
@@ -31,8 +31,8 @@ mod sidebar;
 pub use material::theme;
 pub mod terminal;
 mod toolbar;
-mod worktree_form;
-mod worktree_rename;
+pub(crate) mod worktree_form;
+pub(crate) mod worktree_rename;
 
 use crate::app::{Message, Overlay, State};
 use crate::icons::{icon_role, Icon, IconSurface};
@@ -41,6 +41,27 @@ use iced::{Element, Length, Subscription};
 use micold_core::session::SessionId;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
+
+/// How a dialog builds its body from the state that opened it.
+///
+/// The render half of a floating surface. It is *not* on [`FloatingSurface`](crate::overlay::
+/// FloatingSurface), and cannot be: FR-006 forbids a feature module naming a rendering framework,
+/// and Tier 1 sited views here, beside the feature rather than inside it. So the two halves are
+/// named together on the surface's registration line instead — one line still buys a whole
+/// surface, which is what FR-009 asks for.
+///
+/// `None` means the surface is open but the live state it draws is absent: render nothing rather
+/// than an empty dialog.
+///
+/// A bare `fn` pointer rather than a boxed closure so it can sit in a `static` registration table
+/// and be `Copy`. Every dialog takes the same three arguments whether or not it needs all of them,
+/// which is the price of the uniformity — an environment-include outcome is meaningless to the
+/// About box, but a signature that varied per dialog could not be dispatched generically at all.
+pub type DialogView = for<'a> fn(
+    &'a State,
+    ColorScheme,
+    &'a micold_core::env_include::EnvIncludeOutcome,
+) -> Option<Element<'a, Message>>;
 
 /// Where the sidebar's own context menus open: just inside the sidebar, below the app bar.
 ///
@@ -317,73 +338,24 @@ pub fn view<'a>(
     // behind (captured before the core cleared its live state) so the exit has something to draw
     // (FR-002). Each of these builds only the dialog; the transition around it belongs to `Modal`,
     // which owns the three tracks that carry it in and out.
-    let dialog: Option<Element<'a, Message>> = match state.overlay {
-        Overlay::None => {
-            dismissing.map(|closing| dismissing_dialog(closing, scheme, env_include_outcome))
-        }
-        Overlay::About => Some(about::modal(scheme)),
-        // Overlay flagged but no live state — render nothing rather than an empty dialog.
-        Overlay::ProjectSelector => state
-            .selector
-            .as_ref()
-            .map(|selector| project_selector::modal(selector, scheme)),
-        Overlay::RenameProject => state
-            .rename_draft
-            .as_ref()
-            .map(|draft| rename::modal(draft, scheme, state.focused_field)),
-        Overlay::AddWorktree => state.worktree_form.as_ref().map(|form| {
-            worktree_form::modal(
-                form,
-                state.worktree_error.as_deref(),
-                scheme,
-                state.focused_field,
-            )
-        }),
-        Overlay::Settings => state.settings_draft.as_ref().map(|draft| {
-            settings_form::modal(draft, scheme, env_include_outcome, state.focused_field)
-        }),
-        Overlay::ConfirmWorktreeDelete => state.worktree_delete_target.as_ref().map(|dir| {
-            let branch = state
-                .worktrees
-                .iter()
-                .find(|w| &w.dir_name == dir)
-                .and_then(|w| w.branch.as_deref());
-            confirm_delete::modal(
-                dir,
-                &state.worktree_display_name(dir),
-                branch,
-                state.worktree_delete_keep_branch,
-                scheme,
-            )
-        }),
-        Overlay::RenameWorktree => state
-            .worktree_rename_draft
-            .as_ref()
-            .map(|draft| worktree_rename::modal(draft, scheme, state.focused_field)),
-        Overlay::ConfirmSessionRemove => state
-            .session_remove_target
-            .and_then(|id| state.workspace.find_session(id))
-            .map(|(_, session)| confirm_session_remove::modal(session.label.display(), scheme)),
-        Overlay::ConfirmForgetProject => state.forget_target.as_ref().map(|path| {
-            // The display name and running-session count are read from the catalog/sessions at
-            // render time; the count (FR-002a) is exactly the set the binary will stop.
-            let display_name = state
-                .workspace
-                .projects
-                .iter()
-                .find(|p| &p.path == path)
-                .map(|p| p.display_name.clone())
-                .unwrap_or_else(|| micold_core::project::default_display_name(path));
-            let running = state.workspace.running_session_count(path);
-            confirm_forget::modal(&display_name, running, scheme)
-        }),
+    // Which dialog, from the registry; how to draw it, from the view its registration line names.
+    // This was a ten-arm match over the overlay enum — every dialog's state lookup written out
+    // here, hundreds of lines from the dialog it belonged to, and one more arm to remember for
+    // every dialog anyone added. Each of those lookups now lives beside the dialog that needs it
+    // (feature 021, T035 — FR-008, SC-001).
+    let open_dialog = crate::overlay::registry::open_dialog(state);
+    let dialog: Option<Element<'a, Message>> = match &open_dialog {
+        Some(open) => open
+            .view()
+            .and_then(|view| view(state, scheme, env_include_outcome)),
+        None => dismissing.map(|closing| dismissing_dialog(closing, scheme, env_include_outcome)),
     };
 
     let modal: Option<cdk::overlay::Surface<'a, Message>> = dialog.map(|dialog| {
         // A snapshot is a dialog on its way out: nothing is open behind it, so it is not shown and
         // has nothing left to cancel.
         let mut modal = material::Modal::new(dialog, roles)
-            .shown(state.overlay != Overlay::None)
+            .shown(open_dialog.is_some())
             // The identity of the dialog being rendered, which for a snapshot is the one it was
             // taken of — not `Overlay::None`, which is merely where the application has got to.
             .restart_on(overlay_key(match dismissing {
