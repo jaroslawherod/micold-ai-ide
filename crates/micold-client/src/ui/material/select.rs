@@ -31,6 +31,11 @@
 //! are assembled inside [`Widget::layout`], where `&mut self` and `&mut Tree` are both in hand,
 //! and `tree.diff_children` keeps the assembled subtree's own state across frames.
 //!
+//! Assembling there costs one thing, and it is not obvious: [`Widget::diff`] must then be
+//! **overridden to do nothing**, because iced's default implementation clears the children a
+//! `children()` would have supplied — and this one supplies them a step later. Leaving the default
+//! in place discarded the list's entrance on every rebuild and made it blink (BUG-001).
+//!
 //! The single child is a [`cdk::picker::Picker`], so there is exactly one hand-written overlay in
 //! this application and it is not this one (`one_overlay_implementation.rs`).
 //!
@@ -379,6 +384,21 @@ where
     fn children(&self) -> Vec<Tree> {
         Vec::new()
     }
+
+    /// Deliberately empty, and the emptiness is load-bearing.
+    ///
+    /// iced's *default* `diff` is `tree.children.clear()`, which is right for a widget that hands
+    /// its children over in [`Widget::children`] — there is nothing to keep. This one assembles its
+    /// child in [`Widget::layout`] instead, so clearing here throws away a subtree that is still in
+    /// use: the list's scroll position, a ripple mid-flight, and the menu's entrance transition.
+    /// The transition is the visible one — a discarded track starts over from zero, the restart
+    /// asks for another frame, that frame re-runs `view()` and discards it again, and the list
+    /// blinks forever (BUG-001).
+    ///
+    /// `layout` runs on every frame a rebuild does, and diffs the freshly assembled child in. So
+    /// leaving the subtree alone here loses nothing: reconciliation still happens, one step later,
+    /// against a child that actually exists.
+    fn diff(&self, _tree: &mut Tree) {}
 
     /// The wrapper's shape, not the child's: `FormField` fills its width and is sized by its own
     /// content, and this has to answer before there is a child to ask.
