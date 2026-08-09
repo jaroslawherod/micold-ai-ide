@@ -50,7 +50,7 @@ description = "Build the release GUI binary [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client"
 
 [tasks.sweep]
-description = "Reclaim space in the shared target dir (default: artifacts unused for 7 days) [build-locked]"
+description = "Reclaim space in every target dir -- shared and per-worktree (default: artifacts unused for 7 days) [build-locked]"
 run = """
 command -v cargo-sweep >/dev/null 2>&1 || cargo install cargo-sweep --locked
 
@@ -64,17 +64,22 @@ if [ -z "${SWEEP_FORCE:-}" ] && pgrep -x cargo >/dev/null 2>&1; then
   exit 1
 fi
 
-# cargo-sweep reads target-dir from .cargo/config.toml itself, so it finds
-# target-shared unaided. Do NOT pass that directory as its [PATH] argument:
-# [PATH] is a *project* path and cargo-sweep will look for a Cargo.toml in it.
+# sweep-targets.sh walks `git worktree list` and sweeps each checkout's own
+# target dir, because there are two of them: `mise run` builds land in the
+# shared dir beside the main checkout (build-lock.sh exports CARGO_TARGET_DIR),
+# while a bare `cargo` in a worktree resolves target-dir from that worktree's
+# own .cargo/config.toml and builds beside the worktree instead. Sweeping only
+# the shared one leaves the per-worktree dirs growing unbounded.
+#
+# It is run *through* build-lock.sh for the lock, and unsets the exported
+# CARGO_TARGET_DIR itself so that lock does not pin every pass to one directory.
 #
 # SWEEP_ARGS overrides the default, e.g.
 #   SWEEP_ARGS='--dry-run --time 7' mise run sweep     # show what would go
-#   SWEEP_ARGS='--maxsize 50GB'     mise run sweep     # bound the directory
+#   SWEEP_ARGS='--maxsize 50GB'     mise run sweep     # bound each directory
 #   SWEEP_ARGS='--installed'        mise run sweep     # drop old toolchains
 args="${SWEEP_ARGS:-"--time 7"}"
-echo "sweep: cargo sweep $args"
-{{config_root}}/scripts/build-lock.sh cargo sweep $args
+{{config_root}}/scripts/build-lock.sh {{config_root}}/scripts/sweep-targets.sh $args
 """
 
 [tasks.deb]
