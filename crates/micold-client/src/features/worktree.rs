@@ -16,6 +16,7 @@
 //! itself, at which point these operate on the worktree feature's own state.
 
 use crate::app::Message;
+use crate::app::Overlay;
 use crate::app::State;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
@@ -124,5 +125,53 @@ impl Registered for WorktreeContextMenu {
             .worktree_menu_open
             .as_ref()
             .map(|_| WorktreeContextMenu)
+    }
+}
+
+/// The confirm-delete-worktree dialog, as a floating surface (feature 021, T032).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmWorktreeDeleteDialog;
+
+impl FloatingSurface for ConfirmWorktreeDeleteDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("confirm_worktree_delete")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::WorktreeDeleteCancelled)
+    }
+}
+
+impl Registered for ConfirmWorktreeDeleteDialog {
+    fn open_in(state: &State) -> Option<Self> {
+        (state.overlay == Overlay::ConfirmWorktreeDelete).then_some(ConfirmWorktreeDeleteDialog)
+    }
+}
+
+/// The rename-worktree dialog, as a floating surface (feature 021, T032).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenameWorktreeDialog;
+
+impl FloatingSurface for RenameWorktreeDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("rename_worktree")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::WorktreeRenameCancelled)
+    }
+}
+
+impl Registered for RenameWorktreeDialog {
+    fn open_in(state: &State) -> Option<Self> {
+        (state.overlay == Overlay::RenameWorktree).then_some(RenameWorktreeDialog)
     }
 }

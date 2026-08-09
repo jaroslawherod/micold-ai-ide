@@ -8,9 +8,13 @@
 //!
 //! Render-free, like every module here: `tests/features_are_render_free.rs` holds that line.
 
+use crate::app::{Message, Overlay, State};
+use crate::overlay::registry::Registered;
+use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{
     derive, dir_name_from_branch, ConventionalType, DerivedNames, NamingError, WorktreeNaming,
 };
+use micold_core::overlay::Layer;
 use micold_core::typeahead::{rank, Match, Query};
 use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
@@ -258,5 +262,29 @@ impl WorktreeForm {
             }
             BranchSituation::Blocked { .. } | BranchSituation::DirectoryTaken { .. } => None,
         }
+    }
+}
+
+/// The add-worktree form, as a floating surface (feature 021, T032).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AddWorktreeDialog;
+
+impl FloatingSurface for AddWorktreeDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("add_worktree")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::AddWorktreeCancelled)
+    }
+}
+
+impl Registered for AddWorktreeDialog {
+    fn open_in(state: &State) -> Option<Self> {
+        (state.overlay == Overlay::AddWorktree).then_some(AddWorktreeDialog)
     }
 }

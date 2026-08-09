@@ -132,7 +132,10 @@ fn the_scan_actually_finds_the_overlay_layer() {
         .map(|d| d.name)
         .collect();
 
-    for expected in ["SurfaceId", "DismissalRules", "Open", "ModalSurface"] {
+    // Three, since T032 moved the last surface *type* out of this directory and into the feature
+    // modules that own the surfaces. What is left here is the vocabulary itself, which is the
+    // point: the layer describes surfaces without containing any.
+    for expected in ["SurfaceId", "DismissalRules", "Open"] {
         assert!(
             found.contains(&expected.to_string()),
             "expected `{expected}` among the overlay layer's structs, found {found:?} — a scan \

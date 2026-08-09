@@ -66,6 +66,23 @@ fn the_registry_and_the_enum_answer_escape_identically_in_every_state() {
 }
 
 #[test]
+fn the_registry_and_the_enum_agree_on_which_surface_that_is() {
+    // Not just *what closes it* but *which surface it is*. T035 keys the view and the exit
+    // animation on identity, so an id typo'd in a feature module would move a dialog's transition
+    // rather than break its dismissal — a failure the equivalence above cannot see.
+    for overlay in OVERLAYS {
+        let state = state(*overlay, false);
+        let from_registry = registry::topmost(&state).map(|open| open.id());
+        let from_enum = overlay.as_surface().map(|(id, _)| id);
+
+        assert_eq!(
+            from_registry, from_enum,
+            "{overlay:?}: the registry and the enum name different surfaces"
+        );
+    }
+}
+
+#[test]
 fn every_variant_is_in_the_list() {
     // `as_surface` is the enum's own account of itself; a variant added without one is a surface
     // the registry cannot see. The compiler catches the missing arm, and this catches the case

@@ -13,6 +13,7 @@
 //! the type rather than the module, so moving them changed no call site.
 
 use crate::app::Message;
+use crate::app::Overlay;
 use crate::app::State;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
@@ -229,5 +230,29 @@ impl FloatingSurface for TerminalContextMenu {
 impl Registered for TerminalContextMenu {
     fn open_in(state: &State) -> Option<Self> {
         state.terminal_context_menu.map(|_| TerminalContextMenu)
+    }
+}
+
+/// The confirm-remove-session dialog, as a floating surface (feature 021, T032).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmSessionRemoveDialog;
+
+impl FloatingSurface for ConfirmSessionRemoveDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("confirm_session_remove")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::SessionRemoveCancelled)
+    }
+}
+
+impl Registered for ConfirmSessionRemoveDialog {
+    fn open_in(state: &State) -> Option<Self> {
+        (state.overlay == Overlay::ConfirmSessionRemove).then_some(ConfirmSessionRemoveDialog)
     }
 }
