@@ -1287,3 +1287,25 @@ it (SC-008e).
   > label is also `primary`. Same two-colour control, four call sites, none of them this feature's
   > subject. `shell.rs:108` is **not** one of them — its `error` tint on a Delete action is a
   > deliberate semantic override, which is why `leading` must keep taking a tint at all.
+  >
+  > **Both of those held only until the follow-up**, which fixed the three other call sites at the
+  > source instead: `Button::leading` now takes no tint and resolves the variant's own content
+  > colour, `Button::leading_tinted` is the explicit override the Delete action uses, and
+  > `IconSurface::AccentButton` — named above — is gone, because no call site names the accent any
+  > more (BUG-007 follow-up, 2026-08-09).
+
+  > **Second pass, 2026-08-09, on merged `main` (`24379b7`)** — the same `visual-pass` route
+  > (private Xvfb under lavapipe, `xdotool`, isolated `XDG_*`, cleaned up by PID), re-run after the
+  > follow-up landed, and this time in **both schemes**.
+  >
+  > **Passed.** Dark at rest: folder glyph and `micold-ai-ide` on one baseline, both in the accent
+  > tone — the two-colour defect above is closed at the merged state, not just in the branch that
+  > fixed it. Hover: the state layer covers the whole button, glyph and label together, rather than
+  > the glyph alone. Open: the panel hangs below the bar and its divider at the shared 240dp width,
+  > `micold-ai-ide` carries the active marker, `switcher-branch` is unmarked with its label starting
+  > at the same x (FR-006a), and "Add project…" trails. Light: the same treatment at rest and open,
+  > legible throughout — the app bar's mean of 0.9775 is what confirms the scheme actually flipped
+  > rather than the capture being mislabelled.
+  >
+  > **Still unrun**, unchanged from the first pass: the mid-flight look of the fade, for the same
+  > reason.
