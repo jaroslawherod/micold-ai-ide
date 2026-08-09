@@ -7,6 +7,10 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # See the matching note in release.yml. The shared target directory in .cargo/config.toml is a
+  # local-machine concession to many concurrent worktrees; on a runner it only breaks
+  # Swatinem/rust-cache, which caches ./target and would restore and save nothing.
+  CARGO_TARGET_DIR: target
 
 jobs:
   # Formatting + lints run once on Linux (they are platform-independent).
