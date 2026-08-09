@@ -10,6 +10,11 @@
 //! have followed the line range rather than the feature — the exact mistake FR-001 exists to
 //! correct — so it stays put for the session module (T021).
 
+use crate::app::Message;
+use crate::app::State;
+use crate::overlay::registry::Registered;
+use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use micold_core::overlay::Layer;
 use micold_core::project::RenameError;
 use std::path::PathBuf;
 
@@ -67,4 +72,60 @@ pub struct RenameDraft {
     pub text: String,
     /// The last validation error, if the user tried to confirm an invalid name (FR-020).
     pub error: Option<RenameError>,
+}
+
+/// The project-switcher panel, as a floating surface (feature 021, T031).
+///
+/// A marker: the rows are projected from the workspace at render time, so "open" is all the
+/// panel itself stores.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectSwitcher;
+
+impl FloatingSurface for ProjectSwitcher {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("project_switcher")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Popover
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Popover).cancelled_by(Message::ProjectSwitcherToggled)
+    }
+}
+
+impl Registered for ProjectSwitcher {
+    fn open_in(state: &State) -> Option<Self> {
+        state.project_switcher_open.then_some(ProjectSwitcher)
+    }
+}
+
+/// A project row's right-click menu, as a floating surface (feature 021, T031).
+///
+/// [`Layer::ContextMenu`] rather than [`Layer::Popover`]: it is opened *over* the switcher it was
+/// right-clicked in, and the row it acts on has to stay visible behind it. That was a property of
+/// the order `ui::view` happened to build the two in; declaring the band makes it a property of
+/// what the menu is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectContextMenu;
+
+impl FloatingSurface for ProjectContextMenu {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("project_menu")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::ContextMenu
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::ContextMenu).cancelled_by(Message::ProjectMenuDismissed)
+    }
+}
+
+impl Registered for ProjectContextMenu {
+    fn open_in(state: &State) -> Option<Self> {
+        state.project_menu_open.as_ref().map(|_| ProjectContextMenu)
+    }
 }

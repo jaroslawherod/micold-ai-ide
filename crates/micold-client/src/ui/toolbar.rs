@@ -3,7 +3,8 @@
 //! (three dots). The menu's items — a cycling theme-mode toggle and "About" — float as an
 //! overlay (see [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
 
-use crate::app::{help_actions, Message, State};
+use crate::app::{Message, State};
+use crate::features::help::help_actions;
 use crate::icons::Icon;
 use crate::ui::material::{Button, MenuItem, MenuTrigger, Toolbar};
 use iced::Element;

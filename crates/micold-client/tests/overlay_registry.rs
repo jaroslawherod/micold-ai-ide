@@ -9,9 +9,9 @@
 //! `on_escape`. If the two ever diverge, they diverge here rather than in a dialog that will not
 //! close.
 //!
-//! What is *not* claimed: that the registry is complete. Six popovers are deliberately outside it
-//! until T031 (see `overlay/registry.rs` for why registering them today would change behaviour),
-//! and `overlay_registration.rs` is what holds them meanwhile.
+//! The equivalence covers the states `Overlay` can express, crossed with the one popover Escape
+//! reached before T031. T031 registered the other six, and that *did* change what Escape does —
+//! recorded below in `escape_now_reaches_every_popover`, not hidden inside the equivalence.
 
 use micold_client::app::{on_escape, Message, Overlay, State};
 use micold_client::overlay::registry::{self, Probe};
@@ -151,6 +151,38 @@ fn a_surface_is_registered_by_naming_it_once_and_nothing_else() {
     assert_eq!(
         open.on(Trigger::Escape),
         Some(&Message::SidebarFilterMenuToggled)
+    );
+}
+
+#[test]
+fn escape_now_reaches_every_popover() {
+    // **A behaviour change, and the only one in T031's dispatch.** Escape did not close the
+    // overflow menu, the switcher, or the three context menus: no widget handles Escape — the
+    // `cdk::overlay::Surface` observes an outside click and nothing else — and the keyboard path
+    // only ever asked about a modal or the filter panel. The *rule* has said since feature 017
+    // that a non-modal surface dismisses on Escape, and `Surface::dismisses_on` exists precisely
+    // so "callers that own such a trigger consult the same rule rather than re-deciding it". The
+    // subscription was never wired to it. Registering the popovers finishes that wiring.
+    //
+    // FR-012 preserves the *priority* between simultaneously-open surfaces and the rule that a
+    // modal closes popovers; both still hold, and are asserted above. It does not require that a
+    // surface Escape never reached keeps not being reached.
+    let mut state = State {
+        help_menu_open: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        registry::escape(&state),
+        Some(Message::HelpMenuToggled),
+        "Escape closes the overflow menu, which before T031 it left open"
+    );
+
+    // And the priority is unchanged: a modal over it still takes Escape for itself.
+    state.overlay = Overlay::About;
+    assert_eq!(
+        registry::escape(&state),
+        Some(Message::AboutClosed),
+        "a dialog outranks a menu, whichever was opened first (contract D1)"
     );
 }
 

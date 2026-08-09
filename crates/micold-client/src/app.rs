@@ -33,22 +33,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// The labels of the actions revealed under the "Help" menu, in display order.
-///
-/// "Help" exposes exactly one action — "About" (FR-003, FR-004).
-pub const HELP_ACTIONS: [&str; 1] = ["About"];
-
 /// Minimum sidebar width in pixels (resize lower bound).
 pub const SIDEBAR_MIN_WIDTH: u16 = 180;
 /// Maximum sidebar width in pixels (resize upper bound).
 pub const SIDEBAR_MAX_WIDTH: u16 = 600;
 /// Default sidebar width in pixels, used until the user resizes it.
 pub const SIDEBAR_DEFAULT_WIDTH: u16 = 300;
-
-/// The actions under the "Help" menu. See [`HELP_ACTIONS`].
-pub fn help_actions() -> &'static [&'static str] {
-    &HELP_ACTIONS
-}
 
 /// Which modal overlay, if any, is currently shown over the main window.
 ///
@@ -739,15 +729,10 @@ impl State {
     /// and must survive it. Shared by the two messages that can report a scroll so the rule has one
     /// caller-visible answer rather than two that can drift.
     fn dismiss_on_scroll_beneath(&mut self) {
-        use micold_core::overlay::{dismisses, Surface as OverlaySurface, Trigger};
-        if dismisses(OverlaySurface::NonModal, Trigger::ScrollBeneath) {
-            self.help_menu_open = false;
-            self.project_switcher_open = false;
-            self.sidebar_filter_open = false;
-            self.project_menu_open = None;
-            self.worktree_menu_open = None;
-            self.session_menu_open = None;
-        }
+        // Which surfaces the trigger reaches is the registry's answer now, not a list here. It
+        // used to name six of the seven popovers; the seventh, the terminal's context menu, is
+        // included from T031 — it is a non-modal surface and the core rule has always said so.
+        crate::overlay::registry::close_on_scroll_beneath(self);
     }
 
     /// Surface a failed action to the user (see [`notify::Notification`]).
@@ -779,12 +764,14 @@ impl State {
     /// so it was possible to open e.g. the Add Worktree form while the filter panel was still
     /// (invisibly) open, leaving Escape's two implementations disagreeing about what to
     /// dismiss. Routing every overlay-open through here makes that reset unconditional.
+    /// Since T031 the popovers are closed by asking the registry which are open rather than by
+    /// assigning to four remembered fields — so the three this list had never mentioned
+    /// (`worktree_menu_open`, `session_menu_open`, `terminal_context_menu`) are now closed too.
+    /// The first two were cleared by hand in the six reducer arms that open a modal from them,
+    /// which is the arrangement this replaces; the third was closed by nothing.
     pub fn open_overlay(&mut self, overlay: Overlay) {
         self.overlay = overlay;
-        self.help_menu_open = false;
-        self.project_switcher_open = false;
-        self.sidebar_filter_open = false;
-        self.project_menu_open = None;
+        crate::overlay::registry::close_popovers(self);
         // A dialog opens with nothing focused. The fields that reported focus belong to a widget
         // tree that is being torn down and will never report losing it, so a remembered focus would
         // outlive them — and reopening the same dialog would draw its field focused over an input

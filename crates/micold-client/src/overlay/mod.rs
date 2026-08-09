@@ -119,6 +119,17 @@ impl DismissalRules {
         self.kind
     }
 
+    /// The message this surface's cancellation sends, whatever prompted it.
+    ///
+    /// [`Self::on`] is the one to reach for: it pairs the message with the question "does this
+    /// trigger close it?", and a caller that asks the two separately has two chances to mismatch
+    /// them. This exists for the caller that is not answering a trigger at all — a modal opening
+    /// closes the popovers beneath it because a modal opened, not because the user did any of the
+    /// three things [`Trigger`] enumerates.
+    pub fn cancel(&self) -> Option<&Message> {
+        self.cancel.as_ref()
+    }
+
     /// The message to send when `trigger` happens, or `None` when this trigger does not close this
     /// surface — or when the surface has no cancel message at all.
     ///

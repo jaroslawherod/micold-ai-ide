@@ -1,6 +1,6 @@
 //! Integration test: the overflow menu's "Help" action exposes exactly "About" (FR-004).
 
-use micold_client::app::help_actions;
+use micold_client::features::help::help_actions;
 
 #[test]
 fn help_menu_exposes_only_about() {
