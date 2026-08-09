@@ -32,7 +32,7 @@
 //! renderer, and a text input's state includes its focus: a field that gained a child when a
 //! validation error appeared would drop the keystroke that caused it (feature 021's lesson).
 
-use iced::advanced::widget::{tree, Operation, Tree, Widget};
+use iced::advanced::widget::{operation, tree, Id, Operation, Tree, Widget};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Renderer as _, Shell};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
 use micold_core::tokens::{anatomy, density, state, Roles};
@@ -95,12 +95,77 @@ pub struct State {
     pub layer: Layer,
 }
 
+/// Whether the control holds the keyboard — asked of the control, not guessed from the pointer.
+///
+/// The field cannot infer this. A press in its 16dp padding lands on the container and not on the
+/// input, and focus also moves for reasons that never reach this widget at all: Tab, a focus
+/// operation, the window itself losing and regaining focus. Any rule written here would be a second
+/// opinion about a fact the input already holds, and BUG-002 was exactly what two opinions look
+/// like. So this asks, through the traversal the rendering stack provides for the purpose, and the
+/// answer comes from the input's own state — the only copy of it there is.
+///
+/// A control that cannot be focused — the select's trigger is a plain container — never answers,
+/// which leaves this `false` and its field's `active` entirely in its caller's hands (§7.7 wants a
+/// picker's indicator to follow *open*, not focus).
+#[derive(Default)]
+struct AsksControlForFocus(bool);
+
+impl Operation for AsksControlForFocus {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        operate(self);
+    }
+
+    fn focusable(
+        &mut self,
+        _id: Option<&Id>,
+        _bounds: Rectangle,
+        state: &mut dyn operation::Focusable,
+    ) {
+        self.0 |= state.is_focused();
+    }
+}
+
+/// Hand the keyboard to the control, for a press that landed on the container around it.
+///
+/// The mirror of [`AsksControlForFocus`], and it goes through the same traversal for the same
+/// reason: focus lives in the control's own state and this is the way in that does not require
+/// knowing what the control is. A control with no focus to take never answers.
+struct FocusesTheControl;
+
+impl Operation for FocusesTheControl {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        operate(self);
+    }
+
+    fn focusable(
+        &mut self,
+        _id: Option<&Id>,
+        _bounds: Rectangle,
+        state: &mut dyn operation::Focusable,
+    ) {
+        if !state.is_focused() {
+            state.focus();
+        }
+    }
+}
+
+/// What this last told its caller about the control's focus.
+///
+/// Remembered so that only *changes* are published: the question is asked on every event, and a
+/// field that re-announced "still focused" on every pointer move would put the application into a
+/// message loop with itself.
+#[derive(Default)]
+struct Reported {
+    focused: bool,
+}
+
 /// The filled box: container, label, control and active indicator, laid out to §7.7's metrics.
 pub struct FilledField<'a, M> {
     /// `[leading, control, trailing, label]`, always four.
     children: Vec<Element<'a, M>>,
     roles: Roles,
     state: State,
+    on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
 }
 
 impl<'a, M: 'a> FilledField<'a, M> {
@@ -116,7 +181,21 @@ impl<'a, M: 'a> FilledField<'a, M> {
             children: vec![leading, control, trailing, label],
             roles,
             state,
+            on_focus_change: None,
         }
+    }
+
+    /// Report the control gaining or losing the keyboard (BUG-003).
+    ///
+    /// Focus decides three things at once — where the label sits, whether the indicator thickens,
+    /// and which state layer the container carries — and the first of those is settled when the
+    /// field is *built*, before this widget exists. So the fact has to travel up: this notices it,
+    /// the application holds it, and the next view passes it back down as
+    /// [`active`](super::FormField::active). Without a caller here, `active` is the only source and
+    /// nothing ever sets it, which is the whole of BUG-003.
+    pub fn on_focus_change(mut self, f: impl Fn(bool) -> M + 'a) -> Self {
+        self.on_focus_change = Some(Box::new(f));
+        self
     }
 
     /// The field's total height: §7.7's 56dp, from the density scale so it follows the axis.
@@ -329,6 +408,59 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
                 state, event, layout, cursor, renderer, clipboard, shell, viewport,
             );
         }
+
+        // A press anywhere in the container reaches the control (FR-034). The control occupies one
+        // 24dp value line inside 16dp of padding, so most of a 56dp field is not the input — and a
+        // press there used to land on a box that shades, hovers and looks entirely pressable, and
+        // do nothing. The layer already covers the whole container; this is the other half of
+        // "wherever a press is accepted" being one rectangle rather than two.
+        //
+        // Not over the control itself — the input handles its own presses, and re-focusing after it
+        // has just placed a caret would drag the caret to the end of the text. Not over the
+        // adornments either: a trailing icon button is an action of its own, and a press on it is
+        // that action rather than an attempt to type.
+        if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
+            let mut slots = layout.children();
+            let leading = slots.next().expect("leading");
+            let control = slots.next().expect("control");
+            let trailing = slots.next().expect("trailing");
+            let elsewhere = cursor.is_over(layout.bounds())
+                && !cursor.is_over(control.bounds())
+                && !cursor.is_over(leading.bounds())
+                && !cursor.is_over(trailing.bounds());
+            if elsewhere {
+                // A control that cannot be focused simply never answers, which is what makes this
+                // safe to run for the select's plain container as well as for a text input.
+                self.children[1].as_widget_mut().operate(
+                    &mut tree.children[1],
+                    control,
+                    renderer,
+                    &mut FocusesTheControl,
+                );
+            }
+        }
+
+        // *After* the children, always: the event that changes focus is the one the input has just
+        // handled, and asking before it does would report the previous frame's answer.
+        if self.on_focus_change.is_some() {
+            let mut asks = AsksControlForFocus::default();
+            self.children[1].as_widget_mut().operate(
+                &mut tree.children[1],
+                layout
+                    .children()
+                    .nth(1)
+                    .expect("the control is the second of the container's four slots"),
+                renderer,
+                &mut asks,
+            );
+            let reported = tree.state.downcast_mut::<Reported>();
+            if reported.focused != asks.0 {
+                reported.focused = asks.0;
+                if let Some(on_focus_change) = &self.on_focus_change {
+                    shell.publish(on_focus_change(asks.0));
+                }
+            }
+        }
     }
 
     fn operate(
@@ -389,8 +521,14 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
         )
     }
 
+    /// Stateful only because of what it has already told its caller — see [`Reported`]. Nothing
+    /// about the field's *appearance* is kept here; that is all supplied or read off the cursor.
     fn tag(&self) -> tree::Tag {
-        tree::Tag::stateless()
+        tree::Tag::of::<Reported>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(Reported::default())
     }
 }
 

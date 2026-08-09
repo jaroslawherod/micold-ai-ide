@@ -7,10 +7,11 @@
 //! branch-name collision from a dead-end error into a decision panel rendered in place of the
 //! normal actions, so cancelling leaves every input where the user left it (FR-007).
 
-use crate::app::Message;
+use crate::app::{FieldId, Message};
 use crate::features::worktree_form::{
     BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
+use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
     self, Button, Select, StageProgress, SurfaceKind, Text, TextField, ToggleChip, TypeRole,
     TypeaheadRow,
@@ -28,6 +29,7 @@ pub fn modal<'a>(
     form: &'a WorktreeForm,
     error: Option<&'a str>,
     scheme: ColorScheme,
+    focused: Option<FieldId>,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let is_creating = form.status == WorktreeFormStatus::Creating;
@@ -60,11 +62,13 @@ pub fn modal<'a>(
             let ticket = TextField::new("", &form.ticket, r)
                 .label("Ticket")
                 .supporting("Optional — e.g. ABC-123")
+                .track_focus(FieldId::AddWorktreeTicket, focused)
                 .on_input(Message::AddWorktreeTicketChanged);
 
             let name = TextField::new("", &form.name, r)
                 .label("Name")
                 .supporting("e.g. login page")
+                .track_focus(FieldId::AddWorktreeName, focused)
                 .on_input(Message::AddWorktreeNameChanged)
                 .on_submit(Message::AddWorktreeSubmitted);
 
