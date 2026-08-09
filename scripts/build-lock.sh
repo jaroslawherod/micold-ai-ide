@@ -55,11 +55,13 @@ if ! common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/n
 	exec "$@"
 fi
 
-# The shared target directory is normally set by `target-dir` in
-# .cargo/config.toml, which every worktree beneath the main checkout inherits.
-# Exporting it here too covers a worktree created outside the main checkout,
-# where that config is not on the ancestor path. Keep the directory name in
-# sync with .cargo/config.toml. An explicit CARGO_TARGET_DIR still wins.
+# This export is what actually makes the target directory shared. `target-dir`
+# in .cargo/config.toml does not: it is relative to its own config file, that
+# file is checked in, and cargo's closest config wins -- so a bare cargo in a
+# worktree resolves it to a target-shared/ beside the *worktree*, not this one.
+# Deriving the path from the common git dir instead points every worktree at
+# the main checkout's directory. Keep the directory name in sync with
+# .cargo/config.toml. An explicit CARGO_TARGET_DIR still wins.
 repo_root=$(dirname "$common_dir")
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$repo_root/target-shared}"
 
