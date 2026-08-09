@@ -30,8 +30,13 @@ Canvas render over `content.grid.display_iter()`:
 
 ## Input (`on_event`) — FR-006..FR-016
 
-- **Auto-resize**: when the widget's layout size changes, publish `Message::TerminalResized {
-  cols, rows }` computed from `layout / cell metrics`. (FR-014/FR-015)
+- **Auto-resize**: when the terminal **area's** layout size changes, publish
+  `Message::TerminalResized { cols, rows }` computed from `layout / cell metrics`. (FR-014/FR-015)
+  Owned by `GridSizeReporter`, which *wraps* the area, and deliberately **not** by `TerminalPane`,
+  which fills it: the pane is mounted only once a session is displayed **and** its first grid frame
+  has arrived, so a report owned there does not exist during the interval in which the process is
+  spawned (FR-014b). One owner, not two — reporting in both would put two `SessionResize` messages
+  on the wire per resize.
 - **Size at start (BUG-003, FR-014a).** A change is not the only trigger, and the widget is not the
   only source. The last published `(cols, rows)` MUST be retained by the app and sent to the session
   service **before** the `SessionStart` of any session being started, resumed, selected, or created —
@@ -40,6 +45,11 @@ Canvas render over `content.grid.display_iter()`:
   process, and seed every spawn from it (initial start, crash respawn, additional terminal instance),
   falling back to its default only for a session no size has ever been reported for. See
   `010-daemon-session-persistence` FR-020a and its `contracts/protocol.md` `SessionResize` entry.
+  The *ordering* is best-effort by construction: a freshly-launched application has measured nothing
+  until it has drawn a frame, so its very first session's size is reported just **after** that
+  session's start request rather than before it (FR-014b). The service's retention rule is therefore
+  the load-bearing half and this ordering is the optimisation — the size still reaches the spawn,
+  which does not complete within a frame.
 - **Focus gate**: `if !state.is_focused { return Status::Ignored }` — unfocused events fall
   through to the app. (FR-009)
 - **Keyboard** (focused): build `KeyInput` from the iced event; `keymap::encode(input, mode)`:

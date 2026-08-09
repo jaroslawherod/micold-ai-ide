@@ -389,15 +389,49 @@ session service owns rather than a command it can only deliver to a running proc
   session started with **no resize after launch** came up with the AI CLI's interface spanning the
   whole pane, and `stty size` on the spawned process's pty read **69 rows × 165 columns** — the pane,
   not the 100×30 seed. Covers the fresh-start half of SC-011 on one platform; the resumed-session and
-  cross-platform halves rest on T060/T061 and the daemon suite.)*
+  cross-platform halves rest on T060/T061 and the daemon suite. **What it could not distinguish**,
+  recorded because it is what hid FR-014b's half of the bug for a further round: `stty size` reads the
+  size *now*, so a process spawned wrong and corrected a frame later reads identically to one spawned
+  right — and in this very run it was the former. The spawn-time claim is executable instead, in T066
+  and T060.)*
+
+### Follow-up — the cold start the first fix left open (FR-014b)
+
+Found by asking where the size comes from on the *first* session after launch, and confirmed against
+the running application: it did not come from anywhere. `TerminalPane` was the only thing measuring
+the terminal area, and it is mounted only once a session is displayed **and** its first grid frame
+has arrived — so at the moment the first session is started, nothing had ever measured anything.
+T063 then had nothing to state and the start went out sizeless, exactly as before, for that one
+session. The visual pass did not catch it: `stty size` reads the size *now*, and the pane's report
+one frame later had already corrected it.
+
+- [X] T065 [BUG-003] Move the measurement off the contents and onto the area: add `GridSizeReporter`
+  in `src/ui/material/terminal_pane.rs` — an `advanced::Widget` that wraps the terminal area,
+  publishes `Message::TerminalResized` from its own layout bounds (deduplicated per instance), and
+  delegates everything else to its child. Mount it in both branches of `ui::terminal::pane` (the
+  live pane and the "Starting…" placeholder), and **remove** the report from `TerminalPane` so there
+  is one owner rather than two messages per resize (FR-014b, contract §Input).
+- [X] T066 [BUG-003] Failing test in `crates/micold-client/tests/terminal_size_reporting.rs`: with a
+  session displayed and no grid frame yet — the frame a cold start actually starts its first session
+  on — the first redraw publishes `TerminalResized` with a real measurement of the area, and a
+  second unchanged frame publishes nothing. Resolves the real widget tree through the feature 019
+  headless apparatus (no display, no GPU), so the claim is executable rather than a visual one.
 
 **Checkpoint**: A session started, resumed, selected or created in a window the user never resizes
 fills its pane from the first frame; a crash respawn and a second terminal instance come back at the
-same size.
+same size; and the first session after launch is sized from the frame it is displayed on rather than
+from the frame its output arrives.
 
 **Bugfix**: 2026-08-09 — BUG-003 Updated from bugfix patch. T029 (emit `TerminalResized` on layout
 change) is *not* reopened — it implements FR-015's change path exactly as specified, and the defect is
 the absence of a start-time path, which FR-014a adds. Added Phase 12 (T060–T064).
+
+**Bugfix**: 2026-08-09 — BUG-003 (second finding) Added FR-014b and T065–T066. The first fix made the
+start *state* a size and the service *retain* one; neither made the application *have* one on a cold
+start, because the measurement lived in a widget that is not mounted until a session's first output
+arrives. `contracts/terminal-render-input.md`'s auto-resize rule now names the area — not the pane —
+as the reporter, and records that the send-before-start ordering is best-effort while the service's
+retention rule is the load-bearing half.
 
 ---
 
