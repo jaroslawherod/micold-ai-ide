@@ -1,9 +1,10 @@
 //! The About dialog, rendered as a Material modal overlay within the main window (FR-013).
 
-use crate::app::Message;
+use crate::app::{Message, State};
 use crate::ui::material::{Button, SurfaceKind, Text, TypeRole};
 use iced::widget::column;
 use iced::Element;
+use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::metadata::AppMetadata;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self};
@@ -36,4 +37,19 @@ pub fn modal<'a>(scheme: ColorScheme) -> Element<'a, Message> {
     );
 
     dialog.into()
+}
+
+/// This dialog's body, built from the state that opened it — `None` when the surface is open but
+/// the live state it renders is absent, so nothing is drawn rather than an empty dialog.
+///
+/// The uniform shape every registered dialog has, and the reason `ui::view` no longer needs a
+/// match: the registration line in [`crate::overlay::registry`] names this beside the surface it
+/// draws, so a dialog says where its own state lives instead of a central arm saying it for them
+/// all (feature 021, T035 — FR-008, FR-009).
+pub fn dialog<'a>(
+    _state: &'a State,
+    scheme: ColorScheme,
+    _env_include_outcome: &'a EnvIncludeOutcome,
+) -> Option<Element<'a, Message>> {
+    Some(modal(scheme))
 }

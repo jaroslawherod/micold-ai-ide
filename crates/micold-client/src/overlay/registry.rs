@@ -57,12 +57,29 @@ pub trait Registered: FloatingSurface + Sized {
 ///
 /// The erased form of a [`Registered`] surface. Owned rather than borrowed because a surface may
 /// be assembled from state on the fly, and dispatch has no place to keep it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Open {
     id: SurfaceId,
     layer: Layer,
     dismissal: DismissalRules,
+    view: Option<crate::ui::DialogView>,
 }
+
+/// Two open surfaces are the same one when they are the same surface — identity, band and
+/// dismissal. The view is deliberately not part of it.
+///
+/// Hand-written rather than derived because `view` is a function pointer, and comparing those
+/// compares addresses the compiler does not promise are unique: the same function can have two,
+/// and two functions can share one. So a derived `PartialEq` would be answering a question nobody
+/// asked with a result nobody can rely on. Which view a surface is drawn by is not part of what
+/// makes it that surface anyway — `drawn_by` attaches it at registration.
+impl PartialEq for Open {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.layer == other.layer && self.dismissal == other.dismissal
+    }
+}
+
+impl Eq for Open {}
 
 /// Erasing a live surface to what dispatch needs — the conversion the chain terminates in.
 ///
@@ -76,11 +93,31 @@ impl<S: FloatingSurface> From<&S> for Open {
             id: surface.id(),
             layer: surface.layer(),
             dismissal: surface.dismissal(),
+            view: None,
         }
     }
 }
 
 impl Open {
+    /// Pair this surface with the view that draws it — the optional step in the chain (T035).
+    ///
+    /// Set from the registration line rather than from the surface, because a surface is a
+    /// feature-module type and FR-006 forbids one naming a rendering framework. The two halves
+    /// are still named in one place, which is what FR-009 is about; they simply cannot be named
+    /// in the same *module*.
+    ///
+    /// Only the dialog band has one. A popover is drawn by the panel it hangs off, which already
+    /// outlives the flag that opened it so that it has something to fade out.
+    pub fn drawn_by(mut self, view: crate::ui::DialogView) -> Self {
+        self.view = Some(view);
+        self
+    }
+
+    /// The view registered for this surface, if any.
+    pub fn view(&self) -> Option<crate::ui::DialogView> {
+        self.view
+    }
+
     /// Which surface this is.
     pub fn id(&self) -> SurfaceId {
         self.id
@@ -114,30 +151,31 @@ pub type Probe = fn(&State) -> Option<Open>;
 /// against reality — contract R2 is a guard test precisely because the compiler cannot hold it
 /// once the enum is gone.
 macro_rules! register {
-    ($($surface:ty),+ $(,)?) => {
+    ($($surface:ty $(=> $view:path)?),+ $(,)?) => {
         static REGISTERED: &[Probe] = &[
-            $(|state| <$surface as Registered>::open_in(state).map(|s| Open::from(&s))),+
+            $(|state| <$surface as Registered>::open_in(state)
+                .map(|s| Open::from(&s)$(.drawn_by($view))?)),+
         ];
     };
 }
 
 register! {
-    crate::features::help::AboutDialog,
+    crate::features::help::AboutDialog => crate::ui::about::dialog,
     crate::features::help::HelpMenu,
-    crate::features::project::ConfirmForgetProjectDialog,
+    crate::features::project::ConfirmForgetProjectDialog => crate::ui::confirm_forget::dialog,
     crate::features::project::ProjectContextMenu,
-    crate::features::project::ProjectSelectorDialog,
+    crate::features::project::ProjectSelectorDialog => crate::ui::project_selector::dialog,
     crate::features::project::ProjectSwitcher,
-    crate::features::project::RenameProjectDialog,
-    crate::features::session::ConfirmSessionRemoveDialog,
+    crate::features::project::RenameProjectDialog => crate::ui::rename::dialog,
+    crate::features::session::ConfirmSessionRemoveDialog => crate::ui::confirm_session_remove::dialog,
     crate::features::session::SessionContextMenu,
     crate::features::session::TerminalContextMenu,
-    crate::features::settings::SettingsDialog,
+    crate::features::settings::SettingsDialog => crate::ui::settings_form::dialog,
     crate::features::sidebar::SidebarFilterPanel,
-    crate::features::worktree::ConfirmWorktreeDeleteDialog,
+    crate::features::worktree::ConfirmWorktreeDeleteDialog => crate::ui::confirm_delete::dialog,
     crate::features::worktree::WorktreeContextMenu,
-    crate::features::worktree::RenameWorktreeDialog,
-    crate::features::worktree_form::AddWorktreeDialog,
+    crate::features::worktree::RenameWorktreeDialog => crate::ui::worktree_rename::dialog,
+    crate::features::worktree_form::AddWorktreeDialog => crate::ui::worktree_form::dialog,
 }
 
 /// Every registered surface, in registration order.
@@ -188,6 +226,23 @@ pub fn scroll_beneath(state: &State) -> Vec<Message> {
         .iter()
         .filter_map(|open| open.on(Trigger::ScrollBeneath).cloned())
         .collect()
+}
+
+/// The open dialog, if there is one: the surface in the modal band.
+///
+/// The subject of the view's old ten-arm match (T035). It answers *which* dialog rather than
+/// drawing it, because the caller needs both halves — the body to draw, and the identity to key
+/// the transition on, so switching straight from one dialog to another replays the entrance
+/// instead of inheriting a transition the previous one had already finished.
+///
+/// At most one can be open: [`crate::app::Overlay`] is a single slot, and that is the whole of
+/// what it is still for. `max_by_key` rather than `find` so this does not quietly depend on that
+/// staying true.
+pub fn open_dialog(state: &State) -> Option<Open> {
+    open_among(REGISTERED, state)
+        .into_iter()
+        .filter(|open| open.layer() == Layer::Dialog)
+        .max_by_key(|open| open.layer())
 }
 
 /// Every open surface below the dialog band: the lightweight popovers and context menus.

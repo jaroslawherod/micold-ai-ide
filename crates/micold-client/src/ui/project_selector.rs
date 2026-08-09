@@ -2,13 +2,14 @@
 //! within the main window (research R3). Lists the current directory's subfolders, supports
 //! navigation, and lets the user open the current folder as a project.
 
-use crate::app::Message;
+use crate::app::{Message, State};
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::material::{
     self, Button, ButtonVariant, IconLabel, Scrollable, SurfaceKind, Text, TypeRole,
 };
 use iced::widget::{column, row};
 use iced::{Element, Length};
+use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::selector::{Selector, SelectorStatus};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
@@ -96,4 +97,22 @@ pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Mes
     .height(Length::Fixed(420.0));
 
     dialog.into()
+}
+
+/// This dialog's body, built from the state that opened it — `None` when the surface is open but
+/// the live state it renders is absent, so nothing is drawn rather than an empty dialog.
+///
+/// The uniform shape every registered dialog has, and the reason `ui::view` no longer needs a
+/// match: the registration line in [`crate::overlay::registry`] names this beside the surface it
+/// draws, so a dialog says where its own state lives instead of a central arm saying it for them
+/// all (feature 021, T035 — FR-008, FR-009).
+pub fn dialog<'a>(
+    state: &'a State,
+    scheme: ColorScheme,
+    _env_include_outcome: &'a EnvIncludeOutcome,
+) -> Option<Element<'a, Message>> {
+    state
+        .selector
+        .as_ref()
+        .map(|selector| modal(selector, scheme))
 }

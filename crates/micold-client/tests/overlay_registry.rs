@@ -370,6 +370,138 @@ fn the_keyboard_subscription_names_no_surface() {
 }
 
 #[test]
+fn every_dialog_is_registered_with_a_view() {
+    // T035. A dialog is two halves — where its state lives (the surface, in the feature module)
+    // and how to draw it (the view, in `crate::ui`) — and FR-006 keeps them in different modules,
+    // so the registration line is the one place they are named together. A surface registered
+    // without its other half is a dialog that opens and draws nothing, which nothing else here
+    // would notice: dismissal, stacking and identity would all still be right.
+    let mut viewless = Vec::new();
+    for overlay in OVERLAYS {
+        let Some((id, _)) = expected(*overlay) else {
+            continue; // `Overlay::None` names no surface
+        };
+        let open = registry::open_dialog(&state(*overlay, false));
+        match open {
+            Some(open) if open.view().is_some() => {}
+            Some(_) => viewless.push(format!("`{id}` is registered, but with no view")),
+            None => viewless.push(format!("`{id}` is not in the dialog band at all")),
+        }
+    }
+    assert!(viewless.is_empty(), "{}", viewless.join("\n  - "));
+}
+
+#[test]
+fn a_popover_is_not_drawn_from_the_registry() {
+    // The other half of the pairing rule. A popover's panel is pushed by `ui::view` whether or not
+    // it is open — it owns its own fade, so it has to outlive the flag that opened it — and giving
+    // one a registered dialog view would draw it a second time, inside the modal band.
+    let mut drawn = Vec::new();
+    for probe in registry::probes() {
+        let mut state = State {
+            help_menu_open: true,
+            project_switcher_open: true,
+            sidebar_filter_open: true,
+            terminal_context_menu: Some((4, 2)),
+            ..Default::default()
+        };
+        state.overlay = Overlay::None;
+        if let Some(open) = probe(&state) {
+            if open.layer() < Layer::Dialog && open.view().is_some() {
+                drawn.push(open.id().to_string());
+            }
+        }
+    }
+    assert!(
+        drawn.is_empty(),
+        "these popovers registered a dialog view: {drawn:?} — the modal band is not where they \
+         are drawn"
+    );
+}
+
+#[test]
+fn a_dialog_draws_from_its_own_state() {
+    // The failure the pairing above cannot see: a registration line naming the *wrong* view. Both
+    // halves are present and the dialog opens; it just renders nothing, because the view it was
+    // paired with looks for state a different dialog owns.
+    //
+    // Driven through the reducer rather than by assigning fields, so the live state is the one the
+    // application actually produces. Seven of the nine dialogs can be opened that way. The project
+    // selector's listing and a session's record are established by the binary, not the pure core,
+    // so a `State` built here has neither and the view would correctly return `None` — they are
+    // covered by `every_dialog_is_registered_with_a_view` above and by their own feature tests.
+    let scheme = micold_core::theme::ColorScheme::Dark;
+    let env = micold_core::env_include::EnvIncludeOutcome::Disabled;
+
+    // A project and a worktree in the catalog: several of the openers refuse to open a dialog
+    // about something the application does not know exists, which is correct of them.
+    fn seeded() -> State {
+        let mut state = State::default();
+        state
+            .workspace
+            .projects
+            .push(micold_core::project::Project {
+                path: std::path::PathBuf::from("/p"),
+                display_name: "p".to_string(),
+                is_git_repo: true,
+                availability: micold_core::project::Availability::Available,
+            });
+        state.workspace.active = Some(std::path::PathBuf::from("/p"));
+        state.worktrees = vec![micold_core::worktree::Worktree {
+            dir_name: "feat-x".to_string(),
+            path: std::path::PathBuf::from("/p/.claude/worktrees/feat-x"),
+            branch: Some("feat/x".to_string()),
+            status: micold_core::worktree::WorktreeStatus::Valid,
+        }];
+        state
+    }
+
+    #[allow(clippy::type_complexity)]
+    let openers: &[(&str, fn(&mut State))] = &[
+        ("about", |s| s.update(Message::AboutOpened)),
+        ("rename_project", |s| {
+            s.update(Message::RenameStarted(std::path::PathBuf::from("/p")))
+        }),
+        ("add_worktree", |s| s.update(Message::AddWorktreeOpened)),
+        ("settings", |s| s.update(Message::SettingsOpened)),
+        ("confirm_worktree_delete", |s| {
+            s.update(Message::WorktreeDeleteRequested("feat-x".to_string()))
+        }),
+        ("rename_worktree", |s| {
+            s.update(Message::WorktreeRenameStarted("feat-x".to_string()))
+        }),
+        ("confirm_forget_project", |s| {
+            s.update(Message::ProjectForgetRequested(std::path::PathBuf::from(
+                "/p",
+            )))
+        }),
+    ];
+
+    let mut blank = Vec::new();
+    for (id, open) in openers {
+        let mut state = seeded();
+        open(&mut state);
+
+        let dialog = registry::open_dialog(&state)
+            .unwrap_or_else(|| panic!("`{id}`: the opener did not open a dialog"));
+        assert_eq!(
+            dialog.id().as_str(),
+            *id,
+            "the opener for `{id}` opened something else"
+        );
+
+        let view = dialog.view().expect("checked above");
+        if view(&state, scheme, &env).is_none() {
+            blank.push(format!(
+                "`{id}` is open with its live state present, and its registered view drew \
+                 nothing — the registration line has paired it with another dialog's view"
+            ));
+        }
+    }
+    assert!(blank.is_empty(), "{}", blank.join("\n  - "));
+}
+
+#[test]
 fn the_registry_is_actually_looking_at_something() {
     assert!(
         registry::probes().len() >= 2,

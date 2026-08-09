@@ -1,7 +1,7 @@
 //! The Settings dialog, rendered as a Material modal overlay within the main window (feature
 //! 006, FR-019/FR-020). Currently exposes the embedded-terminal scrollback limit.
 
-use crate::app::{FieldId, Message};
+use crate::app::{FieldId, Message, State};
 use crate::features::settings::SettingsDraft;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Text, TextField, TypeRole};
@@ -97,4 +97,22 @@ pub fn modal<'a>(
     .width(Length::Fixed(420.0));
 
     dialog.into()
+}
+
+/// This dialog's body, built from the state that opened it — `None` when the surface is open but
+/// the live state it renders is absent, so nothing is drawn rather than an empty dialog.
+///
+/// The uniform shape every registered dialog has, and the reason `ui::view` no longer needs a
+/// match: the registration line in [`crate::overlay::registry`] names this beside the surface it
+/// draws, so a dialog says where its own state lives instead of a central arm saying it for them
+/// all (feature 021, T035 — FR-008, FR-009).
+pub fn dialog<'a>(
+    state: &'a State,
+    scheme: ColorScheme,
+    env_include_outcome: &'a EnvIncludeOutcome,
+) -> Option<Element<'a, Message>> {
+    state
+        .settings_draft
+        .as_ref()
+        .map(|draft| modal(draft, scheme, env_include_outcome, state.focused_field))
 }

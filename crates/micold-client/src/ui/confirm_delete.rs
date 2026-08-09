@@ -3,11 +3,12 @@
 //! exactly what is removed (the working directory and its sessions, always; the git branch,
 //! conditional on the branch-deletion checkbox below) before the user confirms.
 
-use crate::app::Message;
+use crate::app::{Message, State};
 use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
 use iced::Element;
 use iced::Length;
+use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self};
 
@@ -64,4 +65,32 @@ pub fn modal<'a>(
     .width(Length::Fixed(460.0));
 
     dialog.into()
+}
+
+/// This dialog's body, built from the state that opened it — `None` when the surface is open but
+/// the live state it renders is absent, so nothing is drawn rather than an empty dialog.
+///
+/// The uniform shape every registered dialog has, and the reason `ui::view` no longer needs a
+/// match: the registration line in [`crate::overlay::registry`] names this beside the surface it
+/// draws, so a dialog says where its own state lives instead of a central arm saying it for them
+/// all (feature 021, T035 — FR-008, FR-009).
+pub fn dialog<'a>(
+    state: &'a State,
+    scheme: ColorScheme,
+    _env_include_outcome: &'a EnvIncludeOutcome,
+) -> Option<Element<'a, Message>> {
+    state.worktree_delete_target.as_ref().map(|dir| {
+        let branch = state
+            .worktrees
+            .iter()
+            .find(|w| &w.dir_name == dir)
+            .and_then(|w| w.branch.as_deref());
+        modal(
+            dir,
+            &state.worktree_display_name(dir),
+            branch,
+            state.worktree_delete_keep_branch,
+            scheme,
+        )
+    })
 }
