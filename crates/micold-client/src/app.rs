@@ -84,6 +84,36 @@ pub enum Overlay {
     ConfirmForgetProject,
 }
 
+/// Which text field holds the keyboard, when one does (BUG-003).
+///
+/// A filled field's whole focus affordance — the label floating clear of the value, the active
+/// indicator thickening to the accent, the focus state layer (§7.7, FR-031, FR-035) — is decided
+/// when the field is *built*, from a flag its caller supplies. Nothing supplied it. The component
+/// honoured the flag, every anatomy gate proved it honoured the flag, and in the running
+/// application every field was drawn permanently at rest.
+///
+/// One enum for the whole application rather than a focus flag on each of the four drafts, for the
+/// reason [`Overlay`] is one enum: at most one field can hold the keyboard, and this is the shape
+/// that says so. `Option<FieldId>` also makes "two fields focused at once" unrepresentable
+/// (Principle V), where four booleans would have needed a rule keeping them apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldId {
+    /// The rename-project dialog's name field.
+    RenameProjectName,
+    /// The rename-worktree dialog's name field.
+    RenameWorktreeName,
+    /// The add-worktree form's optional ticket field.
+    AddWorktreeTicket,
+    /// The add-worktree form's branch-name field.
+    AddWorktreeName,
+    /// Settings: the terminal scrollback limit.
+    SettingsScrollback,
+    /// Settings: the environment-include script path.
+    SettingsEnvIncludePath,
+    /// Settings: the environment-include timeout.
+    SettingsEnvIncludeTimeout,
+}
+
 /// Every user interaction that can change application state.
 ///
 /// No longer `Copy`: some variants carry owned data (`PathBuf`, listing results).
@@ -116,6 +146,10 @@ pub enum Message {
     KnownProjectReopened(PathBuf),
     /// Begin renaming the given project; opens the rename dialog (FR-017).
     RenameStarted(PathBuf),
+    /// A text field took or lost the keyboard (BUG-003). Emitted by the field's own container,
+    /// which asks the input rather than guessing from the pointer — see
+    /// `material::FormField::on_focus_change`. Sole mutation: [`State::focused_field`].
+    FieldFocusChanged(FieldId, bool),
     /// The rename dialog's text changed.
     RenameTextChanged(String),
     /// Confirm the rename. Applies it if valid (FR-020); the binary then persists.
@@ -512,6 +546,11 @@ pub struct State {
     pub selector: Option<Selector>,
     /// The in-progress rename, present only while the rename overlay is shown.
     pub rename_draft: Option<RenameDraft>,
+    /// Which text field holds the keyboard, if any (BUG-003). Transient — never persisted.
+    ///
+    /// Held here rather than on each draft because it is one fact about the application, not four:
+    /// see [`FieldId`]. Every filled field's focus chrome is drawn from this and nothing else.
+    pub focused_field: Option<FieldId>,
     /// How the app chooses its theme (persisted); defaults to following the OS (FR-005).
     pub theme_pref: ThemePreference,
     /// The last light/dark scheme reported by the OS poll (transient, not persisted).
@@ -714,6 +753,11 @@ impl State {
         self.project_switcher_open = false;
         self.sidebar_filter_open = false;
         self.project_menu_open = None;
+        // A dialog opens with nothing focused. The fields that reported focus belong to a widget
+        // tree that is being torn down and will never report losing it, so a remembered focus would
+        // outlive them — and reopening the same dialog would draw its field focused over an input
+        // that has not been clicked (BUG-003).
+        self.focused_field = None;
     }
 
     /// Apply a [`Message`], transitioning the state. Pure and side-effect free.
@@ -798,6 +842,18 @@ impl State {
                         error: None,
                     });
                     self.open_overlay(Overlay::RenameProject);
+                }
+            }
+            // A blur is only believed from the field that currently holds focus. Gaining and losing
+            // are reported by two different widgets and arrive in whichever order the frame
+            // produced them, so an unguarded `None` on the way out of one field would erase the
+            // focus the next one had already claimed — and clicking straight from one field to
+            // another would leave both at rest.
+            Message::FieldFocusChanged(field, focused) => {
+                if focused {
+                    self.focused_field = Some(field);
+                } else if self.focused_field == Some(field) {
+                    self.focused_field = None;
                 }
             }
             Message::RenameTextChanged(text) => {

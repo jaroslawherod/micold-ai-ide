@@ -1,8 +1,9 @@
 //! The Settings dialog, rendered as a Material modal overlay within the main window (feature
 //! 006, FR-019/FR-020). Currently exposes the embedded-terminal scrollback limit.
 
-use crate::app::Message;
+use crate::app::{FieldId, Message};
 use crate::features::settings::SettingsDraft;
+use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};
 use iced::{Element, Length};
@@ -31,12 +32,14 @@ pub fn modal<'a>(
     draft: &'a SettingsDraft,
     scheme: ColorScheme,
     env_include_outcome: &'a EnvIncludeOutcome,
+    focused: Option<FieldId>,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
     let input = TextField::new("", &draft.scrollback_lines, r)
         .label("Scrollback lines")
         .supporting("Lines kept per terminal")
+        .track_focus(FieldId::SettingsScrollback, focused)
         .on_input(Message::SettingsScrollbackChanged)
         .on_submit(Message::SettingsSaved);
 
@@ -46,11 +49,13 @@ pub fn modal<'a>(
         .on_toggle(Message::SettingsEnvIncludeEnabledToggled);
     let env_include_path_input = TextField::new("", &draft.env_include_script_path, r)
         .label("Script path")
+        .track_focus(FieldId::SettingsEnvIncludePath, focused)
         .on_input(Message::SettingsEnvIncludePathChanged)
         .on_submit(Message::SettingsSaved);
     let env_include_timeout_input = TextField::new("", &draft.env_include_timeout, r)
         .label("Timeout")
         .supporting("Seconds")
+        .track_focus(FieldId::SettingsEnvIncludeTimeout, focused)
         .on_input(Message::SettingsEnvIncludeTimeoutChanged)
         .on_submit(Message::SettingsSaved);
 

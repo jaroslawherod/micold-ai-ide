@@ -2,8 +2,9 @@
 //! (FR-017, FR-020). Editing changes only the stored display name — never the folder on
 //! disk (FR-018).
 
-use crate::app::Message;
+use crate::app::{FieldId, Message};
 use crate::features::project::RenameDraft;
+use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};
 use iced::{Element, Length};
@@ -13,11 +14,16 @@ use micold_core::tokens::{self};
 
 /// The rename dialog as the dialog body; `ui::view` wraps it in the shared
 /// [`Modal`](crate::ui::material::Modal) transition.
-pub fn modal<'a>(draft: &'a RenameDraft, scheme: ColorScheme) -> Element<'a, Message> {
+pub fn modal<'a>(
+    draft: &'a RenameDraft,
+    scheme: ColorScheme,
+    focused: Option<FieldId>,
+) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
     let input = TextField::new("", &draft.text, r)
         .label("Project name")
+        .track_focus(FieldId::RenameProjectName, focused)
         .on_input(Message::RenameTextChanged)
         .on_submit(Message::RenameConfirmed);
 

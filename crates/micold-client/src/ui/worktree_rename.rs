@@ -2,8 +2,9 @@
 //! FR-013/FR-014). Editing changes only the worktree's displayed name in the sidebar — never
 //! the folder on disk or the git branch. Mirrors the project rename dialog.
 
-use crate::app::Message;
+use crate::app::{FieldId, Message};
 use crate::features::worktree::WorktreeRenameDraft;
+use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};
 use iced::{Element, Length};
@@ -13,11 +14,16 @@ use micold_core::tokens::{self};
 
 /// The worktree-rename dialog as the dialog body; `ui::view` wraps it in the shared
 /// [`Modal`](crate::ui::material::Modal) transition.
-pub fn modal<'a>(draft: &'a WorktreeRenameDraft, scheme: ColorScheme) -> Element<'a, Message> {
+pub fn modal<'a>(
+    draft: &'a WorktreeRenameDraft,
+    scheme: ColorScheme,
+    focused: Option<FieldId>,
+) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
     let input = TextField::new("", &draft.text, r)
         .label("Worktree name")
+        .track_focus(FieldId::RenameWorktreeName, focused)
         .on_input(Message::WorktreeRenameTextChanged)
         .on_submit(Message::WorktreeRenameConfirmed);
 

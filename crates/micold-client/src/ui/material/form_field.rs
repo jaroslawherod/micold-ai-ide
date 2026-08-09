@@ -95,6 +95,7 @@ pub struct FormField<'a, M> {
     trailing: Option<Element<'a, M>>,
     layer: Layer,
     pressable: bool,
+    on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
 }
 
 impl<'a, M: 'a> FormField<'a, M> {
@@ -112,7 +113,18 @@ impl<'a, M: 'a> FormField<'a, M> {
             trailing: None,
             layer: Layer::None,
             pressable: false,
+            on_focus_change: None,
         }
+    }
+
+    /// Report the wrapped control gaining or losing the keyboard (BUG-003).
+    ///
+    /// The other half of [`Self::active`], and the half that was missing: `active` is *supplied*
+    /// for the reasons in the module docs, and until this existed there was no way for a caller to
+    /// find out what to supply. A control that cannot take focus never fires it.
+    pub fn on_focus_change(mut self, f: impl Fn(bool) -> M + 'a) -> Self {
+        self.on_focus_change = Some(Box::new(f));
+        self
     }
 
     /// The field's name, rendered **inside** the container above the value.
@@ -232,7 +244,7 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
         // The box itself is a widget, not a stack of containers: §7.7's internal geometry is fixed
         // (8 + 16 + 24 + 8 = 56) and a column distributes leftover space it does not have. See
         // `filled_field.rs` for what composing it looked like and why it did not read as Material.
-        let field: Element<'a, M> = FilledField::new(
+        let field = FilledField::new(
             slot(f.leading),
             f.control,
             slot(f.trailing),
@@ -244,8 +256,11 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
                 floating,
                 layer: f.layer,
             },
-        )
-        .into();
+        );
+        let field: Element<'a, M> = match f.on_focus_change {
+            Some(on_focus_change) => field.on_focus_change(on_focus_change).into(),
+            None => field.into(),
+        };
         // The ripple wraps the **container**, not the control inside it (FR-010, FR-034). Wrapping
         // the control is what BUG-002 found: a press in the 16dp padding opened the select and
         // rippled nothing, because the two were reading different rectangles. `Ripple` is

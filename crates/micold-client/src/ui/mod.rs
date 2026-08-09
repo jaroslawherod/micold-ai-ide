@@ -5,6 +5,7 @@ pub mod cdk;
 mod confirm_delete;
 mod confirm_forget;
 mod confirm_session_remove;
+mod focus;
 /// The component library. `pub(crate)` rather than private to `ui`, so the component showcase
 /// (feature 020, `crate::showcase`) can compose the very same components the application renders —
 /// which is the whole of FR-002. The crate's *public* API is unchanged: nothing outside
@@ -329,15 +330,18 @@ pub fn view<'a>(
         Overlay::RenameProject => state
             .rename_draft
             .as_ref()
-            .map(|draft| rename::modal(draft, scheme)),
-        Overlay::AddWorktree => state
-            .worktree_form
-            .as_ref()
-            .map(|form| worktree_form::modal(form, state.worktree_error.as_deref(), scheme)),
-        Overlay::Settings => state
-            .settings_draft
-            .as_ref()
-            .map(|draft| settings_form::modal(draft, scheme, env_include_outcome)),
+            .map(|draft| rename::modal(draft, scheme, state.focused_field)),
+        Overlay::AddWorktree => state.worktree_form.as_ref().map(|form| {
+            worktree_form::modal(
+                form,
+                state.worktree_error.as_deref(),
+                scheme,
+                state.focused_field,
+            )
+        }),
+        Overlay::Settings => state.settings_draft.as_ref().map(|draft| {
+            settings_form::modal(draft, scheme, env_include_outcome, state.focused_field)
+        }),
         Overlay::ConfirmWorktreeDelete => state.worktree_delete_target.as_ref().map(|dir| {
             let branch = state
                 .worktrees
@@ -355,7 +359,7 @@ pub fn view<'a>(
         Overlay::RenameWorktree => state
             .worktree_rename_draft
             .as_ref()
-            .map(|draft| worktree_rename::modal(draft, scheme)),
+            .map(|draft| worktree_rename::modal(draft, scheme, state.focused_field)),
         Overlay::ConfirmSessionRemove => state
             .session_remove_target
             .and_then(|id| state.workspace.find_session(id))
@@ -482,6 +486,9 @@ fn overlay_key(overlay: Overlay) -> u64 {
 /// Render the snapshot of a just-closed overlay so it can keep fading out after the pure core
 /// has already cleared its live state (see [`crate::app::ClosingOverlay`]). Delegates to the same
 /// per-overlay `modal` render functions as the live path, so the exit is the enter in reverse.
+///
+/// Every field renders unfocused here: the snapshot is not interactive, and the input that held the
+/// keyboard went with the live state. Same reasoning as `ConfirmDelete`'s below.
 fn dismissing_dialog<'a>(
     closing: &'a crate::app::ClosingOverlay,
     scheme: ColorScheme,
@@ -491,11 +498,13 @@ fn dismissing_dialog<'a>(
     match closing {
         ClosingOverlay::About => about::modal(scheme),
         ClosingOverlay::Selector(selector) => project_selector::modal(selector, scheme),
-        ClosingOverlay::Rename(draft) => rename::modal(draft, scheme),
+        ClosingOverlay::Rename(draft) => rename::modal(draft, scheme, None),
         ClosingOverlay::Worktree(form, error) => {
-            worktree_form::modal(form, error.as_deref(), scheme)
+            worktree_form::modal(form, error.as_deref(), scheme, None)
         }
-        ClosingOverlay::Settings(draft) => settings_form::modal(draft, scheme, env_include_outcome),
+        ClosingOverlay::Settings(draft) => {
+            settings_form::modal(draft, scheme, env_include_outcome, None)
+        }
         ClosingOverlay::ConfirmDelete(dir) => {
             // Fading-out snapshot: the override may already be gone, so fall back to the derived
             // name for the exit animation. The live state (branch, checkbox choice) is gone by
@@ -504,7 +513,7 @@ fn dismissing_dialog<'a>(
             let friendly = micold_core::naming::display_name(dir);
             confirm_delete::modal(dir, &friendly, None, false, scheme)
         }
-        ClosingOverlay::WorktreeRename(draft) => worktree_rename::modal(draft, scheme),
+        ClosingOverlay::WorktreeRename(draft) => worktree_rename::modal(draft, scheme, None),
         ClosingOverlay::ConfirmSessionRemove(label) => confirm_session_remove::modal(label, scheme),
         ClosingOverlay::ConfirmForget(display_name, running) => {
             confirm_forget::modal(display_name, *running, scheme)

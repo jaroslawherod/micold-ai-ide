@@ -10,6 +10,7 @@ description: "Task list for feature 022 — Dedicated Select Component on a Shar
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md),
 [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
 
+**Bugfix**: 2026-08-09 — [BUG-003](./bugs/BUG-003.md) Added Phase 8 — the focus no screen reported.
 **Bugfix**: 2026-08-09 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch. Added Phase 7
 (T041–T048) for FR-034 – FR-036. **No task was reopened**: T012, T016 and T031 each did what they
 said, and the requirement they would have needed did not exist.
@@ -348,6 +349,78 @@ T040, which are blocked on a pull request and on eyes at a display respectively.
 
 ---
 
+## Phase 8: The focus nobody reported (BUG-003)
+
+*Added 2026-08-09. FR-031 (feature 018), FR-034, FR-035, SC-012. Phase 7 gave the field a focus
+state layer; this is the discovery, made by Phase 7's own visual pass, that **no screen ever
+reported focus** — so the layer, the active indicator and the floating label had all been specified,
+implemented and never once reached.*
+
+### Tests for Phase 8 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T049 [P] Write a failing gate that every `TextField` in the application reports its focus, in `crates/micold-client/tests/field_focus_call_sites.rs` (FR-035, SC-012)
+
+  > The check whose absence *is* the bug: BUG-003 was found by a grep, and this is that grep kept.
+  > It is the same shape as `anatomy_call_sites.rs` — there, a figure that reaches no call site;
+  > here, a parameter that reaches no call site. **Observed failing** against the seven unwired
+  > fields it was written for. It also guards its own vocabulary: a second test asserts that
+  > `ui/focus.rs`'s `track_focus` still joins *both* halves, since a rule spelled against a helper
+  > that had quietly stopped joining them would pass while meaning nothing.
+
+- [X] T050 [P] Write failing gates that a field reports taking and losing the keyboard, and that a press anywhere in its container reaches its control, in `crates/micold-client/src/ui/material/field_focus.rs` (FR-034, FR-035)
+
+  > In-crate, and *driven* rather than posed — which is the whole point. `form_field_anatomy.rs`
+  > and `text_field_anatomy.rs` build a field with `active` set by the test, so they prove the
+  > component obeys and structurally cannot ask whether anything commands it. Five tests: a press
+  > on the input reports focus, a press in the padding reaches the input, a press on the trailing
+  > action does not, leaving reports the loss, and a settled field stays quiet on further pointer
+  > moves.
+
+- [X] T051 [P] Write failing gates for the reducer, including a blur arriving after the next field's focus, in `crates/micold-client/tests/app_state.rs` (FR-035)
+
+  > Gaining and losing are reported by two different widgets in whichever order the frame produced
+  > them. An unguarded blur would erase the focus the next field had already claimed, which is the
+  > bug reappearing on every click from one field to another.
+
+### Implementation for Phase 8
+
+- [X] T052 Ask the control whether it holds the keyboard, and publish changes, in `crates/micold-client/src/ui/material/filled_field.rs` (FR-035)
+
+  > Through the rendering stack's own focus traversal, so the answer is the input's state and not a
+  > second opinion about it — BUG-002's lesson applied to the keyboard. Only *changes* are
+  > published; the question is asked on every event, and a field re-announcing "still focused" on
+  > each pointer move would loop the application against itself.
+
+- [X] T053 Forward `on_focus_change` through the wrapper and the text field, in `form_field.rs` and `text_field.rs` (FR-035)
+
+  > `active` stays *supplied* — the search picker still supplies **open** (§7.7, FR-013). What was
+  > missing was a way for a caller to find out what to say.
+
+- [X] T054 Send a press that lands on the container to the control, in `filled_field.rs` (FR-034)
+
+  > The other direction of FR-034, which BUG-002 only read one way. A 24dp control inside a 56dp
+  > box meant most of a field shaded, hovered and looked pressable while doing nothing. Excludes
+  > the adornment slots: a trailing icon button is an action of its own.
+
+- [X] T055 Hold which field has the keyboard, in `crates/micold-client/src/app.rs` (FR-035)
+
+  > One `Option<FieldId>` for the application rather than a flag per draft: at most one field has
+  > the keyboard, so `Option` is the shape that says so and "two focused at once" is
+  > unrepresentable (Principle V). Cleared when a dialog opens, because the fields that reported
+  > focus are being torn down and will never report losing it.
+
+- [X] T056 Join both halves in one call, in `crates/micold-client/src/ui/focus.rs` (FR-035)
+
+  > Reporting focus nobody keeps and being told a fact nobody reports are the same field
+  > permanently at rest. Separable halves are how this survived two features, so there is no
+  > spelling of half of it.
+
+- [X] T057 Wire the seven live text fields, in `ui/rename.rs`, `ui/worktree_rename.rs`, `ui/worktree_form.rs`, `ui/settings_form.rs` and `ui/mod.rs` (FR-031, FR-035, SC-012)
+
+  > The `true` no screen ever passed.
+
+---
+
 ## Dependencies & Execution Order
 
 ```text
@@ -364,6 +437,8 @@ Phase 5 / US3 (T029–T032)  ← verification
 Phase 6 (T033–T040)
       ↓
 Phase 7 (T041–T048)  ← BUG-002; independent of T039/T040, which are externally blocked
+      ↓
+Phase 8 (T049–T057)  ← BUG-003; found by Phase 7's visual pass
 ```
 
 **Story independence**: US1 is shippable alone (with the transition on the search picker only, from

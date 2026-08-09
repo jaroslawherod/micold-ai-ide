@@ -4,6 +4,7 @@
 
 **Input**: Feature specification from `/specs/022-dedicated-select-component/spec.md`
 
+**Bugfix**: 2026-08-09 — [BUG-003](./bugs/BUG-003.md) See "The focus nobody reported".
 **Bugfix**: 2026-08-09 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch. See
 [Interaction states](#interaction-states-bug-002).
 
@@ -230,6 +231,44 @@ and should land together — building focus alone would put the same layer in tw
 re-runs `view()`, and the anatomy gates assert element sizes rather than the relationship between
 two rectangles. The new gate has to compare the shaded rectangle with the pressable one, which is a
 kind of assertion this suite does not yet make anywhere.
+
+## The focus nobody reported (BUG-003)
+
+*Added 2026-08-09, for FR-031 (feature 018), FR-034 and FR-035.*
+
+The section above put the focus layer in the field and left one thing unexamined: **who tells the
+field it is focused**. Nothing did, at any point in two features. `FormField::active` is supplied,
+not observed — correctly, since the state that thickens the indicator is focus for a text input and
+*open* for a picker — and no `TextField` call site in the application ever passed it. The component
+obeyed, the anatomy gates proved it obeyed, and every field in the running application drew
+permanently at rest: label unfloated, indicator a hairline, focus layer never once painted.
+
+**The fix is split at the line the label draws.** Neither of the two routes BUG-003 offered works
+alone:
+
+- Observing focus inside `FilledField` **cannot float the label**. `label_floats` decides the
+  label's type role and tint inside `FormField::from`, at *build* time. A widget noticing focus
+  afterwards can move an element; it cannot change what that element already is. That is symptom 1,
+  and it is the one a person notices.
+- Screens tracking focus **have no event to track**. iced publishes nothing when a text input gains
+  focus; that is the sentence `TextField::active`'s doc opens with, and why `cdk/picker.rs` proxies
+  focus with a press inside its bounds.
+
+So the field asks and the application keeps the answer. `FilledField` runs the rendering stack's own
+focus traversal over its control after each event — the input's state is the only copy of the fact,
+so there is no second opinion to disagree with, which is BUG-002's lesson applied to the keyboard —
+and publishes changes. The application holds one `Option<FieldId>` and hands it back on the next
+view, in time for the label.
+
+**FR-034 runs both ways.** BUG-002 read it as "grow the layer to the responsive area", which is the
+direction the select was wrong in. The text field was wrong in the other: a 24dp control in a 56dp
+box meant most of a field shaded and hovered while accepting no press at all. A press on the
+container now reaches the control, adornment slots excepted.
+
+**Risk, and it is the one that let this happen**: a component gate that poses its own input can
+never see an unwired call site. `field_focus_call_sites.rs` is the answer and it reads source text
+rather than pixels — deliberately, because the bug was found by a grep and the property is a
+property of the source.
 
 ## Complexity Tracking
 

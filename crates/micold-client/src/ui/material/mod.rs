@@ -36,6 +36,10 @@ pub(crate) mod dialog;
 mod dialog_anatomy;
 mod divider;
 mod ellipsized;
+/// A field reporting and taking the keyboard, driven rather than posed — the gap the anatomy
+/// modules structurally cannot see (BUG-003).
+#[cfg(test)]
+mod field_focus;
 mod filled_field;
 mod filter_panel;
 mod form_field;

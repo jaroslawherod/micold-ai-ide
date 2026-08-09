@@ -44,6 +44,7 @@ pub struct TextField<'a, M> {
     supporting: Option<String>,
     error: Option<String>,
     active: bool,
+    on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
 }
 
 impl<'a, M: Clone + 'a> TextField<'a, M> {
@@ -61,6 +62,7 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
             supporting: None,
             error: None,
             active: false,
+            on_focus_change: None,
         }
     }
 
@@ -100,13 +102,27 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
         self
     }
 
-    /// Whether the input holds focus, which thickens the active indicator.
+    /// Whether the input holds focus, which floats the label, thickens the active indicator and
+    /// shades the container.
     ///
     /// Supplied rather than observed: the rendering stack reports focus only inside the input's own
     /// style closure, and the indicator is a sibling of the input rather than part of it. See
     /// [`FormField`](super::FormField) for why the wrapper takes this as a parameter.
+    ///
+    /// What a caller supplies here comes back from [`Self::on_focus_change`]. Setting one without
+    /// the other is BUG-003 — a field permanently at rest, or one that reports a fact nobody keeps.
     pub fn active(mut self, active: bool) -> Self {
         self.active = active;
+        self
+    }
+
+    /// The message emitted when the input takes or loses the keyboard (BUG-003).
+    ///
+    /// The source of the flag [`Self::active`] wants back. Two calls rather than one because the
+    /// application decides *where* the fact lives — one field per form, or one for the whole app —
+    /// and this library has no business knowing which.
+    pub fn on_focus_change(mut self, f: impl Fn(bool) -> M + 'a) -> Self {
+        self.on_focus_change = Some(Box::new(f));
         self
     }
 
@@ -176,6 +192,9 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
             // A field with text in it floats its label; an empty one rests it where the text will
             // go. Only the control knows which it is.
             .populated(!f.value.is_empty());
+        if let Some(on_focus_change) = f.on_focus_change {
+            field = field.on_focus_change(on_focus_change);
+        }
         if let Some((icon, message)) = f.trailing_action {
             field = field.trailing(super::IconButton::new(icon, f.roles).on_press(message));
         }

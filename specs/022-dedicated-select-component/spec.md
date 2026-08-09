@@ -263,6 +263,14 @@ through both controls. Every one must be defined once and pass for both.
   the pressable one. This is the rule the feature assumed and never stated: FR-002's field anatomy,
   FR-008's row anatomy and FR-010's ripple all say what a layer looks like, and none says how far it
   reaches.
+
+  > **The rule runs both ways** *([BUG-003](./bugs/BUG-003.md), 2026-08-09)*. BUG-002 read it as
+  > "the layer must grow to the responsive area", which is the direction the select was wrong in.
+  > The text field was wrong in the other: its layer covered the whole 56dp container while only
+  > the 24dp value line accepted a press, so a click in the padding landed on a box that shaded,
+  > hovered and looked entirely pressable, and did nothing. A press anywhere in a filled field's
+  > container now reaches its control — excluding the adornment slots, where a trailing icon button
+  > is an action of its own.
 - **FR-035**: Every input MUST answer focus with the design system's focused state layer, held for
   as long as the input has the keyboard and dropped when it leaves — the select, the text field, the
   search picker and the checkbox alike. Focus is distinct from the active indicator, which already
@@ -278,13 +286,22 @@ through both controls. Every one must be defined once and pass for both.
   > justifies. The checkbox answers **hover** (FR-036) and nothing else, and this is recorded rather
   > than quietly dropped so the next person does not read the gate as covering it.
   >
-  > **And for the text field it renders but never fires** *(visual pass, 2026-08-09)*. Focus is a
+  > ~~**And for the text field it renders but never fires** *(visual pass, 2026-08-09)*. Focus is a
   > *supplied* flag — `TextField::active` — and **no call site in the application or the gallery
   > passes it**. The container draws the layer when told; nothing tells it. The select is
   > unaffected, since its open state is its own. Closing this needs a screen that tracks which
   > field holds the keyboard, which is a change to every form rather than to this component, and
   > the same gap has kept the *active indicator* dark since feature 018. **FR-035 is therefore met
-  > for the select and unmet in practice for every text field.**
+  > for the select and unmet in practice for every text field.**~~
+  >
+  > **Met for the text field too** *([BUG-003](./bugs/BUG-003.md), 2026-08-09)*. `active` stays a
+  > supplied flag for the reasons above, and the field now *reports* what to supply: the container
+  > asks its control, through the rendering stack's own focus traversal, so the answer comes from
+  > the input's state rather than from a guess about where the pointer was. The application holds
+  > which field has the keyboard (`State::focused_field`) and hands it back on the next view, which
+  > is what floats the label as well as shading the container — the label's position is settled
+  > when the field is built and no amount of observing later could move it. **FR-035 is now met for
+  > every input except the checkbox**, whose limit is unchanged and recorded above.
 - **FR-036**: Every input MUST answer hover with the design system's hover state layer, on the same
   area FR-034 defines. Today the text field and the checkbox draw no hover layer at all; the select
   draws one over part of itself.
@@ -359,6 +376,12 @@ through both controls. Every one must be defined once and pass for both.
   wearing the shared field container. The checkbox responds to hover only — see FR-035's note, and
   it is a limit of the stack's checkbox rather than a decision. *(Added by BUG-002; amended
   2026-08-09 on implementing it.)*
+
+  > **Counted in the running application, not in a pose** *(BUG-003, 2026-08-09)*. The count above
+  > was three the day it was written and one in the application, because two of the three could
+  > only be posed by a test. It is now three in both: `field_focus_call_sites.rs` holds every text
+  > field in the application to reporting its focus, which is the check whose absence let the count
+  > differ.
 
 ## Assumptions
 
