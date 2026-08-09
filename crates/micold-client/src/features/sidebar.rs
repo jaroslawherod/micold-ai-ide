@@ -16,7 +16,10 @@
 
 use crate::app::State;
 use crate::features::worktree::worktree_tags;
+use crate::overlay::registry::Registered;
+use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{ConventionalType, Tag};
+use micold_core::overlay::Layer;
 use micold_core::session::{Session, SessionLocation};
 use micold_core::worktree::Worktree;
 use std::collections::BTreeSet;
@@ -211,5 +214,38 @@ impl State {
             out.push(TagFilter::Untyped);
         }
         out
+    }
+}
+
+/// The sidebar's tag-filter panel, as a floating surface (feature 021, T029).
+///
+/// The panel is a popover with no state of its own beyond "is it showing": the filters it edits
+/// live in `State::sidebar_filters` and outlive it, which is contract D3 — closing the panel is
+/// not a decision about the filters. So the surface is a marker, and everything dispatch needs is
+/// the three answers below.
+///
+/// The one popover Escape reaches today. Registering it is a faithful description of what the
+/// code already does, which is why it is the popover Tier 2 registers first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SidebarFilterPanel;
+
+impl FloatingSurface for SidebarFilterPanel {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("sidebar_filter")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Popover
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Popover)
+            .cancelled_by(crate::app::Message::SidebarFilterMenuToggled)
+    }
+}
+
+impl Registered for SidebarFilterPanel {
+    fn open_in(state: &State) -> Option<Self> {
+        state.sidebar_filter_open.then_some(SidebarFilterPanel)
     }
 }
