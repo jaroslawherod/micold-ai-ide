@@ -218,8 +218,54 @@ impl<'a> Mounted<'a> {
             .is_some()
     }
 
+    /// One event, reporting whether anything asked for another frame as a result.
+    ///
+    /// The ripple never requests a redraw directly — handling the press already causes one, and its
+    /// track then chains from that (see `ripple.rs`). So "did a press start a ripple?" is answered
+    /// by the *frame after* it still asking for another, which is what this exposes.
+    fn send_probing_frames(&mut self, event: Event, cursor: mouse::Cursor) -> bool {
+        let mut messages = Vec::new();
+        let mut shell = iced::advanced::Shell::new(&mut messages);
+        self.element.as_widget_mut().update(
+            &mut self.tree,
+            &event,
+            Layout::new(&self.node),
+            cursor,
+            &self.renderer,
+            &mut clipboard::Null,
+            &mut shell,
+            &Rectangle::with_size(WINDOW),
+        );
+        shell.redraw_request() != iced::window::RedrawRequest::Wait
+    }
+
+    /// Press at `at` and report whether a ripple is running afterwards.
+    fn ripples_when_pressed_at(&mut self, at: Point) -> bool {
+        let _ = self.send(
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            mouse::Cursor::Available(at),
+        );
+        self.frame += 1;
+        let stamp = self.origin + FRAME * self.frame;
+        self.send_probing_frames(
+            Event::Window(iced::window::Event::RedrawRequested(stamp)),
+            mouse::Cursor::Available(at),
+        )
+    }
+
     /// Draw the field over `backdrop` and return the buffer with the size it was drawn at.
     fn screenshot(&mut self, backdrop: Color, on: Color) -> (Vec<u8>, u32, u32) {
+        self.screenshot_under(backdrop, on, mouse::Cursor::Unavailable)
+    }
+
+    /// The same, with the pointer somewhere — the container reads hover off the cursor when it
+    /// draws (BUG-002), so a hover screenshot has to hand one over.
+    fn screenshot_under(
+        &mut self,
+        backdrop: Color,
+        on: Color,
+        cursor: mouse::Cursor,
+    ) -> (Vec<u8>, u32, u32) {
         let size = self.node.bounds().size();
         let viewport = Rectangle::with_size(size);
         self.renderer.reset(viewport);
@@ -229,7 +275,7 @@ impl<'a> Mounted<'a> {
             &super::theme(micold_core::theme::ColorScheme::Light),
             &renderer::Style { text_color: on },
             Layout::new(&self.node),
-            mouse::Cursor::Unavailable,
+            cursor,
             &viewport,
         );
         let (w, h) = (size.width.ceil() as u32, size.height.ceil() as u32);
@@ -262,13 +308,20 @@ fn as_bytes(c: Color) -> [u8; 3] {
 /// bottom edge, and what colour they are.
 ///
 /// Sampled at `x = 2`, inside the container and well clear of §7.7's 16dp padding, so nothing but
-/// the container's own fill and the indicator can be in the column.
+/// the container's own background and the indicator can be in the column.
+///
+/// **The background is read from the field rather than from the token** (BUG-002). It used to be
+/// `surface_container_highest` outright, which was true only while nothing else painted the
+/// container: an open select now carries the pressed state layer over its whole width, so every row
+/// in the column differed from the bare token and the indicator measured the full 56dp. The layer
+/// is correct and the yardstick was wrong — so the reference is now a row from the container's
+/// middle, which is whatever the field actually has behind its indicator.
 fn indicator(field: &mut Mounted<'_>, r: Roles) -> (f32, [u8; 3]) {
     let fill = style::color(r.surface_container_highest);
     let box_bottom = field.container().height.round() as u32;
     let (pixels, width, _) = field.screenshot(fill, style::color(r.on_surface));
 
-    let back = as_bytes(fill);
+    let back = pixel(&pixels, width, 2, box_bottom / 2);
     let mut rows = 0.0;
     let mut colour = back;
     for y in (0..box_bottom).rev() {
@@ -452,6 +505,71 @@ fn the_chevron_is_drawn_in_the_muted_role() {
          only {} away from it — §7.7 draws the chevron muted, so it does not compete with the value \
          beside it",
         distance(value, variant),
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The state layer covers the field it responds on (BUG-002 — FR-034, SC-011)
+// ---------------------------------------------------------------------------------------------
+
+/// Hovering shades the **whole** container, not an inner part of it.
+///
+/// Sampled at `x = 2` and at the container's top row: both are inside the field and both are
+/// outside §7.7's 16dp padding, so before this was fixed neither could ever change colour. The
+/// layer was painted on the control, which `FilledField` lays into one 24dp value line inside that
+/// padding — 440×24 of a 472×56 field — while hover and press were read off the whole band. This is
+/// the shape of the bug, and it is why the assertion is two corners rather than an area: an
+/// implementation that shades the middle and not the edges is the one being ruled out.
+#[test]
+fn hovering_shades_the_whole_container_not_the_control_slot() {
+    let r = roles();
+    let fill = style::color(r.surface_container_highest);
+    let on = style::color(r.on_surface);
+
+    let mut field = Mounted::new(select(None, r));
+    let box_ = field.container();
+    // Inside the padding at the leading edge, vertically clear of the indicator.
+    let probe = Point::new(box_.x + 4.0, box_.y + box_.height / 2.0);
+
+    let (resting, width, _) = field.screenshot(fill, on);
+    let (hovered, _, _) = field.screenshot_under(fill, on, mouse::Cursor::Available(probe));
+
+    let y = (box_.y + box_.height / 2.0) as u32;
+    let edge_at_rest = pixel(&resting, width, 2, y);
+    let edge_hovered = pixel(&hovered, width, 2, y);
+    assert!(
+        distance(edge_at_rest, edge_hovered) > 0,
+        "the container's leading edge is unchanged by a hover the field itself registers — the \
+         layer is painted somewhere smaller than the rectangle the pointer is read against \
+         (FR-034, SC-011)"
+    );
+
+    let top_at_rest = pixel(&resting, width, width / 2, (box_.y + 2.0) as u32);
+    let top_hovered = pixel(&hovered, width, width / 2, (box_.y + 2.0) as u32);
+    assert!(
+        distance(top_at_rest, top_hovered) > 0,
+        "the container's top edge is unchanged by a hover — the layer is inset vertically, which \
+         is the 24dp-in-56dp half of BUG-002 (FR-034)"
+    );
+}
+
+/// A press in the field's padding ripples, because that press already opens the list.
+///
+/// The contradiction this closes is the whole of BUG-002: `Select::update` read hover and press off
+/// the 472×56 band while `Ripple` watched a 440×24 node inside it, so the pointer in the 16dp
+/// gutter opened the select and rippled nothing.
+#[test]
+fn a_press_in_the_padding_ripples_because_it_also_opens_the_list() {
+    let r = roles();
+    let mut field = Mounted::new(select(None, r));
+    let box_ = field.container();
+    let gutter = Point::new(box_.x + 4.0, box_.y + box_.height / 2.0);
+
+    assert!(
+        field.ripples_when_pressed_at(gutter),
+        "a press in the field's padding started no ripple, yet the same press toggles the list — \
+         the rectangle that accepts the press and the one that answers it must be the same \
+         (FR-010, FR-034)"
     );
 }
 

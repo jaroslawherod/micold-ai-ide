@@ -218,8 +218,40 @@ pub fn form_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
                 roles,
             ),
             posed("no label", control(), roles),
+            // The four state layers (BUG-002, FR-035, SC-012). Posed rather than driven, and here
+            // that is not a compromise: hover and focus are *transient*, so a live instance shows
+            // one of them at a time and never two together — while the question these answer is
+            // about the differences between them, which is only visible side by side. Feature 021's
+            // FR-020a rules out pinning a state on a *live* entry; this entry poses everything.
+            //
+            // Built on a bare control rather than on a `TextField`, because a text field composes
+            // its own `FormField` and wrapping it in a second would draw two containers — the
+            // mistake this function's own docs describe.
+            layer_pose("None", material::FieldLayer::None, roles),
+            layer_pose("Hovered", material::FieldLayer::Hovered, roles),
+            layer_pose("Focused", material::FieldLayer::Focused, roles),
+            layer_pose("Pressed", material::FieldLayer::Pressed, roles),
         ],
         Layout::FullWidth,
+    )
+}
+
+/// One field wearing one state layer, for the four poses above.
+fn layer_pose<'a>(
+    name: &'static str,
+    layer: material::FieldLayer,
+    roles: Roles,
+) -> Element<'a, Message> {
+    posed(
+        name,
+        material::FormField::new(
+            material::Text::new(samples::FILLED, material::TypeRole::Body, roles),
+            roles,
+        )
+        .label("Theme")
+        .populated(true)
+        .layer(layer),
+        roles,
     )
 }
 

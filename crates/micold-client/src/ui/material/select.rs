@@ -86,12 +86,11 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::widget::{container, row, Space};
-use iced::{alignment, keyboard, Background, Element, Event, Length, Rectangle, Size, Vector};
-use micold_core::tokens::{anatomy, shape, state, Roles};
+use iced::{alignment, keyboard, Element, Event, Length, Rectangle, Size, Vector};
+use micold_core::tokens::{anatomy, Roles};
 use micold_core::typeahead::{claims, intent_for, move_highlight, Intent};
 
 use super::picker::{animated_menu, menu_element, Row, EXIT, GAP};
-use super::style;
 use super::text::TypeRole;
 use crate::icons::Icon;
 use crate::ui::cdk::picker::{key_for, Picker};
@@ -214,9 +213,6 @@ enum Acted {
 struct SelectState {
     open: bool,
     highlight: Option<usize>,
-    /// Whether the pointer is over the trigger, for §5's state layer. Held rather than read at draw
-    /// time because the layer is the trigger's *background*, decided when the trigger is built.
-    hovered: bool,
     /// The channel described in the module docs. Shared with the [`ListWatch`] built into the
     /// list, which is rebuilt every layout — so the cell lives here, where it survives.
     acted: Rc<Cell<Acted>>,
@@ -227,7 +223,6 @@ impl Default for SelectState {
         Self {
             open: false,
             highlight: None,
-            hovered: false,
             acted: Rc::new(Cell::new(Acted::Nothing)),
         }
     }
@@ -254,7 +249,6 @@ impl SelectState {
 struct View {
     open: bool,
     highlight: Option<usize>,
-    hovered: bool,
     acted: Rc<Cell<Acted>>,
 }
 
@@ -278,21 +272,6 @@ where
         None => s.placeholder.clone(),
     };
 
-    // §5's state layer: the content colour over the container at the state's opacity. An open list
-    // reads at the pressed opacity and a hovered one at hover — the same two the `pick_list` style
-    // closure resolved, and for the same reason (§7.7 asks the select's open and hover states to be
-    // carried by the layer). What is different is that the *component* answers now, rather than a
-    // closure the rest of the application could not see into.
-    let opacity = if view.open {
-        state::PRESSED
-    } else if view.hovered {
-        state::HOVER
-    } else {
-        0.0
-    };
-    let layer = (opacity > 0.0)
-        .then(|| Background::Color(style::state_fill(style::color(r.on_surface), opacity)));
-
     let line = row![
         super::Text::new(value, TypeRole::Body, r),
         Space::new().width(Length::Fill),
@@ -304,24 +283,28 @@ where
     ]
     .align_y(alignment::Vertical::Center);
 
-    // No padding of its own: `FormField` pads the container to §7.7's 16dp, and a trigger that
-    // padded itself as well would sit inset from every text field beside it.
-    let surface = container(line)
+    // No padding, no background and no ripple of its own. All three belong to the container now:
+    // it is the thing the pointer is read against, so it is the thing that shades and ripples
+    // (FR-034, BUG-002). A trigger that padded itself would also sit inset from every text field
+    // beside it.
+    let trigger: Element<'a, M> = container(line)
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(move |_: &iced::Theme| container::Style {
-            background: layer,
-            ..container::Style::default()
-        });
-    // Every pressable surface ripples (feature 019, FR-024c) and this is one. The wrapper watches
-    // its own bounds for the press, so it needs no message — which is what lets the trigger publish
-    // nothing at all and leaves the press for `Select::update` to read.
-    let trigger: Element<'a, M> =
-        super::Ripple::new(surface, r.on_surface, shape::EXTRA_SMALL).into();
+        .into();
 
     let mut field = super::FormField::new(trigger, r)
         // The indicator, answering for itself. Nothing supplies this and nothing can (FR-013).
         .active(view.open)
+        // An open list reads at the pressed opacity — §7.7 asks the select's open state to be
+        // carried by the layer, and the component is what knows it. Hover is not passed: the
+        // container sees the cursor for itself.
+        .layer(if view.open {
+            super::form_field::Layer::Pressed
+        } else {
+            super::form_field::Layer::None
+        })
+        // Every pressable surface ripples (feature 019, FR-024c) and this is one.
+        .pressable(true)
         // A selection counts as content; an unset select rests its label like an empty input.
         .populated(populated);
     if let Some(label) = s.label.clone() {
@@ -418,7 +401,6 @@ where
             View {
                 open: state.open,
                 highlight: state.highlight,
-                hovered: state.hovered,
                 acted: state.acted.clone(),
             }
         };
@@ -496,17 +478,10 @@ where
                 }
                 // Deliberately not captured: the press still belongs to the ripple underneath.
             }
-            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                let over = cursor.is_over(trigger);
-                let state = tree.state.downcast_mut::<SelectState>();
-                if state.hovered != over {
-                    state.hovered = over;
-                    // The state layer is the trigger's background, so a change of hover is a change
-                    // of what has to be built — which is a layout, not just a repaint.
-                    shell.invalidate_layout();
-                    shell.invalidate_widgets();
-                }
-            }
+            // No `CursorMoved` arm. There used to be one, holding a `hovered` flag so the trigger
+            // could be *built* with a background — and it was half of BUG-002: the flag was set
+            // from the whole field while the layer it fed covered 40% of it. `FilledField` reads
+            // the cursor when it draws, so the fact has one owner and needs no rebuild to change.
             _ => {}
         }
 

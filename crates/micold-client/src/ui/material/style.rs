@@ -73,6 +73,20 @@ pub fn state_fill(content: Color, opacity: f32) -> Color {
     alpha(content, opacity)
 }
 
+/// `layer` composited over `base`, both opaque afterwards.
+///
+/// For the one place a state layer cannot be a separate quad: `checkbox::Style` exposes a single
+/// opaque `background`, so its hover layer has to be blended into the fill rather than drawn on
+/// top of it. Everywhere else the layer is its own quad and this is not needed.
+pub fn over(layer: Color, base: Color) -> Color {
+    Color {
+        r: layer.r * layer.a + base.r * (1.0 - layer.a),
+        g: layer.g * layer.a + base.g * (1.0 - layer.a),
+        b: layer.b * layer.a + base.b * (1.0 - layer.a),
+        a: 1.0,
+    }
+}
+
 fn radius(px: f32) -> Border {
     Border {
         radius: px.into(),
@@ -512,12 +526,27 @@ pub fn checkbox(r: Roles) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbo
             checkbox_widget::Status::Hovered { .. } => color(r.primary),
             _ => color(r.outline),
         };
+        let base = if is_checked {
+            color(r.primary)
+        } else {
+            color(r.surface)
+        };
+        // §5's hover layer, composited into the box's own fill (FR-036, BUG-002). Before this, a
+        // hovered checkbox changed its *border* colour and nothing else, which is a Material 2
+        // affordance rather than a state layer — and it left the checkbox the one control in the
+        // app whose hover could be missed entirely against a busy background.
+        //
+        // Composited rather than overlaid because `checkbox::Style` has one opaque `background` and
+        // no layer of its own: there is nowhere to put a translucent quad, so the blend happens
+        // here. The opacity is still the published one; only the arithmetic is local.
+        let background = match status {
+            checkbox_widget::Status::Hovered { .. } => {
+                over(state_fill(color(r.on_surface), state::HOVER), base)
+            }
+            _ => base,
+        };
         checkbox_widget::Style {
-            background: Background::Color(if is_checked {
-                color(r.primary)
-            } else {
-                color(r.surface)
-            }),
+            background: Background::Color(background),
             icon_color: color(r.on_primary),
             border: Border {
                 color: border_color,
