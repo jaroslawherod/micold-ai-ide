@@ -29,11 +29,16 @@
 //! menus, each described in the feature module that owns it and named here once. The transitional
 //! `ModalSurface` that stood in for the whole `Overlay` enum at T029 is gone as of T032.
 //!
-//! The enum itself is not, yet. It survives as the *storage* the dialog surfaces read — their
-//! `open_in` is `state.overlay == Overlay::X` — and as the thing `app::on_escape` still matches
-//! on. Those are two independent statements of the same nine facts, which is exactly the drift
-//! this feature exists to end, and `tests/overlay_registry.rs` holds them equal over every state
-//! either can express until T034 deletes the second one.
+//! The enum itself is not, yet — but as of T033 it no longer *describes* anything. It survives as
+//! the *storage* the dialog surfaces read: their `open_in` is `state.overlay == Overlay::X`, and
+//! that is the whole of it. The second copy of the nine facts — `Overlay::as_surface`, the
+//! nine-arm bridge T029 built so the two representations could not answer differently while they
+//! coexisted — is deleted, and `app::on_escape` is one call into [`escape`] below.
+//!
+//! What holds the nine facts now is `tests/overlay_registry.rs`, which states each dialog's
+//! identity and cancellation in an exhaustive match of its own and checks dispatch against it.
+//! That is a stronger check than the equality it replaces: the expectation is written
+//! independently of the code under test rather than read out of it.
 
 use crate::app::{Message, State};
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
@@ -166,8 +171,9 @@ pub fn topmost(state: &State) -> Option<Open> {
 
 /// What Escape closes: the topmost surface's cancellation, or nothing.
 ///
-/// Topmost and no other — a modal keeps Escape whatever floats above it (contract D1). This is
-/// `app::on_escape` expressed generically; T034 replaces that function with this one.
+/// Topmost and no other — a modal keeps Escape whatever floats above it (contract D1). As of T033
+/// this *is* `app::on_escape`, which delegates here; T034 brings the keyboard subscription's
+/// hand-written mirror of it onto the same call and retires the wrapper.
 pub fn escape(state: &State) -> Option<Message> {
     topmost(state)?.on(Trigger::Escape).cloned()
 }

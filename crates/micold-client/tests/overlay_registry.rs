@@ -1,17 +1,25 @@
-//! The registry answers what the enum answers, for every state it can be in (feature 021, T029 —
-//! contract R1, R3; FR-008, FR-012).
+//! Generic dispatch reaches every dialog, under the right name, with the right cancellation
+//! (feature 021, T029/T033 — contract R1, R3; FR-008, FR-012).
 //!
-//! T029's whole claim is that two representations of "what is floating" now coexist and agree.
-//! Agreement is the thing worth testing, because the four commits after this one delete the older
-//! representation a site at a time: each of those is safe exactly insofar as the newer one already
-//! gives the same answer. So the central test here is an exhaustive equivalence — every `Overlay`
-//! variant crossed with the filter panel open and closed, twenty states, registry against
-//! `on_escape`. If the two ever diverge, they diverge here rather than in a dialog that will not
-//! close.
+//! ## What this file checked before T033, and what it checks now
 //!
-//! The equivalence covers the states `Overlay` can express, crossed with the one popover Escape
+//! T029's claim was that two representations of "what is floating" coexisted and agreed, so the
+//! central test was an exhaustive *equivalence*: every `Overlay` variant crossed with the filter
+//! panel open and closed, twenty states, registry against `on_escape`. The four commits that
+//! delete the older representation a site at a time are each safe exactly insofar as the newer one
+//! already gives the same answer.
+//!
+//! T033 deleted the older representation's own account of itself — `Overlay::as_surface` — so
+//! there is no longer a second answer to compare against. The obligation does not go with it: the
+//! nine facts still have to be right, and T034–T036 still delete a site each on the strength of
+//! them. So they are stated **here**, in [`expected`], an exhaustive match written independently
+//! of the code under test. That is strictly stronger than the equality it replaces, which could
+//! only ever catch the two sides *disagreeing*, never both being wrong; and it is exhaustive, so a
+//! tenth variant added without an expectation fails to compile rather than going unchecked.
+//!
+//! The states covered are the ones `Overlay` can express, crossed with the one popover Escape
 //! reached before T031. T031 registered the other six, and that *did* change what Escape does —
-//! recorded below in `escape_now_reaches_every_popover`, not hidden inside the equivalence.
+//! recorded below in `escape_now_reaches_every_popover`, not hidden inside the table.
 
 use micold_client::app::{on_escape, Message, Overlay, State};
 use micold_client::overlay::registry::{self, Probe};
@@ -34,6 +42,34 @@ const OVERLAYS: &[Overlay] = &[
     Overlay::ConfirmForgetProject,
 ];
 
+/// What each variant must dispatch as: the surface's name, and the message that cancels it.
+///
+/// The test's own statement of the nine facts, deliberately *not* read out of the production code
+/// it checks. Exhaustive on purpose — a variant added without an expectation is a dialog nobody
+/// has said how to close, and this file must fail to build rather than quietly skip it. That is
+/// the same compile-time hold T026 verified for the enum's other match sites, kept alive here now
+/// that the enum has none of its own.
+fn expected(overlay: Overlay) -> Option<(&'static str, Message)> {
+    Some(match overlay {
+        Overlay::None => return None,
+        Overlay::About => ("about", Message::AboutClosed),
+        Overlay::ProjectSelector => ("project_selector", Message::ProjectSelectorClosed),
+        Overlay::RenameProject => ("rename_project", Message::RenameCancelled),
+        Overlay::AddWorktree => ("add_worktree", Message::AddWorktreeCancelled),
+        Overlay::Settings => ("settings", Message::SettingsCancelled),
+        Overlay::ConfirmWorktreeDelete => {
+            ("confirm_worktree_delete", Message::WorktreeDeleteCancelled)
+        }
+        Overlay::RenameWorktree => ("rename_worktree", Message::WorktreeRenameCancelled),
+        Overlay::ConfirmSessionRemove => {
+            ("confirm_session_remove", Message::SessionRemoveCancelled)
+        }
+        Overlay::ConfirmForgetProject => {
+            ("confirm_forget_project", Message::ProjectForgetCancelled)
+        }
+    })
+}
+
 fn state(overlay: Overlay, filter_open: bool) -> State {
     State {
         overlay,
@@ -42,7 +78,7 @@ fn state(overlay: Overlay, filter_open: bool) -> State {
     }
 }
 
-/// The twenty states the two representations must agree on.
+/// The twenty states dispatch must get right.
 fn every_state() -> impl Iterator<Item = (Overlay, bool, State)> {
     OVERLAYS.iter().flat_map(|overlay| {
         [false, true]
@@ -52,48 +88,64 @@ fn every_state() -> impl Iterator<Item = (Overlay, bool, State)> {
 }
 
 #[test]
-fn the_registry_and_the_enum_answer_escape_identically_in_every_state() {
+fn escape_closes_the_open_dialog_in_every_state() {
+    // Both entry points, against the table rather than against each other. `on_escape` delegates
+    // to the registry as of T033, so comparing the two would now be vacuous — this is the check
+    // that outlives the collapse, and it is the one T034–T036 delete a site each on the strength
+    // of.
     for (overlay, filter, state) in every_state() {
+        let cancel = expected(overlay).map(|(_, cancel)| cancel);
+        let panel = filter.then_some(Message::SidebarFilterMenuToggled);
+        // A dialog outranks the panel; with no dialog open the panel is the topmost surface.
+        let want = cancel.or(panel);
+
         assert_eq!(
             registry::escape(&state),
+            want,
+            "{overlay:?} with the filter panel {}: generic dispatch did not produce the \
+             cancellation this dialog declares",
+            if filter { "open" } else { "closed" }
+        );
+        assert_eq!(
             on_escape(&state),
-            "{overlay:?} with the filter panel {}: generic dispatch disagreed with the enum it is \
-             replacing. The next four tasks delete a match site each on the strength of this \
-             equality, so a divergence here is a dialog that will not close after one of them",
+            want,
+            "{overlay:?} with the filter panel {}: the public Escape entry point disagreed with \
+             the registry it now delegates to",
             if filter { "open" } else { "closed" }
         );
     }
 }
 
 #[test]
-fn the_registry_and_the_enum_agree_on_which_surface_that_is() {
+fn each_dialog_registers_under_its_own_identity() {
     // Not just *what closes it* but *which surface it is*. T035 keys the view and the exit
     // animation on identity, so an id typo'd in a feature module would move a dialog's transition
-    // rather than break its dismissal — a failure the equivalence above cannot see.
+    // rather than break its dismissal — a failure the cancellations above cannot see.
     for overlay in OVERLAYS {
         let state = state(*overlay, false);
-        let from_registry = registry::topmost(&state).map(|open| open.id());
-        let from_enum = overlay.as_surface().map(|(id, _)| id);
+        let registered = registry::topmost(&state).map(|open| open.id());
+        let want = expected(*overlay).map(|(id, _)| id);
 
         assert_eq!(
-            from_registry, from_enum,
-            "{overlay:?}: the registry and the enum name different surfaces"
+            registered.map(|id| id.as_str()),
+            want,
+            "{overlay:?}: the registry names a different surface than this dialog is supposed to be"
         );
     }
 }
 
 #[test]
 fn every_variant_is_in_the_list() {
-    // `as_surface` is the enum's own account of itself; a variant added without one is a surface
-    // the registry cannot see. The compiler catches the missing arm, and this catches the case
-    // where the arm exists but this file's list does not.
+    // `expected` is exhaustive, so the compiler catches a variant added without an expectation.
+    // This catches the other half: the arm exists but this file's iteration list does not mention
+    // it, so the twenty states are quietly nineteen.
     let named = OVERLAYS.len();
-    let with_a_surface = OVERLAYS.iter().filter(|o| o.as_surface().is_some()).count();
+    let with_a_surface = OVERLAYS.iter().filter(|o| expected(**o).is_some()).count();
 
     assert_eq!(
         named, 10,
-        "OVERLAYS has drifted from the enum. Add the new variant here and to the equivalence \
-         above, or the twenty states it is meant to prove are no longer twenty"
+        "OVERLAYS has drifted from the enum. Add the new variant here as well as to `expected`, \
+         or the twenty states this file is meant to cover are no longer twenty"
     );
     assert_eq!(
         with_a_surface, 9,
