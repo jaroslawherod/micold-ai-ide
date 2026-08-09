@@ -10,6 +10,10 @@ description: "Task list for feature 022 — Dedicated Select Component on a Shar
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md),
 [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
 
+**Bugfix**: 2026-08-09 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch. Added Phase 7
+(T041–T048) for FR-034 – FR-036. **No task was reopened**: T012, T016 and T031 each did what they
+said, and the requirement they would have needed did not exist.
+
 **Tests**: MANDATORY per Constitution Principle I. Every implementation task below is preceded by a
 test task that must be **observed failing** first. The GUI-wiring exception is claimed only for the
 render glue — `worktree_form.rs`'s call and the gallery's entries — and never for the visibility
@@ -270,6 +274,80 @@ the durability half of the request.
 
 ---
 
+## Phase 7: Interaction states (BUG-002)
+
+*Added 2026-08-09 by the bugfix patch. FR-034 – FR-036, SC-011, SC-012. Independent of T039 and
+T040, which are blocked on a pull request and on eyes at a display respectively.*
+
+### Tests for Phase 7 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T041 [P] Write a failing gate that for **every** control drawing a state layer, the rectangle it shades equals the rectangle it accepts a press on — ~~in `crates/micold-client/src/ui/material/style_states.rs`~~ **in `select_anatomy.rs`**, which today asserts opacity deltas and no geometry at all. It MUST fail on the select's trigger as it stands (440×24 shaded within a 472×56 pressable field, `layout_snapshot.txt:2296`) (FR-034, SC-011)
+
+  > **Landed as `hovering_shades_the_whole_container_not_the_control_slot`, and in a different file
+  > than this task named.** `style_states.rs` resolves *style functions* and mounts no widgets, so
+  > it cannot see a rectangle; the gate needs the pointer over a real field and a look at what was
+  > painted, and the rasterising harness for that is `select_anatomy.rs`'s. It samples the
+  > container's leading edge and its top row — both inside the field, both outside §7.7's 16dp
+  > padding, so neither could change colour while the layer sat in the control slot. **Observed
+  > failing**: with the layer put back on the slot, it and T043 both fail; with the fix, all 16
+  > pass. The impl-granular requirement fell away with the file change — this asserts drawn output,
+  > which has no impl to be granular about.
+
+- [X] T042 [P] Write a failing gate that each input resolves a **distinct** treatment at rest, hovered and focused, in both schemes, in `crates/micold-client/src/ui/material/style_states.rs` (FR-035, FR-036, SC-012)
+
+  > Landed as `a_fields_states_are_distinct_and_ordered`, `the_field_layers_are_the_published_opacities`
+  > and `a_checkbox_reacts_to_hover_with_a_layer`. The first two assert the ordering that stops two
+  > layers stacking and that all three opacities are the published tokens; the third covers the one
+  > input that is not a field.
+
+- [X] T043 [P] Write a failing test that a press landing in the field's padding — where `Select::update` already toggles the list — starts a ripple, in `crates/micold-client/src/ui/material/select_anatomy.rs` (FR-010, FR-034)
+
+  > Landed as `a_press_in_the_padding_ripples_because_it_also_opens_the_list`. A ripple never
+  > requests a redraw directly, so it is observed through the frame *after* the press still asking
+  > for another. Observed failing alongside T041.
+
+### Implementation for Phase 7
+
+- [X] T044 Move the state layer and the `Ripple` from the control slot onto the container in `crates/micold-client/src/ui/material/filled_field.rs`, and delete the layer from `crates/micold-client/src/ui/material/select.rs`'s trigger (FR-034, plan *Interaction states*)
+
+  > Done, and it removed more than it added. `FilledField` paints the layer over its own bounds and
+  > **reads hover off the cursor when it draws** — so `SelectState.hovered`, the `View.hovered` it
+  > fed and the whole `CursorMoved` arm that maintained it are gone. That flag was half the bug: it
+  > was set from the whole field while the layer it fed covered 40% of it. The ripple moved to
+  > `FormField`, behind a `.pressable()` the select opts into and a text field does not — clicking a
+  > text field places a caret, and rippling would announce an action that did not happen.
+
+- [X] T045 Give `FilledField` a focused input and feed it from `text_input`'s reported focus in `text_field.rs`, and from the select's own state in `select.rs` — where `open` maps to the pressed opacity, so **open-and-focused must not stack two layers** (FR-035)
+
+  > Done for the fields, and **not achievable for the checkbox** — see FR-035's note in spec.md.
+  > `checkbox::Status` has no focused variant, so there is nothing to answer. Stacking is prevented
+  > structurally rather than by care: the layer is one ordered enum, so the strongest state wins and
+  > two cannot be represented at once.
+
+- [X] T046 ~~Make `style::field_input` answer the `text_input::Status` it is handed~~ and add the hover layer to the checkbox (FR-036)
+
+  > **The `field_input` half turned out to be unnecessary and was not done.** It rested on hover
+  > being the *input's* to draw; once T044 put the layer on the container, every field — text field
+  > included — answers hover without the input's status being consulted at all. Changing it as well
+  > would paint the same layer twice. The checkbox half was done, in `style.rs` rather than
+  > `checkbox.rs`: `checkbox::Style` exposes one opaque `background` and no layer, so the hover
+  > layer is composited into the fill by a new `style::over` helper.
+
+- [X] T047 [P] Add the new state-layer colour pairings to the AA-contrast gate in `crates/micold-core/tests/tokens.rs` (FR-036a, FR-029)
+
+  > Two gates: `every_field_state_layer_stays_legible` (three states × three foregrounds × both
+  > schemes, over the shared container) and `the_checkboxs_hover_layer_stays_legible` (both fills).
+  > No new token: `state::FOCUS` already existed and was unused by any input.
+
+- [X] T048 [P] Show the hovered and focused poses in the gallery, in `crates/micold-client/src/showcase/sections/controls.rs` (FR-031, SC-012)
+
+  > Four poses on the **`FormField`** entry, one per layer. Not a separate entry: `showcase_completeness`'s
+  > C2 rejects a catalogue entry naming a component the library does not contain, which is what a
+  > `FieldLayers` entry would have been. The gate found this on its own — the new `pub enum Layer`
+  > made C3 demand an instance for every variant the moment it existed.
+
+---
+
 ## Dependencies & Execution Order
 
 ```text
@@ -284,6 +362,8 @@ Phase 4 / US2 (T026–T028)  ← one call, given Phase 2
 Phase 5 / US3 (T029–T032)  ← verification
       ↓
 Phase 6 (T033–T040)
+      ↓
+Phase 7 (T041–T048)  ← BUG-002; independent of T039/T040, which are externally blocked
 ```
 
 **Story independence**: US1 is shippable alone (with the transition on the search picker only, from
@@ -295,8 +375,14 @@ neighbours suggest:
 
 - `cdk/picker.rs`: T001 → T006 → T007
 - `material/picker.rs`: T002 → T008 → T009 → T030
-- `material/select.rs`: T016 → T017 → T018 → T027 → T030
+- `material/select.rs`: T016 → T017 → T018 → T027 → T030 → T044 → T045
 - `material/typeahead.rs`: T001 → T008 → T010 → T030
+- `material/style_states.rs`: T041 → T042 *(both add to one file; write them in order)*
+- `material/filled_field.rs`: T044 → T045 *(T045 needs the layer already on the container)*
+
+**Within Phase 7**: T041–T043 are parallel with each other and all precede T044. T044 lands alone
+(FR-034 is independent). T045 and T046 land **together** — they share one mechanism, and building
+focus alone would put the same layer in twice (plan *Interaction states*, Ordering).
 
 ## Parallel Opportunities
 

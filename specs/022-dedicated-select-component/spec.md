@@ -8,6 +8,11 @@
 
 **Input**: User description: "Make select an dedicated compoenent that will fully support the material design 3 look and feel similar to type a head. Both should share same common base." Follow-up: "the drop down option list should be animated same as angular material"
 
+**Bugfix**: 2026-08-09 — [BUG-002](./bugs/BUG-002.md) added the interaction-state requirements
+(FR-034 – FR-036, SC-011, SC-012). The feature specified where a state layer's colour comes from but
+never what area it covers, so the select's trigger drew its layer over 40% of the field it responds
+on; and no input in the app answers focus at all, because focus was never named as a state.
+
 ## Context
 
 The application has two controls that ask a person to choose one item from a list that appears
@@ -76,6 +81,12 @@ this alone and the select already stops looking foreign.
     appears above the control instead of being clipped or pushed off screen.
 12. **Given** a select with more options than fit, **When** it is opened, **Then** the list stops
     growing at the same row count the search picker stops at and scrolls beyond it.
+13. **Given** a closed select, **When** the pointer rests anywhere over its field — including the
+    padding at its edges, where a press already opens it — **Then** the whole field is shaded, not
+    an inner part of it, and a press from that position ripples. *(Added by BUG-002.)*
+14. **Given** any field on the form, **When** it takes the keyboard, **Then** its container shows
+    the focused treatment for as long as it holds focus, and drops it when focus leaves.
+    *(Added by BUG-002.)*
 
 ---
 
@@ -244,6 +255,35 @@ through both controls. Every one must be defined once and pass for both.
 - **FR-028**: A third picker built on the foundation later MUST obtain positioning, dismissal,
   keyboard handling, row treatment and motion without restating any of them.
 
+**Interaction states** *(added by [BUG-002](./bugs/BUG-002.md), 2026-08-09)*
+
+- **FR-034**: A control's state layer MUST cover the same area the control responds on. Wherever a
+  press is accepted and a hover is registered, that is the area the hover, focus and pressed layers
+  MUST shade, and the area a ripple MUST originate within — not an inner element that happens to be
+  the pressable one. This is the rule the feature assumed and never stated: FR-002's field anatomy,
+  FR-008's row anatomy and FR-010's ripple all say what a layer looks like, and none says how far it
+  reaches.
+- **FR-035**: Every input MUST answer focus with the design system's focused state layer, held for
+  as long as the input has the keyboard and dropped when it leaves — the select, the text field, the
+  search picker and the checkbox alike. Focus is distinct from the active indicator, which already
+  answers separately and MUST keep doing so.
+
+  > **Partly unmet, and it is the rendering stack that stops it** *(found while implementing
+  > T045, 2026-08-09)*. Every control wearing the shared field container answers focus: the text
+  > field and the search picker report it, and the select reports its open state at the pressed
+  > opacity. The **checkbox cannot**. It is the stack's own checkbox, whose style is a function of
+  > `Status`, and that enum has three variants — active, hovered, disabled. There is no focused
+  > variant to answer, so the layer has nowhere to attach. Meeting this for the checkbox means
+  > owning the widget the way `FilledField` owns the field, which is a larger change than this bug
+  > justifies. The checkbox answers **hover** (FR-036) and nothing else, and this is recorded rather
+  > than quietly dropped so the next person does not read the gate as covering it.
+- **FR-036**: Every input MUST answer hover with the design system's hover state layer, on the same
+  area FR-034 defines. Today the text field and the checkbox draw no hover layer at all; the select
+  draws one over part of itself.
+- **FR-036a**: FR-034 – FR-036 MUST be satisfied using the design system's already-published state
+  opacities — hover, focus and pressed — introducing no new token, exactly as FR-020 requires of the
+  motion values. The focused opacity already exists and is unused by any input.
+
 **Parity, consumers and documentation**
 
 - **FR-029**: Every state above MUST be correct in both the light and the dark scheme and MUST behave
@@ -302,6 +342,15 @@ through both controls. Every one must be defined once and pass for both.
   no difference in what the form accepts or submits.
 - **SC-010**: A reviewer can see the select and the search picker, open, in both schemes, from a
   **single** page of the component gallery.
+- **SC-011**: For every control that draws a state layer, the rectangle it shades and the rectangle
+  it accepts a press on are the **same** rectangle — measured, not reviewed. The select's trigger
+  currently shades 40% of the field it responds on (440×24 within 472×56). *(Added by BUG-002.)*
+- **SC-012**: **Every** input — select, text field, search picker, checkbox — shows a distinct
+  treatment at rest, on hover and on focus, in both schemes. The count of inputs that respond to
+  focus rises from **zero** to ~~all of them~~ **every input that can report it**: the three
+  wearing the shared field container. The checkbox responds to hover only — see FR-035's note, and
+  it is a limit of the stack's checkbox rather than a decision. *(Added by BUG-002; amended
+  2026-08-09 on implementing it.)*
 
 ## Assumptions
 
@@ -331,6 +380,14 @@ through both controls. Every one must be defined once and pass for both.
   rows rather than a fixed height so a density change does not silently change how many fit.
 - **The gallery and the design-system documents are deliverables of this change**, per the project's
   documentation rule, not follow-ups.
+- **FR-034 – FR-036 reach past the two pickers, deliberately.** *(BUG-002, 2026-08-09.)* The rest of
+  this specification is about the select and the search picker, and a state-layer rule scoped to
+  them would be the same mistake in a smaller frame: the select's layer is confined to a sub-slot
+  because it inherited the text field's arrangement, so fixing one control and not the arrangement
+  leaves the next field to repeat it. Hover and focus for the text field and the checkbox are
+  therefore **new behaviour adopted into this feature**, not regressions it caused — they have never
+  existed. Where a layer already exists and is merely the wrong size, that is a defect of this
+  feature.
 
 ## Out of Scope
 

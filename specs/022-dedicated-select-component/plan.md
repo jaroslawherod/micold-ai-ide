@@ -4,6 +4,9 @@
 
 **Input**: Feature specification from `/specs/022-dedicated-select-component/spec.md`
 
+**Bugfix**: 2026-08-09 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch. See
+[Interaction states](#interaction-states-bug-002).
+
 ## Summary
 
 Make the select a component of this library rather than a re-coloured `pick_list`, put it and the
@@ -191,6 +194,42 @@ and slice 2 for the other.
 | The select's trigger gains a fixed height and puts its content at the top | BUG-001 and BUG-002 of feature 018 were both exactly this. `anatomy_size.rs` and `content_placement.rs` already exist because of them and already cover the class |
 | Losing `pick_list`'s highlight-on-open | Contract §2 states it as a requirement rather than trusting it to survive: the highlight is seeded from the current choice on open. Feature 013's FR-003 is the thing that would silently regress |
 | SC-001 and SC-002 cannot be automated | Stated plainly in quickstart §B's preamble rather than papered over. A green suite is not this feature working, and the recorded pass says which half was machine-checked |
+
+## Interaction states (BUG-002)
+
+*Added 2026-08-09 by the bugfix patch, for FR-034 – FR-036.*
+
+**The layer belongs to the container, not to what sits in its slot.** `FilledField` lays its control
+into one value line inside the field's 16dp padding, and `Select` paints its layer on the control —
+so the layer is 440×24 in a 472×56 field while hover and press are read off the whole field. Moving
+the layer onto `FilledField`, which is the thing that knows the container's bounds, fixes the select
+and gives the text field and any future field the same treatment without restating it. Patching
+`Select` alone would leave the arrangement that caused it.
+
+That places three of the new requirements in the shared field rather than in either picker:
+
+- **FR-034** (extent) — `FilledField` draws the layer over its own bounds; `Select` stops drawing one.
+  `Ripple` moves out to the same bounds so a press in the padding ripples, per FR-010.
+- **FR-035** (focus) — needs a focused flag the field can read. The text field has one to offer
+  (`text_input` reports focus); the select owns its own, as it already owns `open`. Note the select
+  is the harder half: `open` currently maps to the *pressed* opacity, and open-and-focused must not
+  double up.
+- **FR-036** (hover) — `style::field_input` currently discards the `text_input::Status` it is handed,
+  which is why a text field shows nothing. The status is already delivered; nothing new is plumbed.
+
+- **FR-036a** (no new token) — costs nothing to satisfy: `state::FOCUS` already sits in
+  `crates/micold-core/src/tokens/state.rs` beside `HOVER` and `PRESSED`, published by feature 018 and
+  consumed by no input. The work is to *use* the opacity that exists, not to add one, exactly as
+  FR-020 required of the menu timings. The contrast gate is where this is held (T047): a new pairing
+  is measured, never a new value.
+
+**Ordering**: the extent fix is independent and can land first. Focus and hover share one mechanism
+and should land together — building focus alone would put the same layer in twice.
+
+**Risk, and it is the one BUG-001 left behind**: none of this is observable to a test that never
+re-runs `view()`, and the anatomy gates assert element sizes rather than the relationship between
+two rectangles. The new gate has to compare the shaded rectangle with the pressable one, which is a
+kind of assertion this suite does not yet make anywhere.
 
 ## Complexity Tracking
 
