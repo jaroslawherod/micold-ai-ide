@@ -277,6 +277,14 @@ through both controls. Every one must be defined once and pass for both.
   > owning the widget the way `FilledField` owns the field, which is a larger change than this bug
   > justifies. The checkbox answers **hover** (FR-036) and nothing else, and this is recorded rather
   > than quietly dropped so the next person does not read the gate as covering it.
+  >
+  > **And for the text field it renders but never fires** *(visual pass, 2026-08-09)*. Focus is a
+  > *supplied* flag — `TextField::active` — and **no call site in the application or the gallery
+  > passes it**. The container draws the layer when told; nothing tells it. The select is
+  > unaffected, since its open state is its own. Closing this needs a screen that tracks which
+  > field holds the keyboard, which is a change to every form rather than to this component, and
+  > the same gap has kept the *active indicator* dark since feature 018. **FR-035 is therefore met
+  > for the select and unmet in practice for every text field.**
 - **FR-036**: Every input MUST answer hover with the design system's hover state layer, on the same
   area FR-034 defines. Today the text field and the checkbox draw no hover layer at all; the select
   draws one over part of itself.
