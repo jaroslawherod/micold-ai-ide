@@ -45,6 +45,14 @@ pub const SIDEBAR_DEFAULT_WIDTH: u16 = 300;
 /// Modeling the overlay as an enum (rather than a `bool` per dialog) makes
 /// "the About dialog is open twice" unrepresentable — satisfying FR-015 at the
 /// type level (Constitution Principle V).
+///
+/// **This is a storage slot, not a description of the dialogs** (feature 021, T033). What each
+/// dialog *is* — its identity, its band, what closes it — is stated once, in the feature module
+/// that owns it, and reaches dispatch through [`crate::overlay::registry`]. The enum used to
+/// carry a second copy of those nine facts in an `as_surface` match here; that match is gone, so
+/// the variants now say only *which slot is filled*. Each dialog's `Registered::open_in` reads
+/// this, which is the last thing the enum is for: T034–T036 collapse the remaining sites that
+/// match on it, and T037 replaces the slot itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Overlay {
     /// No modal is open; the main window is fully interactive.
@@ -102,38 +110,6 @@ pub enum FieldId {
     SettingsEnvIncludePath,
     /// Settings: the environment-include timeout.
     SettingsEnvIncludeTimeout,
-}
-
-impl Overlay {
-    /// The floating surface this variant names: its identity, and the message its cancellation
-    /// sends. `None` for [`Overlay::None`], which names no surface.
-    ///
-    /// This is the enum's own knowledge, and it is stated **once**. Both readers of it — the
-    /// [`on_escape`] path below and the overlay registry that Tier 2 dispatches through
-    /// ([`crate::overlay::registry`]) — call this rather than matching the enum again, so the two
-    /// representations cannot answer differently while they coexist. The registry is derived from
-    /// the enum here; T032 reverses that, and this function goes with the enum at T037.
-    pub fn as_surface(self) -> Option<(crate::overlay::SurfaceId, Message)> {
-        let (id, cancel) = match self {
-            Overlay::None => return None,
-            Overlay::About => ("about", Message::AboutClosed),
-            Overlay::ProjectSelector => ("project_selector", Message::ProjectSelectorClosed),
-            Overlay::RenameProject => ("rename_project", Message::RenameCancelled),
-            Overlay::AddWorktree => ("add_worktree", Message::AddWorktreeCancelled),
-            Overlay::Settings => ("settings", Message::SettingsCancelled),
-            Overlay::ConfirmWorktreeDelete => {
-                ("confirm_worktree_delete", Message::WorktreeDeleteCancelled)
-            }
-            Overlay::RenameWorktree => ("rename_worktree", Message::WorktreeRenameCancelled),
-            Overlay::ConfirmSessionRemove => {
-                ("confirm_session_remove", Message::SessionRemoveCancelled)
-            }
-            Overlay::ConfirmForgetProject => {
-                ("confirm_forget_project", Message::ProjectForgetCancelled)
-            }
-        };
-        Some((crate::overlay::SurfaceId::new(id), cancel))
-    }
 }
 
 /// Every user interaction that can change application state.
@@ -1646,20 +1622,19 @@ impl State {
 /// `None` otherwise, so pressing Esc with no dialog open has no effect (edge case). The
 /// iced keyboard subscription in the binary delegates to this pure function.
 ///
-/// Checks the sidebar filter panel first (feature 009): it's a lightweight popover, not a
-/// modal `Overlay`, and the two are mutually exclusive in practice, so this takes priority
-/// without needing `state.overlay` to be `None`.
+/// Escape goes to the topmost open surface, whichever that is: a dialog outranks the sidebar
+/// filter panel and every other popover (contract D1), and with nothing open it goes nowhere.
+///
+/// **No longer a match** (feature 021, T033). This asked the enum for the open dialog's cancel
+/// message and hand-checked the one popover it knew about; the priority between the two was
+/// written out here and mirrored, by hand, in the keyboard subscription. It is now the registry's
+/// [`escape`](crate::overlay::registry::escape), which reads the band ordering the core already
+/// declares — so a surface added tomorrow is reached without this function hearing of it.
+///
+/// The function itself survives only as the name the scrim and the tests already call; T034
+/// collapses the keyboard subscription onto the same call and this goes with it.
 pub fn on_escape(state: &State) -> Option<Message> {
-    // Matches the keyboard subscription's guard exactly (`ui::subscription()`) — both require
-    // no modal `Overlay` before prioritizing the filter panel. `open_overlay()` keeps this
-    // combination unreachable in practice, but checking it here too means the two Escape
-    // implementations can never disagree even if that invariant is ever violated elsewhere.
-    if state.overlay == Overlay::None && state.sidebar_filter_open {
-        return Some(Message::SidebarFilterMenuToggled);
-    }
-    // The per-variant cancel messages live on the enum (see `Overlay::as_surface`) so this path
-    // and the registry read the same list rather than two copies of it.
-    state.overlay.as_surface().map(|(_, cancel)| cancel)
+    crate::overlay::registry::escape(state)
 }
 
 /// Where a decoded key press should go (feature 006, FR-009/FR-011). Pure; see
