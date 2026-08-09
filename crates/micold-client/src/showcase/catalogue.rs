@@ -282,7 +282,11 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/form_field.rs",
         component: "FormField",
-        variants: &[],
+        // The four state layers (BUG-002, FR-035). Posed rather than driven because the question
+        // they answer is about the *differences* — is focus distinguishable from hover, is pressed
+        // stronger than both — and hover and focus are transient, so a live instance can only ever
+        // show one of them at a time.
+        variants: &["None", "Hovered", "Focused", "Pressed"],
         density: &[],
         posed: &["label + supporting", "active", "error", "no label"],
         live: &[],

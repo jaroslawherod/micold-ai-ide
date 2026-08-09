@@ -130,7 +130,7 @@ pub use connection_banner::ConnectionBanner;
 pub use divider::Divider;
 pub use ellipsized::Ellipsized;
 pub use filter_panel::FilterTrigger;
-pub use form_field::FormField;
+pub use form_field::{FormField, Layer as FieldLayer};
 pub use glyph::Glyph;
 pub use icon_button::IconButton;
 pub use icon_label::IconLabel;

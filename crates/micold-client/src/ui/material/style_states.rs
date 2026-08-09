@@ -170,6 +170,97 @@ fn the_state_layers_come_from_the_token_scale() {
 // which hover can mask focus.
 
 // ---------------------------------------------------------------------------------------------
+// The inputs answer hover and focus too (BUG-002 — FR-035, FR-036, FR-036a, SC-012)
+// ---------------------------------------------------------------------------------------------
+
+/// Every field state resolves a *different* layer, and they are ordered.
+///
+/// The buttons have had this since feature 018; the fields had none of it. A field's layer is an
+/// ordered enum rather than a set of flags precisely so that "open **and** focused" cannot paint
+/// two layers at once, and that is what the ordering below is really asserting: one value, always
+/// comparable, always the strongest that applies.
+#[test]
+fn a_fields_states_are_distinct_and_ordered() {
+    use super::filled_field::Layer;
+
+    let opacities = [
+        ("none", Layer::None),
+        ("hovered", Layer::Hovered),
+        ("focused", Layer::Focused),
+        ("pressed", Layer::Pressed),
+    ];
+    for (i, (name, layer)) in opacities.iter().enumerate() {
+        for (other_name, other) in opacities.iter().skip(i + 1) {
+            assert!(
+                layer.opacity() <= other.opacity(),
+                "the {name} layer ({}) is stronger than the {other_name} one ({}) — the enum's \
+                 order is what stops two states stacking, so it has to match the opacities \
+                 (FR-035)",
+                layer.opacity(),
+                other.opacity()
+            );
+        }
+    }
+    assert!(
+        Layer::None.opacity() == 0.0 && Layer::Hovered.opacity() > 0.0,
+        "a field at rest must paint nothing and a hovered one must paint something (FR-036)"
+    );
+}
+
+/// The field layers are the published opacities, and **no new token was added** (FR-036a).
+///
+/// `state::FOCUS` had been sitting in the scale unused by any input since feature 018 — the whole
+/// of "add a focus state" was to consume it. A test that let a hand-picked number through here
+/// would let the design system grow a fourth field opacity nobody had agreed to.
+#[test]
+fn the_field_layers_are_the_published_opacities() {
+    use super::filled_field::Layer;
+
+    for (name, layer, token) in [
+        ("hover", Layer::Hovered, state::HOVER),
+        ("focus", Layer::Focused, state::FOCUS),
+        ("pressed", Layer::Pressed, state::PRESSED),
+    ] {
+        assert!(
+            (layer.opacity() - token).abs() < 1e-6,
+            "the field's {name} layer is {} but the token is {token} — FR-036a admits no new \
+             opacity, only the scale that exists",
+            layer.opacity()
+        );
+    }
+}
+
+/// A checkbox reacts to hover with a state layer, not only with a border colour.
+///
+/// It was the one control whose hover changed only its outline — a Material 2 affordance, and easy
+/// to miss against a busy background. Asserted in both schemes and both checked states, because the
+/// fill differs in each and a layer that only shows over one of them is half a fix.
+#[test]
+fn a_checkbox_reacts_to_hover_with_a_layer() {
+    use iced::widget::checkbox as checkbox_widget;
+
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let theme = style::theme(scheme);
+        let f = style::checkbox(r);
+        for is_checked in [false, true] {
+            let rest = f(&theme, checkbox_widget::Status::Active { is_checked });
+            let hovered = f(&theme, checkbox_widget::Status::Hovered { is_checked });
+            let fill = |s: &checkbox_widget::Style| match s.background {
+                Background::Color(c) => c,
+                _ => Color::TRANSPARENT,
+            };
+            assert!(
+                delta(fill(&rest), fill(&hovered)) > 0.0,
+                "{scheme:?} checked={is_checked}: hovering the checkbox changes only its border — \
+                 §5 asks for a state layer, and a border shift is the Material 2 affordance it \
+                 replaced (FR-036)"
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Disabled (T027, FR-023)
 // ---------------------------------------------------------------------------------------------
 

@@ -35,7 +35,7 @@
 use iced::advanced::widget::{tree, Operation, Tree, Widget};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Renderer as _, Shell};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
-use micold_core::tokens::{anatomy, density, Roles};
+use micold_core::tokens::{anatomy, density, state, Roles};
 
 use super::style;
 
@@ -46,6 +46,36 @@ use super::style;
 const PAD_Y: f32 = 8.0;
 const LABEL_LINE: f32 = 16.0;
 const VALUE_LINE: f32 = 24.0;
+
+/// Which state layer the container carries (§5), strongest last.
+///
+/// An ordered enum rather than a set of booleans, and that is the point: a field that is both open
+/// and focused must show **one** layer, not two blended into a colour neither token names. Making
+/// the states mutually exclusive puts that beyond reach of a call site instead of asking every one
+/// of them to remember it (feature 022, FR-035; BUG-002).
+///
+/// Hover is deliberately *not* something a caller supplies — see [`FilledField::draw`].
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+pub enum Layer {
+    #[default]
+    None,
+    Hovered,
+    Focused,
+    Pressed,
+}
+
+impl Layer {
+    /// The published opacity for this state. No number is written here: FR-036a requires the
+    /// existing scale, and `state::FOCUS` had been sitting in it unused by any input.
+    pub fn opacity(self) -> f32 {
+        match self {
+            Layer::None => 0.0,
+            Layer::Hovered => state::HOVER,
+            Layer::Focused => state::FOCUS,
+            Layer::Pressed => state::PRESSED,
+        }
+    }
+}
 
 /// What the field's chrome responds to.
 ///
@@ -60,6 +90,9 @@ pub struct State {
     pub error: bool,
     /// Whether the label has floated to the top, or is resting in the middle of an empty box.
     pub floating: bool,
+    /// The strongest layer the *control* reports — focus for a text input, open for the select.
+    /// Hover is not in here; the container reads that off the cursor itself.
+    pub layer: Layer,
 }
 
 /// The filled box: container, label, control and active indicator, laid out to §7.7's metrics.
@@ -214,6 +247,37 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
                 .background
                 .unwrap_or(iced::Background::Color(iced::Color::TRANSPARENT)),
         );
+
+        // The state layer, over the container's **own bounds** (FR-034, BUG-002).
+        //
+        // This is the whole of that bug's fix and it is worth saying why it lives here rather than
+        // on the control. `layout` puts the control in one 24dp value line inside 16dp of padding,
+        // so a layer painted by the control covered 440×24 of a 472×56 field — while hover and
+        // press were read off the *field*. The rectangle that responds and the rectangle that
+        // shades are now the same rectangle because only one thing owns both, and it is this one.
+        //
+        // Hover is read off the cursor here rather than supplied, for the same reason: a caller
+        // that tracked its own hover would be a second opinion about a fact this widget can see,
+        // and the two disagreeing is exactly what the bug was. `Select` used to hold a `hovered`
+        // flag for this; it does not need to any more.
+        let hovered = cursor.is_over(bounds);
+        let layer = self
+            .state
+            .layer
+            .max(if hovered { Layer::Hovered } else { Layer::None });
+        if layer != Layer::None {
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds,
+                    border: container.border,
+                    ..Default::default()
+                },
+                iced::Background::Color(style::state_fill(
+                    style::color(r.on_surface),
+                    layer.opacity(),
+                )),
+            );
+        }
 
         // The active indicator, drawn *inside* the container's own footprint so the two are one
         // shape. Thickening it is the whole of a filled field's focus affordance — there is no

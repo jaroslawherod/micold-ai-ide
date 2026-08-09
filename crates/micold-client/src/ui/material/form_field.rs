@@ -54,8 +54,9 @@
 
 use iced::widget::{column, container, Space};
 use iced::{Element, Length};
-use micold_core::tokens::{anatomy, spacing, Roles};
+use micold_core::tokens::{anatomy, shape, spacing, Roles};
 
+pub use super::filled_field::Layer;
 use super::filled_field::{FilledField, State as FilledFieldState};
 use super::style;
 use super::{Text, TypeRole};
@@ -92,6 +93,8 @@ pub struct FormField<'a, M> {
     populated: bool,
     leading: Option<Element<'a, M>>,
     trailing: Option<Element<'a, M>>,
+    layer: Layer,
+    pressable: bool,
 }
 
 impl<'a, M: 'a> FormField<'a, M> {
@@ -107,6 +110,8 @@ impl<'a, M: 'a> FormField<'a, M> {
             populated: false,
             leading: None,
             trailing: None,
+            layer: Layer::None,
+            pressable: false,
         }
     }
 
@@ -154,6 +159,29 @@ impl<'a, M: 'a> FormField<'a, M> {
     /// whether a text input has text or a select has a selection. Each knows its own.
     pub fn populated(mut self, populated: bool) -> Self {
         self.populated = populated;
+        self
+    }
+
+    /// The state layer the *control* reports — focus for a text input, open for the select
+    /// (FR-035, BUG-002).
+    ///
+    /// Hover is not among the choices and cannot be: the container reads it off the cursor when it
+    /// draws, so there is nowhere for a caller to disagree with it. What is left here is the state
+    /// only the control knows, and it is one value rather than a set of flags so that
+    /// open-and-focused resolves to a single layer instead of two stacked ones.
+    pub fn layer(mut self, layer: Layer) -> Self {
+        self.layer = layer;
+        self
+    }
+
+    /// Whether pressing the container is a *press* — true for the select, false for a text input.
+    ///
+    /// It buys the ripple every pressable surface in the app produces (FR-010), over the whole
+    /// container rather than over whatever sits in its control slot. A text field is not pressable
+    /// in this sense: clicking it places a caret, and rippling for that would announce an action
+    /// that did not happen.
+    pub fn pressable(mut self, pressable: bool) -> Self {
+        self.pressable = pressable;
         self
     }
 
@@ -214,9 +242,19 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
                 active: f.active,
                 error: invalid,
                 floating,
+                layer: f.layer,
             },
         )
         .into();
+        // The ripple wraps the **container**, not the control inside it (FR-010, FR-034). Wrapping
+        // the control is what BUG-002 found: a press in the 16dp padding opened the select and
+        // rippled nothing, because the two were reading different rectangles. `Ripple` is
+        // layout-transparent, so this adds no node and moves nothing.
+        let field = if f.pressable {
+            super::Ripple::new(field, r.on_surface, shape::EXTRA_SMALL).into()
+        } else {
+            field
+        };
 
         // Supporting text sits *beneath* the box, outside it. The error message replaces it rather
         // than joining it: a field showing a problem should not also be showing the hint the

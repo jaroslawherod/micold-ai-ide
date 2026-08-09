@@ -194,6 +194,67 @@ fn the_sidebar_stays_denser_than_the_text_it_nests_under() {
     assert_eq!(typography::SIDEBAR_SESSION, typography::SIDEBAR_NAME);
 }
 
+/// Every field state layer stays legible, on every field (feature 022, T047 — FR-029, FR-036a).
+///
+/// T031 checked the select's two states because they were the only ones that existed. BUG-002 gave
+/// the layer to the shared container, so a **text field** now carries it too — and added focus,
+/// whose opacity had been sitting in the scale unused. Three states over one container, under both
+/// of the roles that sit on it.
+///
+/// The point of measuring `focus` in particular: it is the state a person leaves a field in while
+/// reading what they typed, so it is the one where a contrast failure would be looked at longest.
+#[test]
+fn every_field_state_layer_stays_legible() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = roles(scheme);
+        for (state, opacity) in [
+            ("hovered", micold_core::tokens::state::HOVER as f64),
+            ("focused", micold_core::tokens::state::FOCUS as f64),
+            ("pressed", micold_core::tokens::state::PRESSED as f64),
+        ] {
+            let background = composite(r.on_surface, r.surface_container_highest, opacity);
+            for (what, fg) in [
+                ("value", r.on_surface),
+                ("label", r.on_surface_variant),
+                ("placeholder", r.on_surface_variant),
+            ] {
+                let ratio = contrast(fg, background);
+                assert!(
+                    ratio >= AA_NORMAL,
+                    "{scheme:?} field {what} while {state}: contrast {ratio:.2} < {AA_NORMAL}. \
+                     Every field wears this layer now, not only the select — so a new opacity or a \
+                     moved container role fails here for all of them at once (FR-029, FR-036a)"
+                );
+            }
+        }
+    }
+}
+
+/// The checkbox's hover layer, composited into its fill (feature 022, T047 — FR-029, FR-036).
+///
+/// The layer is blended into an opaque `background` rather than drawn as its own quad, because
+/// `checkbox::Style` has nowhere to put a translucent one. Both fills are checked: `surface` while
+/// unchecked and `primary` while checked, each under the mark that sits on it.
+#[test]
+fn the_checkboxs_hover_layer_stays_legible() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = roles(scheme);
+        let hover = micold_core::tokens::state::HOVER as f64;
+        for (what, base, fg) in [
+            ("unchecked box", r.surface, r.on_surface),
+            ("checked box", r.primary, r.on_primary),
+        ] {
+            let background = composite(r.on_surface, base, hover);
+            let ratio = contrast(fg, background);
+            assert!(
+                ratio >= AA_NORMAL,
+                "{scheme:?} checkbox {what} while hovered: contrast {ratio:.2} < {AA_NORMAL}. \
+                 The hover layer darkens the fill the mark is read against (FR-029, FR-036)"
+            );
+        }
+    }
+}
+
 /// The select's trigger **under its own state layer** (feature 022, T031 — FR-029).
 ///
 /// §5 draws hover and open as `on_surface` over the container at the state's opacity, and §7.7

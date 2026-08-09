@@ -164,6 +164,15 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
         // it looks.
         let mut field = super::FormField::new(widget, f.roles)
             .active(f.active)
+            // Focus shades the container as well as thickening the indicator (FR-035, BUG-002).
+            // For a text input `active` *is* focus — see `FormField`'s docs on why the wrapper is
+            // told rather than asking. Not `.pressable`: clicking a text field places a caret, and
+            // a ripple would announce an action that did not happen.
+            .layer(if f.active {
+                super::form_field::Layer::Focused
+            } else {
+                super::form_field::Layer::None
+            })
             // A field with text in it floats its label; an empty one rests it where the text will
             // go. Only the control knows which it is.
             .populated(!f.value.is_empty());
