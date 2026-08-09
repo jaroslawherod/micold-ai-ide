@@ -96,6 +96,11 @@ impl Open {
     pub fn on(&self, trigger: Trigger) -> Option<&Message> {
         self.dismissal.on(trigger)
     }
+
+    /// The message that closes this surface, whatever prompted the close.
+    pub fn cancel(&self) -> Option<&Message> {
+        self.dismissal.cancel()
+    }
 }
 
 /// A registration: "look at the state and tell me whether this surface is open".
@@ -119,7 +124,13 @@ macro_rules! register {
 
 register! {
     ModalSurface,
+    crate::features::help::HelpMenu,
+    crate::features::project::ProjectSwitcher,
+    crate::features::project::ProjectContextMenu,
     crate::features::sidebar::SidebarFilterPanel,
+    crate::features::session::SessionContextMenu,
+    crate::features::session::TerminalContextMenu,
+    crate::features::worktree::WorktreeContextMenu,
 }
 
 /// Every registered surface, in registration order.
@@ -169,6 +180,55 @@ pub fn scroll_beneath(state: &State) -> Vec<Message> {
         .iter()
         .filter_map(|open| open.on(Trigger::ScrollBeneath).cloned())
         .collect()
+}
+
+/// Every open surface below the dialog band: the lightweight popovers and context menus.
+pub fn open_popovers(state: &State) -> Vec<Open> {
+    open_among(REGISTERED, state)
+        .into_iter()
+        .filter(|open| open.layer() < Layer::Dialog)
+        .collect()
+}
+
+/// Close every open popover, by sending each the cancellation it declared.
+///
+/// FR-012's second half — opening a modal closes the lightweight popovers — as a rule over the
+/// registry rather than a list of field assignments. A popover registered later is closed by it
+/// without anyone having remembered to add a line, which is the whole of R2's argument.
+pub fn close_popovers(state: &mut State) {
+    close_each(state, open_popovers);
+}
+
+/// Close every surface a scroll beneath the content reaches.
+pub fn close_on_scroll_beneath(state: &mut State) {
+    close_each(state, |state| {
+        open_among(REGISTERED, state)
+            .into_iter()
+            .filter(|open| open.on(Trigger::ScrollBeneath).is_some())
+            .collect()
+    });
+}
+
+/// Close surfaces one at a time, re-asking which are open after each.
+///
+/// Re-asking is not caution, it is required. Several of these cancellations are *toggles*, and the
+/// reducer arms behind them close their neighbours too (the three panel popovers are mutually
+/// exclusive). Sending a batch collected up front would hand a toggle to a surface that an earlier
+/// message had already closed — and reopen it.
+///
+/// Bounded by the number of registrations, so a surface whose cancellation does not actually close
+/// it costs one wasted pass rather than a hang. `every_registered_popover_can_be_closed` in
+/// `tests/overlay_registration.rs` is what stops that being reachable.
+fn close_each(state: &mut State, open: fn(&State) -> Vec<Open>) {
+    for _ in 0..REGISTERED.len() {
+        let Some(surface) = open(state).into_iter().next() else {
+            return;
+        };
+        let Some(cancel) = surface.cancel().cloned() else {
+            return;
+        };
+        state.update(cancel);
+    }
 }
 
 /// Whichever [`crate::app::Overlay`] variant is open, as a registered surface.

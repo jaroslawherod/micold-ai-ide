@@ -1,116 +1,73 @@
-//! Every popover has an answer at every dismissal path (feature 021, T026 — FR-010, contract R2).
+//! Every popover is registered, and registers as itself (feature 021, T026/T031 — FR-010,
+//! contract R2).
 //!
-//! ## Why this guards the popovers and not the `Overlay` enum
+//! ## What this file used to hold, and why it changed
 //!
-//! The contract states R2's problem as *"forgetting one of eight edit sites produces an overlay
-//! that opens but will not close, discovered by hand"*. For the nine `Overlay` variants that is
-//! **not true today**, and it is worth being precise about why, because the reason is the whole
-//! argument for this file's shape.
+//! T026 wrote it against the *dismissal paths*: a table of the seven popovers and what each of
+//! `open_overlay` and `dismiss_on_scroll_beneath` did with each, so that every combination was a
+//! decision someone had written down rather than an omission nobody noticed. Four of seven and six
+//! of seven, two different subsets, nothing checking either.
 //!
-//! Those sites are `match` statements over a closed enum, so the compiler already enforces
-//! coverage. Removing an arm was tried three ways while writing this test — from the view match,
-//! from the snapshot mapping, and by renaming a site out of existence — and every one of them
-//! failed to *compile*, before any test ran. A guard asserting what `rustc` already asserts is a
-//! guard that can never fire.
+//! T031 removed the subject. Both paths now ask the registry which surfaces are open and close
+//! them, so there is no list to have forgotten a popover from — which is what T026's own closing
+//! note said would happen: *"the lists below empty out and the subject becomes registration
+//! itself — the obligation is unchanged, so the file stays."*
 //!
-//! The seven lightweight popovers have no such protection. They are loose `bool` and `Option`
-//! fields on `State`, and each dismissal path clears whichever subset its author remembered:
+//! ## The obligation, restated over the registry
 //!
-//! - `open_overlay` clears **four** of them.
-//! - `dismiss_on_scroll_beneath` clears **six** — a different six.
+//! R2: *an unregistered surface fails the build or a guard test, never discovered by hand at
+//! runtime*. For the nine `Overlay` variants the compiler holds it — they are matches over a
+//! closed enum, verified at T026 by removing an arm three ways, each of which failed to compile.
+//! The popovers are loose fields with no such protection, so this is where R2 lives:
 //!
-//! Nothing checks either list. Add an eighth popover and it silently belongs to neither, which is
-//! exactly the "opens but will not close, discovered by hand" failure, sitting in the half of the
-//! problem the enum was never covering.
-//!
-//! Note what this file does **not** claim: that the current subsets are right. Whether a worktree
-//! context menu should survive a modal opening over it is a behaviour question, and FR-027 puts
-//! behaviour changes out of scope for this feature. What is asserted is that each combination is a
-//! decision someone made and wrote down, rather than an omission nobody noticed.
-//!
-//! ## What happens to this file in Tier 2
-//!
-//! T031 moves these seven onto the registry, at which point "did this path remember this popover?"
-//! stops being a question and `DismissalRules` answers it uniformly. The lists below empty out and
-//! the subject becomes registration itself — the obligation is unchanged, so the file stays.
+//! - every popover-shaped field on `State` has a registration (add an eighth, and this fails);
+//! - setting one opens **exactly** its own surface and no other (a copy-pasted `open_in` reading
+//!   its neighbour's field fails here rather than as a menu that will not close);
+//! - every registered popover declares what closes it (the registry's collective closes are
+//!   bounded loops; a surface with no cancellation would silently survive one).
 
+use micold_client::app::State;
+use micold_client::features::project::ProjectMenu;
+use micold_client::overlay::registry;
+use micold_core::session::SessionId;
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-fn app_rs() -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app.rs");
-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
-}
-
-/// What a dismissal path does with a popover.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Disposition {
-    /// The path clears it.
-    Cleared,
-    /// The path deliberately leaves it alone, for the stated reason.
-    Kept(&'static str),
-}
-use Disposition::{Cleared, Kept};
-
-/// The seven lightweight popovers, and what each dismissal path does with each.
+/// A popover: the `State` field that carries it, the id it registers as, and how to open it.
 ///
-/// `(field, on open_overlay, on dismiss_on_scroll_beneath)`.
+/// The setter is a closure because Rust cannot name a field generically — and it earns its place:
+/// opening exactly one surface is what makes "registers as *itself*" testable at all.
 #[allow(clippy::type_complexity)]
-const POPOVERS: &[(&str, Disposition, Disposition)] = &[
-    ("help_menu_open", Cleared, Cleared),
-    ("project_switcher_open", Cleared, Cleared),
-    ("sidebar_filter_open", Cleared, Cleared),
-    ("project_menu_open", Cleared, Cleared),
-    (
-        "worktree_menu_open",
-        Kept(
-            "not cleared when a modal opens — the paths that open a modal from this menu clear it \
-              themselves (the reducer does so at four separate sites), so open_overlay never sees \
-              it set. That is the fragile arrangement Tier 2 removes, not a rule worth keeping",
-        ),
-        Cleared,
-    ),
-    (
-        "session_menu_open",
-        Kept(
-            "same shape as worktree_menu_open: cleared by the two reducer arms that open a modal \
-              from it rather than centrally",
-        ),
-        Cleared,
-    ),
-    (
-        "terminal_context_menu",
-        Kept(
-            "the only popover cleared by neither path. It is anchored inside the terminal pane \
-              rather than to a window-level trigger, and is cleared by its own reducer arm",
-        ),
-        Kept(
-            "scroll dismissal is about the surface the pointer scrolled over; this menu's own \
-              scroll handling lives with the pane",
-        ),
-    ),
+const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
+    ("help_menu_open", "help_menu", |s| s.help_menu_open = true),
+    ("project_switcher_open", "project_switcher", |s| {
+        s.project_switcher_open = true
+    }),
+    ("sidebar_filter_open", "sidebar_filter", |s| {
+        s.sidebar_filter_open = true
+    }),
+    ("project_menu_open", "project_menu", |s| {
+        s.project_menu_open = Some(ProjectMenu {
+            path: PathBuf::from("/tmp/p"),
+            anchor: (10, 10),
+        })
+    }),
+    ("worktree_menu_open", "worktree_menu", |s| {
+        s.worktree_menu_open = Some("feature-x".to_string())
+    }),
+    ("session_menu_open", "session_menu", |s| {
+        s.session_menu_open = Some(SessionId::new())
+    }),
+    ("terminal_context_menu", "terminal_context_menu", |s| {
+        s.terminal_context_menu = Some((4, 2))
+    }),
 ];
-
-/// The body of a function in `app.rs`, from its signature to the first line that closes it at
-/// four-space indentation.
-fn body_of(fn_signature: &str) -> String {
-    let src = app_rs();
-    let at = src.find(fn_signature).unwrap_or_else(|| {
-        panic!(
-            "`{fn_signature}` is gone from app.rs. If Tier 2 replaced it with generic dispatch, \
-             this file's subject moved with it: rewrite the lists here against the registry rather \
-             than deleting the check, because R2 still has to hold."
-        )
-    });
-    let rest = &src[at..];
-    let end = rest.find("\n    }\n").map(|e| e + 6).unwrap_or(rest.len());
-    rest[..end].to_string()
-}
 
 /// Popover-shaped fields actually declared on `State`, so the list above cannot go stale.
 fn declared_popovers() -> BTreeSet<String> {
-    let src = app_rs();
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app.rs");
+    let src = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let at = src.find("pub struct State {").expect("State has moved");
     let rest = &src[at..];
     let end = rest.find("\n}").expect("unterminated struct");
@@ -124,6 +81,12 @@ fn declared_popovers() -> BTreeSet<String> {
         .collect()
 }
 
+fn opened(setter: fn(&mut State)) -> State {
+    let mut state = State::default();
+    setter(&mut state);
+    state
+}
+
 #[test]
 fn the_list_of_popovers_matches_the_ones_that_exist() {
     let declared = declared_popovers();
@@ -134,80 +97,99 @@ fn the_list_of_popovers_matches_the_ones_that_exist() {
 
     assert!(
         unlisted.is_empty(),
-        "a new popover exists that no dismissal path has been asked about: {unlisted:?}\n\nAdd it \
-         to POPOVERS with what each path should do. That is the whole point — a popover nobody \
-         decided about is one that opens and will not close (FR-010)."
+        "a new popover exists that this file has never asked about: {unlisted:?}\n\nAdd it here \
+         with the surface it registers as. That is the whole point — a popover nobody registered \
+         is one that opens and will not close (FR-010, contract R2)."
     );
     assert!(
         phantom.is_empty(),
-        "POPOVERS names fields State no longer has: {phantom:?}\n\nIf Tier 2 migrated them onto \
-         the registry, strike them off here in the same commit."
+        "this file names fields `State` no longer has: {phantom:?}\n\nIf the field moved into its \
+         feature module, follow it here in the same commit."
     );
 }
 
 #[test]
-fn opening_a_modal_makes_the_same_decision_about_every_popover_as_last_time() {
-    let body = body_of("pub fn open_overlay(&mut self, overlay: Overlay)");
-    let mut wrong = Vec::new();
-
-    for (field, on_open, _) in POPOVERS {
-        let clears = body.contains(field);
-        match (on_open, clears) {
-            (Cleared, false) => wrong.push(format!(
-                "{field} is listed as cleared when a modal opens, but open_overlay no longer \
-                 touches it — a popover left floating over a scrim"
-            )),
-            (Kept(why), true) => wrong.push(format!(
-                "{field} is now cleared by open_overlay, but is listed as kept because: {why}\n     \
-                 If that changed on purpose, update the list; the behaviour and its reason have to \
-                 travel together"
-            )),
-            _ => {}
+fn every_popover_is_registered() {
+    let mut missing = Vec::new();
+    for (field, id, open) in POPOVERS {
+        let state = opened(*open);
+        if registry::topmost(&state).is_none() {
+            missing.push(format!(
+                "`{field}` is set, and the registry reports nothing open — the surface `{id}` is \
+                 not registered, or its `open_in` reads a different field"
+            ));
         }
     }
+    assert!(missing.is_empty(), "{}", missing.join("\n  - "));
+}
 
+#[test]
+fn a_popover_registers_as_itself_and_opens_nothing_else() {
+    let mut wrong = Vec::new();
+    for (field, id, open) in POPOVERS {
+        let state = opened(*open);
+        let ids: Vec<&str> = registry::open_popovers(&state)
+            .iter()
+            .map(|s| s.id().as_str())
+            .collect();
+
+        if ids != [*id] {
+            wrong.push(format!(
+                "setting `{field}` opened {ids:?}, expected exactly [\"{id}\"] — an `open_in` \
+                 reading its neighbour's field is a menu that closes when the wrong thing is \
+                 dismissed, and nothing else would notice"
+            ));
+        }
+    }
     assert!(wrong.is_empty(), "{}", wrong.join("\n  - "));
 }
 
 #[test]
-fn scrolling_beneath_makes_the_same_decision_about_every_popover_as_last_time() {
-    let body = body_of("fn dismiss_on_scroll_beneath(&mut self)");
-    let mut wrong = Vec::new();
-
-    for (field, _, on_scroll) in POPOVERS {
-        let clears = body.contains(field);
-        match (on_scroll, clears) {
-            (Cleared, false) => wrong.push(format!(
-                "{field} is listed as cleared on a scroll beneath, but the path no longer \
-                 touches it"
-            )),
-            (Kept(why), true) => wrong.push(format!(
-                "{field} is now cleared on a scroll beneath, but is listed as kept because: {why}"
-            )),
-            _ => {}
+fn every_registered_popover_can_be_closed() {
+    // The registry's collective closes (`close_popovers`, `close_on_scroll_beneath`) are bounded
+    // loops that send each open surface its own cancellation. A surface that declared none would
+    // not close, and the loop would give up rather than hang — quietly, which is the failure this
+    // catches.
+    let mut mute = Vec::new();
+    for (field, id, open) in POPOVERS {
+        let state = opened(*open);
+        let Some(surface) = registry::open_popovers(&state).into_iter().next() else {
+            continue; // already reported by `every_popover_is_registered`
+        };
+        if surface.cancel().is_none() {
+            mute.push(format!(
+                "`{field}` registers as `{id}` but names no cancellation"
+            ));
         }
     }
-
-    assert!(wrong.is_empty(), "{}", wrong.join("\n  - "));
+    assert!(mute.is_empty(), "{}", mute.join("\n  - "));
 }
 
 #[test]
-fn the_two_dismissal_paths_disagree_and_that_is_recorded_rather_than_accidental() {
-    let cleared_on_open = POPOVERS.iter().filter(|(_, o, _)| *o == Cleared).count();
-    let cleared_on_scroll = POPOVERS.iter().filter(|(.., s)| *s == Cleared).count();
-
-    assert_ne!(
-        cleared_on_open, cleared_on_scroll,
-        "the two paths used to clear different subsets (4 and 6 of 7), which is the duplication \
-         Tier 2 removes. If they agree now, either the registry landed — in which case this file's \
-         subject is registration, not these lists — or someone unified them by hand, which is a \
-         behaviour change FR-027 does not authorise"
-    );
+fn closing_the_popovers_closes_all_of_them_whatever_order_they_are_in() {
+    // Several cancellations are *toggles*, and their reducer arms close their neighbours too. A
+    // batch collected up front would hand a toggle to a surface an earlier message had already
+    // closed and reopen it, so the registry re-asks after each. This is that property.
+    let mut state = State::default();
+    for (_, _, open) in POPOVERS {
+        open(&mut state);
+    }
     assert_eq!(
-        (cleared_on_open, cleared_on_scroll),
-        (4, 6),
-        "the split moved. Every combination in POPOVERS is meant to be a recorded decision, so a \
-         change to the totals means a decision changed without its reason being updated"
+        registry::open_popovers(&state).len(),
+        POPOVERS.len(),
+        "precondition: every popover is open, so closing them has something to do"
+    );
+
+    registry::close_popovers(&mut state);
+
+    let left: Vec<&str> = registry::open_popovers(&state)
+        .iter()
+        .map(|s| s.id().as_str())
+        .collect();
+    assert!(
+        left.is_empty(),
+        "these survived a collective close: {left:?} — a toggle sent to an already-closed surface \
+         reopens it, which is why the registry re-asks rather than sending a batch"
     );
 }
 
@@ -218,8 +200,9 @@ fn the_guard_is_actually_looking_at_something() {
         "no popover-shaped fields found on State — the parser has stopped matching its shape, and \
          a guard iterating an empty list passes vacuously"
     );
-    assert!(
-        body_of("pub fn open_overlay(&mut self, overlay: Overlay)").len() > 40,
-        "open_overlay's body came back empty, so every 'does it clear this?' check would answer no"
+    assert_eq!(
+        POPOVERS.len(),
+        7,
+        "the seven FR-007 names. A shorter list is a guard that has stopped covering them."
     );
 }

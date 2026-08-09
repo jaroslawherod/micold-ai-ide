@@ -15,8 +15,12 @@
 //! the type rather than the module, so moving them here changed no call site. Tier 3 splits `State`
 //! itself, at which point these operate on the worktree feature's own state.
 
+use crate::app::Message;
 use crate::app::State;
+use crate::overlay::registry::Registered;
+use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{display_name, parse_tags, Tag};
+use micold_core::overlay::Layer;
 use micold_core::worktree::{Worktree, WorktreeStatus};
 
 /// In-progress worktree-rename state, present only while the worktree-rename dialog is open
@@ -90,5 +94,35 @@ impl State {
     /// (Principle I).
     pub fn has_visible_worktrees(&self) -> bool {
         self.visible_worktrees().next().is_some()
+    }
+}
+
+/// A worktree row's right-click menu, as a floating surface (feature 021, T031).
+///
+/// Anchored beside the sidebar rather than at the cursor, but a context menu all the same: it is
+/// opened over the row it acts on and must not fall behind it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WorktreeContextMenu;
+
+impl FloatingSurface for WorktreeContextMenu {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("worktree_menu")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::ContextMenu
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::ContextMenu).cancelled_by(Message::WorktreeMenuDismissed)
+    }
+}
+
+impl Registered for WorktreeContextMenu {
+    fn open_in(state: &State) -> Option<Self> {
+        state
+            .worktree_menu_open
+            .as_ref()
+            .map(|_| WorktreeContextMenu)
     }
 }

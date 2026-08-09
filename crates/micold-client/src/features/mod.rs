@@ -15,6 +15,7 @@
 //! Modules are declared here as each is extracted from `crate::app`, one migration step at a time.
 
 pub mod connection;
+pub mod help;
 pub mod notifications;
 pub mod project;
 pub mod session;

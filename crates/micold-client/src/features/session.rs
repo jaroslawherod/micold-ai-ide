@@ -12,7 +12,11 @@
 //! These are `impl State` blocks because `State` is still monolithic in Tier 1. Methods resolve on
 //! the type rather than the module, so moving them changed no call site.
 
+use crate::app::Message;
 use crate::app::State;
+use crate::overlay::registry::Registered;
+use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
 use micold_core::session::{Session, SessionId};
 use std::path::Path;
@@ -171,5 +175,59 @@ impl State {
             .get_mut(&path)?
             .iter_mut()
             .find(|s| s.id == id)
+    }
+}
+
+/// A session row's right-click menu, as a floating surface (feature 021, T031).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionContextMenu;
+
+impl FloatingSurface for SessionContextMenu {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("session_menu")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::ContextMenu
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::ContextMenu).cancelled_by(Message::SessionMenuDismissed)
+    }
+}
+
+impl Registered for SessionContextMenu {
+    fn open_in(state: &State) -> Option<Self> {
+        state.session_menu_open.map(|_| SessionContextMenu)
+    }
+}
+
+/// The terminal pane's right-click menu, as a floating surface (feature 021, T031).
+///
+/// The one surface hosted on a pane's own overlay rather than the window's, because its anchor is
+/// pane-local and the pane's origin is not known at render time. That is a fact about where it is
+/// *drawn*; what closes it is the same rule as every other menu, which is why it registers here
+/// like the rest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TerminalContextMenu;
+
+impl FloatingSurface for TerminalContextMenu {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("terminal_context_menu")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::ContextMenu
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::ContextMenu)
+            .cancelled_by(Message::TerminalContextMenuClosed)
+    }
+}
+
+impl Registered for TerminalContextMenu {
+    fn open_in(state: &State) -> Option<Self> {
+        state.terminal_context_menu.map(|_| TerminalContextMenu)
     }
 }
