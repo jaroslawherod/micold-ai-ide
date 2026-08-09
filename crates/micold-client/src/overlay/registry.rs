@@ -65,16 +65,23 @@ pub struct Open {
     dismissal: DismissalRules,
 }
 
-impl Open {
-    /// Erase a live surface to what dispatch needs.
-    pub fn of(surface: &impl FloatingSurface) -> Self {
+/// Erasing a live surface to what dispatch needs — the conversion the chain terminates in.
+///
+/// A `From` impl rather than an `Open::of` constructor, so this layer ends the way every other
+/// builder in the codebase does: `(&surface).into()`, exactly as a component ends in an
+/// `iced::Element` (Principle VIII, FR-030). There is no second way to build an `Open`; a surface
+/// describes itself through [`FloatingSurface`] and this is the only door out.
+impl<S: FloatingSurface> From<&S> for Open {
+    fn from(surface: &S) -> Self {
         Self {
             id: surface.id(),
             layer: surface.layer(),
             dismissal: surface.dismissal(),
         }
     }
+}
 
+impl Open {
     /// Which surface this is.
     pub fn id(&self) -> SurfaceId {
         self.id
@@ -105,7 +112,7 @@ pub type Probe = fn(&State) -> Option<Open>;
 macro_rules! register {
     ($($surface:ty),+ $(,)?) => {
         static REGISTERED: &[Probe] = &[
-            $(|state| <$surface as Registered>::open_in(state).map(|s| Open::of(&s))),+
+            $(|state| <$surface as Registered>::open_in(state).map(|s| Open::from(&s))),+
         ];
     };
 }
