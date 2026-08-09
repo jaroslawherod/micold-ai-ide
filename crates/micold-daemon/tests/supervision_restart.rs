@@ -13,6 +13,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use alacritty_terminal::grid::Dimensions;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
 use micold_core::session::{Session, SessionId, SessionLocation, TerminalMode};
@@ -169,4 +170,37 @@ fn a_restart_that_survives_resets_to_running() {
         Some(WireLifecycle::Running),
         "a restart that survives a supervision tick is healthy again"
     );
+}
+
+/// BUG-003 (`006-real-terminal-emulator` FR-014a, `010` FR-020a/SC-023): a crash respawn must come
+/// back at the size the session was last given. Nothing about the viewer changed when the process
+/// died, so a respawn at the 100×30 seed silently shrinks a session the user is still looking at —
+/// and no `SessionResize` follows, because the pane never changed size.
+#[test]
+fn a_respawn_comes_back_at_the_sessions_recorded_size() {
+    let project = tempfile::tempdir().unwrap();
+    let settings = tempfile::tempdir().unwrap();
+    let (state, id) =
+        state_with_regular_session(project.path(), &settings.path().join("settings.json"));
+
+    // A client sized this session, then its process crashed.
+    state.resize_session(id, 200, 55);
+    let handle =
+        state.register_session(PtySession::spawn(id, sh("exit 1"), 100, Some((200, 55))).unwrap());
+    wait_dead(&handle);
+
+    state.supervise_exited_sessions();
+
+    let respawned = state.live_session(id).expect("a crash is respawned");
+    let (cols, rows) = {
+        let term = respawned.term().lock();
+        (term.grid().columns(), term.grid().screen_lines())
+    };
+    assert_eq!(
+        (cols, rows),
+        (200, 55),
+        "the respawn keeps the session's size instead of falling back to the seed"
+    );
+
+    respawned.kill().expect("kill");
 }

@@ -1566,16 +1566,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // session last left in Regular mode gets a fresh shell instead.
         Message::SessionSelected(id) => {
             app.core.update(Message::SessionSelected(id));
-            // View the selected session (the daemon streams its grid), resuming it if idle.
-            app.selection = None;
-            app.display_offset = 0;
-            if let (Some(project), Some(d)) = (app.core.workspace.active.clone(), &app.daemon) {
-                d.send(ClientMsg::SessionStart { session: id });
-                d.send(ClientMsg::SetViewedSession {
-                    project,
-                    session: Some(id),
-                });
-            }
+            // View the selected session (the daemon streams its grid), resuming it if idle — the
+            // same sequence `view_and_start` performs for every other path that displays a session,
+            // called rather than repeated so the pane size that now precedes the start (BUG-003,
+            // FR-014a) cannot be added to one copy and not the other.
+            view_and_start(app, id);
             // BUG-001: auto-focus the selected session's terminal (FR-010/FR-010a). Selecting from
             // the sidebar is a click *outside* the pane, so a currently-focused pane also publishes
             // `TerminalFocusReleased` for the same click. Re-assert focus via a follow-up message,
@@ -2184,10 +2179,33 @@ fn view_and_start(app: &mut App, id: SessionId) {
     app.selection = None;
     app.display_offset = 0;
     if let (Some(project), Some(d)) = (app.core.workspace.active.clone(), &app.daemon) {
+        send_pane_size(app, id);
         d.send(ClientMsg::SessionStart { session: id });
         d.send(ClientMsg::SetViewedSession {
             project,
             session: Some(id),
+        });
+    }
+}
+
+/// Tell the daemon what size to start `id` at, **before** its `SessionStart` (BUG-003, FR-014a).
+///
+/// The pane widget only publishes `Message::TerminalResized` when its own size *changes*, so a
+/// session started into a window the user is not resizing is never told anything — it used to come
+/// up at the daemon's 100×30 spawn seed and stay there until the next window resize. `App::last_grid`
+/// is the last size the pane published; stating it here is what makes it a size the *next* session
+/// starts at rather than only one the current session was corrected to. Ordered before the start so
+/// the daemon has it recorded when the spawn reads it (the daemon also honours it if it arrives
+/// afterwards — `010` FR-020a — but only the ordering makes the spawn itself right).
+///
+/// A no-op before the first frame has laid out a pane (`last_grid` is `None`), where the daemon's
+/// own default correctly applies.
+fn send_pane_size(app: &App, id: SessionId) {
+    if let (Some((cols, rows)), Some(d)) = (app.last_grid, &app.daemon) {
+        d.send(ClientMsg::SessionResize {
+            session: id,
+            cols,
+            rows,
         });
     }
 }
@@ -3167,6 +3185,68 @@ mod tests {
             },
         );
         assert_eq!(app.last_grid, Some((180, 45)));
+    }
+
+    /// T061 (BUG-003, `006-real-terminal-emulator` FR-014a): displaying a session must state the
+    /// pane's size *before* starting it, so the daemon spawns the process at that size instead of
+    /// its 100×30 seed.
+    ///
+    /// The pane widget publishes `TerminalResized` only when its own size changes, so a session
+    /// started into a window nobody is resizing was never told anything at all. The neighbouring
+    /// `terminal_resized_remembers_the_pane_size_for_future_spawns` pins that `App::last_grid` is
+    /// *stored*; nothing pinned that anything reads it, and nothing did — this closes that gap by
+    /// asserting the message order on the wire.
+    #[test]
+    fn displaying_a_session_states_the_pane_size_before_starting_it() {
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.core.workspace.active = Some(std::path::PathBuf::from("/tmp/project"));
+        let id = SessionId::new();
+        app.last_grid = Some((220, 60));
+
+        let _ = update_inner(&mut app, Message::SessionSelected(id));
+
+        match rx.try_recv() {
+            Ok(ClientMsg::SessionResize {
+                session,
+                cols,
+                rows,
+            }) => {
+                assert_eq!(session, id);
+                assert_eq!((cols, rows), (220, 60));
+            }
+            other => panic!("expected the size first, got {other:?}"),
+        }
+        assert!(
+            matches!(
+                rx.try_recv(),
+                Ok(ClientMsg::SessionStart { session }) if session == id
+            ),
+            "the start must follow the size, not precede it"
+        );
+    }
+
+    /// The pane has not been laid out yet (nothing has published a size): the start goes out alone
+    /// and the daemon's own default applies. A zero-size guess here would be worse than no guess.
+    #[test]
+    fn displaying_a_session_before_the_pane_has_a_size_sends_only_the_start() {
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.core.workspace.active = Some(std::path::PathBuf::from("/tmp/project"));
+        let id = SessionId::new();
+        assert_eq!(app.last_grid, None);
+
+        let _ = update_inner(&mut app, Message::SessionSelected(id));
+
+        assert!(
+            matches!(
+                rx.try_recv(),
+                Ok(ClientMsg::SessionStart { session }) if session == id
+            ),
+            "the first message is the start itself"
+        );
     }
 
     /// Builds an `App` with every field at a neutral default, so each test only spells out the

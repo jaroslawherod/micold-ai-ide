@@ -88,6 +88,14 @@ struct Inner {
     /// [`Self::worktree_gates`] exists: spawning the work removed the serialization the connection
     /// loop provided incidentally, and two concurrent starts would spawn two processes.
     session_gates: HashMap<SessionId, Arc<tokio::sync::Mutex<()>>>,
+    /// The `(cols, rows)` a client last asked for per session — the size of its terminal pane —
+    /// kept **whether or not the session is live** (BUG-003, `006-real-terminal-emulator`
+    /// FR-014a). A `SessionResize` used to reach live PTYs only, so a size reported for a session
+    /// whose process did not exist yet was lost and the spawn came up at the 100×30 seed; every
+    /// spawn site now seeds from here instead. Survives stop/start and crash-respawn (the pane is
+    /// still that size); dropped when the session is archived. Never persisted — it describes a
+    /// client's window, not the session.
+    sizes: HashMap<SessionId, (u16, u16)>,
 }
 
 /// One live process of a session: its PTY and its framer. The [`PtySession`] is behind an `Arc` so
@@ -178,6 +186,7 @@ impl DaemonState {
                 worktree_gates: HashMap::new(),
                 starting: HashMap::new(),
                 session_gates: HashMap::new(),
+                sizes: HashMap::new(),
             }),
             next_id: AtomicU64::new(1),
             lifecycle: Lifecycle::new(),
@@ -635,6 +644,10 @@ impl DaemonState {
             if let Some(live) = inner.sessions.remove(&id) {
                 removed.extend(live.procs.values().map(|p| Arc::clone(&p.pty)));
             }
+            // Every caller here is an archive/forget path — the session is not coming back, so its
+            // recorded size goes with it (FR-020a). A mere stop/kill does *not* come through here,
+            // which is what keeps the size across a restart of the same session.
+            inner.sizes.remove(&id);
         }
         removed
     }
@@ -794,6 +807,7 @@ impl DaemonState {
         };
 
         let env = self.env_include_vars_for(&plan.cwd);
+        let size = self.desired_size(id);
         let session = match plan.mode {
             TerminalMode::AiCli => {
                 let spec = LaunchSpec {
@@ -803,10 +817,10 @@ impl DaemonState {
                     env,
                 };
                 let settings = self.hook_settings_file(id);
-                PtySession::spawn_claude(id, &spec, plan.scrollback, None, settings.as_deref())?
+                PtySession::spawn_claude(id, &spec, plan.scrollback, size, settings.as_deref())?
             }
             TerminalMode::Regular => {
-                PtySession::spawn_shell(id, &plan.cwd, &env, plan.scrollback, None)?
+                PtySession::spawn_shell(id, &plan.cwd, &env, plan.scrollback, size)?
             }
         };
         // Session-start event with the launch reason (FR-045). No terminal content — id + mode only.
@@ -984,6 +998,9 @@ impl DaemonState {
     /// of leaving a dead entry that looks alive.
     fn respawn_primary(&self, id: SessionId, cwd: PathBuf, mode: TerminalMode, scrollback: usize) {
         let env = self.env_include_vars_for(&cwd);
+        // The viewer's pane did not change size because the process died — come back at the size the
+        // session was last given, not at the seed (FR-020a, `006` SC-011).
+        let size = self.desired_size(id);
         let spawned = match mode {
             TerminalMode::AiCli => {
                 let spec = LaunchSpec {
@@ -993,9 +1010,9 @@ impl DaemonState {
                     env,
                 };
                 let settings = self.hook_settings_file(id);
-                PtySession::spawn_claude(id, &spec, scrollback, None, settings.as_deref())
+                PtySession::spawn_claude(id, &spec, scrollback, size, settings.as_deref())
             }
-            TerminalMode::Regular => PtySession::spawn_shell(id, &cwd, &env, scrollback, None),
+            TerminalMode::Regular => PtySession::spawn_shell(id, &cwd, &env, scrollback, size),
         };
         match spawned {
             Ok(session) => {
@@ -1051,6 +1068,42 @@ impl DaemonState {
             .get(&session)
             .map(|l| l.procs.values().map(|p| Arc::clone(&p.pty)).collect())
             .unwrap_or_default()
+    }
+
+    /// Resize a session to the client's visible grid (`ClientMsg::SessionResize`).
+    ///
+    /// The size is **recorded first**, whether or not the session has any process yet, and every
+    /// spawn site seeds from that record (FR-020a; BUG-003 of `006-real-terminal-emulator`). This
+    /// method used to be the `SessionResize` arm's inline loop over the live PTYs, which meant a
+    /// size arriving before the process — routine, since `SessionStart` is spawned and may wait on a
+    /// 60 s environment-include script — was applied to an empty list and lost, leaving the session
+    /// at the 100×30 seed until an unrelated window resize produced another one.
+    ///
+    /// Every one of the session's processes is then resized, not just the attached one, so a later
+    /// attach-switch shows a correctly-sized grid too. PTY resizes happen outside the state lock
+    /// (the handles are cloned `Arc`s).
+    pub fn resize_session(&self, session: SessionId, cols: u16, rows: u16) {
+        // A degenerate size is not a size: `PtySession::resize` rejects a zero dimension, and
+        // recording one would seed a spawn with it. A client reporting one keeps whatever it last
+        // reported for real.
+        if cols > 0 && rows > 0 {
+            self.lock().sizes.insert(session, (cols, rows));
+        }
+        for pty in self.session_ptys(session) {
+            if let Err(err) = pty.resize(cols, rows) {
+                tracing::warn!(session = %session.0, %err, "resize failed");
+            }
+            // Force the stream to re-frame at the new size even for a process that doesn't redraw
+            // on SIGWINCH (the framer treats a size change as structural → full frame).
+            pty.signals().mark_dirty();
+        }
+    }
+
+    /// The size this session's next process should be spawned at — whatever a client last reported
+    /// for it (FR-020a). `None` for a session no client has ever sized, where the supervisor's own
+    /// seed applies.
+    fn desired_size(&self, session: SessionId) -> Option<(u16, u16)> {
+        self.lock().sizes.get(&session).copied()
     }
 
     /// The *attached* process's framer (used by the view-stream task and the scrollback handler).
@@ -1116,8 +1169,11 @@ impl DaemonState {
             ));
         };
         let env = self.env_include_vars_for(&cwd);
+        // A second terminal for a session is displayed in the same pane as the first, so it starts
+        // at the same size (FR-020a, `006` SC-011).
+        let size = self.desired_size(session);
         let pty = Arc::new(PtySession::spawn_shell(
-            session, &cwd, &env, scrollback, None,
+            session, &cwd, &env, scrollback, size,
         )?);
         let mut inner = self.lock();
         match inner.sessions.get_mut(&session) {

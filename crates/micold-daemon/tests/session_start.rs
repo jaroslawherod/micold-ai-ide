@@ -288,3 +288,57 @@ fn create_session_adds_a_daemon_owned_session_to_the_catalog() {
         "an empty worktree_dir is the Default (root) location"
     );
 }
+
+/// BUG-003 (`006-real-terminal-emulator` FR-014/FR-014a): a size reported for a session that is not
+/// live yet must be *remembered* and used to seed the spawn — not dropped.
+///
+/// Before the fix, `SessionResize` only walked `session_ptys`, which is empty until the process
+/// exists, and every spawn site passed `initial_size: None`. So a session started right after the
+/// client reported its pane size came up at the 100×30 seed and stayed there — the whole visible
+/// symptom: a terminal occupying a fixed patch of an otherwise empty pane until the next window
+/// resize happened to produce a fresh `SessionResize`.
+#[test]
+fn a_session_spawns_at_the_size_last_requested_for_it() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(0x5E55));
+    let state = DaemonState::new(catalog_with_shell_session(project.path(), store.path()));
+
+    // The client reports the pane size while the session has no process at all.
+    state.resize_session(id, 220, 60);
+
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect("start must spawn the shell session");
+    let live = state.live_session(id).expect("registered");
+
+    let (cols, rows) = {
+        let term = live.term().lock();
+        (term.grid().columns(), term.grid().screen_lines())
+    };
+    assert_eq!(
+        (cols, rows),
+        (220, 60),
+        "the spawn must adopt the last requested size, not the 100×30 seed"
+    );
+
+    // A second terminal instance is displayed in the same pane, so it starts at the same size —
+    // `open_shell` is the third spawn site and had the same hardcoded `None`.
+    let instance = micold_core::session::ShellInstanceId(0);
+    state
+        .open_shell(id, instance)
+        .expect("open a shell instance");
+    for pty in state.session_ptys(id) {
+        let term = pty.term().lock();
+        assert_eq!(
+            (term.grid().columns(), term.grid().screen_lines()),
+            (220, 60),
+            "every one of the session's processes starts at the recorded size"
+        );
+    }
+
+    for pty in state.session_ptys(id) {
+        pty.kill().expect("kill");
+    }
+    drop(live);
+}
