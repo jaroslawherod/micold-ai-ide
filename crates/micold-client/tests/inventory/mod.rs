@@ -42,11 +42,28 @@ pub fn library_dirs() -> Vec<PathBuf> {
     vec![ui.join("material"), ui.join("cdk")]
 }
 
+/// A directory under `src/`, for a caller holding a layer other than the library to the same rule.
+///
+/// Added by feature 021 T030: `src/overlay/` is not part of the component library and never becomes
+/// an element, but it is built the same way — required inputs to a constructor, options through
+/// chainable steps — and the argument for one definition of that shape is the same argument that
+/// moved this scanner here in the first place.
+pub fn src_dir(relative: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join(relative)
+}
+
 /// Every library source, keyed by a display path (`material/button.rs`).
 pub fn library_sources() -> BTreeMap<String, String> {
+    sources_in(&library_dirs())
+}
+
+/// Every `.rs` file directly under each of `dirs`, keyed by a display path (`overlay/registry.rs`).
+pub fn sources_in(dirs: &[PathBuf]) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
-    for dir in library_dirs() {
-        for entry in fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display())) {
+    for dir in dirs {
+        for entry in fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display())) {
             let path = entry.expect("dir entry").path();
             if path.extension().is_some_and(|e| e == "rs") {
                 let key = format!(
@@ -134,8 +151,14 @@ impl Declared {
 }
 
 pub fn declarations() -> Vec<Declared> {
+    declarations_in(&library_dirs())
+}
+
+/// Every public struct declared directly under each of `dirs`, with the same reading of
+/// "constructor", "builder step" and "public field" the library gate uses.
+pub fn declarations_in(dirs: &[PathBuf]) -> Vec<Declared> {
     let mut out = Vec::new();
-    for (module, src) in library_sources() {
+    for (module, src) in sources_in(dirs) {
         let code = code_only(&src);
         for line in code.lines() {
             let trimmed = line.trim_start();
@@ -291,31 +314,41 @@ pub fn animation_helpers() -> BTreeSet<String> {
         .collect()
 }
 
-/// The text between `pub struct Name … {` and its closing brace, at brace depth.
+/// A struct's field list: between the braces of a braced struct, or the parentheses of a tuple one.
+///
+/// The three forms are distinguished by whichever of `{`, `(` and `;` closes the header first. Only
+/// the braced form existed in the library, and taking the next `{` unconditionally was fine for it —
+/// but a *tuple* struct's next `{` is its `impl` block, so the "fields" came back as a list of
+/// methods and every one of them read as `pub`. Feature 021 T030 pointed this scanner at
+/// `src/overlay/`, whose `SurfaceId(&'static str)` is exactly that shape, and it reported a public
+/// field the type does not have.
 fn struct_body(code: &str, name: &str) -> String {
     let Some(start) = code.find(&format!("pub struct {name}")) else {
         return String::new();
     };
     let after = &code[start..];
-    let Some(open) = after.find('{') else {
-        return String::new();
+    let (open, close) = match after.find(['{', '(', ';']) {
+        Some(at) if after.as_bytes()[at] == b'{' => (at, ('{', '}')),
+        Some(at) if after.as_bytes()[at] == b'(' => (at, ('(', ')')),
+        // A unit struct — `pub struct SidebarFilterPanel;` — has no fields to report.
+        _ => return String::new(),
     };
     let mut depth = 0usize;
     let mut end = open;
     for (i, c) in after[open..].char_indices() {
-        match c {
-            '{' => depth += 1,
-            '}' => {
-                depth -= 1;
-                if depth == 0 {
-                    end = open + i;
-                    break;
-                }
+        if c == close.0 {
+            depth += 1;
+        } else if c == close.1 {
+            depth -= 1;
+            if depth == 0 {
+                end = open + i;
+                break;
             }
-            _ => {}
         }
     }
-    after[open..end].to_string()
+    // Past the opening delimiter, so a tuple struct's `(pub String)` reads as a public field the
+    // way a braced struct's `pub name: String` line does.
+    after[open + 1..end].to_string()
 }
 
 /// Whether a public free function in the same module returns `name`, i.e. constructs it.
@@ -448,6 +481,21 @@ mod tests {
             .filter(|(m, n)| m == "material/animation.rs" && n == "Fade")
             .count();
         assert_eq!(keyed, 1, "the tag and the wrapper must collapse to one key");
+    }
+
+    /// The three struct forms, since only the braced one existed when this parser was written.
+    ///
+    /// A tuple struct's next `{` is its `impl` block; before feature 021 T030 that block came back
+    /// as the field list and every `pub fn` in it read as a public field.
+    #[test]
+    fn a_tuple_structs_methods_are_not_its_fields() {
+        let code = "pub struct Id(&'static str);\n\nimpl Id {\n    pub fn new() -> Self {}\n}\n";
+        assert_eq!(struct_body(code, "Id"), "&'static str");
+
+        let public = "pub struct Pair(pub String);\n";
+        assert!(struct_body(public, "Pair").trim_start().starts_with("pub "));
+
+        assert_eq!(struct_body("pub struct Marker;\n", "Marker"), "");
     }
 
     /// Variant names, payloads stripped.
