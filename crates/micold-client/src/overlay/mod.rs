@@ -38,6 +38,8 @@
 //! message its cancellation sends. Whether a given trigger closes it is forwarded to `dismisses`.
 //! A struct named "rules" that contained rules would be the parallel rule engine FR-014 rules out.
 
+pub mod registry;
+
 use crate::app::Message;
 use micold_core::overlay::{dismisses, Layer, Surface, Trigger};
 

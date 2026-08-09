@@ -114,6 +114,38 @@ pub enum FieldId {
     SettingsEnvIncludeTimeout,
 }
 
+impl Overlay {
+    /// The floating surface this variant names: its identity, and the message its cancellation
+    /// sends. `None` for [`Overlay::None`], which names no surface.
+    ///
+    /// This is the enum's own knowledge, and it is stated **once**. Both readers of it — the
+    /// [`on_escape`] path below and the overlay registry that Tier 2 dispatches through
+    /// ([`crate::overlay::registry`]) — call this rather than matching the enum again, so the two
+    /// representations cannot answer differently while they coexist. The registry is derived from
+    /// the enum here; T032 reverses that, and this function goes with the enum at T037.
+    pub fn as_surface(self) -> Option<(crate::overlay::SurfaceId, Message)> {
+        let (id, cancel) = match self {
+            Overlay::None => return None,
+            Overlay::About => ("about", Message::AboutClosed),
+            Overlay::ProjectSelector => ("project_selector", Message::ProjectSelectorClosed),
+            Overlay::RenameProject => ("rename_project", Message::RenameCancelled),
+            Overlay::AddWorktree => ("add_worktree", Message::AddWorktreeCancelled),
+            Overlay::Settings => ("settings", Message::SettingsCancelled),
+            Overlay::ConfirmWorktreeDelete => {
+                ("confirm_worktree_delete", Message::WorktreeDeleteCancelled)
+            }
+            Overlay::RenameWorktree => ("rename_worktree", Message::WorktreeRenameCancelled),
+            Overlay::ConfirmSessionRemove => {
+                ("confirm_session_remove", Message::SessionRemoveCancelled)
+            }
+            Overlay::ConfirmForgetProject => {
+                ("confirm_forget_project", Message::ProjectForgetCancelled)
+            }
+        };
+        Some((crate::overlay::SurfaceId::new(id), cancel))
+    }
+}
+
 /// Every user interaction that can change application state.
 ///
 /// No longer `Copy`: some variants carry owned data (`PathBuf`, listing results).
@@ -1638,18 +1670,9 @@ pub fn on_escape(state: &State) -> Option<Message> {
     if state.overlay == Overlay::None && state.sidebar_filter_open {
         return Some(Message::SidebarFilterMenuToggled);
     }
-    match state.overlay {
-        Overlay::About => Some(Message::AboutClosed),
-        Overlay::ProjectSelector => Some(Message::ProjectSelectorClosed),
-        Overlay::RenameProject => Some(Message::RenameCancelled),
-        Overlay::AddWorktree => Some(Message::AddWorktreeCancelled),
-        Overlay::Settings => Some(Message::SettingsCancelled),
-        Overlay::ConfirmWorktreeDelete => Some(Message::WorktreeDeleteCancelled),
-        Overlay::RenameWorktree => Some(Message::WorktreeRenameCancelled),
-        Overlay::ConfirmSessionRemove => Some(Message::SessionRemoveCancelled),
-        Overlay::ConfirmForgetProject => Some(Message::ProjectForgetCancelled),
-        Overlay::None => None,
-    }
+    // The per-variant cancel messages live on the enum (see `Overlay::as_surface`) so this path
+    // and the registry read the same list rather than two copies of it.
+    state.overlay.as_surface().map(|(_, cancel)| cancel)
 }
 
 /// Where a decoded key press should go (feature 006, FR-009/FR-011). Pure; see
