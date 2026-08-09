@@ -33,6 +33,13 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Opt out of the shared target directory that .cargo/config.toml sets. That directory exists to
+  # stop several local agent worktrees from each keeping a ~30 GB target/ and thrashing one NVMe;
+  # a runner has a single checkout, no worktrees, and a disk it throws away, so it gains nothing
+  # and loses two things: cargo-deb wrote to target-shared/debian/ while the upload step globbed
+  # target/debian/ (v0.5.0 failed exactly here), and Swatinem/rust-cache caches ./target, so every
+  # run became a cold build. CARGO_TARGET_DIR takes precedence over `build.target-dir` in config.
+  CARGO_TARGET_DIR: target
 
 jobs:
   release-please:
