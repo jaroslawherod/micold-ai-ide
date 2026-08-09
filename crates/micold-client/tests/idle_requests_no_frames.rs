@@ -281,6 +281,139 @@ fn the_frame_request_sits_behind_the_animating_guard() {
     );
 }
 
+// ---------------------------------------------------------------------------------------------
+// The second door: a widget that throws its own children away
+// ---------------------------------------------------------------------------------------------
+
+/// The brace-matched block starting at the first `{` at or after `at`, plus the byte index just
+/// past it. `None` if there is no `{` left or the braces do not balance.
+fn block_at(code: &str, at: usize) -> Option<(&str, usize)> {
+    let open = at + code[at..].find('{')?;
+    let mut depth = 0usize;
+    for (i, c) in code[open..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    let end = open + i + c.len_utf8();
+                    return Some((&code[open..end], end));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Every `impl` block in a source file, as `(header, body)`.
+///
+/// Impl granularity is the point. A file granular version of this check passes on `select.rs` for
+/// the wrong reason: the same file also holds `ListWatch`, whose `diff` is present and correct, and
+/// that was enough to hide the missing one next to it.
+fn impl_blocks(code: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut from = 0usize;
+    while let Some(rel) = code[from..].find("\nimpl") {
+        let at = from + rel + 1;
+        let Some((body, end)) = block_at(code, at) else {
+            break;
+        };
+        let header = code[at..code[at..].find('{').map_or(at, |o| at + o)]
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        out.push((header, body.to_string()));
+        from = end;
+    }
+    out
+}
+
+/// Whether an impl body assembles its children inside `fn layout`.
+fn assembles_in_layout(body: &str) -> bool {
+    let mut from = 0usize;
+    while let Some(rel) = body[from..].find("fn layout") {
+        let at = from + rel;
+        let Some((layout, end)) = block_at(body, at) else {
+            return false;
+        };
+        if layout.contains("diff_children") {
+            return true;
+        }
+        from = end;
+    }
+    false
+}
+
+/// Widget impls whose `layout` assembles their children, as `(path relative to src/, impl header)`.
+fn assemblers() -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for (path, src) in ui_sources() {
+        for (header, body) in impl_blocks(&code_only(&src)) {
+            if assembles_in_layout(&body) {
+                out.push((path.clone(), header));
+            }
+        }
+    }
+    out
+}
+
+/// A widget that builds its children in `layout` must override `diff`, or it discards them.
+///
+/// This is the *other* way to hold the render loop awake, and it leaves no fingerprint the checks
+/// above can see: no component calls `request_redraw`, every `Progress` is guarded and correct, and
+/// the application still spins at 60fps. iced's default `Widget::diff` is `tree.children.clear()`,
+/// which is right for a widget that hands its children over in `children()` — and destructive for
+/// one that assembles them a step later, in `layout`. The cleared subtree is rebuilt from scratch,
+/// its transitions restart from zero, restarting asks for a frame, the frame re-runs `view()`, and
+/// the rebuild clears it again. That loop is BUG-001: the select's list blinked for as long as it
+/// was open.
+///
+/// Declaring `diff` is the fix, and an empty body is the right one when `layout` already diffs the
+/// child in — so the rule costs one line in a widget that genuinely wants the default.
+#[test]
+fn a_widget_that_assembles_in_layout_keeps_its_subtree() {
+    let found = assemblers();
+
+    assert!(
+        found.iter().any(|(p, _)| p == "ui/material/select.rs"),
+        "no widget was found to assemble its children in `layout`, so this check is vacuous. \
+         `ui/material/select.rs` is the widget that does it and the reason the rule exists; if it \
+         changed shape, this test must be re-aimed rather than left to pass on an empty set. \
+         Found: {found:?}"
+    );
+
+    let sources = ui_sources();
+    let offenders: Vec<_> = found
+        .iter()
+        .filter(|(path, header)| {
+            let src = code_only(
+                &sources
+                    .iter()
+                    .find(|(p, _)| p == path)
+                    .expect("path came from the same scan")
+                    .1,
+            );
+            impl_blocks(&src)
+                .iter()
+                .find(|(h, _)| h == header)
+                .is_some_and(|(_, body)| !body.contains("fn diff("))
+        })
+        .map(|(path, header)| format!("  {path}  {header}"))
+        .collect();
+
+    assert!(
+        offenders.is_empty(),
+        "these widgets assemble their children in `layout` but leave `Widget::diff` at its \
+         default, which is `tree.children.clear()`:\n{}\n\nEvery rebuild of the view throws the \
+         assembled subtree away — scroll positions, ripples, and any transition in flight. A \
+         restarted transition asks for a frame, that frame rebuilds the view, and the widget never \
+         settles (BUG-001, feature 022). Override `diff`; an empty body is the right one when \
+         `layout` already diffs the child in.",
+        offenders.join("\n")
+    );
+}
+
 /// A scan that scans nothing passes trivially. If `src/ui/` moves or the sanctioned file is
 /// renamed, this fails rather than reporting a clean bill of health for an empty set.
 #[test]

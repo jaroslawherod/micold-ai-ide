@@ -1,24 +1,20 @@
-//! The select's list never stops animating inside the dialog (feature 022, BUG-001).
+//! The select's list must stop animating once it has arrived (feature 022, BUG-001).
 //!
-//! **Ignored because it fails.** Un-ignoring it is how the fix proves itself.
+//! The blink is a *reset*, and the thing that resets it is the one thing a widget test forgets to
+//! do: **re-run `view()` every frame**. A real iced application rebuilds its whole element tree on
+//! each redraw and diffs it against the persistent [`Tree`]; a test that builds one element and
+//! pumps events at it never exercises `Widget::diff` at all. `Select` assembles its only child in
+//! `layout`, and iced 0.14's *default* `diff` is `tree.children.clear()` — so every rebuild threw
+//! that child's state away and the list's entrance started over from zero.
 //!
-//! This is the reproduction the bug report asked for, and it is fast: 0.07s, headless, no GUI. It
-//! took four wrong turns to get here and the shape of it is the lesson.
+//! That is why the earlier version of this file, which reused a single element, reported a serene
+//! settle while the real client blinked for six seconds straight. It is also why the loop is
+//! self-sustaining: the reset makes the select ask for another frame, the frame re-runs `view()`,
+//! and the rebuild resets it again.
 //!
-//! - The same select **bare** settles. Inside a plain `stack`, it settles. Only in the real dialog
-//!   does it keep going — 21 of 60 idle frames ask for another one.
-//! - Synthetic nesting did not reproduce it. A hand-built `Surface` and `Modal` both reported a
-//!   serene zero, and both were **lying**: the press never landed, so nothing was measured. That is
-//!   why the `opened` assertion below is not decoration — without it this file would have reported
-//!   the opposite conclusion.
-//! - What works is the covered state the layout fixture already has. It builds the real
-//!   application view, presses the select at a node path that is checked against the fixture, and
-//!   settles the dialog's entrance first — a modal swallows every event that is not a redraw until
-//!   it has appeared, which is why a press into a freshly built tree reaches nothing.
-//!
-//! Instrumentation showed *what* is wrong: the transition's `Progress` is **recreated** rather than
-//! restarted — `from` is always 0.0 and the target never flips, so nothing is retargeting it. Its
-//! widget-tree state is not surviving the frame here, and does survive one level shallower.
+//! The two frame budgets below are deliberately far larger than the ~150 ms the transitions need.
+//! An earlier gate for this bug asserted at 30 frames and failed for want of frames rather than for
+//! want of a fix, which is indistinguishable from the real thing until you check.
 #[path = "support/mod.rs"]
 mod support;
 
@@ -29,8 +25,7 @@ use support::covered_states::covered_states;
 use support::layout::{walk, Layer, FRAME, WINDOW};
 
 #[test]
-#[ignore = "BUG-001: reproduces the blink; un-ignore it with the fix"]
-fn does_the_dialog_select_settle() {
+fn the_dialogs_select_settles_across_view_rebuilds() {
     let cs = covered_states()
         .iter()
         .find(|c| c.name == "add-worktree-dialog-type-menu-open")
@@ -41,16 +36,19 @@ fn does_the_dialog_select_settle() {
         .expect("this covered state presses something");
 
     let renderer = support::layout::renderer();
-    let mut element = micold_client::ui::view(
-        &under.state,
-        None,
-        None,
-        0,
-        None,
-        &micold_core::env_include::EnvIncludeOutcome::Disabled,
-        &under.connection,
-    );
+    let build = || {
+        micold_client::ui::view(
+            &under.state,
+            None,
+            None,
+            0,
+            None,
+            &micold_core::env_include::EnvIncludeOutcome::Disabled,
+            &under.connection,
+        )
+    };
     let limits = layout::Limits::new(Size::ZERO, WINDOW);
+    let mut element = build();
     let mut tree = Tree::new(element.as_widget());
     let mut node = element
         .as_widget_mut()
@@ -58,6 +56,8 @@ fn does_the_dialog_select_settle() {
     let origin = std::time::Instant::now();
     let mut clock = 0u32;
 
+    /// One application frame: deliver the event, then rebuild the view and diff it in, exactly as
+    /// the runtime does between redraws.
     macro_rules! pump {
         ($ev:expr, $cur:expr) => {{
             let mut msgs = Vec::new();
@@ -89,6 +89,8 @@ fn does_the_dialog_select_settle() {
                     &mut shell,
                 );
             }
+            element = build();
+            tree.diff(element.as_widget());
             node = element
                 .as_widget_mut()
                 .layout(&mut tree, &renderer, &limits);
@@ -96,14 +98,21 @@ fn does_the_dialog_select_settle() {
         }};
     }
 
-    // 1. settle the dialog's entrance
-    for _ in 0..10 {
-        clock += 1;
-        pump!(
-            Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * clock)),
-            mouse::Cursor::Unavailable
-        );
+    macro_rules! settle {
+        ($frames:expr) => {
+            for _ in 0..$frames {
+                clock += 1;
+                let _ = pump!(
+                    Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * clock)),
+                    mouse::Cursor::Unavailable
+                );
+            }
+        };
     }
+
+    // 1. let the dialog's own entrance finish — a modal swallows every event that is not a redraw
+    //    until it has appeared, so a press into a freshly built tree would reach nothing.
+    settle!(40);
 
     // 2. press the select, at the node path the covered state names
     let target = walk(Layout::new(&node), Layer::Base)
@@ -114,20 +123,16 @@ fn does_the_dialog_select_settle() {
         target.x + target.width / 2.0,
         target.y + target.height / 2.0,
     );
-    pump!(
+    let _ = pump!(
         Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
         mouse::Cursor::Available(at)
     );
 
-    // 3. settle the list's arrival
-    for _ in 0..10 {
-        clock += 1;
-        pump!(
-            Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * clock)),
-            mouse::Cursor::Unavailable
-        );
-    }
+    // 3. let the list arrive
+    settle!(40);
 
+    // Without this the whole measurement is about nothing: an earlier bisect reported a confident
+    // zero from two arrangements where the press had simply missed.
     let opened = element
         .as_widget_mut()
         .overlay(
@@ -155,9 +160,9 @@ fn does_the_dialog_select_settle() {
             asks += 1;
         }
     }
-    println!("DIALOG SELECT: asked on {asks} of 60 idle frames (opened={opened})");
     assert_eq!(
         asks, 0,
-        "the dialog's select asked on {asks} of 60 idle frames"
+        "an open select that has arrived asked for {asks} more frames over 60 idle ones — \
+         its transition is being restarted by the view rebuild (BUG-001)"
     );
 }
