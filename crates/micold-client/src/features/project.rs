@@ -11,6 +11,7 @@
 //! correct — so it stays put for the session module (T021).
 
 use crate::app::Message;
+use crate::app::Overlay;
 use crate::app::State;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
@@ -127,5 +128,78 @@ impl FloatingSurface for ProjectContextMenu {
 impl Registered for ProjectContextMenu {
     fn open_in(state: &State) -> Option<Self> {
         state.project_menu_open.as_ref().map(|_| ProjectContextMenu)
+    }
+}
+
+/// The folder-browser dialog that adds a project, as a floating surface
+/// (feature 021, T032).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectSelectorDialog;
+
+impl FloatingSurface for ProjectSelectorDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("project_selector")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::ProjectSelectorClosed)
+    }
+}
+
+impl Registered for ProjectSelectorDialog {
+    fn open_in(state: &State) -> Option<Self> {
+        (state.overlay == Overlay::ProjectSelector).then_some(ProjectSelectorDialog)
+    }
+}
+
+/// The rename-project dialog, as a floating surface (feature 021, T032).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenameProjectDialog;
+
+impl FloatingSurface for RenameProjectDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("rename_project")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::RenameCancelled)
+    }
+}
+
+impl Registered for RenameProjectDialog {
+    fn open_in(state: &State) -> Option<Self> {
+        (state.overlay == Overlay::RenameProject).then_some(RenameProjectDialog)
+    }
+}
+
+/// The confirm-forget-project dialog, as a floating surface (feature 021, T032).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmForgetProjectDialog;
+
+impl FloatingSurface for ConfirmForgetProjectDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("confirm_forget_project")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::ProjectForgetCancelled)
+    }
+}
+
+impl Registered for ConfirmForgetProjectDialog {
+    fn open_in(state: &State) -> Option<Self> {
+        (state.overlay == Overlay::ConfirmForgetProject).then_some(ConfirmForgetProjectDialog)
     }
 }

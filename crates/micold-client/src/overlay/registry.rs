@@ -23,23 +23,17 @@
 //! `State::dismiss_on_scroll_beneath` does today. A single "dismiss" entry point would have had to
 //! pick one and silently change the other.
 //!
-//! # What is registered today, and what T031/T032 change
+//! # What is registered
 //!
-//! Two surfaces, which is enough to prove both bands and both dispatch shapes:
+//! All sixteen surfaces the application has: nine dialogs, three panel popovers and four context
+//! menus, each described in the feature module that owns it and named here once. The transitional
+//! `ModalSurface` that stood in for the whole `Overlay` enum at T029 is gone as of T032.
 //!
-//! - [`ModalSurface`] — the transitional bridge. It stands for whichever [`crate::app::Overlay`]
-//!   variant is open, deriving its identity and cancellation from `Overlay::as_surface`. It is one
-//!   registration standing for nine surfaces, which is the wrong shape on purpose: T032 splits it
-//!   into nine feature-owned surfaces and this type goes away.
-//! - `features::sidebar::SidebarFilterPanel` — a genuine one, owned by its feature module,
-//!   costing the single line below. It is the one popover Escape reaches today.
-//!
-//! The other six popovers are **not** registered yet, and registering them is not a formality.
-//! Escape does not close them today — the keyboard path only ever asks about a modal or the filter
-//! panel — while the core rule says a `NonModal` surface dismisses on Escape. Registering them as
-//! they stand would therefore *change behaviour*, which FR-012 ("preserve the existing priority")
-//! does not authorise. That decision belongs to T031, where the popovers migrate, and is recorded
-//! there rather than made here by accident.
+//! The enum itself is not, yet. It survives as the *storage* the dialog surfaces read — their
+//! `open_in` is `state.overlay == Overlay::X` — and as the thing `app::on_escape` still matches
+//! on. Those are two independent statements of the same nine facts, which is exactly the drift
+//! this feature exists to end, and `tests/overlay_registry.rs` holds them equal over every state
+//! either can express until T034 deletes the second one.
 
 use crate::app::{Message, State};
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
@@ -123,14 +117,22 @@ macro_rules! register {
 }
 
 register! {
-    ModalSurface,
+    crate::features::help::AboutDialog,
     crate::features::help::HelpMenu,
-    crate::features::project::ProjectSwitcher,
+    crate::features::project::ConfirmForgetProjectDialog,
     crate::features::project::ProjectContextMenu,
-    crate::features::sidebar::SidebarFilterPanel,
+    crate::features::project::ProjectSelectorDialog,
+    crate::features::project::ProjectSwitcher,
+    crate::features::project::RenameProjectDialog,
+    crate::features::session::ConfirmSessionRemoveDialog,
     crate::features::session::SessionContextMenu,
     crate::features::session::TerminalContextMenu,
+    crate::features::settings::SettingsDialog,
+    crate::features::sidebar::SidebarFilterPanel,
+    crate::features::worktree::ConfirmWorktreeDeleteDialog,
     crate::features::worktree::WorktreeContextMenu,
+    crate::features::worktree::RenameWorktreeDialog,
+    crate::features::worktree_form::AddWorktreeDialog,
 }
 
 /// Every registered surface, in registration order.
@@ -228,39 +230,5 @@ fn close_each(state: &mut State, open: fn(&State) -> Vec<Open>) {
             return;
         };
         state.update(cancel);
-    }
-}
-
-/// Whichever [`crate::app::Overlay`] variant is open, as a registered surface.
-///
-/// **Transitional.** Nine surfaces behind one registration, which is exactly what Tier 2 is
-/// dismantling — but it is what lets the enum and the registry coexist green (T029) instead of
-/// nine surfaces appearing in the same commit that deletes the enum. Its identity and cancellation
-/// come from `Overlay::as_surface`, so it cannot drift from `on_escape`. T032 replaces it with one
-/// feature-owned surface per dialog and deletes this type.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModalSurface {
-    id: SurfaceId,
-    cancel: Message,
-}
-
-impl FloatingSurface for ModalSurface {
-    fn id(&self) -> SurfaceId {
-        self.id
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(self.cancel.clone())
-    }
-}
-
-impl Registered for ModalSurface {
-    fn open_in(state: &State) -> Option<Self> {
-        let (id, cancel) = state.overlay.as_surface()?;
-        Some(Self { id, cancel })
     }
 }
