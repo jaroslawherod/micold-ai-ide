@@ -1,5 +1,5 @@
 //! Generic dispatch reaches every dialog, under the right name, with the right cancellation
-//! (feature 021, T029/T033 — contract R1, R3; FR-008, FR-012).
+//! (feature 021, T029/T033/T034 — contract R1, D1, R3; FR-008, FR-012).
 //!
 //! ## What this file checked before T033, and what it checks now
 //!
@@ -20,6 +20,15 @@
 //! The states covered are the ones `Overlay` can express, crossed with the one popover Escape
 //! reached before T031. T031 registered the other six, and that *did* change what Escape does —
 //! recorded below in `escape_now_reaches_every_popover`, not hidden inside the table.
+//!
+//! ## The keyboard path (T034)
+//!
+//! Up to T034 all of that was about what dispatch *would* answer; the live Escape key still went
+//! through a nine-arm match in `ui::subscription`. It now emits `Message::EscapePressed` and the
+//! reducer asks the registry. A `Subscription` is opaque and cannot be asserted against, so the
+//! wiring is covered from both ends instead: `pressing_escape_closes_the_topmost_surface` drives
+//! the message the subscription emits, and `the_keyboard_subscription_names_no_surface` reads the
+//! function to confirm it still emits only that one.
 
 use micold_client::app::{on_escape, Message, Overlay, State};
 use micold_client::overlay::registry::{self, Probe};
@@ -252,6 +261,111 @@ fn escape_now_reaches_every_popover() {
         registry::escape(&state),
         Some(Message::AboutClosed),
         "a dialog outranks a menu, whichever was opened first (contract D1)"
+    );
+}
+
+#[test]
+fn pressing_escape_closes_the_topmost_surface() {
+    // T034: the keyboard path reports *that Escape happened* and the reducer decides. This drives
+    // the message the subscription now emits, so it covers the wiring the subscription itself
+    // cannot be asked about — `Subscription` is opaque, and the old nine-arm match in it was
+    // testable only by reading it.
+    fn open(state: &State) -> Vec<&'static str> {
+        registry::open_among(registry::probes(), state)
+            .iter()
+            .map(|s| s.id().as_str())
+            .collect()
+    }
+
+    for (overlay, filter, mut state) in every_state() {
+        let before = open(&state);
+        let top = registry::topmost(&state).map(|s| s.id().as_str());
+        state.update(Message::EscapePressed);
+
+        // Exactly the topmost surface closed, and nothing else moved either way.
+        let want: Vec<&str> = before
+            .iter()
+            .copied()
+            .filter(|id| Some(*id) != top)
+            .collect();
+        assert_eq!(
+            open(&state),
+            want,
+            "{overlay:?} with the filter panel {}: Escape was supposed to close {top:?} and \
+             leave the rest alone",
+            if filter { "open" } else { "closed" }
+        );
+    }
+
+    // A dialog over a popover: Escape takes the dialog and leaves the popover (contract D1), so
+    // the two cases above are genuinely different and the loop's allowance is not a hole.
+    let mut both = state(Overlay::About, true);
+    both.update(Message::EscapePressed);
+    assert_eq!(both.overlay, Overlay::None, "the dialog took the Escape");
+    assert!(
+        both.sidebar_filter_open,
+        "and the popover beneath it is untouched — one Escape closes one surface"
+    );
+
+    // A popover alone, including one the pre-T031 keyboard path never reached.
+    let mut menu = State {
+        help_menu_open: true,
+        ..Default::default()
+    };
+    menu.update(Message::EscapePressed);
+    assert!(
+        !menu.help_menu_open,
+        "Escape now reaches the overflow menu, which the subscription's match never named"
+    );
+}
+
+#[test]
+fn pressing_escape_with_nothing_open_changes_nothing() {
+    let mut state = State::default();
+    let before = state.clone();
+    state.update(Message::EscapePressed);
+    assert_eq!(
+        state, before,
+        "the trigger is reported unconditionally; deciding that nothing closes is the reducer's \
+         job, and it must be a no-op rather than a state change"
+    );
+}
+
+#[test]
+fn the_keyboard_subscription_names_no_surface() {
+    // The collapse itself, held open. The subscription's job is now "hold a listener while Escape
+    // has something to close"; the moment a per-surface message or an overlay variant reappears
+    // in it, the second copy of the dismissal table is back and the two paths can drift again —
+    // which is the failure that produced `on_escape`'s "mirrors the subscription exactly" comment
+    // and the hand-written priority guard above the old match.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/mod.rs");
+    let src =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let at = src
+        .find("pub fn subscription(")
+        .expect("`ui::subscription` has moved; point this guard at it");
+    let rest = &src[at..];
+    let end = rest.find("\n}").expect("unterminated function");
+    let body = &rest[..end];
+
+    assert!(
+        body.contains("Message::EscapePressed"),
+        "the guard is looking at the wrong text: the subscription's body should emit \
+         `Message::EscapePressed`"
+    );
+    assert!(
+        !body.contains("Overlay::"),
+        "`ui::subscription` matches on an overlay variant again:\n{body}"
+    );
+    let named: Vec<&str> = body
+        .match_indices("Message::")
+        .map(|(at, _)| body[at..].split_whitespace().next().unwrap_or_default())
+        .filter(|m| !m.starts_with("Message::EscapePressed"))
+        .collect();
+    assert!(
+        named.is_empty(),
+        "`ui::subscription` names per-surface messages again: {named:?} — it is supposed to \
+         report that Escape happened and let the registry decide what that closes"
     );
 }
 

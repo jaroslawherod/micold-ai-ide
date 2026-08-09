@@ -521,56 +521,47 @@ fn dismissing_dialog<'a>(
     }
 }
 
-/// Keyboard subscription. While a modal overlay is open, Esc dismisses it — the About
-/// dialog (FR-011) or the project selector. Mirrors [`crate::app::on_escape`].
+/// Keyboard subscription: while anything is floating, Esc dismisses it.
 ///
 /// Feature 006 (FR-009): while the embedded terminal holds focus, the app binds NO global
 /// keyboard shortcuts — every key is owned by the focused terminal widget (so Esc and any app
 /// chord reach the `claude` process instead of driving the app).
+///
+/// # This function no longer knows what Escape closes (feature 021, T034)
+///
+/// It used to. It was a nine-arm match over the overlay enum, with the sidebar filter panel
+/// hand-checked ahead of it because a popover is not an `Overlay` — a second copy of both the
+/// per-dialog cancellations and the priority between bands, kept in step with `app::on_escape` by
+/// hand. It now reports *that Escape happened* and lets the reducer ask the registry which
+/// surface that reaches, exactly as the scroll trigger has worked since feature 017.
+///
+/// Three things fall out of that, none of them incidental:
+///
+/// - **The macro is gone.** `Subscription::filter_map` requires a zero-sized closure and derives
+///   the subscription's identity from its `TypeId`, so naming the message per overlay meant one
+///   distinct closure *expression* per overlay — otherwise iced kept the previous overlay's
+///   recipe alive across a switch and Esc emitted the wrong message. A message that does not name
+///   its target cannot be stale, so one shared closure is now correct.
+/// - **The priority is the band ordering**, not a guard written above a match. A dialog outranks
+///   a popover because `Layer` says so (contract D1).
+/// - **The decision is made when Escape lands**, not when the frame was last rendered.
+///
+/// What is left here is the one thing that genuinely belongs to the view layer: whether to hold a
+/// keyboard listener open at all. It is held only while Escape has something to close, so pressing
+/// it with nothing open stays as inert as it was.
 pub fn subscription(state: &State) -> Subscription<Message> {
-    /// One Esc-dismiss subscription, for `$message`.
-    ///
-    /// This is a macro rather than a helper `fn` because `Subscription::filter_map` requires a
-    /// **zero-sized** closure and derives the subscription's identity from that closure's
-    /// `TypeId`. A function taking the message would capture it (non-zero-sized, rejected at
-    /// compile time); a single shared closure would give every overlay the same identity, so
-    /// iced would keep the previous overlay's recipe alive across a switch and Esc would emit
-    /// the wrong message. Each macro expansion is a distinct closure expression, hence a
-    /// distinct type — exactly what the 0.13 `on_key_press(fn)` form gave us per call site.
-    macro_rules! on_escape {
-        ($message:expr) => {
-            iced::keyboard::listen().filter_map(|event| {
-                use iced::keyboard::{key::Named, Event, Key};
-                matches!(
-                    event,
-                    Event::KeyPressed {
-                        key: Key::Named(Named::Escape),
-                        ..
-                    }
-                )
-                .then_some($message)
-            })
-        };
-    }
-
-    if state.terminal_focused {
+    if state.terminal_focused || crate::app::on_escape(state).is_none() {
         return Subscription::none();
     }
-    // The sidebar filter panel (feature 009) is a lightweight popover, not a modal `Overlay`,
-    // so it's checked ahead of the `Overlay` match below (mirrors `on_escape`'s priority).
-    if state.overlay == Overlay::None && state.sidebar_filter_open {
-        return on_escape!(Message::SidebarFilterMenuToggled);
-    }
-    match state.overlay {
-        Overlay::None => Subscription::none(),
-        Overlay::About => on_escape!(Message::AboutClosed),
-        Overlay::ProjectSelector => on_escape!(Message::ProjectSelectorClosed),
-        Overlay::RenameProject => on_escape!(Message::RenameCancelled),
-        Overlay::AddWorktree => on_escape!(Message::AddWorktreeCancelled),
-        Overlay::Settings => on_escape!(Message::SettingsCancelled),
-        Overlay::ConfirmWorktreeDelete => on_escape!(Message::WorktreeDeleteCancelled),
-        Overlay::RenameWorktree => on_escape!(Message::WorktreeRenameCancelled),
-        Overlay::ConfirmSessionRemove => on_escape!(Message::SessionRemoveCancelled),
-        Overlay::ConfirmForgetProject => on_escape!(Message::ProjectForgetCancelled),
-    }
+    iced::keyboard::listen().filter_map(|event| {
+        use iced::keyboard::{key::Named, Event, Key};
+        matches!(
+            event,
+            Event::KeyPressed {
+                key: Key::Named(Named::Escape),
+                ..
+            }
+        )
+        .then_some(Message::EscapePressed)
+    })
 }

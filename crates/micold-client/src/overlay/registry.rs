@@ -207,6 +207,16 @@ pub fn close_popovers(state: &mut State) {
     close_each(state, open_popovers);
 }
 
+/// Close whatever Escape reaches: the topmost open surface, and nothing else.
+///
+/// [`escape`] answers the question; this one acts on the answer, for the caller that has a
+/// `&mut State` rather than a message to return. `Message::EscapePressed` is that caller.
+pub fn close_topmost(state: &mut State) {
+    if let Some(cancel) = escape(state) {
+        state.update(cancel);
+    }
+}
+
 /// Close every surface a scroll beneath the content reaches.
 pub fn close_on_scroll_beneath(state: &mut State) {
     close_each(state, |state| {
