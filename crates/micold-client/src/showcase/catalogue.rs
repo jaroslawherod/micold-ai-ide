@@ -718,6 +718,15 @@ pub const EXEMPTIONS: &[Exemption] = &[
                  section poses.",
     },
     Exemption {
+        module: "material/terminal_pane.rs",
+        component: "GridSizeReporter",
+        reason: "a measuring wrapper with no appearance: it lays out to its child, draws the child \
+                 and nothing else, and exists only to report the terminal area's size in cells so a \
+                 session can be *started* at it (BUG-003, FR-014b). What the area looks like is \
+                 `TerminalPane`, which the gallery already poses; posing an invisible wrapper would \
+                 show its child a second time under a name that draws nothing.",
+    },
+    Exemption {
         module: "cdk/picker.rs",
         component: "Picker",
         reason: "a behaviour-layer wrapper, for the same reason as the two above: it anchors a \

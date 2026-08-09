@@ -31,6 +31,182 @@ use iced::{
 };
 use micold_core::protocol::grid::{LineId, WireColor, WireStyle};
 
+/// Reports the terminal area's size in *cells* to the app, whatever is currently drawn in it
+/// (BUG-003, FR-014a).
+///
+/// [`TerminalPane`] already reports its own size, and for a long time that looked sufficient: the
+/// pane is the terminal area. But the pane is only mounted while a session is displayed **and** its
+/// first grid frame has arrived — before that the same rectangle holds an empty state or a
+/// "Starting…" placeholder, and nothing measures it. So on a cold start the app knew no size at the
+/// one moment it most needs one: the first session the user clicks is started before any pane has
+/// ever been laid out, and is therefore spawned at the service's default (`010` FR-020a) and
+/// corrected a frame later, with its first output laid out for the wrong screen.
+///
+/// This wraps the terminal area itself rather than its contents, so the measurement exists from the
+/// first frame after launch and does not depend on what is inside. Reporting is deduplicated per
+/// instance: only a *change* in the computed `(cols, rows)` publishes, so a steady window is silent.
+pub struct GridSizeReporter<'a, Theme = iced::Theme, Renderer = iced::Renderer> {
+    content: Element<'a, Message, Theme, Renderer>,
+}
+
+/// The last `(cols, rows)` this instance published, so an unchanged size stays off the wire.
+#[derive(Default)]
+struct ReporterState {
+    last_grid: (u16, u16),
+}
+
+impl<'a> GridSizeReporter<'a> {
+    /// Wrap the element that occupies the terminal area.
+    pub fn new(content: impl Into<Element<'a, Message>>) -> Self {
+        Self {
+            content: content.into(),
+        }
+    }
+}
+
+impl<Theme, Renderer> Widget<Message, Theme, Renderer> for GridSizeReporter<'_, Theme, Renderer>
+where
+    Renderer: renderer::Renderer,
+{
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<ReporterState>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(ReporterState::default())
+    }
+
+    fn children(&self) -> Vec<Tree> {
+        vec![Tree::new(&self.content)]
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        tree.diff_children(std::slice::from_ref(&self.content));
+    }
+
+    fn size(&self) -> Size<Length> {
+        self.content.as_widget().size()
+    }
+
+    fn layout(
+        &mut self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        self.content
+            .as_widget_mut()
+            .layout(&mut tree.children[0], renderer, limits)
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        viewport: &Rectangle,
+    ) {
+        let bounds = layout.bounds();
+        let grid = CellMetrics::new(TERM_FONT_SIZE).grid_size(bounds.width, bounds.height);
+        let state = tree.state.downcast_mut::<ReporterState>();
+        if grid != state.last_grid {
+            state.last_grid = grid;
+            shell.publish(Message::TerminalResized {
+                cols: grid.0,
+                rows: grid.1,
+            });
+        }
+
+        self.content.as_widget_mut().update(
+            &mut tree.children[0],
+            event,
+            layout,
+            cursor,
+            renderer,
+            clipboard,
+            shell,
+            viewport,
+        );
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn iced::advanced::widget::Operation,
+    ) {
+        self.content
+            .as_widget_mut()
+            .operate(&mut tree.children[0], layout, renderer, operation);
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+        renderer: &Renderer,
+    ) -> mouse::Interaction {
+        self.content.as_widget().mouse_interaction(
+            &tree.children[0],
+            layout,
+            cursor,
+            viewport,
+            renderer,
+        )
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        self.content.as_widget().draw(
+            &tree.children[0],
+            renderer,
+            theme,
+            style,
+            layout,
+            cursor,
+            viewport,
+        );
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: iced::Vector,
+    ) -> Option<iced::advanced::overlay::Element<'b, Message, Theme, Renderer>> {
+        self.content.as_widget_mut().overlay(
+            &mut tree.children[0],
+            layout,
+            renderer,
+            viewport,
+            translation,
+        )
+    }
+}
+
+impl<'a> From<GridSizeReporter<'a>> for Element<'a, Message> {
+    fn from(r: GridSizeReporter<'a>) -> Self {
+        Element::new(r)
+    }
+}
+
 /// Per-widget interaction state (drag + tracked modifiers + click cadence for single/double/
 /// triple selection).
 #[derive(Default)]
@@ -38,8 +214,6 @@ struct PaneState {
     dragging: bool,
     modifiers: keyboard::Modifiers,
     last_click: Option<Click>,
-    /// Last reported grid size, to detect resizes and notify the PTY (FR-014/FR-015).
-    last_grid: (u16, u16),
     /// While dragging the scrollbar thumb: the cursor's offset below the thumb's top edge, so the
     /// grabbed point stays under the pointer (FR-016).
     scrollbar_grab: Option<f32>,
@@ -545,15 +719,11 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         let bounds = layout.bounds();
         let metrics = CellMetrics::new(TERM_FONT_SIZE);
 
-        // Report the visible grid size to the process whenever it changes (FR-014/FR-015).
-        let grid = metrics.grid_size(bounds.width, bounds.height);
-        if grid != state.last_grid {
-            state.last_grid = grid;
-            shell.publish(Message::TerminalResized {
-                cols: grid.0,
-                rows: grid.1,
-            });
-        }
+        // The visible grid size is reported by [`GridSizeReporter`], which wraps the terminal area
+        // rather than living in it (BUG-003, FR-014a) — the pane is absent from the tree until a
+        // session is displayed and its first frame has arrived, so a report owned here could not
+        // exist at the moment a cold-started app most needs one. Reporting it in both places would
+        // put two `SessionResize` messages on the wire for every resize.
 
         // Track modifiers (even when unfocused) so Shift-forces-selection works (FR-013b).
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(m)) = &event {

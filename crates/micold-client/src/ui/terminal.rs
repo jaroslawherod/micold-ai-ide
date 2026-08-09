@@ -12,8 +12,8 @@ use crate::grid::GridCache;
 use crate::icons::Icon;
 use crate::icons::{mode_glyph, mode_tooltip};
 use crate::ui::material::{
-    self, Button, ButtonVariant, ContextMenu, IconButton, MenuItem, SurfaceKind, TerminalPane,
-    Text, Tooltip, TooltipPosition, TypeRole,
+    self, Button, ButtonVariant, ContextMenu, GridSizeReporter, IconButton, MenuItem, SurfaceKind,
+    TerminalPane, Text, Tooltip, TooltipPosition, TypeRole,
 };
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
@@ -323,18 +323,25 @@ pub fn pane<'a>(
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
+    // Every branch below wraps the terminal area in a `GridSizeReporter`, including the ones with no
+    // terminal in it (BUG-003, FR-014a). The size of this rectangle is what a session must be
+    // *started* at, and the empty state occupies exactly the rectangle the first session will be
+    // displayed in — so measuring it here is what lets that session be spawned at the right size
+    // instead of corrected a frame after its first output.
     let Some(active) = state.active_session else {
-        return container(
-            Text::new(
-                "Select or start a session to open its terminal.",
-                TypeRole::Body,
-                r,
+        return GridSizeReporter::new(
+            container(
+                Text::new(
+                    "Select or start a session to open its terminal.",
+                    TypeRole::Body,
+                    r,
+                )
+                .muted(),
             )
-            .muted(),
+            .padding(spacing::LG)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill),
         )
-        .padding(spacing::LG)
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
         .into();
     };
 
@@ -351,6 +358,8 @@ pub fn pane<'a>(
             .center_y(Length::Fill)
             .into(),
     };
+    // Measured whether the pane, the placeholder, or nothing at all is inside it (see above).
+    let body: Element<'a, Message> = GridSizeReporter::new(body).into();
 
     // While the right-click context menu is open, float it over the terminal body anchored at the
     // clicked point; choosing Copy/Paste or clicking outside dismisses it (FR-013).
