@@ -245,6 +245,17 @@ pub enum Message {
     /// [`micold_core::overlay::Trigger::ScrollBeneath`]. Emitted unconditionally by the scrollable
     /// that moved; deciding whether anything closes is the reducer's job, via the shared rule.
     ScrolledBeneathOverlay,
+    /// Escape was pressed with the terminal unfocused (feature 021, T034). The first of the three
+    /// dismissal triggers to be reported the same way the third already was: as *what happened*,
+    /// not as what should close.
+    ///
+    /// The keyboard subscription used to name the message itself, which meant a nine-arm match
+    /// over the overlay enum in the view layer and a hand-written priority rule above it. It now
+    /// emits this, and the reducer asks the registry which surface Escape reaches — so a surface
+    /// added tomorrow is dismissed without the subscription hearing of it, and the decision is
+    /// made against the state Escape actually lands in rather than the state that was last
+    /// rendered.
+    EscapePressed,
     /// The worktree sidebar scrolled to this vertical offset.
     ///
     /// Carries the offset rather than being a bare notification, because the app bar's elevation
@@ -711,6 +722,15 @@ impl State {
         crate::overlay::registry::close_on_scroll_beneath(self);
     }
 
+    /// Dismiss whatever Escape reaches: the topmost open surface, and no other (contract D1).
+    ///
+    /// The counterpart of [`Self::dismiss_on_scroll_beneath`], and deliberately its opposite
+    /// shape — a scroll invalidates every anchored menu at once, Escape is a single decision
+    /// aimed at whatever holds the user's attention.
+    fn dismiss_topmost(&mut self) {
+        crate::overlay::registry::close_topmost(self);
+    }
+
     /// Surface a failed action to the user (see [`notify::Notification`]).
     ///
     /// Use this for anything the user asked for that could not be completed. Do not add a new
@@ -1063,6 +1083,7 @@ impl State {
                 self.dismiss_on_scroll_beneath();
             }
             Message::ScrolledBeneathOverlay => self.dismiss_on_scroll_beneath(),
+            Message::EscapePressed => self.dismiss_topmost(),
             Message::SidebarFilterMenuToggled => {
                 self.sidebar_filter_open = !self.sidebar_filter_open;
                 // Mutually exclusive with the other two lightweight popovers (feature 009).
