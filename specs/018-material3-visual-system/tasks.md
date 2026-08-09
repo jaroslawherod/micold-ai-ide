@@ -1211,15 +1211,48 @@ That is how `shell.rs` shipped five buttons whose leading glyph was 14dp against
 defect the manual §B4 pass found by reading, after every automated gate had passed. This phase
 turns that reading into a rule.
 
-- [ ] T129 Extract the labelled icon into `crates/micold-client/src/ui/material/icon_label.rs`. Two feature modules built it by hand, identically — the "git" badge in `project_selector.rs` and in `shell.rs`'s known list. The type states the distinction the defect turned on: here the glyph takes the **label's** role, because a labelled icon is text with a picture in front of it; `Button::leading` is not that, and applies §7.3's 18dp whatever the label's role (Principle VIII, §7.3)
+**Renumbered T129/T130 → T140/T141, 2026-08-09.** `T129` named two different tasks: BUG-005's
+text-overflow gate fix in the phase above, and this phase's extraction. BUG-005's is the one with
+claims on the number — `bugs/BUG-005.md` cites it four times, including a postscript titled after
+it — so this phase moved instead, to the first free numbers above Phase 19's T131–T139. That leaves
+the phases numerically out of order and it stays that way: the numbers identify tasks, they do not
+order them, and the phase above already records the same renumber-on-rebase churn that caused this.
 
-- [ ] T130 Gate that no feature module composes a `Glyph` and a `Text` as siblings in a row or column of its own — `crates/micold-client/tests/composite_call_sites.rs`. Scans the same two roots as `material_boundary.rs` (`src/ui/` minus the library layers, plus all of `src/showcase/`), blanking nested macro bodies so a violation is reported once and against the inner row (FR-027, §7.3, SC-001)
+- [X] T140 Extract the labelled icon into `crates/micold-client/src/ui/material/icon_label.rs`. Two feature modules built it by hand, identically — the "git" badge in `project_selector.rs` and in `shell.rs`'s known list. The type states the distinction the defect turned on: here the glyph takes the **label's** role, because a labelled icon is text with a picture in front of it; `Button::leading` is not that, and applies §7.3's 18dp whatever the label's role (Principle VIII, §7.3)
+
+  > **Both call sites go through the type.** `project_selector.rs:59` and `shell.rs:128` each build
+  > the "git" badge as `IconLabel::new(Icon::Git, "git", TypeRole::Label, r).tint(..).muted()`, and
+  > neither spells the row out any more. The doc on the type carries the distinction rather than
+  > leaving it to be rediscovered — and it is the doc T132 was corrected against when "regular icon
+  > button" was first read as icon-only.
+
+- [X] T141 Gate that no feature module composes a `Glyph` and a `Text` as siblings in a row or column of its own — `crates/micold-client/tests/composite_call_sites.rs`. Scans the same two roots as `material_boundary.rs` (`src/ui/` minus the library layers, plus all of `src/showcase/`), blanking nested macro bodies so a violation is reported once and against the inner row (FR-027, §7.3, SC-001)
 
   > **Scope, stated as a limit rather than a claim.** A list row with a leading status marker is
   > not caught, and should not be: in `shell.rs`'s known-projects entry the glyph and the name are
   > separate children of a §7.2 row, not a composite handed on as one thing, and §7.2's geometry
   > has its own gates. A rule that also banned list rows could not reach zero without a `ListRow`
   > component — and a gate that cannot reach zero is a budget, not a rule.
+
+  > **Green, and proven able to fail**, 2026-08-09: 7 passed, 0 failed. The proof is
+  > `the_guard_actually_works`, which feeds the scanner the shape `shell.rs` actually shipped —
+  > `row![Glyph::new(..).tint(..), Text::new(..)]` behind a local `labeled()` helper — and asserts
+  > it is flagged. Three more pin the edges the scan could get wrong: a commented-out composite is
+  > not a violation, a nested one is reported once and against the *inner* row, and
+  > `icon_role(..)`/`subtext(..)` are not read as `icon(`/`text(`. The exemption is load-bearing
+  > rather than decorative — `the_library_is_excluded_because_it_owns_the_composite` asserts
+  > `button.rs` still builds its leading slot as a row, so if that stops being true the exemption
+  > gets re-examined instead of silently protecting nothing.
+  >
+  > **The boundary is drawn by syntax, not by meaning — worth knowing before trusting it.** The
+  > scan reads `row!`/`column!` macro *bodies*, so a composite assembled with `.push()` is outside
+  > it. Today that costs nothing and is even why the scope above holds: `shell.rs`'s known-projects
+  > entry starts at `row![]` and pushes its marker, its name and its badge, so the list row this
+  > rule deliberately does not want to catch is excluded by its own spelling. But the agreement is
+  > luck rather than design — the same list row written as `row![Glyph::new(..), Text::new(..)]`
+  > would be flagged against the stated scope, and a genuine labelled icon written with pushes
+  > would escape. Closing that needs the semantic distinction the scope note says it has no cheap
+  > way to make, so it stays a limit rather than a defect.
 
 ---
 
