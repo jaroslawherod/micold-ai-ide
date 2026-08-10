@@ -78,6 +78,36 @@ pub fn sources_in(dirs: &[PathBuf]) -> BTreeMap<String, String> {
     out
 }
 
+/// Every `.rs` file at or under `root`, recursively, keyed by a path relative to `src/`
+/// (`features/help.rs`, `ui/material/button.rs`).
+///
+/// [`sources_in`] deliberately does not recurse — it answers "the files of this one layer", which
+/// is what the library gates ask. This answers "everywhere in the client", which is what a
+/// reachability guard has to ask, since a surface named from `ui/material/` would be just as much
+/// a violation as one named from `ui/`. Added at feature 021 T039 rather than written a second
+/// time in the guard that needed it (FR-014).
+pub fn sources_under(root: &Path) -> BTreeMap<String, String> {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut out = BTreeMap::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display())) {
+            let path = entry.expect("dir entry").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let key = path
+                    .strip_prefix(&src)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                out.insert(key, fs::read_to_string(&path).expect("read source"));
+            }
+        }
+    }
+    out
+}
+
 /// Strips comments so prose is never mistaken for a declaration.
 pub fn code_only(src: &str) -> String {
     let mut out = String::with_capacity(src.len());
