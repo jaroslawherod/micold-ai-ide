@@ -255,6 +255,36 @@ fn the_checkboxs_hover_layer_stays_legible() {
     }
 }
 
+/// The checkbox's **focus** layer, on the same fills (BUG-003 — FR-029, FR-035).
+///
+/// Added rather than folded into the hover gate above: focus is the stronger of the two opacities,
+/// so it moves the fill further toward the mark read against it and is the one that would fail
+/// first. A single loop over both would have been tidier and would have rewritten an assertion that
+/// was already earning its keep, which FR-027 does not allow and which is the wrong trade anyway —
+/// the hover gate is why hover is safe, and this is why focus is.
+///
+/// It exists at all because the checkbox had no focus to shade until it was given a keyboard.
+#[test]
+fn the_checkboxs_focus_layer_stays_legible() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = roles(scheme);
+        let focus = micold_core::tokens::state::FOCUS as f64;
+        for (what, base, fg) in [
+            ("unchecked box", r.surface, r.on_surface),
+            ("checked box", r.primary, r.on_primary),
+        ] {
+            let background = composite(r.on_surface, base, focus);
+            let ratio = contrast(fg, background);
+            assert!(
+                ratio >= AA_NORMAL,
+                "{scheme:?} checkbox {what} while focused: contrast {ratio:.2} < {AA_NORMAL}. \
+                 The focus layer is the stronger of the two and moves the fill the mark is read \
+                 against furthest (FR-029, FR-035)"
+            );
+        }
+    }
+}
+
 /// The select's trigger **under its own state layer** (feature 022, T031 — FR-029).
 ///
 /// §5 draws hover and open as `on_surface` over the container at the state's opacity, and §7.7

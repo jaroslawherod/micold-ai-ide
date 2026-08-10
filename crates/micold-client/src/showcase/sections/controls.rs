@@ -100,7 +100,12 @@ pub fn icon_button<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
     )
 }
 
-/// `Checkbox` — checked and unchecked, and one with no toggle message (disabled).
+/// `Checkbox` — checked and unchecked, focused, and one with no toggle message (disabled).
+///
+/// The focused pose earns its place: it is the state FR-035 recorded as out of reach for this
+/// control, because the rendering stack's checkbox has no focus at all until the library gives it
+/// one (BUG-003). A gallery that showed every state but that one would still be describing the
+/// checkbox the bug left behind.
 pub fn checkbox<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
         vec![
@@ -112,6 +117,13 @@ pub fn checkbox<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Me
             posed(
                 "checked",
                 material::Checkbox::new(samples::LABEL, true, roles).on_toggle(|_| Message::NoOp),
+                roles,
+            ),
+            posed(
+                "focused",
+                material::Checkbox::new(samples::LABEL, false, roles)
+                    .focused(true)
+                    .on_toggle(|_| Message::NoOp),
                 roles,
             ),
             posed(

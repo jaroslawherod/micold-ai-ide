@@ -35,7 +35,7 @@
 use iced::advanced::widget::{operation, tree, Id, Operation, Tree, Widget};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Renderer as _, Shell};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
-use micold_core::tokens::{anatomy, density, state, Roles};
+use micold_core::tokens::{anatomy, density, Roles};
 
 use super::style;
 
@@ -49,33 +49,9 @@ const VALUE_LINE: f32 = 24.0;
 
 /// Which state layer the container carries (§5), strongest last.
 ///
-/// An ordered enum rather than a set of booleans, and that is the point: a field that is both open
-/// and focused must show **one** layer, not two blended into a colour neither token names. Making
-/// the states mutually exclusive puts that beyond reach of a call site instead of asking every one
-/// of them to remember it (feature 022, FR-035; BUG-002).
-///
-/// Hover is deliberately *not* something a caller supplies — see [`FilledField::draw`].
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
-pub enum Layer {
-    #[default]
-    None,
-    Hovered,
-    Focused,
-    Pressed,
-}
-
-impl Layer {
-    /// The published opacity for this state. No number is written here: FR-036a requires the
-    /// existing scale, and `state::FOCUS` had been sitting in it unused by any input.
-    pub fn opacity(self) -> f32 {
-        match self {
-            Layer::None => 0.0,
-            Layer::Hovered => state::HOVER,
-            Layer::Focused => state::FOCUS,
-            Layer::Pressed => state::PRESSED,
-        }
-    }
-}
+/// Defined in [`style`] because the checkbox shares the ordering — see there. Hover is deliberately
+/// *not* something a caller supplies for a field: see [`FilledField::draw`].
+pub use style::Layer;
 
 /// What the field's chrome responds to.
 ///

@@ -63,6 +63,11 @@ pub enum FieldId {
     AddWorktreeName,
     /// Settings: the terminal scrollback limit.
     SettingsScrollback,
+    /// The confirm-worktree-delete dialog's "also delete the branch" checkbox.
+    ConfirmDeleteAlsoBranch,
+    /// Settings: the environment-include on/off checkbox. Not a text field — the checkbox now
+    /// takes the keyboard too, and this is the same fact about the same dialog (BUG-003).
+    SettingsEnvIncludeEnabled,
     /// Settings: the environment-include script path.
     SettingsEnvIncludePath,
     /// Settings: the environment-include timeout.

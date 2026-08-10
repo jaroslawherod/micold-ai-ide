@@ -87,6 +87,38 @@ pub fn over(layer: Color, base: Color) -> Color {
     }
 }
 
+/// Which state layer a control carries (§5), strongest last.
+///
+/// An ordered enum rather than a set of booleans, and that is the point: a control that is both
+/// hovered and focused must show **one** layer, not two blended into a colour neither token names.
+/// Making the states mutually exclusive puts that beyond reach of a call site instead of asking
+/// every one of them to remember it (feature 022, FR-035; BUG-002).
+///
+/// Lives here rather than with any one widget because two now share it — the filled field draws it
+/// as a quad over its container, the checkbox composites it into a fill that has nowhere to put a
+/// quad — and the *ordering* is the part neither may restate.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+pub enum Layer {
+    #[default]
+    None,
+    Hovered,
+    Focused,
+    Pressed,
+}
+
+impl Layer {
+    /// The published opacity for this state. No number is written here: FR-036a requires the
+    /// existing scale, and `state::FOCUS` had been sitting in it unused by any input.
+    pub fn opacity(self) -> f32 {
+        match self {
+            Layer::None => 0.0,
+            Layer::Hovered => state::HOVER,
+            Layer::Focused => state::FOCUS,
+            Layer::Pressed => state::PRESSED,
+        }
+    }
+}
+
 fn radius(px: f32) -> Border {
     Border {
         radius: px.into(),
@@ -515,7 +547,15 @@ pub fn muted(r: Roles) -> impl Fn(&Theme) -> text::Style {
 }
 
 /// A checkbox styled to the design system (feature 011's "Enabled" toggle).
-pub fn checkbox(r: Roles) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbox_widget::Style {
+///
+/// `focused` is supplied rather than read from `status`, because the rendering stack's checkbox has
+/// no focus to report: its `Status` is active, hovered or disabled, and the widget itself is not
+/// focusable and answers no key. `Checkbox` wraps it in something that *is*, and tells this what it
+/// found — the same arrangement as [`field_indicator`], and for the same reason (BUG-003).
+pub fn checkbox(
+    r: Roles,
+    focused: bool,
+) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbox_widget::Style {
     move |_theme, status| {
         let is_checked = matches!(
             status,
@@ -524,6 +564,7 @@ pub fn checkbox(r: Roles) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbo
         );
         let border_color = match status {
             checkbox_widget::Status::Hovered { .. } => color(r.primary),
+            _ if focused => color(r.primary),
             _ => color(r.outline),
         };
         let base = if is_checked {
@@ -531,19 +572,27 @@ pub fn checkbox(r: Roles) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbo
         } else {
             color(r.surface)
         };
-        // §5's hover layer, composited into the box's own fill (FR-036, BUG-002). Before this, a
-        // hovered checkbox changed its *border* colour and nothing else, which is a Material 2
-        // affordance rather than a state layer — and it left the checkbox the one control in the
-        // app whose hover could be missed entirely against a busy background.
+        // §5's state layer, composited into the box's own fill (FR-035, FR-036; BUG-002, BUG-003).
+        // Before this, a hovered checkbox changed its *border* colour and nothing else, which is a
+        // Material 2 affordance rather than a state layer — and it left the checkbox the one
+        // control in the app whose hover could be missed entirely against a busy background. Focus
+        // did not exist for it at all.
         //
         // Composited rather than overlaid because `checkbox::Style` has one opaque `background` and
         // no layer of its own: there is nowhere to put a translucent quad, so the blend happens
         // here. The opacity is still the published one; only the arithmetic is local.
-        let background = match status {
-            checkbox_widget::Status::Hovered { .. } => {
-                over(state_fill(color(r.on_surface), state::HOVER), base)
-            }
-            _ => base,
+        //
+        // `max` and not a chain of ifs: a focused, hovered checkbox shows **one** layer, and which
+        // one is [`Layer`]'s to say rather than this function's — the field settles the same
+        // question with the same enum.
+        let hovered = match status {
+            checkbox_widget::Status::Hovered { .. } => Layer::Hovered,
+            _ => Layer::None,
+        };
+        let layer = hovered.max(if focused { Layer::Focused } else { Layer::None });
+        let background = match layer {
+            Layer::None => base,
+            layer => over(state_fill(color(r.on_surface), layer.opacity()), base),
         };
         checkbox_widget::Style {
             background: Background::Color(background),

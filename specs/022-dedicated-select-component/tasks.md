@@ -419,6 +419,47 @@ implemented and never once reached.*
 
   > The `true` no screen ever passed.
 
+### The checkbox, added 2026-08-09 on closing the last of FR-035
+
+- [X] T058 [P] Write failing gates that a checkbox takes the keyboard, toggles on Space, and shades with the focused layer that outranks hover, in `crates/micold-client/src/ui/material/field_focus.rs` (FR-035)
+
+  > Seven, driven rather than posed: a press gives it the keyboard, Space toggles a focused one, a
+  > focused one leaves *Enter* to the dialog, an unfocused one leaves Space alone, a press elsewhere
+  > takes the keyboard back, a **disabled** one takes it never, and the focused fill differs from
+  > both rest and hover while focused-and-hovered resolves to **one** layer.
+
+- [X] T059 Give the checkbox a keyboard, in `crates/micold-client/src/ui/material/checkbox.rs` (FR-035)
+
+  > FR-035 recorded this as out of reach because `checkbox::Status` has no focused variant. That was
+  > the symptom; the cause is that the stack's checkbox cannot be focused **at all** — no focus
+  > state, no traversal, no key. A wrapper holds the focus, offers it to the traversal, answers
+  > Space — and only Space, because Enter means submit in every dialog holding one — and reports
+  > changes. Not a reimplementation: the stack's checkbox keeps its
+  > drawing and its pointer, and gains the one capability it lacked.
+
+- [X] T060 Move `Layer` to the styling layer and let the checkbox resolve its fill through it, in `style.rs`, `filled_field.rs` (FR-035, FR-036a)
+
+  > Two controls now settle "hovered *and* focused" and the ordering is the part neither may
+  > restate. The field draws its layer as a quad; the checkbox composites it into a fill that has
+  > nowhere to put one — different arithmetic, one scale. No new token (FR-036a).
+
+- [X] T061 Wire both checkboxes and widen the call-site gate to cover them, in `settings_form.rs`, `confirm_delete.rs`, `ui/focus.rs`, `tests/field_focus_call_sites.rs` (FR-035, SC-012)
+
+  > `track_focus` becomes a trait over inputs rather than a method on the text field, so "which
+  > control has the keyboard" keeps one answer for the application instead of one per kind of
+  > control. The gate lists constructors, so the next focusable control is a one-line addition.
+
+- [X] T062 [P] Extend the contrast gate to the focused fill, in `crates/micold-core/tests/tokens.rs` (FR-029, FR-035)
+
+  > Focus is the stronger opacity, so it moves the fill further toward the mark read against it and
+  > is the one that would fail first — which is why the pair is checked rather than the one that
+  > came first.
+
+- [X] T063 [P] Pose the focused checkbox in the gallery, in `crates/micold-client/src/showcase/sections/controls.rs` (SC-012)
+
+  > The state FR-035 had recorded as unreachable for this control. A gallery showing every state
+  > but that one would still be describing the checkbox the bug left behind.
+
 ---
 
 ## Dependencies & Execution Order
@@ -438,7 +479,7 @@ Phase 6 (T033–T040)
       ↓
 Phase 7 (T041–T048)  ← BUG-002; independent of T039/T040, which are externally blocked
       ↓
-Phase 8 (T049–T057)  ← BUG-003; found by Phase 7's visual pass
+Phase 8 (T049–T063)  ← BUG-003; found by Phase 7's visual pass
 ```
 
 **Story independence**: US1 is shippable alone (with the transition on the search picker only, from

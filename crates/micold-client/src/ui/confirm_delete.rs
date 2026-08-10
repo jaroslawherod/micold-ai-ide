@@ -3,7 +3,8 @@
 //! exactly what is removed (the working directory and its sessions, always; the git branch,
 //! conditional on the branch-deletion checkbox below) before the user confirms.
 
-use crate::app::{Message, State};
+use crate::app::{FieldId, Message, State};
+use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
 use iced::Element;
@@ -24,6 +25,7 @@ pub fn modal<'a>(
     branch: Option<&str>,
     keep_branch: bool,
     scheme: ColorScheme,
+    focused: Option<FieldId>,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
@@ -48,6 +50,7 @@ pub fn modal<'a>(
                 !keep_branch,
                 r,
             )
+            .track_focus(FieldId::ConfirmDeleteAlsoBranch, focused)
             .on_toggle(|checked| Message::WorktreeDeleteKeepBranchToggled(!checked)),
         );
     }
@@ -91,6 +94,7 @@ pub fn dialog<'a>(
             branch,
             state.worktree_delete_keep_branch,
             scheme,
+            state.focused_field,
         )
     })
 }

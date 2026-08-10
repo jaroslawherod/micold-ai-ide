@@ -22,11 +22,11 @@
 //! lives in the application because the choice of where the fact is held is the application's.
 
 use crate::app::{FieldId, Message};
-use crate::ui::material::TextField;
+use crate::ui::material::{Checkbox, TextField};
 
-/// Wire a text field's focus to the application's [`FieldId`].
+/// Wire an input's focus to the application's [`FieldId`].
 pub trait TrackFocus {
-    /// Report this field's focus as `id`, and draw it from whatever the application currently
+    /// Report this input's focus as `id`, and draw it from whatever the application currently
     /// holds in `focused`.
     fn track_focus(self, id: FieldId, focused: Option<FieldId>) -> Self;
 }
@@ -34,6 +34,16 @@ pub trait TrackFocus {
 impl<'a> TrackFocus for TextField<'a, Message> {
     fn track_focus(self, id: FieldId, focused: Option<FieldId>) -> Self {
         self.active(focused == Some(id))
+            .on_focus_change(move |focused| Message::FieldFocusChanged(id, focused))
+    }
+}
+
+/// The checkbox joins on the same terms, which is the point of it being a trait: one `FieldId`
+/// space and one message for every input in the application, so "which control has the keyboard"
+/// has a single answer rather than one per kind of control.
+impl<'a> TrackFocus for Checkbox<'a, Message> {
+    fn track_focus(self, id: FieldId, focused: Option<FieldId>) -> Self {
+        self.focused(focused == Some(id))
             .on_focus_change(move |focused| Message::FieldFocusChanged(id, focused))
     }
 }

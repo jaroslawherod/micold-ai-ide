@@ -276,7 +276,7 @@ through both controls. Every one must be defined once and pass for both.
   search picker and the checkbox alike. Focus is distinct from the active indicator, which already
   answers separately and MUST keep doing so.
 
-  > **Partly unmet, and it is the rendering stack that stops it** *(found while implementing
+  > ~~**Partly unmet, and it is the rendering stack that stops it** *(found while implementing
   > T045, 2026-08-09)*. Every control wearing the shared field container answers focus: the text
   > field and the search picker report it, and the select reports its open state at the pressed
   > opacity. The **checkbox cannot**. It is the stack's own checkbox, whose style is a function of
@@ -284,7 +284,21 @@ through both controls. Every one must be defined once and pass for both.
   > variant to answer, so the layer has nowhere to attach. Meeting this for the checkbox means
   > owning the widget the way `FilledField` owns the field, which is a larger change than this bug
   > justifies. The checkbox answers **hover** (FR-036) and nothing else, and this is recorded rather
-  > than quietly dropped so the next person does not read the gate as covering it.
+  > than quietly dropped so the next person does not read the gate as covering it.~~
+  >
+  > **Met for the checkbox too, and the missing variant was the smaller half of it**
+  > *([BUG-003](./bugs/BUG-003.md), 2026-08-09)*. The absent `Status::Focused` was the symptom. The
+  > cause is that the rendering stack's checkbox **cannot be focused at all**: its widget state is
+  > the label's shaped paragraph, it joins no focus traversal and it answers no key. There was no
+  > focus to report because the control was reachable by pointer only — an accessibility gap as
+  > much as a visual one, and one no amount of styling would have closed.
+  >
+  > It is not reimplemented. A wrapper holds the focus, takes it on a press, offers it to the focus
+  > traversal, toggles on Space — and leaves Enter to the dialog, which reads it as *submit* — and
+  > reports changes; the stack's checkbox keeps drawing
+  > itself and keeps owning the pointer. The layer is still composited into the fill, because
+  > `checkbox::Style` still has one opaque background and nowhere to put a quad — but *which* layer
+  > is now `Layer`'s to decide, shared with the field, so a focused **and** hovered box shows one.
   >
   > ~~**And for the text field it renders but never fires** *(visual pass, 2026-08-09)*. Focus is a
   > *supplied* flag — `TextField::active` — and **no call site in the application or the gallery
@@ -372,16 +386,18 @@ through both controls. Every one must be defined once and pass for both.
   currently shades 40% of the field it responds on (440×24 within 472×56). *(Added by BUG-002.)*
 - **SC-012**: **Every** input — select, text field, search picker, checkbox — shows a distinct
   treatment at rest, on hover and on focus, in both schemes. The count of inputs that respond to
-  focus rises from **zero** to ~~all of them~~ **every input that can report it**: the three
+  focus rises from **zero** to ~~all of them~~ ~~**every input that can report it**: the three
   wearing the shared field container. The checkbox responds to hover only — see FR-035's note, and
-  it is a limit of the stack's checkbox rather than a decision. *(Added by BUG-002; amended
-  2026-08-09 on implementing it.)*
+  it is a limit of the stack's checkbox rather than a decision.~~ **all of them, as first written.**
+  *(Added by BUG-002; amended 2026-08-09 on implementing it, and again on closing BUG-003.)*
 
   > **Counted in the running application, not in a pose** *(BUG-003, 2026-08-09)*. The count above
   > was three the day it was written and one in the application, because two of the three could
-  > only be posed by a test. It is now three in both: `field_focus_call_sites.rs` holds every text
-  > field in the application to reporting its focus, which is the check whose absence let the count
-  > differ.
+  > only be posed by a test. It is now **four in both** — select, text field, search picker,
+  > checkbox: `field_focus_call_sites.rs` holds every input in the application to reporting its
+  > focus, which is the check whose absence let the count differ. The exclusion the criterion had
+  > acquired is withdrawn rather than met halfway; it asked for every input and every input now
+  > answers.
 
 ## Assumptions
 
