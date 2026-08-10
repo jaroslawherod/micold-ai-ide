@@ -40,48 +40,6 @@ pub const SIDEBAR_MAX_WIDTH: u16 = 600;
 /// Default sidebar width in pixels, used until the user resizes it.
 pub const SIDEBAR_DEFAULT_WIDTH: u16 = 300;
 
-/// Which modal overlay, if any, is currently shown over the main window.
-///
-/// Modeling the overlay as an enum (rather than a `bool` per dialog) makes
-/// "the About dialog is open twice" unrepresentable — satisfying FR-015 at the
-/// type level (Constitution Principle V).
-///
-/// **This is a storage slot, not a description of the dialogs** (feature 021, T033). What each
-/// dialog *is* — its identity, its band, what closes it — is stated once, in the feature module
-/// that owns it, and reaches dispatch through [`crate::overlay::registry`]. The enum used to
-/// carry a second copy of those nine facts in an `as_surface` match here; that match is gone, so
-/// the variants now say only *which slot is filled*. Each dialog's `Registered::open_in` reads
-/// this, which is the last thing the enum is for: T034–T036 collapse the remaining sites that
-/// match on it, and T037 replaces the slot itself.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Overlay {
-    /// No modal is open; the main window is fully interactive.
-    #[default]
-    None,
-    /// The About dialog is shown as a modal overlay.
-    About,
-    /// The in-app project selector (folder browser) is shown as a modal overlay.
-    ProjectSelector,
-    /// The rename-project dialog is shown as a modal overlay.
-    RenameProject,
-    /// The add-worktree form is shown as a modal overlay (feature 005, FR-005).
-    AddWorktree,
-    /// The Settings form is shown as a modal overlay (feature 006, FR-019).
-    Settings,
-    /// The confirm-delete dialog for a worktree is shown (feature 008, FR-018). The target
-    /// worktree is held in [`State::worktree_delete_target`].
-    ConfirmWorktreeDelete,
-    /// The rename-worktree dialog is shown (feature 008, FR-013/FR-014). The in-progress edit
-    /// is held in [`State::worktree_rename_draft`].
-    RenameWorktree,
-    /// The confirm-remove dialog for a session is shown (bugfix BUG-003, FR-015c). The target
-    /// session is held in [`State::session_remove_target`].
-    ConfirmSessionRemove,
-    /// The confirm-forget dialog for a project is shown (feature 014, FR-002). The target
-    /// project is held in [`State::forget_target`].
-    ConfirmForgetProject,
-}
-
 /// Which text field holds the keyboard, when one does (BUG-003).
 ///
 /// A filled field's whole focus affordance — the label floating clear of the value, the active
@@ -90,9 +48,8 @@ pub enum Overlay {
 /// honoured the flag, every anatomy gate proved it honoured the flag, and in the running
 /// application every field was drawn permanently at rest.
 ///
-/// One enum for the whole application rather than a focus flag on each of the four drafts, for the
-/// reason [`Overlay`] is one enum: at most one field can hold the keyboard, and this is the shape
-/// that says so. `Option<FieldId>` also makes "two fields focused at once" unrepresentable
+/// One enum for the whole application rather than a focus flag on each of the four drafts: at most
+/// one field can hold the keyboard, and this is the shape that says so. `Option<FieldId>` also makes "two fields focused at once" unrepresentable
 /// (Principle V), where four booleans would have needed a rule keeping them apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FieldId {
@@ -545,16 +502,29 @@ pub enum Message {
 /// Root application state for the single main window.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
-    /// The currently displayed modal overlay.
-    pub overlay: Overlay,
+    /// Whether the About dialog is open.
+    ///
+    /// The last remnant of the `Overlay` enum (feature 021, T037). That enum was a single slot
+    /// naming which of nine dialogs was showing, and eight of the nine already had a field of
+    /// their own saying the same thing — `selector`, `rename_draft`, `worktree_form`,
+    /// `settings_draft`, and the four confirm-dialog targets. The slot was a second copy of a fact
+    /// the state already held, kept in step by hand at twenty-five reducer sites. Each dialog now
+    /// reads its own state, and About, which had none, gets this.
+    ///
+    /// **What the enum bought and this does not**: two dialogs open at once was unrepresentable
+    /// (FR-015, Principle V). That invariant now belongs to [`State::clear_for_dialog`], which
+    /// closes whatever dialog is open before the next one is set up, and to
+    /// `one_dialog_at_a_time` in `tests/overlay_registry.rs`. A mechanism where there was a type;
+    /// recorded rather than glossed.
+    pub about_open: bool,
     /// Whether the Help menu is currently expanded (transient UI affordance).
     pub help_menu_open: bool,
     /// The known-projects catalog and the active working space (persisted). Per-story
     /// selector/rename working state is added alongside those stories.
     pub workspace: micold_core::workspace::Workspace,
-    /// The folder-browser state, present only while the project-selector overlay is shown.
+    /// The folder-browser state; its presence *is* the project-selector dialog being shown (T037).
     pub selector: Option<Selector>,
-    /// The in-progress rename, present only while the rename overlay is shown.
+    /// The in-progress rename; its presence *is* the rename dialog being shown (T037).
     pub rename_draft: Option<RenameDraft>,
     /// Which text field holds the keyboard, if any (BUG-003). Transient — never persisted.
     ///
@@ -634,13 +604,13 @@ pub struct State {
     /// most one is open at a time; `None` means no menu is showing.
     pub worktree_menu_open: Option<String>,
     /// The worktree pending deletion (its `dir_name`), shown in the confirm dialog (feature
-    /// 008, FR-018/FR-019). Present only while [`Overlay::ConfirmWorktreeDelete`] is shown.
+    /// 008, FR-018/FR-019). Its presence *is* the confirm dialog being shown (T037).
     pub worktree_delete_target: Option<String>,
     /// Whether the user has opted to also delete the branch when confirming a worktree delete
     /// (feature 013). Defaults to `false` = delete (today's unconditional behavior), so an
     /// unmodified confirm is unchanged. Reset to `false` on every `WorktreeDeleteRequested`.
     pub worktree_delete_keep_branch: bool,
-    /// The in-progress worktree rename, present only while [`Overlay::RenameWorktree`] is shown
+    /// The in-progress worktree rename; its presence *is* the rename dialog being shown (T037)
     /// (feature 008, FR-013/FR-014).
     pub worktree_rename_draft: Option<WorktreeRenameDraft>,
     /// Active sidebar tag filters (feature 008, FR-024). Empty ⇒ all worktrees shown. Multiple
@@ -665,11 +635,11 @@ pub struct State {
     /// at a time; `None` means no menu is showing. Mirrors `worktree_menu_open`.
     pub session_menu_open: Option<SessionId>,
     /// The session pending permanent removal, shown in the confirm dialog (bugfix BUG-003,
-    /// FR-015c). Present only while [`Overlay::ConfirmSessionRemove`] is shown. Mirrors
+    /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
     /// `worktree_delete_target`.
     pub session_remove_target: Option<SessionId>,
-    /// The project pending a forget confirmation, by path (feature 014). Present only while
-    /// [`Overlay::ConfirmForgetProject`] is shown. Transient — never persisted. Mirrors
+    /// The project pending a forget confirmation, by path (feature 014). Its presence *is* the
+    /// confirm dialog being shown (T037). Transient — never persisted. Mirrors
     /// `worktree_delete_target`.
     pub forget_target: Option<PathBuf>,
 }
@@ -754,20 +724,33 @@ impl State {
             .push(notify::Notification::new(level.to_queue_level(), message));
     }
 
-    /// Open a modal overlay, closing any lightweight popover first. The two are meant to be
-    /// mutually exclusive (`on_escape` and the keyboard subscription both assume it — feature
-    /// 009 code review), but before this helper existed each overlay-opening arm had to
-    /// remember to reset the popovers by hand, and none of them reset `sidebar_filter_open`,
-    /// so it was possible to open e.g. the Add Worktree form while the filter panel was still
-    /// (invisibly) open, leaving Escape's two implementations disagreeing about what to
-    /// dismiss. Routing every overlay-open through here makes that reset unconditional.
-    /// Since T031 the popovers are closed by asking the registry which are open rather than by
-    /// assigning to four remembered fields — so the three this list had never mentioned
-    /// (`worktree_menu_open`, `session_menu_open`, `terminal_context_menu`) are now closed too.
-    /// The first two were cleared by hand in the six reducer arms that open a modal from them,
-    /// which is the arrangement this replaces; the third was closed by nothing.
-    pub fn open_overlay(&mut self, overlay: Overlay) {
-        self.overlay = overlay;
+    /// Clear the way for a dialog about to open: close whatever is already floating.
+    ///
+    /// Popovers and modals are meant to be mutually exclusive (`on_escape` and the keyboard
+    /// subscription both assume it — feature 009 code review), but before this helper existed each
+    /// overlay-opening arm had to reset the popovers by hand, and none of them reset
+    /// `sidebar_filter_open`, so it was possible to open e.g. the Add Worktree form while the
+    /// filter panel was still (invisibly) open, leaving Escape's two implementations disagreeing
+    /// about what to dismiss. Routing every dialog-open through here makes that reset
+    /// unconditional. Since T031 the popovers are closed by asking the registry which are open
+    /// rather than by assigning to four remembered fields — so the three that list had never
+    /// mentioned (`worktree_menu_open`, `session_menu_open`, `terminal_context_menu`) are closed
+    /// too.
+    ///
+    /// **It now closes an open dialog as well** (T037), and that is the point of the rename: it
+    /// used to *be* the assignment that opened one, `self.overlay = overlay`, and a single slot
+    /// cannot hold two dialogs, so replacing the slot's contents closed the previous dialog for
+    /// free — while quietly leaving its draft behind, since nothing read the draft once the slot
+    /// said otherwise. With the slot gone the draft is what says a dialog is open, so a leftover
+    /// one *is* a second open dialog. The same registry call that closes the popovers closes it,
+    /// by sending the cancellation the dialog itself declared, so this is still not a list of
+    /// dialogs anybody has to maintain.
+    ///
+    /// Callers must invoke it **before** setting up the dialog they are opening — otherwise it
+    /// closes the one they just prepared. The eight call sites that did it the other way round
+    /// were reordered at T037.
+    pub fn clear_for_dialog(&mut self) {
+        crate::overlay::registry::close_dialogs(self);
         crate::overlay::registry::close_popovers(self);
         // A dialog opens with nothing focused. The fields that reported focus belong to a widget
         // tree that is being torn down and will never report losing it, so a remembered focus would
@@ -813,12 +796,13 @@ impl State {
             }
             Message::AboutOpened => {
                 // Idempotent: opening while already open keeps a single instance (FR-015).
-                self.open_overlay(Overlay::About);
+                self.clear_for_dialog();
+                self.about_open = true;
             }
             Message::AboutClosed => {
                 // No-op when nothing is open (edge case); otherwise return to the
                 // main window unchanged (FR-012).
-                self.overlay = Overlay::None;
+                self.about_open = false;
             }
             Message::SelectorNavigatedInto(path) => {
                 if let Some(selector) = &mut self.selector {
@@ -841,7 +825,6 @@ impl State {
                 }
             }
             Message::ProjectSelectorClosed => {
-                self.overlay = Overlay::None;
                 self.selector = None;
             }
             Message::RenameStarted(path) => {
@@ -852,12 +835,13 @@ impl State {
                     .find(|p| p.path == path)
                     .map(|p| p.display_name.clone());
                 if let Some(name) = current {
+                    self.clear_for_dialog();
                     self.rename_draft = Some(RenameDraft {
                         path,
                         text: name,
                         error: None,
                     });
-                    self.open_overlay(Overlay::RenameProject);
+
                 }
             }
             // A blur is only believed from the field that currently holds focus. Gaining and losing
@@ -887,7 +871,6 @@ impl State {
                     match self.workspace.rename(&path, &text) {
                         // Renaming never touches disk — only the stored name (FR-018).
                         Ok(()) => {
-                            self.overlay = Overlay::None;
                             self.rename_draft = None;
                         }
                         Err(error) => {
@@ -899,7 +882,6 @@ impl State {
                 }
             }
             Message::RenameCancelled => {
-                self.overlay = Overlay::None;
                 self.rename_draft = None;
             }
             Message::CursorMoved { x, y } => {
@@ -929,9 +911,8 @@ impl State {
             }
             Message::ProjectForgetRequested(path) => {
                 // Open the confirmation; nothing is removed until confirmed (FR-002).
-                self.project_menu_open = None;
+                self.clear_for_dialog();
                 self.forget_target = Some(path);
-                self.open_overlay(Overlay::ConfirmForgetProject);
             }
             Message::ProjectForgetConfirmed => {
                 // Drop the record + all per-path metadata (FR-003/FR-005). The binary has already
@@ -950,11 +931,9 @@ impl State {
                     }
                 }
                 self.forget_target = None;
-                self.overlay = Overlay::None;
             }
             Message::ProjectForgetCancelled => {
                 self.forget_target = None;
-                self.overlay = Overlay::None;
             }
             Message::ThemeModeCycled => {
                 // Advance to the next mode; the menu stays open so repeated clicks cycle.
@@ -1001,11 +980,10 @@ impl State {
                 self.worktree_menu_open = None;
             }
             Message::WorktreeDeleteRequested(dir) => {
-                self.worktree_menu_open = None;
+                self.clear_for_dialog();
                 self.worktree_delete_target = Some(dir);
                 // Never carries a choice over from a previously cancelled/confirmed dialog.
                 self.worktree_delete_keep_branch = false;
-                self.open_overlay(Overlay::ConfirmWorktreeDelete);
             }
             // Confirming *requests* the delete; it does not perform it. The daemon owns the git
             // removal and the session records, and answers with `OperationOk` (which is followed by
@@ -1019,24 +997,22 @@ impl State {
             // to the error notification explaining why.
             Message::WorktreeDeleteConfirmed => {
                 self.worktree_delete_target = None;
-                self.overlay = Overlay::None;
             }
             Message::WorktreeDeleteCancelled => {
                 self.worktree_delete_target = None;
-                self.overlay = Overlay::None;
             }
             Message::WorktreeDeleteKeepBranchToggled(keep) => {
                 self.worktree_delete_keep_branch = keep;
             }
             Message::WorktreeRenameStarted(dir) => {
                 let text = self.worktree_display_name(&dir);
-                self.worktree_menu_open = None;
+                self.clear_for_dialog();
                 self.worktree_rename_draft = Some(WorktreeRenameDraft {
                     dir_name: dir,
                     text,
                     error: None,
                 });
-                self.open_overlay(Overlay::RenameWorktree);
+
             }
             Message::WorktreeRenameTextChanged(text) => {
                 if let Some(draft) = &mut self.worktree_rename_draft {
@@ -1053,7 +1029,6 @@ impl State {
                     // Changes only the stored display name — never the folder or branch (FR-014).
                     match self.workspace.set_worktree_name(&dir, &text) {
                         Ok(()) => {
-                            self.overlay = Overlay::None;
                             self.worktree_rename_draft = None;
                         }
                         Err(error) => {
@@ -1065,7 +1040,6 @@ impl State {
                 }
             }
             Message::WorktreeRenameCancelled => {
-                self.overlay = Overlay::None;
                 self.worktree_rename_draft = None;
             }
             Message::SidebarFilterToggled(filter) => {
@@ -1110,7 +1084,7 @@ impl State {
                 }
             }
             Message::AddWorktreeOpened => {
-                self.open_overlay(Overlay::AddWorktree);
+                self.clear_for_dialog();
                 self.worktree_form = Some(WorktreeForm::default());
                 self.worktree_error = None;
             }
@@ -1153,7 +1127,6 @@ impl State {
                 }
             }
             Message::AddWorktreeCancelled => {
-                self.overlay = Overlay::None;
                 self.worktree_form = None;
             }
             // ----- feature 016: existing-branch source + conflict resolution -----
@@ -1319,7 +1292,6 @@ impl State {
                     self.worktrees.push(worktree);
                     self.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
                 }
-                self.overlay = Overlay::None;
                 self.worktree_form = None;
                 self.worktree_error = None;
             }
@@ -1445,9 +1417,8 @@ impl State {
                 self.session_menu_open = None;
             }
             Message::SessionRemoveRequested(id) => {
-                self.session_menu_open = None;
+                self.clear_for_dialog();
                 self.session_remove_target = Some(id);
-                self.open_overlay(Overlay::ConfirmSessionRemove);
             }
             Message::SessionRemoveConfirmed => {
                 // Unlike close (archive), remove drops the record outright — the pre-BUG-003
@@ -1464,11 +1435,9 @@ impl State {
                         self.terminal_focused = false;
                     }
                 }
-                self.overlay = Overlay::None;
             }
             Message::SessionRemoveCancelled => {
                 self.session_remove_target = None;
-                self.overlay = Overlay::None;
             }
             Message::TerminalTick => {}
             Message::SidebarToggled => {
@@ -1495,7 +1464,7 @@ impl State {
                 self.terminal_context_menu = None;
             }
             Message::SettingsOpened => {
-                self.open_overlay(Overlay::Settings);
+                self.clear_for_dialog();
                 // The binary seeds the current value; ensure a draft exists for the reducer path.
                 if self.settings_draft.is_none() {
                     self.settings_draft = Some(SettingsDraft::default());
@@ -1527,11 +1496,9 @@ impl State {
             }
             Message::SettingsSaved => {
                 // Validation + persistence happen in the binary; the reducer closes the form.
-                self.overlay = Overlay::None;
                 self.settings_draft = None;
             }
             Message::SettingsCancelled => {
-                self.overlay = Overlay::None;
                 self.settings_draft = None;
             }
             Message::NotificationDismissed => self.notify.dismiss(),
@@ -1624,10 +1591,9 @@ impl State {
             .as_deref()
             .is_some_and(|d| !names.contains(d))
         {
+            // Clearing the target *is* closing the dialog since T037; there is no second slot
+            // left to reset.
             self.worktree_delete_target = None;
-            if self.overlay == Overlay::ConfirmWorktreeDelete {
-                self.overlay = Overlay::None;
-            }
         }
         // Prune rename overrides for the active project's worktrees that are gone (FR-015).
         if let Some(active) = self.workspace.active.clone() {

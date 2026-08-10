@@ -8,7 +8,7 @@
 //!
 //! Render-free, like every module here: `tests/features_are_render_free.rs` holds that line.
 
-use crate::app::{Message, Overlay, State};
+use crate::app::{Message, State};
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{
@@ -43,8 +43,8 @@ pub enum BranchSource {
 /// The conflict-resolution sub-state of the add-worktree form (feature 016, contract
 /// `branch-conflict.md` §3).
 ///
-/// Lives INSIDE the form rather than as its own [`Overlay`] variant: `Overlay` holds one modal at
-/// a time, so routing the prompt through it would tear down the form — and with it the inputs
+/// Lives INSIDE the form rather than as a dialog of its own: only one dialog shows at a time, so
+/// routing the prompt through the registry would tear down the form — and with it the inputs
 /// FR-007 requires to survive a cancel (research R9).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum ResolutionState {
@@ -285,6 +285,6 @@ impl FloatingSurface for AddWorktreeDialog {
 
 impl Registered for AddWorktreeDialog {
     fn open_in(state: &State) -> Option<Self> {
-        (state.overlay == Overlay::AddWorktree).then_some(AddWorktreeDialog)
+        state.worktree_form.as_ref().map(|_| AddWorktreeDialog)
     }
 }

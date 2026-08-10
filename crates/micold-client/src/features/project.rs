@@ -11,7 +11,6 @@
 //! correct — so it stays put for the session module (T021).
 
 use crate::app::Message;
-use crate::app::Overlay;
 use crate::app::State;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
@@ -152,7 +151,7 @@ impl FloatingSurface for ProjectSelectorDialog {
 
 impl Registered for ProjectSelectorDialog {
     fn open_in(state: &State) -> Option<Self> {
-        (state.overlay == Overlay::ProjectSelector).then_some(ProjectSelectorDialog)
+        state.selector.as_ref().map(|_| ProjectSelectorDialog)
     }
 }
 
@@ -176,7 +175,7 @@ impl FloatingSurface for RenameProjectDialog {
 
 impl Registered for RenameProjectDialog {
     fn open_in(state: &State) -> Option<Self> {
-        (state.overlay == Overlay::RenameProject).then_some(RenameProjectDialog)
+        state.rename_draft.as_ref().map(|_| RenameProjectDialog)
     }
 }
 
@@ -200,6 +199,9 @@ impl FloatingSurface for ConfirmForgetProjectDialog {
 
 impl Registered for ConfirmForgetProjectDialog {
     fn open_in(state: &State) -> Option<Self> {
-        (state.overlay == Overlay::ConfirmForgetProject).then_some(ConfirmForgetProjectDialog)
+        state
+            .forget_target
+            .as_ref()
+            .map(|_| ConfirmForgetProjectDialog)
     }
 }

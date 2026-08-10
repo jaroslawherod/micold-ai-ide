@@ -15,7 +15,7 @@
 //! core, because it is what arms a row's delete button. A widget owning it privately would be a
 //! widget deciding whether a destructive action is available.
 
-use micold_client::app::{Message, Overlay, State, SIDEBAR_MIN_WIDTH};
+use micold_client::app::{Message, State, SIDEBAR_MIN_WIDTH};
 use micold_client::features::sidebar::TagFilter;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
@@ -65,10 +65,15 @@ fn sidebar_width_is_application_owned_and_clamped_here() {
 /// component owning it would be a component deciding the application's modality.
 #[test]
 fn open_overlay_identity_is_application_owned() {
+    // Since T037 the identity is not a slot but the state each dialog draws from, read back
+    // through the registry — the same answer to the same question, asked of what now holds it.
     let mut state = State::default();
-    assert_eq!(state.overlay, Overlay::None);
-    state.open_overlay(Overlay::About);
-    assert_eq!(state.overlay, Overlay::About);
+    assert!(micold_client::overlay::registry::open_dialog(&state).is_none());
+    state.update(Message::AboutOpened);
+    assert_eq!(
+        micold_client::overlay::registry::open_dialog(&state).map(|open| open.id()),
+        Some(micold_client::overlay::SurfaceId::new("about"))
+    );
 }
 
 /// Menu identity is a *string* — which worktree's menu is open — not a boolean about a panel. The

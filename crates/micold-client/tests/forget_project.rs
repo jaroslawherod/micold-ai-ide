@@ -4,10 +4,17 @@
 //! termination and per-project state-file deletion are binary/IO glue validated by
 //! `quickstart.md` (Principle I GUI-wiring exception); here we assert the pure state transitions.
 
-use micold_client::app::{on_escape, Message, Overlay, State};
+use micold_client::app::{on_escape, Message, State};
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionLocation};
 use std::path::{Path, PathBuf};
+
+/// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
+/// Asked of the registry, which reads each dialog's own state, so this is the same question about
+/// the same fact rather than a weaker one.
+fn open_dialog(state: &State) -> Option<&'static str> {
+    micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
+}
 
 /// A `State` with the given project paths, all `Available`, the last one active.
 fn state_with_projects(paths: &[&str]) -> State {
@@ -32,7 +39,7 @@ fn forget_requested_opens_confirmation_and_sets_target() {
 
     state.update(Message::ProjectForgetRequested(PathBuf::from("/a")));
 
-    assert_eq!(state.overlay, Overlay::ConfirmForgetProject);
+    assert_eq!(open_dialog(&state), Some("confirm_forget_project"));
     assert_eq!(
         state.forget_target.as_deref(),
         Some(std::path::Path::new("/a"))
@@ -48,7 +55,7 @@ fn forget_cancelled_closes_and_changes_nothing() {
 
     state.update(Message::ProjectForgetCancelled);
 
-    assert_eq!(state.overlay, Overlay::None);
+    assert_eq!(open_dialog(&state), None);
     assert!(state.forget_target.is_none());
     assert_eq!(
         state.workspace.projects.len(),
@@ -65,7 +72,7 @@ fn forget_confirmed_removes_the_nonactive_target_others_remain() {
 
     state.update(Message::ProjectForgetConfirmed);
 
-    assert_eq!(state.overlay, Overlay::None);
+    assert_eq!(open_dialog(&state), None);
     assert!(state.forget_target.is_none());
     assert_eq!(state.workspace.projects.len(), 1);
     assert_eq!(state.workspace.projects[0].path, PathBuf::from("/b"));
@@ -163,7 +170,7 @@ fn forget_confirmed_removes_an_unavailable_project() {
     }
 
     state.update(Message::ProjectForgetRequested(PathBuf::from("/gone")));
-    assert_eq!(state.overlay, Overlay::ConfirmForgetProject);
+    assert_eq!(open_dialog(&state), Some("confirm_forget_project"));
     state.update(Message::ProjectForgetConfirmed);
 
     assert!(!state

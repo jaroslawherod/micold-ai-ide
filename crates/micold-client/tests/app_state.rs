@@ -1,6 +1,13 @@
 //! T011 — extended app base state: defaults + new message wiring (feature 005).
 
-use micold_client::app::{on_escape, FieldId, Message, Overlay, State};
+use micold_client::app::{on_escape, FieldId, Message, State};
+
+/// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
+/// Asked of the registry, which reads each dialog's own state, so this is the same question about
+/// the same fact rather than a weaker one.
+fn open_dialog(state: &State) -> Option<&'static str> {
+    micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
+}
 use micold_client::features::sidebar::TagFilter;
 use micold_client::features::worktree_form::WorktreeFormStatus;
 use micold_core::naming::ConventionalType;
@@ -17,7 +24,7 @@ fn defaults_are_empty() {
     assert!(state.active_session.is_none());
     assert!(state.worktree_form.is_none());
     assert!(state.worktree_error.is_none());
-    assert_eq!(state.overlay, Overlay::None);
+    assert_eq!(open_dialog(&state), None);
     assert!(state.active_sessions().is_empty());
 }
 
@@ -25,7 +32,7 @@ fn defaults_are_empty() {
 fn opening_the_form_sets_overlay_and_draft() {
     let mut state = State::default();
     state.update(Message::AddWorktreeOpened);
-    assert_eq!(state.overlay, Overlay::AddWorktree);
+    assert_eq!(open_dialog(&state), Some("add_worktree"));
     assert!(state.worktree_form.is_some());
 }
 
@@ -57,7 +64,7 @@ fn cancelling_the_form_clears_it() {
     let mut state = State::default();
     state.update(Message::AddWorktreeOpened);
     state.update(Message::AddWorktreeCancelled);
-    assert_eq!(state.overlay, Overlay::None);
+    assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_form.is_none());
 }
 
@@ -72,7 +79,7 @@ fn created_worktree_is_added_and_form_closed() {
         status: WorktreeStatus::Valid,
     };
     state.update(Message::WorktreeCreated(wt));
-    assert_eq!(state.overlay, Overlay::None);
+    assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_form.is_none());
     assert_eq!(state.worktrees.len(), 1);
 }
@@ -277,12 +284,12 @@ fn delete_requested_opens_confirm_then_confirmed_only_dismisses_the_dialog() {
     assert_eq!(state.active_sessions().len(), 1);
 
     state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
-    assert_eq!(state.overlay, Overlay::ConfirmWorktreeDelete);
+    assert_eq!(open_dialog(&state), Some("confirm_worktree_delete"));
     assert_eq!(state.worktree_delete_target.as_deref(), Some("feat-x"));
     assert!(state.worktree_menu_open.is_none());
 
     state.update(Message::WorktreeDeleteConfirmed);
-    assert_eq!(state.overlay, Overlay::None);
+    assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_delete_target.is_none());
     assert_eq!(
         state.active_sessions().len(),
@@ -300,7 +307,7 @@ fn delete_cancelled_changes_nothing() {
     let mut state = state_with_worktree_and_session("feat-x");
     state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
     state.update(Message::WorktreeDeleteCancelled);
-    assert_eq!(state.overlay, Overlay::None);
+    assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_delete_target.is_none());
     assert_eq!(state.active_sessions().len(), 1, "session untouched");
     assert!(state.worktrees.iter().any(|w| w.dir_name == "feat-x"));
@@ -467,14 +474,14 @@ fn toggling_reveal_changes_only_that_field() {
     state.update(Message::WorktreeExpansionToggled("feat-x".to_string()));
     let filters_before = state.sidebar_filters.clone();
     let expanded_before = state.expanded.clone();
-    let overlay_before = state.overlay;
+    let dialog_before = open_dialog(&state);
 
     state.update(Message::ShowAgentWorktreesToggled);
 
     assert!(state.show_agent_worktrees);
     assert_eq!(state.sidebar_filters, filters_before);
     assert_eq!(state.expanded, expanded_before);
-    assert_eq!(state.overlay, overlay_before);
+    assert_eq!(open_dialog(&state), dialog_before);
 }
 
 #[test]
@@ -710,7 +717,7 @@ fn cancelling_the_choice_restores_idle_and_preserves_every_input() {
     assert_eq!(after.source, before.source);
     assert_eq!(after.selected_branch, before.selected_branch);
     // And the form is still open — cancelling the prompt is not cancelling the form.
-    assert_eq!(state.overlay, Overlay::AddWorktree);
+    assert_eq!(open_dialog(&state), Some("add_worktree"));
 }
 
 #[test]
@@ -1278,7 +1285,7 @@ fn opening_a_dialog_forgets_the_field_that_had_focus() {
     // The fields that reported focus belong to a widget tree being torn down, and will never report
     // losing it. A remembered focus would outlive them and draw the next dialog's field focused
     // over an input nobody has clicked.
-    state.open_overlay(Overlay::Settings);
+    state.update(Message::SettingsOpened);
 
     assert_eq!(state.focused_field, None);
 }

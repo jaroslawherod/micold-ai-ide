@@ -13,7 +13,6 @@
 //! the type rather than the module, so moving them changed no call site.
 
 use crate::app::Message;
-use crate::app::Overlay;
 use crate::app::State;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
@@ -253,6 +252,8 @@ impl FloatingSurface for ConfirmSessionRemoveDialog {
 
 impl Registered for ConfirmSessionRemoveDialog {
     fn open_in(state: &State) -> Option<Self> {
-        (state.overlay == Overlay::ConfirmSessionRemove).then_some(ConfirmSessionRemoveDialog)
+        state
+            .session_remove_target
+            .map(|_| ConfirmSessionRemoveDialog)
     }
 }
