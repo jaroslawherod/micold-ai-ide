@@ -18,6 +18,29 @@
 - Q: May the current-session mark rely on colour alone (the existing selected-row tint), given hover is also a tint change and the row already carries lifecycle colour and an activity dot? → A: No. The mark pairs the selected tint with at least one non-colour cue, so the current row is identifiable without relying on colour.
 - Q: Does the reveal animate, and does that contradict SC-002's "complete by the first draw"? → A: Instant where the panel's contents are being replaced anyway (project switch, launch restore) — drawn already open, marked and scrolled; animated only when the reveal happens in a panel the user is already looking at (starting a new session).
 
+### Session 2026-08-10 — corrections found during planning
+
+Two statements in the requirements above described behaviour this application does not have. Both
+were found by reading the code during `/speckit-plan`, and both are corrected in place rather than
+left for implementation to discover.
+
+- **"Restore at launch" was never a trigger.** FR-001, SC-002, SC-004 and US3 all named restoring a
+  session at launch as one of the paths that makes a session current. No such path exists: the app
+  starts with no current session and keeps none until the user picks or starts one. Rather than add
+  the behaviour — which is a different feature, and one nobody asked for — FR-001 is restated as a
+  rule over *every* path that makes a session current instead of a list of three, so it stays true
+  as paths are added; FR-001d states the negative; SC-004 is measured by the absence of
+  path-specific behaviour rather than by counting paths; and US3 scenario 1 now asserts what a cold
+  start actually does. The reveal will cover a launch restore the day one exists, without this spec
+  changing again.
+- **FR-010a asked for an animation that does not exist.** It required the in-place reveal to be
+  animated "using the same motion a user-initiated expand and scroll use" — but a user-initiated
+  expand in this application is instant, and a user-initiated *scroll* is a drag with no motion to
+  borrow. Read literally the requirement was unsatisfiable; read as intended it was already
+  satisfied. It now says what it was for: the app's own reveal must never be a different experience
+  from the user's own expand of the same row, whatever that experience is. If expansion later gains
+  motion, the reveal inherits it — which is the guarantee the original clause was reaching for.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See which session I landed on after switching projects (Priority: P1)
@@ -93,22 +116,24 @@ session's row is visible without scrolling.
 
 ### User Story 3 - Reveal wherever the app moves me, not just on a project switch (Priority: P2)
 
-The app decides which session is in front of me in more situations than a project switch: it also
-does so when it restores my work at launch, and when I start a new session. Each of those leaves me
-in the same position — a session in the main area with nothing marked in the panel. I want the same
-reveal in all of them.
+The app decides which session is in front of me in more situations than a project switch — starting
+a new session is the other one today. That leaves me in the same position as a switch does — a
+session in the main area with nothing marked in the panel. I want the same reveal wherever the app
+moves me, including in any path that gains the ability to move me later.
 
 **Why this priority**: Same value as US1 and the same mechanism, applied to the remaining paths.
 Separated because US1 is the reported case and can ship first.
 
-**Independent Test**: For each path (launch/restore, starting a session), confirm the panel ends
-with the new current session's location open and that session marked, with no clicks in the panel.
+**Independent Test**: Start a session and confirm the panel ends with it marked and its location
+open, with no clicks in the panel. Then confirm the paths that must *not* reveal — clicking a
+session, and closing the one I am on — leave the panel alone.
 
 **Acceptance Scenarios**:
 
-1. **Given** the app restores an earlier project and session at launch,
+1. **Given** the app has just started and has not put any session in front of me,
    **When** the panel first appears,
-   **Then** the restored session's location is open and that session is marked as current.
+   **Then** no session is marked and no row is opened on my behalf — and if the app later gains the
+   ability to restore a session at launch, that session is revealed exactly as a switch reveals one.
 2. **Given** I start a new session in some location,
    **When** it becomes the session in front of me,
    **Then** that location is open and the new session is marked as current.
@@ -185,9 +210,14 @@ and the row saying why it is shown, while every other excluded location stays hi
 
 ### Functional Requirements
 
-- **FR-001**: When the app itself makes a session the current one — on a project switch, on restore
-  at launch, or when a newly started session becomes the current one — the side panel MUST open the
-  location that holds that session so its row is listed.
+- **FR-001**: Whenever the app itself makes a session the current one, the side panel MUST open the
+  location that holds that session so its row is listed. This MUST hold for every such path rather
+  than for an enumerated set: today those paths are a project switch and a newly started session,
+  and any path added later MUST reveal without needing this requirement restated.
+- **FR-001d**: The app making *no* session current is not one of those paths. Nothing is opened,
+  marked, or scrolled when the current session merely goes away — see FR-001a — or when the app
+  starts with none, which is what it does today (there is no restore-a-session-at-launch behaviour
+  to reveal for).
 - **FR-001a**: Closing or removing the current session MUST leave no session current, and MUST NOT
   open, close, or scroll anything on the user's behalf. This feature does not promote another
   session in its place.
@@ -221,10 +251,11 @@ and the row saying why it is shown, while every other excluded location stays hi
 - **FR-010**: After the panel has been scrolled to reveal the current session, the user's own
   scrolling MUST take effect and MUST NOT be overridden until the app next makes a session current.
 - **FR-010a**: When the reveal accompanies a wholesale change of the panel's contents (a project
-  switch, or restoring at launch), the panel MUST be drawn already open, marked, and scrolled — no
-  transition into that state is shown. When the reveal happens in a panel whose contents the user is
-  already looking at (starting a new session), the opening and any scrolling MUST be animated, using
-  the same motion a user-initiated expand and scroll use.
+  switch), the panel MUST be drawn already open, marked, and scrolled — no transition into that
+  state is shown. When the reveal happens in a panel whose contents the user is already looking at
+  (starting a new session), the opening MUST behave exactly as a user-initiated expand of the same
+  row behaves — whatever motion that is, including none. The requirement is that the app's own
+  reveal is never a *different* experience from the user's own expand, not that either is animated.
 - **FR-011**: The location holding the current session MUST be listed in the panel even when the
   active tag filters or the hidden-agent-worktree setting would exclude it.
 - **FR-012**: An exemption under FR-011 MUST apply only to the location holding the current session;
@@ -261,13 +292,15 @@ and the row saying why it is shown, while every other excluded location stays hi
 
 - **SC-001**: After switching projects, the user can tell which session they are on by looking at
   the side panel, with zero clicks and no scrolling.
-- **SC-002**: On a project switch or a launch restore, the reveal is complete by the time that
-  project's panel is first drawn — the user never sees an intermediate state where the current
-  session is unmarked or hidden, and no transition into the revealed state is visible.
+- **SC-002**: On a project switch, the reveal is complete by the time that project's panel is first
+  drawn — the user never sees an intermediate state where the current session is unmarked or hidden,
+  and no transition into the revealed state is visible.
 - **SC-003**: In a project with 30 locations, the current session's row is visible in the panel
   immediately after a switch, in every case where that session exists.
-- **SC-004**: Across the three paths where the app makes a session current (project switch, restore
-  at launch, new session), the panel ends in the same revealed state — no path is an exception.
+- **SC-004**: Across every path where the app makes a session current — a project switch and a newly
+  started session today — the panel ends in the same revealed state, and no path is an exception.
+  Measured by there being no path-specific reveal behaviour to find, rather than by counting paths:
+  a path added later that did not reveal would fail this criterion.
 - **SC-005**: Turning on a filter that excludes the current session's location does not make the
   panel stop showing where the user is, and does not reveal any other excluded location.
 - **SC-006**: A location the user closes stays closed for the whole time they remain on the same

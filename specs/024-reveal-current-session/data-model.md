@@ -77,11 +77,11 @@ the active project (`app.rs:877`), and `reconcile_catalog` dropping a dangling p
 (`main.rs:2401`). All four route through the same function so I3's commit runs, and none of them
 arms (I5). That list is what contract §3's table enumerates and what the source gate checks.
 
-FR-001 also names "restore at launch". No such path exists: `boot()` leaves `active_session` at
-`None` and `reconcile_catalog` only clears a dangling one (research R12). The arming condition is
-therefore written as *any app-initiated transition of `active_session`* rather than as a list of
-messages, so the trigger becomes real the day a launch restore is added, with nothing here to
-change.
+Nothing makes a session current at launch — `boot()` leaves `active_session` at `None` and
+`reconcile_catalog` only clears a dangling one (research R12), which is what FR-001d states. The
+arming condition is therefore written as *any app-initiated transition of `active_session` to
+`Some`* rather than as a list of messages, so a launch restore added later reveals with nothing here
+to change.
 
 ## Effective open state (`crates/micold-client/src/features/sidebar.rs`)
 

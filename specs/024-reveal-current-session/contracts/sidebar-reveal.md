@@ -41,7 +41,7 @@ stays open. *(FR-001c, Invariant I3)*
 **§3.0** The rule is *any app-initiated transition of `active_session` **to `Some`***, not a list of
 call sites. `SessionSelected` is the single excluded transition to `Some`. Stated this way so a
 future path that makes a session current inherits the reveal without a new arming site — which is
-what FR-001's third trigger would need. *(research R12.)*
+exactly what FR-001 now requires of every path rather than of a named list. *(research R12.)*
 
 **§3.0a** A transition to `None` arms nothing. It still runs §2.3's commit — that is what keeps the
 outgoing row open (FR-001c) — but there is no row to mark and none to scroll to, and FR-001a
@@ -67,11 +67,11 @@ that completeness is the point: an enumeration nobody checks is how a future cal
 arming. It is asserted by a source gate rather than maintained by hand — see §3.0's rule, which is
 what the gate encodes.
 
-**§3.2** FR-001's "restore at launch" trigger is vacuous against this codebase: `boot()` never sets
-`active_session`, `reconcile_catalog` only clears a dangling one, and `foreground_by_project` is not
-persisted (research R12). A cold start therefore has no current session and §1.2 applies until the
-user selects or starts one. This feature does not add such a path; §3.0 is what makes one free if it
-is ever added.
+**§3.2** Nothing makes a session current at launch: `boot()` never sets `active_session`,
+`reconcile_catalog` only clears a dangling one, and `foreground_by_project` is not persisted
+(research R12). A cold start therefore has no current session and §1.2 applies until the user
+selects or starts one — which is what FR-001d requires. This feature does not add such a path; §3.0
+is what makes one free if it is ever added.
 
 ## §4 The mark
 
