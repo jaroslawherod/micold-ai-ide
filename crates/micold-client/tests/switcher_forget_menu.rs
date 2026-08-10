@@ -7,9 +7,16 @@
 //! and the hand-off into the existing `ProjectForgetRequested` flow. Rendering is build-verified
 //! and validated by quickstart.md.
 
-use micold_client::app::{Message, Overlay, State};
+use micold_client::app::{Message, State};
 use micold_client::features::project::clamp_menu_anchor;
 use std::path::PathBuf;
+
+/// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
+/// Asked of the registry, which reads each dialog's own state, so this is the same question about
+/// the same fact rather than a weaker one.
+fn open_dialog(state: &State) -> Option<&'static str> {
+    micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
+}
 
 // --- Opening, closing, and replacing the menu ---
 
@@ -172,7 +179,7 @@ fn choosing_forget_closes_the_menu_and_opens_the_existing_confirm_dialog() {
 
     assert_eq!(st.project_menu_open, None, "the context menu closes");
     assert_eq!(st.forget_target, Some(PathBuf::from("/a")));
-    assert_eq!(st.overlay, Overlay::ConfirmForgetProject);
+    assert_eq!(open_dialog(&st), Some("confirm_forget_project"));
     assert!(
         !st.project_switcher_open,
         "opening the confirm modal closes the switcher (open_overlay)"
@@ -191,5 +198,5 @@ fn dismissing_the_menu_forgets_nothing() {
 
     assert_eq!(st.project_menu_open, None);
     assert_eq!(st.forget_target, None, "nothing was staged for removal");
-    assert_eq!(st.overlay, Overlay::None, "no confirmation was opened");
+    assert_eq!(open_dialog(&st), None, "no confirmation was opened");
 }

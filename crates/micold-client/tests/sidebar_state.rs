@@ -1,13 +1,20 @@
 //! Sidebar hide/show + adjustable-width state (feature 005 UI enhancement).
 
 use micold_client::app::{
-    on_escape, Message, Overlay, State, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
+    on_escape, Message, State, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
 };
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
+
+/// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
+/// Asked of the registry, which reads each dialog's own state, so this is the same question about
+/// the same fact rather than a weaker one.
+fn open_dialog(state: &State) -> Option<&'static str> {
+    micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
+}
 
 fn state_with_active() -> State {
     let mut state = State::default();
@@ -102,7 +109,7 @@ fn worktree_rename_seeds_edits_and_applies() {
     state.update(Message::WorktreeRenameStarted(
         "feat-abc-123-login-page".to_string(),
     ));
-    assert_eq!(state.overlay, Overlay::RenameWorktree);
+    assert_eq!(open_dialog(&state), Some("rename_worktree"));
     assert!(state.worktree_menu_open.is_none());
     let draft = state.worktree_rename_draft.as_ref().unwrap();
     assert_eq!(draft.dir_name, "feat-abc-123-login-page");
@@ -115,7 +122,7 @@ fn worktree_rename_seeds_edits_and_applies() {
     );
 
     state.update(Message::WorktreeRenameConfirmed);
-    assert_eq!(state.overlay, Overlay::None);
+    assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_rename_draft.is_none());
     assert_eq!(
         state.worktree_display_name("feat-abc-123-login-page"),
@@ -130,7 +137,7 @@ fn worktree_rename_empty_keeps_prior_name_with_error() {
     state.update(Message::WorktreeRenameTextChanged("   ".to_string()));
     state.update(Message::WorktreeRenameConfirmed);
     // Stays open with an error; no override applied → still the derived name.
-    assert_eq!(state.overlay, Overlay::RenameWorktree);
+    assert_eq!(open_dialog(&state), Some("rename_worktree"));
     assert!(state
         .worktree_rename_draft
         .as_ref()
@@ -267,7 +274,7 @@ fn escape_prefers_an_open_overlay_over_the_filter_panel() {
     // silently disagree with the live subscription if that invariant is ever violated.
     let state = State {
         sidebar_filter_open: true,
-        overlay: Overlay::AddWorktree,
+        worktree_form: Some(Default::default()),
         ..Default::default()
     };
     assert_eq!(on_escape(&state), Some(Message::AddWorktreeCancelled));
@@ -288,7 +295,7 @@ fn opening_an_overlay_closes_the_filter_panel() {
         !state.sidebar_filter_open,
         "opening an overlay must close the filter panel"
     );
-    assert_eq!(state.overlay, Overlay::AddWorktree);
+    assert_eq!(open_dialog(&state), Some("add_worktree"));
 }
 
 // T020 (010-root-dir-session, FR-011, research.md R4): the Default entry is exempt from the

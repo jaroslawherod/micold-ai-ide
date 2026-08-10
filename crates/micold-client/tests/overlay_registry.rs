@@ -30,70 +30,125 @@
 //! the message the subscription emits, and `the_keyboard_subscription_names_no_surface` reads the
 //! function to confirm it still emits only that one.
 
-use micold_client::app::{on_escape, Message, Overlay, State};
+use std::path::PathBuf;
+
+use micold_client::app::{on_escape, Message, State};
+use micold_client::features::project::RenameDraft;
+use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_client::overlay::registry::{self, Probe};
 use micold_core::overlay::{Layer, Trigger};
+use micold_core::selector::Selector;
+use micold_core::session::SessionId;
 
-/// Every `Overlay` variant, `None` included.
+/// Every dialog, with the three facts this file states about it: the name it registers under, the
+/// message that cancels it, and how to put the state into "this dialog is open".
 ///
-/// Written out rather than derived: this list going stale is itself a finding, caught by
-/// `every_variant_is_in_the_list` below.
-const OVERLAYS: &[Overlay] = &[
-    Overlay::None,
-    Overlay::About,
-    Overlay::ProjectSelector,
-    Overlay::RenameProject,
-    Overlay::AddWorktree,
-    Overlay::Settings,
-    Overlay::ConfirmWorktreeDelete,
-    Overlay::RenameWorktree,
-    Overlay::ConfirmSessionRemove,
-    Overlay::ConfirmForgetProject,
-];
-
-/// What each variant must dispatch as: the surface's name, and the message that cancels it.
+/// Until T037 the first two lived in an `expected(Overlay)` match and the third was
+/// `state.overlay = variant` — the enum was a slot, so opening a dialog *was* naming it. The enum
+/// is gone: a dialog is open when the state it draws from is there, so saying which dialog to open
+/// means building that state, and the three facts belong on one row.
 ///
-/// The test's own statement of the nine facts, deliberately *not* read out of the production code
-/// it checks. Exhaustive on purpose — a variant added without an expectation is a dialog nobody
-/// has said how to close, and this file must fail to build rather than quietly skip it. That is
-/// the same compile-time hold T026 verified for the enum's other match sites, kept alive here now
-/// that the enum has none of its own.
-fn expected(overlay: Overlay) -> Option<(&'static str, Message)> {
-    Some(match overlay {
-        Overlay::None => return None,
-        Overlay::About => ("about", Message::AboutClosed),
-        Overlay::ProjectSelector => ("project_selector", Message::ProjectSelectorClosed),
-        Overlay::RenameProject => ("rename_project", Message::RenameCancelled),
-        Overlay::AddWorktree => ("add_worktree", Message::AddWorktreeCancelled),
-        Overlay::Settings => ("settings", Message::SettingsCancelled),
-        Overlay::ConfirmWorktreeDelete => {
-            ("confirm_worktree_delete", Message::WorktreeDeleteCancelled)
-        }
-        Overlay::RenameWorktree => ("rename_worktree", Message::WorktreeRenameCancelled),
-        Overlay::ConfirmSessionRemove => {
-            ("confirm_session_remove", Message::SessionRemoveCancelled)
-        }
-        Overlay::ConfirmForgetProject => {
-            ("confirm_forget_project", Message::ProjectForgetCancelled)
-        }
-    })
+/// Written out rather than derived from the registry, which is the whole point — this is the
+/// test's own statement of the nine facts, not a second reading of the code under test. What the
+/// enum's exhaustiveness used to catch (a dialog added with no expectation) is caught instead by
+/// `every_dialog_is_in_the_list`, which holds this list against the registry's own count.
+struct Dialog {
+    id: &'static str,
+    cancel: Message,
+    open: fn(&mut State),
 }
 
-fn state(overlay: Overlay, filter_open: bool) -> State {
-    State {
-        overlay,
+fn dialogs() -> Vec<Dialog> {
+    vec![
+        Dialog {
+            id: "about",
+            cancel: Message::AboutClosed,
+            open: |state| state.about_open = true,
+        },
+        Dialog {
+            id: "project_selector",
+            cancel: Message::ProjectSelectorClosed,
+            open: |state| state.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
+        },
+        Dialog {
+            id: "rename_project",
+            cancel: Message::RenameCancelled,
+            open: |state| {
+                state.rename_draft = Some(RenameDraft {
+                    path: PathBuf::from("/tmp"),
+                    text: String::new(),
+                    error: None,
+                })
+            },
+        },
+        Dialog {
+            id: "add_worktree",
+            cancel: Message::AddWorktreeCancelled,
+            open: |state| state.worktree_form = Some(Default::default()),
+        },
+        Dialog {
+            id: "settings",
+            cancel: Message::SettingsCancelled,
+            open: |state| state.settings_draft = Some(Default::default()),
+        },
+        Dialog {
+            id: "confirm_worktree_delete",
+            cancel: Message::WorktreeDeleteCancelled,
+            open: |state| state.worktree_delete_target = Some("wt".to_string()),
+        },
+        Dialog {
+            id: "rename_worktree",
+            cancel: Message::WorktreeRenameCancelled,
+            open: |state| {
+                state.worktree_rename_draft = Some(WorktreeRenameDraft {
+                    dir_name: "wt".to_string(),
+                    text: String::new(),
+                    error: None,
+                })
+            },
+        },
+        Dialog {
+            id: "confirm_session_remove",
+            cancel: Message::SessionRemoveCancelled,
+            open: |state| state.session_remove_target = Some(SessionId::new()),
+        },
+        Dialog {
+            id: "confirm_forget_project",
+            cancel: Message::ProjectForgetCancelled,
+            open: |state| state.forget_target = Some(PathBuf::from("/p")),
+        },
+    ]
+}
+
+/// A state with `dialog` open (or nothing open, for `None`) and the filter panel as asked.
+fn state(dialog: Option<&Dialog>, filter_open: bool) -> State {
+    let mut state = State {
         sidebar_filter_open: filter_open,
         ..Default::default()
+    };
+    if let Some(dialog) = dialog {
+        (dialog.open)(&mut state);
     }
+    state
 }
 
-/// The twenty states dispatch must get right.
-fn every_state() -> impl Iterator<Item = (Overlay, bool, State)> {
-    OVERLAYS.iter().flat_map(|overlay| {
-        [false, true]
-            .into_iter()
-            .map(move |filter| (*overlay, filter, state(*overlay, filter)))
-    })
+/// The twenty states dispatch must get right: nine dialogs plus nothing open, each with the filter
+/// panel open and closed.
+fn every_state() -> Vec<(Option<Dialog>, bool, State)> {
+    let mut out = Vec::new();
+    for filter in [false, true] {
+        out.push((None, filter, state(None, filter)));
+        for dialog in dialogs() {
+            let built = state(Some(&dialog), filter);
+            out.push((Some(dialog), filter, built));
+        }
+    }
+    out
+}
+
+/// How a row prints when a test fails: the dialog's name, or "nothing open".
+fn label(dialog: &Option<Dialog>) -> &'static str {
+    dialog.as_ref().map_or("nothing open", |d| d.id)
 }
 
 #[test]
@@ -102,25 +157,24 @@ fn escape_closes_the_open_dialog_in_every_state() {
     // to the registry as of T033, so comparing the two would now be vacuous — this is the check
     // that outlives the collapse, and it is the one T034–T036 delete a site each on the strength
     // of.
-    for (overlay, filter, state) in every_state() {
-        let cancel = expected(overlay).map(|(_, cancel)| cancel);
+    for (dialog, filter, state) in every_state() {
+        let cancel = dialog.as_ref().map(|d| d.cancel.clone());
         let panel = filter.then_some(Message::SidebarFilterMenuToggled);
         // A dialog outranks the panel; with no dialog open the panel is the topmost surface.
         let want = cancel.or(panel);
+        let (name, filter) = (label(&dialog), if filter { "open" } else { "closed" });
 
         assert_eq!(
             registry::escape(&state),
             want,
-            "{overlay:?} with the filter panel {}: generic dispatch did not produce the \
-             cancellation this dialog declares",
-            if filter { "open" } else { "closed" }
+            "{name} with the filter panel {filter}: generic dispatch did not produce the \
+             cancellation this dialog declares"
         );
         assert_eq!(
             on_escape(&state),
             want,
-            "{overlay:?} with the filter panel {}: the public Escape entry point disagreed with \
-             the registry it now delegates to",
-            if filter { "open" } else { "closed" }
+            "{name} with the filter panel {filter}: the public Escape entry point disagreed with \
+             the registry it now delegates to"
         );
     }
 }
@@ -130,37 +184,119 @@ fn each_dialog_registers_under_its_own_identity() {
     // Not just *what closes it* but *which surface it is*. T035 keys the view and the exit
     // animation on identity, so an id typo'd in a feature module would move a dialog's transition
     // rather than break its dismissal — a failure the cancellations above cannot see.
-    for overlay in OVERLAYS {
-        let state = state(*overlay, false);
+    for dialog in dialogs() {
+        let state = state(Some(&dialog), false);
         let registered = registry::topmost(&state).map(|open| open.id());
-        let want = expected(*overlay).map(|(id, _)| id);
 
         assert_eq!(
             registered.map(|id| id.as_str()),
-            want,
-            "{overlay:?}: the registry names a different surface than this dialog is supposed to be"
+            Some(dialog.id),
+            "{}: the registry names a different surface than this dialog is supposed to be",
+            dialog.id
         );
+    }
+    assert!(
+        registry::topmost(&state(None, false)).is_none(),
+        "with nothing open the registry must name no surface"
+    );
+}
+
+#[test]
+fn every_dialog_is_in_the_list() {
+    // The compile-time half of this went with the enum: an exhaustive `match` used to make a
+    // dialog added without an expectation a build error. Nothing about a registration line is
+    // exhaustive, so the hold is now arithmetic — this list against the registry's own count of
+    // dialogs. A tenth dialog registered without a row here fails on the second assertion, and
+    // the twenty states this file covers stay twenty.
+    assert_eq!(
+        dialogs().len(),
+        9,
+        "the dialog list has drifted. Add the new dialog here, or the twenty states this file is \
+         meant to cover are no longer twenty"
+    );
+    assert_eq!(
+        every_state().len(),
+        20,
+        "nine dialogs plus nothing open, each with the filter panel open and closed"
+    );
+
+    let registered_dialogs = registry::probes()
+        .iter()
+        .filter(|probe| {
+            dialogs().iter().any(|dialog| {
+                let mut state = State::default();
+                (dialog.open)(&mut state);
+                probe(&state).is_some_and(|open| open.layer() == Layer::Dialog)
+            })
+        })
+        .count();
+    assert_eq!(
+        registered_dialogs,
+        dialogs().len(),
+        "a registered dialog has no row in this file's list, so nothing here says how to open it \
+         or what closes it"
+    );
+}
+
+#[test]
+fn one_dialog_at_a_time() {
+    // What the `Overlay` enum guaranteed in the type system until T037 (FR-015, Principle V): the
+    // slot held one variant, so a second open dialog was unrepresentable. A dialog now says it is
+    // open by holding the state it draws from, and two of those *can* be set at once — the
+    // invariant became a mechanism, `State::clear_for_dialog`, and this is what holds it.
+    //
+    // Not a formality. With two dialogs open, `open_dialog` picks by band and both are `Dialog`,
+    // so the one that gets drawn is whichever the registry happens to see last — a silent choice
+    // where the type used to make the question impossible to ask.
+    for first in dialogs() {
+        for second in dialogs() {
+            let mut state = state(Some(&first), false);
+            state.clear_for_dialog();
+            (second.open)(&mut state);
+
+            let open: Vec<&str> = registry::open_dialogs(&state)
+                .iter()
+                .map(|open| open.id().as_str())
+                .collect();
+            assert_eq!(
+                open,
+                vec![second.id],
+                "opening `{}` over `{}` should leave exactly one dialog open",
+                second.id,
+                first.id
+            );
+        }
     }
 }
 
 #[test]
-fn every_variant_is_in_the_list() {
-    // `expected` is exhaustive, so the compiler catches a variant added without an expectation.
-    // This catches the other half: the arm exists but this file's iteration list does not mention
-    // it, so the twenty states are quietly nineteen.
-    let named = OVERLAYS.len();
-    let with_a_surface = OVERLAYS.iter().filter(|o| expected(**o).is_some()).count();
+fn the_reducer_opens_a_dialog_through_that_mechanism() {
+    // The other half: `clear_for_dialog` only holds the invariant if the arms that open a dialog
+    // actually call it. Driven with real messages rather than by setting fields, so an arm that
+    // forgets the call fails here — which is the failure the enum could not have.
+    let openers: &[(&str, Message)] = &[
+        ("about", Message::AboutOpened),
+        ("add_worktree", Message::AddWorktreeOpened),
+        ("settings", Message::SettingsOpened),
+    ];
 
-    assert_eq!(
-        named, 10,
-        "OVERLAYS has drifted from the enum. Add the new variant here as well as to `expected`, \
-         or the twenty states this file is meant to cover are no longer twenty"
-    );
-    assert_eq!(
-        with_a_surface, 9,
-        "exactly one variant — `None` — names no surface. A second such variant is an overlay \
-         that opens and cannot be dismissed"
-    );
+    for (name, opening) in openers {
+        for already in dialogs() {
+            let mut state = state(Some(&already), false);
+            state.update(opening.clone());
+
+            let open: Vec<&str> = registry::open_dialogs(&state)
+                .iter()
+                .map(|open| open.id().as_str())
+                .collect();
+            assert_eq!(
+                open,
+                vec![*name],
+                "{opening:?} with `{}` already open left the previous dialog behind",
+                already.id
+            );
+        }
+    }
 }
 
 #[test]
@@ -168,13 +304,13 @@ fn a_modal_keeps_escape_whatever_floats_above_it() {
     // Contract D1, stated at the registry rather than at `on_escape`: the band decides, and
     // `Dialog` outranks `Popover`. `overlay_dispatch_ordering.rs` holds the same obligation
     // against the public entry points; this holds it against the mechanism that will implement it.
-    let both = state(Overlay::About, true);
+    let both = state(Some(&dialogs()[0]), true);
 
     let top = registry::topmost(&both).expect("a modal and a popover are open");
     assert_eq!(top.layer(), Layer::Dialog);
     assert_eq!(registry::escape(&both), Some(Message::AboutClosed));
 
-    let popover_alone = state(Overlay::None, true);
+    let popover_alone = state(None, true);
     assert_eq!(
         registry::escape(&popover_alone),
         Some(Message::SidebarFilterMenuToggled),
@@ -188,13 +324,13 @@ fn a_scroll_beneath_reaches_every_menu_and_no_dialog() {
     // behaviour `State::dismiss_on_scroll_beneath` has today — it clears the popovers whether or
     // not a modal is over them.
     assert_eq!(
-        registry::scroll_beneath(&state(Overlay::About, true)),
+        registry::scroll_beneath(&state(Some(&dialogs()[0]), true)),
         vec![Message::SidebarFilterMenuToggled],
         "a scroll behind an open modal still invalidates the menu anchored beneath it, and does \
          not touch the modal"
     );
     assert!(
-        registry::scroll_beneath(&state(Overlay::About, false)).is_empty(),
+        registry::scroll_beneath(&state(Some(&dialogs()[0]), false)).is_empty(),
         "a dialog is anchored to nothing, so scrolling the content behind it closes nothing"
     );
 }
@@ -205,14 +341,16 @@ fn registration_order_does_not_decide_anything() {
     let forward: Vec<Probe> = registry::probes().to_vec();
     let reversed: Vec<Probe> = forward.iter().rev().copied().collect();
 
-    for (overlay, filter, state) in every_state() {
+    for (dialog, filter, state) in every_state() {
         let a = registry::topmost_among(&forward, &state);
         let b = registry::topmost_among(&reversed, &state);
         assert_eq!(
-            a, b,
-            "{overlay:?} + filter {filter}: reversing the registration list changed which surface \
-             is on top. Stacking must be a property of the band, not of the order someone happened \
-             to write the register! lines in"
+            a,
+            b,
+            "{} + filter {filter}: reversing the registration list changed which surface is on \
+             top. Stacking must be a property of the band, not of the order someone happened to \
+             write the register! lines in",
+            label(&dialog)
         );
     }
 }
@@ -222,7 +360,7 @@ fn a_surface_is_registered_by_naming_it_once_and_nothing_else() {
     // R1/SC-001 in miniature: the sidebar filter panel is described entirely in
     // `features/sidebar.rs` and appears in exactly one line of `overlay/registry.rs`. Dispatch
     // finds it without any central match having heard of it.
-    let open = registry::topmost(&state(Overlay::None, true)).expect("the panel is open");
+    let open = registry::topmost(&state(None, true)).expect("the panel is open");
 
     assert_eq!(open.id().as_str(), "sidebar_filter");
     assert_eq!(open.layer(), Layer::Popover);
@@ -256,7 +394,7 @@ fn escape_now_reaches_every_popover() {
     );
 
     // And the priority is unchanged: a modal over it still takes Escape for itself.
-    state.overlay = Overlay::About;
+    state.about_open = true;
     assert_eq!(
         registry::escape(&state),
         Some(Message::AboutClosed),
@@ -277,7 +415,7 @@ fn pressing_escape_closes_the_topmost_surface() {
             .collect()
     }
 
-    for (overlay, filter, mut state) in every_state() {
+    for (dialog, filter, mut state) in every_state() {
         let before = open(&state);
         let top = registry::topmost(&state).map(|s| s.id().as_str());
         state.update(Message::EscapePressed);
@@ -291,17 +429,21 @@ fn pressing_escape_closes_the_topmost_surface() {
         assert_eq!(
             open(&state),
             want,
-            "{overlay:?} with the filter panel {}: Escape was supposed to close {top:?} and \
-             leave the rest alone",
+            "{} with the filter panel {}: Escape was supposed to close {top:?} and leave the rest \
+             alone",
+            label(&dialog),
             if filter { "open" } else { "closed" }
         );
     }
 
     // A dialog over a popover: Escape takes the dialog and leaves the popover (contract D1), so
     // the two cases above are genuinely different and the loop's allowance is not a hole.
-    let mut both = state(Overlay::About, true);
+    let mut both = state(Some(&dialogs()[0]), true);
     both.update(Message::EscapePressed);
-    assert_eq!(both.overlay, Overlay::None, "the dialog took the Escape");
+    assert!(
+        registry::open_dialog(&both).is_none(),
+        "the dialog took the Escape"
+    );
     assert!(
         both.sidebar_filter_open,
         "and the popover beneath it is untouched — one Escape closes one surface"
@@ -377,12 +519,9 @@ fn every_dialog_is_registered_with_a_view() {
     // without its other half is a dialog that opens and draws nothing, which nothing else here
     // would notice: dismissal, stacking and identity would all still be right.
     let mut viewless = Vec::new();
-    for overlay in OVERLAYS {
-        let Some((id, _)) = expected(*overlay) else {
-            continue; // `Overlay::None` names no surface
-        };
-        let open = registry::open_dialog(&state(*overlay, false));
-        match open {
+    for dialog in dialogs() {
+        let id = dialog.id;
+        match registry::open_dialog(&state(Some(&dialog), false)) {
             Some(open) if open.view().is_some() => {}
             Some(_) => viewless.push(format!("`{id}` is registered, but with no view")),
             None => viewless.push(format!("`{id}` is not in the dialog band at all")),
@@ -398,14 +537,13 @@ fn a_popover_is_not_drawn_from_the_registry() {
     // one a registered dialog view would draw it a second time, inside the modal band.
     let mut drawn = Vec::new();
     for probe in registry::probes() {
-        let mut state = State {
+        let state = State {
             help_menu_open: true,
             project_switcher_open: true,
             sidebar_filter_open: true,
             terminal_context_menu: Some((4, 2)),
             ..Default::default()
         };
-        state.overlay = Overlay::None;
         if let Some(open) = probe(&state) {
             if open.layer() < Layer::Dialog && open.view().is_some() {
                 drawn.push(open.id().to_string());

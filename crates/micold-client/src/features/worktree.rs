@@ -16,7 +16,6 @@
 //! itself, at which point these operate on the worktree feature's own state.
 
 use crate::app::Message;
-use crate::app::Overlay;
 use crate::app::State;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
@@ -148,7 +147,10 @@ impl FloatingSurface for ConfirmWorktreeDeleteDialog {
 
 impl Registered for ConfirmWorktreeDeleteDialog {
     fn open_in(state: &State) -> Option<Self> {
-        (state.overlay == Overlay::ConfirmWorktreeDelete).then_some(ConfirmWorktreeDeleteDialog)
+        state
+            .worktree_delete_target
+            .as_ref()
+            .map(|_| ConfirmWorktreeDeleteDialog)
     }
 }
 
@@ -172,6 +174,9 @@ impl FloatingSurface for RenameWorktreeDialog {
 
 impl Registered for RenameWorktreeDialog {
     fn open_in(state: &State) -> Option<Self> {
-        (state.overlay == Overlay::RenameWorktree).then_some(RenameWorktreeDialog)
+        state
+            .worktree_rename_draft
+            .as_ref()
+            .map(|_| RenameWorktreeDialog)
     }
 }

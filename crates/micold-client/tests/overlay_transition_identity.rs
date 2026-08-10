@@ -25,60 +25,81 @@
 //! rather than the `Overlay` it used to be translated into, and every snapshot is produced by the
 //! real `Closing::of` from a real state rather than hand-constructed. The assertion-freeze check
 //! flags this file; this comment is the explanation it is flagged against.
+//!
+//! T037 touched it once more, for the same unavoidable reason: it deleted the `Overlay` enum the
+//! restated version still used to *say which dialog*. The nine rows now carry the name and the way
+//! to open the dialog instead of a variant. No property changed.
 
-use micold_client::app::{Overlay, State};
+use std::path::PathBuf;
+
+use micold_client::app::State;
+use micold_client::features::project::RenameDraft;
+use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_client::overlay::registry::Closing;
 use micold_client::overlay::SurfaceId;
+use micold_core::selector::Selector;
+use micold_core::session::SessionId;
 
-/// Every dialog `Overlay` can express, `None` excluded — the states a snapshot can be taken in.
+/// Every dialog, with the name its snapshot must report and how to open it.
 ///
 /// Written out rather than derived, so this is an independent statement of the set instead of a
 /// second copy of the implementation agreeing with itself. Kept honest by
-/// `every_variant_is_covered`.
-const DIALOGS: &[Overlay] = &[
-    Overlay::About,
-    Overlay::ProjectSelector,
-    Overlay::RenameProject,
-    Overlay::AddWorktree,
-    Overlay::Settings,
-    Overlay::ConfirmWorktreeDelete,
-    Overlay::RenameWorktree,
-    Overlay::ConfirmSessionRemove,
-    Overlay::ConfirmForgetProject,
+/// `every_variant_is_covered`. Before T037 the two columns were one — a dialog *was* an `Overlay`
+/// variant, so naming it and opening it were the same act; a dialog now says it is open by holding
+/// the state it draws from, so the row has to build that state.
+#[allow(clippy::type_complexity)]
+const DIALOGS: &[(&str, fn(&mut State))] = &[
+    ("about", |state| state.about_open = true),
+    ("project_selector", |state| {
+        state.selector = Some(Selector::open_at(PathBuf::from("/tmp")))
+    }),
+    ("rename_project", |state| {
+        state.rename_draft = Some(RenameDraft {
+            path: PathBuf::from("/tmp"),
+            text: String::new(),
+            error: None,
+        })
+    }),
+    ("add_worktree", |state| {
+        state.worktree_form = Some(Default::default())
+    }),
+    ("settings", |state| {
+        state.settings_draft = Some(Default::default())
+    }),
+    ("confirm_worktree_delete", |state| {
+        state.worktree_delete_target = Some("wt".to_string())
+    }),
+    ("rename_worktree", |state| {
+        state.worktree_rename_draft = Some(WorktreeRenameDraft {
+            dir_name: "wt".to_string(),
+            text: String::new(),
+            error: None,
+        })
+    }),
+    ("confirm_session_remove", |state| {
+        state.session_remove_target = Some(SessionId::new())
+    }),
+    ("confirm_forget_project", |state| {
+        state.forget_target = Some(PathBuf::from("/p"))
+    }),
 ];
 
-/// The name each dialog's snapshot must report, stated here rather than read out of the registry.
-///
-/// Exhaustive on purpose: a tenth dialog added without an expectation fails to build rather than
-/// going unchecked.
-fn expected_id(overlay: Overlay) -> &'static str {
-    match overlay {
-        Overlay::None => unreachable!("None is not a dialog"),
-        Overlay::About => "about",
-        Overlay::ProjectSelector => "project_selector",
-        Overlay::RenameProject => "rename_project",
-        Overlay::AddWorktree => "add_worktree",
-        Overlay::Settings => "settings",
-        Overlay::ConfirmWorktreeDelete => "confirm_worktree_delete",
-        Overlay::RenameWorktree => "rename_worktree",
-        Overlay::ConfirmSessionRemove => "confirm_session_remove",
-        Overlay::ConfirmForgetProject => "confirm_forget_project",
-    }
+/// A state with just that dialog open.
+fn opened(open: fn(&mut State)) -> State {
+    let mut state = State::default();
+    open(&mut state);
+    state
 }
 
 /// One snapshot of every kind, with the dialog each is a snapshot *of* — taken the way the binary
 /// takes them, so a snapshot the real code could not produce cannot pass these tests.
-fn every_snapshot() -> Vec<(Overlay, Closing)> {
+fn every_snapshot() -> Vec<(&'static str, Closing)> {
     DIALOGS
         .iter()
-        .map(|overlay| {
-            let state = State {
-                overlay: *overlay,
-                ..Default::default()
-            };
-            let closing = Closing::of(&state)
-                .unwrap_or_else(|| panic!("{overlay:?} is open but no snapshot was taken of it"));
-            (*overlay, closing)
+        .map(|(name, open)| {
+            let closing = Closing::of(&opened(*open))
+                .unwrap_or_else(|| panic!("{name} is open but no snapshot was taken of it"));
+            (*name, closing)
         })
         .collect()
 }
@@ -86,11 +107,11 @@ fn every_snapshot() -> Vec<(Overlay, Closing)> {
 /// The headline property: a snapshot names the dialog it was taken of.
 #[test]
 fn a_snapshot_reports_the_dialog_it_was_taken_of() {
-    for (overlay, closing) in every_snapshot() {
+    for (name, closing) in every_snapshot() {
         assert_eq!(
             closing.id(),
-            SurfaceId::new(expected_id(overlay)),
-            "the snapshot of {overlay:?} should report the dialog it snapshots"
+            SurfaceId::new(name),
+            "the snapshot of {name} should report the dialog it snapshots"
         );
     }
 }
@@ -103,14 +124,10 @@ fn a_snapshot_reports_the_dialog_it_was_taken_of() {
 /// a dialog is open leaves the renderer with nothing to draw, which is the same instant vanish.
 #[test]
 fn no_snapshot_reports_itself_as_nothing_open() {
-    for overlay in DIALOGS {
-        let state = State {
-            overlay: *overlay,
-            ..Default::default()
-        };
+    for (name, open) in DIALOGS {
         assert!(
-            Closing::of(&state).is_some(),
-            "{overlay:?} must keep a real identity while it animates out"
+            Closing::of(&opened(*open)).is_some(),
+            "{name} must keep a real identity while it animates out"
         );
     }
     // And the converse, which the old enum got for free by having no variant for it: with nothing
@@ -126,11 +143,11 @@ fn no_snapshot_reports_itself_as_nothing_open() {
 #[test]
 fn no_two_snapshots_share_an_identity() {
     let mut seen: Vec<SurfaceId> = Vec::new();
-    for (overlay, closing) in every_snapshot() {
+    for (name, closing) in every_snapshot() {
         let id = closing.id();
         assert!(
             !seen.contains(&id),
-            "the snapshot of {overlay:?} shares an identity with an earlier one ({id})"
+            "the snapshot of {name} shares an identity with an earlier one ({id})"
         );
         seen.push(id);
     }
@@ -140,7 +157,7 @@ fn no_two_snapshots_share_an_identity() {
 /// leave all three tests above passing on a stale set.
 #[test]
 fn every_variant_is_covered() {
-    // Bump deliberately: a new dialog needs a row in `DIALOGS` and a name in `expected_id`.
+    // Bump deliberately: a new dialog needs a row in `DIALOGS`.
     assert_eq!(
         every_snapshot().len(),
         9,
@@ -154,14 +171,14 @@ fn every_variant_is_covered() {
 /// exactly as the renderer does.
 #[test]
 fn a_snapshot_still_knows_how_to_draw_itself() {
-    for (overlay, closing) in every_snapshot() {
-        let surface = closing.surface().unwrap_or_else(|| {
-            panic!("the snapshot of {overlay:?} lost the dialog it was taken of")
-        });
-        assert_eq!(surface.id(), closing.id(), "{overlay:?}");
+    for (name, closing) in every_snapshot() {
+        let surface = closing
+            .surface()
+            .unwrap_or_else(|| panic!("the snapshot of {name} lost the dialog it was taken of"));
+        assert_eq!(surface.id(), closing.id(), "{name}");
         assert!(
             surface.view().is_some(),
-            "the snapshot of {overlay:?} has no view to fade out with"
+            "the snapshot of {name} has no view to fade out with"
         );
     }
 }
@@ -171,17 +188,16 @@ fn a_snapshot_still_knows_how_to_draw_itself() {
 #[test]
 fn a_snapshot_does_not_follow_the_state_it_came_from() {
     let mut state = State {
-        overlay: Overlay::About,
+        about_open: true,
         ..Default::default()
     };
     let closing = Closing::of(&state).expect("About is open");
 
-    state.overlay = Overlay::None;
+    state.about_open = false;
 
     assert_eq!(closing.id(), SurfaceId::new("about"));
-    assert_eq!(
-        closing.state().overlay,
-        Overlay::About,
+    assert!(
+        closing.state().about_open,
         "the snapshot must keep the state as it was, not track the live one"
     );
 }

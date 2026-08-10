@@ -5,7 +5,6 @@
 //! of `app.rs` and a `bool` two hundred lines below them". The actions and the surface that shows
 //! them are one feature; they belong together.
 
-use crate::app::Overlay;
 use crate::app::{Message, State};
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
@@ -71,6 +70,6 @@ impl FloatingSurface for AboutDialog {
 
 impl Registered for AboutDialog {
     fn open_in(state: &State) -> Option<Self> {
-        (state.overlay == Overlay::About).then_some(AboutDialog)
+        state.about_open.then_some(AboutDialog)
     }
 }

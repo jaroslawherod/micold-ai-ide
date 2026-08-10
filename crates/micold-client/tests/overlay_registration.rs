@@ -16,15 +16,32 @@
 //! ## The obligation, restated over the registry
 //!
 //! R2: *an unregistered surface fails the build or a guard test, never discovered by hand at
-//! runtime*. For the nine `Overlay` variants the compiler holds it — they are matches over a
-//! closed enum, verified at T026 by removing an arm three ways, each of which failed to compile.
-//! The popovers are loose fields with no such protection, so this is where R2 lives:
+//! runtime*. For the nine dialogs the compiler used to hold it — they were matches over the closed
+//! `Overlay` enum, verified at T026 by removing an arm three ways, each of which failed to
+//! compile. The popovers were loose fields with no such protection, so this is where R2 lived:
 //!
 //! - every popover-shaped field on `State` has a registration (add an eighth, and this fails);
 //! - setting one opens **exactly** its own surface and no other (a copy-pasted `open_in` reading
 //!   its neighbour's field fails here rather than as a menu that will not close);
 //! - every registered popover declares what closes it (the registry's collective closes are
 //!   bounded loops; a surface with no cancellation would silently survive one).
+//!
+//! ## T037 deleted the enum, so the compiler's half went with it
+//!
+//! Every dialog is now a loose field too. The exposure is not the same, though, and saying so is
+//! the honest version of this note rather than a claim that nothing changed. A popover's panel is
+//! pushed by `ui::view` from its flag whether or not the registry has heard of it, so an
+//! unregistered popover **opens and cannot be closed** — a live bug. A dialog since T035 is drawn
+//! only *through* its registration, so an unregistered one is not drawn at all: still wrong, but
+//! it fails loudly the first time anyone opens it rather than trapping the user behind a surface
+//! with no exit.
+//!
+//! What T037 does add here is a classification duty. The scan below finds popover-*shaped* fields
+//! by name, and `about_open` — the flag About gained when it lost its enum variant — has exactly
+//! that shape while being a dialog. So a field matching the shape must now appear in one list or
+//! the other, and [`DIALOG_FLAGS`] asserts its own members really do register in the dialog band.
+//! A new `_open` field belonging to neither still fails the scan, which is the property that
+//! matters.
 
 use micold_client::app::State;
 use micold_client::features::project::ProjectMenu;
@@ -64,7 +81,17 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
     }),
 ];
 
-/// Popover-shaped fields actually declared on `State`, so the list above cannot go stale.
+/// Popover-*shaped* fields that are actually a dialog's own state, with the dialog each opens.
+///
+/// One member, and it is here rather than exempted by name: `about_open` looks exactly like a
+/// popover flag to the scan below, and the way to keep the scan honest is to say what it is, not
+/// to teach the scan to skip it. `a_dialog_flag_registers_in_the_dialog_band` then holds this list
+/// to being true.
+#[allow(clippy::type_complexity)]
+const DIALOG_FLAGS: &[(&str, &str, fn(&mut State))] =
+    &[("about_open", "about", |s| s.about_open = true)];
+
+/// Popover-shaped fields actually declared on `State`, so the lists above cannot go stale.
 fn declared_popovers() -> BTreeSet<String> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app.rs");
     let src = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
@@ -90,22 +117,49 @@ fn opened(setter: fn(&mut State)) -> State {
 #[test]
 fn the_list_of_popovers_matches_the_ones_that_exist() {
     let declared = declared_popovers();
-    let listed: BTreeSet<String> = POPOVERS.iter().map(|(f, ..)| f.to_string()).collect();
+    let listed: BTreeSet<String> = POPOVERS
+        .iter()
+        .chain(DIALOG_FLAGS.iter())
+        .map(|(f, ..)| f.to_string())
+        .collect();
 
     let unlisted: Vec<_> = declared.difference(&listed).collect();
     let phantom: Vec<_> = listed.difference(&declared).collect();
 
     assert!(
         unlisted.is_empty(),
-        "a new popover exists that this file has never asked about: {unlisted:?}\n\nAdd it here \
-         with the surface it registers as. That is the whole point — a popover nobody registered \
-         is one that opens and will not close (FR-010, contract R2)."
+        "a new popover-shaped field exists that this file has never asked about: {unlisted:?}\n\n\
+         Add it to POPOVERS with the surface it registers as, or to DIALOG_FLAGS if it is a \
+         dialog's own state wearing a popover's name. That is the whole point — a popover nobody \
+         registered is one that opens and will not close (FR-010, contract R2)."
     );
     assert!(
         phantom.is_empty(),
         "this file names fields `State` no longer has: {phantom:?}\n\nIf the field moved into its \
          feature module, follow it here in the same commit."
     );
+}
+
+#[test]
+fn a_dialog_flag_registers_in_the_dialog_band() {
+    // Keeps DIALOG_FLAGS from being a way to smuggle a field past the scan: a member claiming to
+    // be a dialog has to actually open one, in the modal band, under the name it gives.
+    let mut wrong = Vec::new();
+    for (field, id, open) in DIALOG_FLAGS {
+        let state = opened(*open);
+        match registry::open_dialog(&state) {
+            Some(dialog) if dialog.id().as_str() == *id => {}
+            Some(dialog) => wrong.push(format!(
+                "`{field}` opens `{}`, not the `{id}` it is listed as",
+                dialog.id()
+            )),
+            None => wrong.push(format!(
+                "`{field}` is listed as the dialog `{id}`, but setting it opens no dialog — so it \
+                 is either an unregistered popover or nothing at all"
+            )),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n  - "));
 }
 
 #[test]

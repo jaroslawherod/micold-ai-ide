@@ -9,7 +9,7 @@
 //! rather than beside the type it validates, which is what FR-001 asks against. Moving it is
 //! Tier 3 work (it is reducer code, and the arm returns a `Task`), not Tier 1's; recorded here so
 //! the split is visible from the module rather than only from the plan.
-use crate::app::{Message, Overlay, State};
+use crate::app::{Message, State};
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::Layer;
@@ -55,6 +55,6 @@ impl FloatingSurface for SettingsDialog {
 
 impl Registered for SettingsDialog {
     fn open_in(state: &State) -> Option<Self> {
-        (state.overlay == Overlay::Settings).then_some(SettingsDialog)
+        state.settings_draft.as_ref().map(|_| SettingsDialog)
     }
 }

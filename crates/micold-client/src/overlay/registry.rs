@@ -27,13 +27,15 @@
 //!
 //! All sixteen surfaces the application has: nine dialogs, three panel popovers and four context
 //! menus, each described in the feature module that owns it and named here once. The transitional
-//! `ModalSurface` that stood in for the whole `Overlay` enum at T029 is gone as of T032.
+//! `ModalSurface` that stood in for the whole `Overlay` enum at T029 is gone as of T032, and the
+//! enum itself as of T037.
 //!
-//! The enum itself is not, yet — but as of T033 it no longer *describes* anything. It survives as
-//! the *storage* the dialog surfaces read: their `open_in` is `state.overlay == Overlay::X`, and
-//! that is the whole of it. The second copy of the nine facts — `Overlay::as_surface`, the
-//! nine-arm bridge T029 built so the two representations could not answer differently while they
-//! coexisted — is deleted, and `app::on_escape` is one call into [`escape`] below.
+//! It went in three steps, because it was doing three things. T033 deleted its *description* of
+//! the dialogs — `Overlay::as_surface`, the nine-arm bridge T029 built so the two representations
+//! could not answer differently while they coexisted — leaving `app::on_escape` as one call into
+//! [`escape`] below. T034–T036 collapsed the sites that matched on the remaining slot. T037
+//! removed the slot: eight of the nine dialogs already had a field of their own saying they were
+//! open, so their `open_in` reads that, and About, which had none, gained `State::about_open`.
 //!
 //! What holds the nine facts now is `tests/overlay_registry.rs`, which states each dialog's
 //! identity and cancellation in an exhaustive match of its own and checks dispatch against it.
@@ -177,7 +179,7 @@ impl Closing {
     /// Which dialog this is a snapshot of.
     ///
     /// The identity `material::Modal` keys its transition on. It has to survive the close: the
-    /// live state says `Overlay::None` the instant the dialog is dismissed, and a renderer reading
+    /// live state says nothing is open the instant the dialog is dismissed, and a renderer reading
     /// *that* would see the identity change, restart the transition, and make the dialog vanish
     /// instead of animating out.
     pub fn id(&self) -> SurfaceId {
@@ -291,14 +293,26 @@ pub fn scroll_beneath(state: &State) -> Vec<Message> {
 /// the transition on, so switching straight from one dialog to another replays the entrance
 /// instead of inheriting a transition the previous one had already finished.
 ///
-/// At most one can be open: [`crate::app::Overlay`] is a single slot, and that is the whole of
-/// what it is still for. `max_by_key` rather than `find` so this does not quietly depend on that
-/// staying true.
+/// At most one is open, and since T037 that is a rule rather than a type: the `Overlay` enum was a
+/// single slot, so a second dialog could not be represented; each dialog now says it is open by
+/// holding the state it draws from, and two of those could in principle be set at once.
+/// [`crate::app::State::clear_for_dialog`] is what keeps it from happening, and
+/// `one_dialog_at_a_time` in `tests/overlay_registry.rs` is what would notice if it did.
+/// `max_by_key` rather than `find` because it never depended on the slot in the first place —
+/// registration order decides nothing (contract R3).
 pub fn open_dialog(state: &State) -> Option<Open> {
     open_among(REGISTERED, state)
         .into_iter()
         .filter(|open| open.layer() == Layer::Dialog)
         .max_by_key(|open| open.layer())
+}
+
+/// Every open dialog: the surfaces in the modal band. Normally none or one — see [`open_dialog`].
+pub fn open_dialogs(state: &State) -> Vec<Open> {
+    open_among(REGISTERED, state)
+        .into_iter()
+        .filter(|open| open.layer() == Layer::Dialog)
+        .collect()
 }
 
 /// Every open surface below the dialog band: the lightweight popovers and context menus.
@@ -316,6 +330,15 @@ pub fn open_popovers(state: &State) -> Vec<Open> {
 /// without anyone having remembered to add a line, which is the whole of R2's argument.
 pub fn close_popovers(state: &mut State) {
     close_each(state, open_popovers);
+}
+
+/// Close any open dialog, by sending it the cancellation it declared.
+///
+/// The invariant the `Overlay` enum used to hold in the type system (T037): opening a dialog
+/// closes whichever was open. Expressed the same way [`close_popovers`] is — as a rule over the
+/// registry, so a dialog added later is closed by it without a line being added anywhere.
+pub fn close_dialogs(state: &mut State) {
+    close_each(state, open_dialogs);
 }
 
 /// Close whatever Escape reaches: the topmost open surface, and nothing else.

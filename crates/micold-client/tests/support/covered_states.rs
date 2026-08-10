@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use micold_client::app::{Overlay, State};
+use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;
 use micold_client::features::settings::SettingsDraft;
 use micold_client::features::worktree_form::{BranchSource, WorktreeForm};
@@ -182,7 +182,6 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "add-worktree-dialog-new-branch",
             build: || {
                 let mut state = with_project();
-                state.overlay = Overlay::AddWorktree;
                 state.worktree_form = Some(WorktreeForm {
                     source: BranchSource::New,
                     name: "example".to_string(),
@@ -210,7 +209,6 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "add-worktree-dialog-existing-branch",
             build: || {
                 let mut state = with_project();
-                state.overlay = Overlay::AddWorktree;
                 state.worktree_form = Some(WorktreeForm {
                     source: BranchSource::Existing,
                     ..WorktreeForm::default()
@@ -283,7 +281,6 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "error-add-worktree-failed",
             build: || {
                 let mut state = with_project();
-                state.overlay = Overlay::AddWorktree;
                 state.worktree_form = Some(WorktreeForm {
                     source: BranchSource::New,
                     name: "example".to_string(),
@@ -372,7 +369,6 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "add-worktree-dialog-type-menu-open",
             build: || {
                 let mut state = with_project();
-                state.overlay = Overlay::AddWorktree;
                 state.worktree_form = Some(WorktreeForm {
                     source: BranchSource::New,
                     name: "example".to_string(),
@@ -410,7 +406,6 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "settings-dialog-with-validation-error",
             build: || {
                 let mut state = with_project();
-                state.overlay = Overlay::Settings;
                 state.settings_draft = Some(SettingsDraft {
                     scrollback_lines: "12000".to_string(),
                     env_include_enabled: true,

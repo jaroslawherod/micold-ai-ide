@@ -9,7 +9,7 @@
 
 use iced::time::every;
 use iced::{Subscription, Task};
-use micold_client::app::{Message, Overlay, State};
+use micold_client::app::{Message, State};
 use micold_client::features::session::SelectKind;
 use micold_client::features::worktree_form::{
     BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
@@ -293,7 +293,7 @@ fn scene_facts(app: &App) -> SceneFacts {
     SceneFacts {
         worktrees: app.core.worktrees.len(),
         running_sessions,
-        dialog_open: app.core.overlay != Overlay::None,
+        dialog_open: micold_client::overlay::registry::open_dialog(&app.core).is_some(),
         context_menu_open: app.core.terminal_context_menu.is_some(),
         ripple_animating: app.ripples_animating.load(Ordering::Relaxed) > 0,
     }
@@ -665,17 +665,21 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     // Snapshot the open dialog BEFORE the reducer runs: closing a dialog clears the state it was
     // drawn from synchronously in the core, so this snapshot is the only way to keep rendering it
     // while it fades out (FR-002/FR-006/FR-012).
-    let overlay_before = app.core.overlay;
+    // Which dialog, not merely that one is open: switching straight from one to another has to
+    // read as a change here too. Since T037 there is no enum to compare, and the identity the
+    // snapshot already carries is the right thing to ask anyway.
     let snapshot_before = Closing::of(&app.core);
+    let dialog_before = snapshot_before.as_ref().map(Closing::id);
 
     let task = update_inner(app, message);
 
     // Hand a closing overlay's snapshot to the renderer so its exit has something to draw (US1).
     // The transition itself belongs to `material::Modal`, which reports back with
     // `OverlayTransitionFinished` once it is over; the snapshot is released there.
-    let overlay_after = app.core.overlay;
-    if overlay_before != overlay_after {
-        app.dismissing = if overlay_after == Overlay::None {
+    let dialog_after =
+        micold_client::overlay::registry::open_dialog(&app.core).map(|open| open.id());
+    if dialog_before != dialog_after {
+        app.dismissing = if dialog_after.is_none() {
             snapshot_before
         } else {
             None
@@ -1224,8 +1228,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::ProjectSelectorOpened => {
             let dir = start_dir();
+            app.core.clear_for_dialog();
             app.core.selector = Some(Selector::open_at(dir.clone()));
-            app.core.open_overlay(Overlay::ProjectSelector);
             scan_task(dir)
         }
         Message::SelectorNavigatedInto(_) | Message::SelectorNavigatedUp => {
@@ -1243,7 +1247,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // every modal wraps behind its scrim, so a refusal reported while the selector was
             // still open would be dimmed out of view.
             app.core.selector = None;
-            app.core.overlay = Overlay::None;
             if !GitCli::new().is_repo_root(&path) {
                 app.core.update(Message::ProjectOpenRefused(
                     "Only git repositories can be opened as projects.".to_string(),

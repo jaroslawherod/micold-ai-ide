@@ -9,9 +9,38 @@
 //! used to do, and asserts what it does now — so the delta is a thing that can be reviewed rather
 //! than a thing that has to be taken on trust. `specs/017-material-component-architecture/`'s
 //! `behavior-delta.md` is the prose version of the same list.
+//!
+//! ## Restated at feature 021 T037, and why (FR-027)
+//!
+//! This is one of the protected tests T037 says must keep passing unchanged, and it cannot: it
+//! opened dialogs with `state.open_overlay(Overlay::X)` and read them back off `state.overlay`,
+//! and T037 deletes both. Nothing here is *about* the enum — the delta this file records is which
+//! gestures close which surfaces — so every assertion is preserved, asked of what now holds the
+//! answer: a dialog is open when the state it draws from is there, and the registry reports which
+//! one. Nine rows replace nine variants. No property changed, nothing was weakened, and the
+//! assertion-freeze check flags the file with this paragraph as its explanation.
 
-use micold_client::app::{Message, Overlay, State};
+use std::path::PathBuf;
+
+use micold_client::app::{Message, State};
+use micold_client::features::project::RenameDraft;
+use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_core::overlay::{dismisses, Surface, Trigger};
+use micold_core::selector::Selector;
+use micold_core::session::SessionId;
+
+/// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
+fn open_dialog(state: &State) -> Option<&'static str> {
+    micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
+}
+
+/// Open the About dialog, the stand-in for "a dialog" throughout this file.
+fn with_about() -> State {
+    State {
+        about_open: true,
+        ..State::default()
+    }
+}
 
 /// A state with the overflow menu open.
 fn with_help_menu() -> State {
@@ -38,8 +67,7 @@ fn a_dialog_now_dismisses_on_a_scrim_click() {
         "the unified rule must close a dialog on an outside click"
     );
 
-    let mut state = State::default();
-    state.open_overlay(Overlay::About);
+    let state = with_about();
     assert_eq!(
         micold_client::app::on_escape(&state),
         Some(Message::AboutClosed),
@@ -53,12 +81,11 @@ fn a_dialog_now_dismisses_on_a_scrim_click() {
 fn a_dialog_still_survives_scrolling_behind_it() {
     assert!(!dismisses(Surface::Dialog, Trigger::ScrollBeneath));
 
-    let mut state = State::default();
-    state.open_overlay(Overlay::About);
+    let mut state = with_about();
     state.update(Message::ScrolledBeneathOverlay);
     assert_eq!(
-        state.overlay,
-        Overlay::About,
+        open_dialog(&state),
+        Some("about"),
         "scrolling behind a dialog must not close it"
     );
 }
@@ -122,32 +149,70 @@ fn outside_click_dismissal_of_a_menu_is_unchanged() {
 /// surface, never which surfaces Escape reaches.
 #[test]
 fn escape_still_reaches_exactly_what_it_used_to() {
-    for (overlay, expected) in [
-        (Overlay::About, Message::AboutClosed),
-        (Overlay::ProjectSelector, Message::ProjectSelectorClosed),
-        (Overlay::RenameProject, Message::RenameCancelled),
-        (Overlay::AddWorktree, Message::AddWorktreeCancelled),
-        (Overlay::Settings, Message::SettingsCancelled),
+    #[allow(clippy::type_complexity)]
+    let dialogs: &[(&str, fn(&mut State), Message)] = &[
+        ("about", |s| s.about_open = true, Message::AboutClosed),
         (
-            Overlay::ConfirmWorktreeDelete,
+            "project_selector",
+            |s| s.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
+            Message::ProjectSelectorClosed,
+        ),
+        (
+            "rename_project",
+            |s| {
+                s.rename_draft = Some(RenameDraft {
+                    path: PathBuf::from("/tmp"),
+                    text: String::new(),
+                    error: None,
+                })
+            },
+            Message::RenameCancelled,
+        ),
+        (
+            "add_worktree",
+            |s| s.worktree_form = Some(Default::default()),
+            Message::AddWorktreeCancelled,
+        ),
+        (
+            "settings",
+            |s| s.settings_draft = Some(Default::default()),
+            Message::SettingsCancelled,
+        ),
+        (
+            "confirm_worktree_delete",
+            |s| s.worktree_delete_target = Some("wt".to_string()),
             Message::WorktreeDeleteCancelled,
         ),
-        (Overlay::RenameWorktree, Message::WorktreeRenameCancelled),
         (
-            Overlay::ConfirmSessionRemove,
+            "rename_worktree",
+            |s| {
+                s.worktree_rename_draft = Some(WorktreeRenameDraft {
+                    dir_name: "wt".to_string(),
+                    text: String::new(),
+                    error: None,
+                })
+            },
+            Message::WorktreeRenameCancelled,
+        ),
+        (
+            "confirm_session_remove",
+            |s| s.session_remove_target = Some(SessionId::new()),
             Message::SessionRemoveCancelled,
         ),
         (
-            Overlay::ConfirmForgetProject,
+            "confirm_forget_project",
+            |s| s.forget_target = Some(PathBuf::from("/p")),
             Message::ProjectForgetCancelled,
         ),
-    ] {
+    ];
+
+    for (name, open, expected) in dialogs {
         let mut state = State::default();
-        state.open_overlay(overlay);
+        open(&mut state);
         assert_eq!(
             micold_client::app::on_escape(&state),
-            Some(expected),
-            "Escape changed for {overlay:?}"
+            Some(expected.clone()),
+            "Escape changed for {name}"
         );
     }
 }
@@ -160,7 +225,8 @@ fn scrolling_with_nothing_open_changes_nothing() {
     let before = state.clone();
     state.update(Message::ScrolledBeneathOverlay);
     assert_eq!(
-        state.overlay, before.overlay,
+        open_dialog(&state),
+        open_dialog(&before),
         "an idle scroll must not touch the overlay"
     );
     assert!(!state.help_menu_open);

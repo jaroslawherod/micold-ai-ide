@@ -7,9 +7,16 @@
 //! no longer tracks process liveness for this purpose, so there is no client-side
 //! `should_write_to` left to test here.
 
-use micold_client::app::{route_key, KeyRouting, Overlay, State};
+use micold_client::app::{route_key, KeyRouting, State};
 use micold_client::keymap::KeyOutput;
 use micold_core::session::SessionLocation;
+
+/// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
+/// Asked of the registry, which reads each dialog's own state, so this is the same question about
+/// the same fact rather than a weaker one.
+fn open_dialog(state: &State) -> Option<&'static str> {
+    micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
+}
 
 #[test]
 fn base_state_defaults() {
@@ -19,7 +26,7 @@ fn base_state_defaults() {
         "terminal must start unfocused (FR-010)"
     );
     assert!(s.settings_draft.is_none());
-    assert_eq!(s.overlay, Overlay::None);
+    assert_eq!(open_dialog(&s), None);
 }
 
 #[test]
@@ -67,7 +74,7 @@ fn new_terminal_instance_chord_never_yields_pty_bytes() {
 fn escape_closes_the_settings_overlay() {
     use micold_client::app::{on_escape, Message};
     let s = State {
-        overlay: Overlay::Settings,
+        settings_draft: Some(Default::default()),
         ..State::default()
     };
     assert_eq!(on_escape(&s), Some(Message::SettingsCancelled));
