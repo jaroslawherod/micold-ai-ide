@@ -601,9 +601,18 @@ pub struct State {
     pub sidebar_hidden: bool,
     /// The sidebar width in pixels. `0` means "use the default width" (see [`State::sidebar_width_px`]).
     pub sidebar_width: u16,
-    /// Whether the embedded terminal holds input focus (feature 006). Default `false`; keys are
-    /// delivered to the session process only while `true` (FR-009/FR-010/FR-012).
-    pub terminal_focused: bool,
+    /// Whether the user has explicitly handed the keyboard from the terminal back to the
+    /// application (feature 023, FR-021). Default `false`.
+    ///
+    /// **This is not "the terminal is unfocused"** — that question is [`State::terminal_focused`],
+    /// which is derived. This is the one thing about focus the user decides: the reserved chord or
+    /// the release affordance sets it, and any navigation that displays a terminal clears it
+    /// (FR-021a). It replaced a stored `terminal_focused: bool` that seven scattered assignments
+    /// had to keep correct between them, which is how project switch, mode toggle and instance
+    /// switch each ended up missing a case. Written only by [`State::focus_terminal`] and
+    /// [`State::release_terminal`]; `tests/terminal_bar_stability.rs` fails if that stops being
+    /// true.
+    pub terminal_released: bool,
     /// The open terminal right-click context menu's anchor in pane-local pixels, or `None` when
     /// no menu is showing (feature 006, FR-013).
     pub terminal_context_menu: Option<(u16, u16)>,
@@ -803,6 +812,61 @@ impl State {
         // outlive them — and reopening the same dialog would draw its field focused over an input
         // that has not been clicked (BUG-003).
         self.focused_field = None;
+    }
+
+    /// Whether the displayed session's terminal holds the keyboard (feature 023, FR-009).
+    ///
+    /// **Derived, never stored.** The rule in one line: *the displayed terminal holds the keyboard
+    /// unless the user gave it away or something that types took it.* Everything else follows
+    /// rather than being remembered — a dialog closes and this reads true again with no restore
+    /// stack (FR-010); a session goes away and nothing has to clear a flag (FR-012, FR-016); the
+    /// window loses and regains focus and nothing is written at all, so nothing needs restoring
+    /// (FR-013–FR-015). Only the displayed session is ever named here, which is what makes "at most
+    /// one terminal, and only that one" structural rather than a rule (FR-020).
+    ///
+    /// See `specs/023-terminal-focus-flow/contracts/focus-model.md` (v2).
+    pub fn terminal_focused(&self) -> bool {
+        self.active_session.is_some()
+            && !self.terminal_released
+            && self.focused_field.is_none()
+            && !self.any_surface_takes_keyboard()
+    }
+
+    /// Any floating surface that takes the keyboard while it is open (FR-004, FR-017).
+    ///
+    /// Every dialog, and every popover **except** the terminal's own right-click menu: that one is
+    /// pane furniture (FR-007), drawn inside the pane, offering the pane's own Copy and Paste — a
+    /// right-click that stopped the user typing would be the same defect this feature exists to
+    /// remove.
+    ///
+    /// It asks the registry rather than naming flags. A hand-written list of popovers is exactly
+    /// the list nobody remembers to extend, and feature 024 already built the one that is
+    /// maintained — "one line per surface, and this is the only such list" (024 FR-009) — so a
+    /// surface registered later participates in terminal focus without anyone touching this.
+    fn any_surface_takes_keyboard(&self) -> bool {
+        // Stub — filled in by US4/T028, so US4's bounds tests are observed failing first
+        // (Principle I). Until then the terminal keeps the keyboard while a dialog is open, which
+        // is FR-017 unmet and exactly what T027 asserts.
+        false
+    }
+
+    /// The user is being put in front of a terminal (FR-011, FR-021a, FR-008b).
+    ///
+    /// Clears the explicit release *and* any text-field focus. The second one matters: a press on
+    /// the pane, or a navigation that displays a terminal, is a request for that terminal, and it
+    /// must not be defeated by a field that still believes it holds the keyboard. Without it, a
+    /// press into the pane made while a rename field had focus would depend on iced's blur
+    /// arriving first. FR-018 permits taking the keyboard from a field for exactly this reason —
+    /// it is a user press.
+    pub(crate) fn focus_terminal(&mut self) {
+        self.terminal_released = false;
+        self.focused_field = None;
+    }
+
+    /// The user handed the keyboard back to the application (FR-021) — the reserved chord or the
+    /// release affordance. It holds until they give it back or navigate to a terminal.
+    pub(crate) fn release_terminal(&mut self) {
+        self.terminal_released = true;
     }
 
     /// Apply a [`Message`], transitioning the state. Pure and side-effect free.
@@ -1380,10 +1444,9 @@ impl State {
                     }
                 }
                 self.set_current_session(Some(id));
-                // BUG-001: making a session the displayed session auto-focuses its terminal so the
-                // user can interact with the AI CLI immediately (FR-010/FR-010a). The gui path
-                // re-asserts focus after any same-click release (see `src/main.rs`).
-                self.terminal_focused = true;
+                // Making a session the displayed session puts the user in front of a terminal,
+                // so it holds the keyboard (FR-011). No re-assertion from the gui path any more:
+                // nothing releases focus on the same click, so there is no race to win.
             }
             Message::SessionSelected(id) => {
                 // Feature 024: the ONE writer that does not go through `set_current_session`
@@ -1392,8 +1455,9 @@ impl State {
                 // (FR-006). `tests/current_session_writers.rs` knows about this exemption by name;
                 // any other direct write to `active_session` fails that gate.
                 self.active_session = Some(id);
-                // BUG-001: selecting a session auto-focuses its terminal (FR-010/FR-010a).
-                self.terminal_focused = true;
+                // Selecting a session displays its terminal, so it holds the keyboard, clearing
+                // any earlier release (FR-011, FR-021a).
+                self.focus_terminal();
             }
             Message::SessionRunning(id) => {
                 if let Some(session) = self.session_mut(id) {
@@ -1467,9 +1531,10 @@ impl State {
                     // view (FR-001c). Nothing is armed — no session is current to scroll to, and
                     // FR-001a forbids moving the panel when the user closes the session they were
                     // on.
+                    //
+                    // Nothing to clear alongside it: with no displayed session `terminal_focused()`
+                    // is already false (feature 023, FR-012/FR-016).
                     self.set_current_session(None);
-                    // BUG-001 / focus-model.md: no session is displayed, so no terminal is focused.
-                    self.terminal_focused = false;
                 }
             }
             Message::SessionMenuToggled(id) => {
@@ -1501,7 +1566,6 @@ impl State {
                     // record in place.
                     if self.active_session == Some(id) {
                         self.set_current_session(None);
-                        self.terminal_focused = false;
                     }
                     if let Some(path) = self.workspace.active.clone() {
                         if let Some(list) = self.workspace.sessions.get_mut(&path) {
@@ -1526,10 +1590,10 @@ impl State {
 
             // ---- Feature 006 ----
             Message::TerminalFocused => {
-                self.terminal_focused = true;
+                self.focus_terminal();
             }
             Message::TerminalFocusReleased => {
-                self.terminal_focused = false;
+                self.release_terminal();
             }
             Message::TerminalContextMenuOpened { x, y } => {
                 self.terminal_context_menu = Some((x, y));

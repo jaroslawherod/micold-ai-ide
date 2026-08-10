@@ -1,5 +1,18 @@
 # Contract: Focus Model & Key Routing
 
+> **Superseded by [`specs/023-terminal-focus-flow/contracts/focus-model.md`](../../023-terminal-focus-flow/contracts/focus-model.md) (v2)**, including this file's BUG-001 amendment.
+>
+> What survives verbatim: the **routing rule** (a focused terminal takes the keys and the app's
+> shortcuts stand down; an unfocused one lets no key reach any PTY) and the **write gate** (bytes
+> reach the PTY only while the session is `Running`, dropped otherwise, never buffered). Feature 023
+> changes *when* the terminal is focused, not what being focused means.
+>
+> What v2 replaces: everything in the State and Transitions sections below. `State.terminal_focused`
+> is no longer a stored field — it is derived from `active_session`, an explicit
+> `terminal_released`, `focused_field`, and the overlay registry — so the click-outside release, the
+> project-switch rule, and the auto-focus list here are all restated there. Read this file for the
+> history; read v2 for the behaviour.
+
 Governs FR-009, FR-010, FR-011, FR-012, FR-012a. The goal: keys reach the `claude` process
 **only** while the terminal is focused; otherwise they drive the application.
 

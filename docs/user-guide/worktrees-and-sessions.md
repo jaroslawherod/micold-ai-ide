@@ -465,8 +465,8 @@ The embedded terminal renders `claude`'s output like a real terminal, not as fla
   ANSI colors use a fixed conventional palette so programs look as their authors intended.
 - **Full-screen interfaces** — `claude`'s interactive UI and other full-screen (alternate-screen)
   programs redraw cleanly, with the cursor shown at its current position.
-- **Focus** — starting or selecting a session automatically focuses its terminal (a colored
-  border marks the focused terminal); you can also click the terminal to focus it.
+- **Focus** — the terminal you are looking at is where the keyboard goes, unless you have handed
+  it away or something that types has taken it (a colored border marks the focused terminal).
 
 ## Interacting with the terminal
 
@@ -488,10 +488,35 @@ Keystrokes stream straight to `claude` as you press them, exactly like a standal
   including Escape and shortcuts the app would otherwise use — goes to `claude`; when not focused,
   those keys drive the application instead. Input is only delivered while the session's process
   is running (otherwise keystrokes are ignored and the header shows the session status).
-- **Leaving focus**: press **Ctrl+Shift+E** (Cmd+Shift+E on macOS), click on empty app chrome
-  outside the terminal, or use the **"⎋ release focus"** control in the terminal header. Releasing
-  focus never interrupts the running session. (Clicking another session in the sidebar switches to
-  it and focuses *its* terminal, rather than just leaving focus.)
+- **Leaving focus**: press **Ctrl+Shift+E** (Cmd+Shift+E on macOS), or use the **release focus**
+  control in the terminal's bottom bar. Releasing focus never interrupts the running session.
+  Clicking on empty app chrome no longer does it — see below.
+
+### One press does what you pressed
+
+Every control in the window acts on the **first** press, whatever the terminal was holding. Press
+the mode toggle and the mode switches; press a session in the sidebar and it opens; press a toolbar
+button and it fires. You never press something twice — once to get out of the terminal, once to
+actually use it.
+
+What a press does to the keyboard depends only on what you pressed:
+
+- **Something that types** — a text field, or a menu or dialog that opens on the press — takes the
+  keyboard, and hands it back when it closes.
+- **Something that types nothing** — an icon button, a toggle, a menu item that performs an action
+  — leaves the keyboard exactly where it was. Press it while typing in the terminal and you carry
+  straight on typing.
+- **Empty space, or a disabled control** — changes nothing at all. Inert space is not a way out of
+  the terminal; the release chord and the release control are.
+
+The release control is always in the bottom bar, and greys out when the terminal does not hold the
+keyboard — it does not appear and disappear as you work.
+
+### Pressing into the terminal
+
+Pressing a terminal that does not hold the keyboard both gives it the keyboard **and** does what the
+press would have done anyway — placing the cursor, starting a selection, or reaching a mouse-driven
+program at the cell you pressed. No press is spent purely on focusing.
 
 ## Sizing, resize & scrollback
 

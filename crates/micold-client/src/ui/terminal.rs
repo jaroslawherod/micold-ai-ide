@@ -351,7 +351,7 @@ pub fn pane<'a>(
         Some(grid) => TerminalPane::new(grid, TermPalette::from_scheme(scheme))
             .selection(selection)
             .display_offset(display_offset)
-            .focused(state.terminal_focused)
+            .focused(state.terminal_focused())
             .into(),
         None => container(Text::new("Starting…", TypeRole::Caption, r).muted())
             .center_x(Length::Fill)
@@ -411,24 +411,36 @@ pub fn pane<'a>(
             .on_press(Message::TerminalRestartRequested),
         );
     }
-    // While the terminal holds focus, offer an explicit way out (FR-011) alongside the reserved
-    // Ctrl+Shift+E chord and click-outside. Icon-only (with a tooltip carrying the label and
-    // chord) rather than an icon+text button — keeps the bar compact; `Icon::ReleaseFocus` reads
-    // clearly on its own and the tooltip still surfaces the reserved chord on hover.
-    if state.terminal_focused {
-        bar = bar.push(
-            Tooltip::new(
-                IconButton::new(Icon::ReleaseFocus, r)
-                    .padding(spacing::SM)
-                    .on_press(Message::TerminalFocusReleased),
-                "Release focus (Ctrl+Shift+E)",
-                r,
-            )
-            // This control sits mid-bar, not at an edge — opening below would run past the
-            // window's bottom edge since the bar is the last row on screen, so open upward.
-            .position(TooltipPosition::Top),
-        );
-    }
+    // An explicit way out of the terminal (FR-021) alongside the reserved Ctrl+Shift+E chord.
+    // Icon-only (with a tooltip carrying the label and chord) rather than an icon+text button —
+    // keeps the bar compact; `Icon::ReleaseFocus` reads clearly on its own and the tooltip still
+    // surfaces the reserved chord on hover.
+    //
+    // **Always pushed, enabled only while focused** (feature 023, FR-008a). This used to be
+    // `if state.terminal_focused()`, and that conditional is what made every control to its right
+    // need two presses: a press that changed focus re-ran `view()` between its own press and
+    // release, this child vanished, the mode toggle and the "+" each shifted one index left, and
+    // iced's `Tree::diff_children` — which zips by position — handed the pressed control its
+    // neighbour's node, dropping the `is_pressed` that `on_press` fires from (research R1). The
+    // bar's child list must not depend on focus; `tests/terminal_bar_stability.rs` fails if it
+    // does again.
+    bar = bar.push(
+        Tooltip::new(
+            {
+                let button = IconButton::new(Icon::ReleaseFocus, r).padding(spacing::SM);
+                if state.terminal_focused() {
+                    button.on_press(Message::TerminalFocusReleased)
+                } else {
+                    button
+                }
+            },
+            "Release focus (Ctrl+Shift+E)",
+            r,
+        )
+        // This control sits mid-bar, not at an edge — opening below would run past the
+        // window's bottom edge since the bar is the last row on screen, so open upward.
+        .position(TooltipPosition::Top),
+    );
     // The instance-switching control: one entry per open Regular Terminal instance, visible only
     // once a session has more than one (feature 011, FR-004/FR-005). Placed just before the
     // "open a new instance" control, both ahead of the primary mode toggle.

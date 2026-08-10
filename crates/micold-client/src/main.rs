@@ -864,7 +864,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                         if let OperationResult::SessionCreated { session } = result {
                             app.core.update(Message::SessionSelected(session));
                             view_and_start(app, session);
-                            return Task::done(Message::TerminalFocused);
+                            // No follow-up focus message: `SessionSelected` focuses the terminal in
+                            // the reducer and nothing releases it on the same click any more
+                            // (feature 023). The re-assertion this replaced existed to win a race
+                            // against a `TerminalFocusReleased` published by the very click that
+                            // selected — the shape FR-008a forbids, since it puts the keyboard
+                            // somewhere the user did not ask for, however briefly.
                         }
                     }
                     // A worktree create succeeded: close the form. The worktree itself arrives via
@@ -1566,12 +1571,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // called rather than repeated so the pane size that now precedes the start (BUG-003,
             // FR-014a) cannot be added to one copy and not the other.
             view_and_start(app, id);
-            // BUG-001: auto-focus the selected session's terminal (FR-010/FR-010a). Selecting from
-            // the sidebar is a click *outside* the pane, so a currently-focused pane also publishes
-            // `TerminalFocusReleased` for the same click. Re-assert focus via a follow-up message,
-            // which is delivered *after* the current event batch drains — so the focus wins
-            // regardless of the intra-batch order of `SessionSelected` vs `TerminalFocusReleased`.
-            Task::done(Message::TerminalFocused)
+            // Nothing further: the reducer's `SessionSelected` arm focuses the terminal (FR-011),
+            // and selecting from the sidebar no longer releases it, so there is no race left to
+            // win with a follow-up message (feature 023, research R3).
+            Task::none()
         }
         // Close a session: kill both its processes (AI CLI and shell, feature 010 FR-014) and
         // drop the runtime handles. The pure core archives (not deletes) the record (FR-015a,
