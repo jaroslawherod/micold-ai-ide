@@ -45,18 +45,6 @@ mod inventory;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-/// The seven service ports (spec §"What already exists"). A real implementation is a type
-/// implementing one of these; the client must never name one outside the shell.
-const PORTS: &[&str] = &[
-    "Git",
-    "ProjectStore",
-    "SettingsStore",
-    "FolderScanner",
-    "TerminalBackend",
-    "TerminalHandle",
-    "AiCliProvider",
-];
-
 /// The four T041 names explicitly. The derivation must find at least these.
 const NAMED_BY_THE_TASK: &[&str] = &[
     "GitCli",
@@ -74,43 +62,16 @@ fn is_shell(path: &str) -> bool {
     path == "main.rs" || path.starts_with("shell/")
 }
 
-/// Every real implementation in `micold-core`, by name.
+/// The real implementations: every port implementation in the core that is not a fake.
 ///
-/// A fake is excluded by its `Fake` prefix, which is the codebase's established convention
-/// (`FakeGit`, `FakeTerminalBackend`, `FakeHandle`) and the one T048 is about to extend to every
-/// remaining port. [`the_only_excluded_implementations_are_fakes`] holds that convention rather
-/// than trusting it.
-fn implementations() -> BTreeMap<String, bool> {
-    let core = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("crates/")
-        .join("micold-core/src");
-    let mut found = BTreeMap::new();
-    for (_, text) in inventory::sources_under(&core) {
-        for line in inventory::code_only(&text).lines() {
-            let line = line.trim();
-            let Some(rest) = line.strip_prefix("impl ") else {
-                continue;
-            };
-            let Some((port, ty)) = rest.split_once(" for ") else {
-                continue;
-            };
-            if !PORTS.contains(&port) {
-                continue;
-            }
-            let ty = ty.trim_end_matches(" {").trim();
-            found.insert(ty.to_string(), ty.starts_with("Fake"));
-        }
-    }
-    found
-}
-
-/// The real implementations: everything [`implementations`] found that is not a fake.
+/// The scan itself lives in `inventory` (T042 moved it there) because the fake-coverage guard
+/// needs the same derivation, and two answers to "what implements a capability" is the drift
+/// FR-014 objects to.
 fn real_implementations() -> BTreeSet<String> {
-    implementations()
+    inventory::port_impls_under(&inventory::core_src())
         .into_iter()
-        .filter(|(_, is_fake)| !is_fake)
-        .map(|(ty, _)| ty)
+        .filter(|found| !found.is_fake())
+        .map(|found| found.ty)
         .collect()
 }
 
@@ -155,10 +116,10 @@ fn the_derivation_finds_the_implementations_this_task_names() {
 fn the_only_excluded_implementations_are_fakes() {
     // `implementations` excludes by name prefix, so the prefix has to mean what it says. A real
     // implementation called `FakeSomething` would be waved through every test here.
-    let excluded: BTreeSet<String> = implementations()
+    let excluded: BTreeSet<String> = inventory::port_impls_under(&inventory::core_src())
         .into_iter()
-        .filter(|(_, is_fake)| *is_fake)
-        .map(|(ty, _)| ty)
+        .filter(inventory::PortImpl::is_fake)
+        .map(|found| found.ty)
         .collect();
     let known: BTreeSet<String> = ["FakeGit", "FakeHandle", "FakeTerminalBackend"]
         .iter()
