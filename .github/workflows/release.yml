@@ -19,6 +19,16 @@ name: release
 # is the single source of truth, and the three local crates' entries in Cargo.lock follow it.
 # `component` is pinned because the tag prefix used to be derived from the root crate's name,
 # which the workspace split removed — without it, tags would drift from `micold-ai-ide-vX.Y.Z`.
+#
+# Why `changelog-sections` is spelled out (same reason — JSON takes no comments): the changelog is
+# `include_str!`'d into the binary and shown to users as "what's new", so the default sections are
+# right for almost everything — `docs`, `chore`, `refactor`, `test` and `style` stay hidden because
+# a user does not experience them. `ci` and `build` are the deliberate exception, surfaced under
+# "Build & CI": feature 023 made a documentation-only change skip the pipeline entirely, which
+# changes how the project is developed and released, and burying that under a hidden type meant the
+# only record of it was a commit message. Specifying the list at all means specifying all of it —
+# release-please replaces the defaults rather than merging with them, so every type above is listed
+# explicitly, including the ones that were already hidden.
 
 on:
   push:
