@@ -122,14 +122,14 @@ straight away with zero presses (quickstart §B4).
 
 ### Tests for User Story 3 (MANDATORY) ⚠️
 
-- [ ] T022 [P] [US3] Add failing navigation tests to `crates/micold-client/tests/terminal_focus.rs`: starting from `terminal_released: true`, each of `SessionStarted`, `SessionSelected`, `TerminalModeToggled`, `ShellInstanceOpenRequested`, `ShellInstanceSelected`, `ShellInstanceCloseRequested` clears the release (FR-011, FR-021a); and `State::default()` with a restored `active_session` is focused (FR-012a).
+- [X] T022 [P] [US3] Add failing navigation tests to `crates/micold-client/tests/terminal_focus.rs`: starting from `terminal_released: true`, each of `SessionStarted`, `SessionSelected`, `TerminalModeToggled`, `ShellInstanceOpenRequested`, `ShellInstanceSelected`, `ShellInstanceCloseRequested` clears the release (FR-011, FR-021a); and `State::default()` with a restored `active_session` is focused (FR-012a).
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] In `crates/micold-client/src/app.rs`, call `self.focus_terminal()` from the six navigation arms named in T022. No arm may assign `terminal_released` directly — T004's gate enforces it.
-- [ ] T024 [US3] In `crates/micold-client/src/features/session.rs`, change `restore_after_activation` to call `self.focus_terminal()` where it set `self.terminal_focused = false;` — a project switch onto a restored session lands focused (FR-011). This is why T005 makes the helper `pub(crate)`.
-- [ ] T025 [P] [US3] Update `docs/user-guide/worktrees-and-sessions.md`: what counts as navigation, and that navigating to a terminal clears a release you made earlier.
-- [ ] T026 [US3] Run quickstart §B4 with the `visual-pass` skill and append the pass to `specs/023-terminal-focus-flow/visual-pass.md`.
+- [X] T023 [US3] In `crates/micold-client/src/app.rs`, call `self.focus_terminal()` from the six navigation arms named in T022. No arm may assign `terminal_released` directly — T004's gate enforces it.
+- [X] T024 [US3] In `crates/micold-client/src/features/session.rs`, change `restore_after_activation` to call `self.focus_terminal()` where it set `self.terminal_focused = false;` — a project switch onto a restored session lands focused (FR-011). This is why T005 makes the helper `pub(crate)`.
+- [X] T025 [P] [US3] Update `docs/user-guide/worktrees-and-sessions.md`: what counts as navigation, and that navigating to a terminal clears a release you made earlier.
+- [X] T026 [US3] Run quickstart §B4 with the `visual-pass` skill and append the pass to `specs/023-terminal-focus-flow/visual-pass.md`.
 
 **Checkpoint**: US1–US3 hold independently.
 
@@ -146,13 +146,13 @@ unless it was explicitly released (quickstart §B5).
 
 ### Tests for User Story 4 (MANDATORY) ⚠️
 
-- [ ] T027 [P] [US4] Add failing bounds tests to `crates/micold-client/tests/terminal_focus.rs`: each registered popover — help menu, project switcher, sidebar filter, and the project/worktree/session context menus — makes the predicate false and restores it on close; an open dialog makes it false (FR-017); `FieldFocusChanged(id, true)` then `(id, false)` round-trips (FR-018, FR-010); terminal output and lifecycle changes flip nothing (FR-019); and `terminal_context_menu` being open is **deliberately not** a term — the terminal keeps the keyboard (FR-007, research R4). The menu cases fail against T005's stub, which is the point.
+- [X] T027 [P] [US4] Add failing bounds tests to `crates/micold-client/tests/terminal_focus.rs`: each registered popover — help menu, project switcher, sidebar filter, and the project/worktree/session context menus — makes the predicate false and restores it on close; an open dialog makes it false (FR-017); `FieldFocusChanged(id, true)` then `(id, false)` round-trips (FR-018, FR-010); terminal output and lifecycle changes flip nothing (FR-019); and `terminal_context_menu` being open is **deliberately not** a term — the terminal keeps the keyboard (FR-007, research R4). The menu cases fail against T005's stub, which is the point.
 
 ### Implementation for User Story 4
 
-- [ ] T028 [US4] In `crates/micold-client/src/app.rs`, replace T005's `any_surface_takes_keyboard()` stub with the real predicate: `overlay::registry::open_dialog(self).is_some()`, or any surface in `overlay::registry::open_popovers(self)` whose `SurfaceId` is not `"terminal_context_menu"`. Ask the registry — do **not** write a list of menu flags; that is the list research R2 argued against and feature 024's FR-009 already owns. Add the comment naming FR-007/research R4 so the one exclusion reads as a decision.
-- [ ] T029 [P] [US4] Update `docs/user-guide/worktrees-and-sessions.md`: what takes the keyboard from the terminal (fields, dialogs, menus), what gives it back, and that the terminal's own right-click menu does not.
-- [ ] T030 [US4] Run quickstart §B5 with the `visual-pass` skill and append the pass to `specs/023-terminal-focus-flow/visual-pass.md`.
+- [X] T028 [US4] In `crates/micold-client/src/app.rs`, replace T005's `any_surface_takes_keyboard()` stub with the real predicate: `overlay::registry::open_dialog(self).is_some()`, or any surface in `overlay::registry::open_popovers(self)` whose `SurfaceId` is not `"terminal_context_menu"`. Ask the registry — do **not** write a list of menu flags; that is the list research R2 argued against and feature 024's FR-009 already owns. Add the comment naming FR-007/research R4 so the one exclusion reads as a decision.
+- [X] T029 [P] [US4] Update `docs/user-guide/worktrees-and-sessions.md`: what takes the keyboard from the terminal (fields, dialogs, menus), what gives it back, and that the terminal's own right-click menu does not.
+- [X] T030 [US4] Run quickstart §B5 with the `visual-pass` skill and append the pass to `specs/023-terminal-focus-flow/visual-pass.md`.
 
 **Checkpoint**: All four stories hold independently.
 

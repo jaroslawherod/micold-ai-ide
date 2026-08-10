@@ -105,21 +105,21 @@ fn entering_a_project_with_no_recorded_foreground_falls_back_to_a_running_sessio
 }
 
 #[test]
-fn a_switch_does_not_carry_terminal_focus_across() {
-    let (mut st, a, _) = two_projects(1, 1);
-    // A session has to be *displayed* before any terminal can hold the keyboard (FR-020), so the
-    // precondition is a selection, not a bare focus message.
-    st.update(micold_client::app::Message::SessionSelected(a[0]));
-    assert!(
-        st.terminal_focused(),
-        "precondition: the terminal holds the keyboard"
-    );
+fn a_switch_lands_on_a_terminal_ready_to_type() {
+    // Reversed by feature 023 (FR-011). This asserted the opposite until then, on the reasoning
+    // that arriving in a project is not the same as asking to type in it — true of arriving
+    // somewhere by accident, but a project switch is deliberate, and what fills the pane afterwards
+    // is a restored session's terminal. An explicit release made before the switch goes with it
+    // (FR-021a): it was about the moment, not about the session.
+    let (mut st, _, _) = two_projects(1, 1);
+    st.update(micold_client::app::Message::TerminalFocusReleased);
 
     assert!(st.switch_active(Path::new("/b")));
 
     assert!(
-        !st.terminal_focused(),
-        "arriving in a project is not the same as asking to type in it (BUG-001, focus-model.md)"
+        st.terminal_focused(),
+        "switching to a project with a restored session must leave its terminal holding the \
+         keyboard, with no press (FR-011)"
     );
 }
 

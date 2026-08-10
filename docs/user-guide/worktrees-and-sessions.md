@@ -512,6 +512,33 @@ What a press does to the keyboard depends only on what you pressed:
 The release control is always in the bottom bar, and greys out when the terminal does not hold the
 keyboard — it does not appear and disappear as you work.
 
+### While you are typing somewhere else
+
+The terminal never takes the keyboard out from under you. A dialog, a menu, the project switcher,
+the sidebar's filter panel or a text field holds it for as long as it is open, and hands it back
+when it closes — unless you had released the terminal first, in which case the keyboard stays with
+the application.
+
+Nothing that happens on its own moves the keyboard: not terminal output, not a background session
+finishing its start-up, not a session changing state. Only you move it.
+
+The terminal's own right-click menu is the exception that proves the rule — it belongs to the pane,
+so opening it leaves the terminal holding the keyboard and you can carry on typing.
+
+### Landing on a session ready to type
+
+Anything that puts a different terminal in front of you leaves that terminal holding the keyboard,
+so you can type straight away:
+
+- selecting a session in the sidebar, or starting a new one;
+- switching between AI CLI and Regular Terminal mode;
+- opening, closing or switching a Regular Terminal instance;
+- switching to a project whose session is restored;
+- launching the app with a session restored from last time.
+
+Going to a terminal on purpose also ends an earlier release — you asked for that terminal, so it
+gets the keyboard. (Releasing is about the moment, not something a session remembers.)
+
 ### Leaving the app and coming back
 
 Switching to another window and back changes nothing about where the keyboard is. If you were
