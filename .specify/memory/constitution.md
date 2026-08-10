@@ -1,6 +1,40 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.5.0 → 1.6.0
+Bump rationale: MINOR — the all-three-platform CI mandate gains one narrowly-scoped,
+  explicitly-named exemption: a change whose every touched path is declared documentation MAY skip
+  the suite. Consistent with 1.3.0 (Principle III's Default-session exception) and 1.5.0
+  (Principle I's showcase-glue path), both of which treated a narrow, explicitly-named expansion of
+  what is permitted as MINOR rather than PATCH.
+
+  This amendment deliberately edits **three** statements, not one. The mandate appears in
+  Principle VI's CI bullet, in the TDD gate, and in the Cross-platform gate; amending only the gate
+  that prompted the work would have left the principle itself forbidding what the pipeline does. A
+  gate narrowed in one place and left standing in two is not narrowed, it is contradicted — the
+  same erosion 1.5.0's report objected to, approached from the other direction. Found by feature
+  023's /speckit-analyze pass (finding D1): the plan originally named only the TDD gate.
+
+Modified in 1.6.0:
+  - Principle VI — the CI bullet is scoped to changes able to affect what is built or tested, and
+    points at the Cross-platform gate for the exemption's definition.
+  - Development Workflow & Quality Gates, TDD gate — scoped to changes able to affect what is
+    built, linted, packaged, or tested, and carries the documentation-only exemption in full,
+    including the declaration's location and the check that enforces its precondition.
+  - Development Workflow & Quality Gates, Cross-platform gate — scoped by reference to the TDD
+    gate's exemption.
+  - Templates: ✅ `.specify/templates/plan-template.md` — the Principle VI Constitution-Check line
+    ("CI covers all three") was left imprecise by this amendment and is updated in the same change
+    to "CI covers all three for any change able to affect the build".
+
+  Following 1.5.0's precedent, the exemption does not stand on its own wording:
+  `crates/micold-core/tests/documentation_is_not_read.rs` asserts on every build that nothing under
+  test reads a declared documentation path, so the precondition is checked rather than reviewed. It
+  earned its place before it was written — the changelog is `include_str!`'d into the binary, so
+  `CHANGELOG.md` is a build input and is explicitly carved out of the declaration. Any future
+  widening of the declaration SHOULD arrive with the same kind of check.
+
+Prior report (1.4.1 → 1.5.0):
 Version change: 1.4.1 → 1.5.0
 Bump rationale: MINOR — Principle I's GUI/process-spawn exception gains one further covered
   location: a development-only binary's own render glue (`src/showcase/`), introduced by feature
@@ -318,7 +352,10 @@ a second-class target.
   is not "done" until it works on Linux, macOS, and Windows.
 - Platform-specific behavior MUST be isolated behind clear abstractions. Core logic MUST
   remain platform-agnostic and MUST NOT branch on the host operating system directly.
-- CI MUST build and test the application on all three platforms.
+- CI MUST build and test the application on all three platforms, for every change able to
+  affect what is built or tested. A change whose every touched path is declared documentation
+  is exempt; the Cross-platform gate below carries the definition and the check that enforces
+  it.
 
 Rationale: Developers choose their own operating systems, and a tool that degrades on any
 of them fragments the user base and the codebase. Confining platform differences to thin,
@@ -391,11 +428,20 @@ every call site — which itself removes a common excuse to fork a bespoke widge
 
 ## Development Workflow & Quality Gates
 
-- **TDD gate**: CI MUST run the full test suite on every change, on Linux, macOS, and
-  Windows. Merges are blocked while the suite is red on any platform. This gate
-  operationalizes Principle I.
+- **TDD gate**: CI MUST run the full test suite on every change able to affect what is
+  built, linted, packaged, or tested, on Linux, macOS, and Windows. Merges are blocked
+  while the suite is red on any platform. This gate operationalizes Principle I.
+  - **Exemption — documentation-only changes.** A change whose every touched path is
+    declared documentation MAY skip the suite entirely. The declaration is a single list
+    in the repository (`.gitattributes`, attribute `micold-docs`), and the exemption holds
+    only while nothing under test reads those paths — a condition asserted on every build
+    by `crates/micold-core/tests/documentation_is_not_read.rs`, not left to review. Any
+    other path — source, manifest, lockfile, toolchain or tool configuration, build or
+    helper script, workflow definition, or any file compiled into the binary — is NOT
+    documentation, even when only its comments change.
 - **Cross-platform gate**: CI MUST build and test the application on all three supported
-  platforms. This gate operationalizes Principle VI.
+  platforms, under the same scope and the same documentation-only exemption as the TDD
+  gate above. This gate operationalizes Principle VI.
 - **Documentation gate**: User-facing changes MUST update the user guide/docs in the same
   pull request, and the docs build MUST pass in CI. This gate operationalizes
   Principle VII.
@@ -430,4 +476,4 @@ convention, or habit conflicts with it, this constitution prevails.
   principles. Complexity that violates a principle MUST be either removed or explicitly
   justified and recorded.
 
-**Version**: 1.5.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-07-28
+**Version**: 1.6.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-08-10

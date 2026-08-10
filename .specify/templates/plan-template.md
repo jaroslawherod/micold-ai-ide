@@ -48,7 +48,7 @@ deviation in Complexity Tracking):
 - [ ] **III. Worktree Integration**: File/VCS operations are worktree-aware; the app owns worktree create/switch/cleanup with no manual git steps required of the user; every session maps to a worktree or to the project root as the sanctioned "Default" location — no other non-worktree location is used.
 - [ ] **IV. Local-First Storage (NON-NEGOTIABLE)**: All state lives on the local filesystem; the feature works fully offline; nothing leaves the device without explicit opt-in.
 - [ ] **V. Rust + iced Stack**: Implemented in Rust with iced only; invalid session/worktree states are made unrepresentable via the type system.
-- [ ] **VI. Cross-Platform Parity**: Feature behaves equivalently on Linux, macOS, and Windows; platform-specific code sits behind clear abstractions; CI covers all three.
+- [ ] **VI. Cross-Platform Parity**: Feature behaves equivalently on Linux, macOS, and Windows; platform-specific code sits behind clear abstractions; CI covers all three for any change able to affect the build.
 - [ ] **VII. Documentation First-Class**: User-facing changes include user-guide docs in the same change; docs are in-repo and verified in CI.
 - [ ] **VIII. Reusable UI Component Foundation**: UI is built from shared, reusable primitives; new widgets are added to (or promoted into) the shared library and reused, not forked as feature-local one-offs; shared components honor theming and cross-platform parity; shared components expose a chainable **builder** API terminating in `.into()` (iced widget idiom), not free functions with many positional parameters.
 

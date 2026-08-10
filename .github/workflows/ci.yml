@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+    # `labeled` is feature 023's escape hatch: applying the `full-ci` label must start a *fresh*
+    # run, because re-running an existing one replays the original event payload and would never
+    # see a label added afterwards. Removing the label is deliberately not a trigger -- the next
+    # push reclassifies anyway, and a full run someone asked for costs nothing to keep.
+    types: [opened, synchronize, reopened, labeled]
 
 env:
   CARGO_TERM_COLOR: always
@@ -13,9 +18,78 @@ env:
   CARGO_TARGET_DIR: target
 
 jobs:
+  # Which paths did this change touch? (Feature 023.) Every skip below keys off this verdict, and
+  # this job is the only one that asks the question -- the decision itself lives in
+  # `scripts/classify-change.sh`, which is driven by `scripts/tests/classify-change.test.sh`, so
+  # the workflow carries no rule of its own.
+  classify:
+    name: classify change
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.verdict.outputs.docs_only }}
+      reason: ${{ steps.verdict.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the classification is against the merge base, not the last commit
+      - name: Classify
+        id: verdict
+        env:
+          # The escape hatch: label a pull request `full-ci` to force the whole pipeline. The
+          # `labeled` trigger above exists so that applying it starts a fresh run -- re-running an
+          # existing run replays the original event payload and would not see the new label.
+          FORCE_FULL_CI: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+        run: |
+          set -o pipefail
+          if [ -n "${{ github.base_ref }}" ]; then
+            # A pull request. `fetch-depth: 0` does NOT create `origin/<base>`, which is why the
+            # `assertions` job below fetches explicitly despite using it too. Without this the
+            # classifier reports `base ref unavailable`, every run falls back to the full pipeline,
+            # and the feature silently never fires.
+            git fetch --quiet origin "${{ github.base_ref }}"
+            BASE="origin/${{ github.base_ref }}"
+          else
+            # A push. `before` is the previous tip; it is all zeroes for a new branch and may no
+            # longer exist after a force push. The script treats both as code-affecting.
+            BASE="${{ github.event.before }}"
+          fi
+          scripts/classify-change.sh "$BASE" HEAD 2> "$RUNNER_TEMP/offenders.txt" \
+            | tee -a "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/offenders.txt"
+      - name: Summarise the verdict
+        if: always()
+        env:
+          DOCS_ONLY: ${{ steps.verdict.outputs.docs_only }}
+          REASON: ${{ steps.verdict.outputs.reason }}
+        run: |
+          if [ "$DOCS_ONLY" = "true" ]; then
+            headline="**Documentation-only change** — lint, build and test are skipped."
+          else
+            headline="**Code-affecting change** — the full pipeline runs."
+          fi
+          {
+            echo "### classify change"
+            echo
+            echo "$headline"
+            echo
+            echo "Reason: \`${REASON:-unavailable}\`"
+            if [ -s "$RUNNER_TEMP/offenders.txt" ]; then
+              echo
+              echo '<details><summary>Paths that made this code-affecting</summary>'
+              echo
+              echo '```'
+              cat "$RUNNER_TEMP/offenders.txt"
+              echo '```'
+              echo
+              echo '</details>'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # Formatting + lints run once on Linux (they are platform-independent).
   lint:
     name: fmt + clippy
+    needs: classify
+    if: needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,11 +104,23 @@ jobs:
         run: cargo clippy -p micold-core --all-targets -- -D warnings
       - name: clippy (workspace)
         run: cargo clippy --workspace --all-targets -- -D warnings
+      # Feature 023's shell-side suites: the documentation-set declaration and the change
+      # classifier. They gate what CI skips, so they are enforced here rather than only locally.
+      # Linux-only by design -- the classifier runs nowhere else (see plan.md's Complexity
+      # Tracking).
+      - name: Test (shell suites)
+        run: |
+          for t in scripts/tests/*.test.sh; do
+            echo "== $t"
+            "$t"
+          done
 
   # Constitution Principle VI: Linux, macOS, and Windows. `fail-fast: false` so one platform's
   # failure still reports the others — the point of the matrix is seeing *which* platforms differ.
   test:
     name: build + test (${{ matrix.os }})
+    needs: classify
+    if: needs.classify.outputs.docs_only != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -92,6 +178,8 @@ jobs:
   # it is allowed to block a merge (task T074 promotes it).
   assertions:
     name: assertion freeze (advisory)
+    needs: classify
+    if: needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -104,6 +192,9 @@ jobs:
           git fetch --quiet origin "${{ github.base_ref || 'main' }}"
           scripts/check-assertions-frozen.sh "$BASE"
 
+  # Deliberately unconditional (feature 023, FR-010): this is the one gate a documentation-only
+  # change can actually break, so skipping the build must not skip it. No `needs: classify`, no
+  # `if:`.
   docs:
     name: docs check
     runs-on: ubuntu-latest
@@ -123,3 +214,62 @@ jobs:
         run: |
           test -f docs/development/component-library.md
           test -f docs/development/component-showcase.md
+          # Feature 023 is developer-facing, so Principle VII is satisfied here rather than in the
+          # user guide. This check runs on documentation-only changes too -- which is the point.
+          test -f docs/development/ci-pipeline.md
+
+  # The single status check the default branch's ruleset requires (feature 023). It states the
+  # outcome of the run instead of enumerating the pipeline's internals, which is what lets the jobs
+  # above be skipped on a documentation-only change without making a pull request unmergeable.
+  # Requiring job names welds the merge gate to the pipeline's shape; requiring this one does not.
+  #
+  # See docs/development/ci-pipeline.md and
+  # specs/023-docs-only-ci-skip/contracts/required-checks.md. Renaming this job breaks the merge
+  # gate for every pull request, and no pull request can fix it -- the ruleset lives outside the
+  # repository.
+  ci-complete:
+    name: ci complete
+    needs: [classify, lint, test, assertions, docs]
+    # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
+    # whenever a covered job failed -- and a skipped check reports success. The gate would go green
+    # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
+    # both this and that every job above appears in `needs:`.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate on every covered job
+        env:
+          CLASSIFY: ${{ needs.classify.result }}
+          LINT: ${{ needs.lint.result }}
+          TEST: ${{ needs.test.result }}
+          DOCS: ${{ needs.docs.result }}
+          ASSERTIONS: ${{ needs.assertions.result }}
+        run: |
+          status=0
+          check() {
+            case "$2" in
+              # `skipped` is satisfied: a job that did not need to run is not a failure. That is the
+              # whole point -- a documentation-only run skips lint and test, and this stays green.
+              success|skipped) printf 'ok       %-12s %s\n' "$1" "$2" ;;
+              *) printf 'BLOCKED  %-12s %s\n' "$1" "$2"; status=1 ;;
+            esac
+          }
+          check classify "$CLASSIFY"
+          check lint "$LINT"
+          check test "$TEST"
+          check docs "$DOCS"
+          # `assertions` is advisory by design (continue-on-error, see its comment above), so it is
+          # reported but never gates. Promoting it means moving it into check() above.
+          printf 'advisory %-12s %s (not gated)\n' assertions "$ASSERTIONS"
+          {
+            echo "### ci complete"
+            echo
+            echo "| job | result | gated |"
+            echo "| --- | --- | --- |"
+            echo "| classify | \`$CLASSIFY\` | yes |"
+            echo "| lint | \`$LINT\` | yes |"
+            echo "| test | \`$TEST\` | yes |"
+            echo "| docs | \`$DOCS\` | yes |"
+            echo "| assertions | \`$ASSERTIONS\` | no (advisory) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
