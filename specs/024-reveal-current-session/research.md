@@ -167,6 +167,11 @@ refresh (SC-008).
 
 ## R8 — FR-010a asks for animation "the same as a user-initiated expand". What is that, today?
 
+> **Outcome**: FR-010a was reworded to say what it was for — the app's reveal must not be a
+> different experience from the user's own expand, whatever that experience is — because as written
+> it demanded a motion that does not exist. See spec Clarifications, session 2026-08-10. The
+> decision below is unchanged by that rewording; it is what prompted it.
+
 **Decision**: Instant. A user-initiated expand in this codebase is not animated — `TreeView` builds
 its rows from the item list and expansion simply adds items (`ui/material/tree_view.rs:223`,
 `ui/sidebar.rs:430`). `animation.rs`'s wrappers animate per-row icon reveal, not the twisty.
@@ -218,7 +223,12 @@ Ordered by expected trouble:
 - **Reduced motion**: not applicable — R8 adds no motion.
 - **Cross-platform**: arithmetic and iced operations only, no platform branch (Principle VI).
 
-## R12 — FR-001 lists "restore at launch" as a trigger. Does that path exist?
+## R12 — FR-001 listed "restore at launch" as a trigger. Does that path exist?
+
+> **Outcome**: no — and the spec was corrected rather than the code. FR-001 is now a rule over every
+> path that makes a session current, FR-001d states the negative, and SC-004 no longer counts paths.
+> See spec Clarifications, session 2026-08-10. The finding below is kept as written, because the
+> reasoning is what justifies the shape the arming rule ended up with.
 
 **Decision**: Not today. Nothing makes a session current at launch, so the trigger is vacuous — and
 the arming rule is written so it costs nothing if that ever changes.
