@@ -120,6 +120,50 @@ automated suite covers it, but these are the behaviors most likely to shift in a
 
 Run M2 after step 11 — the point where `Overlay` and `ClosingOverlay` are deleted.
 
+#### Result — 2026-08-10, after T037 (feature 021, T040)
+
+Run against `feat/021-tier2-quickstart` (`cacd9ab`), **not on a real display**: Xvfb `:77` at
+1600×1400 with Mesa lavapipe (software Vulkan), driven by `xdotool`, captured with `import`. State
+was isolated via `XDG_DATA_HOME` and `XDG_RUNTIME_DIR` pointed at a scratch directory, against a
+throwaway two-project fixture with 21 worktrees under `.claude/worktrees/`; the developer's own
+running app and session daemon were left alone.
+
+| # | Behaviour | Result |
+|---|---|---|
+| 1 | About animates out on Escape | **Not verified** — see below |
+| 2 | Reopening mid-exit reverses; no flicker, no duplicate | **Partial** — end state clean, reversal unverified |
+| 3 | Filters survive closing the filter panel (FR-013) | **Pass** |
+| 4 | Escape takes the context menu, switcher stays (FR-012, D1) | **Pass** |
+| 5 | Opening a modal closes the popover (FR-012, D2) | **Pass** |
+| 6 | Scrolling beneath a popover dismisses it | **Blocked** — see finding |
+
+**1 and 2 — the animation itself is out of reach here, and is not being claimed.** The dialog does
+close on Escape and reopens correctly. But the exit is a designed 200 ms (`modal.rs` `EXIT` =
+`duration::SHORT_4`), and a capture loop sampling the dialog region every ~60 ms across 40 frames
+recorded *no* intermediate frame: the region's mean jumps from 9971.78 (open) to 5225.67 (closed)
+between consecutive samples. Either the transition is not being played under a software rasteriser
+with no presentation timing, or it completes far faster than its token says. A screenshot pipeline
+cannot distinguish those, so neither step is marked passed. What *is* established for step 2 is the
+failure mode that would outlive a bad transition: reopening immediately after Escape yields a single
+dialog whose captured region is byte-identical to a clean open — no duplicate, no ghost behind the
+scrim, no stuck overlay.
+
+**6 — blocked, and the reason is a finding rather than an environment artefact.** With a popover
+open the sidebar does not scroll *at all*: three wheel notches over the list changed **0 pixels**,
+where the same gesture at the same coordinates scrolls normally with no popover open. The trigger
+therefore never fires, so the dismissal cannot be observed. This is **not** a Tier 2 regression —
+`Message::SidebarScrolled` calls `dismiss_on_scroll_beneath()` correctly — and points at the overlay
+primitive (feature 017) capturing wheel events before they reach the content beneath.
+
+**A related observation, worth its own follow-up.** `Message::ScrolledBeneathOverlay` is declared and
+handled in the reducer but **emitted by nothing** in `src/`; the live producer is
+`Message::SidebarScrolled(offset)`, whose arm calls the same method. The only thing that drives
+`ScrolledBeneathOverlay` is `tests/overlay_dismissal_delta.rs` — so feature 017's "non-modal surfaces
+gained scroll dismissal" is asserted exclusively through an entry point the running application never
+uses. The behaviours are equivalent *provided the live message is ever sent*, which is exactly what
+step 6 could not confirm. Both belong to feature 017's overlay primitive and are out of scope for
+this feature; recorded here rather than fixed.
+
 ## Documentation deliverable (Principle VII)
 
 This change is not user-facing, so the user-guide obligation is met by architectural documentation:
