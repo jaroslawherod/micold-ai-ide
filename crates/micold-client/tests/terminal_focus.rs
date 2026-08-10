@@ -1,5 +1,11 @@
-//! Focus-routing contract tests (feature 006). Pure — `cargo test --no-default-features`. See
-//! `contracts/focus-model.md`.
+//! Focus-routing and keyboard-holder contract tests.
+//!
+//! The contract is `specs/023-terminal-focus-flow/contracts/focus-model.md` (v2), which supersedes
+//! feature 006's file of the same name, including its BUG-001 amendment. What 006 wrote and 023
+//! kept verbatim is the **routing rule** — a focused terminal takes the keys and the app's
+//! shortcuts stand down; an unfocused one lets no key reach any PTY — and the **write gate**. What
+//! 023 replaced is *when* the terminal is focused: `terminal_focused` is a derived question now,
+//! not a stored bool, so the tests below that once set a field drive messages instead.
 //!
 //! The write-gate itself (FR-012a: discard input to a non-`Running` session) moved daemon-side
 //! when feature 010 introduced the session daemon — the daemon drops input for any session not
