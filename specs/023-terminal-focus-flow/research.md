@@ -69,8 +69,10 @@ cannot drift.
   `Message::FieldFocusChanged(FieldId, bool)`, and `State.focused_field` holds it. All seven live
   text fields are wired. This landed on `main` as BUG-003's fix, for the visual affordance — this
   feature is its second consumer.
-- Menus and dialogs are already state: `overlay`, `help_menu_open`, `project_switcher_open`,
-  `sidebar_filter_open`, `project_menu_open`, `worktree_menu_open`, `session_menu_open`.
+- Menus and dialogs are already state, and since feature 024 they are already *enumerated*: the
+  overlay registry's `open_dialog(&State)` / `open_popovers(&State)` answer "is a surface open"
+  without anyone naming a flag. That list is 024's FR-009 — one line per surface, and the only such
+  list — so this feature reads it instead of writing a second one.
 - Controls that do **not** type need no entry anywhere, because after R1's deletion a press on one
   of them does not touch focus. There is no list to forget to add to.
 
@@ -98,8 +100,7 @@ pub fn terminal_focused(&self) -> bool {
     self.active_session.is_some()
         && !self.terminal_released
         && self.focused_field.is_none()
-        && self.overlay == Overlay::None
-        && !self.any_menu_open()
+        && !self.any_surface_takes_keyboard()
 }
 ```
 
@@ -109,12 +110,12 @@ consequence instead of a rule someone must remember:
 | Requirement | How derivation satisfies it |
 |---|---|
 | FR-009 default holder | The predicate *is* the default: true unless something says otherwise |
-| FR-010 return when a transient finishes | The dialog closes, `overlay` is `None` again, the predicate is true again — no restore stack |
+| FR-010 return when a transient finishes | The dialog closes, the registry reports nothing open, the predicate is true again — no restore stack |
 | FR-012 / FR-016 session gone | `active_session.is_none()` ⇒ false, with nothing to clear |
 | FR-012a launch | `Default::default()` has `terminal_released: false`, so a restored session is focused |
 | FR-013–FR-015 window return | Nothing mutates on blur, so nothing needs restoring — the "suspended holder" has no runtime existence |
-| FR-017 / FR-018 bounds | `overlay`/`focused_field` are terms of the predicate, so the terminal *cannot* hold the keyboard alongside them |
-| FR-019 output changes nothing | Output touches none of the five terms |
+| FR-017 / FR-018 bounds | The registry's answer and `focused_field` are terms of the predicate, so the terminal *cannot* hold the keyboard alongside them |
+| FR-019 output changes nothing | Output touches none of the four terms |
 | FR-020 one holder, displayed only | `active_session` is the only session the predicate can be true for |
 
 It also removes the FR-008a hazard at the source: the two `Task::done(Message::TerminalFocused)`
@@ -126,7 +127,7 @@ momentarily elsewhere.
 
 - *Stored `enum KeyboardHolder { Terminal, Field, Overlay, App }` plus a `suspended: Option<Holder>`
   for window blur.* This is what the spec's Key Entities read like on a first pass. Rejected: it
-  duplicates facts `overlay` and `focused_field` already hold, and every duplicate is a chance for
+  duplicates facts the overlay registry and `focused_field` already hold, and every duplicate is a chance for
   the two to disagree — precisely the failure mode `terminal_focused` has today.
 - *Keep the bool and fix the assignments.* Rejected: seven write sites is what made project switch,
   mode toggle and instance switch each miss a case; the eighth would too.
