@@ -973,7 +973,10 @@ impl State {
                         == Some(canonicalize_best_effort(&path).as_path());
                     self.workspace.forget(&path);
                     if was_active {
-                        self.active_session = None;
+                        // Feature 024: an app-initiated clear like any other, so it goes through
+                        // the same function (contract §3's table). It arms nothing — there is no
+                        // session and, after a forget, no project either.
+                        self.set_current_session(None);
                     }
                 }
                 self.forget_target = None;
@@ -1360,21 +1363,24 @@ impl State {
                         .or_default()
                         .push(session);
                 }
-                match location {
-                    SessionLocation::Worktree(dir) => {
-                        self.expanded.insert(dir);
-                    }
-                    SessionLocation::Default => {
-                        self.default_expanded = true;
-                    }
-                }
-                self.active_session = Some(id);
+                // Feature 024: the location is no longer opened by hand here. Making the session
+                // current *is* what opens its row, derived on every view — so a row opened for a
+                // session that has since gone is not left behind in the user's own set, and the
+                // one place that decides this is `set_current_session` rather than each arm that
+                // moves the pointer (contract §3.0).
+                let _ = location;
+                self.set_current_session(Some(id));
                 // BUG-001: making a session the displayed session auto-focuses its terminal so the
                 // user can interact with the AI CLI immediately (FR-010/FR-010a). The gui path
                 // re-asserts focus after any same-click release (see `src/main.rs`).
                 self.terminal_focused = true;
             }
             Message::SessionSelected(id) => {
+                // Feature 024: the ONE writer that does not go through `set_current_session`
+                // (contract §3.0). The user clicked a row they could already see, so revealing it
+                // would open nothing they had not opened and scroll a list they were reading
+                // (FR-006). `tests/current_session_writers.rs` knows about this exemption by name;
+                // any other direct write to `active_session` fails that gate.
                 self.active_session = Some(id);
                 // BUG-001: selecting a session auto-focuses its terminal (FR-010/FR-010a).
                 self.terminal_focused = true;
@@ -1446,7 +1452,12 @@ impl State {
                     }
                 }
                 if self.active_session == Some(id) {
-                    self.active_session = None;
+                    // Feature 024: through `set_current_session` so the row the closed session was
+                    // in is committed open rather than snapping shut and taking its siblings out of
+                    // view (FR-001c). Nothing is armed — no session is current to scroll to, and
+                    // FR-001a forbids moving the panel when the user closes the session they were
+                    // on.
+                    self.set_current_session(None);
                     // BUG-001 / focus-model.md: no session is displayed, so no terminal is focused.
                     self.terminal_focused = false;
                 }
@@ -1472,14 +1483,20 @@ impl State {
                 // close behavior. The binary has already killed the process and recorded the
                 // durable suppression marker (FR-015c, FR-020c).
                 if let Some(id) = self.session_remove_target.take() {
+                    // Feature 024: clear the pointer BEFORE dropping the record. The commit that
+                    // keeps the row open (FR-001c) resolves the outgoing session's location by
+                    // looking it up — and a record already removed has no location to find, so
+                    // ordering it the other way collapses the row and takes its siblings out of
+                    // view. The close arm above is not exposed to this: archiving leaves the
+                    // record in place.
+                    if self.active_session == Some(id) {
+                        self.set_current_session(None);
+                        self.terminal_focused = false;
+                    }
                     if let Some(path) = self.workspace.active.clone() {
                         if let Some(list) = self.workspace.sessions.get_mut(&path) {
                             list.retain(|s| s.id != id);
                         }
-                    }
-                    if self.active_session == Some(id) {
-                        self.active_session = None;
-                        self.terminal_focused = false;
                     }
                 }
             }

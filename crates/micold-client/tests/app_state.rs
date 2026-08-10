@@ -186,13 +186,27 @@ fn session_started_selected_and_closed() {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path);
+    // The worktree the session is started in — discovered, as it is in the application, since a
+    // session is started *from* its row. Feature 024 made this matter: a row is opened for the
+    // current session only when the panel knows the location (FR-013), where the old expansion
+    // write happened whether the location existed or not.
+    state.set_worktrees(vec![Worktree {
+        dir_name: "feat-x".to_string(),
+        path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
+        branch: Some("feat/x".to_string()),
+        status: WorktreeStatus::Valid,
+    }]);
 
     let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     let id = session.id;
     state.update(Message::SessionStarted(session));
     assert_eq!(state.active_session, Some(id));
     assert_eq!(state.active_sessions().len(), 1);
-    assert!(state.expanded.contains("feat-x"));
+    // Feature 024: asked of the row rather than of `expanded`. Starting a session no longer writes
+    // into the user's own expansion set — the row is open because it holds the current session,
+    // derived on every view. The behaviour this always asserted is unchanged; where the answer
+    // comes from is not.
+    assert!(state.location_open(&SessionLocation::Worktree("feat-x".to_string())));
 
     state.update(Message::SessionRunning(id));
     assert!(state.active_sessions()[0].is_active());
@@ -245,8 +259,11 @@ fn default_session_started_enters_workspace_sessions() {
         state.active_sessions()[0].location,
         SessionLocation::Default
     );
-    // The Default row's own expansion flag opens, not the worktree `expanded` set.
-    assert!(state.default_expanded);
+    // The Default row opens, and no worktree row does with it (feature 010's point). Feature 024
+    // changed where the answer lives: `default_expanded` is now strictly the user's own choice, and
+    // the row is open because it holds the current session.
+    assert!(state.location_open(&SessionLocation::Default));
+    assert!(state.expanded.is_empty());
 }
 
 // --- Feature 008 US2: worktree delete reducer ---
@@ -1570,4 +1587,105 @@ fn a_reveal_waits_for_the_worktree_list_rather_than_scrolling_to_a_stale_row() {
          scroll to and must stay armed rather than scroll to an offset computed from other rows \
          (contract §6.4, research R7)"
     );
+}
+
+// --- Feature 024: which paths reveal, and which pointedly do not ------------------------------
+//
+// Contract §3. The rule is "any app-initiated transition of `active_session` to Some", so these
+// check the behaviour at each path rather than the plumbing — `current_session_writers.rs` is what
+// checks that the plumbing cannot be bypassed.
+
+#[test]
+fn starting_a_session_reveals_it() {
+    let mut state = state_with_current_session_in("feat-a");
+    state.set_worktrees(vec![
+        Worktree {
+            dir_name: "feat-a".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+            branch: Some("feat/feat-a".to_string()),
+            status: WorktreeStatus::Valid,
+        },
+        Worktree {
+            dir_name: "feat-b".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-b"),
+            branch: Some("feat/feat-b".to_string()),
+            status: WorktreeStatus::Valid,
+        },
+    ]);
+    state.pending_reveal_scroll = false;
+
+    let started = Session::start_new(SessionLocation::Worktree("feat-b".to_string()));
+    let id = started.id;
+    state.update(Message::SessionStarted(started));
+
+    assert_eq!(state.active_session, Some(id));
+    assert!(
+        state.location_open(&SessionLocation::Worktree("feat-b".to_string())),
+        "a session you just started is one the app put in front of you, so it is revealed like any \
+         other (US3 scenario 2)"
+    );
+    assert!(state.pending_reveal_scroll, "and brought into view");
+    assert!(
+        state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
+        "while the row that held the outgoing current session stays open — ceasing to be current \
+         never closes a row (FR-001c)"
+    );
+}
+
+#[test]
+fn clicking_a_session_marks_it_and_moves_nothing() {
+    let mut state = state_with_current_session_in("feat-a");
+    let other = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let other_id = other.id;
+    let path = state.workspace.active.clone().unwrap();
+    state.workspace.sessions.get_mut(&path).unwrap().push(other);
+    state.pending_reveal_scroll = false;
+
+    state.update(Message::SessionSelected(other_id));
+
+    assert_eq!(state.active_session, Some(other_id), "it is now current");
+    assert!(
+        !state.pending_reveal_scroll,
+        "but nothing is opened or scrolled on the user's behalf: they clicked a row they could \
+         already see, and scrolling it would move the list they were reading (FR-006)"
+    );
+}
+
+#[test]
+fn closing_the_current_session_promotes_nothing_in_its_place() {
+    let mut state = state_with_current_session_in("feat-a");
+    let sibling = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let path = state.workspace.active.clone().unwrap();
+    state.workspace.sessions.get_mut(&path).unwrap().push(sibling);
+    let closing = state.active_session.unwrap();
+
+    state.update(Message::SessionCloseRequested(closing));
+
+    assert!(
+        state.active_session.is_none(),
+        "this feature reveals where you are; it does not decide where you go next. A sibling \
+         session in the same location is not promoted (FR-001a)"
+    );
+    assert!(
+        state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
+        "and the row stays open, so the sibling you might want next is still on screen (FR-001c)"
+    );
+    assert!(!state.pending_reveal_scroll, "with nothing armed to scroll to");
+}
+
+#[test]
+fn removing_the_current_session_behaves_the_same_way() {
+    let mut state = state_with_current_session_in("feat-a");
+    let removing = state.active_session.unwrap();
+    state.update(Message::SessionRemoveRequested(removing));
+
+    state.update(Message::SessionRemoveConfirmed);
+
+    assert!(state.active_session.is_none());
+    assert!(
+        state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
+        "remove drops the record where close archives it, but neither is the app moving you to a \
+         session — so neither opens, closes or scrolls anything (FR-001a)"
+    );
+    assert!(!state.pending_reveal_scroll);
 }
