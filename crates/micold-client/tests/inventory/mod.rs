@@ -108,6 +108,86 @@ pub fn sources_under(root: &Path) -> BTreeMap<String, String> {
     out
 }
 
+/// The seven service ports (spec §"What already exists"): the I/O needs the render-free core
+/// declares and the shell supplies.
+///
+/// Here rather than in the guard that first needed it, because two guards now do — T041's
+/// reachability check and T042's fake-coverage check — and two copies of "what a capability is" is
+/// exactly the drift FR-014 objects to.
+pub const PORTS: &[&str] = &[
+    "Git",
+    "ProjectStore",
+    "SettingsStore",
+    "FolderScanner",
+    "TerminalBackend",
+    "TerminalHandle",
+    "AiCliProvider",
+];
+
+/// One `impl <Port> for <Type>`, and where it was found.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PortImpl {
+    /// The capability being implemented, e.g. `Git`.
+    pub port: String,
+    /// The implementing type, e.g. `GitCli`.
+    pub ty: String,
+    /// Display path of the file it was found in.
+    pub file: String,
+}
+
+impl PortImpl {
+    /// Whether this is a test double, by the codebase's `Fake` naming convention.
+    pub fn is_fake(&self) -> bool {
+        self.ty.starts_with("Fake")
+    }
+}
+
+/// Every implementation of a service port under `root`, from the source text.
+///
+/// Matches `impl <Port> for <Type>`, tolerating a fully-qualified port path
+/// (`impl micold_core::git::Git for X`) so a scan of test files finds what they write.
+pub fn port_impls_under(root: &Path) -> Vec<PortImpl> {
+    let mut found = Vec::new();
+    for (file, text) in sources_under(root) {
+        for line in code_only(&text).lines() {
+            let line = line.trim();
+            let Some(rest) = line.strip_prefix("impl ") else {
+                continue;
+            };
+            let Some((port, ty)) = rest.split_once(" for ") else {
+                continue;
+            };
+            let port = port.rsplit("::").next().unwrap_or(port).trim();
+            if !PORTS.contains(&port) {
+                continue;
+            }
+            let ty = ty
+                .trim_end_matches('{')
+                .trim()
+                .split('<')
+                .next()
+                .unwrap_or(ty)
+                .trim();
+            found.push(PortImpl {
+                port: port.to_string(),
+                ty: ty.to_string(),
+                file: file.clone(),
+            });
+        }
+    }
+    found.sort();
+    found.dedup();
+    found
+}
+
+/// The render-free core's `src` directory.
+pub fn core_src() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("crates/")
+        .join("micold-core/src")
+}
+
 /// Strips comments so prose is never mistaken for a declaration.
 pub fn code_only(src: &str) -> String {
     let mut out = String::with_capacity(src.len());
