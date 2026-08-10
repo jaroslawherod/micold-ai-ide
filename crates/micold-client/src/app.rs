@@ -264,7 +264,8 @@ pub enum Message {
     SidebarScrolled(u32),
     /// A dialog has finished animating out (feature 017, FR-011). Emitted by the `Modal` component
     /// itself, which owns the transition, so the binary can release the snapshot it was rendering
-    /// from ([`ClosingOverlay`]). The binary used to watch a central progress value for this; the
+    /// from ([`crate::overlay::registry::Closing`]). The binary used to watch a central progress
+    /// value for this; the
     /// component now says it, which is the only part of a transition an application still needs.
     OverlayTransitionFinished,
     /// The pointer entered a worktree row (feature 008), by `dir_name`; reveals its row actions.
@@ -1692,52 +1693,6 @@ pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> Ke
         KeyOutput::ReleaseFocus => KeyRouting::ReleaseFocus,
         KeyOutput::NewTerminalInstance => KeyRouting::NewTerminalInstance,
         KeyOutput::Ignore => KeyRouting::Ignore,
-    }
-}
-
-/// A snapshot of a just-closed overlay, kept alive by the client so it can keep being rendered
-/// while it fades out. The pure core clears the overlay + its draft synchronously on close, so
-/// we capture the data here *before* the reducer runs and render from this snapshot during the
-/// exit animation. Each variant carries a clone of exactly what that overlay's render function
-/// needs (all `Clone`, straight from the core `State`).
-#[derive(Debug)]
-pub enum ClosingOverlay {
-    About,
-    Selector(Selector),
-    Rename(RenameDraft),
-    /// Boxed, unlike its siblings: `WorktreeForm` carries the branch list, the search text and the
-    /// match results, which makes it several times the size of every other variant — and an enum is
-    /// as large as its largest arm, so an unboxed one would make *every* closing overlay pay for
-    /// this one.
-    Worktree(Box<WorktreeForm>, Option<String>),
-    Settings(SettingsDraft),
-    ConfirmDelete(String),
-    WorktreeRename(WorktreeRenameDraft),
-    ConfirmSessionRemove(String),
-    /// Fading-out confirm-forget dialog (feature 014): the project's display name and the
-    /// running-session count captured at close time, so the exit animation matches the live view.
-    ConfirmForget(String, usize),
-}
-
-impl ClosingOverlay {
-    /// Which overlay this is a snapshot of.
-    ///
-    /// The renderer needs a dialog's identity to stay put across the close — a transition that
-    /// sees its subject change restarts, and a dialog whose identity vanished the instant it began
-    /// closing would jump to hidden instead of animating out. `state.overlay` is already `None` by
-    /// then, so the snapshot is the only thing that still knows.
-    pub fn overlay(&self) -> Overlay {
-        match self {
-            ClosingOverlay::About => Overlay::About,
-            ClosingOverlay::Selector(_) => Overlay::ProjectSelector,
-            ClosingOverlay::Rename(_) => Overlay::RenameProject,
-            ClosingOverlay::Worktree(..) => Overlay::AddWorktree,
-            ClosingOverlay::Settings(_) => Overlay::Settings,
-            ClosingOverlay::ConfirmDelete(_) => Overlay::ConfirmWorktreeDelete,
-            ClosingOverlay::WorktreeRename(_) => Overlay::RenameWorktree,
-            ClosingOverlay::ConfirmSessionRemove(_) => Overlay::ConfirmSessionRemove,
-            ClosingOverlay::ConfirmForget(..) => Overlay::ConfirmForgetProject,
-        }
     }
 }
 

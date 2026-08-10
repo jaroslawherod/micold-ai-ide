@@ -155,9 +155,11 @@ impl DismissalRules {
 /// point (T029) names a surface and its view together, so adding one still costs a single line and
 /// FR-009 holds.
 ///
-/// The exit-animation snapshot (contract A1–A3) is not here yet either; it arrives with T036, when
-/// `ClosingOverlay` is collapsed into this trait. It is called out rather than forgotten because
-/// it is the riskiest obligation in the feature.
+/// **No snapshot method either** (contract A1–A3). T036 expected one here, one implementation per
+/// surface, replacing `ClosingOverlay`'s variants. What it would have been is the same line
+/// everywhere — clone the state, remember which surface was open — so it is
+/// [`registry::Closing`] instead: one type, no per-surface hook, and a fading dialog that draws
+/// through its own registration rather than a second list that has to agree with the first.
 pub trait FloatingSurface {
     /// This surface's stable identity.
     fn id(&self) -> SurfaceId;
