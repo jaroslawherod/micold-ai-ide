@@ -143,6 +143,10 @@ pub const COMPONENTS: &[Entry] = &[
             "SidebarName",
             "SidebarTag",
             "SidebarSession",
+            // Feature 024: the same size as `SidebarSession` at the other weight. Posed beside it
+            // deliberately — the difference is the whole point, and a weight difference is one of
+            // the few things you genuinely cannot judge from memory.
+            "SidebarSessionCurrent",
         ],
         density: &[],
         posed: &["muted"],

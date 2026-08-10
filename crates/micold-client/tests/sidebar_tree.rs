@@ -931,3 +931,57 @@ fn an_exempt_row_conjures_no_filter_chip() {
          hidden agent worktree already obeys (contract §5.6, feature 014 R7)"
     );
 }
+
+#[test]
+fn exactly_one_session_row_carries_the_mark_when_a_location_holds_several() {
+    let mut state = state_with_active_project();
+    let path = state.workspace.active.clone().unwrap();
+    let sibling = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let sibling_id = sibling.id;
+    state
+        .workspace
+        .sessions
+        .get_mut(&path)
+        .unwrap()
+        .push(sibling);
+    let current = state.active_sessions()[0].id;
+    state.active_session = Some(current);
+
+    let node = state
+        .worktree_tree()
+        .into_iter()
+        .find(|n| n.worktree.dir_name == "feat-a")
+        .unwrap();
+    assert_eq!(node.sessions.len(), 2, "two sessions share the location");
+
+    let marked: Vec<_> = node
+        .sessions
+        .iter()
+        .filter(|s| state.active_session == Some(s.id))
+        .map(|s| s.id)
+        .collect();
+    assert_eq!(
+        marked,
+        vec![current],
+        "exactly one row carries the mark, and it is the current session's — not its sibling's \
+         (FR-002)"
+    );
+    assert_ne!(current, sibling_id);
+}
+
+#[test]
+fn nothing_is_marked_when_no_session_is_current() {
+    let mut state = state_with_active_project();
+    state.set_current_session(None);
+
+    let node = state
+        .worktree_tree()
+        .into_iter()
+        .find(|n| n.worktree.dir_name == "feat-a")
+        .unwrap();
+    assert!(
+        node.sessions.iter().all(|s| state.active_session != Some(s.id)),
+        "and none carries it when there is no current session — the panel must not claim \
+         otherwise (FR-002, FR-013)"
+    );
+}

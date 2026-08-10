@@ -174,3 +174,95 @@ fn closing_the_displayed_session_clears_focus() {
     );
     assert!(s.active_session.is_none());
 }
+
+// --- Feature 024: the current-session mark is not a focus indicator ---------------------------
+//
+// FR-014 and FR-015, contract §4.4. Being the session in front of you, having typing focus, and
+// still running are three different facts, and the panel says the first one.
+
+/// A project with one worktree, holding one session that is current.
+fn state_with_current_session() -> State {
+    use micold_core::project::{Availability, Project};
+    use micold_core::session::Session;
+    use micold_core::worktree::{Worktree, WorktreeStatus};
+    use std::path::PathBuf;
+
+    let mut state = State::default();
+    let path = PathBuf::from("/repo");
+    state.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(path.clone());
+    state.worktrees = vec![Worktree {
+        dir_name: "feat-a".to_string(),
+        path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+        branch: Some("feat/a".to_string()),
+        status: WorktreeStatus::Valid,
+    }];
+    let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let id = session.id;
+    state.workspace.sessions.insert(path, vec![session]);
+    state.active_session = Some(id);
+    state
+}
+
+#[test]
+fn the_current_session_is_marked_whether_or_not_its_terminal_has_focus() {
+    let mut state = state_with_current_session();
+    let marked = state.active_session;
+
+    for focused in [true, false] {
+        state.terminal_focused = focused;
+        assert_eq!(
+            state.active_session, marked,
+            "the mark says which session the main area is showing, not where the keyboard is \
+             going. A project switch deliberately does not carry focus across, so tying the two \
+             together would leave the panel unmarked in exactly the case this feature exists for \
+             (FR-014)"
+        );
+        assert!(
+            state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
+            "and its row stays open either way"
+        );
+    }
+}
+
+#[test]
+fn a_stopped_or_failed_session_that_is_current_is_still_marked() {
+    use micold_core::session::RestartDecision;
+
+    for drive in [0usize, 1, 8] {
+        let mut state = state_with_current_session();
+        let id = state.active_session.unwrap();
+        {
+            let session = state
+                .workspace
+                .sessions
+                .values_mut()
+                .flatten()
+                .find(|s| s.id == id)
+                .unwrap();
+            session.mark_running();
+            for _ in 0..drive {
+                if session.on_unexpected_exit() == RestartDecision::GiveUp {
+                    break;
+                }
+            }
+        }
+
+        assert_eq!(
+            state.active_session,
+            Some(id),
+            "run state and being current are independent: a session you are looking at is the one \
+             you are looking at, whether it is running, stopped, interrupted or failed (FR-015)"
+        );
+        assert!(
+            state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
+            "and a failing session does not lose you the row it is in — that is when you most \
+             need to find it"
+        );
+    }
+}
