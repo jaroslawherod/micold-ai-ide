@@ -56,13 +56,20 @@ requests would be *permanently* unmergeable rather than quickly green.
 `Success` and does not block merging, even when required. This is the standard basis for the
 "filter job + `if:` on every job" pattern.
 
-**Finding (unverified, and the reason the design does not use it)**: When a job that carries a
-`strategy.matrix` is skipped wholesale by a job-level `if:`, community reports say the individual
-matrix legs do not appear as check runs at all — the parent job shows as skipped and
-`build + test (ubuntu-latest)` is simply absent. An absent required check is pending, which is R1's
-blocking case. We could not confirm whether this applies to a *static* matrix (the reports involve
-matrices computed from an upstream job's output), and confirming it would mean merging a change
-that might wedge the default branch to find out.
+**Finding (was unverified; now CONFIRMED on this repository — see below)**: When a job that carries
+a `strategy.matrix` is skipped wholesale by a job-level `if:`, the individual matrix legs do not
+appear as check runs at all. An absent required check is pending, which is R1's blocking case. At
+design time we could not confirm whether this applied to a *static* matrix — the community reports
+involve matrices computed from an upstream job's output — and confirming it would have meant
+merging a change that might wedge the default branch to find out.
+
+**Confirmed 2026-08-10** by the first documentation-only run (pull request #136, run
+`31394694174`): the skipped matrix reports as a single check named
+`build + test (${{ matrix.os }})` — the un-expanded expression — and no per-leg check is created.
+Had the four per-job contexts stayed required, `build + test (ubuntu-latest)` and its siblings would
+never have existed on that run, and the pull request could never have merged. The caution was
+correct, and the aggregate gate turned out to be the only design that works here rather than merely
+the tidier one. Recorded in [ci-pass.md](./ci-pass.md).
 
 **Why it stops mattering**: under the aggregate gate (§R4) none of those four names is required any
 more, so whether a skipped matrix job creates its per-leg check runs is no longer load-bearing. The
