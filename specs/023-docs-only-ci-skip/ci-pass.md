@@ -126,3 +126,119 @@ no run emits. The aggregate gate was the only design that works on this reposito
 The fallback design (required jobs always run, steps conditional, matrix collapsed onto Linux)
 would also have worked, at the cost of three green `build + test (<os>)` checks that built nothing.
 Both facts are worth keeping: the alternative was viable, and the naive version was not.
+
+### B2 — the code path is untouched (T020, T041) — 2026-08-10
+
+Pull request #134's run `31394068048`, compared against the T001 baseline:
+
+| | Baseline | After the feature |
+|---|---|---|
+| `fmt + clippy` | ✅ | ✅ |
+| `build + test (ubuntu-latest)` | ✅ | ✅ |
+| `build + test (macos-latest)` | ✅ | ✅ |
+| `build + test (windows-latest)` | ✅ | ✅ |
+| `assertion freeze (advisory)` | ✅ | ✅ |
+| `docs check` | ✅ | ✅ |
+| `classify change` | — | ✅ (new) |
+| `ci complete` | — | ✅ (new) |
+
+No job lost, no platform lost (SC-004). The same run is T041's evidence: the full workspace suite
+green on Linux, macOS and Windows, with both new gates running on all three.
+
+### B2a — the gate summarises rather than papers over (T023, T024) — 2026-08-10
+
+Scratch pull request #139, a `compile_error!` behind `#[cfg(target_os = "windows")]`.
+
+| Job | Result |
+|-----|--------|
+| `fmt + clippy` | pass |
+| `build + test (ubuntu-latest)` | pass |
+| `build + test (macos-latest)` | pass |
+| `build + test (windows-latest)` | **fail** |
+| `ci complete` | **fail** |
+
+The gate's own output, which is what a reviewer reads:
+
+```
+ok       classify     success
+ok       lint         success
+BLOCKED  test         failure
+ok       docs         success
+advisory assertions   success (not gated)
+```
+
+Pull request state `BLOCKED`. One platform failing is enough, and the advisory job is reported
+without gating, exactly as designed (FR-014).
+
+**First attempt was wrong, and worth recording.** The `compile_error!` was initially prepended
+above `lib.rs`'s `//!` module docs, where inner doc comments are a syntax error — so it broke all
+three platforms instead of one. The run still showed `ci complete: fail`, but it did not prove the
+precise claim. Corrected by inserting after the doc block, which is when ubuntu and macOS went
+green and windows alone went red.
+
+**Cancellation (T024)**: run `31396007887` cancelled mid-flight. Four jobs `cancelled`,
+`ci complete` **failure** — not success, not skipped. This is what `if: always()` buys: without it
+the gate inherits `success()`, is skipped when upstream does not succeed, and a skipped check
+reports success — so anyone could clear the merge gate by cancelling their own run.
+
+### B3 — the documentation gate still bites (T027) — 2026-08-10
+
+Scratch pull request #138 deleted `docs/user-guide/icons.md` and touched nothing else.
+Classification `docs_only=true`. `fmt + clippy`, `build + test` and `assertion freeze` all skipped
+— and `docs check` **failed**, `ci complete` **failed**, state `BLOCKED` (SC-005). Skipping the
+build did not skip the one gate a prose change can break.
+
+### B4 — the escape hatch (T031) — 2026-08-10
+
+Scratch pull request #140, one file under `specs/`.
+
+1. Before the label: three jobs, everything else skipped, `ci complete` pass (run `31395333073`).
+2. Applying `full-ci` started a **fresh** run `31395560991` — a new run, not a re-run.
+3. That run executed the entire pipeline on all three operating systems and passed, on a change
+   that touches nothing but prose (FR-021, FR-022).
+
+**Note for whoever applies the label next**: `gh pr edit --add-label` failed here with a
+Projects-classic GraphQL error and applied nothing, silently enough that it looked like the trigger
+had not fired. `gh api -X POST repos/{owner}/{repo}/issues/<n>/labels -f 'labels[]=full-ci'` works.
+
+### T021 — ordering independence: covered by the suite, not re-run live
+
+`classify-change.test.sh` builds real repositories and asserts both orders — a documentation commit
+followed by a code commit, and the reverse — both classify as code-affecting. The classifier reaches
+them through the same `base...head` three-dot diff that every live run uses, and both live verdicts
+(`true` on #136, `false` on #134) exercised that path. A live re-run would cost a full three-platform
+pipeline to re-test the same code path, so it was not run. Recorded as a decision, not an oversight.
+
+### T022 — fork pull requests: reasoned, not arranged
+
+The `classify` job only ever *reads* the base repository: `actions/checkout@v4` on the merge ref,
+then `git fetch origin <base>`. Both are available to the read-only token a fork's `pull_request`
+run receives, so classification behaves the same. If the fetch were ever refused, the script reports
+`base ref unavailable` and the change is treated as code-affecting — the full pipeline, which is the
+safe direction (FR-006).
+
+Arranging a real fork pull request needs a second account, so this is reasoned rather than observed.
+Recorded here so it is a stated position rather than an untested assumption.
+
+### T042 — the rollback file stays
+
+[`ruleset.before.json`](./ruleset.before.json) is kept. It is the only record of what the branch
+protection looked like before the switch, it costs nothing, and the ruleset lives outside the
+repository where nothing else version-controls it.
+
+## Summary
+
+Every success criterion in the spec is met and observed:
+
+| | |
+|---|---|
+| SC-001 | 25 s to settle (target: under 3 min) |
+| SC-002 | zero macOS/Windows runner minutes, zero compilation |
+| SC-003 | merged with no override, no re-run, no branch-protection touch |
+| SC-003a | one ruleset edit, rollback recorded, no pull request left unmergeable |
+| SC-004 | every baseline job and platform still runs on a code-affecting change |
+| SC-005 | a deleted required document fails a documentation-only run |
+| SC-006 | the two paths are distinguishable from the check list alone |
+| SC-007 | 27 of the last 100 merged pull requests qualify |
+| SC-008 | a probe reading documentation fails the build, demonstrated |
+| SC-009 | all three constitution CI mandates scoped; no case the text forbids and the pipeline permits |

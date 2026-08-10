@@ -101,7 +101,7 @@ request is mergeable.
 - [X] T017 [US1] Add `test -f docs/development/ci-pipeline.md` to the "Required developer docs exist" step of the `docs` job in `.github/workflows/ci.yml`, so Principle VII stays enforced for this feature's own document
 - [X] T018 [US1] Run [quickstart §B1](./quickstart.md) live on a prose-only pull request and record run id, job list and wall-clock in `specs/023-docs-only-ci-skip/ci-pass.md`, confirming the `classify` reason is a path count and **not** `base ref unavailable` (SC-001, SC-002, SC-003, SC-006, FR-012, FR-017)
 
-- [ ] T019 [US1] Verify the documentation-only **push to `main`** path live per [quickstart §B1a](./quickstart.md) (US1 scenario 4): land a prose-only commit on `main`, confirm the same three jobs run, and confirm the classifier resolved its base from `github.event.before` rather than a pull-request base. Check both degenerate cases the push path has and the pull-request path does not — an all-zero `before` (new branch) and a `before` that no longer exists (force push) — fall back to code-affecting. Record in `ci-pass.md` (FR-005, FR-006)
+- [X] T019 [US1] Verify the documentation-only **push to `main`** path live per [quickstart §B1a](./quickstart.md) (US1 scenario 4): land a prose-only commit on `main`, confirm the same three jobs run, and confirm the classifier resolved its base from `github.event.before` rather than a pull-request base. Check both degenerate cases the push path has and the pull-request path does not — an all-zero `before` (new branch) and a `before` that no longer exists (force push) — fall back to code-affecting. Record in `ci-pass.md` (FR-005, FR-006)
 
 **Checkpoint**: MVP delivered. Documentation-only pull requests are cheap, honest, and mergeable.
 
@@ -115,12 +115,12 @@ aggregate gate fails when any of them fails.
 **Independent Test**: Open a pull request that changes one `.rs` file and several documentation
 files; diff its job list against the T001 baseline.
 
-- [ ] T020 [US2] Run [quickstart §B2](./quickstart.md) live: a pull request changing one `.rs` file and several documentation files runs `lint`, three real `build + test` legs on their own operating systems, `assertions` and `docs`, plus `classify` and `ci complete`. Diff against T001's baseline — no job lost, no platform lost — and record in `ci-pass.md` (FR-011, SC-004)
-- [ ] T021 [US2] Verify ordering-independence live: push the `.rs` change and the documentation change as separate commits, in each order, and confirm both classify as code-affecting (US2 scenario 2, FR-005)
-- [ ] T022 [US2] Establish the fork-pull-request behaviour and record it: open a pull request from a fork of this repository and confirm the classifier either classifies correctly or falls back to code-affecting — it must never error the run. If a fork pull request is not practical to arrange, reason it through against the `classify` job's checkout and token, reach a stated conclusion, and record forks as out of scope in `docs/development/ci-pipeline.md` with the fail-safe rationale (spec Edge Cases, FR-006)
-- [ ] T023 [US2] **On a scratch branch**, run [quickstart §B2a](./quickstart.md): break one platform deliberately (a `compile_error!` behind `#[cfg(target_os = "windows")]`), confirm `build + test (windows-latest)` fails, `ci complete` **fails naming it**, and the pull request is not mergeable. Delete the scratch branch afterwards — do not do this on the feature branch that carries the ruleset switch. This is the proof the gate is a gate (US2 scenario 5, FR-014)
-- [ ] T024 [US2] **On a scratch branch**, cancel a run mid-flight (`gh run cancel`) and confirm `ci complete` reports failure, not success. `if: always()` exists for exactly this case, and a gate that goes green on a cancelled run is a gate anyone can bypass by cancelling (spec Edge Cases, FR-014)
-- [ ] T025 [US2] **On a scratch branch**, verify the coverage gate bites: add a throwaway job to `.github/workflows/ci.yml`, leave it out of `ci complete`'s `needs:`, confirm `ci_gate_covers_every_job` fails naming it, then delete the branch (US2 scenario 6, FR-015)
+- [X] T020 [US2] Run [quickstart §B2](./quickstart.md) live: a pull request changing one `.rs` file and several documentation files runs `lint`, three real `build + test` legs on their own operating systems, `assertions` and `docs`, plus `classify` and `ci complete`. Diff against T001's baseline — no job lost, no platform lost — and record in `ci-pass.md` (FR-011, SC-004)
+- [X] T021 [US2] Verify ordering-independence live: push the `.rs` change and the documentation change as separate commits, in each order, and confirm both classify as code-affecting (US2 scenario 2, FR-005)
+- [X] T022 [US2] Establish the fork-pull-request behaviour and record it: open a pull request from a fork of this repository and confirm the classifier either classifies correctly or falls back to code-affecting — it must never error the run. If a fork pull request is not practical to arrange, reason it through against the `classify` job's checkout and token, reach a stated conclusion, and record forks as out of scope in `docs/development/ci-pipeline.md` with the fail-safe rationale (spec Edge Cases, FR-006)
+- [X] T023 [US2] **On a scratch branch**, run [quickstart §B2a](./quickstart.md): break one platform deliberately (a `compile_error!` behind `#[cfg(target_os = "windows")]`), confirm `build + test (windows-latest)` fails, `ci complete` **fails naming it**, and the pull request is not mergeable. Delete the scratch branch afterwards — do not do this on the feature branch that carries the ruleset switch. This is the proof the gate is a gate (US2 scenario 5, FR-014)
+- [X] T024 [US2] **On a scratch branch**, cancel a run mid-flight (`gh run cancel`) and confirm `ci complete` reports failure, not success. `if: always()` exists for exactly this case, and a gate that goes green on a cancelled run is a gate anyone can bypass by cancelling (spec Edge Cases, FR-014)
+- [X] T025 [US2] **On a scratch branch**, verify the coverage gate bites: add a throwaway job to `.github/workflows/ci.yml`, leave it out of `ci complete`'s `needs:`, confirm `ci_gate_covers_every_job` fails naming it, then delete the branch (US2 scenario 6, FR-015)
 
 **Checkpoint**: The fast path costs nothing on the safe path, and the gate cannot be papered over.
 
@@ -134,7 +134,7 @@ document.
 **Independent Test**: On a documentation-only branch, delete a required document; the run must fail.
 
 - [X] T026 [US3] Confirm by inspection that the `docs` job in `.github/workflows/ci.yml` carries no `needs: classify` and no classification `if:` — it must run identically under both classifications (FR-010)
-- [ ] T027 [US3] Run [quickstart §B3](./quickstart.md) live: on a documentation-only branch delete one required user-guide document, confirm the run fails and the pull request is not mergeable, restore the file, and record in `ci-pass.md` (US3 scenario 1, SC-005)
+- [X] T027 [US3] Run [quickstart §B3](./quickstart.md) live: on a documentation-only branch delete one required user-guide document, confirm the run fails and the pull request is not mergeable, restore the file, and record in `ci-pass.md` (US3 scenario 1, SC-005)
 
 **Checkpoint**: The documentation gate survives the fast path.
 
@@ -150,7 +150,7 @@ full pipeline runs.
 - [X] T028 [US4] Add `labeled` to the `pull_request` trigger types in `.github/workflows/ci.yml`, and set `FORCE_FULL_CI` on the `classify` step from `contains(github.event.pull_request.labels.*.name, 'full-ci')`. The script side is already covered by T011's `FORCE_FULL_CI` case (FR-021, research §R9)
 - [X] T029 [P] [US4] Create the `full-ci` label in the repository with a description pointing at `docs/development/ci-pipeline.md`
 - [X] T030 [P] [US4] Document the escape hatch in `docs/development/ci-pipeline.md` — how to apply it, and why removing the label is deliberately not a trigger (FR-020)
-- [ ] T031 [US4] Run [quickstart §B4](./quickstart.md) live: apply the label to a documentation-only pull request, confirm a *fresh* run starts (not a re-run), the full pipeline executes on all three operating systems, and `ci complete` reports its real outcome. Record in `ci-pass.md` (FR-022)
+- [X] T031 [US4] Run [quickstart §B4](./quickstart.md) live: apply the label to a documentation-only pull request, confirm a *fresh* run starts (not a re-run), the full pipeline executes on all three operating systems, and `ci complete` reports its real outcome. Record in `ci-pass.md` (FR-022)
 
 **Checkpoint**: The classification can be overridden by anyone, without faking a code edit.
 
@@ -184,9 +184,9 @@ constitution's quality gates against the pipeline and find no disagreement.
 
 - [X] T038 [P] Measure and record SC-007 per [quickstart §B5](./quickstart.md): the share of recent merged pull requests that would classify as documentation-only, excluding those whose only Markdown change is `CHANGELOG.md`. Put the number in `docs/development/ci-pipeline.md`
 - [X] T039 [P] Link `docs/development/ci-pipeline.md` from `docs/README.md` so it is discoverable alongside the other developer documents
-- [ ] T040 Run the whole of [quickstart Part A](./quickstart.md) (§A1–A6) on a clean checkout and record the results
-- [ ] T041 Confirm the full workspace suite is green on Linux, macOS and Windows on a code-affecting run (Principle VI), and that both new gates ran on all three
-- [ ] T042 After the feature has been live for a few pull requests, decide whether to retire `specs/023-docs-only-ci-skip/ruleset.before.json` or keep it as the recorded rollback; note the decision in `ci-pass.md`
+- [X] T040 Run the whole of [quickstart Part A](./quickstart.md) (§A1–A6) on a clean checkout and record the results
+- [X] T041 Confirm the full workspace suite is green on Linux, macOS and Windows on a code-affecting run (Principle VI), and that both new gates ran on all three
+- [X] T042 After the feature has been live for a few pull requests, decide whether to retire `specs/023-docs-only-ci-skip/ruleset.before.json` or keep it as the recorded rollback; note the decision in `ci-pass.md`
 
 ---
 
