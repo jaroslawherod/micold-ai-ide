@@ -11,6 +11,10 @@
 //! The iced rendering layer lives in `micold-client`; the PTY/VT session host lives in
 //! `micold-daemon`.
 
+// Deliberate scratch break for task T023 / quickstart B2a. Not for merge.
+#[cfg(target_os = "windows")]
+compile_error!("deliberate Windows-only break: proving `ci complete` fails with a failing leg");
+
 pub mod connect;
 pub mod endpoint;
 pub mod env_include;
