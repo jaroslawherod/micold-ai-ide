@@ -102,6 +102,7 @@ impl<'a, M: Clone + 'a> From<Checkbox<'a, M>> for Element<'a, M> {
         TakesTheKeyboard {
             content: widget.into(),
             on_key,
+            focused: c.focused,
             on_focus_change: c.on_focus_change,
         }
         .into()
@@ -116,6 +117,8 @@ impl<'a, M: Clone + 'a> From<Checkbox<'a, M>> for Element<'a, M> {
 struct TakesTheKeyboard<'a, M> {
     content: Element<'a, M>,
     on_key: Option<M>,
+    /// What the application says about this box's focus — see [`Focus::supplied`].
+    focused: bool,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
 }
 
@@ -137,6 +140,19 @@ impl<M> TakesTheKeyboard<'_, M> {
 #[derive(Default)]
 struct Focus {
     focused: bool,
+    /// The application's answer, as of the last frame this saw it (BUG-004).
+    ///
+    /// Focus is observed here and *held* by the application, which is two copies of one fact. This
+    /// is what lets the second one win when they disagree: a screen that takes the keyboard back —
+    /// `State::focus_terminal()` clears `focused_field` with no press landing anywhere near this
+    /// box — changes the supplied flag, and the box gives the keyboard up rather than drawing
+    /// itself at rest while still answering Space.
+    ///
+    /// A **change** in the supplied flag, not a disagreement with it. A disagreement is also what
+    /// an unreported focus looks like — the traversal in [`TakesTheKeyboard::operate`] can take
+    /// focus without publishing anything — and undoing that would make this control unreachable by
+    /// the very traversal it was joined to.
+    supplied: bool,
 }
 
 impl operation::Focusable for Focus {
@@ -159,6 +175,18 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
     }
 
     fn diff(&self, tree: &mut Tree) {
+        // A rebuild is where the application's answer can be seen changing, and the only place: a
+        // frame carries no event of its own, so `update` alone would miss a flag that went true and
+        // back between two keystrokes (BUG-004). Nothing has to be deferred here the way the
+        // field's does — the focus this reconciles is a bool in this very tree, not something
+        // living inside a child that has to be reached through an operation.
+        if self.on_focus_change.is_some() {
+            let state = tree.state.downcast_mut::<Focus>();
+            if state.supplied != self.focused {
+                state.supplied = self.focused;
+                state.focused = self.focused;
+            }
+        }
         tree.diff_children(std::slice::from_ref(&self.content));
     }
 

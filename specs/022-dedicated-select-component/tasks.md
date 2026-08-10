@@ -10,6 +10,8 @@ description: "Task list for feature 022 — Dedicated Select Component on a Shar
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md),
 [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
 
+**Bugfix**: 2026-08-10 — [BUG-004](./bugs/BUG-004.md) Added T064–T065 — the direction the
+report could not travel: the application taking the keyboard back.
 **Bugfix**: 2026-08-09 — [BUG-003](./bugs/BUG-003.md) Added Phase 8 — the focus no screen reported.
 **Bugfix**: 2026-08-09 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch. Added Phase 7
 (T041–T048) for FR-034 – FR-036. **No task was reopened**: T012, T016 and T031 each did what they
@@ -460,6 +462,22 @@ implemented and never once reached.*
   > The state FR-035 had recorded as unreachable for this control. A gallery showing every state
   > but that one would still be describing the checkbox the bug left behind.
 
+### The other direction, added 2026-08-10 ([BUG-004](./bugs/BUG-004.md))
+
+- [X] T064 [P] Write failing gates that a control gives the keyboard up when the application says it has, and that a picker closing its list does not, in `crates/micold-client/src/ui/material/field_focus.rs` (FR-035)
+
+  > Three, and the third is the one that matters most: `active` is focus for a text field and *open*
+  > for a picker, so the obvious version of this fix — one rule for every supplied flag — takes the
+  > keyboard out of the search field every time its list closes. The harness needed
+  > `Mounted::rebuild`, because "the application changed its mind" is a rebuild rather than an event.
+
+- [X] T065 Let the application take the keyboard back, in `crates/micold-client/src/ui/material/filled_field.rs`, `crates/micold-client/src/ui/material/checkbox.rs` (FR-035)
+
+  > Noticed in `diff`, because a frame carries no event and `update` alone would miss a flag that
+  > changed and changed back. Acted on where each control can: the checkbox reconciles outright, the
+  > field records the intent and spends it before the input sees its next event. A **change** in the
+  > flag, not a disagreement — a disagreement is also what an unreported traversal focus looks like.
+
 ---
 
 ## Dependencies & Execution Order
@@ -479,7 +497,8 @@ Phase 6 (T033–T040)
       ↓
 Phase 7 (T041–T048)  ← BUG-002; independent of T039/T040, which are externally blocked
       ↓
-Phase 8 (T049–T063)  ← BUG-003; found by Phase 7's visual pass
+Phase 8 (T049–T065)  ← BUG-003, then BUG-004; found by Phase 7's visual pass and by
+                       re-checking BUG-003 after feature 023 landed
 ```
 
 **Story independence**: US1 is shippable alone (with the transition on the search picker only, from
