@@ -128,14 +128,36 @@ here rather than leaving the table blank and implying it was.
 
 | Recorded | |
 |---|---|
-| Date | |
-| Platform | |
-| B1 — first frame after a switch, worktree and Default | |
-| B2 — weight, hover, greyscale, both schemes | |
-| B3 — close sticks across a worktree refresh | |
-| B4 — 30 locations, both densities, no needless scroll | |
-| B5 — one exempt row, chipped, in place | |
-| B6 — the three non-arming paths | |
+| Date | 2026-08-10 |
+| Platform | Linux. **Xvfb :77 + Mesa lavapipe (software Vulkan), not a real display**, driving `micold-showcase` — see the caveat below |
+| B1 — first frame after a switch, worktree and Default | **NOT RUN** — needs the client with a live daemon and two projects holding real sessions |
+| B2 — weight, hover, greyscale, both schemes | **PARTIAL.** Weight and greyscale ✅ (evidence below). Hover-vs-current, and the second scheme, **not run** — both need the sidebar in the client |
+| B3 — close sticks across a worktree refresh | **NOT RUN** — needs live sessions. Covered automatically by `tests/sidebar_state.rs` and `tests/app_state.rs`, which is not the same as seen |
+| B4 — 30 locations, both densities, no needless scroll | **NOT RUN** — this is the geometry check, and it is the one §A cannot stand in for |
+| B5 — one exempt row, chipped, in place | **NOT RUN** — needs live sessions |
+| B6 — the three non-arming paths | **NOT RUN** — needs live sessions |
+
+### What was actually verified, and what it cost
+
+**B2's weight claim is verified.** `SidebarSession` (400) and `SidebarSessionCurrent` (500) were
+cropped at identical geometry, stacked, magnified 6× and converted to greyscale. The current role is
+visibly heavier with colour removed, which is the whole of FR-003a — see
+`evidence/b2-weight-greyscale.png`.
+
+**Getting there found a real defect, in the gallery rather than in this feature.**
+`showcase/main.rs` registered the icon font but neither Roboto face, so every weight-500 role fell
+back to a serif and rendered *lighter* than the weight-400 roles beside it. The gallery showed the
+distinction backwards, on the one screen a reviewer would go to in order to check it — and it had
+been that way since the gallery was built, affecting `Caption`/`Label` and `Body`/`Action` as much
+as this feature's pair. Fixed in the same change; `evidence/b2-type-scale.png` is the corrected
+scale.
+
+**Why the rest is unrun, stated plainly.** B1, B3, B4, B5 and B6 all need the *client*, with a
+session daemon and at least two projects holding real `claude` sessions. The showcase renders
+components, not the application, so it cannot reach any of them. B1 (one frame after a switch), B4
+(geometry against a real viewport) and B2's hover comparison remain exactly what this quickstart
+said they were: claims a green §A does not establish. **This feature has not been seen working end
+to end.**
 
 ### Screenshots
 
