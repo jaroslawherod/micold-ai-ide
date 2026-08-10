@@ -86,6 +86,43 @@ reason matters as much as the verdict — `base ref unavailable` would also have
 and the full pipeline would have run for the wrong reason, with nothing visibly wrong. That was
 analysis finding C1, fixed by fetching the base ref explicitly.
 
-### B1 — the documentation-only path (T018)
+### B1 — the documentation-only path (T018) — 2026-08-10
 
-_This very pull request. Results recorded on merge._
+Pull request [#136](https://github.com/jaroslawherod/micold-ai-ide/pull/136), run `31394694174`,
+one file changed under `specs/`. Classification: `docs_only=true`, `reason=1 documentation path(s)`.
+
+| Job | Conclusion |
+|-----|-----------|
+| `classify change` | success |
+| `docs check` | success |
+| `ci complete` | success |
+| `fmt + clippy` | **skipped** |
+| `build + test (${{ matrix.os }})` | **skipped** |
+| `assertion freeze (advisory)` | **skipped** |
+
+| Criterion | Target | Actual |
+|-----------|--------|--------|
+| SC-001 wall clock | < 3 min | **25 s** to settle; 11 s of job time (13:47:34 → 13:47:45) |
+| SC-002 macOS/Windows runner minutes | zero | zero — no leg started |
+| SC-002 compilation | none | none; no lint, build or test step executed |
+| SC-003 mergeable without override | yes | `MERGEABLE` / `CLEAN` |
+| FR-019 honest reporting | skipped, not success | all three gated jobs report `skipped` |
+| SC-006 legible from the check list | yes | six checks, three plainly skipped |
+
+Against the pre-feature baseline: six jobs across three operating systems, bounded by a ~202 s leg,
+becomes three Linux jobs in 11 s.
+
+### R3 confirmed — the design was necessary, not just cleaner
+
+The skipped matrix job reports as **one** check named `build + test (${{ matrix.os }})` — the
+un-expanded expression — not as three per-leg checks. Research §R3 could only cite community reports
+for this and deliberately refused to bet the default branch on it.
+
+It is now observed here: had the four per-job contexts stayed required and been gated with a
+job-level `if:`, `build + test (ubuntu-latest)` and its two siblings would never have been created
+on a documentation-only run, and every such pull request would have waited for ever on checks that
+no run emits. The aggregate gate was the only design that works on this repository.
+
+The fallback design (required jobs always run, steps conditional, matrix collapsed onto Linux)
+would also have worked, at the cost of three green `build + test (<os>)` checks that built nothing.
+Both facts are worth keeping: the alternative was viable, and the naive version was not.
