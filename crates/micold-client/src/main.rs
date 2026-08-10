@@ -1964,6 +1964,17 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::WindowFocusChanged(focused) => {
             app.window_focused = focused;
+            // **Nothing here touches terminal focus, and that is the implementation of
+            // FR-013–FR-015** (feature 023). Coming back to the window must leave the keyboard
+            // exactly where it was, and it does — not because anything is saved and restored, but
+            // because `State::terminal_focused()` is derived from state that a window focus change
+            // does not write. The spec names a "suspended holder"; it has no runtime existence.
+            //
+            // So resist adding a restore here. A rule that hands the terminal the keyboard on
+            // return would take it from a half-typed dialog field and would undo a release the
+            // user made on purpose. `window_focus_changes_no_focus_term` in
+            // `tests/terminal_focus.rs` fails if this arm starts writing one.
+
             // Re-detect on the way back in rather than waiting out the next poll tick: coming
             // back from the OS theme settings is the single most likely moment for the app's
             // idea of the scheme to be stale (003 FR-006).

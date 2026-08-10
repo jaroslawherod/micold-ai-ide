@@ -99,13 +99,13 @@ the process with no click. Release the terminal first and the release survives t
 
 ### Tests for User Story 2 (MANDATORY) ⚠️
 
-- [ ] T018 [P] [US2] Add `window_focus_changes_no_focus_term` to `crates/micold-client/tests/terminal_focus.rs`: applying `Message::WindowFocusChanged(false)` then `(true)` leaves `terminal_released`, `focused_field`, `active_session` and every registered surface's state all unchanged, so `terminal_focused()` reads the same before and after — both for a focused terminal and for a released one (FR-013–FR-015).
+- [X] T018 [P] [US2] Add `window_focus_changes_no_focus_term` to `crates/micold-client/tests/terminal_focus.rs`: applying `Message::WindowFocusChanged(false)` then `(true)` leaves `terminal_released`, `focused_field`, `active_session` and every registered surface's state all unchanged, so `terminal_focused()` reads the same before and after — both for a focused terminal and for a released one (FR-013–FR-015).
 
 ### Implementation for User Story 2
 
-- [ ] T019 [US2] Confirm the `Message::WindowFocusChanged` arm in `crates/micold-client/src/main.rs` still only re-detects the OS theme, and add a one-line comment there naming FR-013–FR-015: this story is satisfied by writing **nothing**, and a future "helpful" restore would break it. No other production change.
-- [ ] T020 [P] [US2] Update `docs/user-guide/worktrees-and-sessions.md`: switching away and back leaves the keyboard where you left it, including an explicit release.
-- [ ] T021 [US2] Run quickstart §B3 with the `visual-pass` skill — including §B3.4, which releases and re-acquires focus while `yes | nl` prints and confirms the line numbers are unbroken (FR-025) — and append the pass to `specs/023-terminal-focus-flow/visual-pass.md`.
+- [X] T019 [US2] Confirm the `Message::WindowFocusChanged` arm in `crates/micold-client/src/main.rs` still only re-detects the OS theme, and add a one-line comment there naming FR-013–FR-015: this story is satisfied by writing **nothing**, and a future "helpful" restore would break it. No other production change.
+- [X] T020 [P] [US2] Update `docs/user-guide/worktrees-and-sessions.md`: switching away and back leaves the keyboard where you left it, including an explicit release.
+- [X] T021 [US2] Run quickstart §B3 with the `visual-pass` skill — including §B3.4, which releases and re-acquires focus while `yes | nl` prints and confirms the line numbers are unbroken (FR-025) — and append the pass to `specs/023-terminal-focus-flow/visual-pass.md`.
 
 **Checkpoint**: US1 and US2 both hold independently.
 

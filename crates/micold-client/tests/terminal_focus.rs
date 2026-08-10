@@ -390,3 +390,65 @@ fn a_late_blur_after_a_pane_press_is_a_no_op() {
         "a stale blur must not disturb the holder the press already decided (FR-008a)"
     );
 }
+
+// ---- US2: leaving the window and coming back changes nothing (FR-013–FR-015) ----
+
+#[test]
+fn window_focus_changes_no_focus_term() {
+    // This story is satisfied by writing *nothing*. There is no suspended holder to restore
+    // because nothing was suspended: none of the predicate's terms is touched by the window
+    // gaining or losing OS focus, so the answer on return is the answer from before by
+    // construction. The test exists so that a future "helpful" restore fails loudly.
+    for released in [false, true] {
+        let mut s = showing_a_terminal();
+        if released {
+            s.update(Message::TerminalFocusReleased);
+        }
+        let before = (
+            s.terminal_focused(),
+            s.terminal_released,
+            s.focused_field,
+            s.active_session,
+        );
+
+        s.update(Message::WindowFocusChanged(false));
+        s.update(Message::WindowFocusChanged(true));
+
+        assert_eq!(
+            (
+                s.terminal_focused(),
+                s.terminal_released,
+                s.focused_field,
+                s.active_session
+            ),
+            before,
+            "a window focus round trip must leave the keyboard exactly where it was \
+             (released={released}; FR-013–FR-015)"
+        );
+    }
+}
+
+#[test]
+fn a_release_survives_leaving_the_window() {
+    // The half that a "restore the terminal on return" rule would get wrong: the user handed the
+    // keyboard back on purpose, and coming back is not a request to undo that (FR-015, FR-021).
+    let mut s = showing_a_terminal();
+    s.update(Message::TerminalFocusReleased);
+    s.update(Message::WindowFocusChanged(false));
+    s.update(Message::WindowFocusChanged(true));
+    assert!(
+        !s.terminal_focused(),
+        "returning to the window must not hand the keyboard back to a terminal the user released"
+    );
+}
+
+#[test]
+fn a_field_still_holds_the_keyboard_after_a_window_round_trip() {
+    // A half-typed dialog field has to survive an alt-tab (spec US2 scenario 3).
+    let mut s = showing_a_terminal();
+    s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
+    s.update(Message::WindowFocusChanged(false));
+    s.update(Message::WindowFocusChanged(true));
+    assert_eq!(s.focused_field, Some(FieldId::AddWorktreeName));
+    assert!(!s.terminal_focused(), "and the terminal has not taken it back");
+}
