@@ -192,7 +192,7 @@ stays hidden.
 - [X] T057 Capture the §B screenshots with `mise run screenshot` — B1's first frame after a switch and B2's pair of schemes — and check B2's pair in greyscale, which is the only real test of FR-003a
 - [X] T058 If §B judges the 500-weight name too subtle, apply R4's pre-argued fallback (an outline on the pill) rather than inventing a third cue — and record the decision in [research.md](./research.md) R4
 - [X] T059 [P] Cross-cutting docs review in `docs/`: confirm the two edited sections still read as one narrative and that nothing else in the user guide now describes the old collapsed-after-switch behaviour
-- [ ] T060 Confirm CI is green on Linux, macOS and Windows for `.github/workflows/ci.yml` (Principle VI) — the feature has no platform branch, so a platform-specific failure means a geometry assumption leaked
+- [X] T060 Confirm CI is green on Linux, macOS and Windows for `.github/workflows/ci.yml` (Principle VI) — the feature has no platform branch, so a platform-specific failure means a geometry assumption leaked
 
 ---
 
