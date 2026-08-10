@@ -202,10 +202,9 @@ fn session_started_selected_and_closed() {
     state.update(Message::SessionStarted(session));
     assert_eq!(state.active_session, Some(id));
     assert_eq!(state.active_sessions().len(), 1);
-    // Feature 024: asked of the row rather than of `expanded`. Starting a session no longer writes
-    // into the user's own expansion set — the row is open because it holds the current session,
-    // derived on every view. The behaviour this always asserted is unchanged; where the answer
-    // comes from is not.
+    assert!(state.expanded.contains("feat-x"));
+    // Feature 024: and the row reads as open, which is now a second question — open-ness is
+    // derived from which session is current, and the line above is the user's own set.
     assert!(state.location_open(&SessionLocation::Worktree("feat-x".to_string())));
 
     state.update(Message::SessionRunning(id));
@@ -259,11 +258,11 @@ fn default_session_started_enters_workspace_sessions() {
         state.active_sessions()[0].location,
         SessionLocation::Default
     );
-    // The Default row opens, and no worktree row does with it (feature 010's point). Feature 024
-    // changed where the answer lives: `default_expanded` is now strictly the user's own choice, and
-    // the row is open because it holds the current session.
-    assert!(state.location_open(&SessionLocation::Default));
+    // The Default row's own expansion flag opens, not the worktree `expanded` set.
+    assert!(state.default_expanded);
     assert!(state.expanded.is_empty());
+    // Feature 024: and the row reads as open, by derivation as well as by the flag.
+    assert!(state.location_open(&SessionLocation::Default));
 }
 
 // --- Feature 008 US2: worktree delete reducer ---
@@ -1656,7 +1655,12 @@ fn closing_the_current_session_promotes_nothing_in_its_place() {
     let mut state = state_with_current_session_in("feat-a");
     let sibling = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
     let path = state.workspace.active.clone().unwrap();
-    state.workspace.sessions.get_mut(&path).unwrap().push(sibling);
+    state
+        .workspace
+        .sessions
+        .get_mut(&path)
+        .unwrap()
+        .push(sibling);
     let closing = state.active_session.unwrap();
 
     state.update(Message::SessionCloseRequested(closing));
@@ -1670,7 +1674,10 @@ fn closing_the_current_session_promotes_nothing_in_its_place() {
         state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
         "and the row stays open, so the sibling you might want next is still on screen (FR-001c)"
     );
-    assert!(!state.pending_reveal_scroll, "with nothing armed to scroll to");
+    assert!(
+        !state.pending_reveal_scroll,
+        "with nothing armed to scroll to"
+    );
 }
 
 #[test]
