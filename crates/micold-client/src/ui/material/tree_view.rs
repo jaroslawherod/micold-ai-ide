@@ -322,7 +322,9 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 _ => label_role,
             };
             line = line.push(super::Ellipsized::at_role(
-                item.label, row_label_role, item.tint,
+                item.label,
+                row_label_role,
+                item.tint,
             ));
 
             if let Some(custom) = item.trailing_custom {

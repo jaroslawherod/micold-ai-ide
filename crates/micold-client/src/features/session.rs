@@ -147,8 +147,8 @@ impl State {
         // it drops you into (FR-001) — the reported bug was that the panel showed every row
         // collapsed while the main area showed a session.
         self.set_current_session(self.restore_foreground(&key)); // STEP 3
-                                                             // BUG-001 / focus-model.md: switching (or opening) a project does not carry terminal focus
-                                                             // across — re-focusing the restored session is a fresh explicit action (or a select/start).
+                                                                 // BUG-001 / focus-model.md: switching (or opening) a project does not carry terminal focus
+                                                                 // across — re-focusing the restored session is a fresh explicit action (or a select/start).
         self.terminal_focused = false;
         // `default_expanded` is not keyed per project (unlike `expanded`, which is pruned by
         // worktree `dir_name` in `set_worktrees`) — reset it explicitly so a Default entry

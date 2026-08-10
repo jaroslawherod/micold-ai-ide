@@ -720,10 +720,7 @@ fn a_current_session_whose_worktree_is_gone_opens_nothing() {
     state.set_worktrees(vec![worktree("feat-b", WorktreeStatus::Valid)]);
 
     assert!(
-        state
-            .worktree_tree()
-            .into_iter()
-            .all(|n| !n.expanded),
+        state.worktree_tree().into_iter().all(|n| !n.expanded),
         "the location that held the current session no longer exists, so there is nothing to \
          open — and no unrelated row may be opened in its place (FR-013)"
     );
@@ -743,10 +740,13 @@ fn a_current_session_in_the_project_root_opens_the_default_row() {
         .push(default_session);
     state.active_session = Some(id);
 
-    let default_open = state.sidebar_entries().into_iter().any(|entry| match entry {
-        SidebarEntry::Default(node) => node.expanded,
-        SidebarEntry::Worktree(_) => false,
-    });
+    let default_open = state
+        .sidebar_entries()
+        .into_iter()
+        .any(|entry| match entry {
+            SidebarEntry::Default(node) => node.expanded,
+            SidebarEntry::Worktree(_) => false,
+        });
     assert!(
         default_open,
         "FR-001 is not a worktree-only promise — the project root holds sessions too \
@@ -806,7 +806,9 @@ fn listed(state: &State) -> Vec<String> {
 #[test]
 fn a_filter_that_would_hide_the_current_session_does_not_hide_it() {
     let mut state = state_with_filterable_worktrees("fix-b");
-    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Feat));
+    state
+        .sidebar_filters
+        .insert(TagFilter::Type(ConventionalType::Feat));
 
     assert_eq!(
         listed(&state),
@@ -820,7 +822,9 @@ fn a_filter_that_would_hide_the_current_session_does_not_hide_it() {
 #[test]
 fn the_exempt_row_sits_where_it_would_sit_unfiltered() {
     let mut state = state_with_filterable_worktrees("feat-a");
-    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Fix));
+    state
+        .sidebar_filters
+        .insert(TagFilter::Type(ConventionalType::Fix));
 
     assert_eq!(
         listed(&state),
@@ -834,7 +838,9 @@ fn the_exempt_row_sits_where_it_would_sit_unfiltered() {
 fn only_the_current_sessions_location_escapes_the_filter() {
     let mut state = state_with_filterable_worktrees("fix-b");
     state.show_agent_worktrees = true;
-    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Feat));
+    state
+        .sidebar_filters
+        .insert(TagFilter::Type(ConventionalType::Feat));
 
     let listed = listed(&state);
     assert!(
@@ -863,11 +869,19 @@ fn a_hidden_agent_worktree_holding_the_current_session_is_shown() {
 #[test]
 fn the_exempt_row_says_why_it_is_there_and_others_do_not() {
     let mut state = state_with_filterable_worktrees("fix-b");
-    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Feat));
+    state
+        .sidebar_filters
+        .insert(TagFilter::Type(ConventionalType::Feat));
 
     let tree = state.filtered_worktree_tree();
-    let exempt = tree.iter().find(|n| n.worktree.dir_name == "fix-b").unwrap();
-    let admitted = tree.iter().find(|n| n.worktree.dir_name == "feat-a").unwrap();
+    let exempt = tree
+        .iter()
+        .find(|n| n.worktree.dir_name == "fix-b")
+        .unwrap();
+    let admitted = tree
+        .iter()
+        .find(|n| n.worktree.dir_name == "feat-a")
+        .unwrap();
 
     assert!(
         exempt.shown_for_current_session,
@@ -883,10 +897,15 @@ fn the_exempt_row_says_why_it_is_there_and_others_do_not() {
 #[test]
 fn a_row_the_filters_allow_is_not_marked_as_exempt_merely_for_being_current() {
     let mut state = state_with_filterable_worktrees("feat-a");
-    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Feat));
+    state
+        .sidebar_filters
+        .insert(TagFilter::Type(ConventionalType::Feat));
 
     let tree = state.filtered_worktree_tree();
-    let current = tree.iter().find(|n| n.worktree.dir_name == "feat-a").unwrap();
+    let current = tree
+        .iter()
+        .find(|n| n.worktree.dir_name == "feat-a")
+        .unwrap();
 
     assert!(
         !current.shown_for_current_session,
@@ -898,7 +917,9 @@ fn a_row_the_filters_allow_is_not_marked_as_exempt_merely_for_being_current() {
 #[test]
 fn the_exemption_ends_when_the_location_stops_holding_the_current_session() {
     let mut state = state_with_filterable_worktrees("fix-b");
-    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Feat));
+    state
+        .sidebar_filters
+        .insert(TagFilter::Type(ConventionalType::Feat));
     assert!(listed(&state).contains(&"fix-b".to_string()));
 
     let moved = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
@@ -923,9 +944,7 @@ fn an_exempt_row_conjures_no_filter_chip() {
     let state = state_with_filterable_worktrees("agent-00112233445566aa");
 
     assert!(
-        !state
-            .available_tag_filters()
-            .contains(&TagFilter::Untyped),
+        !state.available_tag_filters().contains(&TagFilter::Untyped),
         "an agent worktree's machine name has no conventional type, so listing it as exempt must \
          not offer an `Untyped` chip matching nothing else the user can see — the same rule a \
          hidden agent worktree already obeys (contract §5.6, feature 014 R7)"
@@ -980,7 +999,9 @@ fn nothing_is_marked_when_no_session_is_current() {
         .find(|n| n.worktree.dir_name == "feat-a")
         .unwrap();
     assert!(
-        node.sessions.iter().all(|s| state.active_session != Some(s.id)),
+        node.sessions
+            .iter()
+            .all(|s| state.active_session != Some(s.id)),
         "and none carries it when there is no current session — the panel must not claim \
          otherwise (FR-002, FR-013)"
     );

@@ -40,7 +40,10 @@ fn sources() -> Vec<(String, String)> {
         }
     }
     let mut out = Vec::new();
-    walk(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"), &mut out);
+    walk(
+        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut out,
+    );
     out
 }
 

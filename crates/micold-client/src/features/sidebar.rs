@@ -112,7 +112,11 @@ pub fn matches_filters(tags: &[Tag], filters: &BTreeSet<TagFilter>) -> bool {
 /// The one thing worth reading twice is what is *not* here: nothing about worktree lists arriving
 /// late or being replaced. That is FR-001b, and it is answered by this being a function rather than
 /// a stored flag — a replaced list changes the inputs, never a remembered answer.
-pub fn effective_open(user_open: bool, holds_current_session: bool, reveal_suppressed: bool) -> bool {
+pub fn effective_open(
+    user_open: bool,
+    holds_current_session: bool,
+    reveal_suppressed: bool,
+) -> bool {
     user_open || (holds_current_session && !reveal_suppressed)
 }
 
@@ -357,8 +361,7 @@ impl State {
             .map(|worktree| WorktreeNode {
                 display_name: self.worktree_display_name(&worktree.dir_name),
                 tags: worktree_tags(worktree),
-                expanded: self
-                    .location_open(&SessionLocation::Worktree(worktree.dir_name.clone())),
+                expanded: self.location_open(&SessionLocation::Worktree(worktree.dir_name.clone())),
                 sessions: sessions
                     .iter()
                     .filter(|s| s.location.is_worktree(&worktree.dir_name) && !s.archived)

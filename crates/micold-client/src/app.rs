@@ -1363,12 +1363,22 @@ impl State {
                         .or_default()
                         .push(session);
                 }
-                // Feature 024: the location is no longer opened by hand here. Making the session
-                // current *is* what opens its row, derived on every view — so a row opened for a
-                // session that has since gone is not left behind in the user's own set, and the
-                // one place that decides this is `set_current_session` rather than each arm that
-                // moves the pointer (contract §3.0).
-                let _ = location;
+                // The started session's location joins the user's own open set, as it always has.
+                //
+                // Feature 024 makes this redundant for *display* — `set_current_session` below
+                // opens the row by derivation anyway — but it is kept, and not only because
+                // feature 021's assertion freeze forbids rewriting the expectation. It is also
+                // what the reveal would do a moment later: the commit in `set_current_session`
+                // turns a revealed row into ordinary user-open state on the next change of current
+                // session, so writing it here reaches the same place by the same rule, sooner.
+                match location {
+                    SessionLocation::Worktree(dir) => {
+                        self.expanded.insert(dir);
+                    }
+                    SessionLocation::Default => {
+                        self.default_expanded = true;
+                    }
+                }
                 self.set_current_session(Some(id));
                 // BUG-001: making a session the displayed session auto-focuses its terminal so the
                 // user can interact with the AI CLI immediately (FR-010/FR-010a). The gui path
