@@ -1,4 +1,4 @@
-//! Every text field in the application reports its focus (BUG-003 — FR-031, FR-035).
+//! Every input in the application reports its focus (BUG-003 — FR-031, FR-035).
 //!
 //! # The gap this closes
 //!
@@ -18,10 +18,13 @@
 //!
 //! # What is checked
 //!
-//! Every `TextField::new(` in a rendering module is followed, within its own expression, by
-//! `.track_focus(`. That helper is where `active` and `on_focus_change` are joined (`ui/focus.rs`);
-//! requiring the pair rather than either half is the point, since a field that reports focus nobody
-//! keeps and a field told a fact nobody reports are the same field permanently at rest.
+//! Every `TextField::new(` and `Checkbox::new(` in a rendering module is followed, within its own
+//! expression, by `.track_focus(`. That helper is where the two halves are joined (`ui/focus.rs`);
+//! requiring the pair rather than either half is the point, since an input that reports focus nobody
+//! keeps and one told a fact nobody reports are the same input permanently at rest.
+//!
+//! The checkbox is held to the same rule from the day it *could* be — FR-035 recorded it as beyond
+//! reach while the rendering stack's checkbox had no focus at all, and it now has one.
 //!
 //! # Why source text rather than pixels
 //!
@@ -83,24 +86,30 @@ fn expression(source: &str, from: usize) -> &str {
     &rest[..rest.find(';').unwrap_or(rest.len())]
 }
 
+/// The constructors an input is built through. One list, so adding a control that can hold the
+/// keyboard is a one-line change here rather than a rule someone has to remember to write.
+const INPUTS: [&str; 2] = ["TextField::new(", "Checkbox::new("];
+
 #[test]
-fn every_text_field_in_the_application_reports_its_focus() {
+fn every_input_in_the_application_reports_its_focus() {
     let mut unwired: Vec<String> = Vec::new();
 
     for (name, source) in rendering_files() {
-        for (offset, _) in source.match_indices("TextField::new(") {
-            if !expression(&source, offset).contains(".track_focus(") {
-                let line = source[..offset].lines().count();
-                unwired.push(format!("{name}:{line}"));
+        for constructor in INPUTS {
+            for (offset, _) in source.match_indices(constructor) {
+                if !expression(&source, offset).contains(".track_focus(") {
+                    let line = source[..offset].lines().count();
+                    unwired.push(format!("{name}:{line} ({constructor})"));
+                }
             }
         }
     }
 
     assert!(
         unwired.is_empty(),
-        "these text fields do not report their focus, so nothing they do on focus can ever \
-         happen — no floated label, no thickened indicator, no focus state layer (BUG-003). Join \
-         each to the application's focus state with `.track_focus(FieldId::…, focused)`: {unwired:?}",
+        "these inputs do not report their focus, so nothing they do on focus can ever happen — no \
+         floated label, no thickened indicator, no focus state layer (BUG-003). Join each to the \
+         application's focus state with `.track_focus(FieldId::…, focused)`: {unwired:?}",
     );
 }
 
@@ -122,7 +131,7 @@ fn the_helper_the_rule_names_still_joins_both_halves() {
         source.contains("fn track_focus("),
         "the gate above is written in terms of `track_focus`; it must exist",
     );
-    for half in [".active(", ".on_focus_change("] {
+    for half in [".active(", ".focused(", ".on_focus_change("] {
         assert!(
             source.contains(half),
             "`track_focus` must set {half} — a field that only reports focus, or is only told it, \
@@ -138,7 +147,7 @@ fn the_helper_the_rule_names_still_joins_both_halves() {
 fn the_sweep_reaches_the_application_dialogs() {
     let found: Vec<PathBuf> = rendering_files()
         .into_iter()
-        .filter(|(_, source)| source.contains("TextField::new("))
+        .filter(|(_, source)| INPUTS.iter().any(|c| source.contains(c)))
         .map(|(name, _)| PathBuf::from(name))
         .collect();
 
@@ -147,10 +156,11 @@ fn the_sweep_reaches_the_application_dialogs() {
         "ui/worktree_rename.rs",
         "ui/worktree_form.rs",
         "ui/settings_form.rs",
+        "ui/confirm_delete.rs",
     ] {
         assert!(
             found.iter().any(|p| p == Path::new(expected)),
-            "{expected} builds a text field and the sweep did not see it — found {found:?}",
+            "{expected} builds an input and the sweep did not see it — found {found:?}",
         );
     }
 }

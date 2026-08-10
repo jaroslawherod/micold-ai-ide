@@ -117,6 +117,25 @@ impl<'a> Mounted<'a> {
             mouse::Cursor::Available(at),
         )
     }
+
+    /// Press a named key, with the pointer nowhere near — a keyboard interaction has to work
+    /// without the mouse resting helpfully on the control, or it is not a keyboard interaction.
+    fn press_key(&mut self, key: iced::keyboard::key::Named) -> Vec<String> {
+        self.send(
+            Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(key),
+                modified_key: iced::keyboard::Key::Named(key),
+                physical_key: iced::keyboard::key::Physical::Unidentified(
+                    iced::keyboard::key::NativeCode::Unidentified,
+                ),
+                location: iced::keyboard::Location::Standard,
+                modifiers: iced::keyboard::Modifiers::default(),
+                text: None,
+                repeat: false,
+            }),
+            mouse::Cursor::Unavailable,
+        )
+    }
 }
 
 #[test]
@@ -195,4 +214,152 @@ fn focus_is_reported_when_it_changes_and_not_on_every_event() {
         "a field that re-announced \"still focused\" on every pointer move would put the \
          application into a message loop with itself — published {published:?}",
     );
+}
+
+// -------------------------------------------------------------------------------------------
+// The checkbox, which had no keyboard at all (BUG-003, FR-035)
+// -------------------------------------------------------------------------------------------
+
+/// A checkbox that reports both what happened to it and what happened to its focus, so one harness
+/// can tell a toggle from a focus change.
+fn checkbox<'a>(checked: bool, r: Roles) -> super::Checkbox<'a, String> {
+    super::Checkbox::new("Enabled", checked, r)
+        .on_toggle(move |now| format!("toggled={now}"))
+        .on_focus_change(|focused| format!("focus={focused}"))
+}
+
+#[test]
+fn a_press_gives_the_checkbox_the_keyboard() {
+    let r = roles();
+    let mut box_ = Mounted::new(checkbox(false, r));
+
+    let published = box_.press(box_.node.bounds().center());
+
+    assert!(
+        published.contains(&"focus=true".to_string()),
+        "the rendering stack's checkbox cannot be focused at all — it holds no focus, joins no \
+         traversal and answers no key. FR-035 asks every input to answer focus, and a control the \
+         keyboard cannot reach can never answer it — published {published:?}",
+    );
+}
+
+#[test]
+fn space_toggles_a_focused_checkbox() {
+    let r = roles();
+    let mut box_ = Mounted::new(checkbox(false, r));
+    box_.press(box_.node.bounds().center());
+
+    let published = box_.press_key(iced::keyboard::key::Named::Space);
+
+    assert!(
+        published.contains(&"toggled=true".to_string()),
+        "a focused checkbox must be operable from the keyboard — a focus ring on a control that \
+         still needs the mouse is decoration (FR-035) — published {published:?}",
+    );
+}
+
+#[test]
+fn enter_is_the_dialogs_and_the_checkbox_leaves_it_alone() {
+    let r = roles();
+    let mut box_ = Mounted::new(checkbox(false, r));
+    box_.press(box_.node.bounds().center());
+
+    let published = box_.press_key(iced::keyboard::key::Named::Enter);
+
+    assert!(
+        published.is_empty(),
+        "Space is the key a checkbox answers; Enter means submit in every dialog holding one. A \
+         focused box swallowing it would make \"fill the form in, press Enter\" stop working \
+         depending on where the pointer last landed — published {published:?}",
+    );
+}
+
+#[test]
+fn an_unfocused_checkbox_leaves_space_alone() {
+    let r = roles();
+    let mut box_ = Mounted::new(checkbox(false, r));
+
+    let published = box_.press_key(iced::keyboard::key::Named::Space);
+
+    assert!(
+        published.is_empty(),
+        "a checkbox nobody has focused must not swallow Space from whatever has — published \
+         {published:?}",
+    );
+}
+
+#[test]
+fn a_press_elsewhere_takes_the_keyboard_back() {
+    let r = roles();
+    let mut box_ = Mounted::new(checkbox(false, r));
+    box_.press(box_.node.bounds().center());
+
+    let published = box_.press(Point::new(WINDOW.width - 1.0, WINDOW.height - 1.0));
+
+    assert!(
+        published.contains(&"focus=false".to_string()),
+        "focus must be dropped when it leaves (FR-035) — published {published:?}",
+    );
+}
+
+#[test]
+fn a_disabled_checkbox_does_not_take_the_keyboard() {
+    let r = roles();
+    // No `on_toggle`, which is how a checkbox renders disabled everywhere in this library.
+    let mut box_ = Mounted::new(
+        super::Checkbox::<String>::new("Enabled", false, r)
+            .on_focus_change(|focused| format!("focus={focused}")),
+    );
+
+    let published = box_.press(box_.node.bounds().center());
+
+    assert!(
+        published.is_empty(),
+        "a disabled control must not take the keyboard: it would draw a focus ring on something \
+         that cannot be operated, and stand as a dead stop in the tab order — published \
+         {published:?}",
+    );
+}
+
+#[test]
+fn the_focused_checkbox_is_shaded_and_focus_outranks_hover() {
+    use iced::widget::checkbox as checkbox_widget;
+    use micold_core::theme::ColorScheme;
+
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let theme = super::style::theme(scheme);
+        let fill = |focused: bool, status| match super::style::checkbox(r, focused)(&theme, status)
+            .background
+        {
+            iced::Background::Color(c) => c,
+            _ => iced::Color::TRANSPARENT,
+        };
+        for is_checked in [false, true] {
+            let rest = fill(false, checkbox_widget::Status::Active { is_checked });
+            let hovered = fill(false, checkbox_widget::Status::Hovered { is_checked });
+            let focused = fill(true, checkbox_widget::Status::Active { is_checked });
+            let both = fill(true, checkbox_widget::Status::Hovered { is_checked });
+
+            let delta = |a: iced::Color, b: iced::Color| {
+                (a.r - b.r).abs() + (a.g - b.g).abs() + (a.b - b.b).abs()
+            };
+            assert!(
+                delta(rest, focused) > 0.0,
+                "{scheme:?} checked={is_checked}: a focused checkbox must carry the focused state \
+                 layer (FR-035)",
+            );
+            assert!(
+                delta(hovered, focused) > 0.0,
+                "{scheme:?} checked={is_checked}: focus and hover are different states and must \
+                 look different — §5 publishes two opacities",
+            );
+            assert_eq!(
+                (both.r, both.g, both.b),
+                (focused.r, focused.g, focused.b),
+                "{scheme:?} checked={is_checked}: a focused, hovered checkbox must show **one** \
+                 layer — the stronger — not two blended into a colour no token names",
+            );
+        }
+    }
 }

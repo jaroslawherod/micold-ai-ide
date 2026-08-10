@@ -242,7 +242,7 @@ fn a_checkbox_reacts_to_hover_with_a_layer() {
     for scheme in [ColorScheme::Light, ColorScheme::Dark] {
         let r = tokens::roles(scheme);
         let theme = style::theme(scheme);
-        let f = style::checkbox(r);
+        let f = style::checkbox(r, false);
         for is_checked in [false, true] {
             let rest = f(&theme, checkbox_widget::Status::Active { is_checked });
             let hovered = f(&theme, checkbox_widget::Status::Hovered { is_checked });

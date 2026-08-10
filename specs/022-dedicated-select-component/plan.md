@@ -270,6 +270,24 @@ never see an unwired call site. `field_focus_call_sites.rs` is the answer and it
 rather than pixels — deliberately, because the bug was found by a grep and the property is a
 property of the source.
 
+**And the checkbox, whose gap was never really a styling one.** FR-035 recorded the checkbox as out
+of reach because `checkbox::Status` has no focused variant to attach a layer to. That is true and it
+is the symptom. The cause is that the rendering stack's checkbox **cannot be focused at all**: its
+widget state is the label's shaped paragraph, it joins no focus traversal, it answers no key. The
+control was reachable by pointer only, so there was no focus to report and no keyboard to report it
+from — an accessibility gap wearing a styling gap's clothes.
+
+The fix is the smallest thing that can hold a focus: a wrapper that owns it, takes it on a press,
+offers it to the traversal, toggles on Space, and reports changes. Space and not Enter: Enter means
+*submit* in every dialog holding one of these, and a focused box swallowing it would make "fill the
+form in, press Enter" stop working depending on where the pointer last landed. Deliberately not a
+reimplementation — `FilledField` owns the field's box because §7.7's geometry could not be composed,
+and nothing is wrong with the checkbox's geometry. The layer is still composited into the fill,
+since `checkbox::Style` still has one opaque background; what changed is that *which* layer is
+`Layer`'s to decide, now shared with the field, so a focused **and** hovered box shows one and not
+two. `Layer` moved to the styling layer for that reason: two controls settle the same question with
+different arithmetic, and the ordering is the part neither may restate.
+
 ## Complexity Tracking
 
 No constitutional violation requires justification. Left empty deliberately.

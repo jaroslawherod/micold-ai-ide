@@ -138,35 +138,40 @@ fn render_all() -> String {
         // Re-recording them under a select-shaped name would put one appearance in the fixture
         // twice, which is how two entries for one decision come to disagree.
 
-        // --- Checkbox: status x checked ---------------------------------------
-        let cb = style::checkbox(r);
-        for checked in [false, true] {
-            for (st_name, st) in [
-                (
-                    "active",
-                    checkbox::Status::Active {
-                        is_checked: checked,
-                    },
-                ),
-                (
-                    "hovered",
-                    checkbox::Status::Hovered {
-                        is_checked: checked,
-                    },
-                ),
-                (
-                    "disabled",
-                    checkbox::Status::Disabled {
-                        is_checked: checked,
-                    },
-                ),
-            ] {
-                writeln!(
-                    s,
-                    "checkbox[{st_name},checked={checked}] = {:?}",
-                    cb(&theme, st)
-                )
-                .unwrap();
+        // --- Checkbox: status x checked x focused -----------------------------
+        // `focused` is a third axis rather than a fourth status, because the rendering stack's
+        // checkbox has no focused status to pose — it is supplied by the wrapper that gives the
+        // control a keyboard at all (BUG-003).
+        for focused in [false, true] {
+            let cb = style::checkbox(r, focused);
+            for checked in [false, true] {
+                for (st_name, st) in [
+                    (
+                        "active",
+                        checkbox::Status::Active {
+                            is_checked: checked,
+                        },
+                    ),
+                    (
+                        "hovered",
+                        checkbox::Status::Hovered {
+                            is_checked: checked,
+                        },
+                    ),
+                    (
+                        "disabled",
+                        checkbox::Status::Disabled {
+                            is_checked: checked,
+                        },
+                    ),
+                ] {
+                    writeln!(
+                        s,
+                        "checkbox[{st_name},checked={checked},focused={focused}] = {:?}",
+                        cb(&theme, st)
+                    )
+                    .unwrap();
+                }
             }
         }
 
@@ -270,7 +275,11 @@ fn snapshot_covers_both_schemes_and_every_component() {
         "button.text[hovered]",
         "button.circular_icon[active]",
         "text_input[focused]",
-        "checkbox[hovered,checked=true]",
+        "checkbox[hovered,checked=true,focused=false]",
+        // The state the rendering stack's checkbox cannot express, and the library now can
+        // (BUG-003). Probed by name so a refactor that dropped the focused axis would be caught
+        // here rather than by a baseline that silently shrank.
+        "checkbox[active,checked=false,focused=true]",
         "scrollable[dragged,v=true]",
         "container.dialog",
         "container.notification[error]",

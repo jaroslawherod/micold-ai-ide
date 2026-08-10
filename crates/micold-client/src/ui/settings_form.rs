@@ -46,6 +46,7 @@ pub fn modal<'a>(
     // Environment-include: enabled flag, script path, timeout — grouped as one visually
     // distinct set, separate from the scrollback field above (FR-015).
     let env_include_enabled_checkbox = Checkbox::new("Enabled", draft.env_include_enabled, r)
+        .track_focus(FieldId::SettingsEnvIncludeEnabled, focused)
         .on_toggle(Message::SettingsEnvIncludeEnabledToggled);
     let env_include_path_input = TextField::new("", &draft.env_include_script_path, r)
         .label("Script path")
