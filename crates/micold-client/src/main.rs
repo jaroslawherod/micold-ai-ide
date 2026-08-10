@@ -673,6 +673,17 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 
     let task = update_inner(app, message);
 
+    // Feature 024: an armed reveal scrolls its row into view once there *is* a row to scroll to.
+    //
+    // Here rather than in the arms that arm it, because arming is a consequence of `active_session`
+    // changing and the row may not exist for another frame or two — the incoming project's worktree
+    // list is discovered asynchronously, and the viewport reports its height only once laid out.
+    // Draining on any message is what lets the scroll wait for both without either arm knowing.
+    let task = match reveal_scroll(app) {
+        Some(scroll) => Task::batch([task, scroll]),
+        None => task,
+    };
+
     // Hand a closing overlay's snapshot to the renderer so its exit has something to draw (US1).
     // The transition itself belongs to `material::Modal`, which reports back with
     // `OverlayTransitionFinished` once it is over; the snapshot is released there.
@@ -726,6 +737,36 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let mut steps = vec![task, compose_scene(app)];
     steps.extend(pulse);
     Task::batch(steps)
+}
+
+/// Drain an armed reveal into a scroll, once there is something to scroll to (feature 024, §6.4).
+///
+/// Three conditions, and the arm survives all three failing:
+///
+/// - nothing is armed — the ordinary case, and the reason this is cheap to call on every message;
+/// - the projection holds no row for the current session, because the worktree list has not
+///   arrived yet (research R7) — scrolling now would use an offset computed from the wrong rows;
+/// - the viewport has not been laid out, so its height is still `0` — which means "unknown", never
+///   "nothing fits" (contract §6.3).
+///
+/// Once it does drain, the offset may still be `None`: the row was already fully visible, and
+/// FR-009 says a reveal that did not need to move the list must not move it.
+fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
+    if !app.core.pending_reveal_scroll
+        || app.core.sidebar_viewport_height == 0
+        || !app.core.current_session_is_listed()
+    {
+        return None;
+    }
+    app.core.pending_reveal_scroll = false;
+    let offset = app.core.reveal_scroll_offset()?;
+    Some(iced::widget::operation::scroll_to(
+        micold_client::ui::SIDEBAR_SCROLL_ID.clone(),
+        iced::widget::scrollable::AbsoluteOffset {
+            x: 0.0,
+            y: offset as f32,
+        },
+    ))
 }
 
 fn update_inner(app: &mut App, message: Message) -> Task<Message> {

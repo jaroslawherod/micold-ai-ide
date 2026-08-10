@@ -1476,3 +1476,98 @@ fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
         "and the new current session arms its own scroll"
     );
 }
+
+// --- Feature 024: draining the armed reveal into a scroll -------------------------------------
+//
+// Contract §6.4 and §6.5. The arm is a flag rather than an offset because the offset cannot be
+// known when it is set: the incoming project's worktrees are discovered asynchronously and the
+// viewport reports its height only once laid out.
+
+/// A project with `count` worktrees, the current session in the last of them — SC-003's shape.
+fn state_with_many_worktrees(count: usize) -> State {
+    let mut state = State::default();
+    let path = PathBuf::from("/repo");
+    state.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(path.clone());
+    state.worktrees = (0..count)
+        .map(|i| Worktree {
+            dir_name: format!("feat-{i:02}"),
+            path: PathBuf::from(format!("/repo/.claude/worktrees/feat-{i:02}")),
+            branch: Some(format!("feat/{i:02}")),
+            status: WorktreeStatus::Valid,
+        })
+        .collect();
+    let session = Session::start_new(SessionLocation::Worktree(format!("feat-{:02}", count - 1)));
+    let id = session.id;
+    state.workspace.sessions.insert(path, vec![session]);
+    state.active_session = Some(id);
+    state
+}
+
+#[test]
+fn a_row_near_the_bottom_of_a_long_list_is_scrolled_to() {
+    let mut state = state_with_many_worktrees(30);
+    state.sidebar_viewport_height = 400;
+
+    assert!(
+        state.current_session_is_listed(),
+        "precondition: the row exists in the projection"
+    );
+    let offset = state
+        .reveal_scroll_offset()
+        .expect("a row 30 locations down is not visible in a 400px viewport");
+    assert!(
+        offset > 0,
+        "SC-003: in a project with 30 locations the current session's row is brought on screen, \
+         which is the whole of US2 — opening the right row is no use if it is below the fold"
+    );
+}
+
+#[test]
+fn a_row_already_on_screen_is_not_scrolled_to() {
+    let mut state = state_with_many_worktrees(3);
+    state.sidebar_viewport_height = 400;
+
+    assert_eq!(
+        state.reveal_scroll_offset(),
+        None,
+        "three locations fit in a 400px viewport, so there is nothing to do — and doing something \
+         anyway would jerk the list for no reason the user could see (FR-009, SC-007)"
+    );
+}
+
+#[test]
+fn nothing_is_scrolled_to_before_the_viewport_has_been_laid_out() {
+    let state = state_with_many_worktrees(30);
+
+    assert_eq!(
+        state.sidebar_viewport_height, 0,
+        "precondition: no layout has happened yet"
+    );
+    assert_eq!(
+        state.reveal_scroll_offset(),
+        None,
+        "a viewport height of zero means 'not laid out yet'. Reading it as 'nothing fits' would \
+         scroll on the frame before the panel knew its own size (contract §6.3)"
+    );
+}
+
+#[test]
+fn a_reveal_waits_for_the_worktree_list_rather_than_scrolling_to_a_stale_row() {
+    let mut state = state_with_many_worktrees(30);
+    state.sidebar_viewport_height = 400;
+    // The switch has happened but discovery has not reported yet: the panel knows of no locations.
+    state.set_worktrees(Vec::new());
+
+    assert!(
+        !state.current_session_is_listed(),
+        "with no locations there is no row for the current session, so the reveal has nothing to \
+         scroll to and must stay armed rather than scroll to an offset computed from other rows \
+         (contract §6.4, research R7)"
+    );
+}

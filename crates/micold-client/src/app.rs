@@ -224,6 +224,14 @@ pub enum Message {
     /// derives from it (FR-025a) — and the sidebar is the only scroll region beneath the bar, so it
     /// is the only thing that can answer "is content passing under it".
     SidebarScrolled(u32),
+    /// The sidebar's scroll viewport was laid out at this height, in whole logical pixels
+    /// (feature 024).
+    ///
+    /// Distinct from [`Self::SidebarScrolled`] because the two answer different questions and fire
+    /// at different times: an offset changes when the user scrolls, and a viewport height changes
+    /// when the window does — including on the very first layout, where nothing has scrolled and
+    /// the reveal still has to decide whether its row is on screen.
+    SidebarViewportResized(u32),
     /// A dialog has finished animating out (feature 017, FR-011). Emitted by the `Modal` component
     /// itself, which owns the transition, so the binary can release the snapshot it was rendering
     /// from ([`crate::overlay::registry::Closing`]). The binary used to watch a central progress
@@ -1085,6 +1093,9 @@ impl State {
             }
             Message::SidebarFiltersCleared => {
                 self.sidebar_filters.clear();
+            }
+            Message::SidebarViewportResized(height) => {
+                self.sidebar_viewport_height = height;
             }
             Message::SidebarScrolled(offset) => {
                 self.sidebar_scroll_offset = offset;
