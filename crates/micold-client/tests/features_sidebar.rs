@@ -13,8 +13,8 @@
 //! eroded.
 
 use micold_client::features::sidebar::{
-    matches_filters, worktree_location_label, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
-    DEFAULT_LOCATION_LABEL,
+    effective_open, matches_filters, worktree_location_label, DefaultNode, SidebarEntry, TagFilter,
+    WorktreeNode, DEFAULT_LOCATION_LABEL,
 };
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::worktree::{Worktree, WorktreeStatus};
@@ -127,5 +127,49 @@ fn a_sidebar_row_is_either_a_worktree_or_the_project_root_and_never_both() {
     assert_eq!(
         DEFAULT_LOCATION_LABEL, "Project root",
         "the project-root row's location never varies, so its label is a constant"
+    );
+}
+
+// --- Feature 024: which rows the panel shows open -------------------------------------------
+//
+// `effective_open` is the whole of contract §1.1, reduced to the three booleans that decide it.
+// Kept a free function for the same reason `matches_filters` is one: the rule is worth stating
+// without a `State` to state it against, and this file is where that is checked (SC-004).
+
+#[test]
+fn a_row_the_user_opened_stays_open_whatever_else_is_true() {
+    for holds_current in [false, true] {
+        for suppressed in [false, true] {
+            assert!(
+                effective_open(true, holds_current, suppressed),
+                "the user's own expansion is not something the app may override \
+                 (holds_current={holds_current}, suppressed={suppressed})"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_location_holding_the_current_session_is_open_without_the_user_opening_it() {
+    assert!(
+        effective_open(false, true, false),
+        "this is the whole feature: the row holding the session you were moved to is listed \
+         without you having to find it"
+    );
+}
+
+#[test]
+fn a_user_collapse_closes_the_row_the_app_opened() {
+    assert!(
+        !effective_open(false, true, true),
+        "a row the user closed stays closed — FR-005, and the reason suppression exists at all"
+    );
+}
+
+#[test]
+fn a_location_holding_no_current_session_is_open_only_if_the_user_opened_it() {
+    assert!(
+        !effective_open(false, false, false),
+        "nothing opens a row that neither the user nor the current session asked for"
     );
 }

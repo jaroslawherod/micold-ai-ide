@@ -1,6 +1,6 @@
 //! What each named role actually resolves to (feature 018, T017–T021 — FR-007, FR-010).
 //!
-//! `TypeRole` is the application's whole typographic vocabulary: eleven names, each standing for one
+//! `TypeRole` is the application's whole typographic vocabulary: twelve names, each standing for one
 //! of Material's fifteen roles. The names are what call sites say, so the *mapping* is the thing
 //! that decides how the application reads — and it is one `match` arm away from being changed by
 //! accident while renaming something nearby.
@@ -32,6 +32,11 @@ const MAPPING: &[(TypeRole, &str)] = &[
     (TypeRole::SidebarName, "body_small"),
     (TypeRole::SidebarTag, "label_small"),
     (TypeRole::SidebarSession, "body_small"),
+    // The current session's row: `body_small`'s size and line height at weight 500 — which is
+    // `label_medium`, already in the scale. Pinned here so "the mark does not depend on colour
+    // alone" (feature 024, FR-003a) cannot be quietly undone by re-anchoring it onto the same
+    // role as every other session row.
+    (TypeRole::SidebarSessionCurrent, "label_medium"),
 ];
 
 #[test]
@@ -123,6 +128,35 @@ fn prose_and_interface_labels_differ_in_weight_at_the_same_size() {
             label.name()
         );
     }
+}
+
+/// The current session's row is marked by weight, not by size (feature 024, FR-003a).
+///
+/// This is the non-colour half of the current-session mark, and it is the half a reviewer cannot
+/// check by looking: the row is also filled with `secondary_container`, so on a colour display the
+/// weight is the less obvious of the two signals. It is the only one that survives greyscale, a
+/// colour-vision deficit, and the hover state layer that shares the row.
+///
+/// Same size and line height, because a heavier *and* larger name would reflow the list as the
+/// current session moved — the mark would then move rows that have nothing to do with it.
+#[test]
+fn the_current_session_row_differs_from_its_siblings_only_in_weight() {
+    let ordinary = TypeRole::SidebarSession.resolved();
+    let current = TypeRole::SidebarSessionCurrent.resolved();
+
+    assert_eq!(
+        (ordinary.size, ordinary.line_height),
+        (current.size, current.line_height),
+        "the current session's name is the same size as every other session name; only its weight \
+         differs, so marking it cannot reflow the rows around it"
+    );
+    assert_eq!(
+        (ordinary.weight, current.weight),
+        (400, 500),
+        "and the difference is exactly the scale's two weights — an ordinary session row at 400, \
+         the current one at 500. Equal weights would leave the mark carried by colour alone, which \
+         is what FR-003a forbids"
+    );
 }
 
 /// Only the two weights that ship are reachable (contract §2.1).

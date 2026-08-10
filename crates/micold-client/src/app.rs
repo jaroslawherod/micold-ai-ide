@@ -550,7 +550,40 @@ pub struct State {
     /// sentinel key in `expanded`, since there is always exactly one Default row).
     pub default_expanded: bool,
     /// The currently displayed session, if any (FR-012, FR-015).
+    ///
+    /// Feature 024: written through [`Self::set_current_session`] by everything except
+    /// `SessionSelected`, because the panel's reveal is a consequence of this field changing
+    /// rather than of any particular message being handled (contract §3.0).
     pub active_session: Option<SessionId>,
+    /// The session whose revealed row the user closed (feature 024, FR-005).
+    ///
+    /// Scoped to a session rather than to a location, so an old collapse cannot swallow the next
+    /// reveal: it is compared against `active_session` and cleared whenever that changes
+    /// (invariant I2). `None` means nothing is suppressed.
+    ///
+    /// This is the *whole* of the reveal's stored state. Which row is open is otherwise derived
+    /// from `active_session` on every view ([`Self::location_open`]), which is what makes a
+    /// wholesale replacement of the worktree list unable to lose it (FR-001b).
+    pub reveal_suppressed_for: Option<SessionId>,
+    /// The sidebar scroll viewport's laid-out height in whole logical pixels (feature 024).
+    ///
+    /// Reported by the `Scrollable`'s viewport sensor. `0` until the first layout, which reads as
+    /// "cannot decide visibility yet" and never as "zero tall" — nothing is scrolled on a guess
+    /// (contract §6.3).
+    ///
+    /// `u32` rather than `f32` for two reasons that happen to agree: `State` derives `Eq`, and the
+    /// offset this is compared against ([`Self::sidebar_scroll_offset`]) is already whole pixels.
+    /// Keeping both in the same unit is what stops the scroll arithmetic from having a rounding
+    /// seam in the middle of it.
+    pub sidebar_viewport_height: u32,
+    /// Whether a reveal is waiting to scroll its row into view (feature 024, FR-008).
+    ///
+    /// A flag, not a target. The offset cannot be computed when the reveal is armed: the incoming
+    /// project's worktree list may not have arrived yet, and the viewport height is not known
+    /// until layout. So the reducer arms this, and the binary computes and applies the scroll on
+    /// the first frame where a row for the current session actually exists (research R7,
+    /// invariant I4).
+    pub pending_reveal_scroll: bool,
     /// The add-worktree form, present only while its overlay is shown (FR-005).
     pub worktree_form: Option<WorktreeForm>,
     /// A message shown when opening a non-git directory was refused (FR-001a), or a worktree
@@ -963,12 +996,10 @@ impl State {
                 self.set_worktrees(worktrees);
             }
             Message::WorktreeExpansionToggled(dir) => {
-                if !self.expanded.remove(&dir) {
-                    self.expanded.insert(dir);
-                }
+                self.toggle_location(SessionLocation::Worktree(dir));
             }
             Message::DefaultExpansionToggled => {
-                self.default_expanded = !self.default_expanded;
+                self.toggle_location(SessionLocation::Default);
             }
             Message::WorktreeMenuToggled(dir) => {
                 // Toggle: same worktree closes; a different one replaces (only one open).

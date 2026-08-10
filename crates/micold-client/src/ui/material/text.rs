@@ -74,6 +74,18 @@ pub enum TypeRole {
     SidebarTag,
     /// A session line in the sidebar.
     SidebarSession,
+    /// The sidebar's *current* session — the one the main area is showing (feature 024, FR-003a).
+    ///
+    /// The same size and line height as [`SidebarSession`](Self::SidebarSession), differing only
+    /// in weight, so the row that is current reads as heavier without reflowing the list. That is
+    /// the point: the selected-row tint says "current" in colour, and this says it again in a
+    /// channel that survives greyscale and a colour-vision deficit.
+    ///
+    /// Weight is the only non-colour channel available without inventing a token — 400 and 500 are
+    /// the only weights the scale specifies — and the row's other slots are spoken for: its leading
+    /// slot holds the activity dot and only that (BUG-005), and its name is already tinted by
+    /// lifecycle.
+    SidebarSessionCurrent,
 }
 
 /// The embedded Roboto faces. Registered once at startup in `main` so the application looks the
@@ -94,7 +106,7 @@ impl TypeRole {
     /// The Material 3 role this resolves to (contract §2.4, §2.5).
     ///
     /// The mapping is deliberately a *narrowing*: the scale has fifteen roles and this enum names
-    /// the eleven the application actually distinguishes. The others exist in the scale and are
+    /// the twelve the application actually distinguishes. The others exist in the scale and are
     /// reachable, but no call site is required to use one — Material's true display sizes (36–57)
     /// are larger than anything this app renders.
     ///
@@ -114,12 +126,17 @@ impl TypeRole {
             TypeRole::SidebarName => typography::SIDEBAR_NAME,
             TypeRole::SidebarTag => typography::SIDEBAR_TAG,
             TypeRole::SidebarSession => typography::SIDEBAR_SESSION,
+            // `LABEL_MEDIUM` rather than a new `SIDEBAR_SESSION_CURRENT` alias in core: it is
+            // already 12/16 at weight 500, exactly `SIDEBAR_SESSION` (`BODY_SMALL`) with the
+            // weight changed. Adding an alias would widen `typography::SIDEBAR` and the core tests
+            // that enumerate it, to say something the scale already says.
+            TypeRole::SidebarSessionCurrent => typography::LABEL_MEDIUM,
         }
     }
 
     /// Every role a call site can name, so a test or the showcase can enumerate them without
     /// restating the list (and drifting from it).
-    pub const ALL: [TypeRole; 11] = [
+    pub const ALL: [TypeRole; 12] = [
         TypeRole::Display,
         TypeRole::Headline,
         TypeRole::Title,
@@ -131,6 +148,7 @@ impl TypeRole {
         TypeRole::SidebarName,
         TypeRole::SidebarTag,
         TypeRole::SidebarSession,
+        TypeRole::SidebarSessionCurrent,
     ];
 
     /// The role's name as the enum spells it — for the showcase's per-role labels and for test
@@ -148,6 +166,7 @@ impl TypeRole {
             TypeRole::SidebarName => "SidebarName",
             TypeRole::SidebarTag => "SidebarTag",
             TypeRole::SidebarSession => "SidebarSession",
+            TypeRole::SidebarSessionCurrent => "SidebarSessionCurrent",
         }
     }
 

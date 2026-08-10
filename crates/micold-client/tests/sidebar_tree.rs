@@ -642,3 +642,114 @@ fn filter_recomputes_after_rename(/* FR-028 / C1 */) {
         .clone();
     assert_eq!(renamed, "Hotfix");
 }
+
+// --- Feature 024: the row holding the current session ----------------------------------------
+//
+// Contract §1's clauses, asked of `State` rather than of the predicate: which location holds the
+// current session, and what happens when the answer is unavailable.
+
+/// The state above, with its one session made current.
+fn state_with_current_session() -> State {
+    let mut state = state_with_active_project();
+    state.active_session = Some(state.active_sessions()[0].id);
+    state
+}
+
+#[test]
+fn the_current_sessions_location_is_open_though_nobody_expanded_it() {
+    let state = state_with_current_session();
+
+    let feat_a = state
+        .worktree_tree()
+        .into_iter()
+        .find(|n| n.worktree.dir_name == "feat-a")
+        .unwrap();
+    assert!(
+        feat_a.expanded,
+        "the location holding the current session is listed open — the reported bug is that it \
+         was not (FR-001)"
+    );
+    assert!(
+        state.expanded.is_empty(),
+        "and it is open without anything being written to the user's own expansion set: \
+         open-ness is derived, so a worktree-list replacement has nothing to lose (FR-001b)"
+    );
+}
+
+#[test]
+fn no_other_location_is_opened_on_the_users_behalf() {
+    let state = state_with_current_session();
+
+    let feat_b = state
+        .worktree_tree()
+        .into_iter()
+        .find(|n| n.worktree.dir_name == "feat-b")
+        .unwrap();
+    assert!(
+        !feat_b.expanded,
+        "exactly one location is forced open, because there is at most one current session \
+         (FR-004, invariant I1)"
+    );
+}
+
+#[test]
+fn replacing_the_worktree_list_does_not_close_the_current_sessions_row() {
+    let mut state = state_with_current_session();
+
+    state.set_worktrees(vec![
+        worktree("feat-a", WorktreeStatus::Valid),
+        worktree("feat-c", WorktreeStatus::Valid),
+    ]);
+
+    let feat_a = state
+        .worktree_tree()
+        .into_iter()
+        .find(|n| n.worktree.dir_name == "feat-a")
+        .unwrap();
+    assert!(
+        feat_a.expanded,
+        "creating, deleting or re-discovering a worktree replaces the whole list; the row holding \
+         the current session survives it (SC-008)"
+    );
+}
+
+#[test]
+fn a_current_session_whose_worktree_is_gone_opens_nothing() {
+    let mut state = state_with_current_session();
+
+    state.set_worktrees(vec![worktree("feat-b", WorktreeStatus::Valid)]);
+
+    assert!(
+        state
+            .worktree_tree()
+            .into_iter()
+            .all(|n| !n.expanded),
+        "the location that held the current session no longer exists, so there is nothing to \
+         open — and no unrelated row may be opened in its place (FR-013)"
+    );
+}
+
+#[test]
+fn a_current_session_in_the_project_root_opens_the_default_row() {
+    let mut state = state_with_active_project();
+    let path = state.workspace.active.clone().unwrap();
+    let default_session = Session::start_new(SessionLocation::Default);
+    let id = default_session.id;
+    state
+        .workspace
+        .sessions
+        .get_mut(&path)
+        .unwrap()
+        .push(default_session);
+    state.active_session = Some(id);
+
+    let default_open = state.sidebar_entries().into_iter().any(|entry| match entry {
+        SidebarEntry::Default(node) => node.expanded,
+        SidebarEntry::Worktree(_) => false,
+    });
+    assert!(
+        default_open,
+        "FR-001 is not a worktree-only promise — the project root holds sessions too \
+         (constitution Principle III's Default exception)"
+    );
+}

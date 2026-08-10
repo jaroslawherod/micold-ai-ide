@@ -6,6 +6,7 @@ use micold_client::app::{
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
+use micold_core::session::{Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -330,5 +331,59 @@ fn default_entry_stays_visible_with_an_active_tag_filter() {
             .iter()
             .any(|e| matches!(e, SidebarEntry::Worktree(_))),
         "the worktree portion is still correctly filtered out"
+    );
+}
+
+// --- Feature 024: re-discovery does not disturb the reveal ------------------------------------
+//
+// SC-008, asked of the one path both the `WorktreesLoaded` reducer arm and the binary's direct
+// re-discovery go through. This is the file that already covers `set_worktrees`'s pruning, so it
+// is where "and it does not prune this" belongs.
+
+#[test]
+fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
+    let mut state = state_with_active();
+    let path = state.workspace.active.clone().unwrap();
+    state.set_worktrees(vec![Worktree {
+        dir_name: "feat-a".to_string(),
+        path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+        branch: Some("feat/feat-a".to_string()),
+        status: WorktreeStatus::Valid,
+    }]);
+    let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let id = session.id;
+    state.workspace.sessions.insert(path, vec![session]);
+    state.active_session = Some(id);
+    let location = SessionLocation::Worktree("feat-a".to_string());
+    assert!(
+        state.location_open(&location),
+        "precondition: the panel knows the location, so it can open it"
+    );
+
+    // A worktree created elsewhere, reported by a fresh discovery: the whole list is replaced.
+    state.set_worktrees(vec![
+        Worktree {
+            dir_name: "feat-a".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+            branch: Some("feat/feat-a".to_string()),
+            status: WorktreeStatus::Valid,
+        },
+        Worktree {
+            dir_name: "feat-new".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-new"),
+            branch: Some("feat/feat-new".to_string()),
+            status: WorktreeStatus::Valid,
+        },
+    ]);
+
+    assert!(
+        state.location_open(&location),
+        "creating, deleting or re-discovering a worktree replaces the list wholesale; the row \
+         holding the current session is derived, so there is nothing for the replacement to prune \
+         (SC-008, FR-001b)"
+    );
+    assert!(
+        state.reveal_suppressed_for.is_none(),
+        "and nothing about the user's own choices is reset by a background discovery either"
     );
 }
