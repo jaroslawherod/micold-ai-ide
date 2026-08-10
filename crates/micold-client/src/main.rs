@@ -18,7 +18,7 @@ use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
 use micold_client::overlay::registry::Closing;
 use micold_client::selection::{Anchor, SelectGranularity, Selection};
-use micold_core::env_include::{self, EnvIncludeOutcome};
+use micold_core::env_include::{self, EnvIncludeOutcome, EnvIncludeSnapshot, SubprocessResolver};
 use micold_core::frame_probe::{
     FrameProbe, ProbeConfig, Scene, SceneFacts, ENV_VAR as FRAME_PROBE_ENV,
     SCENE_ENV_VAR as FRAME_PROBE_SCENE_ENV,
@@ -381,39 +381,24 @@ fn report_probe_and_exit(probe: &FrameProbe, app: &App) -> ! {
     }
 }
 
-/// The result of a single resolution attempt for one directory (feature 011, data-model.md).
-/// `vars` is empty for every non-`Success` outcome.
-struct EnvIncludeSnapshot {
-    /// Resolved variables. Vestigial on the client now that the daemon resolves env at spawn time
-    /// (T053); kept so the Settings resolution path is unchanged. TODO: move env-include to the daemon.
-    #[allow(dead_code)]
-    vars: Vec<(String, String)>,
-    outcome: EnvIncludeOutcome,
-}
-
-/// Resolve the environment-include snapshot for `cwd` from the given settings values,
-/// short-circuiting to `Disabled` (no subprocess spawned) when the feature is off or the path is
-/// blank — mirrors the spec's Edge Cases and contracts/env-include-resolution.md's Non-goals (the
-/// engine itself never decides whether to run). Shared by every resolution call site so they all
-/// apply the exact same short-circuit + resolution logic.
+/// Resolve the environment-include snapshot for `cwd` from the given settings values.
+///
+/// A thin call into the core since T046: the short-circuit and the sourcing both live beside the
+/// engine now, and this is the shell picking the real resolver — the one decision that is the
+/// shell's to make (FR-017).
 fn resolve_env_include(
     enabled: bool,
     script_path: &str,
     timeout_secs: u64,
     cwd: &Path,
 ) -> EnvIncludeSnapshot {
-    if !enabled || script_path.trim().is_empty() {
-        return EnvIncludeSnapshot {
-            vars: Vec::new(),
-            outcome: EnvIncludeOutcome::Disabled,
-        };
-    }
-    let (vars, outcome) = env_include::resolve(
-        Path::new(script_path),
-        cwd,
+    env_include::snapshot_for(
+        &SubprocessResolver,
+        enabled,
+        script_path,
         Duration::from_secs(timeout_secs),
-    );
-    EnvIncludeSnapshot { vars, outcome }
+        cwd,
+    )
 }
 
 /// The directory to use whenever a single representative directory is needed synchronously

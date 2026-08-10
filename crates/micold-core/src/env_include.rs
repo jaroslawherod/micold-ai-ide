@@ -8,9 +8,10 @@
 //! exercised by `cargo test --no-default-features` with real disposable subprocesses (research
 //! R4, contracts/env-include-resolution.md).
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -322,4 +323,132 @@ pub fn resolve(
             },
         ),
     }
+}
+
+// ---------------------------------------------------------------------------
+// The capability (feature 021, T046) — declared here, beside the engine it wraps.
+// ---------------------------------------------------------------------------
+
+/// The result of resolving the include script for one directory: the variables it contributed and
+/// how the attempt went.
+///
+/// Moved here from the client's `main.rs` at T046. It was already the shape both halves agreed on;
+/// it lived in the shell only because the decision that produces it did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnvIncludeSnapshot {
+    /// Resolved variables. Vestigial on the client now that the daemon resolves env at spawn time;
+    /// kept so the Settings resolution path is unchanged.
+    pub vars: Vec<(String, String)>,
+    /// How the attempt went — including [`EnvIncludeOutcome::Disabled`] when none was made.
+    pub outcome: EnvIncludeOutcome,
+}
+
+/// Sourcing an include script: the one I/O need this module has (FR-015).
+///
+/// **Deliberately narrower than the contract's sketch**, which was
+/// `fn resolve(&self, cwd: &Path) -> EnvIncludeSnapshot`. That shape folds the *decision* — is the
+/// feature on, is the path blank — into the port, which costs twice. It makes the real
+/// implementation carry settings, so it cannot be a unit struct; and it makes a fake unable to
+/// answer the question a test most wants to ask, which is *what was I asked to source, and was I
+/// asked at all*. FR-016 wants a capability to be the I/O need and nothing more, so the decision
+/// stays where it can be tested without a port at all: [`snapshot_for`], pure and beside this.
+pub trait EnvIncludeResolver {
+    /// Source `path` in a disposable shell rooted at `cwd`, bounded by `timeout`, and report the
+    /// variables it contributed with the outcome of the attempt.
+    fn resolve(
+        &self,
+        path: &Path,
+        cwd: &Path,
+        timeout: Duration,
+    ) -> (Vec<(String, String)>, EnvIncludeOutcome);
+}
+
+/// The real resolver: a disposable, timeout-bounded subprocess (FR-005).
+#[derive(Debug, Default, Clone, Copy)]
+pub struct SubprocessResolver;
+
+impl EnvIncludeResolver for SubprocessResolver {
+    fn resolve(
+        &self,
+        path: &Path,
+        cwd: &Path,
+        timeout: Duration,
+    ) -> (Vec<(String, String)>, EnvIncludeOutcome) {
+        resolve(path, cwd, timeout)
+    }
+}
+
+/// A resolver that spawns nothing and remembers what it was asked (FR-019).
+///
+/// Records every call so a test can assert the *absence* of one — which is the whole point for
+/// this capability: the short-circuit's claim is not merely that the outcome is `Disabled`, it is
+/// that no subprocess was spawned at all. An outcome can be right for the wrong reason; a call
+/// count cannot.
+#[derive(Debug, Default)]
+pub struct FakeEnvIncludeResolver {
+    inner: RefCell<FakeResolverState>,
+}
+
+#[derive(Debug, Default)]
+struct FakeResolverState {
+    calls: Vec<(PathBuf, PathBuf, Duration)>,
+    answer: Option<(Vec<(String, String)>, EnvIncludeOutcome)>,
+}
+
+impl FakeEnvIncludeResolver {
+    /// A resolver that answers every call with `vars` and `outcome`.
+    pub fn answering(vars: Vec<(String, String)>, outcome: EnvIncludeOutcome) -> Self {
+        Self {
+            inner: RefCell::new(FakeResolverState {
+                calls: Vec::new(),
+                answer: Some((vars, outcome)),
+            }),
+        }
+    }
+
+    /// Every `(path, cwd, timeout)` this resolver was asked to source, in order (test assertions).
+    pub fn calls(&self) -> Vec<(PathBuf, PathBuf, Duration)> {
+        self.inner.borrow().calls.clone()
+    }
+}
+
+impl EnvIncludeResolver for FakeEnvIncludeResolver {
+    fn resolve(
+        &self,
+        path: &Path,
+        cwd: &Path,
+        timeout: Duration,
+    ) -> (Vec<(String, String)>, EnvIncludeOutcome) {
+        let mut state = self.inner.borrow_mut();
+        state
+            .calls
+            .push((path.to_path_buf(), cwd.to_path_buf(), timeout));
+        state
+            .answer
+            .clone()
+            .unwrap_or((Vec::new(), EnvIncludeOutcome::Success))
+    }
+}
+
+/// Whether to source at all, and the snapshot either way (feature 011 Edge Cases).
+///
+/// The engine never decides whether to run — that is this function, moved out of the client's
+/// `main.rs` at T046 so every caller applies the same short-circuit and so it can be tested
+/// without a shell. Off, or a blank/whitespace path, yields [`EnvIncludeOutcome::Disabled`]
+/// **without touching `resolver`**: no subprocess is spawned, which is the part that matters.
+pub fn snapshot_for(
+    resolver: &dyn EnvIncludeResolver,
+    enabled: bool,
+    script_path: &str,
+    timeout: Duration,
+    cwd: &Path,
+) -> EnvIncludeSnapshot {
+    if !enabled || script_path.trim().is_empty() {
+        return EnvIncludeSnapshot {
+            vars: Vec::new(),
+            outcome: EnvIncludeOutcome::Disabled,
+        };
+    }
+    let (vars, outcome) = resolver.resolve(Path::new(script_path), cwd, timeout);
+    EnvIncludeSnapshot { vars, outcome }
 }
