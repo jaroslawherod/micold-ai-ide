@@ -350,6 +350,9 @@ You keep control of the panel:
 - A row opened for you **stays** open when you move on to another session. Ceasing to be current
   takes away the highlight, never the open row.
 - **Selecting a session yourself** highlights it and moves nothing — you were already looking at it.
+- If the row would be **below the fold** in a project with many worktrees, the list scrolls just far
+  enough to bring it into view. If it was already visible, the list does not move at all, and once
+  you scroll the panel yourself nothing scrolls it back until you move to another session.
 - After a fresh start, no session is current until you pick one or start one, and the sidebar says
   so by highlighting nothing.
 

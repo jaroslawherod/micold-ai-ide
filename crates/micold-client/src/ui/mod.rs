@@ -25,6 +25,10 @@ pub(crate) mod rename;
 pub(crate) mod settings_form;
 mod shell;
 mod sidebar;
+// The sidebar list's scroll viewport, by name — the binary addresses `scroll_to` to it when a
+// reveal has a row to bring into view (feature 024). Re-exported like `ripple_pulse` above: the
+// binary needs this one name, not the module.
+pub use sidebar::SIDEBAR_SCROLL_ID;
 // The application's theme — the only thing the styling layer exposes beyond the component
 // library (FR-002). Defined in `material`, not here: a feature module naming the styling layer is
 // exactly what the boundary test forbids, and `ui/mod.rs` is a feature module.

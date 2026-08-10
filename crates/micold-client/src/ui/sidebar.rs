@@ -15,6 +15,14 @@ use micold_core::session::{SessionLifecycle, SessionLocation};
 use micold_core::tokens::{self, spacing, Rgb, Roles};
 use micold_core::worktree::WorktreeStatus;
 
+/// The sidebar list's scroll viewport, by name (feature 024, FR-008).
+///
+/// A `LazyLock` because `scrollable::Id` is not a `const` and the id has to be the *same* one on
+/// every frame — a fresh id each render would name a viewport the previous frame's scroll operation
+/// was addressed to, and the scroll would land nowhere.
+pub static SIDEBAR_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("sidebar-list"));
+
 /// Width of the collapsed strip that hosts the "show sidebar" button.
 const STRIP_WIDTH: f32 = 32.0;
 
@@ -125,7 +133,12 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         // The sidebar is the one list at `dense` (§7.2, FR-026a): 36dp rows rather than 48dp, so
         // the worktree count visible without scrolling does not drop. A named step on the shared
         // density scale, not a bespoke shrink (FR-026c).
-        .density(tokens::density::DENSE)
+        //
+        // Read from `features::sidebar` rather than named here, because the row metrics that decide
+        // where to scroll are computed from the same constant (feature 024). Two copies of it would
+        // agree until one of them changed, and the disagreement would be a scroll landing slightly
+        // off — with nothing on screen to say why.
+        .density(crate::features::sidebar::SIDEBAR_DENSITY)
         .label_role(TypeRole::SidebarName)
         // The current session's row is marked by the selected fill *and* by a heavier name
         // (feature 024, FR-003a). Two channels rather than one, because the fill is a colour and
@@ -157,6 +170,17 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // dismissal from this message too, so the third dismissal trigger (feature 017, FR-009) is
     // unchanged — a scrollable gets one subscription, not two.
     .on_scroll_offset(Message::SidebarScrolled)
+    // Feature 024: the reveal has to know whether its row is inside the viewport, and iced reports
+    // no child position — so the geometry is computed, and this is the one input that is not
+    // already in state. Reported from a sensor rather than from `on_scroll`, which fires only when
+    // something scrolls; the frame that matters is the first one after a switch, where nothing has.
+    .on_viewport_resize(|size| {
+        Message::SidebarViewportResized(crate::app::scroll_offset_px(size.height))
+    })
+    // Addressable so `operation::scroll_to` can reach it. On the scrollable itself, never on the
+    // sensor wrapping it — a wrapper that does not forward `operate` swallows scroll operations for
+    // its whole subtree (`ui/material/ripple.rs`).
+    .id(SIDEBAR_SCROLL_ID.clone())
     .into();
 
     // Minimal left/right padding to maximize name/tag width (FR-009); a little vertical breathing

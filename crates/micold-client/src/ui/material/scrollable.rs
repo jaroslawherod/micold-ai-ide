@@ -13,8 +13,9 @@
 //! needs to know the ground moved, and every scrollable is a place the ground can move.
 
 use crate::ui::material::style;
-use iced::widget::scrollable;
-use iced::{Element, Length};
+use iced::advanced::widget::Id;
+use iced::widget::{scrollable, Sensor};
+use iced::{Element, Length, Size};
 use micold_core::tokens::Roles;
 
 /// The scrollbar's width and its scroller's, in pixels, plus the margin holding it off the edge.
@@ -31,6 +32,8 @@ pub struct Scrollable<'a, M> {
     width: Option<Length>,
     on_scroll: Option<M>,
     on_scroll_offset: Option<Box<dyn Fn(u32) -> M + 'a>>,
+    id: Option<Id>,
+    on_viewport_resize: Option<Box<dyn Fn(Size) -> M + 'a>>,
 }
 
 impl<'a, M: Clone + 'a> Scrollable<'a, M> {
@@ -43,6 +46,8 @@ impl<'a, M: Clone + 'a> Scrollable<'a, M> {
             width: None,
             on_scroll: None,
             on_scroll_offset: None,
+            id: None,
+            on_viewport_resize: None,
         }
     }
 
@@ -79,6 +84,34 @@ impl<'a, M: Clone + 'a> Scrollable<'a, M> {
         self.on_scroll_offset = Some(Box::new(f));
         self
     }
+
+    /// Make this viewport addressable, so it can be scrolled by
+    /// [`iced::widget::operation::scroll_to`] (feature 024, FR-008).
+    ///
+    /// Unset by default: a scrollable without an id behaves exactly as it did before.
+    ///
+    /// The id belongs on the scrollable **itself**, never on a wrapper around it. Scroll operations
+    /// reach widgets by traversal, and a wrapper that does not forward `operate` swallows them for
+    /// its whole subtree — the trap `ripple.rs` documents, and the reason the sensor below is
+    /// wrapped *outside* rather than the id moved inside.
+    pub fn id(mut self, id: impl Into<Id>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
+
+    /// Report the **viewport's** laid-out size — the scrolling window, not the content in it
+    /// (feature 024).
+    ///
+    /// Fires on first layout as well as on every later size change, which is why it exists rather
+    /// than reusing [`Self::on_scroll`]'s viewport: `on_scroll` fires only when something scrolls,
+    /// and the case that matters most is the first frame after a project switch, where nothing has.
+    ///
+    /// Independent of the two scroll subscriptions — setting this disturbs neither, and a consumer
+    /// that never sets it pays nothing, since no sensor is inserted into the tree.
+    pub fn on_viewport_resize(mut self, f: impl Fn(Size) -> M + 'a) -> Self {
+        self.on_viewport_resize = Some(Box::new(f));
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<Scrollable<'a, M>> for Element<'a, M> {
@@ -107,6 +140,30 @@ impl<'a, M: Clone + 'a> From<Scrollable<'a, M>> for Element<'a, M> {
         } else if let Some(message) = s.on_scroll {
             widget = widget.on_scroll(move |_| message.clone());
         }
-        widget.into()
+        if let Some(id) = s.id {
+            widget = widget.id(id);
+        }
+        match s.on_viewport_resize {
+            // `on_show` as well as `on_resize`: a size that never changes is still a size nobody
+            // has been told, and the first layout is exactly the frame the reveal needs it for.
+            //
+            // The sensor wraps the scrollable rather than the other way round, so the id set above
+            // stays on the scrollable and `scroll_to` still reaches it — iced's own `Sensor`
+            // forwards `operate`, and a future replacement that did not would break the scroll
+            // silently.
+            Some(f) => {
+                // One closure, two subscriptions — `Rc` because both need it and neither owns the
+                // other. Wrapping the *scrollable* is what makes the reported size the viewport's:
+                // the scrollable's own bounds are the window, and its content's are what scrolls
+                // inside them.
+                let f = std::rc::Rc::new(f);
+                let on_show = std::rc::Rc::clone(&f);
+                Sensor::new(widget)
+                    .on_show(move |size| on_show(size))
+                    .on_resize(move |size| f(size))
+                    .into()
+            }
+            None => widget.into(),
+        }
     }
 }

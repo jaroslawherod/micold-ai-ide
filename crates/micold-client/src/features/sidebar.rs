@@ -20,7 +20,8 @@ use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::overlay::Layer;
-use micold_core::session::{Session, SessionLocation};
+use micold_core::session::{Session, SessionId, SessionLocation};
+use micold_core::tokens::{density, spacing};
 use micold_core::worktree::Worktree;
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -65,6 +66,14 @@ pub struct WorktreeNode {
     pub expanded: bool,
     /// The sessions hosted by this worktree (empty unless expanded is irrelevant to data).
     pub sessions: Vec<Session>,
+    /// Whether this row is listed *only* because it holds the current session — the active tag
+    /// filters, or the hidden-agent-worktree setting, would otherwise have excluded it (feature
+    /// 024, FR-012a).
+    ///
+    /// `false` for a row the filters admit on their own, and that distinction is the requirement
+    /// rather than an implementation detail: the row carries a chip saying why it is there, and a
+    /// row that would have been listed anyway must not claim an exemption it did not need.
+    pub shown_for_current_session: bool,
 }
 
 /// A tag filter the sidebar can apply (feature 008, FR-024). Typed so an impossible filter is
@@ -105,6 +114,113 @@ pub fn matches_filters(tags: &[Tag], filters: &BTreeSet<TagFilter>) -> bool {
 /// a stored flag — a replaced list changes the inputs, never a remembered answer.
 pub fn effective_open(user_open: bool, holds_current_session: bool, reveal_suppressed: bool) -> bool {
     user_open || (holds_current_session && !reveal_suppressed)
+}
+
+/// The density the sidebar's list is drawn at (§7.2, FR-026a).
+///
+/// Named here rather than at the call site so the row metrics below and the `TreeView` that renders
+/// them cannot disagree about it. They are the same number by construction, which is what stops a
+/// computed scroll target from drifting from the rendered rows — the one place in this feature
+/// where a wrong answer is silent.
+pub const SIDEBAR_DENSITY: i8 = density::DENSE;
+
+/// The vertical gap `TreeView` leaves between rows (`tree_view.rs`'s `column![].spacing(...)`).
+///
+/// Not a parameter: the gap is a property of the component that draws the rows, not of the caller
+/// that measures them, and passing it in would invite two answers.
+const ROW_GAP: f32 = spacing::XS;
+
+/// The rendered height of every sidebar row, top to bottom (feature 024, research R6).
+///
+/// A location row is Material's two-line list item when it carries tags and its one-line item
+/// otherwise; a session row is always one line. Both figures come from the same `density::height`
+/// the renderer uses, at [`SIDEBAR_DENSITY`].
+///
+/// Only *open* locations contribute session rows, because only those are drawn.
+pub fn row_heights(entries: &[SidebarEntry]) -> Vec<f32> {
+    let one_line = density::height(density::LIST_ROW_BASE, SIDEBAR_DENSITY);
+    let two_line = density::height(density::LIST_ROW_TWO_LINE_BASE, SIDEBAR_DENSITY);
+    let mut heights = Vec::new();
+    for entry in entries {
+        match entry {
+            SidebarEntry::Default(node) => {
+                heights.push(one_line);
+                if node.expanded {
+                    heights.extend(std::iter::repeat_n(one_line, node.sessions.len()));
+                }
+            }
+            SidebarEntry::Worktree(node) => {
+                heights.push(if node.tags.is_empty() {
+                    one_line
+                } else {
+                    two_line
+                });
+                if node.expanded {
+                    heights.extend(std::iter::repeat_n(one_line, node.sessions.len()));
+                }
+            }
+        }
+    }
+    heights
+}
+
+/// Which rendered row holds the current session, if any (feature 024).
+///
+/// Counted the way the list is built — locations, and the sessions of the open ones — because the
+/// answer is a position in what is on screen, not a position in the model.
+pub fn current_session_row(entries: &[SidebarEntry], current: Option<SessionId>) -> Option<usize> {
+    let current = current?;
+    let mut row = 0usize;
+    for entry in entries {
+        let (expanded, sessions) = match entry {
+            SidebarEntry::Default(node) => (node.expanded, &node.sessions),
+            SidebarEntry::Worktree(node) => (node.expanded, &node.sessions),
+        };
+        row += 1;
+        if expanded {
+            for session in sessions {
+                if session.id == current {
+                    return Some(row);
+                }
+                row += 1;
+            }
+        }
+    }
+    None
+}
+
+/// Where the sidebar's list should sit so that row `index` is fully visible, or `None` if it
+/// already is (feature 024, contract §6).
+///
+/// The minimal move rather than a centring one: the spec asks only that the row be visible, and the
+/// smallest movement is the one least likely to disturb what the user was reading (FR-008, FR-009).
+///
+/// `None` also covers the three cases where scrolling would be a guess rather than a decision: no
+/// layout yet (`viewport_height` of zero — which means "unknown", never "nothing fits"), an index
+/// the projection does not hold, and a list shorter than its own viewport.
+pub fn scroll_target(
+    heights: &[f32],
+    index: usize,
+    viewport_height: f32,
+    current_offset: f32,
+) -> Option<f32> {
+    if viewport_height <= 0.0 || index >= heights.len() {
+        return None;
+    }
+    let top: f32 = heights[..index].iter().sum::<f32>() + ROW_GAP * index as f32;
+    let bottom = top + heights[index];
+    if top >= current_offset && bottom <= current_offset + viewport_height {
+        return None;
+    }
+    let content = heights.iter().sum::<f32>() + ROW_GAP * (heights.len().saturating_sub(1)) as f32;
+    let max_offset = (content - viewport_height).max(0.0);
+    let wanted = if top < current_offset {
+        top
+    } else {
+        bottom - viewport_height
+    };
+    let clamped = wanted.clamp(0.0, max_offset);
+    (clamped != current_offset).then_some(clamped)
 }
 
 /// The fixed location-tooltip label for the "Default" sidebar entry (feature 010, FR-010) —
@@ -177,6 +293,33 @@ impl State {
         )
     }
 
+    /// Where the sidebar should scroll so the current session's row is visible, or `None` when it
+    /// already is — or when the answer would be a guess (feature 024, contract §6).
+    ///
+    /// `None` while the projection holds no row for the current session, which is the async case
+    /// research R7 is about: the incoming project's worktree list arrives after the switch, so the
+    /// row does not exist for the first frame or two. The caller keeps the reveal armed rather than
+    /// scrolling to a stale offset (invariant I4).
+    pub fn reveal_scroll_offset(&self) -> Option<u32> {
+        let entries = self.sidebar_entries();
+        let index = current_session_row(&entries, self.active_session)?;
+        scroll_target(
+            &row_heights(&entries),
+            index,
+            self.sidebar_viewport_height as f32,
+            self.sidebar_scroll_offset as f32,
+        )
+        .map(|offset| offset.round().max(0.0) as u32)
+    }
+
+    /// Whether the projection currently holds a row for the current session (feature 024).
+    ///
+    /// The condition for draining an armed reveal: until it is true there is nothing to scroll to,
+    /// and the arm stays set.
+    pub fn current_session_is_listed(&self) -> bool {
+        current_session_row(&self.sidebar_entries(), self.active_session).is_some()
+    }
+
     /// Open or close a location's row, from the user's own twisty (feature 024, contract §2.1).
     ///
     /// Toggling against [`Self::location_open`] rather than against `expanded` is the whole point:
@@ -222,6 +365,7 @@ impl State {
                     .cloned()
                     .collect(),
                 worktree: worktree.clone(),
+                shown_for_current_session: false,
             })
             .collect()
     }

@@ -13,10 +13,12 @@
 //! eroded.
 
 use micold_client::features::sidebar::{
-    effective_open, matches_filters, worktree_location_label, DefaultNode, SidebarEntry, TagFilter,
-    WorktreeNode, DEFAULT_LOCATION_LABEL,
+    current_session_row, effective_open, matches_filters, row_heights, scroll_target,
+    worktree_location_label, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
+    DEFAULT_LOCATION_LABEL,
 };
 use micold_core::naming::{ConventionalType, Tag};
+use micold_core::session::{Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -111,6 +113,7 @@ fn a_sidebar_row_is_either_a_worktree_or_the_project_root_and_never_both() {
             tags: vec![Tag::Type(ConventionalType::Feat)],
             expanded: false,
             sessions: Vec::new(),
+            shown_for_current_session: false,
         }),
     ];
 
@@ -171,5 +174,192 @@ fn a_location_holding_no_current_session_is_open_only_if_the_user_opened_it() {
     assert!(
         !effective_open(false, false, false),
         "nothing opens a row that neither the user nor the current session asked for"
+    );
+}
+
+// --- Feature 024: getting the revealed row on screen ------------------------------------------
+//
+// The sidebar has to answer "is that row visible, and if not where should the list sit" without a
+// renderer: iced 0.14 has no scroll-child-into-view operation and reports no child position. Row
+// heights are deterministic, so the answer is arithmetic — and arithmetic is checkable here, which
+// is the whole reason these are functions over the projection rather than code inside the view.
+
+fn session(location: SessionLocation) -> Session {
+    Session::start_new(location)
+}
+
+fn default_entry(sessions: Vec<Session>) -> SidebarEntry {
+    SidebarEntry::Default(DefaultNode {
+        display_name: "Default",
+        expanded: !sessions.is_empty(),
+        sessions,
+    })
+}
+
+fn worktree_entry(dir: &str, tags: Vec<Tag>, sessions: Vec<Session>) -> SidebarEntry {
+    SidebarEntry::Worktree(WorktreeNode {
+        worktree: worktree(dir),
+        display_name: dir.to_string(),
+        tags,
+        expanded: !sessions.is_empty(),
+        sessions,
+        shown_for_current_session: false,
+    })
+}
+
+/// The two figures `ui/material/anatomy_size.rs` asserts against the rendered tree, at the sidebar's
+/// own density. Shared rather than restated: a metric that agreed with a copy of the numbers
+/// instead of with the tokens would drift the moment the density did, and drift silently.
+fn one_line() -> f32 {
+    micold_core::tokens::density::height(
+        micold_core::tokens::density::LIST_ROW_BASE,
+        micold_client::features::sidebar::SIDEBAR_DENSITY,
+    )
+}
+
+fn two_line() -> f32 {
+    micold_core::tokens::density::height(
+        micold_core::tokens::density::LIST_ROW_TWO_LINE_BASE,
+        micold_client::features::sidebar::SIDEBAR_DENSITY,
+    )
+}
+
+#[test]
+fn a_tagged_worktree_row_is_a_two_line_row_and_a_session_row_is_not() {
+    let entries = vec![
+        default_entry(vec![]),
+        worktree_entry("feat-a", vec![Tag::Type(ConventionalType::Feat)], vec![]),
+        worktree_entry("plain", vec![], vec![]),
+    ];
+
+    assert_eq!(
+        row_heights(&entries),
+        vec![one_line(), two_line(), one_line()],
+        "a row's height follows its line count and the sidebar's density, and nothing else — the \
+         same rule `TreeView` renders by. A metric that disagreed with the rendered height would \
+         scroll to the wrong place and say nothing about it"
+    );
+}
+
+#[test]
+fn an_open_locations_sessions_are_rows_and_a_closed_ones_are_not() {
+    let with_sessions = vec![worktree_entry(
+        "feat-a",
+        vec![],
+        vec![session(SessionLocation::Worktree("feat-a".into()))],
+    )];
+    assert_eq!(row_heights(&with_sessions).len(), 2);
+
+    let closed = vec![SidebarEntry::Worktree(WorktreeNode {
+        worktree: worktree("feat-a"),
+        display_name: "feat-a".to_string(),
+        tags: vec![],
+        expanded: false,
+        sessions: vec![session(SessionLocation::Worktree("feat-a".into()))],
+        shown_for_current_session: false,
+    })];
+    assert_eq!(
+        row_heights(&closed).len(),
+        1,
+        "a closed location draws no session rows, so they occupy no height — measuring them anyway \
+         would put every row below it out by their total"
+    );
+}
+
+#[test]
+fn an_already_visible_row_is_not_scrolled_to() {
+    let heights = vec![40.0, 40.0, 40.0];
+
+    assert_eq!(
+        scroll_target(&heights, 1, 200.0, 0.0),
+        None,
+        "the list does not move under the user when it did not have to (FR-009, SC-007)"
+    );
+}
+
+#[test]
+fn a_row_below_the_fold_is_brought_just_into_view() {
+    // Four 40dp rows with 4dp between them: tops at 0, 44, 88, 132.
+    let heights = vec![40.0; 4];
+
+    assert_eq!(
+        scroll_target(&heights, 3, 100.0, 0.0),
+        Some(72.0),
+        "the minimal move that brings the row fully in — its bottom (172) less the viewport (100). \
+         Not centred: the smallest movement is the one least likely to disturb what the user was \
+         reading"
+    );
+}
+
+#[test]
+fn a_row_above_the_fold_is_brought_back_by_scrolling_up() {
+    let heights = vec![40.0; 4];
+
+    assert_eq!(
+        scroll_target(&heights, 0, 100.0, 132.0),
+        Some(0.0),
+        "scrolling up stops at the row's top rather than its bottom, which is the same 'minimal' \
+         rule seen from the other side"
+    );
+}
+
+#[test]
+fn nothing_is_scrolled_before_the_first_layout() {
+    let heights = vec![40.0; 4];
+
+    assert_eq!(
+        scroll_target(&heights, 3, 0.0, 0.0),
+        None,
+        "a viewport of zero height means 'not laid out yet', never 'nothing fits' — scrolling on \
+         that reading would jump the list on the frame before it knew its own size (contract §6.3)"
+    );
+}
+
+#[test]
+fn a_target_beyond_the_lists_end_is_clamped_to_it() {
+    let heights = vec![40.0; 3];
+
+    // Content is 128 tall (3×40 + 2×4) in a 200 viewport: everything already fits.
+    assert_eq!(
+        scroll_target(&heights, 2, 200.0, 0.0),
+        None,
+        "a list shorter than its viewport has nowhere to scroll to, and an unclamped target would \
+         ask for an offset the scrollable would refuse"
+    );
+}
+
+#[test]
+fn a_row_that_is_not_there_is_not_scrolled_to() {
+    let heights = vec![40.0; 3];
+
+    assert_eq!(
+        scroll_target(&heights, 7, 100.0, 0.0),
+        None,
+        "the index comes from a projection that may not hold the current session's row yet — an \
+         out-of-range index is that case, not a bug to panic on (research R7)"
+    );
+}
+
+#[test]
+fn the_current_sessions_row_is_found_by_walking_the_rows_as_drawn() {
+    let default_session = session(SessionLocation::Default);
+    let worktree_session = session(SessionLocation::Worktree("feat-a".into()));
+    let wanted = worktree_session.id;
+    let entries = vec![
+        default_entry(vec![default_session]),
+        worktree_entry("feat-a", vec![], vec![worktree_session]),
+    ];
+
+    // Rows as drawn: Default, its session, feat-a, its session.
+    assert_eq!(
+        current_session_row(&entries, Some(wanted)),
+        Some(3),
+        "the index is a position in the rendered list, so it has to be counted the way the list is \
+         built — locations and the sessions of the open ones, in order"
+    );
+    assert_eq!(
+        current_session_row(&entries, None),
+        None,
+        "and with no current session there is no row to scroll to (FR-013)"
     );
 }
