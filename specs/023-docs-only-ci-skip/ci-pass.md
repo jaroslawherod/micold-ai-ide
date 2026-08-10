@@ -126,3 +126,5 @@ no run emits. The aggregate gate was the only design that works on this reposito
 The fallback design (required jobs always run, steps conditional, matrix collapsed onto Linux)
 would also have worked, at the cost of three green `build + test (<os>)` checks that built nothing.
 Both facts are worth keeping: the alternative was viable, and the naive version was not.
+
+<!-- scratch: task T031 / quickstart B4, escape-hatch verification. Not for merge. -->
