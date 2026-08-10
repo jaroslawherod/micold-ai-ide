@@ -268,9 +268,10 @@ fn enter_is_the_dialogs_and_the_checkbox_leaves_it_alone() {
 
     assert!(
         published.is_empty(),
-        "Space is the key a checkbox answers; Enter means submit in every dialog holding one. A \
-         focused box swallowing it would make \"fill the form in, press Enter\" stop working \
-         depending on where the pointer last landed — published {published:?}",
+        "Space is the key a checkbox answers; Enter belongs to the dialog, which reaches \
+         `TextField::on_submit` with it today and may grow a default action tomorrow. A control \
+         that toggles on Enter is the thing that answers first, and nothing downstream of it ever \
+         gets the chance — published {published:?}",
     );
 }
 

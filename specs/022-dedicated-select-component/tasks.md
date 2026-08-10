@@ -433,7 +433,7 @@ implemented and never once reached.*
   > FR-035 recorded this as out of reach because `checkbox::Status` has no focused variant. That was
   > the symptom; the cause is that the stack's checkbox cannot be focused **at all** — no focus
   > state, no traversal, no key. A wrapper holds the focus, offers it to the traversal, answers
-  > Space — and only Space, because Enter means submit in every dialog holding one — and reports
+  > Space — and only Space, because Enter belongs to the dialog it sits in — and reports
   > changes. Not a reimplementation: the stack's checkbox keeps its
   > drawing and its pointer, and gains the one capability it lacked.
 

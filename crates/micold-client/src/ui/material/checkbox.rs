@@ -19,7 +19,8 @@
 //! one.
 //!
 //! So this gives it one, in the smallest thing that can hold it: a wrapper widget that owns the
-//! focus, takes it on a press, offers it to the focus traversal, toggles on Space, and reports
+//! focus, takes it on a press, offers it to the focus traversal, toggles on Space (and only Space —
+//! Enter belongs to the dialog, see [`TakesTheKeyboard::update`]), and reports
 //! changes so a screen can supply the flag back. The stack's checkbox keeps drawing itself and
 //! keeps owning the pointer; nothing about its appearance moved here.
 //!
@@ -223,10 +224,11 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
         let before = tree.state.downcast_ref::<Focus>().focused;
 
         // Space, and **only** Space. That is the key a checkbox answers everywhere it exists — the
-        // platform convention and WAI-ARIA's — and Enter is deliberately left alone: in every
-        // dialog holding one of these, Enter means *submit*, and a focused checkbox swallowing it
-        // would make "fill the form in, press Enter" stop working depending on where the pointer
-        // last landed. Toggling is what the box does; committing the form is not its business.
+        // platform convention and WAI-ARIA's — and Enter is deliberately left alone, because Enter
+        // belongs to the dialog. Today it reaches `TextField::on_submit`, which is what saves the
+        // settings form and confirms both renames; a dialog-level default action is the obvious
+        // next thing to add. Either way, toggling is what the box does and committing the form is
+        // not its business, so it must not be the thing that answers first.
         //
         // Before the child sees it, and captured: the stack's checkbox answers no key at all, so
         // there is nothing to wait for and nothing else here wants a Space.

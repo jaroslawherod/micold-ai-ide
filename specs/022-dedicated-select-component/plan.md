@@ -278,9 +278,11 @@ control was reachable by pointer only, so there was no focus to report and no ke
 from — an accessibility gap wearing a styling gap's clothes.
 
 The fix is the smallest thing that can hold a focus: a wrapper that owns it, takes it on a press,
-offers it to the traversal, toggles on Space, and reports changes. Space and not Enter: Enter means
-*submit* in every dialog holding one of these, and a focused box swallowing it would make "fill the
-form in, press Enter" stop working depending on where the pointer last landed. Deliberately not a
+offers it to the traversal, toggles on Space, and reports changes. Space and not Enter: Enter
+belongs to the dialog — today it reaches `TextField::on_submit`, which saves the settings form and
+confirms both renames, and a dialog-level default action is the obvious next thing to add. A control
+that toggles on Enter is the thing that answers first, and nothing downstream of it ever gets the
+chance. Deliberately not a
 reimplementation — `FilledField` owns the field's box because §7.7's geometry could not be composed,
 and nothing is wrong with the checkbox's geometry. The layer is still composited into the fill,
 since `checkbox::Style` still has one opaque background; what changed is that *which* layer is
