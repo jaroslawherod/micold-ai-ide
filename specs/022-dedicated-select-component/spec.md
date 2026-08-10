@@ -294,7 +294,8 @@ through both controls. Every one must be defined once and pass for both.
   > much as a visual one, and one no amount of styling would have closed.
   >
   > It is not reimplemented. A wrapper holds the focus, takes it on a press, offers it to the focus
-  > traversal, toggles on Space — and leaves Enter to the dialog, which reads it as *submit* — and
+  > traversal, toggles on Space — and leaves Enter to the dialog, which carries it to
+  > `TextField::on_submit` today and may grow a default action tomorrow — and
   > reports changes; the stack's checkbox keeps drawing
   > itself and keeps owning the pointer. The layer is still composited into the fill, because
   > `checkbox::Style` still has one opaque background and nowhere to put a quad — but *which* layer
