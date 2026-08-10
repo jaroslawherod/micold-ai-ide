@@ -147,9 +147,9 @@ impl State {
         // it drops you into (FR-001) — the reported bug was that the panel showed every row
         // collapsed while the main area showed a session.
         self.set_current_session(self.restore_foreground(&key)); // STEP 3
-                                                                 // BUG-001 / focus-model.md: switching (or opening) a project does not carry terminal focus
-                                                                 // across — re-focusing the restored session is a fresh explicit action (or a select/start).
-        self.terminal_focused = false;
+                                                                 // Feature 023, T024 replaces this: a project switch onto a restored session should land
+                                                                 // focused (FR-011). Kept as a release for now so US3's test is observed failing first.
+        self.release_terminal();
         // `default_expanded` is not keyed per project (unlike `expanded`, which is pruned by
         // worktree `dir_name` in `set_worktrees`) — reset it explicitly so a Default entry
         // expanded in one project doesn't render pre-expanded in another (feature 010).

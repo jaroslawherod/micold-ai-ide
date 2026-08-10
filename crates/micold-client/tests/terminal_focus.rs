@@ -22,7 +22,7 @@ fn open_dialog(state: &State) -> Option<&'static str> {
 fn base_state_defaults() {
     let s = State::default();
     assert!(
-        !s.terminal_focused,
+        !s.terminal_focused(),
         "terminal must start unfocused (FR-010)"
     );
     assert!(s.settings_draft.is_none());
@@ -83,11 +83,17 @@ fn escape_closes_the_settings_overlay() {
 #[test]
 fn focus_toggles_via_messages() {
     use micold_client::app::Message;
+    use micold_core::session::Session;
+    // A session has to be displayed first: since feature 023 the predicate names `active_session`,
+    // so "focused with nothing on screen" is not a state that can be reached (FR-020).
     let mut s = State::default();
+    s.update(Message::SessionStarted(Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+    )));
     s.update(Message::TerminalFocused);
-    assert!(s.terminal_focused);
+    assert!(s.terminal_focused());
     s.update(Message::TerminalFocusReleased);
-    assert!(!s.terminal_focused);
+    assert!(!s.terminal_focused());
 }
 
 #[test]
@@ -118,11 +124,11 @@ fn selecting_a_session_focuses_its_terminal() {
     use micold_client::app::Message;
     use micold_core::session::Session;
     let mut s = State::default();
-    assert!(!s.terminal_focused, "precondition: starts unfocused");
+    assert!(!s.terminal_focused(), "precondition: starts unfocused");
     let id = Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id;
     s.update(Message::SessionSelected(id));
     assert!(
-        s.terminal_focused,
+        s.terminal_focused(),
         "selecting a session must auto-focus its terminal (BUG-001, FR-010/FR-010a)"
     );
     assert_eq!(s.active_session, Some(id));
@@ -137,7 +143,7 @@ fn starting_a_session_focuses_its_terminal() {
         SessionLocation::Worktree("feat-x".to_string()),
     )));
     assert!(
-        s.terminal_focused,
+        s.terminal_focused(),
         "starting a session must auto-focus its terminal (BUG-001, FR-010/FR-010a)"
     );
 }
@@ -150,10 +156,10 @@ fn releasing_focus_after_auto_focus_still_works() {
     s.update(Message::SessionSelected(
         Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id,
     ));
-    assert!(s.terminal_focused);
+    assert!(s.terminal_focused());
     s.update(Message::TerminalFocusReleased);
     assert!(
-        !s.terminal_focused,
+        !s.terminal_focused(),
         "release must still return focus to the app after auto-focus (FR-011)"
     );
 }
@@ -166,10 +172,10 @@ fn closing_the_displayed_session_clears_focus() {
     let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     let id = session.id;
     s.update(Message::SessionStarted(session));
-    assert!(s.terminal_focused);
+    assert!(s.terminal_focused());
     s.update(Message::SessionCloseRequested(id));
     assert!(
-        !s.terminal_focused,
+        !s.terminal_focused(),
         "closing the displayed session leaves no terminal to focus (focus-model.md BUG-001)"
     );
     assert!(s.active_session.is_none());
@@ -265,4 +271,122 @@ fn a_stopped_or_failed_session_that_is_current_is_still_marked() {
              need to find it"
         );
     }
+// ---- Feature 023: the keyboard holder is derived, not stored ----
+//
+// `terminal_focused` is a question now, not a field. These cover the terms the predicate is a
+// conjunction of, one at a time — the point of deriving it is that no reducer arm has to remember
+// them, so what is tested is the answer rather than seven assignments agreeing.
+// See `specs/023-terminal-focus-flow/contracts/focus-model.md` (v2).
+
+use micold_client::app::{FieldId, Message};
+use micold_core::session::Session;
+
+/// A state showing one session's terminal, with nothing else claiming the keyboard.
+fn showing_a_terminal() -> State {
+    let mut s = State::default();
+    s.update(Message::SessionStarted(Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+    )));
+    s
+}
+
+#[test]
+fn a_displayed_terminal_holds_the_keyboard_by_default() {
+    assert!(
+        showing_a_terminal().terminal_focused(),
+        "the displayed terminal is the default keyboard holder (FR-009)"
+    );
+}
+
+#[test]
+fn no_displayed_session_means_no_terminal_holds_the_keyboard() {
+    let s = State::default();
+    assert!(s.active_session.is_none(), "precondition");
+    assert!(
+        !s.terminal_focused(),
+        "with nothing displayed there is no terminal to hold the keyboard (FR-012, FR-016)"
+    );
+}
+
+#[test]
+fn an_explicit_release_outranks_the_default() {
+    let mut s = showing_a_terminal();
+    s.update(Message::TerminalFocusReleased);
+    assert!(
+        !s.terminal_focused(),
+        "an explicit release holds until given back or navigated away from (FR-021)"
+    );
+}
+
+#[test]
+fn a_focused_text_field_takes_the_keyboard_and_gives_it_back() {
+    let mut s = showing_a_terminal();
+    s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
+    assert!(
+        !s.terminal_focused(),
+        "a field that types holds the keyboard while it does (FR-004, FR-018)"
+    );
+    s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, false));
+    assert!(
+        s.terminal_focused(),
+        "when the field finishes the keyboard returns, with no restore stack (FR-010)"
+    );
+}
+
+#[test]
+fn only_the_displayed_sessions_terminal_is_eligible() {
+    // Two sessions exist; neither is displayed. FR-020 is structural — `active_session` is the
+    // only session the predicate names — and this is what would notice a second one creeping in.
+    let mut s = State::default();
+    let first = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+    let second = Session::start_new(SessionLocation::Worktree("feat-y".to_string()));
+    s.update(Message::SessionStarted(first));
+    s.update(Message::SessionStarted(second));
+    assert!(
+        s.terminal_focused(),
+        "precondition: the second one is displayed"
+    );
+
+    s.active_session = None;
+    assert!(
+        !s.terminal_focused(),
+        "background sessions are never eligible to hold the keyboard (FR-020)"
+    );
+}
+
+#[test]
+fn pressing_the_pane_wins_over_a_field_that_held_the_keyboard() {
+    // The mirror of the reported bug: a press into the pane must take the keyboard *on that press*
+    // (FR-008b), which FR-018 permits precisely because it is a user press. If `focus_terminal()`
+    // cleared only the release, this would depend on iced's blur arriving first.
+    let mut s = showing_a_terminal();
+    s.update(Message::FieldFocusChanged(FieldId::RenameProjectName, true));
+    assert!(!s.terminal_focused(), "precondition: the field has it");
+
+    s.update(Message::TerminalFocused);
+    assert!(
+        s.terminal_focused(),
+        "a press on the pane takes the keyboard from a field on that press (FR-008b)"
+    );
+    assert_eq!(
+        s.focused_field, None,
+        "and the field must not still believe it holds it"
+    );
+}
+
+#[test]
+fn a_late_blur_after_a_pane_press_is_a_no_op() {
+    // `FieldFocusChanged(_, false)` is guarded on the field still being the focused one, so a blur
+    // arriving after the press cannot undo it.
+    let mut s = showing_a_terminal();
+    s.update(Message::FieldFocusChanged(FieldId::RenameProjectName, true));
+    s.update(Message::TerminalFocused);
+    s.update(Message::FieldFocusChanged(
+        FieldId::RenameProjectName,
+        false,
+    ));
+    assert!(
+        s.terminal_focused(),
+        "a stale blur must not disturb the holder the press already decided (FR-008a)"
+    );
 }

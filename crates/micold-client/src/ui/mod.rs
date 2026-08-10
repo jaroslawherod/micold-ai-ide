@@ -509,7 +509,7 @@ fn surface_key(id: crate::overlay::SurfaceId) -> u64 {
 /// keyboard listener open at all. It is held only while Escape has something to close, so pressing
 /// it with nothing open stays as inert as it was.
 pub fn subscription(state: &State) -> Subscription<Message> {
-    if state.terminal_focused || crate::app::on_escape(state).is_none() {
+    if state.terminal_focused() || crate::app::on_escape(state).is_none() {
         return Subscription::none();
     }
     iced::keyboard::listen().filter_map(|event| {

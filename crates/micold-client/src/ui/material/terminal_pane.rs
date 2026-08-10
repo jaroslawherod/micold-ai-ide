@@ -253,6 +253,21 @@ pub(crate) enum PressRouting {
 /// has enabled mouse reporting. Holding Shift overrides that, which is what keeps selection and
 /// copy reachable under a full-screen program that owns the mouse (FR-013b). Every other
 /// combination — including any press on an unfocused pane — is handled locally.
+/// Whether this press is the one that makes the pane the keyboard holder (FR-008b).
+///
+/// Pure, and tested, because it is a rule rather than wiring: Principle I's GUI-wiring exception
+/// covers glue with no decision of its own, and "which press takes the keyboard" is a decision. Its
+/// answer is also the argument [`press_routing`] needs — routing the granting press on the previous
+/// view's `false` is what stopped a mouse-aware program ever seeing it (research R5).
+///
+/// Which button is **not** part of the decision. FR-007 puts the pane's own context menu in the
+/// same class as its scrollbar and status bar — furniture, which leaves the terminal holding the
+/// keyboard, "giving it the keyboard, per FR-008b, if it did not already hold it" — so a
+/// right-click on an unfocused pane takes it exactly as a left one does.
+pub(crate) fn press_grants_focus(focused: bool, over_bounds: bool) -> bool {
+    !focused && over_bounds
+}
+
 pub(crate) fn press_routing(focused: bool, mouse_mode: bool, shift: bool) -> PressRouting {
     if focused && mouse_mode && !shift {
         PressRouting::MouseReport
@@ -730,15 +745,13 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             state.modifiers = *m;
         }
 
-        // A click outside the focused pane releases focus back to the app (FR-011). The event is
-        // not captured, so the click still reaches whatever is under it.
-        if self.focused {
-            if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = &event {
-                if !cursor.is_over(bounds) {
-                    shell.publish(Message::TerminalFocusReleased);
-                }
-            }
-        }
+        // Deliberately nothing here for a press *outside* the pane (feature 023, FR-005/FR-006).
+        // Until 023 this published `TerminalFocusReleased`, and that one rule cost two presses on
+        // every control in the bar below: the release re-ran `view()` between the press and its
+        // release, the bar dropped its focus-conditional child, every sibling after it shifted one
+        // index, and iced's positional tree diff handed the pressed control its neighbour's node —
+        // `is_pressed` gone, `on_press` never published (research R1). A press on something that
+        // is none of the pane's business now changes nothing about the keyboard holder.
 
         // ---- Scrollbar: drag the right-edge thumb or click the track to page (FR-016). Handled
         // before selection so a drag on the scrollbar never starts a text selection.
@@ -805,14 +818,19 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
                 if cursor.is_over(bounds) =>
             {
-                if !self.focused {
+                // This press's own answer, not the previous view's. `self.focused` is the flag
+                // from the frame already on screen, so routing on it means the press that grants
+                // focus is reported to nothing — in a TUI the first press does nothing and the
+                // user presses again (FR-008b, research R5).
+                let grants = press_grants_focus(self.focused, true);
+                if grants {
                     shell.publish(Message::TerminalFocused);
                 }
+                let focused_now = self.focused || grants;
                 let pos = cursor.position().unwrap_or_default();
                 let (col, line) = grid_at(pos, bounds, metrics);
                 let shift = state.modifiers.shift();
-                if press_routing(self.focused, self.mouse_mode(), shift)
-                    == PressRouting::MouseReport
+                if press_routing(focused_now, self.mouse_mode(), shift) == PressRouting::MouseReport
                 {
                     if let Some(seq) =
                         self.mouse_report_bytes(0, col, line, true, to_keymap_mods(state.modifiers))
@@ -921,10 +939,17 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
                 if cursor.is_over(bounds) =>
             {
+                // Furniture, but furniture that takes the keyboard if the pane did not have it
+                // (FR-007 → FR-008b): a right-click is a press on the pane, and no press may be
+                // consumed solely to grant focus.
+                let grants = press_grants_focus(self.focused, true);
+                if grants {
+                    shell.publish(Message::TerminalFocused);
+                }
+                let focused_now = self.focused || grants;
                 let pos = cursor.position().unwrap_or_default();
                 let shift = state.modifiers.shift();
-                if press_routing(self.focused, self.mouse_mode(), shift)
-                    == PressRouting::MouseReport
+                if press_routing(focused_now, self.mouse_mode(), shift) == PressRouting::MouseReport
                 {
                     let (col, line) = grid_at(pos, bounds, metrics);
                     if let Some(seq) =
@@ -1132,6 +1157,207 @@ mod tests {
         // while the process has mouse mode on — but selecting for copy is still allowed.
         assert_eq!(
             press_routing(false, true, false),
+            PressRouting::HandleLocally
+        );
+    }
+
+    // --- No press outside the pane reaches the process (feature 023, T011, FR-003/SC-008) ---
+    //
+    // A prohibition is the one kind of claim a visual pass is bad at: watching the screen tells you
+    // what did happen, never that nothing arrived at the far end of a pipe. So this drives the real
+    // widget through `Widget::update` on a headless CPU renderer and reads what it published.
+    //
+    // Inline rather than in `tests/` because `ui::material` is `pub(crate)` — deliberately, so a
+    // call site cannot style a widget by hand — and `TerminalPane` is unreachable from an
+    // integration test.
+
+    mod presses {
+        use super::*;
+        use iced::advanced::renderer::Headless;
+        use iced::advanced::widget::Tree;
+        use iced::advanced::{clipboard, layout::Limits, Layout, Shell};
+        use iced::{Element, Point, Rectangle, Size};
+
+        const WINDOW: Size = Size::new(1200.0, 800.0);
+        /// Comfortably outside a pane that fills the window.
+        const OUTSIDE: Point = Point::new(-40.0, -40.0);
+
+        /// Poll a future known to be immediately ready — the tiny-skia headless constructor does
+        /// no I/O, so one poll suffices and no executor has to be pulled in.
+        fn block_on<F: std::future::Future>(f: F) -> F::Output {
+            let mut f = Box::pin(f);
+            let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+            loop {
+                if let std::task::Poll::Ready(v) = f.as_mut().poll(&mut cx) {
+                    return v;
+                }
+                std::hint::spin_loop();
+            }
+        }
+
+        /// `Some("tiny-skia")` is load-bearing: `iced_wgpu`'s `Headless::new` returns `None` on its
+        /// first line when the hint is not `"wgpu"`, so the CPU rasteriser is picked without a GPU
+        /// ever being probed.
+        fn headless() -> Renderer {
+            block_on(<Renderer as Headless>::new(
+                iced::Font::DEFAULT,
+                iced::Pixels(16.0),
+                Some("tiny-skia"),
+            ))
+            .expect("the tiny-skia headless renderer must construct without a GPU")
+        }
+
+        /// Dispatch one event at `at` into a pane filling the window; return everything it published.
+        fn dispatch(at: Point, focused: bool, event: Event) -> Vec<Message> {
+            let renderer = headless();
+            let grid = crate::grid::GridCache::default();
+            let mut element: Element<'_, Message> = TerminalPane::new(
+                &grid,
+                crate::ui::terminal::TermPalette::from_scheme(
+                    micold_core::theme::ColorScheme::Dark,
+                ),
+            )
+            .focused(focused)
+            .into();
+
+            let mut tree = Tree::new(&element);
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &Limits::new(Size::ZERO, WINDOW),
+            );
+
+            let mut messages: Vec<Message> = Vec::new();
+            let mut shell = Shell::new(&mut messages);
+            element.as_widget_mut().update(
+                &mut tree,
+                &event,
+                Layout::new(&node),
+                mouse::Cursor::Available(at),
+                &renderer,
+                &mut clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(WINDOW),
+            );
+            messages
+        }
+
+        fn reaches_the_process(m: &Message) -> bool {
+            matches!(m, Message::TerminalBytes(_))
+        }
+
+        #[test]
+        fn no_press_outside_the_pane_reaches_the_process() {
+            for button in [
+                mouse::Button::Left,
+                mouse::Button::Right,
+                mouse::Button::Middle,
+            ] {
+                for focused in [false, true] {
+                    let published = dispatch(
+                        OUTSIDE,
+                        focused,
+                        Event::Mouse(mouse::Event::ButtonPressed(button)),
+                    );
+                    assert!(
+                        !published.iter().any(reaches_the_process),
+                        "a {button:?} press outside the pane (focused={focused}) produced input at \
+                         the attached process (FR-003, SC-008): {published:?}"
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn a_press_outside_the_pane_does_not_touch_focus() {
+            // The rule feature 023 deleted (research R1). A press on something that is none of the
+            // pane's business must leave the keyboard exactly where it was (FR-005/FR-006) — and
+            // publishing a release here is what shifted the bar's children mid-click and swallowed
+            // the press underneath.
+            let published = dispatch(
+                OUTSIDE,
+                true,
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            );
+            assert!(
+                !published.iter().any(|m| matches!(
+                    m,
+                    Message::TerminalFocusReleased | Message::TerminalFocused
+                )),
+                "a press outside the pane must not change the keyboard holder \
+                 (FR-005, FR-006, FR-008a): {published:?}"
+            );
+        }
+
+        #[test]
+        fn a_press_inside_an_unfocused_pane_asks_for_focus() {
+            // The complement, so the test above cannot pass by the pane having gone silent.
+            let published = dispatch(
+                Point::new(400.0, 300.0),
+                false,
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            );
+            assert!(
+                published
+                    .iter()
+                    .any(|m| matches!(m, Message::TerminalFocused)),
+                "a press inside an unfocused pane takes the keyboard (FR-008b): {published:?}"
+            );
+        }
+    }
+
+    // --- The press that grants focus (feature 023, FR-008b / research R5) ---
+
+    #[test]
+    fn a_press_over_an_unfocused_pane_grants_focus() {
+        assert!(
+            press_grants_focus(false, true),
+            "this is the press that makes the terminal the keyboard holder (FR-008b)"
+        );
+    }
+
+    #[test]
+    fn nothing_grants_focus_to_a_pane_that_already_has_it() {
+        // Not merely redundant: publishing `TerminalFocused` again on every press inside a focused
+        // pane would be a message per click for a state that never changes.
+        assert!(!press_grants_focus(true, true));
+    }
+
+    #[test]
+    fn a_press_outside_the_bounds_grants_nothing() {
+        // The press belongs to whatever is under it. Feature 023 deleted the rule that made an
+        // outside press release focus; it must not gain one that makes it take focus either.
+        assert!(!press_grants_focus(false, false));
+    }
+
+    #[test]
+    fn a_right_click_on_an_unfocused_pane_grants_focus_too() {
+        // FR-007 files the pane's own context menu with its scrollbar and status bar: furniture,
+        // which leaves the terminal holding the keyboard — and takes it if the pane did not have
+        // it. Which button was pressed is not part of the decision, which is why the function does
+        // not ask.
+        assert!(press_grants_focus(false, true));
+    }
+
+    #[test]
+    fn the_granting_press_is_routed_as_if_focused() {
+        // The bug's mirror image (research R5): routing this press on the *previous* view's
+        // `false` means a mouse-aware program never sees it, and the user presses twice — once to
+        // focus, once for the program. `focused_now` is what makes one press enough.
+        let focused_now = press_grants_focus(false, true);
+        assert_eq!(
+            press_routing(focused_now, true, false),
+            PressRouting::MouseReport,
+            "the press that grants focus must reach a mouse-reporting process (FR-008b, SC-009)"
+        );
+        // Shift still overrides, exactly as on an already-focused pane (FR-013b).
+        assert_eq!(
+            press_routing(focused_now, true, true),
+            PressRouting::HandleLocally
+        );
+        // And with no mouse mode it selects, as it always did.
+        assert_eq!(
+            press_routing(focused_now, false, false),
             PressRouting::HandleLocally
         );
     }
