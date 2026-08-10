@@ -48,9 +48,9 @@ exception (T010, T014).
 **⚠️ CRITICAL**: No story work can begin until T005–T008 are complete — after T005 the codebase does
 not compile until T007 and T008 land.
 
-- [ ] T003 [P] Write failing tests for the predicate in `crates/micold-client/tests/terminal_focus.rs`, covering: its first four terms (`active_session.is_some()`, `!terminal_released`, `focused_field.is_none()`, `overlay == Overlay::None`), one test per term flipping the answer, plus the all-clear case; that only the **displayed** session's terminal is ever eligible — background sessions present with `active_session: None` reads false (FR-020); and that `focus_terminal()` clears both `terminal_released` and `focused_field`, so a `TerminalFocused` press wins over a field that held the keyboard (FR-008b, FR-018). The fifth term, `any_menu_open()`, belongs to US4/T027.
+- [ ] T003 [P] Write failing tests for the predicate in `crates/micold-client/tests/terminal_focus.rs`, covering: its first three terms (`active_session.is_some()`, `!terminal_released`, `focused_field.is_none()`), one test per term flipping the answer, plus the all-clear case; that only the **displayed** session's terminal is ever eligible — background sessions present with `active_session: None` reads false (FR-020); and that `focus_terminal()` clears both `terminal_released` and `focused_field`, so a `TerminalFocused` press wins over a field that held the keyboard (FR-008b, FR-018). The fourth term, `any_surface_takes_keyboard()`, belongs to US4/T027.
 - [ ] T004 [P] Write the failing source gate `no_scattered_release_writes` in the new file `crates/micold-client/tests/terminal_bar_stability.rs`: walk `crates/micold-client/src/**/*.rs` and fail if `terminal_released` is assigned outside the bodies of `focus_terminal()` and `release_terminal()`. The whole tree, not just `app.rs` — the helpers are `pub(crate)` and `features/session.rs` calls them. Follow the shape of `crates/micold-client/tests/showcase_glue.rs`.
-- [ ] T005 In `crates/micold-client/src/app.rs`: replace `pub terminal_focused: bool` with `pub terminal_released: bool` (default `false`); add `pub fn terminal_focused(&self) -> bool` as in [data-model.md](./data-model.md); add `fn any_menu_open(&self) -> bool { false }` as a **stub**, marked `// filled in by US4/T028`, so US4's tests are observed failing; and add the two writers `pub(crate) fn focus_terminal(&mut self)` (clears `terminal_released` **and** `focused_field`) / `pub(crate) fn release_terminal(&mut self)`. `pub(crate)` because T024 calls the first from `features/session.rs`. Point the `TerminalFocused` / `TerminalFocusReleased` arms at those writers.
+- [ ] T005 In `crates/micold-client/src/app.rs`: replace `pub terminal_focused: bool` with `pub terminal_released: bool` (default `false`); add `pub fn terminal_focused(&self) -> bool` as in [data-model.md](./data-model.md); add `fn any_surface_takes_keyboard(&self) -> bool { false }` as a **stub**, marked `// filled in by US4/T028`, so US4's tests are observed failing; and add the two writers `pub(crate) fn focus_terminal(&mut self)` (clears `terminal_released` **and** `focused_field`) / `pub(crate) fn release_terminal(&mut self)`. `pub(crate)` because T024 calls the first from `features/session.rs`. Point the `TerminalFocused` / `TerminalFocusReleased` arms at those writers.
 - [ ] T006 In `crates/micold-client/src/app.rs`, delete the now-redundant `self.terminal_focused = false;` lines from the session-close arm and the `SessionRemoveConfirmed` arm — `active_session = None` already makes the predicate false (FR-012, FR-016).
 - [ ] T007 [P] Point the read sites at the predicate: `crates/micold-client/src/ui/terminal.rs` (`.focused(state.terminal_focused())`) and `crates/micold-client/src/ui/mod.rs` (`subscription()`'s early return). `route_key`'s signature is unchanged — only its argument's provenance.
 - [ ] T008 [P] Migrate every `State { terminal_focused: … }` construction in `crates/micold-client/tests/` to set `terminal_released` or drive the message instead. A test that still names the field will not compile; that is the migration working (research R3).
@@ -99,7 +99,7 @@ the process with no click. Release the terminal first and the release survives t
 
 ### Tests for User Story 2 (MANDATORY) ⚠️
 
-- [ ] T018 [P] [US2] Add `window_focus_changes_no_focus_term` to `crates/micold-client/tests/terminal_focus.rs`: applying `Message::WindowFocusChanged(false)` then `(true)` leaves `terminal_released`, `focused_field`, `overlay`, the menu flags and `active_session` all unchanged, so `terminal_focused()` reads the same before and after — both for a focused terminal and for a released one (FR-013–FR-015).
+- [ ] T018 [P] [US2] Add `window_focus_changes_no_focus_term` to `crates/micold-client/tests/terminal_focus.rs`: applying `Message::WindowFocusChanged(false)` then `(true)` leaves `terminal_released`, `focused_field`, `active_session` and every registered surface's state all unchanged, so `terminal_focused()` reads the same before and after — both for a focused terminal and for a released one (FR-013–FR-015).
 
 ### Implementation for User Story 2
 
@@ -146,11 +146,11 @@ unless it was explicitly released (quickstart §B5).
 
 ### Tests for User Story 4 (MANDATORY) ⚠️
 
-- [ ] T027 [P] [US4] Add failing bounds tests to `crates/micold-client/tests/terminal_focus.rs`: each of the six menu flags makes the predicate false and restores it on close; an open overlay makes it false (FR-017); `FieldFocusChanged(id, true)` then `(id, false)` round-trips (FR-018, FR-010); terminal output and lifecycle changes flip nothing (FR-019); and `terminal_context_menu` being open is **deliberately not** a term — the terminal keeps the keyboard (FR-007, research R4). The menu cases fail against T005's stub, which is the point.
+- [ ] T027 [P] [US4] Add failing bounds tests to `crates/micold-client/tests/terminal_focus.rs`: each registered popover — help menu, project switcher, sidebar filter, and the project/worktree/session context menus — makes the predicate false and restores it on close; an open dialog makes it false (FR-017); `FieldFocusChanged(id, true)` then `(id, false)` round-trips (FR-018, FR-010); terminal output and lifecycle changes flip nothing (FR-019); and `terminal_context_menu` being open is **deliberately not** a term — the terminal keeps the keyboard (FR-007, research R4). The menu cases fail against T005's stub, which is the point.
 
 ### Implementation for User Story 4
 
-- [ ] T028 [US4] In `crates/micold-client/src/app.rs`, replace T005's `any_menu_open()` stub with the real predicate over exactly `help_menu_open`, `project_switcher_open`, `sidebar_filter_open`, `project_menu_open`, `worktree_menu_open`, `session_menu_open` — and not `terminal_context_menu`. Add the comment naming FR-007/research R4 so the omission reads as a decision.
+- [ ] T028 [US4] In `crates/micold-client/src/app.rs`, replace T005's `any_surface_takes_keyboard()` stub with the real predicate: `overlay::registry::open_dialog(self).is_some()`, or any surface in `overlay::registry::open_popovers(self)` whose `SurfaceId` is not `"terminal_context_menu"`. Ask the registry — do **not** write a list of menu flags; that is the list research R2 argued against and feature 024's FR-009 already owns. Add the comment naming FR-007/research R4 so the one exclusion reads as a decision.
 - [ ] T029 [P] [US4] Update `docs/user-guide/worktrees-and-sessions.md`: what takes the keyboard from the terminal (fields, dialogs, menus), what gives it back, and that the terminal's own right-click menu does not.
 - [ ] T030 [US4] Run quickstart §B5 with the `visual-pass` skill and append the pass to `specs/023-terminal-focus-flow/visual-pass.md`.
 
@@ -178,7 +178,7 @@ unless it was explicitly released (quickstart §B5).
 - **US2 (Phase 4)**: after Phase 2. Independent — it asserts an absence, so it needs no US1 code.
 - **US3 (Phase 5)**: after Phase 2. Independent of US1/US2/US4.
 - **US4 (Phase 6)**: after Phase 2. Independent of US1–US3, and the only story that touches
-  `any_menu_open()` — T005 leaves it a stub precisely so T027 goes Red.
+  `any_surface_takes_keyboard()` — T005 leaves it a stub precisely so T027 goes Red.
 - **Polish (Phase 7)**: after every story you intend to ship.
 
 ### Task-Level Graph

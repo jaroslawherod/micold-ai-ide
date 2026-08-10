@@ -19,7 +19,7 @@ Green is the gate. The gates that matter to this feature, and what each is watch
 
 | Gate | Watching |
 |---|---|
-| `terminal_focus.rs` | the predicate's truth table over all five terms; only the displayed session's terminal is ever eligible (FR-020); each navigation clearing a release; a release surviving a dialog and a window switch; launch focusing a restored session |
+| `terminal_focus.rs` | the predicate's truth table over all four terms; only the displayed session's terminal is ever eligible (FR-020); each navigation clearing a release; a release surviving a dialog and a window switch; launch focusing a restored session |
 | `terminal_focus.rs` (kept from 006) | `route_key`'s truth table — unchanged by this feature, and the regression check that says so |
 | `terminal_pane.rs`'s inline `mod tests` | `press_routing`; `press_grants_focus`, the press that grants focus (FR-008b) — the case that made a TUI need two presses; and **no press outside the pane's bounds produces a `TerminalAction(Write(..))`** (FR-003, SC-008). Inline because both functions are `pub(crate)` |
 | `terminal_bar_stability.rs` | **the bottom bar does not branch on terminal focus**, and `terminal_released` is written only by the two helpers, anywhere in `crates/micold-client/src/`. The gate most likely to catch a real regression: a focus-conditional child shifts its siblings and iced silently swallows the press on them (research R1) |

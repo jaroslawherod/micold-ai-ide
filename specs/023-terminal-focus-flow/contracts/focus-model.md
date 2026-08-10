@@ -21,14 +21,17 @@ it.
   active_session.is_some()
     && !terminal_released
     && focused_field.is_none()
-    && overlay == Overlay::None
-    && !any_menu_open()
+    && !any_surface_takes_keyboard()
   ```
 
-- `any_menu_open()` covers `help_menu_open`, `project_switcher_open`, `sidebar_filter_open`,
-  `project_menu_open`, `worktree_menu_open`, `session_menu_open`. It does **not** cover
-  `terminal_context_menu`: the pane's own right-click menu is pane furniture (FR-007), and taking the
-  keyboard to open it would stop the user typing.
+- `any_surface_takes_keyboard()` asks the overlay registry, not a list of flags:
+  `registry::open_dialog(state).is_some()`, or any surface in `registry::open_popovers(state)` whose
+  `SurfaceId` is not `"terminal_context_menu"`. The pane's own right-click menu is pane furniture
+  (FR-007) — taking the keyboard to open it would stop the user typing — and it is the only
+  exclusion; the project, worktree and session context menus all take it. Reading the registry
+  rather than naming flags means a surface registered later participates automatically, which is
+  feature 024's FR-009 ("one line per surface, and this is the only such list") doing the work
+  research R2 asked for.
 
 At most one terminal is ever focused, and only the displayed session's (FR-020) — structural, since
 `active_session` is the only session the predicate names.
@@ -138,7 +141,7 @@ is not running, and what the user types is discarded exactly as today.
 
 ## Tests
 
-- `tests/terminal_focus.rs` — the predicate's truth table over its five terms; every navigation
+- `tests/terminal_focus.rs` — the predicate's truth table over its four terms; every navigation
   clearing a release; a release surviving a dialog round-trip and a window switch; launch focusing a
   restored session; `route_key` unchanged.
 - `src/ui/material/terminal_pane.rs`'s inline `mod tests` — `press_routing`'s existing truth table,

@@ -92,7 +92,7 @@ one helper in `src/features/session.rs`. 26 functional requirements; ~7 files; n
 - [x] **IV. Local-First Storage (NON-NEGOTIABLE)**: Nothing is stored, read, or transmitted. Both
       focus facts live in memory for the lifetime of the process.
 - [x] **V. Rust + iced Stack**: Rust + iced only. The type system does the enforcing: deriving
-      `terminal_focused()` from `active_session`, `overlay`, and `focused_field` makes "focused with
+      `terminal_focused()` from `active_session`, the overlay registry, and `focused_field` makes "focused with
       no session displayed" and "focused while a text field is typing" unrepresentable, where today
       they are runtime rules seven assignments must all remember. That is a state machine deleted,
       not added.

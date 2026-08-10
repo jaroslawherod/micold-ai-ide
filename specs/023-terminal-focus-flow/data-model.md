@@ -9,9 +9,9 @@ focus is a property of this client's window, not of the session model the daemon
 |---|---|---|---|---|
 | `terminal_released` | `bool` | `false` | no | The user has explicitly handed the keyboard from the terminal to the application. **New** — replaces `terminal_focused`. |
 | `focused_field` | `Option<FieldId>` | `None` | no | Which text field holds the keyboard. **Exists** (BUG-003); this feature is its second consumer. |
-| `overlay` | `Overlay` | `None` | no | The open modal, if any. **Exists**, unchanged. |
-| `help_menu_open`, `project_switcher_open`, `sidebar_filter_open` | `bool` | `false` | no | Open popovers. **Exist**, unchanged. |
-| `project_menu_open`, `worktree_menu_open`, `session_menu_open` | `Option<…>` | `None` | no | Open context menus. **Exist**, unchanged. |
+| the dialogs' own state | various | — | no | Since feature 024's T037 there is no `overlay` slot: each dialog's presence *is* its being open, and `overlay::registry::open_dialog(&State)` is what asks. **Exists**, unchanged by this feature. |
+| `help_menu_open`, `project_switcher_open`, `sidebar_filter_open` | `bool` | `false` | no | Open popovers. **Exist**, unchanged — but read through the registry, not by name. |
+| `project_menu_open`, `worktree_menu_open`, `session_menu_open` | `Option<…>` | `None` | no | Open context menus. **Exist**, unchanged — likewise read through the registry. |
 | `active_session` | `Option<SessionId>` | `None` | no (derived on restore) | The displayed session. **Exists**, unchanged. |
 | `terminal_context_menu` | `Option<(u16, u16)>` | `None` | no | The pane's own right-click menu. **Exists** — deliberately *not* a term of the predicate (research R4). |
 
@@ -31,26 +31,36 @@ impl State {
         self.active_session.is_some()
             && !self.terminal_released
             && self.focused_field.is_none()
-            && self.overlay == Overlay::None
-            && !self.any_menu_open()
+            && !self.any_surface_takes_keyboard()
     }
 
-    /// Any popover or context menu that takes the keyboard while it is open (FR-004).
-    /// `terminal_context_menu` is excluded — it is pane furniture (FR-007, research R4).
-    fn any_menu_open(&self) -> bool {
-        self.help_menu_open
-            || self.project_switcher_open
-            || self.sidebar_filter_open
-            || self.project_menu_open.is_some()
-            || self.worktree_menu_open.is_some()
-            || self.session_menu_open.is_some()
+    /// Any floating surface that takes the keyboard while it is open (FR-004, FR-017): every
+    /// dialog, and every popover *except* the terminal's own context menu, which is pane
+    /// furniture (FR-007, research R4).
+    fn any_surface_takes_keyboard(&self) -> bool {
+        use crate::overlay::{registry, SurfaceId};
+        registry::open_dialog(self).is_some()
+            || registry::open_popovers(self)
+                .iter()
+                .any(|open| open.id() != SurfaceId::new("terminal_context_menu"))
     }
 }
 ```
 
-`any_menu_open()` is the fifth term and belongs to User Story 4. It lands as a stub returning `false`
-with the rest of the predicate, and is filled in by that story so its tests are observed failing
-first (Principle I).
+**Why the registry and not a list of flags.** This was drafted against feature 024's predecessor as
+`overlay == Overlay::None && !any_menu_open()`, where `any_menu_open()` named its six popover flags
+one by one. That slot is gone — 024's T037 deleted the `Overlay` enum, and each surface now says it
+is open by holding the state it draws from — so the first half no longer compiles. The second half
+would still have compiled, and that is the trap: a hand-written list of six flags is exactly the
+"list nobody remembers to extend" that research R2 argued against, and the registry is feature 024's
+answer to it ("one line per surface, and this is the only such list", its FR-009). A surface added
+later participates in terminal focus automatically. `SurfaceId` comparison rather than a `Layer`
+test because the exclusion is about *which* menu, not which band — the other two context menus do
+take the keyboard.
+
+`any_surface_takes_keyboard()` is the fourth term and belongs to User Story 4. It lands as a stub
+returning `false` with the rest of the predicate, and is filled in by that story so its tests are
+observed failing first (Principle I).
 
 ### Invariants the predicate makes structural
 
@@ -58,7 +68,7 @@ first (Principle I).
 |---|---|---|
 | No terminal holds the keyboard when none is displayed | FR-012, FR-016, FR-020 | `active_session.is_some()` is a conjunct |
 | A text field and the terminal never both hold it | FR-018 | `focused_field.is_none()` is a conjunct |
-| A dialog and the terminal never both hold it | FR-017 | `overlay == None` is a conjunct |
+| A dialog and the terminal never both hold it | FR-017 | `!any_surface_takes_keyboard()` is a conjunct, and it asks the registry rather than a list |
 | Only the displayed session's terminal is eligible | FR-020 | `active_session` is the only session the predicate names |
 | Output never changes the holder | FR-019 | No term of the predicate is written by output or lifecycle |
 
@@ -110,8 +120,8 @@ no-op rather than a second write.
 | `TerminalFocusReleased` (chord or affordance) | `release_terminal()` | FR-021 |
 | `FieldFocusChanged(id, true)` | `focused_field = Some(id)` (existing) ⇒ predicate false | FR-004 |
 | `FieldFocusChanged(id, false)` | `focused_field = None` (existing, guarded) ⇒ predicate true again unless released | FR-010 |
-| `open_overlay(_)` | `overlay = …`, `focused_field = None` (existing) ⇒ predicate false | FR-017 |
-| Overlay closed | `overlay = None` ⇒ predicate true again unless released | FR-010 |
+| `clear_for_dialog()` then a dialog opens | the dialog's own state is set, `focused_field = None` (existing) ⇒ predicate false | FR-017 |
+| Dialog closed | its state is cleared, `open_dialog()` is `None` ⇒ predicate true again unless released | FR-010 |
 | Session closed / removed / worktree deleted | `active_session = None` (existing) ⇒ predicate false. The two `terminal_focused = false` lines that accompanied it are deleted as redundant | FR-012 |
 | Window blur / focus (`WindowFocusChanged`) | **nothing** — no term is touched, so the holder survives the round trip | FR-013–FR-015 |
 | Terminal output, lifecycle change, background session activity | **nothing** | FR-019 |
@@ -127,9 +137,9 @@ user deliberately going to a terminal.
 
 | Spec entity | Runtime representation |
 |---|---|
-| Keyboard holder | Not stored. Answered by `terminal_focused()` and, for everything else, by whichever of `focused_field` / `overlay` / menu flag is set |
+| Keyboard holder | Not stored. Answered by `terminal_focused()` and, for everything else, by `focused_field` or by whichever surface the registry reports open |
 | Displayed terminal | `active_session` + that session's `mode` / `active_shell` (existing, unchanged) |
-| Transient holder | `focused_field`, `overlay`, and the menu flags — each already ends itself, which is why FR-010 needs no restore stack |
+| Transient holder | `focused_field` and every registered floating surface — each already ends itself, which is why FR-010 needs no restore stack |
 | Explicit release | `terminal_released` |
 | Suspended holder | **No runtime existence.** Nothing mutates on window blur, so there is nothing to suspend or restore. Recorded here because the spec names the entity and a reader will look for it |
 
