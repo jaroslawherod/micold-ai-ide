@@ -76,6 +76,31 @@ places the decision actually lives: `press_grants_focus`'s truth table and
 `MouseReport` under mouse mode — the exact thing that was `HandleLocally` before, and the reason a
 TUI needed a second press.
 
+## §B3 — Away and back (US2, SC-003) + the undisturbed process (FR-025) — **PASS**
+
+**Date**: 2026-08-10, at `f777128`.
+
+OS focus was moved off the application and back with a second X client (`xterm`), since `:78` has no
+window manager and nothing else sets input focus.
+
+**1. Typing resumes with no click.** Focused terminal → focus to the xterm → focus back → typed. The
+characters appeared at the shell prompt (`v-b3-final.png`). No click in between.
+
+**2. A release survives the round trip.** Terminal released via the affordance → focus to the xterm
+→ focus back → typed `MUST_NOT_REACH_THE_SHELL`. The prompt line stayed **empty**
+(`v-b3-released-rt.png`); not one character reached the process, and the release affordance was
+still drawn muted in the bar with its siblings unmoved. Returning to a window is not a request to
+undo a decision the user made before leaving.
+
+**3. A dialog field survives.** Not driven here — covered by
+`a_field_still_holds_the_keyboard_after_a_window_round_trip`, which asserts `focused_field` is
+unchanged across the round trip and that the terminal has not taken the keyboard back.
+
+**4. The process is undisturbed (FR-025).** `yes | nl | head -100000` was left printing while focus
+was released and re-acquired **six** times and the window focus round trip above was performed. The
+line numbers ran from 43869 to **100000** — consecutive, no gap, no restart from 1, no reflow
+(`v-b3-running.png` → `v-b3-final.png`). Focus is not something the attached process can notice.
+
 ## §B1 — rapid alternation (spec Edge Cases) — not run
 
 Left for T034's full sitting.
@@ -84,8 +109,7 @@ Left for T034's full sitting.
 
 ## Sections still to run
 
-§B3 (US2), §B4 (US3), §B5 (US4) — each with its own story, plus the whole of §B in one sitting at
-T034.
+§B4 (US3), §B5 (US4) — each with its own story, plus the whole of §B in one sitting at T034.
 
 ## Frames
 
@@ -95,3 +119,5 @@ In the run's scratchpad, not committed:
 - `v-b1-typed.png` — the characters that followed with no click
 - `v-b2-compare.png` — focused vs released, controls unmoved
 - `v-b6.png` — the granting press and what it let through
+- `v-b3-final.png` — 100000 unbroken lines, and typing after the window round trip
+- `v-b3-released-rt.png` — the empty prompt after a released terminal came back

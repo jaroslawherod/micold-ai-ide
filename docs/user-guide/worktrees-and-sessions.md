@@ -512,6 +512,15 @@ What a press does to the keyboard depends only on what you pressed:
 The release control is always in the bottom bar, and greys out when the terminal does not hold the
 keyboard — it does not appear and disappear as you work.
 
+### Leaving the app and coming back
+
+Switching to another window and back changes nothing about where the keyboard is. If you were
+typing in a terminal, keep typing — no click. If you had released the terminal, it stays released
+and your app shortcuts keep working. If you were half-way through a dialog field, the caret is
+still in it.
+
+Nothing is saved and restored here; there is simply nothing for leaving the window to change.
+
 ### Pressing into the terminal
 
 Pressing a terminal that does not hold the keyboard both gives it the keyboard **and** does what the
