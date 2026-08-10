@@ -65,5 +65,27 @@ both NUL streams through files.
 
 ## Part B results
 
-_Pending — see tasks T008–T010, T018–T025, T027, T031, T040–T042. All require a live pull request;
-T009 additionally requires a token that can write repository rulesets._
+### B0 — the ruleset switch (T008–T010) — 2026-08-10
+
+Feature pull request [#134](https://github.com/jaroslawherod/micold-ai-ide/pull/134), run
+`31394068048`. Being code-affecting, it exercised the full pipeline and produced the new context
+alongside the four legacy ones, which is what made the switch safe to apply while it was open.
+
+| Step | Result |
+|------|--------|
+| T008 — a run produced `ci complete` | ✅ `gh pr checks` listed it before the ruleset was touched |
+| T009 — swap four contexts for one | ✅ `PUT /rulesets/19840981` |
+| T010 — verify | ✅ required contexts = `ci complete` alone; `deletion`, `non_fast_forward`, `pull_request`, `required_linear_history`, `required_status_checks`, `code_quality` all intact; enforcement `active`; zero bypass actors; PR `MERGEABLE`/`CLEAN` |
+
+`PUT` is the working method — a previously recorded 404 came from `PATCH`, which these endpoints do
+not implement. The body was rebuilt from `ruleset.before.json` and diffed against it before sending;
+the only difference was the contexts.
+
+Classification on that run: `docs_only=false`, `reason=9 non-documentation path(s) of 23`. The
+reason matters as much as the verdict — `base ref unavailable` would also have produced `false`,
+and the full pipeline would have run for the wrong reason, with nothing visibly wrong. That was
+analysis finding C1, fixed by fetching the base ref explicitly.
+
+### B1 — the documentation-only path (T018)
+
+_This very pull request. Results recorded on merge._
