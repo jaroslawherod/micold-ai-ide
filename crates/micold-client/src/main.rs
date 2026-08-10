@@ -25,6 +25,7 @@ use micold_core::frame_probe::{
 };
 use micold_core::fs_scan::{FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
+use micold_core::os_theme::OsThemeProbe;
 use micold_core::protocol::grid::LineId;
 use micold_core::protocol::messages::{
     CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, SessionProcess, WireLifecycle,
@@ -2742,7 +2743,23 @@ fn map_system_scheme(mode: dark_light::Mode) -> SystemScheme {
 /// every frame. The fallback now happens in the reducer (`Message::SystemThemeChanged`,
 /// `src/app.rs`), which already has the previous scheme in `self.system_scheme`.
 fn detect_system_scheme() -> Result<SystemScheme, ()> {
-    dark_light::detect().map(map_system_scheme).map_err(|_| ())
+    SystemThemeProbe.detect()
+}
+
+/// The real [`OsThemeProbe`] (feature 021, T047): the codebase's only direct operating-system
+/// branch, now behind the capability.
+///
+/// Here rather than in the core, where the trait and its fake live, because `dark-light` is a
+/// client dependency and `micold-core` deliberately has none on it — that is why
+/// [`SystemScheme`] mirrors `dark_light::Mode` instead of re-exporting it. Moving the call into
+/// the core to "isolate the OS branch" would have put the OS crate in the render-free half, which
+/// is the opposite of isolating it. The shell owns the concrete implementation; that is FR-017.
+struct SystemThemeProbe;
+
+impl OsThemeProbe for SystemThemeProbe {
+    fn detect(&self) -> Result<SystemScheme, ()> {
+        dark_light::detect().map(map_system_scheme).map_err(|_| ())
+    }
 }
 
 fn os_theme_poll(interval: Duration) -> Subscription<Message> {

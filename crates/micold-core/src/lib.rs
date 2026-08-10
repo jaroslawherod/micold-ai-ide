@@ -22,6 +22,7 @@ pub mod logout_survival;
 pub mod metadata;
 pub mod naming;
 pub mod notify;
+pub mod os_theme;
 pub mod overlay;
 pub mod project;
 pub mod protocol;

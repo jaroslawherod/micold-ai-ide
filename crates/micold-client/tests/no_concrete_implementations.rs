@@ -127,6 +127,8 @@ fn the_only_excluded_implementations_are_fakes() {
         "FakeTerminalBackend",
         // T046's, added in the commit it appeared in — which is what this list is for.
         "FakeEnvIncludeResolver",
+        // T047's.
+        "FakeOsThemeProbe",
     ]
     .iter()
     .map(|s| s.to_string())

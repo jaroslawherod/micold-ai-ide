@@ -125,6 +125,11 @@ pub const PORTS: &[&str] = &[
     // Declared at T046, alongside T043's behaviour test. Listed the moment it existed: a
     // capability the guards do not know about is one FR-017 and FR-019 are not holding.
     "EnvIncludeResolver",
+    // T047's. Its real implementation lives in the *client*, not the core — `dark-light` is a
+    // client dependency and the core deliberately has none on it — so the coverage guard finds
+    // its fake here while `no_concrete_implementations` never sees the real one. Recorded at
+    // both sites rather than left as a surprise.
+    "OsThemeProbe",
 ];
 
 /// One `impl <Port> for <Type>`, and where it was found.
