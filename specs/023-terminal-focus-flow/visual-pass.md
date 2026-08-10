@@ -141,9 +141,23 @@ keeps the keyboard while a background session produces output and reaches `Runni
 directly by `output_and_lifecycle_never_change_the_holder`, which checks `focused_field` is
 untouched across exactly those events.
 
-## §B1 — rapid alternation (spec Edge Cases) — not run
+## §B1 — rapid alternation (spec Edge Cases) — **PASS**
 
-Left for T034's full sitting.
+Six alternating 250 ms presses — release affordance, into the pane, release affordance, into the
+pane, … — ending on a press **into** the pane. `echo SETTLED_ON_LAST_PRESS` typed straight
+afterwards reached the shell (`w-alt.png`), and the affordance was drawn bright.
+
+The state settled on exactly what the last press asked for. Nothing lingered from an earlier one,
+and nothing was restored behind the user's back — which is what the derived holder buys: there is no
+saved state to come back, and after T015 no follow-up message that could arrive late.
+
+## Final verification (T033/T034)
+
+`mise run test` — 184 test targets, all green. `cargo fmt --check` clean, `clippy -D warnings`
+clean. CI covers Linux, macOS and Windows; no `cfg(target_os)` was added by this feature, so a
+platform-only failure would be a real finding rather than an expected difference.
+
+Every §B section has now run against a build containing the whole feature.
 
 ---
 

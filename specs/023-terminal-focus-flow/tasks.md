@@ -160,10 +160,10 @@ unless it was explicitly released (quickstart §B5).
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T031 [P] Re-point the header comment of `crates/micold-client/tests/terminal_focus.rs` at `specs/023-terminal-focus-flow/contracts/focus-model.md` (v2) instead of 006's.
-- [ ] T032 [P] Cross-cutting documentation review in `docs/`: the focus rules must read consistently wherever they appear, and nothing may still describe the click-outside release.
-- [ ] T033 Verify `mise run test`, `cargo fmt --check` and clippy are green locally, and that every job in `.github/workflows/ci.yml` passes on Linux, macOS and Windows (Principle VI). No `cfg(target_os)` was added, so a platform-only failure is a real finding.
-- [ ] T034 Run the whole of `quickstart.md` — §A end to end and §B1–§B6 in one sitting — and finalize `specs/023-terminal-focus-flow/visual-pass.md` against `visual-pass-baseline.md` from T001, so SC-002's "one press, down from two" is evidenced by both frames.
+- [X] T031 [P] Re-point the header comment of `crates/micold-client/tests/terminal_focus.rs` at `specs/023-terminal-focus-flow/contracts/focus-model.md` (v2) instead of 006's.
+- [X] T032 [P] Cross-cutting documentation review in `docs/`: the focus rules must read consistently wherever they appear, and nothing may still describe the click-outside release.
+- [X] T033 Verify `mise run test`, `cargo fmt --check` and clippy are green locally, and that every job in `.github/workflows/ci.yml` passes on Linux, macOS and Windows (Principle VI). No `cfg(target_os)` was added, so a platform-only failure is a real finding.
+- [X] T034 Run the whole of `quickstart.md` — §A end to end and §B1–§B6 in one sitting — and finalize `specs/023-terminal-focus-flow/visual-pass.md` against `visual-pass-baseline.md` from T001, so SC-002's "one press, down from two" is evidenced by both frames.
 
 ---
 
