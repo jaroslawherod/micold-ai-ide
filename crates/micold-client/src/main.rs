@@ -2409,9 +2409,13 @@ fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktree
         }
     }
     // Clear a dangling active-session pointer if its session is gone.
+    //
+    // Feature 024: through `set_current_session`, like every other app-initiated clear, so the row
+    // the vanished session was in is committed open rather than snapping shut under the user
+    // (FR-001c). Nothing is armed: there is no session to scroll to.
     if let Some(id) = core.active_session {
         if core.workspace.find_session(id).is_none() {
-            core.active_session = None;
+            core.set_current_session(None);
         }
     }
 }

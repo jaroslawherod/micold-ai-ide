@@ -180,3 +180,32 @@ fn forget_confirmed_removes_an_unavailable_project() {
         .any(|p| p.path == *Path::new("/gone")));
     assert_eq!(state.workspace.projects.len(), 1);
 }
+
+// --- Feature 024: forgetting the active project clears the pointer like anything else ---------
+
+#[test]
+fn forgetting_the_active_project_clears_the_current_session_through_the_one_path() {
+    let mut state = state_with_projects(&["/a", "/b"]);
+    let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let id = session.id;
+    state
+        .workspace
+        .sessions
+        .insert(PathBuf::from("/b"), vec![session]);
+    state.active_session = Some(id);
+    state.pending_reveal_scroll = false;
+
+    state.update(Message::ProjectForgetRequested(PathBuf::from("/b")));
+    state.update(Message::ProjectForgetConfirmed);
+
+    assert!(
+        state.active_session.is_none(),
+        "the project holding it is gone, so no session is current"
+    );
+    assert!(
+        !state.pending_reveal_scroll,
+        "and nothing is armed to scroll to. This is an app-initiated clear like the close and \
+         remove arms, and it goes through the same function for the same reason — a scroll armed \
+         with no target stays armed, then fires against whatever row appears next (invariant I5)"
+    );
+}

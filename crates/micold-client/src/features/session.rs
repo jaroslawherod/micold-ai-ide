@@ -80,9 +80,14 @@ impl State {
     ///    when the user closes the session they were on.
     ///
     /// The reveal itself is not written anywhere: which row is open is derived on every view from
-    /// the field this sets. Nothing here decides motion either — the row opens by the same path a
-    /// user's own expand opens it, which is instant today, and would inherit any motion that path
-    /// gains (FR-010a).
+    /// the field this sets.
+    ///
+    /// **Nothing here decides motion, deliberately** (FR-010a). The row opens by exactly the path a
+    /// user's own expand opens it — which is instant today, since `TreeView` builds its rows from
+    /// the item list and expanding simply adds items. If expansion ever gains a transition, the
+    /// reveal inherits it rather than needing one of its own; special-casing the reveal would give
+    /// the application two different expansion behaviours depending on who triggered it, which is
+    /// the opposite of what that requirement asks for.
     pub fn set_current_session(&mut self, next: Option<SessionId>) {
         if self.active_session == next {
             return;
