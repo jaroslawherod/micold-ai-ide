@@ -1,0 +1,27 @@
+# The documentation set (feature 023).
+#
+# `micold-docs` marks paths whose contents cannot affect what is built, linted, packaged or
+# tested. CI skips the whole build when a change touches nothing else -- see
+# `docs/development/ci-pipeline.md`.
+#
+# This is the single declaration. Two consumers read it, both through `git check-attr micold-docs`,
+# so they cannot drift apart:
+#   - scripts/classify-change.sh                          (which paths did this change touch)
+#   - crates/micold-core/tests/documentation_is_not_read.rs (which paths may no test read)
+#
+# Pinned by scripts/tests/documentation-set.test.sh. `set` means documentation; both `unset` and
+# `unspecified` mean code, so a path is code until declared otherwise. Patterns use gitignore
+# syntax; negation (`!`) is not valid here, so an exception is carved out by unsetting (`-attr`)
+# on a later line -- the last matching line wins.
+
+docs/**       micold-docs
+specs/**      micold-docs
+/*.md         micold-docs
+/LICENSE      micold-docs
+/*.png        micold-docs
+
+# Compiled into the binary, so a build input rather than documentation: micold-core's
+# `metadata.rs` does `include_str!("../../../CHANGELOG.md")` so the app can show a "what's new"
+# view with no filesystem or network access (Constitution Principle IV). Changing it changes the
+# artifact, so it takes the full pipeline. Must stay after `/*.md`, which sets the attribute.
+/CHANGELOG.md -micold-docs

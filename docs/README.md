@@ -42,6 +42,10 @@ verified in CI.
   component in every posed state, in both schemes, on one page (`mise run showcase`): how to launch it,
   how to add a component to it, what each completeness failure means, and what it deliberately does not
   cover.
+- [The CI pipeline](development/ci-pipeline.md) — why a change that touches only documentation or
+  specs skips the build entirely, where the documentation set is declared, the single status check
+  the default branch requires and the two properties that keep it honest, how to force a full run,
+  and what to do when the pipeline surprises you.
 
 ## The session service (daemon)
 
