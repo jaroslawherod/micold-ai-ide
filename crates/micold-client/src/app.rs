@@ -1454,6 +1454,7 @@ impl State {
                 // Making a session the displayed session puts the user in front of a terminal,
                 // so it holds the keyboard (FR-011). No re-assertion from the gui path any more:
                 // nothing releases focus on the same click, so there is no race to win.
+                self.focus_terminal();
             }
             Message::SessionSelected(id) => {
                 // Feature 024: the ONE writer that does not go through `set_current_session`

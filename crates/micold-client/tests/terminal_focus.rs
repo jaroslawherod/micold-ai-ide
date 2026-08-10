@@ -226,14 +226,25 @@ fn the_current_session_is_marked_whether_or_not_its_terminal_has_focus() {
     let mut state = state_with_current_session();
     let marked = state.active_session;
 
+    // Feature 023 made `terminal_focused` a derived question, so the two states are reached by
+    // driving the messages rather than by assigning a field.
     for focused in [true, false] {
-        state.terminal_focused = focused;
+        state.update(if focused {
+            Message::TerminalFocused
+        } else {
+            Message::TerminalFocusReleased
+        });
+        assert_eq!(
+            state.terminal_focused(),
+            focused,
+            "precondition: the keyboard is where this iteration says it is"
+        );
         assert_eq!(
             state.active_session, marked,
             "the mark says which session the main area is showing, not where the keyboard is \
-             going. A project switch deliberately does not carry focus across, so tying the two \
-             together would leave the panel unmarked in exactly the case this feature exists for \
-             (FR-014)"
+             going. The two are independent facts: a released terminal is still the session you \
+             are looking at, and tying them together would leave the panel unmarked in exactly \
+             the case this feature exists for (FR-014)"
         );
         assert!(
             state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
@@ -277,6 +288,8 @@ fn a_stopped_or_failed_session_that_is_current_is_still_marked() {
              need to find it"
         );
     }
+}
+
 // ---- Feature 023: the keyboard holder is derived, not stored ----
 //
 // `terminal_focused` is a question now, not a field. These cover the terms the predicate is a
