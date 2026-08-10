@@ -186,12 +186,12 @@ stays hidden.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T054 Run the whole automated gate: `mise run test`, and record which of quickstart §A's rows each new test satisfies
-- [ ] T055 Add the two assertions §A cannot currently claim: exactly one session row carries the mark when several sessions share a location (FR-002, contract §4.1) in `crates/micold-client/tests/features_sidebar.rs`, and the mark is independent of `terminal_focused` and of `lifecycle` (FR-014, FR-015, §4.4) in `crates/micold-client/tests/terminal_focus.rs`
+- [X] T054 Run the whole automated gate: `mise run test`, and record which of quickstart §A's rows each new test satisfies
+- [X] T055 Add the two assertions §A cannot currently claim: exactly one session row carries the mark when several sessions share a location (FR-002, contract §4.1) in `crates/micold-client/tests/features_sidebar.rs`, and the mark is independent of `terminal_focused` and of `lifecycle` (FR-014, FR-015, §4.4) in `crates/micold-client/tests/terminal_focus.rs`
 - [ ] T056 Run quickstart §B B1–B6 with the repo's `visual-pass` skill and fill in the recording table in [quickstart.md](./quickstart.md) — a step that fails is a defect, not a note. B1, B2 and B4 are the three headline claims and none can be automated; if §B was not run, say so rather than leaving the table blank
 - [ ] T057 Capture the §B screenshots with `mise run screenshot` — B1's first frame after a switch and B2's pair of schemes — and check B2's pair in greyscale, which is the only real test of FR-003a
 - [ ] T058 If §B judges the 500-weight name too subtle, apply R4's pre-argued fallback (an outline on the pill) rather than inventing a third cue — and record the decision in [research.md](./research.md) R4
-- [ ] T059 [P] Cross-cutting docs review in `docs/`: confirm the two edited sections still read as one narrative and that nothing else in the user guide now describes the old collapsed-after-switch behaviour
+- [X] T059 [P] Cross-cutting docs review in `docs/`: confirm the two edited sections still read as one narrative and that nothing else in the user guide now describes the old collapsed-after-switch behaviour
 - [ ] T060 Confirm CI is green on Linux, macOS and Windows for `.github/workflows/ci.yml` (Principle VI) — the feature has no platform branch, so a platform-specific failure means a geometry assumption leaked
 
 ---
