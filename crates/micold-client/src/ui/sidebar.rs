@@ -127,6 +127,11 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         // density scale, not a bespoke shrink (FR-026c).
         .density(tokens::density::DENSE)
         .label_role(TypeRole::SidebarName)
+        // The current session's row is marked by the selected fill *and* by a heavier name
+        // (feature 024, FR-003a). Two channels rather than one, because the fill is a colour and
+        // the row beside it can be hovered — a state layer is also a fill change, and the two must
+        // stay tellable apart without relying on hue.
+        .selected_label_role(TypeRole::SidebarSessionCurrent)
         .into();
     let list: Element<'_, Message> = match hint {
         Some(hint) => column![tree, hint].spacing(spacing::SM).into(),

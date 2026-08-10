@@ -160,6 +160,7 @@ pub struct TreeView<'a, M> {
     items: Vec<TreeItem<'a, M>>,
     roles: Roles,
     label_role: TypeRole,
+    selected_label_role: Option<TypeRole>,
     density: i8,
 }
 
@@ -170,6 +171,7 @@ impl<'a, M: Clone + 'a> TreeView<'a, M> {
             items,
             roles,
             label_role: TypeRole::Body,
+            selected_label_role: None,
             density: density::STANDARD,
         }
     }
@@ -192,6 +194,25 @@ impl<'a, M: Clone + 'a> TreeView<'a, M> {
         self.label_role = role;
         self
     }
+
+    /// The role the **selected** row's label is set at, when it should differ from the rest
+    /// (feature 024, FR-003a).
+    ///
+    /// Unset by default, so a list that does not ask for it renders every row at
+    /// [`label_role`](Self::label_role) exactly as before.
+    ///
+    /// It exists because a selected row is otherwise marked by fill alone, and fill is a colour —
+    /// unavailable to a reader with a colour-vision deficit, and indistinguishable from the hover
+    /// state layer that shares the row. Passing a role rather than a weight keeps the difference
+    /// inside the type scale, where it is auditable, instead of letting a call site name a number.
+    ///
+    /// A view-level setting rather than a per-item one on purpose: which row is selected is
+    /// already `TreeItem::selected`, and a second per-row way to say the same thing is a second
+    /// thing to keep in step.
+    pub fn selected_label_role(mut self, role: TypeRole) -> Self {
+        self.selected_label_role = Some(role);
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
@@ -200,6 +221,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             items,
             roles: r,
             label_role,
+            selected_label_role,
             density: step,
         } = tv;
         // The row's own height and horizontal padding both follow the density (§7.2): a dense row
@@ -292,8 +314,15 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // controls leave it. This used to be a plain `text(...).wrapping(Wrapping::None)`,
             // which keeps the single line but does not clip: a long session name was measured at
             // its full width and drawn straight over the close button beside it.
+            // The selected row may carry a heavier role than its siblings (FR-003a). Only the
+            // *label* takes it: the leading icon and the second line's indent stay on
+            // `label_role`, so a row changing emphasis cannot shift the column its name starts in.
+            let row_label_role = match selected_label_role {
+                Some(role) if item.selected => role,
+                _ => label_role,
+            };
             line = line.push(super::Ellipsized::at_role(
-                item.label, label_role, item.tint,
+                item.label, row_label_role, item.tint,
             ));
 
             if let Some(custom) = item.trailing_custom {

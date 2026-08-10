@@ -1289,3 +1289,190 @@ fn opening_a_dialog_forgets_the_field_that_had_focus() {
 
     assert_eq!(state.focused_field, None);
 }
+
+// --- Feature 024: collapsing the row the app opened -------------------------------------------
+//
+// Contract §2.1. This lands in the foundational phase, ahead of the toggle it covers, because
+// `app.rs` is a render-free reducer with decision logic of its own — Principle I's GUI-wiring
+// exception does not reach it, so Red comes first here even though the toggle already exists.
+
+fn state_with_current_session_in(dir: &str) -> State {
+    let mut state = State::default();
+    let path = PathBuf::from("/repo");
+    state.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(path.clone());
+    state.worktrees = vec![Worktree {
+        dir_name: dir.to_string(),
+        path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
+        branch: Some(format!("feat/{dir}")),
+        status: WorktreeStatus::Valid,
+    }];
+    let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
+    let id = session.id;
+    state.workspace.sessions.insert(path, vec![session]);
+    state.active_session = Some(id);
+    state
+}
+
+#[test]
+fn collapsing_the_revealed_row_closes_it_and_it_stays_closed() {
+    let mut state = state_with_current_session_in("feat-a");
+    let location = SessionLocation::Worktree("feat-a".to_string());
+    assert!(
+        state.location_open(&location),
+        "precondition: the row is open because it holds the current session"
+    );
+
+    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+
+    assert!(
+        !state.location_open(&location),
+        "the twisty closes a row the app opened, exactly as it closes one the user opened — \
+         otherwise the control does nothing on the one row the feature added (FR-005)"
+    );
+    assert_eq!(
+        state.reveal_suppressed_for, state.active_session,
+        "and the close is remembered against the session it was made for, so a later reveal for \
+         a different session is not swallowed by it (invariant I2)"
+    );
+
+    state.set_worktrees(vec![Worktree {
+        dir_name: "feat-a".to_string(),
+        path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+        branch: Some("feat/feat-a".to_string()),
+        status: WorktreeStatus::Valid,
+    }]);
+    assert!(
+        !state.location_open(&location),
+        "and a worktree re-discovery does not undo it — the case a one-shot implementation gets \
+         wrong (SC-008)"
+    );
+}
+
+#[test]
+fn re_expanding_a_suppressed_row_lifts_the_suppression() {
+    let mut state = state_with_current_session_in("feat-a");
+    let location = SessionLocation::Worktree("feat-a".to_string());
+
+    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+
+    assert!(
+        state.location_open(&location),
+        "the twisty is a toggle in both directions, on the revealed row as much as any other"
+    );
+    assert!(
+        state.reveal_suppressed_for.is_none(),
+        "re-opening it by hand withdraws the close, rather than leaving a suppression that only \
+         a change of session can clear"
+    );
+}
+
+#[test]
+fn the_default_rows_twisty_suppresses_the_same_way() {
+    let mut state = State::default();
+    let path = PathBuf::from("/repo");
+    state.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(path.clone());
+    let session = Session::start_new(SessionLocation::Default);
+    let id = session.id;
+    state.workspace.sessions.insert(path, vec![session]);
+    state.active_session = Some(id);
+    assert!(state.location_open(&SessionLocation::Default));
+
+    state.update(Message::DefaultExpansionToggled);
+
+    assert!(
+        !state.location_open(&SessionLocation::Default),
+        "the project-root row is a location like any other — FR-005 is not worktree-only"
+    );
+    assert_eq!(state.reveal_suppressed_for, state.active_session);
+}
+
+// --- Feature 024: what a change of current session does to the rows ---------------------------
+//
+// Contract §2.3 and §3. The commit is the clause that stops a derived model from snapping a row
+// shut the instant its session stops being current (FR-001c).
+
+#[test]
+fn a_location_that_stops_holding_the_current_session_stays_open() {
+    let mut state = state_with_current_session_in("feat-a");
+    let location = SessionLocation::Worktree("feat-a".to_string());
+
+    state.set_current_session(None);
+
+    assert!(
+        state.location_open(&location),
+        "ceasing to be current takes away the mark, never the open row — otherwise closing the \
+         session you were on would collapse the row under you, taking its siblings out of view \
+         with it (FR-001c)"
+    );
+    assert!(
+        state.expanded.contains("feat-a"),
+        "and it stays open by becoming ordinary user-open state, which is the honest description \
+         of what the user was looking at (invariant I3)"
+    );
+}
+
+#[test]
+fn a_row_the_user_closed_is_not_re_opened_by_the_commit() {
+    let mut state = state_with_current_session_in("feat-a");
+    let location = SessionLocation::Worktree("feat-a".to_string());
+    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+
+    state.set_current_session(None);
+
+    assert!(
+        !state.location_open(&location),
+        "committing a row the user had closed would re-open exactly what they closed — the commit \
+         is for rows that were actually on screen (contract §2.3)"
+    );
+}
+
+#[test]
+fn clearing_the_current_session_arms_no_scroll() {
+    let mut state = state_with_current_session_in("feat-a");
+    state.pending_reveal_scroll = false;
+
+    state.set_current_session(None);
+
+    assert!(
+        !state.pending_reveal_scroll,
+        "there is no row to scroll to. An armed scroll with no target stays armed — nothing drains \
+         it — and then fires against whatever row appears next; FR-001a forbids scrolling at all \
+         when the user closes the session they were on (invariant I5)"
+    );
+}
+
+#[test]
+fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
+    let mut state = state_with_current_session_in("feat-a");
+    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    assert_eq!(state.reveal_suppressed_for, state.active_session);
+
+    let next = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let next_id = next.id;
+    let path = state.workspace.active.clone().unwrap();
+    state.workspace.sessions.get_mut(&path).unwrap().push(next);
+    state.set_current_session(Some(next_id));
+
+    assert!(
+        state.reveal_suppressed_for.is_none(),
+        "the close was made against a session that is no longer current; keeping it would swallow \
+         the next reveal for a reason the user could not see (invariant I2)"
+    );
+    assert!(
+        state.pending_reveal_scroll,
+        "and the new current session arms its own scroll"
+    );
+}

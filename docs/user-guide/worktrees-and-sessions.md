@@ -330,6 +330,29 @@ Right-click a worktree in the sidebar to open its context menu:
 Session labels come from `claude` itself (its session title); until a title is available a
 placeholder is shown.
 
+### Finding the session you are on
+
+The session the terminal is showing is the **current** session, and the sidebar always says which
+one that is:
+
+- Its row is highlighted, and its name is set slightly heavier than the rows around it. The weight
+  is there so the current session is still identifiable in a screenshot converted to greyscale, or
+  by anyone who cannot separate the highlight from the hover shading beside it.
+- The location holding it — a worktree, or **Default** — is **opened for you**, so the row is
+  actually on screen rather than hidden inside a collapsed entry. This is what tells you where you
+  are after switching projects, when every row would otherwise be collapsed.
+
+You keep control of the panel:
+
+- **Collapsing that row closes it for good**, for as long as you stay on the same session. It does
+  not spring back open when a worktree is created or re-discovered in the background.
+- **Nothing else is opened or closed on your behalf.** Other rows are left exactly as you had them.
+- A row opened for you **stays** open when you move on to another session. Ceasing to be current
+  takes away the highlight, never the open row.
+- **Selecting a session yourself** highlights it and moves nothing — you were already looking at it.
+- After a fresh start, no session is current until you pick one or start one, and the sidebar says
+  so by highlighting nothing.
+
 ## The embedded terminal, resume & restart
 
 - The terminal runs `claude` with its working directory set to the session's worktree, so each

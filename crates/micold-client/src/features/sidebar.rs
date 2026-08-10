@@ -93,6 +93,20 @@ pub fn matches_filters(tags: &[Tag], filters: &BTreeSet<TagFilter>) -> bool {
     })
 }
 
+/// Whether a location's row is shown open (feature 024, contract §1.1).
+///
+/// Three booleans, because that is all the rule is: the user's own expansion, whether this is the
+/// location holding the current session, and whether the user has closed the app's reveal for that
+/// session. A free function like [`matches_filters`] above, and for the same reason — the rule is
+/// worth being able to state, and check, without a `State` to state it against.
+///
+/// The one thing worth reading twice is what is *not* here: nothing about worktree lists arriving
+/// late or being replaced. That is FR-001b, and it is answered by this being a function rather than
+/// a stored flag — a replaced list changes the inputs, never a remembered answer.
+pub fn effective_open(user_open: bool, holds_current_session: bool, reveal_suppressed: bool) -> bool {
+    user_open || (holds_current_session && !reveal_suppressed)
+}
+
 /// The fixed location-tooltip label for the "Default" sidebar entry (feature 010, FR-010) —
 /// unlike a worktree's label, this never varies, since the Default entry is always exactly the
 /// project root.
@@ -112,6 +126,84 @@ pub fn worktree_location_label(project_root: &Path, worktree: &Worktree) -> Stri
 }
 
 impl State {
+    /// Where the current session lives, if the panel can point at it (feature 024, contract §1.2).
+    ///
+    /// `None` in three cases, all of which reduce [`Self::location_open`] to the user's own
+    /// expansion and open nothing: there is no current session; its record is gone from the active
+    /// project; or its location is not among the project's known ones — a worktree removed or
+    /// missing while the project was inactive (FR-013). The third is why this resolves against
+    /// `self.worktrees` rather than trusting the session's own `location`.
+    pub fn current_session_location(&self) -> Option<SessionLocation> {
+        let id = self.active_session?;
+        let location = self
+            .active_sessions()
+            .iter()
+            .find(|s| s.id == id)?
+            .location
+            .clone();
+        match &location {
+            SessionLocation::Default => Some(location),
+            SessionLocation::Worktree(dir) => self
+                .worktrees
+                .iter()
+                .any(|w| &w.dir_name == dir)
+                .then_some(location),
+        }
+    }
+
+    /// Whether the user has closed the revealed row for the session that is current *now*
+    /// (feature 024, invariant I2).
+    ///
+    /// The `is_some` guard is not redundant: without it, "no session is current and nothing is
+    /// suppressed" would compare `None == None` and report a suppression.
+    pub fn reveal_suppressed(&self) -> bool {
+        self.active_session.is_some() && self.reveal_suppressed_for == self.active_session
+    }
+
+    /// Whether a location's row is shown open (feature 024, contract §1.1).
+    ///
+    /// The single answer to "is this row open", derived on every call. `expanded` and
+    /// `default_expanded` keep their meaning and lose their monopoly: they are now strictly the
+    /// *user's* open set, and this is the union of that with the app's one revealed row.
+    pub fn location_open(&self, location: &SessionLocation) -> bool {
+        let user_open = match location {
+            SessionLocation::Worktree(dir) => self.expanded.contains(dir),
+            SessionLocation::Default => self.default_expanded,
+        };
+        effective_open(
+            user_open,
+            self.current_session_location().as_ref() == Some(location),
+            self.reveal_suppressed(),
+        )
+    }
+
+    /// Open or close a location's row, from the user's own twisty (feature 024, contract §2.1).
+    ///
+    /// Toggling against [`Self::location_open`] rather than against `expanded` is the whole point:
+    /// the row the app revealed is not in the user's set, so a toggle that only removed a key
+    /// would leave the one row this feature adds with a twisty that visibly does nothing.
+    ///
+    /// Closing the revealed row is remembered against the session it was closed for; opening it
+    /// again withdraws that, rather than leaving behind a suppression only a change of session
+    /// could clear.
+    pub fn toggle_location(&mut self, location: SessionLocation) {
+        let open = self.location_open(&location);
+        let holds_current = self.current_session_location().as_ref() == Some(&location);
+        match &location {
+            SessionLocation::Worktree(dir) => {
+                if open {
+                    self.expanded.remove(dir);
+                } else {
+                    self.expanded.insert(dir.clone());
+                }
+            }
+            SessionLocation::Default => self.default_expanded = !open,
+        }
+        if holds_current {
+            self.reveal_suppressed_for = if open { self.active_session } else { None };
+        }
+    }
+
     /// Build the sidebar tree: worktrees (top level) each joined with their sessions and
     /// expansion state (FR-002, FR-003). Sessions are matched to worktrees by `dir_name`.
     /// Sourced from [`State::visible_worktrees`], so agent-owned worktrees produce no row while
@@ -122,7 +214,8 @@ impl State {
             .map(|worktree| WorktreeNode {
                 display_name: self.worktree_display_name(&worktree.dir_name),
                 tags: worktree_tags(worktree),
-                expanded: self.expanded.contains(&worktree.dir_name),
+                expanded: self
+                    .location_open(&SessionLocation::Worktree(worktree.dir_name.clone())),
                 sessions: sessions
                     .iter()
                     .filter(|s| s.location.is_worktree(&worktree.dir_name) && !s.archived)
@@ -162,7 +255,7 @@ impl State {
             .collect();
         let mut entries = vec![SidebarEntry::Default(DefaultNode {
             display_name: "Default",
-            expanded: self.default_expanded,
+            expanded: self.location_open(&SessionLocation::Default),
             sessions: default_sessions,
         })];
         entries.extend(

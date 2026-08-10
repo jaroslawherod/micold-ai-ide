@@ -18,7 +18,7 @@ use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
-use micold_core::session::{Session, SessionId};
+use micold_core::session::{Session, SessionId, SessionLocation};
 use std::path::Path;
 
 /// The kind of text selection to begin (feature 006, FR-013): single click = character range,
@@ -58,6 +58,51 @@ impl State {
             .unwrap_or(&[])
     }
 
+    /// Make `next` the current session — the one write to `active_session` the whole application
+    /// goes through, bar one (feature 024, contract §3.0).
+    ///
+    /// The exception is `Message::SessionSelected`: a session the *user* picked in the panel is
+    /// already in front of them, so revealing it would scroll a list they were reading (FR-006).
+    /// Every other writer comes here, and `tests/current_session_writers.rs` is what keeps that
+    /// true as writers are added — the rule is "any app-initiated transition", not a list of call
+    /// sites that a future caller can quietly fall off.
+    ///
+    /// Order is load-bearing, as [`switch_active`](Self::switch_active)'s already is:
+    ///
+    /// 1. **Commit the outgoing revealed row** into the user's own set, so ceasing to be current
+    ///    takes away the mark and never the open row (FR-001c, invariant I3). Skipped when the
+    ///    user had closed that row themselves — committing then would re-open what they closed.
+    /// 2. **Clear the suppression**, which was scoped to the outgoing session (invariant I2).
+    /// 3. **Move the pointer.**
+    /// 4. **Arm the scroll — only for a transition to `Some`** (invariant I5). Arming on a clear
+    ///    would leave a scroll armed with no row to scroll to, which invariant I4 then keeps armed
+    ///    until it fired against whatever row appeared next; and FR-001a forbids scrolling at all
+    ///    when the user closes the session they were on.
+    ///
+    /// The reveal itself is not written anywhere: which row is open is derived on every view from
+    /// the field this sets. Nothing here decides motion either — the row opens by the same path a
+    /// user's own expand opens it, which is instant today, and would inherit any motion that path
+    /// gains (FR-010a).
+    pub fn set_current_session(&mut self, next: Option<SessionId>) {
+        if self.active_session == next {
+            return;
+        }
+        if !self.reveal_suppressed() {
+            match self.current_session_location() {
+                Some(SessionLocation::Worktree(dir)) => {
+                    self.expanded.insert(dir);
+                }
+                Some(SessionLocation::Default) => self.default_expanded = true,
+                None => {}
+            }
+        }
+        self.reveal_suppressed_for = None;
+        self.active_session = next;
+        if next.is_some() {
+            self.pending_reveal_scroll = true;
+        }
+    }
+
     /// Switch the active project **without stopping any session** (feature 008, FR-001/FR-002).
     ///
     /// Order is load-bearing (see data-model.md I1): (1) record the current (outgoing)
@@ -93,7 +138,10 @@ impl State {
     /// background-restart notice. Pair with a preceding [`record_foreground`](Self::record_foreground).
     pub fn restore_after_activation(&mut self, path: &Path) {
         let key = canonicalize_best_effort(path);
-        self.active_session = self.restore_foreground(&key); // STEP 3
+        // Feature 024: through `set_current_session`, so arriving in a project reveals the session
+        // it drops you into (FR-001) — the reported bug was that the panel showed every row
+        // collapsed while the main area showed a session.
+        self.set_current_session(self.restore_foreground(&key)); // STEP 3
                                                              // BUG-001 / focus-model.md: switching (or opening) a project does not carry terminal focus
                                                              // across — re-focusing the restored session is a fresh explicit action (or a select/start).
         self.terminal_focused = false;
