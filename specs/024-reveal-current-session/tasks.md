@@ -148,7 +148,7 @@ promoted.
 - [X] T042 [US3] Route the close and remove arms (`crates/micold-client/src/app.rs:1357`, `:1390`) through `set_current_session` so the outgoing row is committed open (FR-001c) while nothing is armed (I5) — and add nothing that promotes a successor
 - [X] T043 [US3] Route the two remaining clears through `set_current_session` for the same reason: the active project being forgotten (`crates/micold-client/src/app.rs:877`) and `reconcile_catalog` dropping a dangling pointer (`crates/micold-client/src/main.rs:2401`). Both are app-initiated transitions to `None`; without this they skip the commit and the row of the session that just vanished snaps shut, taking its siblings with it
 - [X] T044 [US3] Confirm FR-010a needs no motion: the reveal uses the same expansion path as a user-initiated expand, which is instant today (contract §7.1, research R8). If that changes later, the reveal must inherit it rather than be special-cased — record this in the doc comment on `set_current_session` in `crates/micold-client/src/features/session.rs`
-- [ ] T045 [US3] Document the remaining paths in `docs/user-guide/worktrees-and-sessions.md` under `## Starting, switching, and closing sessions`: a new session is revealed, a session you click is marked but nothing moves, closing the session you are on leaves nothing current, and after a cold start nothing is current until you pick or start a session (FR-001d, research R12)
+- [X] T045 [US3] Document the remaining paths in `docs/user-guide/worktrees-and-sessions.md` under `## Starting, switching, and closing sessions`: a new session is revealed, a session you click is marked but nothing moves, closing the session you are on leaves nothing current, and after a cold start nothing is current until you pick or start a session (FR-001d, research R12)
 
 **Checkpoint**: Every path the app moves you on ends in the same revealed state (SC-004), and the
 paths it does not are provably inert.
@@ -168,17 +168,17 @@ stays hidden.
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T046 [P] [US4] Failing test in `crates/micold-client/tests/features_sidebar.rs`: the exemption admits the current session's location past the tag filters **and** past the hidden-agent setting, resolving against *all* worktrees rather than `visible_worktrees` — which excludes rows earlier, in `crates/micold-client/src/features/worktree.rs:77` (§5.1, FR-011, US4 scenarios 1 and 3)
-- [ ] T047 [P] [US4] Failing test in `crates/micold-client/tests/features_sidebar.rs`: no other excluded location is admitted, and the exemption ends when that location stops holding the current session — while its *open* state, committed by §2.3, survives (§5.2, §5.3, FR-012, SC-005, US4 scenario 4)
-- [ ] T048 [P] [US4] Failing test in `crates/micold-client/tests/features_sidebar.rs`: `shown_for_current_session` is `true` only for a node the filters would have excluded, `false` for one they admit on their own (§5.4, FR-012a)
-- [ ] T049 [P] [US4] Failing test in `crates/micold-client/tests/features_sidebar.rs`: the exempt row sits where it would sit unfiltered (§5.5), and `available_tag_filters` gains nothing from it — the same rule a hidden agent worktree obeys at `crates/micold-client/src/features/sidebar.rs:177-179` (§5.6)
+- [X] T046 [P] [US4] Failing test in `crates/micold-client/tests/features_sidebar.rs`: the exemption admits the current session's location past the tag filters **and** past the hidden-agent setting, resolving against *all* worktrees rather than `visible_worktrees` — which excludes rows earlier, in `crates/micold-client/src/features/worktree.rs:77` (§5.1, FR-011, US4 scenarios 1 and 3)
+- [X] T047 [P] [US4] Failing test in `crates/micold-client/tests/features_sidebar.rs`: no other excluded location is admitted, and the exemption ends when that location stops holding the current session — while its *open* state, committed by §2.3, survives (§5.2, §5.3, FR-012, SC-005, US4 scenario 4)
+- [X] T048 [P] [US4] Failing test in `crates/micold-client/tests/features_sidebar.rs`: `shown_for_current_session` is `true` only for a node the filters would have excluded, `false` for one they admit on their own (§5.4, FR-012a)
+- [X] T049 [P] [US4] Failing test in `crates/micold-client/tests/features_sidebar.rs`: the exempt row sits where it would sit unfiltered (§5.5), and `available_tag_filters` gains nothing from it — the same rule a hidden agent worktree obeys at `crates/micold-client/src/features/sidebar.rs:177-179` (§5.6)
 
 ### Implementation for User Story 4
 
-- [ ] T050 [US4] Add `shown_for_current_session: bool` to `WorktreeNode` in `crates/micold-client/src/features/sidebar.rs`, leaving `DefaultNode` alone — it is already exempt from tag filtering at `:147-149`, so the flag would be permanently false there
-- [ ] T051 [US4] Change `filtered_worktree_tree` in `crates/micold-client/src/features/sidebar.rs` from "filter `worktree_tree`" to "filter, then re-admit the one location holding the current session", preserving unfiltered order and setting the flag only on a re-admitted node
-- [ ] T052 [US4] Render the FR-012a chip in the row's existing `TreeItem::tags(...)` slot from `crates/micold-client/src/ui/sidebar.rs`, reusing the label-only chip precedent `Tag::Agent` sets — and **not** adding a `Tag::Current` to `micold-core::naming` (research R5)
-- [ ] T053 [US4] Document the exemption in `docs/user-guide/worktrees-and-sessions.md` under `### Filtering worktrees by tag`: the location holding your current session is always listed, in its usual place, carrying a chip that says why — and it is the only exception your filters get
+- [X] T050 [US4] Add `shown_for_current_session: bool` to `WorktreeNode` in `crates/micold-client/src/features/sidebar.rs`, leaving `DefaultNode` alone — it is already exempt from tag filtering at `:147-149`, so the flag would be permanently false there
+- [X] T051 [US4] Change `filtered_worktree_tree` in `crates/micold-client/src/features/sidebar.rs` from "filter `worktree_tree`" to "filter, then re-admit the one location holding the current session", preserving unfiltered order and setting the flag only on a re-admitted node
+- [X] T052 [US4] Render the FR-012a chip in the row's existing `TreeItem::tags(...)` slot from `crates/micold-client/src/ui/sidebar.rs`, reusing the label-only chip precedent `Tag::Agent` sets — and **not** adding a `Tag::Current` to `micold-core::naming` (research R5)
+- [X] T053 [US4] Document the exemption in `docs/user-guide/worktrees-and-sessions.md` under `### Filtering worktrees by tag`: the location holding your current session is always listed, in its usual place, carrying a chip that says why — and it is the only exception your filters get
 
 **Checkpoint**: All four stories independently functional.
 

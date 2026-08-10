@@ -252,7 +252,11 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
     arrange(
         vec![posed(
             "a worktree tree",
-            material::TreeView::new(items, roles),
+            material::TreeView::new(items, roles)
+                // The selected row's heavier label (feature 024, FR-003a). Posed here because it is
+                // the half of a selected row that a colour-blind reader, or a greyscale screenshot,
+                // has to rely on — and the gallery is where that is checked.
+                .selected_label_role(material::TypeRole::Label),
             roles,
         )],
         Layout::FullWidth,

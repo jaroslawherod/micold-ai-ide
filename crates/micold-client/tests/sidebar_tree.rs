@@ -753,3 +753,181 @@ fn a_current_session_in_the_project_root_opens_the_default_row() {
          (constitution Principle III's Default exception)"
     );
 }
+
+// --- Feature 024: the one location that escapes the filters -----------------------------------
+//
+// US4. Filters exist so the user sees less; this exists so the panel never stops answering "where
+// am I". Contract §5 is the balance between those two, and its whole weight is on "one".
+
+/// A project whose worktrees are `feat-a` (typed `feat`), `fix-b` (typed `fix`), and a hidden
+/// agent one, with the current session placed in `dir`.
+fn state_with_filterable_worktrees(dir: &str) -> State {
+    let mut state = State::default();
+    let path = PathBuf::from("/repo");
+    state.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(path.clone());
+    state.worktrees = vec![
+        Worktree {
+            dir_name: "feat-a".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+            branch: Some("feat/a".to_string()),
+            status: WorktreeStatus::Valid,
+        },
+        Worktree {
+            dir_name: "fix-b".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/fix-b"),
+            branch: Some("fix/b".to_string()),
+            status: WorktreeStatus::Valid,
+        },
+        // A real agent id: 16+ hex characters, which is what classifies a worktree as
+        // agent-owned and so hidden by default (feature 014).
+        agent_worktree("00112233445566aa", WorktreeStatus::Valid),
+    ];
+    let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
+    let id = session.id;
+    state.workspace.sessions.insert(path, vec![session]);
+    state.active_session = Some(id);
+    state
+}
+
+fn listed(state: &State) -> Vec<String> {
+    state
+        .filtered_worktree_tree()
+        .into_iter()
+        .map(|n| n.worktree.dir_name)
+        .collect()
+}
+
+#[test]
+fn a_filter_that_would_hide_the_current_session_does_not_hide_it() {
+    let mut state = state_with_filterable_worktrees("fix-b");
+    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Feat));
+
+    assert_eq!(
+        listed(&state),
+        vec!["feat-a".to_string(), "fix-b".to_string()],
+        "the filter admits feat-a; fix-b is there only because it holds the current session. \
+         Without this the panel goes quiet in exactly the situation the filter was set up for \
+         (FR-011, SC-005)"
+    );
+}
+
+#[test]
+fn the_exempt_row_sits_where_it_would_sit_unfiltered() {
+    let mut state = state_with_filterable_worktrees("feat-a");
+    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Fix));
+
+    assert_eq!(
+        listed(&state),
+        vec!["feat-a".to_string(), "fix-b".to_string()],
+        "the exemption changes membership, never order — a row pinned to the top would be a \
+         second thing to explain, and would move as the current session moved (FR-012a)"
+    );
+}
+
+#[test]
+fn only_the_current_sessions_location_escapes_the_filter() {
+    let mut state = state_with_filterable_worktrees("fix-b");
+    state.show_agent_worktrees = true;
+    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Feat));
+
+    let listed = listed(&state);
+    assert!(
+        !listed.contains(&"agent-00112233445566aa".to_string()),
+        "one exemption, not a filter bypass — every other excluded location stays hidden (FR-012)"
+    );
+}
+
+#[test]
+fn a_hidden_agent_worktree_holding_the_current_session_is_shown() {
+    let state = state_with_filterable_worktrees("agent-00112233445566aa");
+
+    assert!(
+        listed(&state).contains(&"agent-00112233445566aa".to_string()),
+        "the hidden-agent setting excludes rows earlier than the tag filters do — in \
+         `visible_worktrees`, before the tree is built — so the exemption has to resolve against \
+         all worktrees rather than the visible ones (contract §5.1, US4 scenario 3)"
+    );
+    assert_eq!(
+        listed(&state).len(),
+        3,
+        "the two user worktrees plus the exempt agent one, and nothing else"
+    );
+}
+
+#[test]
+fn the_exempt_row_says_why_it_is_there_and_others_do_not() {
+    let mut state = state_with_filterable_worktrees("fix-b");
+    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Feat));
+
+    let tree = state.filtered_worktree_tree();
+    let exempt = tree.iter().find(|n| n.worktree.dir_name == "fix-b").unwrap();
+    let admitted = tree.iter().find(|n| n.worktree.dir_name == "feat-a").unwrap();
+
+    assert!(
+        exempt.shown_for_current_session,
+        "a row that survived a filter it does not match is otherwise unexplained — the user set \
+         that filter and is owed a reason (FR-012a)"
+    );
+    assert!(
+        !admitted.shown_for_current_session,
+        "and a row the filter admits on its own claims no exemption it did not need"
+    );
+}
+
+#[test]
+fn a_row_the_filters_allow_is_not_marked_as_exempt_merely_for_being_current() {
+    let mut state = state_with_filterable_worktrees("feat-a");
+    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Feat));
+
+    let tree = state.filtered_worktree_tree();
+    let current = tree.iter().find(|n| n.worktree.dir_name == "feat-a").unwrap();
+
+    assert!(
+        !current.shown_for_current_session,
+        "holding the current session is not itself the reason this row is listed — the filter \
+         admits it. Saying otherwise would put a chip on a row that needs no explanation"
+    );
+}
+
+#[test]
+fn the_exemption_ends_when_the_location_stops_holding_the_current_session() {
+    let mut state = state_with_filterable_worktrees("fix-b");
+    state.sidebar_filters.insert(TagFilter::Type(ConventionalType::Feat));
+    assert!(listed(&state).contains(&"fix-b".to_string()));
+
+    let moved = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let moved_id = moved.id;
+    let path = state.workspace.active.clone().unwrap();
+    state.workspace.sessions.get_mut(&path).unwrap().push(moved);
+    state.set_current_session(Some(moved_id));
+
+    assert!(
+        !listed(&state).contains(&"fix-b".to_string()),
+        "the row returns to being hidden, because the filter still excludes it and the reason it \
+         was exempt has gone (FR-012, US4 scenario 4)"
+    );
+    assert!(
+        state.expanded.contains("fix-b"),
+        "its *open* state survives the commit, though — only its presence goes (contract §5.3)"
+    );
+}
+
+#[test]
+fn an_exempt_row_conjures_no_filter_chip() {
+    let state = state_with_filterable_worktrees("agent-00112233445566aa");
+
+    assert!(
+        !state
+            .available_tag_filters()
+            .contains(&TagFilter::Untyped),
+        "an agent worktree's machine name has no conventional type, so listing it as exempt must \
+         not offer an `Untyped` chip matching nothing else the user can see — the same rule a \
+         hidden agent worktree already obeys (contract §5.6, feature 014 R7)"
+    );
+}
