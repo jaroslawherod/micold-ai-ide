@@ -374,11 +374,58 @@ impl State {
     /// filter active this equals [`State::worktree_tree`]. Used by the sidebar to render only
     /// matching worktrees; a subsequent add/rename/delete re-runs this so the list stays
     /// consistent (FR-028).
+    /// (Feature 024) The location holding the current session survives the filters, and says so.
+    ///
+    /// Two mechanisms hide a row and the exemption has to reach past both: the tag filters here,
+    /// and the hidden-agent-worktree setting, which excludes rows *earlier* — in
+    /// [`State::visible_worktrees`], before [`State::worktree_tree`] ever sees them. So the
+    /// re-admitted row is built from `self.worktrees` rather than from the tree above.
+    ///
+    /// Exactly one row can be re-admitted, because there is one current session. That is what keeps
+    /// this an exemption rather than a filter bypass (FR-012), and it is why the row carries
+    /// `shown_for_current_session`: a row that survived a filter it does not match is otherwise
+    /// unexplained, and the user is the one who set that filter.
     pub fn filtered_worktree_tree(&self) -> Vec<WorktreeNode> {
-        self.worktree_tree()
+        let mut tree: Vec<WorktreeNode> = self
+            .worktree_tree()
             .into_iter()
             .filter(|node| matches_filters(&node.tags, &self.sidebar_filters))
-            .collect()
+            .collect();
+
+        let Some(SessionLocation::Worktree(dir)) = self.current_session_location() else {
+            return tree;
+        };
+        if tree.iter().any(|node| node.worktree.dir_name == dir) {
+            // Already listed on its own merits, so it needs no exemption and must not claim one.
+            return tree;
+        }
+        let Some(worktree) = self.worktrees.iter().find(|w| w.dir_name == dir) else {
+            return tree;
+        };
+        let sessions = self.active_sessions();
+        let node = WorktreeNode {
+            display_name: self.worktree_display_name(&worktree.dir_name),
+            tags: worktree_tags(worktree),
+            expanded: self.location_open(&SessionLocation::Worktree(dir.clone())),
+            sessions: sessions
+                .iter()
+                .filter(|s| s.location.is_worktree(&dir) && !s.archived)
+                .cloned()
+                .collect(),
+            worktree: worktree.clone(),
+            shown_for_current_session: true,
+        };
+        // Inserted where it would have sat unfiltered rather than appended: the exemption changes
+        // which rows are listed, never their order (FR-012a). `worktrees` is the order the panel
+        // draws, so its position in that list is the answer.
+        let at = self
+            .worktrees
+            .iter()
+            .filter(|w| tree.iter().any(|n| n.worktree.dir_name == w.dir_name) || w.dir_name == dir)
+            .position(|w| w.dir_name == dir)
+            .unwrap_or(tree.len());
+        tree.insert(at.min(tree.len()), node);
+        tree
     }
 
     /// The full sidebar location list (feature 010): the "Default" entry first, then worktree

@@ -430,7 +430,18 @@ fn build_items(
             WorktreeStatus::Missing | WorktreeStatus::Invalid => r.error,
         };
 
-        let tags: Vec<(String, Rgb)> = node.tags.iter().map(|tag| tag_chip(tag, r)).collect();
+        let mut tags: Vec<(String, Rgb)> = node.tags.iter().map(|tag| tag_chip(tag, r)).collect();
+        // Feature 024 (FR-012a): a row listed only because it holds the current session says so.
+        // It survived a filter it does not match, and the user is the one who set that filter — an
+        // unexplained row is worse than a hidden one, because it reads as the filter being broken.
+        //
+        // In the row's existing chip slot rather than a new badge: `Tag::Agent` is the precedent
+        // for a label-only chip that is never a filter, so this is the idiom already here. Only its
+        // source differs — it is a fact about this run's session state, not about a branch name,
+        // which is why it does not become a `Tag` in the core (research R5).
+        if node.shown_for_current_session {
+            tags.push(("current session".to_string(), r.secondary));
+        }
         let dir = wt.dir_name.clone();
 
         let mut item = TreeItem::new(0, node.display_name.clone(), tint)

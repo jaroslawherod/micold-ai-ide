@@ -61,6 +61,13 @@ clicking outside it, pressing `Esc`, or tapping the filter button again — any 
 stays applied either way. Whenever a filter is active, the filter button itself stays tinted
 so you can tell filtering is on even with the panel closed.
 
+**One exception, and only one.** The worktree holding your current session stays listed even when
+your filters exclude it — including when it's an [agent worktree](#agent-worktrees) you have
+hidden. It sits where it would sit unfiltered, and carries a **current session** chip saying why
+it's there, so a row that survived a filter it doesn't match is never unexplained. Every other
+excluded worktree stays hidden, and the exception disappears as soon as you move to a session
+somewhere your filters do allow. Adding it changes nothing about the filter chips on offer.
+
 ### Agent worktrees
 
 Some AI coding tools create their own throwaway worktrees inside your project — one per
