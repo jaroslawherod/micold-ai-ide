@@ -125,14 +125,52 @@ impl Operation for FocusesTheControl {
     }
 }
 
-/// What this last told its caller about the control's focus.
+/// Take the keyboard back from the control, because the application says it no longer holds it.
 ///
-/// Remembered so that only *changes* are published: the question is asked on every event, and a
-/// field that re-announced "still focused" on every pointer move would put the application into a
-/// message loop with itself.
+/// The mirror of [`FocusesTheControl`], and the half BUG-004 was missing. A control that cannot be
+/// focused never answers, so this is as safe to run over the select's plain container as the other
+/// two are.
+struct UnfocusesTheControl;
+
+impl Operation for UnfocusesTheControl {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        operate(self);
+    }
+
+    fn focusable(
+        &mut self,
+        _id: Option<&Id>,
+        _bounds: Rectangle,
+        state: &mut dyn operation::Focusable,
+    ) {
+        if state.is_focused() {
+            state.unfocus();
+        }
+    }
+}
+
+/// What this last told its caller about the control's focus, and what the caller last said back.
+///
+/// `focused` is remembered so that only *changes* are published: the question is asked on every
+/// event, and a field that re-announced "still focused" on every pointer move would put the
+/// application into a message loop with itself.
+///
+/// `supplied` is remembered for the opposite direction (BUG-004). Focus is observed in the control
+/// and *held* by the application, which is two copies of one fact, and until now only the control
+/// could correct the application. A screen that takes the keyboard back — `State::focus_terminal()`
+/// clears `focused_field` with no press landing anywhere near this field — left the field drawn at
+/// rest while its input went on swallowing every keystroke. A **change** in the supplied flag is
+/// the application changing its mind, and the control adopts it.
+///
+/// A change and not a disagreement, because a standing disagreement is also what an unreported
+/// focus looks like: [`FocusesTheControl`] runs before the answer is asked for, and a focus
+/// traversal can take focus without publishing at all.
 #[derive(Default)]
 struct Reported {
     focused: bool,
+    supplied: bool,
+    /// A change seen in `diff` and not yet carried to the control — see [`FilledField::diff`].
+    pending: Option<bool>,
 }
 
 /// The filled box: container, label, control and active indicator, laid out to §7.7's metrics.
@@ -186,6 +224,22 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
     }
 
     fn diff(&self, tree: &mut Tree) {
+        // A rebuild is the only place the application's answer can be *seen* changing, so it is the
+        // only honest place to notice (BUG-004). An event is not: frames are driven by messages,
+        // and several can pass with no input at all, so a flag that went true and back to false
+        // between two keystrokes would never be observed by `update` alone.
+        //
+        // Noticed here and acted on there, because taking the keyboard away from the control means
+        // running an operation over it, and that needs a layout and a renderer — neither of which
+        // a diff has. What is recorded is the intent; `update` spends it before the input sees its
+        // next event, which is the moment before it could matter.
+        if self.on_focus_change.is_some() {
+            let reported = tree.state.downcast_mut::<Reported>();
+            if reported.supplied != self.state.active {
+                reported.supplied = self.state.active;
+                reported.pending = Some(self.state.active);
+            }
+        }
         tree.diff_children(&self.children);
     }
 
@@ -374,6 +428,32 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
         shell: &mut Shell<'_, M>,
         viewport: &Rectangle,
     ) {
+        // The application changed its mind, and this is the moment before that could matter: the
+        // input has not seen this event yet, so a keystroke is handled by whichever control the
+        // application currently says holds the keyboard (BUG-004). Noticed in `diff`, spent here.
+        if let Some(target) = tree.state.downcast_mut::<Reported>().pending.take() {
+            let control = layout
+                .children()
+                .nth(1)
+                .expect("the control is the second of the container's four slots");
+            if target {
+                self.children[1].as_widget_mut().operate(
+                    &mut tree.children[1],
+                    control,
+                    renderer,
+                    &mut FocusesTheControl,
+                );
+            } else {
+                self.children[1].as_widget_mut().operate(
+                    &mut tree.children[1],
+                    control,
+                    renderer,
+                    &mut UnfocusesTheControl,
+                );
+            }
+            tree.state.downcast_mut::<Reported>().focused = target;
+        }
+
         for ((child, state), layout) in self
             .children
             .iter_mut()

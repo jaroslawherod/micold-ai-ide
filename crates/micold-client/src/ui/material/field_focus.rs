@@ -76,6 +76,24 @@ impl<'a> Mounted<'a> {
         }
     }
 
+    /// Rebuild the element over the **same** tree, the way a frame does after the application's
+    /// state has moved on.
+    ///
+    /// This is the only way to pose the question these tests exist for: a supplied flag is read
+    /// when the widget is *built*, so "the application changed its mind" is not an event that can
+    /// be sent — it is a rebuild carrying a different answer. `Mounted::new` would allocate a fresh
+    /// tree and lose exactly the state under test.
+    fn rebuild(&mut self, element: impl Into<Element<'a, String>>) {
+        let mut element = element.into();
+        self.tree.diff(element.as_widget());
+        self.node = element.as_widget_mut().layout(
+            &mut self.tree,
+            &self.renderer,
+            &layout::Limits::new(Size::ZERO, WINDOW),
+        );
+        self.element = element;
+    }
+
     /// The filled container — the first of the two bands `FormField` emits.
     fn container(&self) -> Rectangle {
         self.node.children()[0].bounds()
@@ -115,6 +133,26 @@ impl<'a> Mounted<'a> {
         self.send(
             Event::Mouse(mouse::Event::CursorMoved { position: at }),
             mouse::Cursor::Available(at),
+        )
+    }
+
+    /// Type one character, which only a focused input answers — so this reads as "does this still
+    /// have the keyboard?" without asking the widget to confess.
+    fn type_char(&mut self, c: char) -> Vec<String> {
+        let key = iced::keyboard::Key::Character(c.to_string().into());
+        self.send(
+            Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: key.clone(),
+                modified_key: key,
+                physical_key: iced::keyboard::key::Physical::Unidentified(
+                    iced::keyboard::key::NativeCode::Unidentified,
+                ),
+                location: iced::keyboard::Location::Standard,
+                modifiers: iced::keyboard::Modifiers::default(),
+                text: Some(c.to_string().into()),
+                repeat: false,
+            }),
+            mouse::Cursor::Unavailable,
         )
     }
 
@@ -213,6 +251,94 @@ fn focus_is_reported_when_it_changes_and_not_on_every_event() {
         published.is_empty(),
         "a field that re-announced \"still focused\" on every pointer move would put the \
          application into a message loop with itself — published {published:?}",
+    );
+}
+
+// -------------------------------------------------------------------------------------------
+// The application's answer is the authoritative one (BUG-004, FR-035)
+// -------------------------------------------------------------------------------------------
+//
+// Focus is *observed* inside the control and *held* by the application, which leaves two copies of
+// one fact. BUG-003 made the control tell the application; these make the application able to tell
+// the control, so a screen that takes the keyboard back — `focus_terminal()` does exactly this —
+// does not leave a control drawing itself at rest while it still answers keys.
+//
+// The reconciliation is deliberately conditional on the caller having asked to be told, because a
+// supplied flag means two different things in this library: for a text field it is focus, and for a
+// picker it is *open* (§7.7 — the active indicator follows the list, not the keyboard).
+// [`a_picker_that_closes_its_list_keeps_the_keyboard`] is the fence around that difference.
+
+#[test]
+fn the_application_can_take_the_keyboard_back_from_a_field() {
+    let r = roles();
+    let mut mounted = Mounted::new(field("", r));
+    mounted.press(mounted.slot(1).center());
+    assert!(
+        !mounted.type_char('a').is_empty(),
+        "precondition: a focused input must answer the keyboard, or the assertion below proves \
+         nothing",
+    );
+
+    // The frame after the press: the application heard `focus=true` and now says so too. Written
+    // out rather than skipped, because what the control watches for is the application *changing
+    // its mind* — not a standing disagreement, which is what an unreported traversal focus looks
+    // like and which it must not undo.
+    mounted.rebuild(field("", r).active(true));
+
+    // And now the application changes its mind: `focus_terminal()` clears `focused_field` with no
+    // press landing anywhere near this field, and the next frame carries that answer back.
+    mounted.rebuild(field("", r).active(false));
+
+    assert!(
+        mounted.type_char('b').is_empty(),
+        "a field the application says is unfocused must not still be typing into. The flag it is \
+         drawn from and the focus it acts on are one fact, and a control that keeps the keyboard \
+         after the application has given it away is a field at rest that swallows every keystroke \
+         (BUG-004)",
+    );
+}
+
+#[test]
+fn the_application_can_take_the_keyboard_back_from_a_checkbox() {
+    let r = roles();
+    let mut box_ = Mounted::new(checkbox(false, r));
+    box_.press(box_.node.bounds().center());
+
+    // The application agrees, then takes it back — the same two frames as the field above.
+    box_.rebuild(checkbox(false, r).focused(true));
+    box_.rebuild(checkbox(false, r).focused(false));
+
+    assert!(
+        box_.press_key(iced::keyboard::key::Named::Space).is_empty(),
+        "a checkbox the application says is unfocused must not still answer Space — it would be a \
+         box drawn at rest that toggles under a keystroke aimed at whatever really has the \
+         keyboard (BUG-004)",
+    );
+}
+
+#[test]
+fn a_picker_that_closes_its_list_keeps_the_keyboard() {
+    let r = roles();
+    // A search picker's field: `active` follows **open**, and nobody is tracking its focus — so
+    // there is no `on_focus_change` here, exactly as `typeahead.rs` builds it.
+    let built = |open: bool| {
+        TextField::new("", "", r)
+            .label("Branch name")
+            .on_input(|typed| typed)
+            .active(open)
+    };
+    let mut mounted = Mounted::new(built(true));
+    mounted.press(mounted.slot(1).center());
+
+    // The list closes. The keyboard has nothing to do with it.
+    mounted.rebuild(built(false));
+
+    assert!(
+        !mounted.type_char('a').is_empty(),
+        "closing a picker's list must not take the keyboard out of its search field. `active` is \
+         focus for a text field and *open* for a picker (§7.7), so the application's answer is \
+         authoritative only where the application asked to be told it — which is what pairs it \
+         with `on_focus_change` (BUG-004)",
     );
 }
 

@@ -317,6 +317,14 @@ through both controls. Every one must be defined once and pass for both.
   > is what floats the label as well as shading the container — the label's position is settled
   > when the field is built and no amount of observing later could move it. **FR-035 is now met for
   > every input except the checkbox**, whose limit is unchanged and recorded above.
+  >
+  > **And the application can say so back** *([BUG-004](./bugs/BUG-004.md), 2026-08-10)*. Observing
+  > in the control and holding in the application is two copies of one fact, and until now only the
+  > control could correct the application. Feature 023's `focus_terminal()` clears `focused_field`
+  > with no press landing anywhere near the control, which left one drawn at rest while it went on
+  > answering keys. The supplied flag is now authoritative on the frame it changes — but only where
+  > the caller asked to be told, because `active` is focus for a text field and *open* for a picker,
+  > and one rule for both would take the keyboard out of the search field whenever its list closed.
 - **FR-036**: Every input MUST answer hover with the design system's hover state layer, on the same
   area FR-034 defines. Today the text field and the checkbox draw no hover layer at all; the select
   draws one over part of itself.
