@@ -121,10 +121,16 @@ fn the_only_excluded_implementations_are_fakes() {
         .filter(inventory::PortImpl::is_fake)
         .map(|found| found.ty)
         .collect();
-    let known: BTreeSet<String> = ["FakeGit", "FakeHandle", "FakeTerminalBackend"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let known: BTreeSet<String> = [
+        "FakeGit",
+        "FakeHandle",
+        "FakeTerminalBackend",
+        // T046's, added in the commit it appeared in — which is what this list is for.
+        "FakeEnvIncludeResolver",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
 
     let unexpected: Vec<_> = excluded.difference(&known).collect();
     assert!(

@@ -122,6 +122,9 @@ pub const PORTS: &[&str] = &[
     "TerminalBackend",
     "TerminalHandle",
     "AiCliProvider",
+    // Declared at T046, alongside T043's behaviour test. Listed the moment it existed: a
+    // capability the guards do not know about is one FR-017 and FR-019 are not holding.
+    "EnvIncludeResolver",
 ];
 
 /// One `impl <Port> for <Type>`, and where it was found.
