@@ -450,5 +450,205 @@ fn a_field_still_holds_the_keyboard_after_a_window_round_trip() {
     s.update(Message::WindowFocusChanged(false));
     s.update(Message::WindowFocusChanged(true));
     assert_eq!(s.focused_field, Some(FieldId::AddWorktreeName));
-    assert!(!s.terminal_focused(), "and the terminal has not taken it back");
+    assert!(
+        !s.terminal_focused(),
+        "and the terminal has not taken it back"
+    );
+}
+
+// ---- US3: every navigation that displays a terminal lands ready to type (FR-011, FR-021a) ----
+
+#[test]
+fn every_navigation_to_a_terminal_clears_a_release() {
+    // The gap this closes: selecting and starting already focused, so the user learned to expect
+    // it — and then the mode toggle, the instance controls and a project switch each left them
+    // looking at a terminal that ignored the keyboard. An explicit release is about the present
+    // moment, not a property a session carries, so deliberately going to a terminal ends it.
+    let shell = micold_core::session::ShellInstanceId(1);
+    /// A navigation, built from the state it is applied to (some name the displayed session).
+    type Navigation = (&'static str, Box<dyn Fn(&State) -> Message>);
+
+    let navigations: Vec<Navigation> = vec![
+        (
+            "SessionStarted",
+            Box::new(|_: &State| {
+                Message::SessionStarted(Session::start_new(SessionLocation::Worktree(
+                    "feat-y".to_string(),
+                )))
+            }),
+        ),
+        (
+            "SessionSelected",
+            Box::new(|s: &State| Message::SessionSelected(s.active_session.expect("displayed"))),
+        ),
+        (
+            "TerminalModeToggled",
+            Box::new(|_: &State| Message::TerminalModeToggled),
+        ),
+        (
+            "ShellInstanceOpenRequested",
+            Box::new(|_: &State| Message::ShellInstanceOpenRequested),
+        ),
+        (
+            "ShellInstanceSelected",
+            Box::new(move |s: &State| {
+                Message::ShellInstanceSelected(s.active_session.expect("displayed"), shell)
+            }),
+        ),
+        (
+            "ShellInstanceCloseRequested",
+            Box::new(move |s: &State| {
+                Message::ShellInstanceCloseRequested(s.active_session.expect("displayed"), shell)
+            }),
+        ),
+    ];
+
+    for (name, build) in navigations {
+        let mut s = showing_a_terminal();
+        s.update(Message::TerminalFocusReleased);
+        assert!(!s.terminal_focused(), "{name}: precondition — released");
+
+        let message = build(&s);
+        s.update(message);
+
+        assert!(
+            !s.terminal_released,
+            "{name} puts a terminal in front of the user, so it must clear the release (FR-011, \
+             FR-021a)"
+        );
+        assert!(
+            s.terminal_focused(),
+            "{name} must leave the newly displayed terminal holding the keyboard"
+        );
+    }
+}
+
+#[test]
+fn a_restored_session_holds_the_keyboard_at_launch() {
+    // Nothing is carried over from the previous run; launch simply applies the default-holder rule
+    // to whatever is displayed (FR-012a). `Default` is `terminal_released: false`, so this is a
+    // property of the default rather than a step somebody has to remember on the startup path.
+    assert!(
+        !State::default().terminal_released,
+        "the application starts with the terminal not released, so a restored session is focused"
+    );
+    let mut s = State::default();
+    let session = Session::start_new(SessionLocation::Worktree("restored".to_string()));
+    let id = session.id;
+    s.workspace
+        .sessions
+        .entry(std::path::PathBuf::from("/p"))
+        .or_default()
+        .push(session);
+    s.active_session = Some(id);
+    assert!(
+        s.terminal_focused(),
+        "a restored, displayed session's terminal holds the keyboard at launch (FR-012a)"
+    );
+}
+
+// ---- US4: the keyboard is never taken while you are typing somewhere else ----
+
+/// Each surface that must take the keyboard while it is open, as (name, open, close).
+fn keyboard_taking_surfaces() -> Vec<(&'static str, Message, Message)> {
+    vec![
+        ("about dialog", Message::AboutOpened, Message::AboutClosed),
+        (
+            "help menu",
+            Message::HelpMenuToggled,
+            Message::HelpMenuToggled,
+        ),
+        (
+            "project switcher",
+            Message::ProjectSwitcherToggled,
+            Message::ProjectSwitcherToggled,
+        ),
+        (
+            "sidebar filter panel",
+            Message::SidebarFilterMenuToggled,
+            Message::SidebarFilterMenuToggled,
+        ),
+    ]
+}
+
+#[test]
+fn an_open_surface_takes_the_keyboard_and_gives_it_back() {
+    // FR-004/FR-017 in one shape: while it is open it types (arrows, Escape, a filter query), so
+    // the terminal must not also be receiving keys; when it closes the keyboard comes back with no
+    // restore stack — the predicate simply reads true again (FR-010).
+    for (name, open, close) in keyboard_taking_surfaces() {
+        let mut s = showing_a_terminal();
+        assert!(s.terminal_focused(), "{name}: precondition");
+
+        s.update(open);
+        assert!(
+            !s.terminal_focused(),
+            "{name} holds the keyboard while it is open (FR-004, FR-017)"
+        );
+
+        s.update(close);
+        assert!(
+            s.terminal_focused(),
+            "{name} closing returns the keyboard to the terminal (FR-010)"
+        );
+    }
+}
+
+#[test]
+fn a_release_outranks_a_closing_surface() {
+    // The user handed the keyboard back on purpose before opening the dialog. Closing it must not
+    // quietly undo that (FR-010's exception, FR-021).
+    for (name, open, close) in keyboard_taking_surfaces() {
+        let mut s = showing_a_terminal();
+        s.update(Message::TerminalFocusReleased);
+        s.update(open);
+        s.update(close);
+        assert!(
+            !s.terminal_focused(),
+            "{name}: an explicit release survives a surface opening and closing over it"
+        );
+    }
+}
+
+#[test]
+fn the_terminals_own_context_menu_is_furniture() {
+    // FR-007 files the pane's right-click menu with its scrollbar and status bar: it is drawn
+    // inside the pane and offers the pane's own Copy and Paste, so taking the keyboard to open it
+    // would mean a right-click stops the user typing. Deliberately *not* a term of the predicate
+    // (research R4) — and the one exclusion, which is why it is asserted rather than assumed.
+    let mut s = showing_a_terminal();
+    s.update(Message::TerminalContextMenuOpened { x: 10, y: 4 });
+    assert!(
+        s.terminal_focused(),
+        "the terminal keeps the keyboard while its own context menu is open (FR-007)"
+    );
+    s.update(Message::TerminalContextMenuClosed);
+    assert!(s.terminal_focused());
+}
+
+#[test]
+fn output_and_lifecycle_never_change_the_holder() {
+    // FR-019. The failure this forbids is the worst one available: a keystroke meant for a form
+    // field delivered to a shell because a background session happened to finish starting.
+    let mut s = showing_a_terminal();
+    s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
+    let before = s.terminal_focused();
+
+    let other = Session::start_new(SessionLocation::Worktree("noisy".to_string()));
+    let other_id = other.id;
+    s.update(Message::SessionStarted(other));
+    s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
+    s.update(Message::SessionRunning(other_id));
+    s.update(Message::TerminalTick);
+
+    assert_eq!(
+        s.terminal_focused(),
+        before,
+        "output, a session reaching Running, and a tick must not move the keyboard (FR-019)"
+    );
+    assert_eq!(
+        s.focused_field,
+        Some(FieldId::AddWorktreeName),
+        "the field the user is typing into still holds it (FR-018)"
+    );
 }

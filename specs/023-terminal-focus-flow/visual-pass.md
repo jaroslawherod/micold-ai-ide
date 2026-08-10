@@ -101,6 +101,46 @@ was released and re-acquired **six** times and the window focus round trip above
 line numbers ran from 43869 to **100000** — consecutive, no gap, no restart from 1, no reflow
 (`v-b3-running.png` → `v-b3-final.png`). Focus is not something the attached process can notice.
 
+## §B4 — Landing ready to type (US3, SC-004) — **PASS**
+
+**Date**: 2026-08-10, at `e6ca347` + US3.
+
+From a **released** terminal — affordance drawn muted, confirmed in `w-b4-released.png` — the mode
+was toggled twice (to AI CLI and back to Regular) and `echo NAVIGATED_THEN_TYPED` typed immediately.
+It appeared at the shell prompt with the caret after it (`w-b4-typed.png`).
+
+Zero presses into the pane. Before this feature the release would have outlived the navigation and
+those keystrokes would have gone to the application: navigating to a terminal is a request for it,
+so it clears the release (FR-011, FR-021a).
+
+Session start and select were exercised incidentally throughout the run — every session here was
+started from the sidebar's "+", and each came up focused. Project switch and relaunch are covered by
+`a_switch_lands_on_a_terminal_ready_to_type` and `a_restored_session_holds_the_keyboard_at_launch`;
+this instance has one project, so a switch is not drivable in it.
+
+## §B5 — Never taken mid-word (US4, SC-005, SC-006) — **PASS**
+
+`yes | nl | head -200000` was left flooding the pane throughout, so every claim below was made while
+the terminal had output arriving.
+
+**A surface takes the keyboard while it is open.** Opening the application's overflow menu
+(top-right) with the terminal focused: the release affordance in the bar went **muted** in the same
+frame the menu appeared (`w-b5-menu.png`). The terminal had yielded — which is the registry doing
+the work, since nothing in this feature names that menu.
+
+**And gives it back.** Escape closed the menu; the affordance returned to full strength
+(`w-b5-closed-bar.png`) and `echo BACK_AFTER_MENU` typed straight afterwards reached the shell
+(`w-b5-final.png`). No restore stack — the predicate simply reads true again (FR-010).
+
+**Output changed nothing.** The flood ran to 200000 unbroken across the menu opening, the Escape,
+and the typing. It never moved the keyboard and was never disturbed by it (FR-019, FR-025).
+
+**Not driven here**: typing into the Add Worktree form specifically. This project has no worktrees,
+so the form was not reachable without creating one. The claim it stands for — that a text field
+keeps the keyboard while a background session produces output and reaches `Running` — is asserted
+directly by `output_and_lifecycle_never_change_the_holder`, which checks `focused_field` is
+untouched across exactly those events.
+
 ## §B1 — rapid alternation (spec Edge Cases) — not run
 
 Left for T034's full sitting.
@@ -109,7 +149,8 @@ Left for T034's full sitting.
 
 ## Sections still to run
 
-§B4 (US3), §B5 (US4) — each with its own story, plus the whole of §B in one sitting at T034.
+All six sections have now run at least once. T034 repeats them in one sitting against the final
+build, and adds the rapid-alternation sequence.
 
 ## Frames
 
@@ -121,3 +162,5 @@ In the run's scratchpad, not committed:
 - `v-b6.png` — the granting press and what it let through
 - `v-b3-final.png` — 100000 unbroken lines, and typing after the window round trip
 - `v-b3-released-rt.png` — the empty prompt after a released terminal came back
+- `w-b4-released.png` / `w-b4-typed.png` — released, navigated, typed with no press
+- `w-b5-menu.png` / `w-b5-closed-bar.png` / `w-b5-final.png` — the keyboard lent to a menu and returned

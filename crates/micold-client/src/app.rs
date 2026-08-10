@@ -814,6 +814,12 @@ impl State {
         self.focused_field = None;
     }
 
+    /// The one surface that does not take the keyboard — see [`State::any_surface_takes_keyboard`].
+    /// Matched by id because the registry is the list; a typo here would silently make the
+    /// terminal yield to its own right-click menu, so `the_terminals_own_context_menu_is_furniture`
+    /// in `tests/terminal_focus.rs` is what notices.
+    const TERMINAL_CONTEXT_MENU: &str = "terminal_context_menu";
+
     /// Whether the displayed session's terminal holds the keyboard (feature 023, FR-009).
     ///
     /// **Derived, never stored.** The rule in one line: *the displayed terminal holds the keyboard
@@ -844,10 +850,11 @@ impl State {
     /// maintained — "one line per surface, and this is the only such list" (024 FR-009) — so a
     /// surface registered later participates in terminal focus without anyone touching this.
     fn any_surface_takes_keyboard(&self) -> bool {
-        // Stub — filled in by US4/T028, so US4's bounds tests are observed failing first
-        // (Principle I). Until then the terminal keeps the keyboard while a dialog is open, which
-        // is FR-017 unmet and exactly what T027 asserts.
-        false
+        use crate::overlay::{registry, SurfaceId};
+        registry::open_dialog(self).is_some()
+            || registry::open_popovers(self)
+                .iter()
+                .any(|open| open.id() != SurfaceId::new(Self::TERMINAL_CONTEXT_MENU))
     }
 
     /// The user is being put in front of a terminal (FR-011, FR-021a, FR-008b).
@@ -1476,6 +1483,11 @@ impl State {
                         session.set_mode(next);
                     }
                 }
+                // Switching mode puts a different terminal in front of the user, so it holds the
+                // keyboard (FR-011). This is the navigation the reported bug was about: it used to
+                // take two presses to reach and then left you looking at a terminal that ignored
+                // the keyboard.
+                self.focus_terminal();
             }
             Message::TerminalRestartRequested => {
                 // No pure state to update here — the binary decides which process to spawn
@@ -1483,19 +1495,25 @@ impl State {
                 // ShellInstanceRunning once it's actually up (mirrors SessionStartRequested).
             }
             Message::ShellInstanceOpenRequested => {
-                // No pure state to update here — the binary decides whether the active session
+                // No session state to update here — the binary decides whether the active session
                 // is in Regular mode, opens the instance (`Session::open_shell_instance`), and
                 // spawns its process, following up with `ShellInstanceRunning` once it's up.
+                // The new instance is what the user will be looking at, so it holds the keyboard
+                // (FR-011).
+                self.focus_terminal();
             }
             Message::ShellInstanceSelected(id, shell_id) => {
                 if let Some(session) = self.session_mut(id) {
                     session.select_shell(shell_id);
                 }
+                self.focus_terminal(); // FR-011
             }
             Message::ShellInstanceCloseRequested(id, shell_id) => {
                 if let Some(session) = self.session_mut(id) {
                     session.close_shell(shell_id);
                 }
+                // Whichever instance takes its place is what the user is now looking at (FR-011).
+                self.focus_terminal();
             }
             Message::ShellInstanceRestartRequested(..) => {
                 // No pure state to update here — the binary spawns the process and follows up

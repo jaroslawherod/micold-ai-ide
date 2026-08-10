@@ -147,9 +147,12 @@ impl State {
         // it drops you into (FR-001) — the reported bug was that the panel showed every row
         // collapsed while the main area showed a session.
         self.set_current_session(self.restore_foreground(&key)); // STEP 3
-                                                                 // Feature 023, T024 replaces this: a project switch onto a restored session should land
-                                                                 // focused (FR-011). Kept as a release for now so US3's test is observed failing first.
-        self.release_terminal();
+                                                                 // Feature 023 (FR-011): arriving in a project puts that session's terminal in front of the
+                                                                 // user, so it holds the keyboard. This used to clear focus on the reasoning that arriving is
+                                                                 // not the same as asking to type — true of arriving somewhere by accident, but a project
+                                                                 // switch is deliberate, and the terminal you are looking at is the one you meant. The two
+                                                                 // features agree here: 024 reveals the row, 023 gives its terminal the keyboard.
+        self.focus_terminal();
         // `default_expanded` is not keyed per project (unlike `expanded`, which is pruned by
         // worktree `dir_name` in `set_worktrees`) — reset it explicitly so a Default entry
         // expanded in one project doesn't render pre-expanded in another (feature 010).
