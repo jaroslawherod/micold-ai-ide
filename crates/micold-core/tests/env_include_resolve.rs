@@ -281,3 +281,133 @@ mod windows {
         );
     }
 }
+
+/// BUG-003 (specs/011-env-include-script/bugs/BUG-003.md): a sourced script that **backgrounds a
+/// process holding the pipe** must not hold `resolve()` open past its own timeout.
+///
+/// `run_bounded`'s doc comment has promised this since feature 011: it kills the whole process
+/// group before reading stdout, "so no orphaned grandchild can keep the pipes open", because
+/// `read_to_end` waits for the last *writer* to close rather than for the child to die. The
+/// promise was kept on Unix by `process_group(0)` plus `kill(-pid)`, and on Windows by nothing at
+/// all — `child.kill()` reaches one process and none of its descendants.
+///
+/// Deliberately in the shared (non-platform) part of this file, because it is one guarantee rather
+/// than two. The script differs per platform only in how a shell backgrounds something.
+///
+/// The bound is generous — 30× the timeout — on purpose. The failure this catches is unbounded
+/// (the recorded run measured 10.8s against a 500ms budget, and would have waited for a 999-second
+/// sleep had the runner allowed it), so a loose bound still separates "returned" from "blocked"
+/// while leaving room for a slow cold runner. Tightening it would trade the thing being measured
+/// for flakiness.
+#[test]
+fn a_script_that_backgrounds_a_pipe_holder_still_returns_promptly() {
+    let dir = tempfile::tempdir().unwrap();
+
+    #[cfg(not(windows))]
+    let script = write_script(
+        &dir,
+        "script.sh",
+        // Inherits this process's stdout, then outlives the script that started it.
+        "sleep 120 &\nexport BUG003_VAR=done\n",
+    );
+    #[cfg(windows)]
+    let script = write_script(
+        &dir,
+        "profile.ps1",
+        // `UseShellExecute = false` with no redirection makes the child inherit our handles, which
+        // is the case that matters — a job runner or version-manager helper left holding stdout.
+        "$si = New-Object System.Diagnostics.ProcessStartInfo\n\
+         $si.FileName = 'powershell'\n\
+         $si.Arguments = '-NoProfile -Command Start-Sleep -Seconds 120'\n\
+         $si.UseShellExecute = $false\n\
+         [void][System.Diagnostics.Process]::Start($si)\n\
+         $env:BUG003_VAR = 'done'\n",
+    );
+
+    let timeout = Duration::from_secs(2);
+    let start = std::time::Instant::now();
+    let (_vars, _outcome) = resolve(&script, dir.path(), timeout);
+    let elapsed = start.elapsed();
+
+    assert!(
+        elapsed < timeout * 30,
+        "resolve() took {elapsed:?} against a {timeout:?} timeout. A backgrounded process is \
+         holding the pipe and nothing killed it, so reading to EOF is waiting for a process this \
+         function never intended to wait for — the exact deadlock `run_bounded`'s doc comment says \
+         it prevents (BUG-003)."
+    );
+}
+
+/// BUG-003, corrected: `resolve()`'s wall clock must be bounded by the timeout it was *given*.
+///
+/// It was not. `resolve` establishes a baseline environment before sourcing anything, and that
+/// probe carried its own hardcoded 10-second budget on both platforms — so a caller asking for
+/// 500 ms could wait 10.5 s, which is exactly what CI measured (10.8 s against a 500 ms budget) and
+/// what the first version of BUG-003 misread as a pipe-holding deadlock.
+///
+/// The two things this pins:
+///
+/// 1. **The budget covers the whole call**, baseline included. It is the user's
+///    `env_include_timeout_secs`, and its promise is about how long opening a project can stall.
+/// 2. **A baseline that did not complete is reported, not treated as an empty environment.** That
+///    was the more dangerous half: diffing a real environment against nothing reports every
+///    variable in it as newly set by the user's script.
+#[test]
+fn a_budget_too_small_to_establish_a_baseline_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    // A script that would succeed instantly given any real budget at all.
+    #[cfg(not(windows))]
+    let script = write_script(&dir, "script.sh", "export BUG003_TINY=yes\n");
+    #[cfg(windows)]
+    let script = write_script(&dir, "profile.ps1", "$env:BUG003_TINY = 'yes'\n");
+
+    let (vars, outcome) = resolve(&script, dir.path(), Duration::from_millis(1));
+
+    assert!(
+        vars.is_empty(),
+        "with no baseline to compare against, every variable in the environment looks newly set. \
+         Reporting them would hand the caller the entire environment as though the script had \
+         exported it: {vars:?}"
+    );
+    match outcome {
+        EnvIncludeOutcome::TimedOut { diagnostic } => assert!(
+            diagnostic.contains("baseline"),
+            "the timeout is real, but the caller cannot act on it without knowing the budget went \
+             before the script ever ran. Diagnostic was: {diagnostic:?}"
+        ),
+        other => {
+            panic!("expected TimedOut once the budget cannot cover the baseline, got {other:?}")
+        }
+    }
+}
+
+/// The same guarantee from the outside: a hanging script does not cost the baseline's budget *plus*
+/// its own.
+///
+/// Loose on purpose. On a fast machine the baseline costs tens of milliseconds and this passes
+/// whether or not the budget is shared, so its value is on a slow runner — which is where the
+/// defect was visible in the first place, and where a regression would reappear.
+#[test]
+fn a_hanging_script_costs_its_own_budget_and_not_the_baselines_as_well() {
+    let dir = tempfile::tempdir().unwrap();
+    #[cfg(not(windows))]
+    let script = write_script(&dir, "script.sh", "sleep 120\n");
+    #[cfg(windows)]
+    let script = write_script(&dir, "profile.ps1", "Start-Sleep -Seconds 120\n");
+
+    let timeout = Duration::from_secs(2);
+    let start = std::time::Instant::now();
+    let (_vars, outcome) = resolve(&script, dir.path(), timeout);
+    let elapsed = start.elapsed();
+
+    assert!(
+        matches!(outcome, EnvIncludeOutcome::TimedOut { .. }),
+        "a 120-second sleep against a 2-second budget times out; got {outcome:?}"
+    );
+    assert!(
+        elapsed < timeout * 4,
+        "resolve() took {elapsed:?} for a {timeout:?} budget. The budget is what bounds how long \
+         opening a project can stall, so anything the call does beyond sourcing the script — the \
+         baseline probe above all — has to come out of it rather than be added to it (BUG-003)."
+    );
+}

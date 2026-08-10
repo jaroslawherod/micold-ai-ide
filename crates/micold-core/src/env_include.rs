@@ -100,6 +100,15 @@ enum RunOutcome {
     SpawnFailed(String),
 }
 
+/// Reported when the budget ran out before a baseline environment could be established (BUG-003).
+///
+/// A distinct message rather than an empty diagnostic, because the two timeouts mean different
+/// things to whoever reads them: the script was slow, or the budget was never big enough to look at
+/// the script at all. The second is a setting to raise, not a script to debug.
+const BASELINE_UNAVAILABLE: &str =
+    "the timeout expired while establishing the baseline environment, before the script was \
+     sourced — raise the env-include timeout";
+
 /// Kill every process in `pid`'s process group (Unix only — `cmd` is spawned with
 /// `process_group(0)` below, so the group id equals the child's own pid) via a direct `kill(2)`
 /// syscall. Deliberately NOT implemented by spawning the `kill(1)` *binary* as a subprocess —
@@ -181,7 +190,7 @@ fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
 }
 
 #[cfg(not(windows))]
-fn baseline_env(cwd: &Path) -> HashMap<String, String> {
+fn baseline_env(cwd: &Path, budget: Duration) -> Option<HashMap<String, String>> {
     // Deliberately reuses `attempt_env`'s exact wrapper (sourcing `/dev/null`, a guaranteed-empty
     // no-op) rather than a bare `env -0`: bash tail-call-optimizes a `-c` script whose last
     // command is a single simple external command (execve()-replacing itself, no fork) but
@@ -198,9 +207,12 @@ fn baseline_env(cwd: &Path) -> HashMap<String, String> {
     // baseline sources `/dev/null` (never the real script), running it in `cwd` does not trigger
     // any directory-dependent hook the real script might contain — only the real `attempt_env`
     // call actually sources user content there.
-    match attempt_env(Path::new("/dev/null"), cwd, Duration::from_secs(10)) {
-        RunOutcome::Exited { stdout, .. } => parse_env_dump(&stdout),
-        _ => HashMap::new(),
+    match attempt_env(Path::new("/dev/null"), cwd, budget) {
+        RunOutcome::Exited { stdout, .. } => Some(parse_env_dump(&stdout)),
+        // `None`, never an empty map (BUG-003). Diffing a real environment against nothing reports
+        // every variable in it as newly set by the user's script — a wrong answer dressed as a
+        // successful one, which is worse than the timeout it is hiding.
+        _ => None,
     }
 }
 
@@ -240,7 +252,7 @@ fn attempt_env(path: &Path, cwd: &Path, timeout: Duration) -> RunOutcome {
 }
 
 #[cfg(windows)]
-fn baseline_env(cwd: &Path) -> HashMap<String, String> {
+fn baseline_env(cwd: &Path, budget: Duration) -> Option<HashMap<String, String>> {
     // `cwd` (BUG-002): matches `attempt_env`'s working directory for the same reason the Unix
     // branch does — even though `[System.Environment]::GetEnvironmentVariables()` (process env
     // vars) isn't expected to vary with the shell's cwd the way bash's `PWD` does, running both
@@ -252,9 +264,10 @@ fn baseline_env(cwd: &Path) -> HashMap<String, String> {
         "[System.Environment]::GetEnvironmentVariables().GetEnumerator() | ForEach-Object { \
          [Console]::Out.Write(\"$($_.Key)=$($_.Value)`0\") }",
     );
-    match run_bounded(cmd, Duration::from_secs(10)) {
-        RunOutcome::Exited { stdout, .. } => parse_env_dump(&stdout),
-        _ => HashMap::new(),
+    match run_bounded(cmd, budget) {
+        RunOutcome::Exited { stdout, .. } => Some(parse_env_dump(&stdout)),
+        // See the Unix branch: `None` rather than an empty map (BUG-003).
+        _ => None,
     }
 }
 
@@ -295,9 +308,30 @@ pub fn resolve(
         return (Vec::new(), EnvIncludeOutcome::MissingScript);
     }
 
-    let baseline = baseline_env(cwd);
+    // ONE budget for the whole call (BUG-003). The baseline probe used to carry its own hardcoded
+    // ten seconds, so a caller asking for 500ms could wait ten and a half — and `timeout` is the
+    // user's `env_include_timeout_secs`, whose promise is about how long opening a project may
+    // stall, not about one of the two subprocesses it takes to answer.
+    let started = Instant::now();
+    let Some(baseline) = baseline_env(cwd, timeout) else {
+        return (
+            Vec::new(),
+            EnvIncludeOutcome::TimedOut {
+                diagnostic: BASELINE_UNAVAILABLE.to_string(),
+            },
+        );
+    };
+    let remaining = timeout.saturating_sub(started.elapsed());
+    if remaining.is_zero() {
+        return (
+            Vec::new(),
+            EnvIncludeOutcome::TimedOut {
+                diagnostic: BASELINE_UNAVAILABLE.to_string(),
+            },
+        );
+    }
 
-    match attempt_env(path, cwd, timeout) {
+    match attempt_env(path, cwd, remaining) {
         RunOutcome::Exited {
             code: 0, stdout, ..
         } => {
