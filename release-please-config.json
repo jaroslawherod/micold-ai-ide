@@ -5,6 +5,61 @@
       "release-type": "simple",
       "component": "micold-ai-ide",
       "changelog-path": "CHANGELOG.md",
+      "changelog-sections": [
+        {
+          "type": "feat",
+          "section": "Features"
+        },
+        {
+          "type": "fix",
+          "section": "Bug Fixes"
+        },
+        {
+          "type": "perf",
+          "section": "Performance Improvements"
+        },
+        {
+          "type": "deps",
+          "section": "Dependencies"
+        },
+        {
+          "type": "revert",
+          "section": "Reverts"
+        },
+        {
+          "type": "ci",
+          "section": "Build & CI"
+        },
+        {
+          "type": "build",
+          "section": "Build & CI"
+        },
+        {
+          "type": "docs",
+          "section": "Documentation",
+          "hidden": true
+        },
+        {
+          "type": "chore",
+          "section": "Miscellaneous",
+          "hidden": true
+        },
+        {
+          "type": "style",
+          "section": "Styles",
+          "hidden": true
+        },
+        {
+          "type": "refactor",
+          "section": "Code Refactoring",
+          "hidden": true
+        },
+        {
+          "type": "test",
+          "section": "Tests",
+          "hidden": true
+        }
+      ],
       "include-component-in-tag": true,
       "include-v-in-tag": true,
       "bump-minor-pre-major": true,
