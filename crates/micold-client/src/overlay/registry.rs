@@ -139,6 +139,62 @@ impl Open {
     }
 }
 
+/// A dialog on its way out: which surface it was, and the state it was drawn from.
+///
+/// # Why a whole `State`, and why there is nothing per-surface here
+///
+/// Closing a dialog clears its draft synchronously in the reducer, so the exit animation would
+/// have nothing left to draw. Something has to outlive the close (FR-011), and until T036 that was
+/// `ClosingOverlay` — a nine-variant enum, one per dialog, each carrying a hand-picked clone of
+/// exactly the fields its renderer needed, plus a match mapping each back to the dialog it was a
+/// snapshot of. Three per-surface lists for one idea.
+///
+/// The idea is just "the state as it was". Keeping that literally makes all three lists vanish:
+/// the snapshot draws through [`Open::view`], the same function the live path calls, so the exit
+/// really is the enter in reverse rather than a second renderer that resembles it. This is why
+/// nothing was added to [`FloatingSurface`] despite T036's brief — the snapshot turned out not to
+/// be per-surface behaviour at all, so a `snapshot` method would have been a hook with one uniform
+/// implementation.
+///
+/// The cost is a `State` clone where there used to be a draft clone, taken before every message
+/// **while a dialog is open** — the same gate the old capture had, so nothing is cloned in the
+/// common case of no dialog on screen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Closing {
+    id: SurfaceId,
+    state: Box<State>,
+}
+
+impl Closing {
+    /// Snapshot the open dialog, or `None` when no dialog is open.
+    pub fn of(state: &State) -> Option<Self> {
+        Some(Self {
+            id: open_dialog(state)?.id(),
+            state: Box::new(state.clone()),
+        })
+    }
+
+    /// Which dialog this is a snapshot of.
+    ///
+    /// The identity `material::Modal` keys its transition on. It has to survive the close: the
+    /// live state says `Overlay::None` the instant the dialog is dismissed, and a renderer reading
+    /// *that* would see the identity change, restart the transition, and make the dialog vanish
+    /// instead of animating out.
+    pub fn id(&self) -> SurfaceId {
+        self.id
+    }
+
+    /// The dialog as the registry sees it in the snapshot — including the view that draws it.
+    pub fn surface(&self) -> Option<Open> {
+        open_dialog(&self.state)
+    }
+
+    /// The state as it was when the dialog was still open.
+    pub fn state(&self) -> &State {
+        &self.state
+    }
+}
+
 /// A registration: "look at the state and tell me whether this surface is open".
 pub type Probe = fn(&State) -> Option<Open>;
 

@@ -34,7 +34,7 @@ mod toolbar;
 pub(crate) mod worktree_form;
 pub(crate) mod worktree_rename;
 
-use crate::app::{Message, Overlay, State};
+use crate::app::{Message, State};
 use crate::icons::{icon_role, Icon, IconSurface};
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length, Subscription};
@@ -144,16 +144,16 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
 ///
 /// No animation state is passed in: every transition belongs to the component that plays it, and
 /// each owns its progress in the widget tree (FR-011, FR-014). `dismissing` is the snapshot of a
-/// just-closed overlay still animating out — the one thing an application still has to hold, since
-/// it outlives the state that opened it (rendered instead of a live overlay when `state.overlay` is
-/// already `None` — see [`crate::app::ClosingOverlay`]).
+/// just-closed dialog still animating out — the one thing an application still has to hold, since
+/// it outlives the state that opened it (rendered instead of a live dialog once no dialog is open —
+/// see [`crate::overlay::registry::Closing`]).
 #[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     state: &'a State,
     grid: Option<&'a crate::grid::GridCache>,
     selection: Option<&'a crate::selection::Selection>,
     display_offset: usize,
-    dismissing: Option<&'a crate::app::ClosingOverlay>,
+    dismissing: Option<&'a crate::overlay::registry::Closing>,
     env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
     connection: &ConnectionStatus,
 ) -> Element<'a, Message> {
@@ -344,24 +344,36 @@ pub fn view<'a>(
     // every dialog anyone added. Each of those lookups now lives beside the dialog that needs it
     // (feature 021, T035 — FR-008, SC-001).
     let open_dialog = crate::overlay::registry::open_dialog(state);
+    // A snapshot only draws once the live dialog is gone. It draws through the *same* registration
+    // as the live one — its own `open_dialog`, over the state it was taken of — so the exit is the
+    // enter in reverse by construction rather than by a second per-dialog list agreeing with the
+    // first (feature 021, T036 — SC-001).
+    let closing = dismissing.filter(|_| open_dialog.is_none());
     let dialog: Option<Element<'a, Message>> = match &open_dialog {
         Some(open) => open
             .view()
             .and_then(|view| view(state, scheme, env_include_outcome)),
-        None => dismissing.map(|closing| dismissing_dialog(closing, scheme, env_include_outcome)),
+        None => closing.and_then(|closing| {
+            let taken_of = closing.state();
+            closing
+                .surface()
+                .and_then(|open| open.view())
+                .and_then(|view| view(taken_of, scheme, env_include_outcome))
+        }),
     };
+    // The identity of the dialog being rendered, which for a snapshot is the one it was taken of —
+    // not "nothing open", which is merely where the application has got to.
+    let drawn = open_dialog
+        .as_ref()
+        .map(|open| open.id())
+        .or_else(|| closing.map(|closing| closing.id()));
 
     let modal: Option<cdk::overlay::Surface<'a, Message>> = dialog.map(|dialog| {
         // A snapshot is a dialog on its way out: nothing is open behind it, so it is not shown and
         // has nothing left to cancel.
         let mut modal = material::Modal::new(dialog, roles)
             .shown(open_dialog.is_some())
-            // The identity of the dialog being rendered, which for a snapshot is the one it was
-            // taken of — not `Overlay::None`, which is merely where the application has got to.
-            .restart_on(overlay_key(match dismissing {
-                Some(closing) if state.overlay == Overlay::None => closing.overlay(),
-                _ => state.overlay,
-            }))
+            .restart_on(drawn.map(surface_key).unwrap_or(0))
             // Once the exit finishes, the snapshot has served its purpose and is released. This is
             // the one thing about a transition the application still needs to hear about — and the
             // component says it, rather than the application watching a progress value for it.
@@ -449,48 +461,19 @@ fn main_content_key(state: &State) -> u64 {
     }
 }
 
-/// Which dialog is open, so that switching straight from one to another replays the entrance
-/// instead of inheriting a transition the previous dialog had already finished.
-fn overlay_key(overlay: Overlay) -> u64 {
-    overlay as u64
-}
-
-/// Render the snapshot of a just-closed overlay so it can keep fading out after the pure core
-/// has already cleared its live state (see [`crate::app::ClosingOverlay`]). Delegates to the same
-/// per-overlay `modal` render functions as the live path, so the exit is the enter in reverse.
+/// Which dialog is being drawn, so that switching straight from one to another replays the
+/// entrance instead of inheriting a transition the previous dialog had already finished.
 ///
-/// Every field renders unfocused here: the snapshot is not interactive, and the input that held the
-/// keyboard went with the live state. Same reasoning as `ConfirmDelete`'s below.
-fn dismissing_dialog<'a>(
-    closing: &'a crate::app::ClosingOverlay,
-    scheme: ColorScheme,
-    env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
-) -> Element<'a, Message> {
-    use crate::app::ClosingOverlay;
-    match closing {
-        ClosingOverlay::About => about::modal(scheme),
-        ClosingOverlay::Selector(selector) => project_selector::modal(selector, scheme),
-        ClosingOverlay::Rename(draft) => rename::modal(draft, scheme, None),
-        ClosingOverlay::Worktree(form, error) => {
-            worktree_form::modal(form, error.as_deref(), scheme, None)
-        }
-        ClosingOverlay::Settings(draft) => {
-            settings_form::modal(draft, scheme, env_include_outcome, None)
-        }
-        ClosingOverlay::ConfirmDelete(dir) => {
-            // Fading-out snapshot: the override may already be gone, so fall back to the derived
-            // name for the exit animation. The live state (branch, checkbox choice) is gone by
-            // now too — this non-interactive snapshot fades the dialog without the branch
-            // checkbox rather than reconstructing it.
-            let friendly = micold_core::naming::display_name(dir);
-            confirm_delete::modal(dir, &friendly, None, false, scheme)
-        }
-        ClosingOverlay::WorktreeRename(draft) => worktree_rename::modal(draft, scheme, None),
-        ClosingOverlay::ConfirmSessionRemove(label) => confirm_session_remove::modal(label, scheme),
-        ClosingOverlay::ConfirmForget(display_name, running) => {
-            confirm_forget::modal(display_name, *running, scheme)
-        }
+/// A surface's identity is a name and a transition's is a number, so the name is hashed. FNV-1a,
+/// written out rather than reached for, because the value only has to tell two surfaces apart
+/// within one run — and this way nothing about it depends on a hasher's defaults.
+fn surface_key(id: crate::overlay::SurfaceId) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in id.as_str().as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
+    hash
 }
 
 /// Keyboard subscription: while anything is floating, Esc dismisses it.

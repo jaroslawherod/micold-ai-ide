@@ -9,13 +9,14 @@
 
 use iced::time::every;
 use iced::{Subscription, Task};
-use micold_client::app::{ClosingOverlay, Message, Overlay, State};
+use micold_client::app::{Message, Overlay, State};
 use micold_client::features::session::SelectKind;
 use micold_client::features::worktree_form::{
     BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
 use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
+use micold_client::overlay::registry::Closing;
 use micold_client::selection::{Anchor, SelectGranularity, Selection};
 use micold_core::env_include::{self, EnvIncludeOutcome};
 use micold_core::frame_probe::{
@@ -132,7 +133,7 @@ struct App {
     scrollback_lines: usize,
     /// The overlay currently fading out (rendered from this snapshot until its fade completes),
     /// or `None` when no overlay is leaving.
-    dismissing: Option<ClosingOverlay>,
+    dismissing: Option<Closing>,
     /// Whether the OS window currently has input focus (idle-CPU fix). Gates the
     /// terminal/OS-theme poll subscriptions: `true` until the first `Unfocused` event,
     /// which matches iced's behavior of not emitting an initial `Focused` on launch.
@@ -661,11 +662,11 @@ fn persist_settings(core: &mut State) {
 }
 
 fn update(app: &mut App, message: Message) -> Task<Message> {
-    // Capture the open overlay + its draft BEFORE the reducer runs: closing an overlay clears
-    // its draft synchronously in the core, so this snapshot is the only way to keep rendering it
+    // Snapshot the open dialog BEFORE the reducer runs: closing a dialog clears the state it was
+    // drawn from synchronously in the core, so this snapshot is the only way to keep rendering it
     // while it fades out (FR-002/FR-006/FR-012).
     let overlay_before = app.core.overlay;
-    let snapshot_before = capture_overlay(app);
+    let snapshot_before = Closing::of(&app.core);
 
     let task = update_inner(app, message);
 
@@ -721,56 +722,6 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let mut steps = vec![task, compose_scene(app)];
     steps.extend(pulse);
     Task::batch(steps)
-}
-
-/// Snapshot the currently open overlay (and its draft) so it can be rendered while it fades out.
-/// Returns `None` when no overlay is open or its draft is unexpectedly absent.
-fn capture_overlay(app: &App) -> Option<ClosingOverlay> {
-    match app.core.overlay {
-        Overlay::None => None,
-        Overlay::About => Some(ClosingOverlay::About),
-        Overlay::ProjectSelector => app.core.selector.clone().map(ClosingOverlay::Selector),
-        Overlay::RenameProject => app.core.rename_draft.clone().map(ClosingOverlay::Rename),
-        Overlay::AddWorktree => {
-            app.core.worktree_form.clone().map(|form| {
-                ClosingOverlay::Worktree(Box::new(form), app.core.worktree_error.clone())
-            })
-        }
-        Overlay::Settings => app
-            .core
-            .settings_draft
-            .clone()
-            .map(ClosingOverlay::Settings),
-        Overlay::ConfirmWorktreeDelete => app
-            .core
-            .worktree_delete_target
-            .clone()
-            .map(ClosingOverlay::ConfirmDelete),
-        Overlay::RenameWorktree => app
-            .core
-            .worktree_rename_draft
-            .clone()
-            .map(ClosingOverlay::WorktreeRename),
-        Overlay::ConfirmSessionRemove => app
-            .core
-            .session_remove_target
-            .and_then(|id| app.core.workspace.find_session(id))
-            .map(|(_, session)| {
-                ClosingOverlay::ConfirmSessionRemove(session.label.display().to_string())
-            }),
-        Overlay::ConfirmForgetProject => app.core.forget_target.clone().map(|path| {
-            let display_name = app
-                .core
-                .workspace
-                .projects
-                .iter()
-                .find(|p| p.path == path)
-                .map(|p| p.display_name.clone())
-                .unwrap_or_else(|| micold_core::project::default_display_name(&path));
-            let running = app.core.workspace.running_session_count(&path);
-            ClosingOverlay::ConfirmForget(display_name, running)
-        }),
-    }
 }
 
 fn update_inner(app: &mut App, message: Message) -> Task<Message> {
