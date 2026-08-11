@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.8.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.7.0...micold-ai-ide-v0.8.0) (2026-08-11)
+
+
+### Features
+
+* **023:** land every navigation on a terminal ready to type ([e123ce0](https://github.com/jaroslawherod/micold-ai-ide/commit/e123ce0f235116013bbaed81f47ee71f27f3f603))
+* **023:** let coming back to the window change nothing ([ce0d90c](https://github.com/jaroslawherod/micold-ai-ide/commit/ce0d90cb46975cf1f65fddd7bbcd897c74fd7fdd))
+* **023:** make focus a question, and stop swallowing the press ([b988cac](https://github.com/jaroslawherod/micold-ai-ide/commit/b988cac7378deb21fdb73d443c8268dd8116516d))
+* **024:** derive which sidebar row is open from which session is current ([44e0e87](https://github.com/jaroslawherod/micold-ai-ide/commit/44e0e87eb77a594d8674f41966a4a2b658b6c66c))
+* **024:** let the current session's location past the filters, and say why ([7f62cd5](https://github.com/jaroslawherod/micold-ai-ide/commit/7f62cd51bf350c3c93ec48215a3639f2effa2bbd))
+* **024:** put the revealed row on screen, not merely in the list ([f7378af](https://github.com/jaroslawherod/micold-ai-ide/commit/f7378afaaae7c15ca5cbb5b5d9a51d5ab0517a5a))
+* **024:** reveal on every path that moves you, and on none that does not ([6273939](https://github.com/jaroslawherod/micold-ai-ide/commit/6273939d997e7e11f1aeaa050789b88a8ef18f86))
+* **client:** say which session entering a project landed on, and why ([293d861](https://github.com/jaroslawherod/micold-ai-ide/commit/293d8617c4426c0f7eba1f5e5a1496485bc543ee))
+* **core:** make env-include resolution answerable without a shell ([a08289c](https://github.com/jaroslawherod/micold-ai-ide/commit/a08289cb75ad45680a63246ef7569acbbf7b670c))
+
+
+### Bug Fixes
+
+* **011:** bound env-include resolution by the timeout it was given ([d259fda](https://github.com/jaroslawherod/micold-ai-ide/commit/d259fda4229a679bf3b70b790f17dc12230b5bde))
+* **011:** give Windows the whole-tree kill its timeout always assumed ([6f8e03a](https://github.com/jaroslawherod/micold-ai-ide/commit/6f8e03a58ad60056301cbaf53e0ffcf9eb8b8efc))
+* **022:** give the checkbox a keyboard, and the focus it never had — BUG-003 ([2b3a106](https://github.com/jaroslawherod/micold-ai-ide/commit/2b3a1064b8a5de1d3a06eea2845a4655823c9bc5))
+* **023:** meet feature 024 where it now writes the session pointer ([8045fdd](https://github.com/jaroslawherod/micold-ai-ide/commit/8045fddf688ac44c6fbab7a22b0e41661c80c353))
+* **024:** honour the assertion freeze, and format ([95e1d37](https://github.com/jaroslawherod/micold-ai-ide/commit/95e1d37ef1b6df7f2300f6c3572ab2b7983df242))
+* **showcase:** register the Roboto faces, so weight roles read as weights ([fcfe224](https://github.com/jaroslawherod/micold-ai-ide/commit/fcfe224b7337379140543a81abf5f6c62bb06778))
+
+
+### Build & CI
+
+* **023:** let the changelog say when the pipeline itself changes ([79b65aa](https://github.com/jaroslawherod/micold-ai-ide/commit/79b65aa99e9b2a209f044655891fccf9beaba0ea))
+* **023:** the build a prose-only change never needed ([979d431](https://github.com/jaroslawherod/micold-ai-ide/commit/979d431a7c3ded9f497fcc36fae0c615c55db9e6))
+
 ## [0.7.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.6.0...micold-ai-ide-v0.7.0) (2026-08-10)
 
 
