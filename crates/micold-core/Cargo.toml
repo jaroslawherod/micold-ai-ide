@@ -37,6 +37,11 @@ futures-util = { workspace = true }
 # `kill(2)`/`process_group` for the environment-include script timeout (`env_include`).
 libc = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+# Job Objects for the environment-include script timeout — the Windows counterpart to the process
+# group `libc` provides above (BUG-003). Still render-free, so FR-040 is intact.
+windows-sys = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 
