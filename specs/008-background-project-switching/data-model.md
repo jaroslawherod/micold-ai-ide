@@ -20,7 +20,7 @@ This feature adds **no persisted schema** (`projects.json` is unchanged) and **n
 
 ### Validation / invariants
 
-- `foreground_by_project[p]` MUST reference a session id present in `workspace.sessions[p]`; stale entries are ignored on restore and overwritten on the next switch-away. A referenced session that is no longer running is treated as "no stored foreground" (fall back to first running session, else `None`).
+- `foreground_by_project[p]` MUST reference a session id present in `workspace.sessions[p]`; stale entries are ignored on restore and overwritten on the next switch-away. A referenced session that has been **closed** (`archived`) is treated as "no stored foreground" (fall back to first running session, else `None`). A session that merely stopped is still restored — see [BUG-001](./bugs/BUG-001.md) and FR-003a. The original rule treated any non-running session as no memory at all, which was reasonable while this feature's premise (sessions keep running in the background) held; it does not hold across a restart, since lifecycle is not persisted, and the rule then discarded the memory in exactly the case the user most notices.
 - An id is inserted into `restarted_while_inactive` ONLY when its owning project ≠ `workspace.active` at restart time. It is removed when that project becomes active (its removal is what arms `notice`).
 - `notice` is presentation-only; it never gates behavior and is safe to drop. It is cleared by `Message::NoticeDismissed` (user dismiss) or overwritten/cleared on the next `switch_active`.
 
