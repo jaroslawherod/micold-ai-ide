@@ -21,6 +21,54 @@ use micold_core::project::canonicalize_best_effort;
 use micold_core::session::{Session, SessionId, SessionLocation};
 use std::path::Path;
 
+/// Why entering a project landed on the session it did — or on none (feature 008 FR-003).
+///
+/// Entering a project picks its foreground session, and when it picks nothing the user is dropped
+/// on the project overview with no explanation. Four different situations produce that, and they
+/// need different answers, so they are told apart here rather than collapsed into `Option::None`:
+///
+/// - a project that genuinely has no sessions is working as intended;
+/// - a project whose sessions have all stopped is also correct, and the count says so;
+/// - a resolve that finds **nothing under the key it was given**, while the sidebar is happily
+///   listing that project's sessions, means the two are looking under different keys. That reads
+///   to a user as "the app forgot my session", and it is invisible to any amount of staring at the
+///   foreground logic.
+///
+/// Carried on the state rather than logged from in here: this module is render-free and does no
+/// I/O, so the reducer decides and the binary writes it out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ForegroundChoice {
+    /// The session this project was left on, still active.
+    Remembered(SessionId),
+    /// No usable remembered session, so the project's first active one was taken. `remembered` is
+    /// what was hoped for — `None` when the project had never been left on anything.
+    FirstActive {
+        /// The session actually chosen.
+        chosen: SessionId,
+        /// What was remembered but could not be used, if anything.
+        remembered: Option<SessionId>,
+    },
+    /// The project has sessions, but none of them is active, so there is nothing to display.
+    NoneActive {
+        /// How many sessions the project has, all inactive.
+        sessions: usize,
+    },
+    /// Nothing is filed under the key the resolve was given. Distinct from `NoneActive`: this is
+    /// the answer that indicts the *key*, not the sessions.
+    NoSessionsForKey,
+}
+
+impl ForegroundChoice {
+    /// The session to display, if any.
+    pub fn session(&self) -> Option<SessionId> {
+        match self {
+            Self::Remembered(id) => Some(*id),
+            Self::FirstActive { chosen, .. } => Some(*chosen),
+            Self::NoneActive { .. } | Self::NoSessionsForKey => None,
+        }
+    }
+}
+
 /// The kind of text selection to begin (feature 006, FR-013): single click = character range,
 /// double = semantic (word), triple = whole line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -143,15 +191,20 @@ impl State {
     /// background-restart notice. Pair with a preceding [`record_foreground`](Self::record_foreground).
     pub fn restore_after_activation(&mut self, path: &Path) {
         let key = canonicalize_best_effort(path);
+        // Recorded before it is acted on, so the binary can say *why* the app landed where it did
+        // — including when it landed nowhere, which is the case a user reports as "it forgot my
+        // session" and which `Option::None` alone cannot explain.
+        let choice = self.explain_foreground(&key);
+        self.last_foreground_choice = Some(choice.clone());
         // Feature 024: through `set_current_session`, so arriving in a project reveals the session
         // it drops you into (FR-001) — the reported bug was that the panel showed every row
         // collapsed while the main area showed a session.
-        self.set_current_session(self.restore_foreground(&key)); // STEP 3
-                                                                 // Feature 023 (FR-011): arriving in a project puts that session's terminal in front of the
-                                                                 // user, so it holds the keyboard. This used to clear focus on the reasoning that arriving is
-                                                                 // not the same as asking to type — true of arriving somewhere by accident, but a project
-                                                                 // switch is deliberate, and the terminal you are looking at is the one you meant. The two
-                                                                 // features agree here: 024 reveals the row, 023 gives its terminal the keyboard.
+        self.set_current_session(choice.session()); // STEP 3
+                                                    // Feature 023 (FR-011): arriving in a project puts that session's terminal in front of the
+                                                    // user, so it holds the keyboard. This used to clear focus on the reasoning that arriving is
+                                                    // not the same as asking to type — true of arriving somewhere by accident, but a project
+                                                    // switch is deliberate, and the terminal you are looking at is the one you meant. The two
+                                                    // features agree here: 024 reveals the row, 023 gives its terminal the keyboard.
         self.focus_terminal();
         // `default_expanded` is not keyed per project (unlike `expanded`, which is pruned by
         // worktree `dir_name` in `set_worktrees`) — reset it explicitly so a Default entry
@@ -166,16 +219,32 @@ impl State {
         self.arm_notice(&key); // STEP 4
     }
 
-    /// The session to display when entering `key`: the stored foreground if it still exists
-    /// and is running, else the project's first running session, else `None` (FR-003).
-    fn restore_foreground(&self, key: &Path) -> Option<SessionId> {
-        let sessions = self.workspace.sessions.get(key)?;
-        if let Some(&stored) = self.foreground_by_project.get(key) {
+    /// The session to display when entering `key`, and why: the session this project was left on
+    /// if it still exists and is running, else the project's first running one, else none
+    /// (FR-003).
+    ///
+    /// Replaces the older `restore_foreground`, which answered the same question and threw the
+    /// reason away. There is one function rather than two so the choice and the explanation of it
+    /// cannot drift apart — see [`ForegroundChoice`].
+    pub fn explain_foreground(&self, key: &Path) -> ForegroundChoice {
+        let Some(sessions) = self.workspace.sessions.get(key) else {
+            return ForegroundChoice::NoSessionsForKey;
+        };
+        let remembered = self.foreground_by_project.get(key).copied();
+        if let Some(stored) = remembered {
             if sessions.iter().any(|s| s.id == stored && s.is_active()) {
-                return Some(stored);
+                return ForegroundChoice::Remembered(stored);
             }
         }
-        sessions.iter().find(|s| s.is_active()).map(|s| s.id)
+        match sessions.iter().find(|s| s.is_active()) {
+            Some(s) => ForegroundChoice::FirstActive {
+                chosen: s.id,
+                remembered,
+            },
+            None => ForegroundChoice::NoneActive {
+                sessions: sessions.len(),
+            },
+        }
     }
 
     /// If any session of the just-activated project was restarted while inactive, raise the

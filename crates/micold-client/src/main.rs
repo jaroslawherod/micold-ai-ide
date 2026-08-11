@@ -1297,6 +1297,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.restore_after_activation(&path);
             app.core.set_worktrees(discover_worktrees(&path));
             app.core.worktree_error = None;
+            log_foreground_choice(app, &path);
             // The daemon is the single writer: tell it to learn this project (persist + discover),
             // and switch this client's attachment to it. No local `persist()`, no local
             // transcript-reconcile — sessions come from the daemon catalog via reconcile_catalog.
@@ -1319,6 +1320,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             let previous = app.core.workspace.active.clone();
             if app.core.switch_active(&path) {
                 app.core.set_worktrees(discover_worktrees(&path));
+                log_foreground_choice(app, &path);
                 // Already a known project (no ProjectAdd); just move the daemon attachment.
                 switch_daemon_attachment(app, previous, &path);
             }
@@ -2242,6 +2244,59 @@ fn send_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64) -> ClientMsg) {
 /// (so another window can take it), attach the new, and set the viewed session — so the daemon
 /// streams grid frames and discovers worktrees for the project now in focus (T055). A no-op when
 /// disconnected; the initial attach on connect is handled by `DaemonConnected`.
+/// Append a line to the client's own log, beside the daemon's (`micold-client.log`).
+///
+/// The client has no logging framework and this does not add one: a single appended line, opened
+/// and closed per call, on a path that already exists for the daemon. It is here rather than in the
+/// reducer because the reducer is render-free and does no I/O, and it writes to a file rather than
+/// stderr because how the application was launched should not decide whether a diagnostic survives.
+///
+/// Silently does nothing if the directory cannot be resolved or the file cannot be opened. A
+/// diagnostic that can itself fail the thing it is diagnosing is worse than no diagnostic.
+fn log_line(message: &str) {
+    let Some(dirs) = directories::ProjectDirs::from("", "", "micold-ai-ide") else {
+        return;
+    };
+    let dir = dirs.data_dir();
+    if std::fs::create_dir_all(dir).is_err() {
+        return;
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("micold-client.log"))
+    {
+        use std::io::Write;
+        let _ = writeln!(file, "{message}");
+    }
+}
+
+/// Record which session entering `path` landed on, and why (feature 008 FR-003).
+///
+/// Written at every project switch because "it forgot which session I was on" is a report with
+/// four distinct causes, and the one hardest to see from outside — a resolve looking under a key
+/// nothing is filed under — is indistinguishable from the others in the UI. The known keys are
+/// logged alongside for exactly that case: if the sidebar lists sessions the resolve cannot find,
+/// the two keys are printed side by side and the mismatch is the answer.
+fn log_foreground_choice(app: &App, path: &Path) {
+    let choice = &app.core.last_foreground_choice;
+    let keys: Vec<String> = app
+        .core
+        .workspace
+        .sessions
+        .keys()
+        .map(|k| k.display().to_string())
+        .collect();
+    log_line(&format!(
+        "switch: entered {} -> active_session={:?} choice={:?} resolve_key={} session_keys={:?}",
+        path.display(),
+        app.core.active_session,
+        choice,
+        micold_core::project::canonicalize_best_effort(path).display(),
+        keys,
+    ));
+}
+
 fn switch_daemon_attachment(app: &App, old: Option<PathBuf>, new: &Path) {
     let Some(daemon) = &app.daemon else {
         return;
