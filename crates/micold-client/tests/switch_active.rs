@@ -46,8 +46,11 @@ fn records_outgoing_foreground_before_activating() {
     assert!(st.switch_active(Path::new("/b")));
 
     // I1: the OUTGOING project (/a) is recorded, not the incoming (/b).
-    assert_eq!(st.foreground_by_project.get(Path::new("/a")), Some(&fg_a));
-    assert!(st.foreground_by_project.get(Path::new("/b")) != Some(&fg_a));
+    assert_eq!(
+        st.workspace.foreground_by_project.get(Path::new("/a")),
+        Some(&fg_a)
+    );
+    assert!(st.workspace.foreground_by_project.get(Path::new("/b")) != Some(&fg_a));
 }
 
 #[test]

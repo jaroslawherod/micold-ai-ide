@@ -671,3 +671,62 @@ fn output_and_lifecycle_never_change_the_holder() {
         "the field the user is typing into still holds it (FR-018)"
     );
 }
+
+// --- Feature 025: a launch restores a session ready to type in --------------------------------
+//
+// Feature 023 made focus derived: a terminal holds the keyboard because a session is displayed and
+// the user has not given it away. So restoring at launch focuses by construction, and that is the
+// behaviour we want — the spec's first answer was the opposite, and reversing it is recorded in its
+// Clarifications and in research R5.
+//
+// Kept as a test rather than left implicit because it is the reason `boot()` may reuse the switch
+// path at all. If focus ever stops following the displayed session, this fails and says so.
+
+#[test]
+fn restoring_a_session_leaves_its_terminal_ready_to_type() {
+    let mut state = state_with_current_session();
+    let path = state.workspace.active.clone().unwrap();
+    state.record_foreground();
+    // The shape after a restart: the memory survived, the pointer did not.
+    state.active_session = None;
+
+    state.restore_after_activation(&path);
+
+    assert!(
+        state.active_session.is_some(),
+        "precondition: the memory was honoured"
+    );
+    assert!(
+        state.terminal_focused(),
+        "you reopen on the session you left and can type into it. Withholding the keyboard here \
+         would need a writer of `terminal_released` that no navigation has, and would make the \
+         launch the one special case in a model built to remove them (FR-013, research R5)"
+    );
+}
+
+#[test]
+fn a_launch_that_restores_nothing_focuses_nothing() {
+    let mut state = state_with_current_session();
+    let path = state.workspace.active.clone().unwrap();
+    // No memory, and every session closed: there is nothing to land on.
+    for id in state
+        .active_sessions()
+        .iter()
+        .map(|s| s.id)
+        .collect::<Vec<_>>()
+    {
+        if let Some((_, session)) = state.workspace.find_session_mut(id) {
+            session.archive();
+        }
+    }
+    state.active_session = None;
+
+    state.restore_after_activation(&path);
+
+    assert!(state.active_session.is_none());
+    assert!(
+        !state.terminal_focused(),
+        "focus follows a displayed session, so with none displayed there is nothing to focus — no \
+         separate rule needed for the empty case"
+    );
+}

@@ -70,6 +70,7 @@ fn catalog_with_session(
         active: Some(project.to_path_buf()),
         sessions,
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
     let projects_path = store.join("projects.json");
     JsonFileStore::at(projects_path.clone())

@@ -29,7 +29,7 @@ workspace only, much faster while iterating on persistence). Never raw `cargo` �
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm a green baseline with `mise run test` before editing anything under `crates/`, so a later red test is this feature's and not inherited
+- [X] T001 Confirm a green baseline with `mise run test` before editing anything under `crates/`, so a later red test is this feature's and not inherited
 
 ---
 
@@ -40,12 +40,12 @@ nothing else can start until it has moved.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T002 Write failing tests in `crates/micold-core/tests/store_roundtrip.rs`: `last_session` survives save → load; a project with no memory round-trips as `None`; and a per-project file written **without** the field loads as `None` rather than failing — the claim that lets this ship with no `schema_version` bump (research R7, §1.3)
-- [ ] T003 Write failing tests in `crates/micold-core/tests/workspace.rs`: `foreground_by_project` is keyed by canonicalised path, exactly as `Workspace::sessions` is, so the two can never be looked up differently (data-model, research R2)
-- [ ] T004 Add `foreground_by_project: BTreeMap<PathBuf, SessionId>` to `Workspace` in `crates/micold-core/src/workspace.rs`, with a doc comment saying what it is and that the daemon owns writing it (invariant I2)
-- [ ] T005 Add `last_session: Option<SessionId>` to `StoredProjectState` in `crates/micold-core/src/store.rs` (`#[serde(default)]`), and carry it both ways: `save()` writes each project's entry, `load()` populates `Workspace::foreground_by_project`. It is per-project data about that project's sessions, so it belongs in the per-project file beside them — and in the file `remove_project_state` already deletes
-- [ ] T006 Remove `foreground_by_project` from `State` in `crates/micold-client/src/app.rs` and point `record_foreground` / `explain_foreground` in `crates/micold-client/src/features/session.rs` at the new home. Behaviour is unchanged — only where they read from is
-- [ ] T007 Confirm `crates/micold-client/tests/features_session.rs` and `crates/micold-client/tests/switch_active.rs` still pass unedited. They are the proof the move changed no behaviour; needing to edit them means it did
+- [X] T002 Write failing tests in `crates/micold-core/tests/store_roundtrip.rs`: `last_session` survives save → load; a project with no memory round-trips as `None`; and a per-project file written **without** the field loads as `None` rather than failing — the claim that lets this ship with no `schema_version` bump (research R7, §1.3)
+- [X] T003 Write failing tests in `crates/micold-core/tests/workspace.rs`: `foreground_by_project` is keyed by canonicalised path, exactly as `Workspace::sessions` is, so the two can never be looked up differently (data-model, research R2)
+- [X] T004 Add `foreground_by_project: BTreeMap<PathBuf, SessionId>` to `Workspace` in `crates/micold-core/src/workspace.rs`, with a doc comment saying what it is and that the daemon owns writing it (invariant I2)
+- [X] T005 Add `last_session: Option<SessionId>` to `StoredProjectState` in `crates/micold-core/src/store.rs` (`#[serde(default)]`), and carry it both ways: `save()` writes each project's entry, `load()` populates `Workspace::foreground_by_project`. It is per-project data about that project's sessions, so it belongs in the per-project file beside them — and in the file `remove_project_state` already deletes
+- [X] T006 Remove `foreground_by_project` from `State` in `crates/micold-client/src/app.rs` and point `record_foreground` / `explain_foreground` in `crates/micold-client/src/features/session.rs` at the new home. Behaviour is unchanged — only where they read from is
+- [X] T007 Confirm `crates/micold-client/tests/features_session.rs` and `crates/micold-client/tests/switch_active.rs` still pass unedited. They are the proof the move changed no behaviour; needing to edit them means it did
 
 **Checkpoint**: The memory has a home on disk and is loaded from it. Nothing yet writes it, and
 launch still starts on the overview.
@@ -63,19 +63,19 @@ front of you, with no clicks.
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T008 [P] [US1] Failing test in `crates/micold-daemon/` covering `SetViewedSession`: a report naming a session records it against that project and persists; a second report naming the **same** session writes nothing (§2.3, FR-001a) — attach re-sends the current id and a session start may name the session already in front of the user
-- [ ] T009 [P] [US1] Failing test in `crates/micold-daemon/`: a report of **no session** leaves the memory untouched (§2.6, FR-005a). This is the clause that stops closing a session from silently costing the user the place they would have returned to
-- [ ] T010 [P] [US1] Failing test in `crates/micold-client/tests/app_state.rs`: applying a project's memory makes that session current — and does so through the path that arms feature 024's reveal, so the row is listed open (§4.1, FR-012)
-- [ ] T011 [P] [US1] Failing test in `crates/micold-client/tests/app_state.rs`: applying a memory **starts nothing** — every session's lifecycle after is exactly what it was before (§3.3, FR-004, SC-005)
-- [ ] T012 [P] [US1] Failing test in `crates/micold-client/tests/terminal_focus.rs`: applying a memory leaves `terminal_focused` false, while a project *switch* still focuses. The two paths differ here deliberately and only a test keeps them apart (§3.4, FR-013, research R5)
+- [X] T008 [P] [US1] Failing test in `crates/micold-daemon/` covering `SetViewedSession`: a report naming a session records it against that project and persists; a second report naming the **same** session writes nothing (§2.3, FR-001a) — attach re-sends the current id and a session start may name the session already in front of the user
+- [X] T009 [P] [US1] Failing test in `crates/micold-daemon/`: a report of **no session** leaves the memory untouched (§2.6, FR-005a). This is the clause that stops closing a session from silently costing the user the place they would have returned to
+- [X] T010 [P] [US1] Failing test in `crates/micold-client/tests/app_state.rs`: applying a project's memory makes that session current — and does so through the path that arms feature 024's reveal, so the row is listed open (§4.1, FR-012)
+- [X] T011 [P] [US1] Failing test in `crates/micold-client/tests/app_state.rs`: applying a memory **starts nothing** — every session's lifecycle after is exactly what it was before (§3.3, FR-004, SC-005)
+- [X] T012 [P] [US1] Failing test in `crates/micold-client/tests/terminal_focus.rs`: applying a memory leaves `terminal_focused` false, while a project *switch* still focuses. The two paths differ here deliberately and only a test keeps them apart (§3.4, FR-013, research R5)
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Record and persist the memory in `crates/micold-daemon/src/catalog.rs`: a method mutating `workspace.foreground_by_project` then calling `self.persist()`, modelled on `set_worktree_display_name` (`catalog.rs:257`) which is the same shape for the same reason
-- [ ] T014 [US1] Call it from `State::set_viewed` in `crates/micold-daemon/src/state.rs:485`, guarded by the two conditions from T008/T009: only when the reported session is `Some`, and only when it differs from what is remembered
-- [ ] T015 [US1] Apply the memory at launch in `boot()` in `crates/micold-client/src/main.rs` (after `prune_empty_sessions`, which is what makes a memory naming a pruned session stop resolving): resolve with `explain_foreground` and apply with `set_current_session`
-- [ ] T016 [US1] Do **not** call `restore_after_activation` from `boot()` in `crates/micold-client/src/main.rs`, and say why in a comment there: feature 023 added `focus_terminal()` to it, and FR-013 says a launch must not put keystrokes into a terminal. Reusing the function would import the focus with the restore (research R5)
-- [ ] T017 [US1] Document reopening in `docs/user-guide/worktrees-and-sessions.md` under `## Starting, switching, and closing sessions`: the app reopens on the session you were last using in that project, whether or not it is still running, and it does not start or focus anything
+- [X] T013 [US1] Record and persist the memory in `crates/micold-daemon/src/catalog.rs`: a method mutating `workspace.foreground_by_project` then calling `self.persist()`, modelled on `set_worktree_display_name` (`catalog.rs:257`) which is the same shape for the same reason
+- [X] T014 [US1] Call it from `State::set_viewed` in `crates/micold-daemon/src/state.rs:485`, guarded by the two conditions from T008/T009: only when the reported session is `Some`, and only when it differs from what is remembered
+- [X] T015 [US1] Apply the memory at launch in `boot()` in `crates/micold-client/src/main.rs` (after `prune_empty_sessions`, which is what makes a memory naming a pruned session stop resolving): resolve with `explain_foreground` and apply with `set_current_session`
+- [X] T016 [US1] ~~Do **not** call `restore_after_activation` from `boot()` in `crates/micold-client/src/main.rs`, and say why in a comment there: feature 023 added `focus_terminal()` to it, and FR-013 says a launch must not put keystrokes into a terminal. Reusing the function would import the focus with the restore (research R5)
+- [X] T017 [US1] Document reopening in `docs/user-guide/worktrees-and-sessions.md` under `## Starting, switching, and closing sessions`: the app reopens on the session you were last using in that project, whether or not it is still running, and it does not start or focus anything
 
 **Checkpoint**: US1 is the feature. Shippable alone — the remaining stories are about behaving
 sensibly when it cannot be honoured.

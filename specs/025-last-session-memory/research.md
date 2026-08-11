@@ -84,33 +84,39 @@ memory needs. Inventing a second message would duplicate it.
 would lose the memory entirely, and the spec's Assumptions choose "written as the current session
 changes" precisely so a kill loses at most the latest change.
 
-## R5 — Where does the launch apply it, and why not reuse `restore_after_activation`?
+## R5 — Where does the launch apply it, and can it reuse `restore_after_activation`?
 
-**Decision**: `boot()` resolves the memory itself and calls `set_current_session`. It does **not**
-call `restore_after_activation`.
+**Decision**: `boot()` calls `restore_after_activation` — the same function a project switch uses.
+Nothing launch-specific.
 
-**Rationale**: `restore_after_activation` is the switch path, and feature 023 added a line to it:
+> **This reverses the first answer, and the reversal is the more interesting half.** The original
+> decision was that `boot()` must resolve and apply the memory itself, *because* `restore_after_activation`
+> calls `focus_terminal()` and FR-013 said a launch must not take the keyboard. Implementing it
+> showed FR-013 was wrong (see below), and once focus is desired the function does exactly what a
+> launch wants and nothing it does not.
 
-```rust
-self.focus_terminal();
-```
+**Rationale**: feature 023 made focus **derived** rather than stored: `terminal_focused()` is
+`active_session.is_some() && !terminal_released && …`. There is no way to display a session and
+withhold the keyboard except by setting `terminal_released`, which means *the user gave it away* and
+is written only by `focus_terminal`/`release_terminal` — `tests/terminal_bar_stability.rs` fails if
+a third writer appears. So honouring the original FR-013 meant either lying about that flag or
+breaking the test that protects it, to produce behaviour that is worse: you reopen on your session
+and cannot type into it.
 
-with the reasoning that *"a project switch is deliberate, and the terminal you are looking at is the
-one you meant"*. That is right for a switch and wrong for a launch — FR-013 says starting the
-application must not put keystrokes into a terminal, because the user has not yet looked at the
-screen. Reusing the function would import the focus with the restore.
+Everything else `restore_after_activation` does is already true at boot, so reusing it costs
+nothing:
 
-The rest of what it does is also switch-specific (`default_expanded = false`,
-`show_agent_worktrees = false`, the background-restart notice) and is already the default at boot.
+- `default_expanded = false` — already the default
+- `show_agent_worktrees = false` — already the default
+- `arm_notice(&key)` — `restarted_while_inactive` is empty at boot, so no notice is raised
 
-So the launch path is two lines: resolve with `explain_foreground`, apply with
-`set_current_session`. Feature 024's arming rule then reveals the row for free — it fires on *any*
-app-initiated transition to `Some`, which is exactly why it was written that way rather than as a
-list of call sites (024 research R12).
+And feature 024's reveal arms from `set_current_session` inside it, so FR-012 still comes free.
 
-**Alternatives considered**: Adding a `focus: bool` parameter to `restore_after_activation` —
-rejected, a boolean parameter that changes what a function *means* at two call sites is the shape
-that made this ambiguous in the first place.
+**Alternatives considered**: a launch-only path resolving and applying the memory directly (the
+original plan) — rejected once FR-013 reversed, because it is a second implementation of a sequence
+the switch already performs, and the two would drift. Adding a `focus: bool` parameter — rejected
+for the same reason it was the first time: a boolean that changes what a function *means* at two
+call sites is how this became ambiguous to begin with.
 
 ## R6 — What happens to a memory that cannot be honoured?
 

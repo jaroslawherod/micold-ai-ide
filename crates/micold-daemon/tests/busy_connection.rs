@@ -93,6 +93,7 @@ fn catalog_with_project(project_dir: &Path, store_dir: &Path) -> Catalog {
         active: Some(project_dir.to_path_buf()),
         sessions: BTreeMap::new(),
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
     let projects_path = store_dir.join("projects.json");
     JsonFileStore::at(projects_path.clone())

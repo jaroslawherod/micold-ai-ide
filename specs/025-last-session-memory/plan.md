@@ -19,9 +19,10 @@ Three changes, and none of them is new machinery:
    stored one that could disagree.
 2. **Persist it from the daemon**, which already receives `SetViewedSession` on every path that
    changes which session is in front of the user, and is already the single writer of the store.
-3. **Apply it at launch**, in `boot()`, using the resolution that already exists
-   (`explain_foreground`) — deliberately *not* by reusing `restore_after_activation`, because that
-   function now focuses the terminal and FR-013 says a launch must not.
+3. **Apply it at launch**, in `boot()`, by calling `restore_after_activation` — the same function
+   a project switch uses. (The plan first said the opposite, to avoid that function's
+   `focus_terminal()`; implementing it showed the requirement behind that was wrong. See research
+   R5.)
 
 There is **no protocol change** and therefore no schema-hash churn: the wire message this needs is
 already sent, and the client reads the memory from its own load rather than waiting for the daemon.
@@ -127,7 +128,7 @@ crates/micold-daemon/src/server.rs  # SetViewedSession also updates the catalog,
 crates/micold-client/src/
 ├── app.rs                          # foreground_by_project moves out of State
 ├── features/session.rs             # record_foreground / explain_foreground read the new home
-└── main.rs                         # boot() applies the memory — WITHOUT focusing the terminal
+└── main.rs                         # boot() applies the memory via restore_after_activation
 
 crates/micold-core/tests/           # store round-trip, back/forward compatibility
 crates/micold-client/tests/         # resolution at launch, and that nothing is started

@@ -76,15 +76,12 @@ boot()
   └─ store.load()                      → workspace, sessions, and now the memory
   └─ prune_empty_sessions(workspace)   → a memory naming a pruned session stops resolving (FR-005)
   └─ if let Some(active) = workspace.active
-       └─ set_current_session(explain_foreground(active).session())
+       └─ restore_after_activation(active)     ← the same function a project switch calls
 ```
 
-Two things deliberately absent from that sequence:
-
-- **No `restore_after_activation`.** It focuses the terminal (feature 023), and FR-013 says a launch
-  must not (research R5).
-- **No new reveal logic.** `set_current_session` arms feature 024's reveal on any transition to
-  `Some`, so FR-012 is a consequence rather than work.
+Nothing launch-specific in that sequence, which is the point. `restore_after_activation` resolves
+the memory, applies it, and focuses the terminal — all three wanted here (research R5) — and
+`set_current_session` inside it arms feature 024's reveal, so FR-012 comes free.
 
 ## Writing it
 

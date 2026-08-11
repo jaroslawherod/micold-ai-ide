@@ -255,3 +255,34 @@ fn open_dedupes_equivalent_paths() {
 
     assert_eq!(ws.projects.len(), 1);
 }
+
+/// Feature 025: the memory is keyed exactly as `sessions` is, so the two cannot be looked up
+/// differently. A mismatch here would present as "the app forgot my session" while the sidebar
+/// happily listed it — which is how feature 024's diagnostic log came to exist.
+#[test]
+fn the_foreground_memory_is_keyed_like_the_sessions_it_refers_to() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("project");
+    std::fs::create_dir(&path).unwrap();
+
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(path.clone(), &FakeFolderScanner::default());
+    let active = ws.active.clone().expect("a project is active");
+
+    let session = Session::start_new(SessionLocation::Default);
+    let id = session.id;
+    ws.sessions.insert(active.clone(), vec![session]);
+    ws.foreground_by_project.insert(active.clone(), id);
+
+    assert_eq!(
+        ws.foreground_by_project.get(&active),
+        Some(&id),
+        "the key that finds a project's sessions must find its memory too — `open_or_activate` \
+         canonicalises, and anything that keyed the memory by the raw path would miss every time"
+    );
+    assert_eq!(
+        ws.foreground_by_project.keys().collect::<Vec<_>>(),
+        ws.sessions.keys().collect::<Vec<_>>(),
+        "same keys, same shape"
+    );
+}

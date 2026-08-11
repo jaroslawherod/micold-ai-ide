@@ -184,7 +184,9 @@ impl State {
     /// and then call [`restore_after_activation`](Self::restore_after_activation) (I1).
     pub fn record_foreground(&mut self) {
         if let (Some(active), Some(id)) = (self.workspace.active.clone(), self.active_session) {
-            self.foreground_by_project.insert(active, id);
+            // Feature 025: on the workspace, so it is persisted with the sessions it refers to.
+            // The client keeps it current in memory; the daemon is what writes it to disk.
+            self.workspace.foreground_by_project.insert(active, id);
         }
     }
 
@@ -232,7 +234,7 @@ impl State {
         let Some(sessions) = self.workspace.sessions.get(key) else {
             return ForegroundChoice::NoSessionsForKey;
         };
-        let remembered = self.foreground_by_project.get(key).copied();
+        let remembered = self.workspace.foreground_by_project.get(key).copied();
         if let Some(stored) = remembered {
             // Running or stopped alike (FR-003a, BUG-001): you are put back where you were. The
             // rule used to require the session still be active, which was fair while a

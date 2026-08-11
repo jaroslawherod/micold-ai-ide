@@ -68,6 +68,7 @@ fn catalog_with_session(project_dir: &std::path::Path, store_dir: &std::path::Pa
         active: Some(project_dir.to_path_buf()),
         sessions,
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
 
     let projects_path = store_dir.join("projects.json");

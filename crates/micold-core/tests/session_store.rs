@@ -45,6 +45,7 @@ fn workspace_with_sessions() -> (Workspace, PathBuf, SessionId) {
             active: Some(path.clone()),
             sessions,
             worktree_names: Default::default(),
+            ..Default::default()
         },
         path,
         id,
@@ -109,6 +110,7 @@ fn null_title_restores_as_pending() {
         active: None,
         sessions,
         worktree_names: Default::default(),
+        ..Default::default()
     };
 
     store.save(&ws).unwrap();
@@ -143,6 +145,7 @@ fn default_session_persists_as_null_worktree_dir_and_roundtrips() {
         active: None,
         sessions,
         worktree_names: Default::default(),
+        ..Default::default()
     };
 
     store.save(&ws).unwrap();

@@ -49,6 +49,7 @@ fn state_with_session(id: SessionId) -> (Arc<DaemonState>, tempfile::TempDir, te
         active: Some(project.path().to_path_buf()),
         sessions,
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
     let projects_path = store.path().join("projects.json");
     JsonFileStore::at(projects_path.clone())

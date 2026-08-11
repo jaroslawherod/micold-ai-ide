@@ -12,7 +12,7 @@ use micold_client::features::sidebar::TagFilter;
 use micold_client::features::worktree_form::WorktreeFormStatus;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionLifecycle, SessionLocation};
+use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation};
 use micold_core::worktree::{CreateStage, Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -1695,4 +1695,88 @@ fn removing_the_current_session_behaves_the_same_way() {
          session — so neither opens, closes or scrolls anything (FR-001a)"
     );
     assert!(!state.pending_reveal_scroll);
+}
+
+// --- Feature 025: applying a project's remembered session at launch ---------------------------
+//
+// The launch resolves the memory with the same function a switch uses, and applies it with the
+// same one — so everything feature 008 and 024 already decided about a session becoming current
+// holds here too, without a second path deciding it again.
+
+fn state_with_remembered_session() -> (State, SessionId) {
+    let mut state = state_with_current_session_in("feat-a");
+    let id = state.active_session.unwrap();
+    state.record_foreground();
+    // The shape after a restart: the memory survived, the pointer did not.
+    state.active_session = None;
+    state.pending_reveal_scroll = false;
+    (state, id)
+}
+
+#[test]
+fn applying_the_memory_makes_that_session_current_and_reveals_it() {
+    let (mut state, id) = state_with_remembered_session();
+    let path = state.workspace.active.clone().unwrap();
+
+    let choice = state.explain_foreground(&path);
+    state.set_current_session(choice.session());
+
+    assert_eq!(
+        state.active_session,
+        Some(id),
+        "reopening lands on the session you were last using, which is the whole feature"
+    );
+    assert!(
+        state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
+        "and its location is listed open — not because this feature opens it, but because feature \
+         024 reveals whatever becomes current, on any app-initiated transition"
+    );
+}
+
+#[test]
+fn applying_the_memory_starts_nothing() {
+    let (mut state, id) = state_with_remembered_session();
+    let path = state.workspace.active.clone().unwrap();
+    let before: Vec<_> = state
+        .active_sessions()
+        .iter()
+        .map(|s| (s.id, s.lifecycle.clone()))
+        .collect();
+
+    state.set_current_session(state.explain_foreground(&path).session());
+
+    let after: Vec<_> = state
+        .active_sessions()
+        .iter()
+        .map(|s| (s.id, s.lifecycle.clone()))
+        .collect();
+    assert_eq!(
+        before, after,
+        "restoring is a display decision; starting a process is not. A stopped session comes back \
+         stopped, showing what it showed before (FR-004, SC-005)"
+    );
+    assert_eq!(state.active_session, Some(id));
+}
+
+#[test]
+fn a_memory_whose_worktree_is_gone_is_still_restored() {
+    let (mut state, id) = state_with_remembered_session();
+    let path = state.workspace.active.clone().unwrap();
+    // Deleted outside the application: the worktree is gone from discovery, but the session's
+    // record survives in the project's state file.
+    state.set_worktrees(Vec::new());
+    state.expanded.insert("kept-open".to_string());
+
+    state.set_current_session(state.explain_foreground(&path).session());
+
+    assert_eq!(
+        state.active_session,
+        Some(id),
+        "the application already lists a session whose worktree is missing and lets you select it,          so refusing to *return* you to it would be the same inconsistency BUG-001 was about.          Declining would also need the worktree list at resolve time, which a project switch does          not have yet — one rule that breaks switching to handle a case the user can see"
+    );
+    assert!(
+        state.expanded.contains("kept-open"),
+        "and the rest of the project is untouched — a memory that cannot be honoured must not cost \
+         the user anything else (FR-006)"
+    );
 }

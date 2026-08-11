@@ -35,6 +35,7 @@ fn loaded_catalog(project: &Path, sessions: Vec<Session>) -> Catalog {
         active: Some(project.to_path_buf()),
         sessions: BTreeMap::from([(project.to_path_buf(), sessions)]),
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
     Catalog::load(
         Box::new(FakeProjectStore::loaded(workspace)),

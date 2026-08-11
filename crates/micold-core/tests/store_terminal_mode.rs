@@ -32,6 +32,7 @@ fn workspace_with(mode: TerminalMode) -> (Workspace, PathBuf, SessionId) {
             active: Some(path.clone()),
             sessions,
             worktree_names: Default::default(),
+            ..Default::default()
         },
         path,
         id,

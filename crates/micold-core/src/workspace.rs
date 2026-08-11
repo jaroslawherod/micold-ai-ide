@@ -30,6 +30,19 @@ pub struct Workspace {
     /// path, then by worktree `dir_name`. Purely a display label — never the folder or branch
     /// on disk. Persisted; absent for worktrees never renamed.
     pub worktree_names: BTreeMap<PathBuf, BTreeMap<String, String>>,
+    /// The session each project was last showing (feature 025, FR-001). Keyed by the project's
+    /// canonical path, exactly as [`Self::sessions`] is, so the two are found by the same key.
+    ///
+    /// Persisted, which is the point: this used to live on the client and die at exit, so every
+    /// launch started on the project overview. It is a **hint, not a promise** — it may name a
+    /// session that has since been closed or removed, and nothing validates it here. Whether it
+    /// can be honoured is decided when it is used, by the one function that already answers that
+    /// (`explain_foreground`).
+    ///
+    /// The **daemon** owns writing it, like everything else in this store: the client reads it and
+    /// keeps it current in memory, but `store.rs` has no locking, so a client-side save would
+    /// clobber whatever the daemon had written since the client loaded.
+    pub foreground_by_project: BTreeMap<PathBuf, SessionId>,
 }
 
 impl Workspace {

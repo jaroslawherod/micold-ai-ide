@@ -254,3 +254,159 @@ fn save_is_atomic_and_leaves_no_temp_file() {
     // The temp file used for the atomic write must be renamed away, not left behind.
     assert!(!path.with_extension("json.tmp").exists());
 }
+
+// --- Feature 025: the last-session memory ------------------------------------------------------
+//
+// The memory is one id per project, stored in that project's own state file beside its sessions —
+// the same file, the same writer, the same deletion when a project is forgotten.
+
+#[test]
+fn the_last_session_memory_survives_save_and_load() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a/one", "one", true));
+    let session =
+        micold_core::session::Session::start_new(micold_core::session::SessionLocation::Default);
+    let id = session.id;
+    ws.sessions.insert(PathBuf::from("/a/one"), vec![session]);
+    ws.foreground_by_project.insert(PathBuf::from("/a/one"), id);
+
+    store.save(&ws).unwrap();
+    let loaded = store.load().workspace;
+
+    assert_eq!(
+        loaded.foreground_by_project.get(Path::new("/a/one")),
+        Some(&id),
+        "the whole feature: the session you were last on is still known after a restart"
+    );
+}
+
+#[test]
+fn a_project_with_no_memory_round_trips_as_none() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a/one", "one", true));
+
+    store.save(&ws).unwrap();
+    let loaded = store.load().workspace;
+
+    assert!(
+        loaded.foreground_by_project.is_empty(),
+        "absence is a real answer, not an id that happens to match nothing — a project nobody has \
+         used a session in must load as having no memory at all"
+    );
+}
+
+#[test]
+fn a_state_file_written_before_this_feature_still_loads() {
+    let dir = tempdir().unwrap();
+    let root = dir.path().join("projects.json");
+    let store = JsonFileStore::at(root.clone());
+
+    // Save a project the ordinary way, then rewrite its state file without the new field —
+    // exactly the shape every existing installation has on disk today.
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a/one", "one", true));
+    ws.sessions.insert(
+        PathBuf::from("/a/one"),
+        vec![micold_core::session::Session::start_new(
+            micold_core::session::SessionLocation::Default,
+        )],
+    );
+    store.save(&ws).unwrap();
+
+    let state_dir = root.parent().unwrap().join("projects");
+    let state_file = std::fs::read_dir(&state_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|p| p.extension().is_some_and(|e| e == "json"))
+        .expect("the project's state file");
+    let text = std::fs::read_to_string(&state_file).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&text).unwrap();
+    value.as_object_mut().unwrap().remove("last_session");
+    std::fs::write(&state_file, serde_json::to_string(&value).unwrap()).unwrap();
+
+    let loaded = store.load();
+
+    assert_eq!(
+        loaded.status,
+        LoadStatus::Loaded,
+        "a file written by a build that predates this feature must load normally, not as corrupt \
+         — this is the claim that lets the field ship without a schema_version bump"
+    );
+    assert!(loaded.workspace.foreground_by_project.is_empty());
+    assert_eq!(
+        loaded
+            .workspace
+            .sessions
+            .get(Path::new("/a/one"))
+            .map(Vec::len),
+        Some(1),
+        "and the rest of the file is unaffected"
+    );
+}
+
+#[test]
+fn two_projects_remember_independently() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a/one", "one", true));
+    ws.projects.push(project("/a/two", "two", true));
+    let a =
+        micold_core::session::Session::start_new(micold_core::session::SessionLocation::Default);
+    let b =
+        micold_core::session::Session::start_new(micold_core::session::SessionLocation::Default);
+    let (a_id, b_id) = (a.id, b.id);
+    ws.sessions.insert(PathBuf::from("/a/one"), vec![a]);
+    ws.sessions.insert(PathBuf::from("/a/two"), vec![b]);
+    ws.foreground_by_project
+        .insert(PathBuf::from("/a/one"), a_id);
+    ws.foreground_by_project
+        .insert(PathBuf::from("/a/two"), b_id);
+
+    store.save(&ws).unwrap();
+    let loaded = store.load().workspace;
+
+    assert_eq!(
+        loaded.foreground_by_project.get(Path::new("/a/one")),
+        Some(&a_id)
+    );
+    assert_eq!(
+        loaded.foreground_by_project.get(Path::new("/a/two")),
+        Some(&b_id),
+        "each project's memory lives in its own file, so one cannot overwrite the other"
+    );
+}
+
+#[test]
+fn closing_the_remembered_session_does_not_erase_the_memory() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a/one", "one", true));
+    let mut session =
+        micold_core::session::Session::start_new(micold_core::session::SessionLocation::Default);
+    let id = session.id;
+    session.archive();
+    ws.sessions.insert(PathBuf::from("/a/one"), vec![session]);
+    ws.foreground_by_project.insert(PathBuf::from("/a/one"), id);
+
+    store.save(&ws).unwrap();
+    let loaded = store.load().workspace;
+
+    assert_eq!(
+        loaded.foreground_by_project.get(Path::new("/a/one")),
+        Some(&id),
+        "the memory still names it. Nothing is restored from it — a closed session cannot be — but \
+         the memory is replaced only by another session becoming current, never erased by the \
+         pointer going away (FR-005a, invariant I0)"
+    );
+}

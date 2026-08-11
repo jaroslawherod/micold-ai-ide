@@ -348,6 +348,7 @@ fn catalog_with_shell(
         active: Some(project.to_path_buf()),
         sessions,
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
     let projects_path = store.join("projects.json");
     micold_core::store::JsonFileStore::at(projects_path.clone())

@@ -268,6 +268,34 @@ impl Catalog {
         self.persist()
     }
 
+    /// Remember which session `project` is currently showing, persisting it (feature 025, FR-001).
+    ///
+    /// Returns whether anything was written. A report naming the session already remembered is not
+    /// a change and writes nothing: attach re-sends the current id and a session start may name the
+    /// session already in front of the user, so writing unconditionally would rewrite a file
+    /// holding every one of that project's session records on every reconnect (FR-001a).
+    ///
+    /// The daemon does this because it is the store's single writer. The client holds the same
+    /// value in memory for its own run and never saves it — `store.rs` has no locking, so a
+    /// client-side write would clobber whatever the daemon had written since the client loaded.
+    ///
+    /// Note what has no method here: *forgetting*. A project's memory is replaced by another
+    /// session becoming current and by nothing else — not by the session it names being closed, nor
+    /// by the client reporting no session at all. The pointer goes to nothing for reasons the user
+    /// never took, and erasing the memory on those would silently cost them the place they would
+    /// have returned to. A memory naming a session that can no longer be shown is harmless, because
+    /// restoring already declines it (feature 008 FR-003a, feature 025 FR-005a).
+    pub fn remember_foreground(&mut self, project: &Path, session: SessionId) -> io::Result<bool> {
+        if self.workspace.foreground_by_project.get(project) == Some(&session) {
+            return Ok(false);
+        }
+        self.workspace
+            .foreground_by_project
+            .insert(project.to_path_buf(), session);
+        self.persist()?;
+        Ok(true)
+    }
+
     /// Forget a worktree's display-name override for `project`, reverting it to the derived name,
     /// persisting (T053). Idempotent — absence is not an error. Prunes an emptied project map so the
     /// on-disk shape matches `Workspace::clear_worktree_name`.
