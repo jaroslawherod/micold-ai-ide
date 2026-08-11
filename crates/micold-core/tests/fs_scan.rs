@@ -1,7 +1,7 @@
 //! US3 tests: git-repository detection via `StdFolderScanner` over real temp dirs
 //! (FR-006, FR-007; research R4). Uses `tempfile` — no reliance on the repo's own `.git`.
 
-use micold_core::fs_scan::{FolderScanner, StdFolderScanner};
+use micold_core::fs_scan::{FolderBrowser, FolderScanner, StdFolderScanner};
 use std::fs;
 use tempfile::tempdir;
 

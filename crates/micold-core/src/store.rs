@@ -595,3 +595,105 @@ impl ProjectStore for JsonFileStore {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// In-memory fake for unit tests. Public (not `#[cfg(test)]`) so integration tests in
+// `tests/` can share it, matching `FakeGit` (FR-019, feature 021 T048). Pure — no disk.
+// ---------------------------------------------------------------------------------------
+
+use std::sync::Mutex;
+
+/// An in-memory [`ProjectStore`] for tests: serves a fixed catalog and records every write.
+///
+/// Replaces three hand-written `FakeStore`s in the daemon's test binaries, each of which had to
+/// implement `save` in order to call `load` — the coverage gap T042's narrowness check was
+/// actually measuring. The trait itself is right-sized: `Catalog`, its only consumer, exercises
+/// all three operations.
+///
+/// `Mutex` rather than `RefCell` because the daemon boxes its store as `Send + Sync`.
+#[derive(Debug, Default)]
+pub struct FakeProjectStore {
+    inner: Mutex<FakeStoreState>,
+}
+
+#[derive(Debug, Default)]
+struct FakeStoreState {
+    workspace: Workspace,
+    status: Option<LoadStatus>,
+    /// Every catalog handed to `save`, in call order.
+    saves: Vec<Workspace>,
+    /// Every path handed to `remove_project_state`, in call order.
+    removals: Vec<PathBuf>,
+    /// When set, the next `save` fails with this kind — a full disk, a read-only home.
+    fail_next_save: Option<io::ErrorKind>,
+}
+
+impl FakeProjectStore {
+    /// A store that has never been written: an empty catalog, [`LoadStatus::Missing`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// A store serving `workspace` as a clean [`LoadStatus::Loaded`].
+    pub fn loaded(workspace: Workspace) -> Self {
+        let fake = Self::new();
+        {
+            let mut state = fake.inner.lock().expect("fake lock");
+            state.workspace = workspace;
+            state.status = Some(LoadStatus::Loaded);
+        }
+        fake
+    }
+
+    /// A store whose file was unparseable: an empty catalog, [`LoadStatus::Recovered`].
+    pub fn recovered() -> Self {
+        let fake = Self::new();
+        fake.inner.lock().expect("fake lock").status = Some(LoadStatus::Recovered);
+        fake
+    }
+
+    /// Make the next [`ProjectStore::save`] fail.
+    pub fn failing_save(self, kind: io::ErrorKind) -> Self {
+        self.inner.lock().expect("fake lock").fail_next_save = Some(kind);
+        self
+    }
+
+    /// Every catalog handed to `save`, in call order — empty if nothing was persisted.
+    pub fn saves(&self) -> Vec<Workspace> {
+        self.inner.lock().expect("fake lock").saves.clone()
+    }
+
+    /// Every path handed to `remove_project_state`, in call order.
+    pub fn removals(&self) -> Vec<PathBuf> {
+        self.inner.lock().expect("fake lock").removals.clone()
+    }
+}
+
+impl ProjectStore for FakeProjectStore {
+    fn load(&self) -> LoadOutcome {
+        let state = self.inner.lock().expect("fake lock");
+        LoadOutcome {
+            workspace: state.workspace.clone(),
+            status: state.status.unwrap_or(LoadStatus::Missing),
+        }
+    }
+
+    fn save(&self, workspace: &Workspace) -> io::Result<()> {
+        let mut state = self.inner.lock().expect("fake lock");
+        if let Some(kind) = state.fail_next_save.take() {
+            return Err(io::Error::new(kind, "fake: save refused"));
+        }
+        state.saves.push(workspace.clone());
+        state.workspace = workspace.clone();
+        Ok(())
+    }
+
+    fn remove_project_state(&self, project_path: &Path) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .removals
+            .push(project_path.to_path_buf());
+        Ok(())
+    }
+}

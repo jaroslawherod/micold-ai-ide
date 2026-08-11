@@ -16,27 +16,13 @@ use micold_core::protocol::messages::WireLifecycle;
 use micold_core::session::{
     Session, SessionId, SessionLocation, TerminalMode, MAX_RESTART_ATTEMPTS,
 };
-use micold_core::settings::JsonFileSettingsStore;
-use micold_core::store::{LoadOutcome, LoadStatus, ProjectStore};
+use micold_core::settings::FakeSettingsStore;
+use micold_core::store::FakeProjectStore;
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
-
-struct FakeStore(Workspace);
-
-impl ProjectStore for FakeStore {
-    fn load(&self) -> LoadOutcome {
-        LoadOutcome {
-            workspace: self.0.clone(),
-            status: LoadStatus::Loaded,
-        }
-    }
-    fn save(&self, _workspace: &Workspace) -> std::io::Result<()> {
-        Ok(())
-    }
-}
 
 fn sh(script: &str) -> CommandBuilder {
     let mut cmd = CommandBuilder::new("sh");
@@ -45,10 +31,7 @@ fn sh(script: &str) -> CommandBuilder {
     cmd
 }
 
-fn state_with_regular_session(
-    project: &Path,
-    settings_path: &Path,
-) -> (Arc<DaemonState>, SessionId) {
+fn state_with_regular_session(project: &Path) -> (Arc<DaemonState>, SessionId) {
     let mut session = Session::start_new(SessionLocation::Default);
     session.set_mode(TerminalMode::Regular);
     let id = session.id;
@@ -63,8 +46,8 @@ fn state_with_regular_session(
         worktree_names: BTreeMap::new(),
     };
     let catalog = Catalog::load(
-        Box::new(FakeStore(workspace)),
-        Box::new(JsonFileSettingsStore::at(settings_path.to_path_buf())),
+        Box::new(FakeProjectStore::loaded(workspace)),
+        Box::new(FakeSettingsStore::new()),
     );
     (Arc::new(DaemonState::new(catalog)), id)
 }
@@ -92,9 +75,7 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
     std::env::set_var("SHELL", "/bin/false");
 
     let project = tempfile::tempdir().unwrap();
-    let settings = tempfile::tempdir().unwrap();
-    let (state, id) =
-        state_with_regular_session(project.path(), &settings.path().join("settings.json"));
+    let (state, id) = state_with_regular_session(project.path());
 
     // The initial primary crashes; every respawn (a `/bin/false` shell) crashes again.
     let handle = state.register_session(PtySession::spawn(id, sh("exit 1"), 100, None).unwrap());

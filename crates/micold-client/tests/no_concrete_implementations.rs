@@ -129,6 +129,12 @@ fn the_only_excluded_implementations_are_fakes() {
         "FakeEnvIncludeResolver",
         // T047's.
         "FakeOsThemeProbe",
+        // T048's four, which is what that task is: the remaining ports gaining a shared fake so
+        // no test has to hand-roll one.
+        "FakeFolderScanner",
+        "FakeProjectStore",
+        "FakeSettingsStore",
+        "FakeAiCliProvider",
     ]
     .iter()
     .map(|s| s.to_string())

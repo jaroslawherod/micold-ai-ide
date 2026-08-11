@@ -15,21 +15,38 @@ the trait, the capability is too wide and must be split.
 
 ## Inventory
 
-### Existing (7) — unchanged by this feature
+### Existing (7, now 8) — one split by this feature
 
 | Capability | Declared in | Real | Fake |
 |---|---|---|---|
-| `Git` | `core/git.rs:14` | `GitCli` | `FakeGit` (`core/git.rs:467`) |
-| `ProjectStore` | `core/store.rs:62` | `JsonFileStore` | to confirm |
-| `SettingsStore` | `core/settings.rs:128` | `JsonFileSettingsStore` | to confirm |
-| `FolderScanner` | `core/fs_scan.rs:14` | `StdFolderScanner` | to confirm |
-| `TerminalBackend` | `core/terminal.rs:77` | daemon-backed | to confirm |
-| `TerminalHandle` | `core/terminal.rs:66` | daemon-backed | to confirm |
-| `AiCliProvider` | `core/provider.rs:23` | provider impls | to confirm |
+| `Git` | `core/git.rs` | `GitCli` | `FakeGit` |
+| `ProjectStore` | `core/store.rs` | `JsonFileStore` | `FakeProjectStore` (T048) |
+| `SettingsStore` | `core/settings.rs` | `JsonFileSettingsStore` | `FakeSettingsStore` (T048) |
+| `FolderScanner` | `core/fs_scan.rs` | `StdFolderScanner` | `FakeFolderScanner` (T048) |
+| `FolderBrowser` | `core/fs_scan.rs` | `StdFolderScanner` | `FakeFolderScanner` (T048) |
+| `TerminalBackend` | `core/terminal.rs` | daemon-backed | `FakeTerminalBackend` |
+| `TerminalHandle` | `core/terminal.rs` | daemon-backed | `FakeHandle` |
+| `AiCliProvider` | `core/provider.rs` | `ClaudeProvider` | `FakeAiCliProvider` (T048) |
 
-`FakeGit` is the shape the other six should match. SC-005 requires every capability to have a fake
-*and* at least one test exercising real behavior through it; step 13 confirms or adds the missing
-ones.
+`FakeGit` is the shape the others match. SC-005 requires every capability to have a fake *and* at
+least one test exercising real behavior through it; T048 supplied the four that were missing.
+
+**`FolderScanner` was split at T048** (FR-016). It declared `is_git_repo`, `is_available` and
+`list_subdirs`, but every consumer that took it *as a trait* — `Workspace::open_or_activate`,
+`Workspace::refresh_availability`, `Catalog::add_project` — asked only the two predicates, while
+the sole caller of `list_subdirs` reached for `StdFolderScanner` concretely. Listing is now
+`FolderBrowser`; `StdFolderScanner` and `FakeFolderScanner` each implement both.
+
+**`ProjectStore` was examined and deliberately not split.** T042's narrowness check flagged
+`save` as supplied-unexercised in three daemon test fakes, but its only trait consumer, `Catalog`,
+exercises all three operations. The hand-written fakes existed because no shared one did — a
+coverage gap presenting as a width symptom — and deleting them in favour of `FakeProjectStore` is
+what resolved it.
+
+**`AiCliProvider` has a fake but no substitutable consumer.** Every caller names `ClaudeProvider`
+concretely, so nothing can be handed a different provider. `core/tests/ai_cli_provider_seam.rs`
+records this and asserts what is assertable today; T049's assembly point is where it becomes
+answerable.
 
 ### To declare (3)
 
