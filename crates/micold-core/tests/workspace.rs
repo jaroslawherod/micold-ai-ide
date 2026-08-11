@@ -286,3 +286,30 @@ fn the_foreground_memory_is_keyed_like_the_sessions_it_refers_to() {
         "same keys, same shape"
     );
 }
+
+/// Feature 025: forgetting a project takes its memory with it (FR-009).
+///
+/// Otherwise re-opening the same folder later would restore a session from a life the user
+/// deliberately ended — and the id would name a session whose record went with the project.
+#[test]
+fn forgetting_a_project_forgets_which_session_it_was_on() {
+    let mut ws = Workspace::empty();
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("project");
+    std::fs::create_dir(&path).unwrap();
+    ws.open_or_activate(path.clone(), &FakeFolderScanner::default());
+    let key = ws.active.clone().unwrap();
+
+    let session = Session::start_new(SessionLocation::Default);
+    let id = session.id;
+    ws.sessions.insert(key.clone(), vec![session]);
+    ws.foreground_by_project.insert(key.clone(), id);
+
+    ws.forget(&key);
+
+    assert!(
+        ws.foreground_by_project.is_empty(),
+        "every piece of state keyed by a forgotten project's path goes with it — sessions and \
+         worktree names already do, and the memory is one more"
+    );
+}

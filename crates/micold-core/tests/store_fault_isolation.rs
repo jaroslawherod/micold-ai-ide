@@ -230,3 +230,49 @@ fn migrating_project_whose_state_write_fails_keeps_a_catalog_fallback() {
         "the fallback must clear once the state-file write succeeds: {raw_catalog_after}"
     );
 }
+
+/// Feature 025: a project whose state cannot be read has no memory either.
+///
+/// The memory lives in the same file as that project's sessions, so a fault that loses the sessions
+/// must lose the memory with them — restoring against sessions that failed to load would name an id
+/// nothing can resolve. A launch must still start normally: FR-010 says an unreadable memory is
+/// treated as no memory, never as an error.
+#[test]
+fn a_corrupt_project_state_file_leaves_that_project_with_no_memory() {
+    let dir = tempdir().unwrap();
+    let root = dir.path().join("projects.json");
+    let store = JsonFileStore::at(root.clone());
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a/one", "one", true));
+    let session = Session::start_new(SessionLocation::Default);
+    let id = session.id;
+    ws.sessions.insert(PathBuf::from("/a/one"), vec![session]);
+    ws.foreground_by_project.insert(PathBuf::from("/a/one"), id);
+    store.save(&ws).unwrap();
+
+    // Corrupt that project's own state file, leaving the catalog itself intact.
+    let state_dir = root.parent().unwrap().join("projects");
+    let state_file = std::fs::read_dir(&state_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|p| p.extension().is_some_and(|e| e == "json"))
+        .expect("the project's state file");
+    std::fs::write(&state_file, "{ not json").unwrap();
+
+    let loaded = store.load();
+
+    assert_eq!(
+        loaded.status,
+        LoadStatus::Loaded,
+        "the catalog is fine, so the launch proceeds — a fault in one project's file never fails \
+         the whole load (FR-012a), and never fails a launch (FR-010)"
+    );
+    assert!(
+        loaded.workspace.foreground_by_project.is_empty(),
+        "and the memory goes with the sessions it referred to, rather than surviving to name an id \
+         that nothing loaded can resolve"
+    );
+    assert!(loaded.workspace.sessions.get(Path::new("/a/one")).is_none());
+}

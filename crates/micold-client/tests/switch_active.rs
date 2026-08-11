@@ -217,3 +217,50 @@ fn switching_to_a_project_with_no_session_reveals_nothing() {
          an unrelated row (invariant I5)"
     );
 }
+
+// --- Feature 025: switching uses the memory that came from disk -------------------------------
+
+#[test]
+fn switching_to_a_project_not_yet_visited_uses_its_stored_memory() {
+    let mut st = two_projects_active_a();
+    // /b's memory as it would arrive from the store at boot: a session nothing in this run has
+    // selected, so only the persisted value can account for it.
+    let b_second = st.workspace.sessions[Path::new("/b")]
+        .last()
+        .map(|s| s.id)
+        .unwrap();
+    st.workspace
+        .foreground_by_project
+        .insert(PathBuf::from("/b"), b_second);
+
+    assert!(st.switch_active(Path::new("/b")));
+
+    assert_eq!(
+        st.active_session,
+        Some(b_second),
+        "the memory loaded from disk is the same map `record_foreground` writes, so a project you \
+         have not visited this run behaves exactly like one you have. Falling back to the first \
+         running session here would mean the persisted memory only worked at launch"
+    );
+}
+
+#[test]
+fn each_project_keeps_the_session_it_was_last_on_not_the_last_one_overall() {
+    let mut st = two_projects_active_a();
+    let fg_a = st.active_session.unwrap();
+
+    assert!(st.switch_active(Path::new("/b")));
+    let fg_b = st.active_session.unwrap();
+    assert!(st.switch_active(Path::new("/a")));
+
+    assert_eq!(
+        st.workspace.foreground_by_project.get(Path::new("/a")),
+        Some(&fg_a)
+    );
+    assert_eq!(
+        st.workspace.foreground_by_project.get(Path::new("/b")),
+        Some(&fg_b),
+        "switching several times leaves each project remembering its own session, not whichever \
+         one happened to be current when the user stopped (US2 scenario 2)"
+    );
+}
