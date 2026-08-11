@@ -140,7 +140,7 @@ starts normally on the overview or another session, with the rest of the project
 - [X] T031 Confirm `crates/micold-core/tests/schema_hash.rs` is **unchanged**. This feature adds no protocol message and edits none; if the hash moved, something reached for the wire that did not need to (research R3)
 - [X] T032 Run quickstart §B (B1–B7) by hand and fill in the recording table in [quickstart.md](./quickstart.md). B1, B2 and B3 need the process actually stopped and started, so none of them can be automated — if §B was not run, say so there rather than leaving the table blank
 - [X] T033 [P] Cross-cutting docs review in `docs/`: confirm the three added passages read as one narrative and that nothing elsewhere still says the app forgets your session at exit
-- [ ] T034 Confirm CI is green on Linux, macOS and Windows for `.github/workflows/ci.yml` (Principle VI) — this feature has no platform branch, so a platform-specific failure means a path or serialisation assumption leaked
+- [X] T034 Confirm CI is green on Linux, macOS and Windows for `.github/workflows/ci.yml` (Principle VI) — this feature has no platform branch, so a platform-specific failure means a path or serialisation assumption leaked
 
 ---
 
