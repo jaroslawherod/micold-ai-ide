@@ -172,6 +172,15 @@ def norm(a):
     Only *snake_case* segments are stripped -- those are crate and module names. CamelCase stays,
     so `Level::Info` does not collapse to `Info` and swapping one enum variant for another is still
     a change.
+
+    Do NOT extend this to `x.field` -> `x.field()`. It looks like the same kind of rename and is
+    not: a module path carries no truth value, so stripping it is safe by construction, whereas
+    `()` swaps a stored fact for a computed one and the computation is arbitrary. `assert!(s.ready)`
+    -> `assert!(s.ready())` reads identically whether `ready()` is a faithful predicate or `true`.
+    Refused as spec.md Q3 (feature 021), which works the case through: of the twelve such renames
+    feature 023 produced, ten were faithful and two were deliberate reversals, and nothing in the
+    text distinguishes them. What the reader needs is the `closest surviving` line below, which
+    settles the faithful ones at a glance while still showing the other two.
     """
     a = re.sub(r"([a-z_][a-z0-9_]*::)+", "", a)
     return re.sub(r"\s+", "", a)
