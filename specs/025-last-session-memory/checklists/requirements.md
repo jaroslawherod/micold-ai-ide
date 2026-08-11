@@ -42,10 +42,21 @@ already has:
 | Does it take keyboard focus? | FR-013 | No. Focus is a separate deliberate act — the same call BUG-001/focus-model already make for arriving somewhere. |
 | The last-used session was closed | FR-005, US3 scenario 1 | Not restored. A closed session is not listed at all, so restoring one would display something the user cannot see in the panel. |
 
-**Deliberately not marked as needing clarification**, though a reviewer might expect it: *when* the
-memory is written (continuously vs at exit). Recorded as an assumption instead — "as the current
-session changes" is the behaviour with no surprising failure mode, and the alternative only differs
-after a force-kill, which the Edge Cases already cover.
+**Resolved by `/speckit-clarify` (2026-08-11)**, both promoted from assumption or silence into
+requirements:
+
+- *When the memory is written* had been recorded as an assumption. It is now **FR-001a** and
+  **SC-007**: written whenever it changes value and only then, so a force-kill costs the most recent
+  change rather than the whole memory. Writing at exit was rejected for failing in exactly the case
+  the feature exists for.
+- *Whether a "no session" report clears the memory* was not covered at all, and it is the difference
+  between closing a session costing the user their place and not. Now **FR-005a** and contract §2.6:
+  the memory is replaced only by another session becoming current, never erased by the pointer going
+  away.
+
+Two statements that contradicted the second answer were rewritten rather than left standing: US3
+scenario 3 and the last Edge Case both said a stale memory is "discarded", where in fact it survives
+and is simply declined at restore.
 
 **One thing the spec deliberately does not decide**: which *project* opens at launch. That is
 existing behaviour and out of scope; this feature only decides which session is in front of the user

@@ -53,16 +53,20 @@ BUG-001 split (research R7).
 
 ### Invariants
 
-1. **I1 — A memory is a hint, never a promise.** `last_session` may name a session that no longer
+1. **I0 — The memory only ever moves forward.** It is set by a session becoming current in that
+   project and by nothing else. No event clears it: not closing the session it names, not an
+   internal loss of the pointer, not a failed restore (FR-005a). Forgetting the project is not an
+   exception — it deletes the file the memory lives in, along with that project's sessions (§2.5).
+2. **I1 — A memory is a hint, never a promise.** `last_session` may name a session that no longer
    exists, was closed, or belongs to a worktree that is gone. Nothing validates it at load; it is
    resolved when used, by the resolution that already exists (I3).
-2. **I2 — The client never writes it to disk.** It reads at load and mutates in memory for the
+3. **I2 — The client never writes it to disk.** It reads at load and mutates in memory for the
    current run; persistence happens daemon-side. This is the split `Workspace::sessions` already
    has, and it exists because `store.rs` has no locking.
-3. **I3 — Usability is decided by `explain_foreground`, not by the store.** A remembered session is
+4. **I3 — Usability is decided by `explain_foreground`, not by the store.** A remembered session is
    restored when it is present and not `archived`; otherwise the existing fallbacks apply. There is
    one implementation of that question (feature 008 FR-003a).
-4. **I4 — Restoring never starts anything.** Applying the memory sets which session is displayed and
+5. **I4 — Restoring never starts anything.** Applying the memory sets which session is displayed and
    nothing else (FR-004).
 
 ## Reading it at launch
@@ -87,8 +91,18 @@ Two things deliberately absent from that sequence:
 ```text
 ClientMsg::SetViewedSession { project, session }   (already sent on every path that changes it)
   └─ daemon: state.set_viewed(client, project, session)      (existing, per-client, in memory)
-  └─ daemon: catalog records project → session, then persists  (NEW)
+  └─ daemon: if session is Some AND differs from what is remembered:   (NEW)
+                catalog records project → session, then persists
 ```
+
+Two conditions, both from clarification:
+
+- **`Some` only.** A `None` report never clears the memory (FR-005a, §2.6). The pointer goes to
+  nothing for reasons the user did not take, and the restore already declines a session that cannot
+  be shown — so a stale memory costs nothing and a lost one costs the user their place.
+- **Only on a change.** Attach re-sends the current id and a session start may name the session
+  already in front of the user; writing on those would rewrite a file holding every session record
+  with identical content (FR-001a).
 
 `SetViewedSession` is already sent on welcome/attach, forced re-attach, selecting or starting a
 session, and switching projects (research R4). Nothing new is sent, and no message changes shape —
