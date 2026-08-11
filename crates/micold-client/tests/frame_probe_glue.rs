@@ -29,8 +29,34 @@ fn main_rs() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src/main.rs")
 }
 
+fn shell_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shell")
+}
+
+/// The binary's source: `src/main.rs` followed by every module under `src/shell/`.
+///
+/// One string, because the two halves are one program. Feature 021 T050 began splitting the
+/// binary by external system, and it moved `probe_config().map(` — which the gate below reads —
+/// out of `main.rs` and into `shell/startup.rs`. This file's own vacuity test already said what to
+/// do about that: "if the binary moved, this file's path must move with it, or the gate above goes
+/// unchecked". Following the source is the fix; relaxing the gate is not, since a probe wired into
+/// an ordinary launch is exactly as invisible from `shell/` as it was from `main.rs`.
+///
+/// `main.rs` comes first and the shell files in sorted order, so the "line before it" reading the
+/// frame-clock gate depends on is a property of the file that line lives in, not of the join.
 fn source() -> String {
-    fs::read_to_string(main_rs()).expect("read src/main.rs")
+    let mut out = fs::read_to_string(main_rs()).expect("read src/main.rs");
+    let mut shell: Vec<PathBuf> = fs::read_dir(shell_dir())
+        .expect("read src/shell")
+        .map(|entry| entry.expect("dir entry").path())
+        .filter(|path| path.extension().is_some_and(|e| e == "rs"))
+        .collect();
+    shell.sort();
+    for path in shell {
+        out.push('\n');
+        out.push_str(&fs::read_to_string(&path).expect("read a shell module"));
+    }
+    out
 }
 
 /// Strips `//` line comments and `/* */` blocks, so this file's subject matter — which `main.rs`
@@ -145,6 +171,19 @@ fn the_probe_is_absent_unless_a_run_was_configured() {
 #[test]
 fn the_scan_actually_reads_the_binary() {
     let src = source();
+    // Both halves, named separately: a `source()` that silently stopped reading `src/shell/`
+    // would still be tens of thousands of bytes of `main.rs` and would still satisfy the size
+    // check below, while the startup gate it moved there went unread. T050 is when that became
+    // possible.
+    assert!(
+        src.contains("fn run() -> iced::Result"),
+        "src/shell/startup.rs is not being read — the binary's entry path moved there at T050 and \
+         the gates above are now scanning only half the program"
+    );
+    assert!(
+        src.contains("fn update_inner("),
+        "src/main.rs is not being read"
+    );
     assert!(
         src.len() > 10_000,
         "src/main.rs is suspiciously short ({} bytes) — if the binary moved, this file's path must \
