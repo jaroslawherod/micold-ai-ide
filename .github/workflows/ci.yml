@@ -104,8 +104,9 @@ jobs:
         run: cargo clippy -p micold-core --all-targets -- -D warnings
       - name: clippy (workspace)
         run: cargo clippy --workspace --all-targets -- -D warnings
-      # Feature 023's shell-side suites: the documentation-set declaration and the change
-      # classifier. They gate what CI skips, so they are enforced here rather than only locally.
+      # The shell-side suites: the documentation-set declaration, the change classifier, and the
+      # assertion-freeze gate. They gate what CI skips and what it blocks, so they are enforced
+      # here rather than only locally.
       # Linux-only by design -- the classifier runs nowhere else (see plan.md's Complexity
       # Tracking).
       - name: Test (shell suites)
@@ -173,9 +174,14 @@ jobs:
 
   # Constitution Principle VII: documentation ships and is verified in CI.
   # Feature 021 (FR-027): the restructuring treats the existing suite as its behavior
-  # specification, which only works while the assertions are frozen. Advisory for now --
-  # `continue-on-error` lets its false-positive rate be observed on real pull requests before
-  # it is allowed to block a merge (task T074 promotes it).
+  # specification, which only works while the assertions are frozen.
+  #
+  # The job runs on every branch, but the rule it enforces does not apply to every branch: FR-027
+  # binds changes made *for feature 021*, and every other feature owns its own expectations. The
+  # script decides that for itself and reports without failing when out of scope (spec.md Q3), so
+  # this job no longer has to be advisory to avoid blocking concurrent features -- what it still
+  # cannot do is fail a *false* positive within 021, which is what `continue-on-error` is now
+  # buying, and what T074 weighs before removing it.
   assertions:
     name: assertion freeze (advisory)
     needs: classify
@@ -187,6 +193,10 @@ jobs:
         with:
           fetch-depth: 0 # needs history to diff against the base ref
       - name: Assertions frozen since base
+        env:
+          # A pull request checks out a detached merge commit, so the branch name is not in the
+          # repository to be read -- and it is one of the two signals scope is decided from.
+          FREEZE_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           BASE="origin/${{ github.base_ref || 'main' }}"
           git fetch --quiet origin "${{ github.base_ref || 'main' }}"

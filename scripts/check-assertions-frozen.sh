@@ -17,10 +17,42 @@
 # Usage:
 #   scripts/check-assertions-frozen.sh [base-ref]      # default: origin/main
 #
+# Environment:
+#   ASSERTION_FREEZE   auto (default) | enforce | report
+#   FREEZE_BRANCH      branch name to judge scope by, when HEAD is detached (CI)
+#
 # Exit codes:
-#   0  no assertion lost
-#   1  one or more assertions removed without reappearing
+#   0  no assertion lost, or losses reported out of scope
+#   1  one or more assertions removed without reappearing, in scope
 #   2  bad usage / not a git repository / nothing to compare against
+#
+# ---------------------------------------------------------------------------------------------
+# SCOPE: FR-027 BINDS FEATURE 021, NOT THE REPOSITORY  (spec.md Q3, task T074)
+#
+# FR-027 freezes the suite "for the duration of feature 021", so that a red suite unambiguously
+# means the restructuring broke something. It says nothing about the other features shipping
+# alongside it, each of which owns its own expectations and is entitled to change them.
+#
+# This job ran on every branch regardless, which is how feature 023 -- a deliberate behavior change
+# with its own specification -- came to be reported for twelve assertions it had every right to
+# change. Advisory, that is noise. Blocking, it stops every concurrent feature dead, which is why
+# T074's promotion was held until this existed.
+#
+# So the check now decides scope from the change itself:
+#
+#   in scope  <=>  it touches specs/021-mvu-slice-architecture/, or its branch names 021
+#
+# Two independent signals, either sufficient, because the failure that matters is the silent one:
+# an in-scope change judged out of scope is unenforced and says nothing, while the reverse is loud
+# and fixed by whoever hits it. The spec-directory signal is the load-bearing one -- executing a
+# task ticks tasks.md in the same commit, so a 021 change touches that directory as a matter of
+# workflow rather than of naming discipline. Verified against all sixteen 021-era pull requests
+# open or merged as of 2026-08-11: 8/8 in-scope touch it, 8/8 out-of-scope do not, and every
+# in-scope branch also names 021.
+#
+# Out of scope the report still prints, in full, and exits 0. A change that rewrites twelve
+# expectations should be told so even when it is allowed to -- the point is that it be deliberate.
+# What out-of-scope no longer does is fail the build.
 #
 # ---------------------------------------------------------------------------------------------
 # WHOLE FILES, NOT DIFF LINES  (issue #146)
@@ -76,6 +108,39 @@ if [ -z "$MERGE_BASE" ]; then
   exit 2
 fi
 
+FEATURE_DIR="specs/021-mvu-slice-architecture/"
+
+# On a pull request CI checks out a detached merge commit, so there is no branch name to read from
+# the repository -- the workflow passes it in. Locally the symbolic ref is the answer, and
+# `--abbrev-ref` yields "HEAD" when detached, which matches no feature and simply abstains.
+BRANCH="${FREEZE_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)}"
+
+scope_reason() {
+  if git diff --name-only "$MERGE_BASE" HEAD -- "$FEATURE_DIR" | grep -q .; then
+    echo "it touches ${FEATURE_DIR}"
+    return 0
+  fi
+  case "$BRANCH" in
+    *021*) echo "its branch '${BRANCH}' names feature 021"; return 0 ;;
+  esac
+  echo "it touches neither ${FEATURE_DIR} nor a branch naming feature 021"
+  return 1
+}
+
+MODE="${ASSERTION_FREEZE:-auto}"
+case "$MODE" in
+  enforce) SCOPE_REASON="ASSERTION_FREEZE=enforce" ;;
+  report) SCOPE_REASON="ASSERTION_FREEZE=report" ;;
+  auto)
+    if SCOPE_REASON=$(scope_reason); then MODE=enforce; else MODE=report; fi
+    ;;
+  *)
+    echo "error: ASSERTION_FREEZE must be auto, enforce or report (got '$MODE')" >&2
+    exit 2
+    ;;
+esac
+export FREEZE_MODE="$MODE" FREEZE_REASON="$SCOPE_REASON"
+
 # Path selection is done here rather than by pathspec, because `git ls-tree` does not accept
 # ':(glob)' magic -- it fails outright, and a check that dies on its own pathspec is a check that
 # stops protecting anything. The old comment claimed the ':(glob)' form was the safe choice *and*
@@ -106,8 +171,13 @@ dump_at() {
 }
 
 CHECK=$(cat <<'PYCHECK'
-import re, sys
+import os, re, sys
 from collections import Counter, defaultdict
+
+# Set by the shell above from ASSERTION_FREEZE and, on 'auto', from whether the change is one made
+# for feature 021. 'report' prints the identical report and exits 0 -- see the SCOPE section.
+MODE = os.environ.get("FREEZE_MODE", "enforce")
+REASON = os.environ.get("FREEZE_REASON", "")
 
 # A reader piping this through `head` closes the stream early. Without this, Python raises
 # BrokenPipeError, prints a traceback over the report it was in the middle of, and exits 120 --
@@ -230,7 +300,13 @@ if not lost:
     sys.exit(0)
 
 n = sum(lost.values())
-print(f"assertion freeze: FAILED — {n} assertion(s) removed and not reinstated", file=sys.stderr)
+if MODE == "enforce":
+    print(f"assertion freeze: FAILED — {n} assertion(s) removed and not reinstated", file=sys.stderr)
+else:
+    print(
+        f"assertion freeze: {n} assertion(s) changed — reported, not enforced",
+        file=sys.stderr,
+    )
 print(file=sys.stderr)
 
 
@@ -257,7 +333,17 @@ for a, count in sorted(lost.items()):
         print("      no near match survives — this looks like an outright deletion", file=sys.stderr)
     print(file=sys.stderr)
 
+if MODE != "enforce":
+    print(f"FR-027 freezes the suite for changes made FOR FEATURE 021. This is not one:", file=sys.stderr)
+    print(f"{REASON}.", file=sys.stderr)
+    print(file=sys.stderr)
+    print("The expectations above belong to this change's own feature, which is entitled to change", file=sys.stderr)
+    print("them. They are listed so that doing so is deliberate rather than incidental -- read them", file=sys.stderr)
+    print("and confirm each says what you now mean. Nothing here fails the build.", file=sys.stderr)
+    sys.exit(0)
+
 print("FR-027 freezes the existing suite for the duration of feature 021.", file=sys.stderr)
+print(f"This change is in scope: {REASON}.", file=sys.stderr)
 print("Tests may be ADDED or RELOCATED; expectations may not be relaxed, rewritten or deleted.", file=sys.stderr)
 print(file=sys.stderr)
 print("If a test turns out to assert a latent bug, the bug and its assertion both stay:", file=sys.stderr)
@@ -265,6 +351,7 @@ print("file it separately and fix it in its own change (spec.md, Edge Cases).", 
 print(file=sys.stderr)
 print("A high-percentage 'closest surviving' line usually means the assertion was rewritten rather", file=sys.stderr)
 print("than removed -- which FR-027 also forbids. Reinstate it, or get the exception recorded.", file=sys.stderr)
+print("A mechanism rename is NOT admitted -- spec.md Q3 refuses that waiver and says why.", file=sys.stderr)
 sys.exit(1)
 PYCHECK
 )
