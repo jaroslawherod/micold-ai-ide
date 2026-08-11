@@ -621,6 +621,13 @@ pub struct State {
     /// The session that was in the foreground for each project, remembered so returning to a
     /// project restores it. In-memory only; not persisted (research R2).
     pub foreground_by_project: BTreeMap<PathBuf, SessionId>,
+    /// Why entering a project landed on the session it did, from the most recent switch.
+    ///
+    /// Diagnostic only — nothing renders from it and nothing branches on it. It exists because
+    /// "the app forgot which session I was on" is a report with four possible causes, and the one
+    /// that matters most (a resolve looking under a key nothing is filed under) is invisible from
+    /// the outside. The binary writes it to the client log at the I/O boundary.
+    pub last_foreground_choice: Option<crate::features::session::ForegroundChoice>,
     /// Sessions that were auto-restarted while their project was inactive, pending a return
     /// notification. Cleared when the user returns to the owner.
     pub restarted_while_inactive: BTreeSet<SessionId>,

@@ -9,7 +9,7 @@
 //! the kind of thing a refactor breaks quietly.
 
 use micold_client::app::State;
-use micold_client::features::session::SelectKind;
+use micold_client::features::session::{ForegroundChoice, SelectKind};
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionId, SessionLocation};
 use std::path::{Path, PathBuf};
@@ -178,4 +178,94 @@ fn sessions_are_located_by_worktree_regardless_of_whether_they_are_visible() {
 fn the_three_selection_kinds_stay_distinct() {
     assert_ne!(SelectKind::Simple, SelectKind::Semantic);
     assert_ne!(SelectKind::Semantic, SelectKind::Lines);
+}
+
+// --- Why the app landed on the session it did -------------------------------------------------
+//
+// Entering a project picks a session, and when it picks *none* the user is dropped on the project
+// overview with nothing to go on. Four different situations produce that, and they want different
+// answers: the project genuinely has no sessions, it has sessions but none running, or the resolve
+// is looking under a key nothing was filed under. `explain_foreground` names which, so the log line
+// the binary writes is a diagnosis rather than a shrug.
+
+#[test]
+fn the_remembered_session_is_chosen_when_it_is_still_running() {
+    let (mut st, a, _) = two_projects(2, 1);
+    st.active_session = Some(a[1]);
+    st.record_foreground();
+
+    assert_eq!(
+        st.explain_foreground(Path::new("/a")),
+        ForegroundChoice::Remembered(a[1]),
+        "returning to a project puts you back on the session you left it on, not on its first one"
+    );
+}
+
+#[test]
+fn a_remembered_session_that_stopped_falls_back_to_a_running_one() {
+    let (mut st, a, _) = two_projects(2, 1);
+    st.active_session = Some(a[1]);
+    st.record_foreground();
+    // The remembered one stops while the project is in the background.
+    let stopped = a[1];
+    if let Some((_, session)) = st.workspace.find_session_mut(stopped) {
+        session.record_clean_exit();
+    }
+
+    assert_eq!(
+        st.explain_foreground(Path::new("/a")),
+        ForegroundChoice::FirstActive {
+            chosen: a[0],
+            remembered: Some(stopped),
+        },
+        "the fallback is deliberate, and worth telling apart from the remembered case — it is why \
+         you can return to a project and find yourself somewhere you did not leave"
+    );
+}
+
+#[test]
+fn a_project_whose_sessions_have_all_stopped_says_that() {
+    let (mut st, a, _) = two_projects(2, 1);
+    for id in &a {
+        if let Some((_, session)) = st.workspace.find_session_mut(*id) {
+            session.record_clean_exit();
+        }
+    }
+
+    assert_eq!(
+        st.explain_foreground(Path::new("/a")),
+        ForegroundChoice::NoneActive { sessions: 2 },
+        "two sessions, neither running: landing on the overview is correct here, and the count is \
+         what distinguishes it from having no sessions at all"
+    );
+}
+
+#[test]
+fn a_key_nothing_was_filed_under_is_its_own_answer() {
+    let (st, _, _) = two_projects(1, 1);
+
+    assert_eq!(
+        st.explain_foreground(Path::new("/somewhere-else")),
+        ForegroundChoice::NoSessionsForKey,
+        "distinct from `NoneActive` on purpose. Sessions listed in the sidebar while the resolve \
+         finds none means the two are looking under different keys — a bug that reads exactly like \
+         'the app forgot my session', and that no amount of staring at the foreground logic finds"
+    );
+}
+
+#[test]
+fn the_choice_is_recorded_where_the_binary_can_log_it() {
+    let (mut st, a, _) = two_projects(1, 1);
+    st.active_session = Some(a[0]);
+    st.record_foreground();
+
+    assert!(st.switch_active(Path::new("/b")));
+    assert!(st.switch_active(Path::new("/a")));
+
+    assert_eq!(
+        st.last_foreground_choice,
+        Some(ForegroundChoice::Remembered(a[0])),
+        "the reducer decides; the binary logs. Keeping the reason on the state is what lets the \
+         log line say why without the decision leaking into the I/O boundary"
+    );
 }
