@@ -452,7 +452,9 @@ only worktree data itself. The existing `worktree_delete` tests must pass unchan
   file to be split at all. Relocation is the **only** admitted exception: an assertion that turns
   out to encode a latent bug is still frozen (see Edge Cases), because a rule with one justified
   exception no longer supports the inference this feature depends on — that a red suite means the
-  restructuring broke something.
+  restructuring broke something. **Mechanism renames are not a further exception** — see Q3 under
+  Resolved Decisions, which refuses one and says why. FR-027 binds changes made *for this feature*;
+  it does not freeze the suite against every other feature shipping concurrently.
 - **FR-028**: The migration MUST be expressible as incremental steps that can each ship
   independently, every one leaving the application buildable, runnable and green. (Determining the
   actual sequence is out of scope for this specification.)
@@ -568,7 +570,7 @@ only worktree data itself. The existing `worktree_delete` tests must pass unchan
 
 Two decisions materially change the size and shape of this work. Both arose because the original
 description predates the client/core/daemon split that the codebase has since adopted. Both are
-now resolved.
+now resolved. A third (Q3) arose later, from the assertion-freeze gate, and is resolved below.
 
 - **Q1 (scope boundary) — Resolved: the session daemon is out of scope.** The daemon has its own
   large files (a 1,483-line server and a 1,317-line state module as of 2026-08-07, both still
@@ -585,3 +587,36 @@ now resolved.
   own operations, which FR-001a forbids. The core keeps the **domain** model (worktree, session,
   workspace, settings, protocol) and the declared service capabilities of FR-015; the client keeps
   application state, feature modules and views.
+- **Q3 (mechanism renames) — Resolved: FR-027 does not admit them, and the question rested on a
+  false premise.** Raised 2026-08-10 by issue #146 and left open there deliberately, since the
+  change that prompted it was the asker's own. Asked: should the freeze treat `x.field` →
+  `x.field()` as mechanism rather than expectation, the way `norm()` in
+  `scripts/check-assertions-frozen.sh` already strips module paths? **No**, for three reasons, the
+  first of which is sufficient on its own.
+
+  1. **`()` is not mechanism.** A module path can be stripped safely because it carries no truth
+     value: `app::State::foo` and `State::foo` denote the same thing by construction. Adding `()`
+     swaps a stored fact for a computed one, and the computation is arbitrary — `assert!(s.ready)`
+     → `assert!(s.ready())` reads as a rename whether `ready()` is a faithful predicate or `true`.
+     The waiver cannot distinguish them, so it would readmit exactly the class of defect #146 was
+     filed to close: an expectation change wearing an edit that obviously isn't one.
+  2. **The motivating change is its own counterexample.** Feature 023 replaced a stored
+     `terminal_focused: bool` with a four-clause derived predicate that additionally requires
+     `focused_field.is_none()` and that no surface takes the keyboard. Field and method are *not*
+     the same proposition; they agreed at ten of the twelve affected sites, and that agreement is
+     the **result** 023 had to establish, not a fact recoverable from the text. At the other two
+     they disagree — which is the point of the feature. If `()` were mechanism, 023 would have been
+     a no-op refactor. It was a behavior change with its own specification.
+  3. **The gate was right and the report was already adjudicable.** Run from a base predating 023,
+     the whole-file check reports twelve losses: ten with a 96–99% surviving counterpart printed
+     beside them (a reader settles each at a glance) and two flagged "no near match survives" —
+     precisely the two deliberate reversals. A waiver would have auto-passed the ten *and* said
+     nothing about the two. Noise suppression that also suppresses the signal is not an improvement.
+
+  **The real defect is scope, not content.** FR-027 freezes the suite for the duration of *this*
+  feature. Feature 023 is a different feature with its own spec and its own right to change what
+  its expectations say, so those twelve were never FR-027 violations — the gate flagged them
+  because `.github/workflows/ci.yml` runs it on every non-docs-only change on every branch, while
+  the rule it enforces is scoped to one feature. That mismatch is harmless while the job is
+  advisory and becomes a merge blocker for every concurrent feature the moment it is promoted; see
+  T074, which is now conditioned on fixing it.
