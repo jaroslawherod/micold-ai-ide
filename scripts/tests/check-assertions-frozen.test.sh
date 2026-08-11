@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# Drives `scripts/check-assertions-frozen.sh` over crafted histories (feature 021, FR-027).
+#
+# Every case builds its own throwaway repository in a temp dir and deletes it afterwards, so the
+# suite touches nothing real and cases cannot leak into one another.
+#
+# **The script under test stays OUTSIDE the fixture.** An earlier draft committed it into the
+# fixture repository, so checking out a case's history also checked out whatever version of the
+# script that commit carried -- and the first two cases silently exercised the buggy version they
+# were written to catch. A gate's own test is exactly where that mistake is most expensive.
+#
+# Two things are pinned here, and they are the two the check has already got wrong once:
+#
+#   1. **Identity** (issue #146): an assertion is what it says, not which of its lines a diff
+#      happened to touch. Reversing a multi-line expectation in place must fail.
+#   2. **Scope** (spec.md Q3, task T074): FR-027 binds changes made for feature 021. Every other
+#      feature owns its own expectations, and must be reported without being blocked.
+
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+CHECK="$ROOT/scripts/check-assertions-frozen.sh"
+
+failures=0
+cases=0
+
+# A repository with one assertion-bearing test file and one source file, on a branch whose name
+# says nothing about any feature.
+new_repo() {
+  local dir
+  dir="$(mktemp -d)"
+  git -C "$dir" init -q -b work
+  git -C "$dir" config user.email t@example.com
+  git -C "$dir" config user.name t
+  git -C "$dir" config commit.gpgsign false
+  mkdir -p "$dir/crates/thing/tests" "$dir/crates/thing/src" "$dir/specs/021-mvu-slice-architecture"
+  cat > "$dir/crates/thing/tests/a.rs" <<'RS'
+#[test]
+fn it_starts_off() {
+    let state = State::new();
+    assert!(
+        !state.enabled,
+        "starts off"
+    );
+    assert_eq!(state.count, 0);
+}
+RS
+  cat > "$dir/crates/thing/src/lib.rs" <<'RS'
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn inline() {
+        assert!(s.ready, "the thing is ready");
+    }
+}
+RS
+  git -C "$dir" add -A
+  git -C "$dir" commit -qm seed
+  echo "$dir"
+}
+
+commit_in() {
+  git -C "$1" add -A
+  git -C "$1" commit -qm "$2"
+}
+
+# run <name> <want_exit> <want_output_substring|-> <dir> <base> [env assignments...]
+run() {
+  local name="$1" want_exit="$2" want_out="$3" dir="$4" base="$5"
+  shift 5
+  cases=$((cases + 1))
+
+  local out got_exit
+  out="$(cd "$dir" && env "$@" "$CHECK" "$base" 2>&1)"
+  got_exit=$?
+
+  if [ "$got_exit" != "$want_exit" ]; then
+    printf 'FAIL  %-52s want exit=%s got=%s\n' "$name" "$want_exit" "$got_exit"
+    printf '%s\n' "$out" | sed 's/^/        | /' | head -6
+    failures=$((failures + 1))
+    return
+  fi
+  if [ "$want_out" != "-" ] && ! printf '%s' "$out" | grep -qF -- "$want_out"; then
+    printf 'FAIL  %-52s want output ~ %s\n' "$name" "$want_out"
+    printf '%s\n' "$out" | sed 's/^/        | /' | head -6
+    failures=$((failures + 1))
+    return
+  fi
+  printf 'ok    %-52s exit=%s\n' "$name" "$got_exit"
+}
+
+# Make the change in-scope for FR-027 the way a real feature-021 change is: by ticking its tasks.
+claim_021() {
+  printf -- '- [X] T0xx done\n' >> "$1/specs/021-mvu-slice-architecture/tasks.md"
+}
+
+# --- identity: what an assertion says, not which lines moved (issue #146) ------------------------
+
+# The case the line-based check passed and should not have. `assert!(` never changes, so it is
+# diff context on neither side; the changed lines carry no `assert` token at all.
+d="$(new_repo)"
+sed -i 's/!state.enabled,/state.enabled,/; s/"starts off"/"starts ON now"/' "$d/crates/thing/tests/a.rs"
+claim_021 "$d"; commit_in "$d" reverse
+run "multi-line expectation reversed in place" 1 "removed and not reinstated" "$d" HEAD~1
+rm -rf "$d"
+
+d="$(new_repo)"
+sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
+claim_021 "$d"; commit_in "$d" delete
+run "assertion deleted outright" 1 "no near match survives" "$d" HEAD~1
+rm -rf "$d"
+
+# FR-027 admits relocation, and only relocation: the same assertion, some other file, both sides.
+d="$(new_repo)"
+sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
+printf '#[test]\nfn moved() {\n    assert_eq!(state.count, 0);\n}\n' > "$d/crates/thing/tests/b.rs"
+claim_021 "$d"; commit_in "$d" relocate
+run "assertion relocated to another file" 0 "intact" "$d" HEAD~1
+rm -rf "$d"
+
+d="$(new_repo)"
+printf '#[test]\nfn extra() {\n    assert!(state.other);\n}\n' > "$d/crates/thing/tests/b.rs"
+claim_021 "$d"; commit_in "$d" add
+run "assertions added, none lost" 0 "added" "$d" HEAD~1
+rm -rf "$d"
+
+# Q3: `x.field` -> `x.field()` is an expectation change, not a mechanism rename. If this case ever
+# goes green, someone widened norm() and reopened #146 from the other end.
+d="$(new_repo)"
+sed -i 's/s\.ready,/s.ready(),/' "$d/crates/thing/src/lib.rs"
+claim_021 "$d"; commit_in "$d" rename
+run "field -> method rename is not waived (Q3)" 1 "closest surviving" "$d" HEAD~1
+rm -rf "$d"
+
+# --- scope: FR-027 binds feature 021, not the repository (Q3, T074) ------------------------------
+
+# Same edit as the first case, minus the tasks.md tick and on a branch naming no feature: another
+# feature changing an expectation it owns. Reported in full, exit 0.
+d="$(new_repo)"
+sed -i 's/!state.enabled,/state.enabled,/; s/"starts off"/"starts ON now"/' "$d/crates/thing/tests/a.rs"
+commit_in "$d" reverse
+run "out of scope: reported, not enforced" 0 "reported, not enforced" "$d" HEAD~1
+rm -rf "$d"
+
+d="$(new_repo)"
+sed -i 's/!state.enabled,/state.enabled,/' "$d/crates/thing/tests/a.rs"
+commit_in "$d" reverse
+run "out of scope: the loss is still listed" 0 'assert!(!state.enabled,"startsoff")' "$d" HEAD~1
+rm -rf "$d"
+
+# The branch-name signal, independent of the spec directory. CI checks out a detached merge commit
+# on a pull request, so the name arrives by environment rather than from the repository.
+d="$(new_repo)"
+sed -i 's/!state.enabled,/state.enabled,/' "$d/crates/thing/tests/a.rs"
+commit_in "$d" reverse
+run "in scope by branch name" 1 "names feature 021" "$d" HEAD~1 FREEZE_BRANCH=feat/021-us4-thing
+rm -rf "$d"
+
+d="$(new_repo)"
+sed -i 's/!state.enabled,/state.enabled,/' "$d/crates/thing/tests/a.rs"
+claim_021 "$d"; commit_in "$d" reverse
+run "in scope by touching the feature directory" 1 "specs/021-mvu-slice-architecture/" "$d" HEAD~1
+rm -rf "$d"
+
+d="$(new_repo)"
+sed -i 's/!state.enabled,/state.enabled,/' "$d/crates/thing/tests/a.rs"
+commit_in "$d" reverse
+run "ASSERTION_FREEZE=enforce overrides out of scope" 1 "FAILED" "$d" HEAD~1 ASSERTION_FREEZE=enforce
+rm -rf "$d"
+
+d="$(new_repo)"
+sed -i 's/!state.enabled,/state.enabled,/' "$d/crates/thing/tests/a.rs"
+claim_021 "$d"; commit_in "$d" reverse
+run "ASSERTION_FREEZE=report overrides in scope" 0 "reported, not enforced" "$d" HEAD~1 ASSERTION_FREEZE=report
+rm -rf "$d"
+
+d="$(new_repo)"
+run "ASSERTION_FREEZE rejects an unknown mode" 2 "must be auto, enforce or report" "$d" HEAD ASSERTION_FREEZE=bogus
+rm -rf "$d"
+
+# --- refusing to pass vacuously ------------------------------------------------------------------
+
+# A base with nothing under the watched paths must be an error, not a pass. This is the guard the
+# old script's comment promised and never implemented.
+d="$(mktemp -d)"
+git -C "$d" init -q -b work
+git -C "$d" config user.email t@example.com
+git -C "$d" config user.name t
+git -C "$d" config commit.gpgsign false
+printf 'x\n' > "$d/README.md"; commit_in "$d" seed
+printf 'y\n' >> "$d/README.md"; commit_in "$d" more
+run "no assertions at the base is an error" 2 "vacuously" "$d" HEAD~1
+rm -rf "$d"
+
+d="$(new_repo)"
+run "unknown base ref" 2 "not found" "$d" no/such/ref
+rm -rf "$d"
+
+echo
+if [ "$failures" -ne 0 ]; then
+  echo "check-assertions-frozen: $failures of $cases case(s) failed"
+  exit 1
+fi
+echo "check-assertions-frozen: all $cases cases passed"
