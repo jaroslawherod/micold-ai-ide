@@ -274,5 +274,5 @@ fn a_corrupt_project_state_file_leaves_that_project_with_no_memory() {
         "and the memory goes with the sessions it referred to, rather than surviving to name an id \
          that nothing loaded can resolve"
     );
-    assert!(loaded.workspace.sessions.get(Path::new("/a/one")).is_none());
+    assert!(!loaded.workspace.sessions.contains_key(Path::new("/a/one")));
 }

@@ -1740,7 +1740,7 @@ fn applying_the_memory_starts_nothing() {
     let before: Vec<_> = state
         .active_sessions()
         .iter()
-        .map(|s| (s.id, s.lifecycle.clone()))
+        .map(|s| (s.id, s.lifecycle))
         .collect();
 
     state.set_current_session(state.explain_foreground(&path).session());
@@ -1748,7 +1748,7 @@ fn applying_the_memory_starts_nothing() {
     let after: Vec<_> = state
         .active_sessions()
         .iter()
-        .map(|s| (s.id, s.lifecycle.clone()))
+        .map(|s| (s.id, s.lifecycle))
         .collect();
     assert_eq!(
         before, after,
