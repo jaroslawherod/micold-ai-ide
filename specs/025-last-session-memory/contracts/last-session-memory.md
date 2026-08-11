@@ -62,10 +62,11 @@ session is restored **whether or not its process is running**, provided it is pr
 running sessions immediately after launch is what it would have been without this feature.
 *(FR-004, SC-005, Invariant I4)*
 
-**§3.4** Restoring does **not** put keyboard input into the session's terminal. This is the one
-place the launch path deliberately differs from the switch path, which does focus (feature 023) —
-switching is a deliberate act by someone already looking at the screen; starting the application is
-not. *(FR-013, research R5)*
+**§3.4** The restored session's terminal **is** ready to type in, exactly as one reached by any
+other navigation is. Focus is derived from a session being displayed and the user not having given
+the keyboard away (feature 023); withholding it here would need a writer of that flag which no
+navigation has, and would make the launch the one special case in a model built to remove them.
+*(FR-013, research R5)*
 
 **§3.5** When nothing can be restored, no session is current and the project overview is shown. The
 application MUST NOT choose a session on the user's behalf. *(FR-007)*

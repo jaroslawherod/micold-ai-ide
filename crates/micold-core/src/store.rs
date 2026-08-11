@@ -295,6 +295,9 @@ impl StoredCatalog {
             active,
             sessions,
             worktree_names,
+            // Feature 025: never carried by the catalog itself. It lives in each project's own
+            // state file and is filled in by `load` after this, alongside that project's sessions.
+            foreground_by_project: BTreeMap::new(),
         }
     }
 }
@@ -310,6 +313,14 @@ struct StoredProjectState {
     sessions: Vec<StoredSession>,
     #[serde(default)]
     worktree_display_names: BTreeMap<String, String>,
+    /// The session this project was last showing (feature 025, FR-001).
+    ///
+    /// `#[serde(default)]` and no `schema_version` bump, for the reason recorded above for the
+    /// BUG-001 split: a file written before this field existed loads with `None`, which means "no
+    /// memory" and is exactly today's behaviour; a file carrying it, read by an older build, has
+    /// one unknown field that `serde` ignores.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_session: Option<SessionId>,
 }
 
 impl StoredProjectState {
@@ -326,6 +337,7 @@ impl StoredProjectState {
                 .get(project_path)
                 .cloned()
                 .unwrap_or_default(),
+            last_session: ws.foreground_by_project.get(project_path).copied(),
         }
     }
 }
@@ -532,6 +544,18 @@ impl ProjectStore for JsonFileStore {
                             .worktree_names
                             .insert(project.path.clone(), state.worktree_display_names);
                     }
+                    // Feature 025. Absent in a file written before this field existed, which is
+                    // "no memory" — the behaviour this application had until now.
+                    match state.last_session {
+                        Some(id) => {
+                            workspace
+                                .foreground_by_project
+                                .insert(project.path.clone(), id);
+                        }
+                        None => {
+                            workspace.foreground_by_project.remove(&project.path);
+                        }
+                    }
                 }
                 ProjectStateLoad::Missing => {
                     // Keep whatever the legacy catalog fallback already populated (possibly
@@ -540,6 +564,10 @@ impl ProjectStore for JsonFileStore {
                 ProjectStateLoad::Corrupt => {
                     workspace.sessions.remove(&project.path);
                     workspace.worktree_names.remove(&project.path);
+                    // A project whose state cannot be read has no memory either — a launch must
+                    // start normally rather than restore against sessions it could not load
+                    // (feature 025, FR-010).
+                    workspace.foreground_by_project.remove(&project.path);
                 }
             }
         }

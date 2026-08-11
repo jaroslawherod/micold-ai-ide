@@ -12,6 +12,8 @@
 
 ### Session 2026-08-11
 
+- Q: Should restoring at launch withhold keyboard focus from the session's terminal? → A: No — reversed during implementation. The spec's first answer was "no focus", by analogy with arriving somewhere you did not ask to be. Feature 023 has since made focus *derived* — a terminal holds the keyboard because a session is displayed and the user has not given it away — so withholding it at launch would require either a third writer of the released flag (a test exists to prevent exactly that) or recording that the user gave the keyboard away when they did not. It would be the single special case in a model built to remove them, and the behaviour it buys is worse: you reopen on your session and cannot type into it.
+- Q: Should a session whose worktree was deleted outside the application be restored? → A: Yes, and shown as any missing-worktree session is shown. Two reasons, found while implementing: the application already lists such a session and lets the user select it, so declining to *return* them to it would repeat the inconsistency feature 008's BUG-001 was about; and declining would require the project's worktree list at resolve time, which on a project switch is discovered asynchronously and is not there yet — so the same rule would break switching to restore a case the user can see for themselves.
 - Q: When should the memory be written to disk? → A: Whenever it changes value, and only then. Reports that name the session already remembered — an attach re-sending the current id, a session start for the session already in front of the user — write nothing. A force-kill therefore loses at most the single most recent change, never the whole memory, which writing only at shutdown would risk in exactly the case the feature exists for.
 - Q: When the current session goes away (closed, or nothing current) the client already reports "no session" — should that clear the project's remembered session? → A: No. A "no session" report is ignored; the memory keeps naming the last session actually in front of the user. Clearing on every incidental loss of the pointer would erase the memory for reasons the user never took (a close, an internal cleanup), and the restore already refuses a session that is closed or gone (FR-005), so a stale memory is harmless where a lost one is not.
 
@@ -37,7 +39,8 @@ The same session is in front of you, with no clicks.
 
 1. **Given** I quit with a session in front of me in the project the app reopens,
    **When** the application starts,
-   **Then** that session is the current one and its location is listed open in the side panel.
+   **Then** that session is the current one, its location is listed open in the side panel, and its
+   terminal is ready to type in.
 2. **Given** I quit with no session in front of me,
    **When** the application starts,
    **Then** no session is current and the project overview is shown — the application does not pick
@@ -91,7 +94,8 @@ that no longer exists is worse than not remembering at all.
    back exactly as it does when there is no memory.
 2. **Given** the remembered session's worktree was deleted outside the application,
    **When** the application starts,
-   **Then** no session is restored for that project and nothing else about the project is disturbed.
+   **Then** that session is still restored, shown as any session with a missing worktree is shown —
+   the same as selecting it by hand — and nothing else about the project is disturbed.
 3. **Given** the remembered session's record is gone entirely,
    **When** the application starts,
    **Then** nothing is restored from it, and the next session I make current in that project
@@ -113,7 +117,8 @@ that no longer exists is worse than not remembering at all.
   not be corrupted by both writing, and neither window may be prevented from starting by the other.
 - **The remembered session exists but its project folder is unavailable** (an unmounted drive):
   nothing is restored for it, consistent with the application already refusing to activate an
-  unavailable project.
+  unavailable project. Distinct from a missing *worktree*, which is restored and shown as missing —
+  there the project is present and the user can see and select the session themselves.
 - **The stored memory is unreadable or from an older version of the application.** It is treated as
   "no memory" and the application starts normally — a launch must never fail because of it.
 - **A session was started, used, and closed within one run, and nothing else selected.** The memory
@@ -160,8 +165,9 @@ that no longer exists is worse than not remembering at all.
 - **FR-012**: The restored session MUST be presented exactly as a session made current by any other
   means — including being revealed in the side panel — so the user cannot tell from the panel how
   they arrived at it.
-- **FR-013**: Restoring a session at launch MUST NOT place keyboard input into its terminal. Typing
-  into a session remains a separate, deliberate act.
+- **FR-013**: The restored session MUST be ready to type in, exactly as a session reached by any
+  other navigation is. Reopening the application is not a special case: the user is looking at the
+  session they left, and typing belongs to it.
 
 ### Key Entities
 

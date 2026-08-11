@@ -337,6 +337,22 @@ Right-click a worktree in the sidebar to open its context menu:
 Session labels come from `claude` itself (its session title); until a title is available a
 placeholder is shown.
 
+### Reopening where you left off
+
+The app remembers, per project, which session you had in front of you — and it remembers across
+restarts. Quit with a session open and reopen later, and that session is in front of you again,
+ready to type in, with no clicks.
+
+- It comes back **whether or not it is still running**. Sessions do not keep running while the app
+  is closed, so the usual case is returning to a stopped one: you see its previous output and its
+  state, exactly as if you had clicked it in the sidebar.
+- **Nothing is started for you.** Reopening selects a session; it does not resume a `claude`
+  process. Starting one stays an explicit action.
+- Each project remembers its own, so switching projects takes you to that project's last session.
+- If the session you were on has been **closed**, or its record has gone, the app opens the project
+  as it otherwise would and leaves everything else alone. Closing a session does not wipe the
+  memory — it just means there is nothing to return to.
+
 ### Finding the session you are on
 
 The session the terminal is showing is the **current** session, and the sidebar always says which

@@ -74,6 +74,7 @@ fn catalog_with_shell_session(
         active: Some(project_dir.to_path_buf()),
         sessions,
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
 
     let projects_path = store_dir.join("projects.json");
@@ -258,6 +259,7 @@ fn create_session_adds_a_daemon_owned_session_to_the_catalog() {
         active: Some(project.clone()),
         sessions: BTreeMap::new(),
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
     let projects_path = store.path().join("projects.json");
     JsonFileStore::at(projects_path.clone())

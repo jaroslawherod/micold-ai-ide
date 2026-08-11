@@ -37,6 +37,7 @@ fn seeded_workspace(project_path: &Path) -> Workspace {
         active: Some(project_path.to_path_buf()),
         sessions,
         worktree_names,
+        foreground_by_project: BTreeMap::new(),
     }
 }
 
@@ -117,6 +118,7 @@ fn archived_sessions_are_excluded_from_the_snapshot() {
         active: Some(project_path.to_path_buf()),
         sessions,
         worktree_names: BTreeMap::new(),
+        foreground_by_project: BTreeMap::new(),
     };
     JsonFileStore::at(projects_path.clone())
         .save(&workspace)
@@ -223,4 +225,110 @@ fn persist_round_trips_the_workspace_atomically() {
     let again = JsonFileStore::at(projects_path).load();
     assert_eq!(again.status, LoadStatus::Loaded);
     assert_eq!(again.workspace.projects.len(), 1);
+}
+
+// --- Feature 025: the catalog remembers which session a project was last showing ---------------
+//
+// The daemon is the store's single writer, so it is the only thing that may persist this. The
+// client keeps the same value in memory for its own run and never writes it — `store.rs` has no
+// locking, and a client-side save would clobber whatever the daemon wrote since the client loaded.
+
+/// A catalog holding one project with one session, plus the temp dir keeping its files alive.
+fn catalog_with_one_session() -> (tempfile::TempDir, Catalog, PathBuf, SessionId) {
+    let dir = tempfile::tempdir().unwrap();
+    let projects_path = dir.path().join("projects.json");
+    let settings_path = dir.path().join("settings.json");
+    let project_path = PathBuf::from("/repo");
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(Project {
+        path: project_path.clone(),
+        display_name: "repo".into(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    let session = Session::start_new(SessionLocation::Default);
+    let id = session.id;
+    ws.sessions.insert(project_path.clone(), vec![session]);
+    JsonFileStore::at(projects_path.clone()).save(&ws).unwrap();
+
+    let catalog = Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(settings_path)),
+    );
+    (dir, catalog, project_path, id)
+}
+
+#[test]
+fn recording_the_viewed_session_persists_it() {
+    let (dir, mut catalog, project, id) = catalog_with_one_session();
+
+    let wrote = catalog.remember_foreground(&project, id).unwrap();
+
+    assert!(
+        wrote,
+        "a session that was not remembered before is a change, and is written"
+    );
+    let reloaded = JsonFileStore::at(dir.path().join("projects.json"))
+        .load()
+        .workspace;
+    assert_eq!(
+        reloaded.foreground_by_project.get(&project),
+        Some(&id),
+        "it has to survive the process, which is the whole point — an in-memory record is what \
+         this feature already had"
+    );
+}
+
+#[test]
+fn recording_the_same_session_again_writes_nothing() {
+    let (_dir, mut catalog, project, id) = catalog_with_one_session();
+    assert!(catalog.remember_foreground(&project, id).unwrap());
+
+    let wrote = catalog.remember_foreground(&project, id).unwrap();
+
+    assert!(
+        !wrote,
+        "attach re-sends the current session id and a session start may name the session already \
+         in front of the user. Writing on those rewrites a file holding every session record with \
+         identical content, on every reconnect (FR-001a)"
+    );
+}
+
+#[test]
+fn each_project_is_remembered_independently() {
+    let (dir, mut catalog, project, id) = catalog_with_one_session();
+    let other = PathBuf::from("/elsewhere");
+
+    catalog.remember_foreground(&project, id).unwrap();
+
+    let reloaded = JsonFileStore::at(dir.path().join("projects.json"))
+        .load()
+        .workspace;
+    assert_eq!(reloaded.foreground_by_project.get(&project), Some(&id));
+    assert_eq!(
+        reloaded.foreground_by_project.get(&other),
+        None,
+        "one project's memory is not another's (FR-008)"
+    );
+}
+
+#[test]
+fn nothing_in_the_catalog_erases_a_projects_memory() {
+    let (dir, mut catalog, project, id) = catalog_with_one_session();
+    catalog.remember_foreground(&project, id).unwrap();
+
+    // Archiving the very session the memory names — the durable half of closing it.
+    catalog.archive_worktree_sessions(&project, "").ok();
+
+    let reloaded = JsonFileStore::at(dir.path().join("projects.json"))
+        .load()
+        .workspace;
+    assert_eq!(
+        reloaded.foreground_by_project.get(&project),
+        Some(&id),
+        "the memory is replaced by another session becoming current and by nothing else. Closing \
+         the session it names leaves it in place — restoring already declines a closed session, so \
+         a stale memory costs nothing, where an erased one costs the user their place (FR-005a)"
+    );
 }

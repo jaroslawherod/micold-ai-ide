@@ -81,6 +81,7 @@ fn catalog_with_slow_env(project_dir: &Path, store_dir: &Path, script: &Path) ->
         active: Some(project_dir.to_path_buf()),
         sessions,
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
 
     let projects_path = store_dir.join("projects.json");

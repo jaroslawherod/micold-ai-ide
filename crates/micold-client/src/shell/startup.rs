@@ -134,6 +134,19 @@ fn boot() -> (App, Task<Message>) {
     // sessions); the client adopts them from the welcome catalog on connect (T055).
     if let Some(repo) = core.workspace.active.clone() {
         core.set_worktrees(discover_worktrees(caps.git(), &repo));
+        // Feature 025: land on the session this project was last showing, rather than on the
+        // project overview. The memory came from the store above, beside that project's sessions.
+        //
+        // The same function a project switch calls, deliberately. It resolves the memory, applies
+        // it, and gives the terminal the keyboard — all three wanted here — and everything else it
+        // does is already true at boot: `default_expanded` and `show_agent_worktrees` are their
+        // defaults, and `arm_notice` finds nothing because no session has restarted yet. A
+        // launch-only path would be a second implementation of a sequence the switch already
+        // performs, and the two would drift (research R5).
+        //
+        // Ordering: after `prune_empty_sessions` above, so a memory naming a session with no
+        // conversation on disk resolves to nothing rather than to a session about to be dropped.
+        core.restore_after_activation(&repo);
     }
     (
         App {

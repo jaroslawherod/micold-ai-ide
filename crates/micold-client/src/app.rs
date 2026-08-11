@@ -29,7 +29,7 @@ use micold_core::theme::{
 };
 use micold_core::typeahead::{move_highlight, Direction};
 use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -618,9 +618,6 @@ pub struct State {
     pub terminal_context_menu: Option<(u16, u16)>,
     /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
-    /// The session that was in the foreground for each project, remembered so returning to a
-    /// project restores it. In-memory only; not persisted (research R2).
-    pub foreground_by_project: BTreeMap<PathBuf, SessionId>,
     /// Why entering a project landed on the session it did, from the most recent switch.
     ///
     /// Diagnostic only — nothing renders from it and nothing branches on it. It exists because

@@ -47,6 +47,7 @@ fn catalog_with_session(
         active: Some(project_path.to_path_buf()),
         sessions,
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
 
     let projects_path = data_dir.join("projects.json");

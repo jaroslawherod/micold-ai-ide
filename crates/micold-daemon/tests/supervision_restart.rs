@@ -47,6 +47,7 @@ fn state_with_regular_session(project: &Path) -> (Arc<DaemonState>, SessionId) {
         active: Some(project.to_path_buf()),
         sessions: BTreeMap::from([(project.to_path_buf(), vec![session])]),
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
     let catalog = Catalog::load(
         Box::new(FakeProjectStore::loaded(workspace)),

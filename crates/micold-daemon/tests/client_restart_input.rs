@@ -101,6 +101,7 @@ fn seed_catalog(project_dir: &Path) {
         active: Some(project_dir.to_path_buf()),
         sessions,
         worktree_names: BTreeMap::new(),
+        ..Default::default()
     };
 
     JsonFileStore::default_location()

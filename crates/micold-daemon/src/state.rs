@@ -481,10 +481,35 @@ impl DaemonState {
         }
     }
 
-    /// Record which session a client is viewing for a project (FR-016).
+    /// Record which session a client is viewing for a project (FR-016), and remember it durably
+    /// so reopening the application lands there (feature 025, FR-001).
+    ///
+    /// Two records, deliberately different in lifetime. `client.viewed` is per connection and dies
+    /// with it — it is what the daemon streams output to. The catalog's memory outlives every
+    /// process, and is what a launch reads.
+    ///
+    /// **Only a `Some` is remembered.** A report of no session does not clear the memory: the
+    /// pointer goes to nothing for reasons the user never took — closing a session, an internal
+    /// cleanup — and erasing the memory on those would silently cost them the place they would
+    /// have returned to. A memory naming a session that can no longer be shown is harmless,
+    /// because restoring declines it (feature 025, FR-005a).
+    ///
+    /// A write failure is logged rather than propagated: losing the memory for one project is not
+    /// a reason to fail the message that reports it, and the session the user is viewing is
+    /// unaffected either way.
     pub fn set_viewed(&self, id: ClientId, project: PathBuf, session: Option<SessionId>) {
-        if let Some(client) = self.lock().clients.get_mut(&id) {
-            client.viewed.insert(project, session);
+        let mut inner = self.lock();
+        if let Some(client) = inner.clients.get_mut(&id) {
+            client.viewed.insert(project.clone(), session);
+        }
+        if let Some(session) = session {
+            if let Err(err) = inner.catalog.remember_foreground(&project, session) {
+                tracing::warn!(
+                    project = %project.display(),
+                    %err,
+                    "could not persist the last-used session for this project"
+                );
+            }
         }
     }
 
