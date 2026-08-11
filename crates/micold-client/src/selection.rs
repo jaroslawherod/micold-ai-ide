@@ -11,6 +11,7 @@
 //! yields a line's display text (one `char` per cell), so the module stays decoupled from the grid
 //! cache's concrete type. A `None` from the provider is treated as an empty line.
 
+use crate::features::Outcome;
 use micold_core::protocol::grid::LineId;
 
 /// A single selection endpoint: an absolute line identity plus a cell column.
@@ -161,6 +162,25 @@ impl Selection {
         }
         out
     }
+}
+
+/// What copying the current selection asks of the clipboard, or nothing to do (feature 021, T045 —
+/// FR-015a, contract C2).
+///
+/// The decision lives here, with the selection: whether there *is* a selection, and whether it
+/// resolves to text worth writing. Before this the terminal's copy action made both calls inline in
+/// the shell, one line above the `iced::clipboard::write` it guarded — which is the arrangement
+/// FR-017 objects to, since it puts a feature's rule where nothing can reach it without a window.
+///
+/// Returning [`Outcome::ClipboardWrite`] rather than performing the write is FR-015a: the operation
+/// returns a deferred task rather than a value, so it cannot be a synchronous service capability,
+/// and an effect request the shell interprets is the sanctioned alternative.
+pub fn copy_request(
+    selection: Option<&Selection>,
+    line_text: impl Fn(LineId) -> Option<String>,
+) -> Option<Outcome> {
+    let text = selection?.text(line_text);
+    (!text.is_empty()).then_some(Outcome::ClipboardWrite(text))
 }
 
 /// The line's display text as a per-cell `char` vector; a missing line is an empty line.

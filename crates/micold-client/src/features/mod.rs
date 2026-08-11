@@ -14,6 +14,31 @@
 //!
 //! Modules are declared here as each is extracted from `crate::app`, one migration step at a time.
 
+/// A consequence a feature returns rather than applies (FR-021).
+///
+/// **One variant so far, and it is here in Phase 5 rather than at T065 because FR-015a needs it.**
+/// Clipboard access cannot be a service capability: all of its call sites return an `iced::Task`
+/// rather than a value, so a synchronous port cannot wrap them without blocking. FR-015a's
+/// alternative for exactly that case is an explicit effect request in this vocabulary, *interpreted
+/// by the shell*.
+///
+/// That is also why introducing it here is not the Tier 3 work SC-004b's checkpoint forbids.
+/// FR-021 sits under "cross-feature coordination" because its subject there is a feature reducer
+/// returning a consequence for the **root** to interpret (FR-022) and route to another feature.
+/// None of that arrives with this variant: there is no root interpreter, no reducer split, and no
+/// feature learns anything about another. T065 adds `SessionsClosed`, `OverlayDismissed` and
+/// `NotificationRaised` along with the root's draining interpreter — it extends this enum rather
+/// than introducing it, which is the one edit its text needs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Outcome {
+    /// Put `text` on the system clipboard.
+    ///
+    /// The shell translates this to `iced::clipboard::write` and decides nothing on the way
+    /// (contract C3) — whether anything should be written at all was settled by the feature that
+    /// emitted the request.
+    ClipboardWrite(String),
+}
+
 pub mod connection;
 pub mod help;
 pub mod notifications;
