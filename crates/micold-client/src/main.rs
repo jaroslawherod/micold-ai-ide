@@ -34,7 +34,6 @@ use micold_core::protocol::grid::LineId;
 use micold_core::protocol::messages::{
     CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, SessionProcess, WireLifecycle,
 };
-use micold_core::provider::AiCliProvider;
 use micold_core::selector::{Selector, SelectorStatus};
 use micold_core::session::{
     Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
@@ -469,34 +468,6 @@ pub fn main() -> iced::Result {
     shell::startup::run()
 }
 
-// The client does NOT write `projects.json`. The daemon's Catalog is its single writer (data-model
-// C1) and `store.rs` has no locking, so a client-side save silently clobbers whatever the daemon
-// wrote since this process loaded — with the client's own copy, in which `mode` means something
-// different.
-//
-// That was the "worktree session starts with a plain terminal" bug: the client's `mode` records
-// which *pane* is displayed, while the daemon's records which *process* it spawns as the session's
-// Primary. Persisting a client-side `Regular` toggle into the daemon's slot made `start_session`
-// launch a plain shell as an AI-CLI session's only process. There is no `SetMode` RPC, so the mode
-// simply does not persist across restarts — every session comes back attached to its AI CLI, which
-// is also what `reconcile_catalog` already assumes when it adopts a daemon-reported session.
-//
-// The remaining local writes are settings (`persist_settings`), a separate file the daemon reads
-// but this client still owns.
-
-/// Remove sessions that have no `claude` conversation on disk (empty sessions).
-fn prune_empty_sessions(
-    provider: &dyn AiCliProvider,
-    workspace: &mut micold_core::workspace::Workspace,
-) {
-    for (project_path, sessions) in workspace.sessions.iter_mut() {
-        sessions.retain(|s| session_has_conversation(provider, project_path, s));
-    }
-    workspace
-        .sessions
-        .retain(|_, sessions| !sessions.is_empty());
-}
-
 /// Resolve a session's working directory from `repo` (the project root) and its
 /// [`SessionLocation`] (feature 010, research.md R2). Thin wrapper around
 /// [`SessionLocation::cwd`] — the pure library method is the single authoritative
@@ -506,36 +477,6 @@ fn prune_empty_sessions(
 /// binary go through this wrapper.
 fn session_cwd_for_location(repo: &Path, location: &SessionLocation) -> PathBuf {
     location.cwd(repo)
-}
-
-/// Whether the AI CLI provider has recorded a conversation transcript for this session
-/// (research R6, FR-020a). Routed through the provider seam (FR-024, bugfix BUG-002).
-/// Cwd site 1/5 (research.md R2).
-fn session_has_conversation(
-    provider: &dyn AiCliProvider,
-    project_path: &Path,
-    session: &micold_core::session::Session,
-) -> bool {
-    let cwd = session_cwd_for_location(project_path, &session.location);
-    let Some(config) = provider.config_dir() else {
-        // Cannot determine the provider config dir — do not drop the session on uncertainty.
-        return true;
-    };
-    provider.has_recorded_conversation(&config, &cwd, session.id.0)
-}
-
-fn persist_settings(caps: &Capabilities, core: &mut State) {
-    if let Some(store) = caps.settings() {
-        // Preserve the persisted scrollback limit (feature 006) and environment-include settings
-        // (feature 011) when saving a theme change — this function only ever changes `theme`.
-        let existing = store.load().settings;
-        if let Err(err) = store.save(&Settings {
-            theme: core.theme_pref,
-            ..existing
-        }) {
-            core.notify_error(format!("Couldn't save your settings: {err}"));
-        }
-    }
 }
 
 fn update(app: &mut App, message: Message) -> Task<Message> {
@@ -1306,7 +1247,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::ThemePreferenceChanged(_) | Message::ThemeModeCycled => {
             app.core.update(message);
-            persist_settings(&app.caps, &mut app.core);
+            shell::persist::persist_settings(app.caps.settings(), &mut app.core);
             Task::none()
         }
         // Validate the form, then create the worktree (incl. any submodule fetch) via git,
@@ -2702,71 +2643,6 @@ mod tests {
     use super::*;
     use micold_client::features::settings::SettingsDraft;
     use micold_core::protocol::messages::{ActivitySignal, ProjectSnapshot, SessionSummary};
-    use micold_core::provider::FakeAiCliProvider;
-    use micold_core::session::Session;
-    use micold_core::workspace::Workspace;
-
-    /// What T049 actually bought, on the one rule that had no test at all.
-    ///
-    /// Boot drops sessions the AI CLI has no recorded conversation for, so a restart never resumes
-    /// a nonexistent one. Before the provider became a capability, `session_has_conversation`
-    /// reached `ClaudeProvider` and the user's real home directory, so exercising this meant
-    /// writing transcripts into `~/.claude` — which is why it was never exercised. It is a
-    /// substitution away now.
-    #[test]
-    fn boot_drops_a_session_the_provider_has_no_conversation_for() {
-        let project = PathBuf::from("/project");
-        let kept = Session::start_new(SessionLocation::Default);
-        let dropped = Session::start_new(SessionLocation::Default);
-
-        // The transcript path is the provider's to derive, so ask it rather than restate it here.
-        let config = PathBuf::from("/config");
-        let transcript = FakeAiCliProvider::new().transcript_path(&config, &project, kept.id.0);
-        let provider = FakeAiCliProvider::new()
-            .with_config_dir(&config)
-            .with_transcript(&transcript, "a recorded conversation");
-
-        let mut workspace = Workspace::empty();
-        workspace
-            .sessions
-            .insert(project.clone(), vec![kept.clone(), dropped.clone()]);
-
-        prune_empty_sessions(&provider, &mut workspace);
-
-        let surviving: Vec<_> = workspace.sessions[&project].iter().map(|s| s.id).collect();
-        assert_eq!(
-            surviving,
-            vec![kept.id],
-            "the session with a transcript stays and the empty one goes"
-        );
-    }
-
-    /// The uncertainty rule, which is the half that would quietly delete a user's work.
-    ///
-    /// When the provider cannot say where its config lives, `session_has_conversation` keeps the
-    /// session. An implementation that treated "cannot tell" as "no conversation" would prune
-    /// every session on a machine where the config directory does not resolve.
-    #[test]
-    fn boot_keeps_every_session_when_the_provider_cannot_locate_its_config() {
-        let project = PathBuf::from("/project");
-        let session = Session::start_new(SessionLocation::Default);
-
-        // No `with_config_dir`: `config_dir()` answers `None`.
-        let provider = FakeAiCliProvider::new();
-
-        let mut workspace = Workspace::empty();
-        workspace
-            .sessions
-            .insert(project.clone(), vec![session.clone()]);
-
-        prune_empty_sessions(&provider, &mut workspace);
-
-        assert_eq!(
-            workspace.sessions[&project].len(),
-            1,
-            "uncertainty must not drop a session"
-        );
-    }
 
     // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
     // own stderr, e.g. naming which submodule failed and why) was destructured with `..` and
