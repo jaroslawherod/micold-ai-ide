@@ -185,3 +185,128 @@ impl AiCliProvider for ClaudeProvider {
         latest
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// In-memory fake for unit tests. Public (not `#[cfg(test)]`) so integration tests in
+// `tests/` can share it, matching `FakeGit` (FR-019, feature 021 T048). Pure — no process,
+// no transcript on disk.
+// ---------------------------------------------------------------------------------------
+
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+
+/// An in-memory [`AiCliProvider`] for tests: canned paths and titles, and a record of the
+/// launches it was asked for.
+///
+/// The point of faking this one is not the path arithmetic — [`ClaudeProvider`]'s own tests cover
+/// that — but everything *above* the seam: that session wiring asks the provider rather than
+/// hardcoding `claude`, and asks it with the right id and mode. So the fake answers with a
+/// distinctive command name and logs every `launch_args` call.
+///
+/// `RefCell`, unlike the store fakes: no consumer boxes a provider across threads.
+#[derive(Debug, Default)]
+pub struct FakeAiCliProvider {
+    inner: RefCell<FakeProviderState>,
+}
+
+#[derive(Debug, Default)]
+struct FakeProviderState {
+    /// The configured base directory, or `None` for "cannot be determined".
+    config_dir: Option<PathBuf>,
+    /// Titles keyed by transcript contents, consulted by `parse_title`.
+    titles: BTreeMap<String, String>,
+    /// Transcript contents by path — what the fake has "on disk".
+    transcripts: BTreeMap<PathBuf, String>,
+    /// Every `(session_id, mode)` passed to `launch_args`, in call order.
+    launches: Vec<(Uuid, LaunchMode)>,
+}
+
+impl FakeAiCliProvider {
+    /// A provider with no config directory and no recorded conversations.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The directory `config_dir` reports.
+    pub fn with_config_dir(self, dir: impl Into<PathBuf>) -> Self {
+        self.inner.borrow_mut().config_dir = Some(dir.into());
+        self
+    }
+
+    /// Make `parse_title` answer `title` for exactly these transcript contents.
+    pub fn with_title(self, transcript: &str, title: &str) -> Self {
+        self.inner
+            .borrow_mut()
+            .titles
+            .insert(transcript.to_string(), title.to_string());
+        self
+    }
+
+    /// Place a transcript at `path` — what
+    /// [`AiCliProvider::has_recorded_conversation`] and `read_title` would find on disk.
+    pub fn with_transcript(self, path: impl Into<PathBuf>, contents: &str) -> Self {
+        self.inner
+            .borrow_mut()
+            .transcripts
+            .insert(path.into(), contents.to_string());
+        self
+    }
+
+    /// Every `(session_id, mode)` passed to `launch_args`, in call order.
+    pub fn launches(&self) -> Vec<(Uuid, LaunchMode)> {
+        self.inner.borrow().launches.clone()
+    }
+}
+
+impl AiCliProvider for FakeAiCliProvider {
+    fn command(&self) -> &'static str {
+        // Deliberately not `claude`: a caller that hardcoded the real name would still pass a
+        // test that asserted the real name, and this is the difference.
+        "fake-ai-cli"
+    }
+
+    fn launch_args(&self, session_id: Uuid, mode: LaunchMode) -> Vec<String> {
+        self.inner.borrow_mut().launches.push((session_id, mode));
+        let flag = match mode {
+            LaunchMode::Fresh => "--fresh",
+            LaunchMode::Resume => "--resume",
+        };
+        vec![flag.to_string(), session_id.to_string()]
+    }
+
+    fn config_dir(&self) -> Option<PathBuf> {
+        self.inner.borrow().config_dir.clone()
+    }
+
+    fn transcript_path(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> PathBuf {
+        self.transcript_dir(config_dir, cwd)
+            .join(format!("{session_id}.jsonl"))
+    }
+
+    fn transcript_dir(&self, config_dir: &Path, cwd: &Path) -> PathBuf {
+        // One flat, reversible encoding, so a test can predict the path without repeating the
+        // real provider's escaping rules.
+        config_dir
+            .join("transcripts")
+            .join(cwd.to_string_lossy().replace(['/', '\\'], "_"))
+    }
+
+    fn parse_title(&self, transcript: &str) -> Option<String> {
+        self.inner.borrow().titles.get(transcript).cloned()
+    }
+
+    fn has_recorded_conversation(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> bool {
+        // Overridden, like `read_title` below, because the default consults the real filesystem —
+        // the one thing a fake exists to avoid. A fake that inherited them would still answer
+        // plausibly (`false`, `None`) while quietly making a syscall, which is how SC-005's "zero
+        // real filesystem access" gets satisfied on paper and not in fact.
+        let path = self.transcript_path(config_dir, cwd, session_id);
+        self.inner.borrow().transcripts.contains_key(&path)
+    }
+
+    fn read_title(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> Option<String> {
+        let path = self.transcript_path(config_dir, cwd, session_id);
+        let contents = self.inner.borrow().transcripts.get(&path).cloned()?;
+        self.parse_title(&contents)
+    }
+}

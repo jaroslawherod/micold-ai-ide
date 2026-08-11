@@ -14,26 +14,10 @@ use micold_core::project::{Availability, Project};
 use micold_core::session::{
     Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,
 };
-use micold_core::settings::JsonFileSettingsStore;
-use micold_core::store::{LoadOutcome, LoadStatus, ProjectStore};
+use micold_core::settings::FakeSettingsStore;
+use micold_core::store::FakeProjectStore;
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
-
-/// A project store that serves a fixed in-memory workspace — the durable records a restarted service
-/// would reload. (`Session` is not `Serialize`, so this is how a test injects loaded sessions.)
-struct FakeStore(Workspace);
-
-impl ProjectStore for FakeStore {
-    fn load(&self) -> LoadOutcome {
-        LoadOutcome {
-            workspace: self.0.clone(),
-            status: LoadStatus::Loaded,
-        }
-    }
-    fn save(&self, _workspace: &Workspace) -> std::io::Result<()> {
-        Ok(())
-    }
-}
 
 /// A restored (loaded-from-disk) session — `Idle`, as every durable record loads.
 fn restored(id: SessionId, mode: TerminalMode) -> Session {
@@ -41,7 +25,7 @@ fn restored(id: SessionId, mode: TerminalMode) -> Session {
 }
 
 /// A catalog freshly loaded from `sessions` under `project` — the just-restarted service's state.
-fn loaded_catalog(project: &Path, sessions: Vec<Session>, settings_path: &Path) -> Catalog {
+fn loaded_catalog(project: &Path, sessions: Vec<Session>) -> Catalog {
     let workspace = Workspace {
         projects: vec![Project::new(
             project.to_path_buf(),
@@ -53,8 +37,8 @@ fn loaded_catalog(project: &Path, sessions: Vec<Session>, settings_path: &Path) 
         worktree_names: BTreeMap::new(),
     };
     Catalog::load(
-        Box::new(FakeStore(workspace)),
-        Box::new(JsonFileSettingsStore::at(settings_path.to_path_buf())),
+        Box::new(FakeProjectStore::loaded(workspace)),
+        Box::new(FakeSettingsStore::new()),
     )
 }
 
@@ -83,7 +67,6 @@ fn lifecycle_of(catalog: &Catalog, id: SessionId) -> SessionLifecycle {
 #[test]
 fn restart_presents_previously_running_sessions_as_interrupted_resumable() {
     let project = tempfile::tempdir().unwrap();
-    let settings = tempfile::tempdir().unwrap();
 
     // Three durable records, all loaded `Idle`: one AI-CLI session that had a conversation (was
     // running), one AI-CLI session with none (created but never started / deliberately empty), and a
@@ -98,7 +81,6 @@ fn restart_presents_previously_running_sessions_as_interrupted_resumable() {
             restored(never_started, TerminalMode::AiCli),
             restored(shell, TerminalMode::Regular),
         ],
-        &settings.path().join("settings.json"),
     );
 
     // Everything loads Idle before the reload step runs.
@@ -144,7 +126,6 @@ fn present_interrupted_resumable_never_overrides_a_running_or_failed_session() {
     // (e.g. it somehow reads Running/Failed) must not be reset — `present_interrupted_resumable`
     // marks only `Idle`, so an always-true predicate still leaves non-Idle sessions untouched.
     let project = tempfile::tempdir().unwrap();
-    let settings = tempfile::tempdir().unwrap();
     let failed = SessionId::new();
     let mut sessions = vec![restored(failed, TerminalMode::AiCli)];
     // Force it Failed via the crash path (three unexpected exits).
@@ -153,11 +134,7 @@ fn present_interrupted_resumable_never_overrides_a_running_or_failed_session() {
     }
     assert_eq!(sessions[0].lifecycle, SessionLifecycle::Failed);
 
-    let mut catalog = loaded_catalog(
-        project.path(),
-        sessions,
-        &settings.path().join("settings.json"),
-    );
+    let mut catalog = loaded_catalog(project.path(), sessions);
     let marked = catalog.present_interrupted_resumable(|_id, _cwd, _mode| true);
 
     assert_eq!(marked, 0);
@@ -198,7 +175,6 @@ fn session_start_is_the_single_explicit_resume_of_an_interrupted_session() {
 #[test]
 fn a_session_with_a_conversation_is_restored_to_the_ai_cli_despite_a_regular_mode() {
     let project = tempfile::tempdir().unwrap();
-    let settings = tempfile::tempdir().unwrap();
 
     let damaged = SessionId::new();
     let real_shell = SessionId::new();
@@ -208,7 +184,6 @@ fn a_session_with_a_conversation_is_restored_to_the_ai_cli_despite_a_regular_mod
             restored(damaged, TerminalMode::Regular),
             restored(real_shell, TerminalMode::Regular),
         ],
-        &settings.path().join("settings.json"),
     );
 
     // Only the damaged one has an AI-CLI conversation on disk.

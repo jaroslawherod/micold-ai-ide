@@ -24,7 +24,7 @@ use micold_core::frame_probe::{
     FrameProbe, ProbeConfig, Scene, SceneFacts, ENV_VAR as FRAME_PROBE_ENV,
     SCENE_ENV_VAR as FRAME_PROBE_SCENE_ENV,
 };
-use micold_core::fs_scan::{FolderScanner, StdFolderScanner};
+use micold_core::fs_scan::{FolderBrowser, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
 use micold_core::os_theme::OsThemeProbe;
 use micold_core::protocol::grid::LineId;

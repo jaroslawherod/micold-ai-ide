@@ -108,7 +108,8 @@ pub fn sources_under(root: &Path) -> BTreeMap<String, String> {
     out
 }
 
-/// The seven service ports (spec §"What already exists"): the I/O needs the render-free core
+/// The service ports (spec §"What already exists" listed seven; the count moves as capabilities
+/// are declared and split): the I/O needs the render-free core
 /// declares and the shell supplies.
 ///
 /// Here rather than in the guard that first needed it, because two guards now do — T041's
@@ -119,6 +120,9 @@ pub const PORTS: &[&str] = &[
     "ProjectStore",
     "SettingsStore",
     "FolderScanner",
+    // Split out of `FolderScanner` at T048 (FR-016): every consumer that took the boundary as a
+    // trait asked only the two predicates, so listing became its own capability.
+    "FolderBrowser",
     "TerminalBackend",
     "TerminalHandle",
     "AiCliProvider",

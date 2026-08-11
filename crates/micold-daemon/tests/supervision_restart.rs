@@ -17,30 +17,13 @@ use alacritty_terminal::grid::Dimensions;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
 use micold_core::session::{Session, SessionId, SessionLocation, TerminalMode};
-use micold_core::settings::JsonFileSettingsStore;
-use micold_core::store::{LoadOutcome, LoadStatus, ProjectStore};
+use micold_core::settings::FakeSettingsStore;
+use micold_core::store::FakeProjectStore;
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
-
-/// A project store that serves a fixed in-memory workspace. `Session` is not `Serialize`, so this is
-/// how a test injects a `Regular`-mode session (whose respawn uses the platform shell we control)
-/// without going through disk.
-struct FakeStore(Workspace);
-
-impl ProjectStore for FakeStore {
-    fn load(&self) -> LoadOutcome {
-        LoadOutcome {
-            workspace: self.0.clone(),
-            status: LoadStatus::Loaded,
-        }
-    }
-    fn save(&self, _workspace: &Workspace) -> std::io::Result<()> {
-        Ok(())
-    }
-}
 
 /// `sh -c "<script>"` — a real, short-lived child whose exit status we choose.
 fn sh(script: &str) -> CommandBuilder {
@@ -51,10 +34,7 @@ fn sh(script: &str) -> CommandBuilder {
 }
 
 /// A daemon hosting one `Regular`-mode session at the project root, and its id.
-fn state_with_regular_session(
-    project: &Path,
-    settings_path: &Path,
-) -> (Arc<DaemonState>, SessionId) {
+fn state_with_regular_session(project: &Path) -> (Arc<DaemonState>, SessionId) {
     let mut session = Session::start_new(SessionLocation::Default);
     session.set_mode(TerminalMode::Regular);
     let id = session.id;
@@ -69,8 +49,8 @@ fn state_with_regular_session(
         worktree_names: BTreeMap::new(),
     };
     let catalog = Catalog::load(
-        Box::new(FakeStore(workspace)),
-        Box::new(JsonFileSettingsStore::at(settings_path.to_path_buf())),
+        Box::new(FakeProjectStore::loaded(workspace)),
+        Box::new(FakeSettingsStore::new()),
     );
     (Arc::new(DaemonState::new(catalog)), id)
 }
@@ -96,9 +76,7 @@ fn wait_dead(pty: &PtySession) {
 #[test]
 fn an_unattended_clean_exit_stops_and_drops_the_session() {
     let project = tempfile::tempdir().unwrap();
-    let settings = tempfile::tempdir().unwrap();
-    let (state, id) =
-        state_with_regular_session(project.path(), &settings.path().join("settings.json"));
+    let (state, id) = state_with_regular_session(project.path());
 
     // A live primary that exits cleanly (status 0), with no client ever attached.
     let handle = state.register_session(PtySession::spawn(id, sh("exit 0"), 100, None).unwrap());
@@ -121,9 +99,7 @@ fn an_unattended_clean_exit_stops_and_drops_the_session() {
 #[test]
 fn an_unattended_crash_triggers_a_restart() {
     let project = tempfile::tempdir().unwrap();
-    let settings = tempfile::tempdir().unwrap();
-    let (state, id) =
-        state_with_regular_session(project.path(), &settings.path().join("settings.json"));
+    let (state, id) = state_with_regular_session(project.path());
 
     // A live primary that crashes (nonzero), with no client attached.
     let handle = state.register_session(PtySession::spawn(id, sh("exit 1"), 100, None).unwrap());
@@ -148,9 +124,7 @@ fn a_restart_that_survives_resets_to_running() {
     // Closes the L5 gap: a respawned process that stays up must return to Running (clearing the
     // crash-loop counter), not read as Restarting forever.
     let project = tempfile::tempdir().unwrap();
-    let settings = tempfile::tempdir().unwrap();
-    let (state, id) =
-        state_with_regular_session(project.path(), &settings.path().join("settings.json"));
+    let (state, id) = state_with_regular_session(project.path());
 
     // Crash once → the next tick respawns the platform shell, which stays alive on its PTY.
     let handle = state.register_session(PtySession::spawn(id, sh("exit 1"), 100, None).unwrap());
@@ -179,9 +153,7 @@ fn a_restart_that_survives_resets_to_running() {
 #[test]
 fn a_respawn_comes_back_at_the_sessions_recorded_size() {
     let project = tempfile::tempdir().unwrap();
-    let settings = tempfile::tempdir().unwrap();
-    let (state, id) =
-        state_with_regular_session(project.path(), &settings.path().join("settings.json"));
+    let (state, id) = state_with_regular_session(project.path());
 
     // A client sized this session, then its process crashed.
     state.resize_session(id, 200, 55);

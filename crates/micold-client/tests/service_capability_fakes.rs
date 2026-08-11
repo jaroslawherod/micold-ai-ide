@@ -1,22 +1,20 @@
 //! Every capability has a fake, something exercises it, and none is wider than its consumers
 //! (feature 021, T042 — FR-016, FR-019, SC-005).
 //!
-//! # Three obligations, two of them not yet met
+//! # Three obligations, all met as of T048
 //!
 //! **FR-019 — every capability has a fake, in the core, beside the capability it satisfies.** Three
-//! of seven do (`FakeGit`, `FakeTerminalBackend`, `FakeHandle`). T048 adds the rest; until then
-//! [`every_capability_has_a_fake_in_the_core`] is `#[ignore]`d rather than softened, so the
-//! requirement is written at the strength it should pass at and `cargo test` reports it outstanding
-//! on every run. Same arrangement as T041's FR-018 clause, and for the same reason.
+//! of seven did when T042 was written; T048 added the other four and split a fifth capability out,
+//! so all of them do. The `#[ignore]` came off with the last missing fake.
 //!
 //! **SC-005 — at least one test exercises real behaviour through each fake.** A fake nothing uses
 //! is not evidence that a capability is fakeable; it is an unused type that happens to compile.
-//! Checked for the fakes that exist, so this one passes today and keeps passing as T048 adds more.
 //!
 //! **FR-016 — narrowness.** The contract states the test exactly: *"if a test must implement a
 //! method it does not exercise merely to satisfy the trait, the capability is too wide and must be
 //! split"* (`contracts/service-capabilities.md`). That is what
-//! [`no_test_is_forced_to_supply_an_operation_it_does_not_use`] checks, and it fails today.
+//! [`no_test_is_forced_to_supply_an_operation_it_does_not_use`] checks. It failed with six
+//! violations when written; it passes now, and how it came to pass is the next section.
 //!
 //! # How "forced to supply, does not exercise" is detected
 //!
@@ -25,28 +23,36 @@
 //! consult what it is: it returns a constant. That is not a fake behaviour, it is a signature being
 //! satisfied.
 //!
-//! The distinction is visible in one file. `tests/support/mod.rs`'s `FakeScanner` implements
-//! `is_git_repo` and `is_available` by reading `self.git` / `self.available` — configurable, so a
-//! test can drive them — and `list_subdirs` as `Ok(vec![])`, which no test can influence or observe.
-//! The first two are exercised; the third is the trait asking for a method nobody wanted.
-//!
 //! Scoped to implementations written **in tests**, which is what the contract's wording is about. A
 //! shared fake in the core implementing everything once is the relief FR-019 exists to provide, not
 //! a violation of FR-016 — nobody is forced to write it a second time.
 //!
-//! # A known blind spot
+//! # How the six violations went away, and why only one was a real width problem
 //!
-//! The scan is line-based, so an `impl` header rustfmt has wrapped across lines
-//! (`impl Port` / `    for Type`) is invisible to it. That is not hypothetical — it is what a long
-//! enough type name produces. [`the_scan_finds_the_implementations_that_exist`] is what notices:
-//! the count drops and the guard fails rather than the narrowness check quietly passing on a
-//! shorter list. Verified by wrapping one, which took the count from six to five and failed.
+//! T042's text: *"A capability failing the narrowness check MUST be split rather than the check
+//! relaxed."* T048 answered both findings, and they turned out to be different problems.
 //!
-//! # What a failure means, and what it does not license
+//! `FolderScanner` **was** too wide, in production and not just in tests: every consumer that took
+//! it as a trait asked only `is_git_repo` and `is_available`, while the sole caller of
+//! `list_subdirs` reached for `StdFolderScanner` concretely. It was split (`FolderBrowser`).
 //!
-//! T042's own text: *"A capability failing the narrowness check MUST be split rather than the check
-//! relaxed."* The failures below are therefore findings about `ProjectStore` and `FolderScanner`,
-//! for T046/T048 to answer — not a reason to loosen the predicate.
+//! `ProjectStore` was **not**. Its only trait consumer, the daemon's `Catalog`, exercises all three
+//! operations. The three `FakeStore`s that had to stub `save` were hand-written because no shared
+//! fake existed — the coverage gap, showing up as a width symptom. Deleting them in favour of
+//! `FakeProjectStore` is what fixed it, and splitting a capability its consumer genuinely uses
+//! would have made the codebase worse to score a check green.
+//!
+//! # The vacuity guard had to change, because T048 emptied the thing it counted
+//!
+//! [`the_scan_finds_the_implementations_that_exist`] originally required at least six port
+//! implementations under `tests/`, so a scan blinded by a line-wrapped `impl` header
+//! (`impl Port` / `    for Type` — the known blind spot, and what a long enough type name
+//! produces) would fail loudly instead of narrowing the list. There are now **zero**: every
+//! hand-rolled fake is gone, which is the point of T048. A count of violations-era implementations
+//! cannot guard a check whose correct answer is an empty list, so the guard moved to where it
+//! cannot go stale — [`the_detector_can_tell_a_stub_from_a_behaviour`] runs `methods_of` over a
+//! source with one of each and asserts it classifies both. That is a stronger guard than the
+//! count: it fails if the parser breaks, not merely if the corpus shrinks.
 
 mod inventory;
 
@@ -130,15 +136,37 @@ struct Method {
     stub: bool,
 }
 
+/// Where the `impl <port> for <ty>` block begins, tolerating a fully-qualified port path.
+///
+/// Reads the header the same way [`inventory::port_impls_under`] does — take what sits between
+/// `impl` and `for`, keep the last `::` segment — because the two disagreeing is a hole rather than
+/// a difference. It was one: `port_impls_under` reported
+/// `impl micold_core::fs_scan::FolderScanner for X` as a `FolderScanner` implementation, while a
+/// reconstructed `impl FolderScanner for X` needle found nothing, so the narrowness check silently
+/// examined no methods and passed. Found by probing T048 with exactly that fake.
+fn impl_block_start(code: &str, port: &str, ty: &str) -> Option<usize> {
+    for (at, _) in code.match_indices(&format!(" for {ty}")) {
+        let Some(head_start) = code[..at].rfind("impl ") else {
+            continue;
+        };
+        let head = &code[head_start + "impl ".len()..at];
+        // A `{` in between means the `impl` found is an earlier block, not this header's.
+        if head.contains('{') {
+            continue;
+        }
+        if head.rsplit("::").next().unwrap_or(head).trim() == port {
+            return Some(head_start);
+        }
+    }
+    None
+}
+
 /// The methods of the `impl <port> for <ty>` block in `code`, if it has one.
 ///
 /// A brace-depth scan rather than a regex: a method body contains braces, and stopping at the first
 /// `}` would read one method and call it the whole block.
 fn methods_of(code: &str, port: &str, ty: &str) -> Vec<Method> {
-    let Some(at) = code.find(&format!("impl {port} for {ty}")).or_else(|| {
-        code.find(&format!(" {port} for {ty}"))
-            .and_then(|i| code[..i].rfind("impl "))
-    }) else {
+    let Some(at) = impl_block_start(code, port, ty) else {
         return Vec::new();
     };
     let body = &code[at..];
@@ -216,11 +244,13 @@ fn methods_of(code: &str, port: &str, ty: &str) -> Vec<Method> {
 
 #[test]
 fn the_scan_finds_the_implementations_that_exist() {
-    // The vacuity guard. Every test here iterates a scan of source text, so a scan that matched
-    // nothing — because an `impl` was reformatted or a directory moved — would pass them all
-    // without looking at anything.
+    // The vacuity guard for the *core* scan, which the coverage check iterates. A scan that
+    // matched nothing — an `impl` reformatted, a directory moved — would pass it without looking
+    // at anything.
+    //
+    // The corresponding claim about the `tests/` scan is no longer a count: T048 drove it to zero
+    // on purpose. See `the_detector_can_tell_a_stub_from_a_behaviour`.
     let core = core_port_impls();
-    let in_tests = test_port_impls();
 
     assert!(
         core.iter().any(|i| i.ty == "GitCli"),
@@ -228,28 +258,77 @@ fn the_scan_finds_the_implementations_that_exist() {
     );
     assert!(
         core.iter().any(|i| i.ty == "FakeGit"),
-        "the core scan lost `FakeGit`, the fake the other six are meant to match: {core:?}"
+        "the core scan lost `FakeGit`, the fake the others are meant to match: {core:?}"
     );
-    let seen: Vec<String> = in_tests
-        .iter()
-        .map(|i| format!("{}:{} for {}", shown(&i.file), i.port, i.ty))
-        .collect();
     assert!(
-        in_tests.len() >= 6,
-        "the tests scan found {} port implementations; there were six when T042 was written, and a \
-         scan that finds fewer makes the narrowness check pass on a short list.\n\nThe known \
-         blind spot is a line-wrapped `impl` header (`impl Port\\n    for Type`), which the \
-         line-based scan cannot see — this count is what notices.\n  - {}",
-        in_tests.len(),
-        seen.join("\n  - ")
+        !test_sources().is_empty(),
+        "the tests scan read no source files at all, so the narrowness check below cannot see a \
+         violation even if one is written"
     );
 }
 
 #[test]
-#[ignore = "FR-019 is not met until T048 adds the missing fakes; run with --ignored to see which"]
+fn the_detector_can_tell_a_stub_from_a_behaviour() {
+    // What `no_test_is_forced_to_supply_an_operation_it_does_not_use` rests on, now that its
+    // correct answer is an empty list. Run over a source with one of each, so it fails if the
+    // parser breaks rather than only if the corpus shrinks.
+    //
+    // Both methods are in one `impl` block deliberately: the block scan has to walk past the first
+    // method's body, and a parser that stopped at the first `}` would report only `is_git_repo`
+    // and call the block finished.
+    //
+    // The fixture names `Capability`, not a real port, because `port_impls_under` reads this
+    // file's own text — and with a real port name it found this literal and reported the fixture
+    // as a live violation. Which is the scan proving it is not vacuous, on its first run.
+    let code = "\
+impl Capability for Probe {
+    fn is_git_repo(&self, _dir: &Path) -> bool {
+        self.git
+    }
+    fn is_available(&self, _dir: &Path) -> bool {
+        true
+    }
+}
+";
+    let methods = methods_of(code, "Capability", "Probe");
+    let names: Vec<&str> = methods.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec!["is_git_repo", "is_available"],
+        "the block scan did not read both methods"
+    );
+
+    // A fully-qualified header must resolve to the same block. `port_impls_under` strips the path
+    // and reports the implementation either way, so a `methods_of` that only matched the bare form
+    // would examine nothing and let a wide fake through — which it did, until a probe wrote one.
+    let qualified = code.replace("impl Capability", "impl some::deep::path::Capability");
+    let qualified_names: Vec<String> = methods_of(&qualified, "Capability", "Probe")
+        .into_iter()
+        .map(|m| m.name)
+        .collect();
+    assert_eq!(
+        qualified_names, names,
+        "a fully-qualified `impl` header found no methods; the narrowness check would pass on it \
+         no matter how much it stubbed"
+    );
+
+    let by_name = |want: &str| methods.iter().find(|m| m.name == want).expect(want).stub;
+    assert!(
+        !by_name("is_git_repo"),
+        "a method that consults `self` is configurable behaviour, not a stub — flagging it would \
+         make the narrowness check fire on every honest fake"
+    );
+    assert!(
+        by_name("is_available"),
+        "a method that ignores every argument and never consults `self` can only return a \
+         constant; if the detector misses this it will never find a real violation either"
+    );
+}
+
+#[test]
 fn every_capability_has_a_fake_in_the_core() {
-    // FR-019. Written at full strength and ignored rather than reduced to the three that pass:
-    // a guard that only asks about the capabilities already satisfied is not asking anything.
+    // FR-019. Was `#[ignore]`d at full strength while four capabilities had no fake; T048 added
+    // them, so it now passes as written rather than having been softened to fit.
     let impls = core_port_impls();
     let mut missing = Vec::new();
 
@@ -267,16 +346,15 @@ fn every_capability_has_a_fake_in_the_core() {
     assert!(
         missing.is_empty(),
         "these capabilities have no fake in the core, so a consumer cannot be tested without the \
-         real thing (FR-019): {missing:?}\n\nT048 adds them beside the capability they satisfy, as \
-         ordinary public items matching `FakeGit`."
+         real thing (FR-019): {missing:?}\n\nAdd one beside the capability it satisfies, as an \
+         ordinary public item matching `FakeGit` — not behind a `cfg` and not in another crate."
     );
 }
 
 #[test]
 fn every_fake_that_exists_is_exercised_by_a_test() {
     // SC-005's second half. A fake nothing constructs is not evidence that a capability is
-    // fakeable — it is an unused type that happens to compile. Scoped to the fakes that exist, so
-    // this passes today and keeps its grip as T048 adds the other four.
+    // fakeable — it is an unused type that happens to compile.
     let fakes: BTreeSet<String> = core_port_impls()
         .into_iter()
         .filter(inventory::PortImpl::is_fake)
@@ -286,16 +364,24 @@ fn every_fake_that_exists_is_exercised_by_a_test() {
     let mut unused = Vec::new();
 
     for fake in &fakes {
-        let used = sources.values().any(|code| code.contains(fake.as_str()));
-        if !used {
+        // Construction, not mention. A bare `contains` counts a `use` line and — as a probe
+        // found — a *guard's own allow-list*: adding `"FakeAiCliProvider"` to the known-fakes
+        // list in `no_concrete_implementations.rs` was enough to satisfy this check with no test
+        // constructing the fake anywhere. A capability's fake being listed somewhere is not
+        // evidence anyone can test through it.
+        let built = |code: &String| {
+            code.contains(&format!("{fake}::")) || code.contains(&format!("{fake} {{"))
+        };
+        if !sources.values().any(built) {
             unused.push(fake.clone());
         }
     }
 
     assert!(
         unused.is_empty(),
-        "these fakes exist but no test names them, so nothing exercises the capability through \
-         them (SC-005): {unused:?}"
+        "these fakes exist but no test constructs them, so nothing exercises the capability \
+         through them (SC-005): {unused:?}\n\nNaming one in a list does not count — the check \
+         looks for `Fake…::` or `Fake… {{`."
     );
     assert!(
         !fakes.is_empty(),
@@ -304,14 +390,13 @@ fn every_fake_that_exists_is_exercised_by_a_test() {
 }
 
 #[test]
-#[ignore = "FR-016 narrowness fails today; the fix is to split the capability, not this check — \
-            run with --ignored to see which methods are being supplied unexercised"]
 fn no_test_is_forced_to_supply_an_operation_it_does_not_use() {
     // FR-016, in the contract's own words: "if a test must implement a method it does not exercise
     // merely to satisfy the trait, the capability is too wide and must be split."
     //
-    // Ignored, not relaxed. T042's text is explicit that a capability failing this must be split,
-    // so softening the predicate would be answering the wrong question.
+    // It found six violations and they were answered by splitting one capability and deleting six
+    // hand-rolled fakes, not by relaxing this predicate. What it holds now is that neither comes
+    // back: a test that writes its own port implementation and stubs half of it fails here.
     let sources = test_sources();
     let mut forced = Vec::new();
 

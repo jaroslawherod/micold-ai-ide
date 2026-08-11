@@ -257,3 +257,84 @@ impl SettingsStore for JsonFileSettingsStore {
         Ok(())
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// In-memory fake for unit tests. Public (not `#[cfg(test)]`) so integration tests in
+// `tests/` can share it, matching `FakeGit` (FR-019, feature 021 T048). Pure — no disk.
+// ---------------------------------------------------------------------------------------
+
+use std::sync::Mutex;
+
+/// An in-memory [`SettingsStore`] for tests: serves fixed settings and records every write.
+///
+/// `Mutex` rather than `RefCell` because the daemon boxes its settings store as `Send + Sync`.
+#[derive(Debug, Default)]
+pub struct FakeSettingsStore {
+    inner: Mutex<FakeSettingsState>,
+}
+
+#[derive(Debug, Default)]
+struct FakeSettingsState {
+    settings: Settings,
+    status: Option<LoadStatus>,
+    /// Every settings value handed to `save`, in call order.
+    saves: Vec<Settings>,
+    /// When set, the next `save` fails with this kind.
+    fail_next_save: Option<io::ErrorKind>,
+}
+
+impl FakeSettingsStore {
+    /// A store that has never been written: defaults, [`LoadStatus::Missing`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// A store serving `settings` as a clean [`LoadStatus::Loaded`].
+    pub fn loaded(settings: Settings) -> Self {
+        let fake = Self::new();
+        {
+            let mut state = fake.inner.lock().expect("fake lock");
+            state.settings = settings;
+            state.status = Some(LoadStatus::Loaded);
+        }
+        fake
+    }
+
+    /// A store whose file was unparseable: defaults, [`LoadStatus::Recovered`].
+    pub fn recovered() -> Self {
+        let fake = Self::new();
+        fake.inner.lock().expect("fake lock").status = Some(LoadStatus::Recovered);
+        fake
+    }
+
+    /// Make the next [`SettingsStore::save`] fail.
+    pub fn failing_save(self, kind: io::ErrorKind) -> Self {
+        self.inner.lock().expect("fake lock").fail_next_save = Some(kind);
+        self
+    }
+
+    /// Every settings value handed to `save`, in call order.
+    pub fn saves(&self) -> Vec<Settings> {
+        self.inner.lock().expect("fake lock").saves.clone()
+    }
+}
+
+impl SettingsStore for FakeSettingsStore {
+    fn load(&self) -> SettingsOutcome {
+        let state = self.inner.lock().expect("fake lock");
+        SettingsOutcome {
+            settings: state.settings.clone(),
+            status: state.status.unwrap_or(LoadStatus::Missing),
+        }
+    }
+
+    fn save(&self, settings: &Settings) -> io::Result<()> {
+        let mut state = self.inner.lock().expect("fake lock");
+        if let Some(kind) = state.fail_next_save.take() {
+            return Err(io::Error::new(kind, "fake: save refused"));
+        }
+        state.saves.push(settings.clone());
+        state.settings = settings.clone();
+        Ok(())
+    }
+}

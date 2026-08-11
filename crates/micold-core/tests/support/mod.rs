@@ -6,40 +6,19 @@
 
 #![allow(dead_code)]
 
-use micold_core::fs_scan::FolderScanner;
-use micold_core::project::{canonicalize_best_effort, FolderEntry};
+use micold_core::fs_scan::FakeFolderScanner;
+use micold_core::project::canonicalize_best_effort;
 use micold_core::session::{
     RestartDecision, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
 use micold_core::workspace::Workspace;
-use std::io;
 use std::path::{Path, PathBuf};
 
-/// A configurable in-memory `FolderScanner` — no filesystem access.
-pub struct FakeScanner {
-    pub git: bool,
-    pub available: bool,
-}
-
-impl Default for FakeScanner {
-    fn default() -> Self {
-        Self {
-            git: true,
-            available: true,
-        }
-    }
-}
-
-impl FolderScanner for FakeScanner {
-    fn list_subdirs(&self, _dir: &Path) -> io::Result<Vec<FolderEntry>> {
-        Ok(vec![])
-    }
-    fn is_git_repo(&self, _dir: &Path) -> bool {
-        self.git
-    }
-    fn is_available(&self, _dir: &Path) -> bool {
-        self.available
-    }
+/// The shared in-memory scanner, primed the way this scaffolding's callers expect: every folder
+/// is a git repository and every folder is present. Replaces a hand-written `FakeScanner`
+/// (feature 021 T048).
+pub fn fake_scanner() -> FakeFolderScanner {
+    FakeFolderScanner::new().git_repos(true)
 }
 
 /// A session that is currently `Running`.
@@ -83,7 +62,7 @@ pub fn failed_session(worktree_dir: &str) -> Session {
 /// the same canonicalized path the app uses.
 pub fn workspace_with(projects: Vec<(&str, Vec<Session>)>) -> Workspace {
     let mut ws = Workspace::empty();
-    let scanner = FakeScanner::default();
+    let scanner = fake_scanner();
     for (path, sessions) in projects {
         ws.open_or_activate(PathBuf::from(path), &scanner);
         let key = canonicalize_best_effort(Path::new(path));

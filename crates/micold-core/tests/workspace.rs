@@ -1,38 +1,17 @@
 //! US1 tests: opening a folder creates/activates a project, in-memory (FR-004, FR-005,
 //! FR-007, FR-012, FR-013). Uses a fake `FolderScanner` — no filesystem access.
 
-use micold_core::fs_scan::FolderScanner;
-use micold_core::project::{canonicalize_best_effort, Availability, FolderEntry};
+use micold_core::fs_scan::FakeFolderScanner;
+use micold_core::project::{canonicalize_best_effort, Availability};
 use micold_core::session::{Session, SessionLocation};
 use micold_core::workspace::Workspace;
 use std::collections::BTreeMap;
-use std::io;
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 
-/// A configurable in-memory scanner (no filesystem access).
-struct FakeScanner {
-    git: bool,
-    available: bool,
-}
-
-impl FolderScanner for FakeScanner {
-    fn list_subdirs(&self, _dir: &Path) -> io::Result<Vec<FolderEntry>> {
-        Ok(vec![])
-    }
-    fn is_git_repo(&self, _dir: &Path) -> bool {
-        self.git
-    }
-    fn is_available(&self, _dir: &Path) -> bool {
-        self.available
-    }
-}
-
-fn plain() -> FakeScanner {
-    FakeScanner {
-        git: false,
-        available: true,
-    }
+/// A scanner reporting an ordinary, present, non-repository folder.
+fn plain() -> FakeFolderScanner {
+    FakeFolderScanner::new()
 }
 
 #[test]
@@ -51,10 +30,7 @@ fn opening_records_git_status_from_scanner() {
     let mut ws = Workspace::empty();
     ws.open_or_activate(
         PathBuf::from("/repo"),
-        &FakeScanner {
-            git: true,
-            available: true,
-        },
+        &FakeFolderScanner::new().git_repos(true),
     );
     assert!(ws.active_project().unwrap().is_git_repo);
 }
@@ -95,10 +71,7 @@ fn refresh_availability_marks_missing_folder_unavailable() {
     ws.open_or_activate(PathBuf::from("/gone"), &plain());
     assert_eq!(ws.projects[0].availability, Availability::Available);
 
-    ws.refresh_availability(&FakeScanner {
-        git: false,
-        available: false,
-    });
+    ws.refresh_availability(&FakeFolderScanner::new().available(false));
     assert_eq!(ws.projects[0].availability, Availability::Unavailable);
 }
 
@@ -117,10 +90,7 @@ fn reopening_unavailable_project_is_rejected_and_leaves_active_unchanged() {
     let mut ws = Workspace::empty();
     ws.open_or_activate(PathBuf::from("/a"), &plain());
     ws.open_or_activate(PathBuf::from("/b"), &plain()); // active = /b
-    ws.refresh_availability(&FakeScanner {
-        git: false,
-        available: false,
-    });
+    ws.refresh_availability(&FakeFolderScanner::new().available(false));
 
     assert!(!ws.activate(Path::new("/a")));
     assert_eq!(ws.active, Some(PathBuf::from("/b")));
@@ -258,10 +228,7 @@ fn forget_removes_an_unavailable_project_like_an_available_one() {
     let mut ws = Workspace::empty();
     ws.open_or_activate(PathBuf::from("/gone"), &plain());
     ws.open_or_activate(PathBuf::from("/here"), &plain());
-    ws.refresh_availability(&FakeScanner {
-        git: false,
-        available: false,
-    }); // both marked Unavailable
+    ws.refresh_availability(&FakeFolderScanner::new().available(false)); // both marked Unavailable
     assert_eq!(ws.projects[0].availability, Availability::Unavailable);
 
     ws.forget(Path::new("/gone"));
