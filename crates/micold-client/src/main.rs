@@ -9,6 +9,9 @@
 
 use iced::time::every;
 use iced::{Subscription, Task};
+mod shell;
+
+use crate::shell::capabilities::Capabilities;
 use micold_client::app::{Message, State};
 use micold_client::features::session::SelectKind;
 use micold_client::features::worktree_form::{
@@ -19,26 +22,26 @@ use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
 use micold_client::overlay::registry::Closing;
 use micold_client::selection::{self, Anchor, SelectGranularity, Selection};
-use micold_core::env_include::{self, EnvIncludeOutcome, EnvIncludeSnapshot, SubprocessResolver};
+use micold_core::env_include::{self, EnvIncludeOutcome, EnvIncludeResolver, EnvIncludeSnapshot};
 use micold_core::frame_probe::{
     FrameProbe, ProbeConfig, Scene, SceneFacts, ENV_VAR as FRAME_PROBE_ENV,
     SCENE_ENV_VAR as FRAME_PROBE_SCENE_ENV,
 };
-use micold_core::fs_scan::{FolderBrowser, StdFolderScanner};
-use micold_core::git::{Git, GitCli};
+use micold_core::fs_scan::FolderBrowser;
+use micold_core::git::Git;
 use micold_core::os_theme::OsThemeProbe;
 use micold_core::protocol::grid::LineId;
 use micold_core::protocol::messages::{
     CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, SessionProcess, WireLifecycle,
 };
-use micold_core::provider::{AiCliProvider, ClaudeProvider};
+use micold_core::provider::AiCliProvider;
 use micold_core::selector::{Selector, SelectorStatus};
 use micold_core::session::{
     Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
     TerminalMode,
 };
-use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
-use micold_core::store::{JsonFileStore, ProjectStore};
+use micold_core::settings::Settings;
+
 use micold_core::theme::{observe_system_scheme, SystemScheme};
 use micold_core::worktree::Worktree;
 use micold_core::worktree::{BranchOrigin, CreateMode};
@@ -120,6 +123,12 @@ impl PendingOp {
 
 struct App {
     core: State,
+    /// Every service capability, chosen once at boot (feature 021, T049 — FR-018).
+    ///
+    /// Held here because four of the eleven sites this replaced were inside `update_inner`, which
+    /// takes `&mut App` and nothing else. Cheap to clone (seven `Arc`s), which is what lets the
+    /// folder-listing task take a capability instead of constructing one.
+    caps: Capabilities,
     /// Per-session renderable grid caches, fed by daemon `GridFrame`s (never Clone/Eq). The client
     /// no longer owns any PTY — sessions live in the daemon (feature 010).
     grids: HashMap<SessionId, GridCache>,
@@ -389,13 +398,14 @@ fn report_probe_and_exit(probe: &FrameProbe, app: &App) -> ! {
 /// engine now, and this is the shell picking the real resolver — the one decision that is the
 /// shell's to make (FR-017).
 fn resolve_env_include(
+    resolver: &dyn EnvIncludeResolver,
     enabled: bool,
     script_path: &str,
     timeout_secs: u64,
     cwd: &Path,
 ) -> EnvIncludeSnapshot {
     env_include::snapshot_for(
-        &SubprocessResolver,
+        resolver,
         enabled,
         script_path,
         Duration::from_secs(timeout_secs),
@@ -428,6 +438,7 @@ fn default_resolution_cwd(core: &State) -> PathBuf {
 /// the spec's Clarifications name.
 fn refresh_env_include(app: &mut App, cwd: &Path) {
     let snapshot = resolve_env_include(
+        app.caps.env_include(),
         app.env_include_enabled,
         &app.env_include_script_path,
         app.env_include_timeout_secs,
@@ -505,20 +516,21 @@ pub fn main() -> iced::Result {
 }
 
 fn boot() -> (App, Task<Message>) {
+    // The single assembly point (FR-018). Everything below takes what it needs from `caps`.
+    let caps = Capabilities::real();
     let mut core = State::default();
-    if let Some(store) = JsonFileStore::default_location() {
+    if let Some(store) = caps.projects() {
         core.workspace = store.load().workspace;
-        core.workspace
-            .refresh_availability(&StdFolderScanner::new());
+        core.workspace.refresh_availability(caps.scanner());
         // Drop any leftover empty sessions so a restart never resumes a nonexistent
         // conversation (bug fix; see spec Clarifications 2026-07-16).
-        prune_empty_sessions(&mut core.workspace);
+        prune_empty_sessions(caps.provider(), &mut core.workspace);
     }
     let mut scrollback_lines = micold_core::settings::DEFAULT_SCROLLBACK_LINES;
     let mut env_include_enabled = micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED;
     let mut env_include_script_path = Settings::default().env_include_script_path;
     let mut env_include_timeout_secs = micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS;
-    if let Some(store) = JsonFileSettingsStore::default_location() {
+    if let Some(store) = caps.settings() {
         let loaded = store.load().settings;
         core.theme_pref = loaded.theme;
         scrollback_lines = loaded.scrollback_lines;
@@ -528,6 +540,7 @@ fn boot() -> (App, Task<Message>) {
     }
     let boot_cwd = default_resolution_cwd(&core);
     let boot_snapshot = resolve_env_include(
+        caps.env_include(),
         env_include_enabled,
         &env_include_script_path,
         env_include_timeout_secs,
@@ -541,11 +554,12 @@ fn boot() -> (App, Task<Message>) {
     // render. Session recovery from transcripts is now the daemon's responsibility (it owns
     // sessions); the client adopts them from the welcome catalog on connect (T055).
     if let Some(repo) = core.workspace.active.clone() {
-        core.set_worktrees(discover_worktrees(&repo));
+        core.set_worktrees(discover_worktrees(caps.git(), &repo));
     }
     (
         App {
             core,
+            caps,
             grids: HashMap::new(),
             stamper: SessionInputStamper::new(),
             selection: None,
@@ -601,9 +615,12 @@ fn boot() -> (App, Task<Message>) {
 // but this client still owns.
 
 /// Remove sessions that have no `claude` conversation on disk (empty sessions).
-fn prune_empty_sessions(workspace: &mut micold_core::workspace::Workspace) {
+fn prune_empty_sessions(
+    provider: &dyn AiCliProvider,
+    workspace: &mut micold_core::workspace::Workspace,
+) {
     for (project_path, sessions) in workspace.sessions.iter_mut() {
-        sessions.retain(|s| session_has_conversation(project_path, s));
+        sessions.retain(|s| session_has_conversation(provider, project_path, s));
     }
     workspace
         .sessions
@@ -624,8 +641,11 @@ fn session_cwd_for_location(repo: &Path, location: &SessionLocation) -> PathBuf 
 /// Whether the AI CLI provider has recorded a conversation transcript for this session
 /// (research R6, FR-020a). Routed through the provider seam (FR-024, bugfix BUG-002).
 /// Cwd site 1/5 (research.md R2).
-fn session_has_conversation(project_path: &Path, session: &micold_core::session::Session) -> bool {
-    let provider = ClaudeProvider;
+fn session_has_conversation(
+    provider: &dyn AiCliProvider,
+    project_path: &Path,
+    session: &micold_core::session::Session,
+) -> bool {
     let cwd = session_cwd_for_location(project_path, &session.location);
     let Some(config) = provider.config_dir() else {
         // Cannot determine the provider config dir — do not drop the session on uncertainty.
@@ -634,8 +654,8 @@ fn session_has_conversation(project_path: &Path, session: &micold_core::session:
     provider.has_recorded_conversation(&config, &cwd, session.id.0)
 }
 
-fn persist_settings(core: &mut State) {
-    if let Some(store) = JsonFileSettingsStore::default_location() {
+fn persist_settings(caps: &Capabilities, core: &mut State) {
+    if let Some(store) = caps.settings() {
         // Preserve the persisted scrollback limit (feature 006) and environment-include settings
         // (feature 011) when saving a theme change — this function only ever changes `theme`.
         let existing = store.load().settings;
@@ -1263,13 +1283,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             let dir = start_dir();
             app.core.clear_for_dialog();
             app.core.selector = Some(Selector::open_at(dir.clone()));
-            scan_task(dir)
+            scan_task(app.caps.browser(), dir)
         }
         Message::SelectorNavigatedInto(_) | Message::SelectorNavigatedUp => {
             app.core.update(message);
             match &app.core.selector {
                 Some(selector) if selector.status == SelectorStatus::Loading => {
-                    scan_task(selector.current_dir.clone())
+                    scan_task(app.caps.browser(), selector.current_dir.clone())
                 }
                 _ => Task::none(),
             }
@@ -1280,7 +1300,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // every modal wraps behind its scrim, so a refusal reported while the selector was
             // still open would be dimmed out of view.
             app.core.selector = None;
-            if !GitCli::new().is_repo_root(&path) {
+            if !app.caps.git().is_repo_root(&path) {
                 app.core.update(Message::ProjectOpenRefused(
                     "Only git repositories can be opened as projects.".to_string(),
                 ));
@@ -1295,9 +1315,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.record_foreground();
             app.core
                 .workspace
-                .open_or_activate(path.clone(), &StdFolderScanner::new());
+                .open_or_activate(path.clone(), app.caps.scanner());
             app.core.restore_after_activation(&path);
-            app.core.set_worktrees(discover_worktrees(&path));
+            app.core
+                .set_worktrees(discover_worktrees(app.caps.git(), &path));
             app.core.worktree_error = None;
             log_foreground_choice(app, &path);
             // The daemon is the single writer: tell it to learn this project (persist + discover),
@@ -1314,14 +1335,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::KnownProjectReopened(path) => {
-            app.core
-                .workspace
-                .refresh_availability(&StdFolderScanner::new());
+            app.core.workspace.refresh_availability(app.caps.scanner());
             // Non-destructive switch: keep the outgoing project's sessions running in the
             // background and restore the target project's foreground (feature 008, BS-1/BS-3).
             let previous = app.core.workspace.active.clone();
             if app.core.switch_active(&path) {
-                app.core.set_worktrees(discover_worktrees(&path));
+                app.core
+                    .set_worktrees(discover_worktrees(app.caps.git(), &path));
                 log_foreground_choice(app, &path);
                 // Already a known project (no ProjectAdd); just move the daemon attachment.
                 switch_daemon_attachment(app, previous, &path);
@@ -1416,7 +1436,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::ThemePreferenceChanged(_) | Message::ThemeModeCycled => {
             app.core.update(message);
-            persist_settings(&mut app.core);
+            persist_settings(&app.caps, &mut app.core);
             Task::none()
         }
         // Validate the form, then create the worktree (incl. any submodule fetch) via git,
@@ -1902,7 +1922,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.env_include_enabled = draft.env_include_enabled;
             app.env_include_script_path = draft.env_include_script_path;
             app.env_include_timeout_secs = env_include_timeout_secs;
-            if let Some(store) = JsonFileSettingsStore::default_location() {
+            if let Some(store) = app.caps.settings() {
                 if let Err(err) = store.save(&Settings {
                     theme: app.core.theme_pref,
                     scrollback_lines,
@@ -2679,8 +2699,8 @@ fn session_cwd_mode_and_active_shell(
 /// Discover the active project's worktrees from git + the filesystem (FR-018/018a). Delegates to the
 /// shared `micold_core::worktree::discover` so the client and daemon can never diverge in how a
 /// worktree is discovered.
-fn discover_worktrees(repo: &Path) -> Vec<Worktree> {
-    micold_core::worktree::discover(&GitCli::new(), repo)
+fn discover_worktrees(git: &dyn Git, repo: &Path) -> Vec<Worktree> {
+    micold_core::worktree::discover(git, repo)
 }
 
 /// Send the create for a resolved mode, re-deriving the names from the form (feature 016).
@@ -2796,12 +2816,12 @@ fn start_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(std::path::MAIN_SEPARATOR_STR))
 }
 
-fn scan_task(dir: PathBuf) -> Task<Message> {
-    Task::perform(async move { scan(dir) }, |message| message)
+fn scan_task(browser: Arc<dyn FolderBrowser + Send + Sync>, dir: PathBuf) -> Task<Message> {
+    Task::perform(async move { scan(&*browser, dir) }, |message| message)
 }
 
-fn scan(dir: PathBuf) -> Message {
-    match StdFolderScanner::new().list_subdirs(&dir) {
+fn scan(browser: &dyn FolderBrowser, dir: PathBuf) -> Message {
+    match browser.list_subdirs(&dir) {
         Ok(entries) => Message::SelectorListingReady(entries),
         Err(error) => Message::SelectorListingFailed(error.to_string()),
     }
@@ -2812,6 +2832,71 @@ mod tests {
     use super::*;
     use micold_client::features::settings::SettingsDraft;
     use micold_core::protocol::messages::{ActivitySignal, ProjectSnapshot, SessionSummary};
+    use micold_core::provider::FakeAiCliProvider;
+    use micold_core::session::Session;
+    use micold_core::workspace::Workspace;
+
+    /// What T049 actually bought, on the one rule that had no test at all.
+    ///
+    /// Boot drops sessions the AI CLI has no recorded conversation for, so a restart never resumes
+    /// a nonexistent one. Before the provider became a capability, `session_has_conversation`
+    /// reached `ClaudeProvider` and the user's real home directory, so exercising this meant
+    /// writing transcripts into `~/.claude` — which is why it was never exercised. It is a
+    /// substitution away now.
+    #[test]
+    fn boot_drops_a_session_the_provider_has_no_conversation_for() {
+        let project = PathBuf::from("/project");
+        let kept = Session::start_new(SessionLocation::Default);
+        let dropped = Session::start_new(SessionLocation::Default);
+
+        // The transcript path is the provider's to derive, so ask it rather than restate it here.
+        let config = PathBuf::from("/config");
+        let transcript = FakeAiCliProvider::new().transcript_path(&config, &project, kept.id.0);
+        let provider = FakeAiCliProvider::new()
+            .with_config_dir(&config)
+            .with_transcript(&transcript, "a recorded conversation");
+
+        let mut workspace = Workspace::empty();
+        workspace
+            .sessions
+            .insert(project.clone(), vec![kept.clone(), dropped.clone()]);
+
+        prune_empty_sessions(&provider, &mut workspace);
+
+        let surviving: Vec<_> = workspace.sessions[&project].iter().map(|s| s.id).collect();
+        assert_eq!(
+            surviving,
+            vec![kept.id],
+            "the session with a transcript stays and the empty one goes"
+        );
+    }
+
+    /// The uncertainty rule, which is the half that would quietly delete a user's work.
+    ///
+    /// When the provider cannot say where its config lives, `session_has_conversation` keeps the
+    /// session. An implementation that treated "cannot tell" as "no conversation" would prune
+    /// every session on a machine where the config directory does not resolve.
+    #[test]
+    fn boot_keeps_every_session_when_the_provider_cannot_locate_its_config() {
+        let project = PathBuf::from("/project");
+        let session = Session::start_new(SessionLocation::Default);
+
+        // No `with_config_dir`: `config_dir()` answers `None`.
+        let provider = FakeAiCliProvider::new();
+
+        let mut workspace = Workspace::empty();
+        workspace
+            .sessions
+            .insert(project.clone(), vec![session.clone()]);
+
+        prune_empty_sessions(&provider, &mut workspace);
+
+        assert_eq!(
+            workspace.sessions[&project].len(),
+            1,
+            "uncertainty must not drop a session"
+        );
+    }
 
     // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
     // own stderr, e.g. naming which submodule failed and why) was destructured with `..` and
@@ -3176,6 +3261,7 @@ mod tests {
     #[test]
     fn update_inner_applies_window_focus_changed() {
         let mut app = App {
+            caps: Capabilities::real(),
             core: State::default(),
             grids: HashMap::new(),
             stamper: SessionInputStamper::new(),
@@ -3220,6 +3306,7 @@ mod tests {
         // its live size changes) must now be remembered on `App` so `spawn_pty` call sites can
         // seed new sessions at the pane's actual current size instead.
         let mut app = App {
+            caps: Capabilities::real(),
             core: State::default(),
             grids: HashMap::new(),
             stamper: SessionInputStamper::new(),
@@ -3336,6 +3423,7 @@ mod tests {
     /// module already use, factored out because T100's tests need several variants of it).
     fn base_app() -> App {
         App {
+            caps: Capabilities::real(),
             core: State::default(),
             grids: HashMap::new(),
             stamper: SessionInputStamper::new(),
@@ -3655,6 +3743,7 @@ mod tests {
         use micold_client::features::connection::ConnectionStatus;
 
         let mut app = App {
+            caps: Capabilities::real(),
             core: State::default(),
             grids: HashMap::new(),
             stamper: SessionInputStamper::new(),

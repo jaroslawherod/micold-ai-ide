@@ -7,15 +7,18 @@
 //! a regression lock on it, in the sense T014a used: the property is true, eight extractions and a
 //! shell split are about to move code around it, and a guard is what keeps it true across them.
 //!
-//! **FR-018 — each real implementation is chosen in exactly one place.** This does **not** hold
-//! today: five real implementations are named from eleven places in `main.rs`, and three of the
-//! five account for the excess — `GitCli` twice, `JsonFileSettingsStore` three times,
-//! `StdFolderScanner` four. (`JsonFileStore` and `ClaudeProvider` already comply, which is why the
-//! failure names three types and not five.) T049 assembles them into `shell/capabilities.rs`; until
-//! then
-//! [`each_implementation_is_chosen_in_exactly_one_place`] is `#[ignore]`d rather than weakened, so
-//! the requirement is written down at full strength and `cargo test` lists it as outstanding on
-//! every run. Remove the attribute in T049 — the assertion is already the one that should pass.
+//! **FR-018 — each real implementation is chosen in exactly one place.** It does now. It did not
+//! when this file was written: five real implementations were named from eleven places in
+//! `main.rs` — `GitCli` twice, `JsonFileSettingsStore` three times, `StdFolderScanner` four — and
+//! [`each_implementation_is_chosen_in_exactly_one_place`] was `#[ignore]`d at full strength rather
+//! than weakened to fit them. T049 assembled them into `shell/capabilities.rs::Capabilities::real`
+//! and the attribute came off unchanged.
+//!
+//! One capability is chosen outside that function and the reason is the GUI framework's:
+//! `SystemThemeProbe` is constructed inside a subscription mapping closure, which iced forbids from
+//! capturing anything. It is invisible to this guard regardless — the derivation below reads
+//! `micold-core`, and that type is defined in the client — so the exception is recorded in
+//! `shell/capabilities.rs` rather than enforced here.
 //!
 //! # What counts as a real implementation
 //!
@@ -180,12 +183,10 @@ fn no_code_outside_the_shell_names_a_real_implementation() {
 }
 
 #[test]
-#[ignore = "FR-018 is not met until T049 assembles the capabilities; run with --ignored to see the \
-            countdown"]
 fn each_implementation_is_chosen_in_exactly_one_place() {
-    // FR-018. Written at full strength and ignored rather than softened to something that passes:
-    // a guard pinned to today's ten sites would go green and stop being about anything. T049
-    // creates `shell/capabilities.rs` and removes the attribute.
+    // FR-018. Was `#[ignore]`d at full strength while eleven sites chose implementations; T049
+    // assembled them in `shell/capabilities.rs`, so it now passes as written rather than having
+    // been softened to fit. What it holds from here is that the assembly point stays single.
     let sources = client_sources();
     let mut wrong = Vec::new();
 
