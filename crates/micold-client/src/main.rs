@@ -14,10 +14,11 @@ use micold_client::features::session::SelectKind;
 use micold_client::features::worktree_form::{
     BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
+use micold_client::features::Outcome;
 use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
 use micold_client::overlay::registry::Closing;
-use micold_client::selection::{Anchor, SelectGranularity, Selection};
+use micold_client::selection::{self, Anchor, SelectGranularity, Selection};
 use micold_core::env_include::{self, EnvIncludeOutcome, EnvIncludeSnapshot, SubprocessResolver};
 use micold_core::frame_probe::{
     FrameProbe, ProbeConfig, Scene, SceneFacts, ENV_VAR as FRAME_PROBE_ENV,
@@ -1815,12 +1816,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Copy the current selection to the system clipboard (FR-013). Also closes the menu.
         Message::TerminalCopyRequested => {
             app.core.update(Message::TerminalContextMenuClosed);
-            let content = selected_text(app);
-            if content.is_empty() {
-                Task::none()
-            } else {
-                iced::clipboard::write(content)
-            }
+            selection_copy_request(app).map_or_else(Task::none, interpret)
         }
         // Paste the system clipboard into the displayed session's PTY (FR-013). The read is async;
         // its result flows back through `TerminalBytes`, which honours the Running write-gate.
@@ -1833,9 +1829,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // labels the app itself doesn't make selectable are still reachable cross-application.
         // Also closes the worktree context menu, mirroring its other actions (idempotent if
         // the text wasn't copied from that menu).
+        // The text is the request: the view named it (`ui::worktree_menu_items` asks the worktree
+        // feature for the display name), so there is nothing left here to decide and no second
+        // emitter to write. Translating it is all the shell does.
         Message::TextCopyRequested(text) => {
             app.core.update(Message::WorktreeMenuDismissed);
-            iced::clipboard::write(text)
+            interpret(Outcome::ClipboardWrite(text))
         }
         // Poll terminals: feed streamed bytes into the VT emulators, then detect unexpected
         // exits and apply the crash-restart policy (FR-012, FR-022).
@@ -2520,15 +2519,28 @@ fn attach_current_process(app: &mut App, id: SessionId) {
     }
 }
 
-/// The selected text of the displayed session, or empty when nothing is selected.
-fn selected_text(app: &App) -> String {
-    let Some(id) = app.core.active_session else {
-        return String::new();
-    };
-    let (Some(grid), Some(sel)) = (app.grids.get(&id), app.selection.as_ref()) else {
-        return String::new();
-    };
-    sel.text(|id| grid.line(id).map(|l| l.text.clone()))
+/// Perform a feature's effect request (feature 021, T045 — FR-015a, contract C3).
+///
+/// Translation and nothing else: one arm per variant, no branch that could have gone the other
+/// way. What reaches the clipboard, and whether anything should, was decided by the feature that
+/// emitted the request — which is the whole point of expressing the request instead of the call.
+fn interpret(outcome: Outcome) -> Task<Message> {
+    match outcome {
+        Outcome::ClipboardWrite(text) => iced::clipboard::write(text),
+    }
+}
+
+/// Ask the selection feature what copying it should put on the clipboard.
+///
+/// Only the grid lookup is here — finding the displayed session's cached lines is reading the
+/// shell's own data, not a rule about copying. Without a grid there is nothing to resolve the
+/// selection against, so there is no selection to offer, which is what `selected_text` said by
+/// returning an empty string before the request had a type.
+fn selection_copy_request(app: &App) -> Option<Outcome> {
+    let grid = app.core.active_session.and_then(|id| app.grids.get(&id))?;
+    selection::copy_request(app.selection.as_ref(), |id| {
+        grid.line(id).map(|l| l.text.clone())
+    })
 }
 
 /// How often the snackbar's countdown ticks while one is visible.
