@@ -99,7 +99,8 @@ impl Workspace {
     /// keyed by its path (feature 014, FR-003/FR-005). The path is canonicalized the same way
     /// `open_or_activate`/`activate`/`rename` do, so any equivalent spelling matches.
     ///
-    /// Removes the `projects` entry, its `sessions[path]`, and its `worktree_names[path]`. If the
+    /// Removes the `projects` entry, its `sessions[path]`, its `worktree_names[path]`, and its
+    /// `foreground_by_project[path]`. If the
     /// forgotten project was the active working space, the active pointer is cleared so the
     /// documented invariant (`active`, when `Some`, references a present `path`) still holds
     /// (FR-008). A no-op when the path is unknown. Non-destructive: this touches only in-memory
@@ -110,6 +111,10 @@ impl Workspace {
         self.projects.retain(|p| p.path != path);
         self.sessions.remove(&path);
         self.worktree_names.remove(&path);
+        // Feature 025: the memory is keyed by project path like everything above, so it goes with
+        // the project. Leaving it would restore a session from a life the user deliberately ended,
+        // and would name a session whose record has just gone with it.
+        self.foreground_by_project.remove(&path);
         if self.active.as_ref() == Some(&path) {
             self.active = None;
         }

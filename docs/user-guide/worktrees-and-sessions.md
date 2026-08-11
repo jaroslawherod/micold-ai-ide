@@ -352,6 +352,11 @@ ready to type in, with no clicks.
 - If the session you were on has been **closed**, or its record has gone, the app opens the project
   as it otherwise would and leaves everything else alone. Closing a session does not wipe the
   memory — it just means there is nothing to return to.
+- If its **worktree** was deleted outside the app, you still land on it, shown the way any session
+  with a missing worktree is shown. You can see and select that session yourself, so the app returns
+  you to it rather than pretending it is not there.
+- **Forgetting a project** forgets which session it was on, along with everything else the app kept
+  about it.
 
 ### Finding the session you are on
 

@@ -1780,3 +1780,26 @@ fn a_memory_whose_worktree_is_gone_is_still_restored() {
          the user anything else (FR-006)"
     );
 }
+
+#[test]
+fn a_memory_naming_a_closed_session_restores_nothing_and_disturbs_nothing() {
+    let (mut state, id) = state_with_remembered_session();
+    let path = state.workspace.active.clone().unwrap();
+    // Closed between one run and the next.
+    if let Some((_, session)) = state.workspace.find_session_mut(id) {
+        session.archive();
+    }
+    state.expanded.insert("kept-open".to_string());
+
+    state.set_current_session(state.explain_foreground(&path).session());
+
+    assert!(
+        state.active_session.is_none(),
+        "a closed session is not listed at all, so restoring one would display something the panel \
+         cannot show (FR-005). Nothing is chosen in its place either (FR-007)"
+    );
+    assert!(
+        state.expanded.contains("kept-open"),
+        "and the rest of the project is exactly as it was (FR-006)"
+    );
+}

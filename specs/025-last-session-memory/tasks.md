@@ -94,14 +94,14 @@ each lands on its own.
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T018 [P] [US2] Failing test in `crates/micold-core/tests/store_roundtrip.rs`: two projects with different memories round-trip independently, and writing one does not disturb the other (§1.2, FR-008)
-- [ ] T019 [P] [US2] Failing test in `crates/micold-client/tests/switch_active.rs`: switching to a project **not yet visited in this run** uses the memory loaded from disk, not just one recorded since launch (FR-008) — the case that distinguishes a persisted memory from the in-memory one that already existed
-- [ ] T020 [P] [US2] Failing test in `crates/micold-client/tests/switch_active.rs`: switching several times then reading each project's memory gives the session last current *in that project*, not the one current at the end (US2 scenario 2)
+- [X] T018 [P] [US2] Failing test in `crates/micold-core/tests/store_roundtrip.rs`: two projects with different memories round-trip independently, and writing one does not disturb the other (§1.2, FR-008)
+- [X] T019 [P] [US2] Failing test in `crates/micold-client/tests/switch_active.rs`: switching to a project **not yet visited in this run** uses the memory loaded from disk, not just one recorded since launch (FR-008) — the case that distinguishes a persisted memory from the in-memory one that already existed
+- [X] T020 [P] [US2] Failing test in `crates/micold-client/tests/switch_active.rs`: switching several times then reading each project's memory gives the session last current *in that project*, not the one current at the end (US2 scenario 2)
 
 ### Implementation for User Story 2
 
-- [ ] T021 [US2] Confirm no code change is needed in `crates/micold-client/src/features/session.rs` beyond Phase 2 and US1 — the map is already per project and `record_foreground` already keys by the active project. If a test above fails, the defect is in the move (T004–T006), not in new behaviour; fix it there rather than adding a second mechanism
-- [ ] T022 [US2] Document the per-project behaviour in `docs/user-guide/worktrees-and-sessions.md`: each project remembers its own session, and switching takes you to that project's
+- [X] T021 [US2] Confirm no code change is needed in `crates/micold-client/src/features/session.rs` beyond Phase 2 and US1 — the map is already per project and `record_foreground` already keys by the active project. If a test above fails, the defect is in the move (T004–T006), not in new behaviour; fix it there rather than adding a second mechanism
+- [X] T022 [US2] Document the per-project behaviour in `docs/user-guide/worktrees-and-sessions.md`: each project remembers its own session, and switching takes you to that project's
 
 **Checkpoint**: US1 + US2 — every project reopens where you left it.
 
@@ -119,16 +119,16 @@ starts normally on the overview or another session, with the rest of the project
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T023 [P] [US3] Failing test in `crates/micold-client/tests/features_session.rs`: a memory naming a **closed** (archived) session is not restored, and one naming an **absent** session falls back to the existing behaviour — first running session, else none (§3.2, FR-005, FR-007)
-- [ ] T024 [P] [US3] Failing test in `crates/micold-client/tests/app_state.rs`: a memory that cannot be honoured leaves every other location's open/closed state alone (§3.6, FR-006)
-- [ ] T025 [P] [US3] Failing test in `crates/micold-core/tests/store_fault_isolation.rs`: an unreadable or malformed per-project file yields a usable workspace with no memory and no error — a launch must not fail, warn or block on it (§3.7, FR-010)
-- [ ] T026 [P] [US3] Failing test in `crates/micold-client/tests/switcher_forget_menu.rs`: forgetting a project discards its memory, and re-opening the same folder later starts without one (§2.5, FR-009)
-- [ ] T027 [P] [US3] Failing test in `crates/micold-core/tests/store_roundtrip.rs`: closing the session a memory names does **not** erase the memory — only another session becoming current replaces it (FR-005a, invariant I0). The stored id may name a session that can never be restored, and that is the intended state
+- [X] T023 [P] [US3] Failing test in `crates/micold-client/tests/features_session.rs`: a memory naming a **closed** (archived) session is not restored, and one naming an **absent** session falls back to the existing behaviour — first running session, else none (§3.2, FR-005, FR-007)
+- [X] T024 [P] [US3] Failing test in `crates/micold-client/tests/app_state.rs`: a memory that cannot be honoured leaves every other location's open/closed state alone (§3.6, FR-006)
+- [X] T025 [P] [US3] Failing test in `crates/micold-core/tests/store_fault_isolation.rs`: an unreadable or malformed per-project file yields a usable workspace with no memory and no error — a launch must not fail, warn or block on it (§3.7, FR-010)
+- [X] T026 [P] [US3] Failing test in `crates/micold-client/tests/switcher_forget_menu.rs`: forgetting a project discards its memory, and re-opening the same folder later starts without one (§2.5, FR-009)
+- [X] T027 [P] [US3] Failing test in `crates/micold-core/tests/store_roundtrip.rs`: closing the session a memory names does **not** erase the memory — only another session becoming current replaces it (FR-005a, invariant I0). The stored id may name a session that can never be restored, and that is the intended state
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Confirm the fallbacks need no new code in `crates/micold-client/src/features/session.rs`: `explain_foreground` already declines an archived session and already returns `NoSessionsForKey` / `NoneActive`, and `load_project_state` already recovers from an unreadable file. Any test above that fails names a real gap — fix it where the behaviour lives, not at the launch site
-- [ ] T029 [US3] Document the fallbacks in `docs/user-guide/worktrees-and-sessions.md`: if the session you were on has been closed or its worktree removed, the app opens on the project as it would otherwise, and nothing else about it changes
+- [X] T028 [US3] Confirm the fallbacks need no new code in `crates/micold-client/src/features/session.rs`: `explain_foreground` already declines an archived session and already returns `NoSessionsForKey` / `NoneActive`, and `load_project_state` already recovers from an unreadable file. Any test above that fails names a real gap — fix it where the behaviour lives, not at the launch site
+- [X] T029 [US3] Document the fallbacks in `docs/user-guide/worktrees-and-sessions.md`: if the session you were on has been closed or its worktree removed, the app opens on the project as it would otherwise, and nothing else about it changes
 
 **Checkpoint**: All three stories independently functional.
 
@@ -136,10 +136,10 @@ starts normally on the overview or another session, with the rest of the project
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T030 Run the whole automated gate: `mise run test`, and record which of quickstart §A's rows each new test satisfies
-- [ ] T031 Confirm `crates/micold-core/tests/schema_hash.rs` is **unchanged**. This feature adds no protocol message and edits none; if the hash moved, something reached for the wire that did not need to (research R3)
-- [ ] T032 Run quickstart §B (B1–B7) by hand and fill in the recording table in [quickstart.md](./quickstart.md). B1, B2 and B3 need the process actually stopped and started, so none of them can be automated — if §B was not run, say so there rather than leaving the table blank
-- [ ] T033 [P] Cross-cutting docs review in `docs/`: confirm the three added passages read as one narrative and that nothing elsewhere still says the app forgets your session at exit
+- [X] T030 Run the whole automated gate: `mise run test`, and record which of quickstart §A's rows each new test satisfies
+- [X] T031 Confirm `crates/micold-core/tests/schema_hash.rs` is **unchanged**. This feature adds no protocol message and edits none; if the hash moved, something reached for the wire that did not need to (research R3)
+- [X] T032 Run quickstart §B (B1–B7) by hand and fill in the recording table in [quickstart.md](./quickstart.md). B1, B2 and B3 need the process actually stopped and started, so none of them can be automated — if §B was not run, say so there rather than leaving the table blank
+- [X] T033 [P] Cross-cutting docs review in `docs/`: confirm the three added passages read as one narrative and that nothing elsewhere still says the app forgets your session at exit
 - [ ] T034 Confirm CI is green on Linux, macOS and Windows for `.github/workflows/ci.yml` (Principle VI) — this feature has no platform branch, so a platform-specific failure means a path or serialisation assumption leaked
 
 ---

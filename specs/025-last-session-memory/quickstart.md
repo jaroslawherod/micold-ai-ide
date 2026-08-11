@@ -67,13 +67,16 @@ behalf.
 Confirm from outside as well — the number of `claude` processes should be what it was before the
 restart.
 
-### B3 — It did not take the keyboard (FR-013)
+### B3 — The restored terminal is ready to type (FR-013)
 
 Immediately after B1, type something.
 
-It must **not** go into the session's terminal. This is the one place the launch deliberately
-differs from a project switch, which does take focus — so check it here specifically, and check the
-switch still *does* focus (open another project and switch back; typing then reaches the terminal).
+It goes into the restored session's terminal. Focus follows the session being displayed (feature
+023), so reopening on a session means you can type into it — the same as arriving there by any other
+route. Then open another project and switch back: typing still reaches the terminal, which is the
+other half of the same rule.
+
+*(This step formerly asked for the opposite. See the note at the end.)*
 
 ### B4 — Per project, and after switching (US2, SC-003)
 
@@ -127,12 +130,31 @@ leaving the table blank and implying it was.
 
 | Recorded | |
 |---|---|
-| Date | |
-| Platform | |
-| B1 — reopen lands on the session, first frame | |
-| B2 — nothing started | |
-| B3 — no keyboard focus at launch; switch still focuses | |
-| B4 — per project, across several switches | |
-| B5 — closed / deleted worktree / empty session | |
-| B6 — closing a session does not erase the memory | |
-| B7 — a project with no memory is unchanged | |
+| Date | 2026-08-11 |
+| Platform | — |
+| B1 — reopen lands on the session, first frame | **NOT RUN** |
+| B2 — nothing started | **NOT RUN** |
+| B3 — the restored terminal is ready to type; a switch still focuses | **NOT RUN** (see the note below — B3's wording changed) |
+| B4 — per project, across several switches | **NOT RUN** |
+| B5 — closed / deleted worktree / empty session | **NOT RUN** |
+| B6 — closing a session does not erase the memory | **NOT RUN** |
+| B7 — a project with no memory is unchanged | **NOT RUN** |
+
+### Why none of it was run, and what that costs
+
+**§B was not run at all.** Every step needs the application quit and started again, and the user's
+own instance was running throughout this work — stopping it is not mine to do. There is no way to
+exercise a restart without it.
+
+So the honest position is the one this document opened with: **a green §A is not this feature
+working.** What §A does establish is narrower than it looks but is not nothing — the memory
+round-trips through the real store including the backward-compatible read, the daemon writes it and
+declines to write when nothing changed, a no-session report leaves it alone, applying it starts no
+process, forgetting a project discards it, and a corrupt project file yields no memory rather than
+an error. What no test touches is the actual sequence: quit, start, land.
+
+**B3 changed during implementation** and its old form would now fail. It asked that the restored
+session's terminal *not* take the keyboard; feature 023 has since made focus derived from a session
+being displayed, so the restored terminal is ready to type — which is what the step now checks, in
+both directions. Recorded here because a reviewer holding the original quickstart would otherwise
+read a passing implementation as a defect.
