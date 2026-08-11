@@ -84,6 +84,15 @@ A user with several known projects wants to tell at a glance, from the switcher,
 - **FR-001**: Users MUST be able to change the active project at any time, including while one or more terminal sessions are running, without those sessions being stopped or reset.
 - **FR-002**: When the active project changes, the previously active project's running sessions MUST continue running in the background — their processes stay alive and their output continues to accumulate.
 - **FR-003**: When the user returns to a project that has background sessions, the system MUST reattach to and display those sessions with their live state, restoring the previously foreground session to the foreground and keeping the others in the background.
+- **FR-003a**: The previously foreground session MUST be restored **whether or not its process is
+  still running**, provided it still exists and has not been closed. Only when there is no such
+  remembered session does the system fall back to the project's first running session, and then to
+  none. Restoring a stopped session displays it; it MUST NOT start anything. *(Added by
+  [BUG-001](./bugs/BUG-001.md). FR-003 was always unqualified; the running-only condition lived in
+  `data-model.md` and was a fair call when a backgrounded session was expected to still be running.
+  Session lifecycle does not persist, so after a restart every session is idle and the condition
+  turned "restore where I was" into "land on the project overview" as the ordinary case — while
+  clicking that same row in the sidebar selects it, with no lifecycle check at all.)*
 - **FR-004**: The system MUST provide a project switcher control in the top app bar, positioned immediately adjacent to the existing menu button. That control MUST be a **shared button component** — specifically the text button with a leading icon, since it carries the active project's name — per [018](../018-material3-visual-system/spec.md) FR-029c, rather than a button assembled for this feature alone. *(Amended by [018's BUG-007](../018-material3-visual-system/bugs/BUG-007.md): the label stays and is still the quickest way to see which project is active without opening the panel; what was wrong was that the control around it was hand-built, so it stood 28dp tall and drew its glyph at the label's 14dp where §7.3 puts a button's leading icon at 18.)*
 - **FR-005**: The switcher MUST list the known projects and allow the user to make any listed project active in a single selection, without opening the folder-browser dialog.
 - **FR-006**: The switcher MUST clearly indicate which project is currently active.

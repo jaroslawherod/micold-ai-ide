@@ -19,7 +19,7 @@ cargo test --no-default-features
 Expected new/most-relevant tests to pass (see contracts for the assertions):
 
 - `switch_active` keeps outgoing sessions `Running` and does not null their lifecycle (BS-1).
-- `switch_active` restores the stored foreground session, else first running, else `None` (BS-3).
+- `switch_active` restores the stored foreground session — running or stopped, so long as it was not closed (FR-003a, BUG-001) — else first running, else `None` (BS-3).
 - `Workspace::find_session` / `find_session_mut` resolve a session in a **non-active** project (BS-6 lookup).
 - background restart marks `restarted_while_inactive`, and switching in sets `notice` and clears the ids (BS-7).
 - switching to an unavailable project returns `false` and leaves state unchanged (BS-10).

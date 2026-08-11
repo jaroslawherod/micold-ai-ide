@@ -201,12 +201,19 @@ fn the_remembered_session_is_chosen_when_it_is_still_running() {
     );
 }
 
+/// BUG-001 / FR-003a: **this expectation changed with the spec**, and deliberately.
+///
+/// It used to assert the fallback — a remembered session that had stopped was treated as no memory
+/// at all. That was a fair call while this feature's premise held (sessions keep running in the
+/// background), and it stopped being one the moment lifecycle turned out not to persist: after a
+/// restart every session is idle, so the rule discarded the memory in the ordinary case and landed
+/// the user on the project overview. Meanwhile clicking that same row selects it with no lifecycle
+/// check, so the two paths disagreed about the same session.
 #[test]
-fn a_remembered_session_that_stopped_falls_back_to_a_running_one() {
+fn a_remembered_session_is_restored_even_after_it_has_stopped() {
     let (mut st, a, _) = two_projects(2, 1);
     st.active_session = Some(a[1]);
     st.record_foreground();
-    // The remembered one stops while the project is in the background.
     let stopped = a[1];
     if let Some((_, session)) = st.workspace.find_session_mut(stopped) {
         session.record_clean_exit();
@@ -214,12 +221,51 @@ fn a_remembered_session_that_stopped_falls_back_to_a_running_one() {
 
     assert_eq!(
         st.explain_foreground(Path::new("/a")),
+        ForegroundChoice::Remembered(stopped),
+        "you are put back where you were. A stopped session shows its scrollback and its state — \
+         which is exactly what clicking it in the sidebar does, and the reason restoring it too is \
+         consistency rather than indulgence"
+    );
+}
+
+#[test]
+fn a_remembered_session_that_was_closed_is_not_restored() {
+    let (mut st, a, _) = two_projects(2, 1);
+    st.active_session = Some(a[1]);
+    st.record_foreground();
+    let closed = a[1];
+    if let Some((_, session)) = st.workspace.find_session_mut(closed) {
+        session.archive();
+    }
+
+    assert_eq!(
+        st.explain_foreground(Path::new("/a")),
         ForegroundChoice::FirstActive {
             chosen: a[0],
-            remembered: Some(stopped),
+            remembered: Some(closed),
         },
-        "the fallback is deliberate, and worth telling apart from the remembered case — it is why \
-         you can return to a project and find yourself somewhere you did not leave"
+        "closing a session hides it from the sidebar entirely, so restoring one would display a \
+         session the user cannot see listed — the one condition worth keeping from the old rule"
+    );
+}
+
+#[test]
+fn restoring_a_stopped_session_does_not_start_it() {
+    let (mut st, a, _) = two_projects(1, 1);
+    st.active_session = Some(a[0]);
+    st.record_foreground();
+    if let Some((_, session)) = st.workspace.find_session_mut(a[0]) {
+        session.record_clean_exit();
+    }
+
+    assert!(st.switch_active(Path::new("/b")));
+    assert!(st.switch_active(Path::new("/a")));
+
+    assert_eq!(st.active_session, Some(a[0]), "restored");
+    assert!(
+        !st.workspace.find_session(a[0]).unwrap().1.is_active(),
+        "restoring is a display decision; starting a process is not. FR-001/FR-002 keep a switch \
+         from disturbing session lifecycle, and this keeps that"
     );
 }
 

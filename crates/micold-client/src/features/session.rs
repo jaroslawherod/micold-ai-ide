@@ -38,7 +38,9 @@ use std::path::Path;
 /// I/O, so the reducer decides and the binary writes it out.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ForegroundChoice {
-    /// The session this project was left on, still active.
+    /// The session this project was left on. Restored whether or not it is still running: a
+    /// stopped session shows its scrollback and its state, which is what selecting it by hand
+    /// does (FR-003a).
     Remembered(SessionId),
     /// No usable remembered session, so the project's first active one was taken. `remembered` is
     /// what was hoped for — `None` when the project had never been left on anything.
@@ -220,8 +222,8 @@ impl State {
     }
 
     /// The session to display when entering `key`, and why: the session this project was left on
-    /// if it still exists and is running, else the project's first running one, else none
-    /// (FR-003).
+    /// if it still exists and was not closed — running or not (FR-003a) — else the project's first
+    /// running one, else none (FR-003).
     ///
     /// Replaces the older `restore_foreground`, which answered the same question and threw the
     /// reason away. There is one function rather than two so the choice and the explanation of it
@@ -232,7 +234,17 @@ impl State {
         };
         let remembered = self.foreground_by_project.get(key).copied();
         if let Some(stored) = remembered {
-            if sessions.iter().any(|s| s.id == stored && s.is_active()) {
+            // Running or stopped alike (FR-003a, BUG-001): you are put back where you were. The
+            // rule used to require the session still be active, which was fair while a
+            // backgrounded session was expected to keep running — and wrong once lifecycle turned
+            // out not to persist, since after a restart every session is idle and the memory was
+            // then discarded in the ordinary case. Clicking that same row selects it with no
+            // lifecycle check, so restoring it is consistency rather than indulgence.
+            //
+            // `archived` is the one condition kept: a closed session is hidden from the sidebar
+            // entirely (feature 010 BUG-003), so restoring one would display a session the user
+            // cannot see listed.
+            if sessions.iter().any(|s| s.id == stored && !s.archived) {
                 return ForegroundChoice::Remembered(stored);
             }
         }
