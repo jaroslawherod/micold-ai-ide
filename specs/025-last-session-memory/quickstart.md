@@ -131,8 +131,8 @@ leaving the table blank and implying it was.
 | Recorded | |
 |---|---|
 | Date | 2026-08-11 |
-| Platform | — |
-| B1 — reopen lands on the session, first frame | **NOT RUN** |
+| Platform | Linux |
+| B1 — reopen lands on the session, first frame | **PASS** — confirmed by the user on their own install ("it works") |
 | B2 — nothing started | **NOT RUN** |
 | B3 — the restored terminal is ready to type; a switch still focuses | **NOT RUN** (see the note below — B3's wording changed) |
 | B4 — per project, across several switches | **NOT RUN** |
@@ -140,14 +140,19 @@ leaving the table blank and implying it was.
 | B6 — closing a session does not erase the memory | **NOT RUN** |
 | B7 — a project with no memory is unchanged | **NOT RUN** |
 
-### Why none of it was run, and what that costs
+### What was run, and what was not
 
-**§B was not run at all.** Every step needs the application quit and started again, and the user's
-own instance was running throughout this work — stopping it is not mine to do. There is no way to
-exercise a restart without it.
+**B1 passed on the user's own install**, reported after the feature merged: they restarted and
+landed on the session they had been using. That is the claim the whole feature rests on, and it is
+the one no test in this repository can make — every test here runs in a single process.
 
-So the honest position is the one this document opened with: **a green §A is not this feature
-working.** What §A does establish is narrower than it looks but is not nothing — the memory
+**The other six steps remain unrun.** Each needs the application quit and started again under
+particular conditions (two projects on different sessions, a closed session, a deleted worktree),
+and the user's own instance was running throughout the work — stopping it is not mine to do. They
+are not blocked on anything; they simply have not been exercised.
+
+B1 passing does not carry the rest: **a green §A plus one passing step is not the whole of §B.**
+What §A establishes is narrower than it looks but is not nothing — the memory
 round-trips through the real store including the backward-compatible read, the daemon writes it and
 declines to write when nothing changed, a no-session report leaves it alone, applying it starts no
 process, forgetting a project discards it, and a corrupt project file yields no memory rather than
