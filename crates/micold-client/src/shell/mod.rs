@@ -11,3 +11,4 @@
 //! operate on `App`, which is the binary's type.
 
 pub mod capabilities;
+pub mod startup;
