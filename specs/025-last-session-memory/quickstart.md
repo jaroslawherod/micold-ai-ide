@@ -27,6 +27,8 @@ Green is the gate. What each gate is watching, for this feature:
 | `micold-client/tests/app_state.rs` | applying a memory leaves other locations' open/closed state alone (§3.6, FR-006) |
 | `micold-client/tests/switch_active.rs` | switching still works after the move, and still records into the new home (FR-008) |
 | `micold-client/tests/switcher_forget_menu.rs` | forgetting a project discards its memory (§2.5, FR-009) |
+| daemon tests (`micold-daemon/`) | a report of **no session** leaves the memory untouched (§2.6, FR-005a) — the clause that stops closing a session from silently costing the user their place |
+| daemon tests (`micold-daemon/`) | a report naming the session already remembered writes nothing; one naming a different session writes (§2.3, FR-001a) |
 | `micold-core/tests/schema_hash.rs` | **unchanged hash** — this feature adds no protocol message and edits none. If this moves, something reached for the wire that did not need to (research R3) |
 
 **What §A cannot tell you**: whether any of this survives an actual restart. Every test above runs in
@@ -93,7 +95,20 @@ Each of these, from a clean restart:
 3. **Empty session**: start a session, type nothing, quit, restart. It was pruned at boot, so it is
    not restored — and nothing else breaks.
 
-### B6 — Nothing else moved
+### B6 — Closing does not cost you the memory (FR-005a)
+
+1. In project A, select session X. Then select session Y. Then **close** Y.
+2. Quit and restart.
+
+You land on Y's absence — the overview — because Y was closed and cannot be restored. Now instead:
+
+1. In project A, select X, then select Y, then close **X** (not the one you are on).
+2. Quit and restart.
+
+You land on Y. Closing another session did not disturb the memory, and neither did the pointer
+moving around while you worked.
+
+### B7 — Nothing else moved
 
 Open a project you have never used a session in: no session is current, the overview is shown, and
 nothing about it differs from before this feature (SC-006).
@@ -119,4 +134,5 @@ leaving the table blank and implying it was.
 | B3 — no keyboard focus at launch; switch still focuses | |
 | B4 — per project, across several switches | |
 | B5 — closed / deleted worktree / empty session | |
-| B6 — a project with no memory is unchanged | |
+| B6 — closing a session does not erase the memory | |
+| B7 — a project with no memory is unchanged | |

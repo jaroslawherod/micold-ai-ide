@@ -8,6 +8,13 @@
 
 **Input**: User description: "Remember which session I was on in each project across application restarts. Today the foreground session per project is remembered only while the app is running; nothing is persisted, so at launch no session is current and I land on the project overview instead of where I left off."
 
+## Clarifications
+
+### Session 2026-08-11
+
+- Q: When should the memory be written to disk? → A: Whenever it changes value, and only then. Reports that name the session already remembered — an attach re-sending the current id, a session start for the session already in front of the user — write nothing. A force-kill therefore loses at most the single most recent change, never the whole memory, which writing only at shutdown would risk in exactly the case the feature exists for.
+- Q: When the current session goes away (closed, or nothing current) the client already reports "no session" — should that clear the project's remembered session? → A: No. A "no session" report is ignored; the memory keeps naming the last session actually in front of the user. Clearing on every incidental loss of the pointer would erase the memory for reasons the user never took (a close, an internal cleanup), and the restore already refuses a session that is closed or gone (FR-005), so a stale memory is harmless where a lost one is not.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Pick up where I left off (Priority: P1)
@@ -87,13 +94,16 @@ that no longer exists is worse than not remembering at all.
    **Then** no session is restored for that project and nothing else about the project is disturbed.
 3. **Given** the remembered session's record is gone entirely,
    **When** the application starts,
-   **Then** the stale memory is discarded rather than carried forward, and the next session I select
-   replaces it.
+   **Then** nothing is restored from it, and the next session I make current in that project
+   replaces the memory.
 
 ---
 
 ### Edge Cases
 
+- **The session that was current is closed, and nothing replaces it.** The memory still names it.
+  Nothing is restored from it on the next launch (it is closed), but the memory is not erased by the
+  closing itself — only by another session becoming current (FR-005a).
 - **The remembered session belongs to a project that is no longer open.** The memory for a forgotten
   project goes with the project; it must not resurface if the same folder is opened again later.
 - **The application is force-killed rather than closed cleanly.** The memory is only as fresh as the
@@ -107,7 +117,9 @@ that no longer exists is worse than not remembering at all.
 - **The stored memory is unreadable or from an older version of the application.** It is treated as
   "no memory" and the application starts normally — a launch must never fail because of it.
 - **A session was started, used, and closed within one run, and nothing else selected.** The memory
-  does not point at the closed session on the next launch.
+  still names it — closing does not erase it (FR-005a) — and the next launch restores nothing from
+  it, because a closed session cannot be restored (FR-005). The user lands on the overview, which is
+  where they were when they quit.
 
 ## Requirements *(mandatory)*
 
@@ -125,6 +137,14 @@ that no longer exists is worse than not remembering at all.
 - **FR-005**: The application MUST NOT restore a session that has been closed, or whose record no
   longer exists. In those cases it MUST fall back to the same behaviour as a project with no
   memory.
+- **FR-001a**: The memory MUST be written durably whenever it changes, and MUST NOT be written when
+  a report names the session already remembered. Losing power or force-killing the application MUST
+  cost at most the single most recent change, never the whole memory.
+- **FR-005a**: A project's memory MUST only ever be replaced by another session becoming current in
+  that project. It MUST NOT be erased by the current session merely going away — closing it, or any
+  internal loss of the pointer. A memory naming a session that can no longer be restored is
+  harmless (FR-005 declines it); a memory erased for a reason the user never took is not, because it
+  silently costs them the place they would have returned to.
 - **FR-006**: When the remembered session cannot be restored, the application MUST leave the rest of
   the project untouched — its other sessions, its locations, and its open/closed state.
 - **FR-007**: When no session can be restored for the project being opened, the application MUST
@@ -167,6 +187,9 @@ that no longer exists is worse than not remembering at all.
 - **SC-005**: Restoring a session starts no process: the number of running sessions immediately
   after launch is the same as it would be without this feature.
 - **SC-006**: A user who has never used a session in a project sees no change in behaviour.
+- **SC-007**: Force-killing the application costs at most the most recently made choice: the session
+  in front of the user at the moment of the kill is restored on the next launch, provided it had
+  been current long enough for the change to be recorded.
 
 ## Assumptions
 
@@ -180,7 +203,5 @@ that no longer exists is worse than not remembering at all.
   exactly as it does when selected by hand; making it run again remains an explicit action.
 - Sessions' run state is not remembered across restarts and this feature does not change that — so
   the common case at launch is restoring a session that is not running.
-- Memory is written as the current session changes rather than only at exit, so a force-kill loses
-  at most the most recent change.
 - Nothing about the side panel's own open/closed rows is persisted by this feature; the panel's
   behaviour on a restored session follows from that session becoming current, as it already does.

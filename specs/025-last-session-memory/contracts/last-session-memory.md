@@ -29,8 +29,11 @@ memory for the run. `store.rs` has no locking, so a client-side write would clob
 daemon had written since the client loaded — the hazard `main.rs` already records for
 `projects.json`. *(Invariant I2)*
 
-**§2.3** It is written **as the current session changes**, not at exit. A force-kill therefore loses
-at most the most recent change rather than the whole memory. *(spec Assumptions, Edge Cases)*
+**§2.3** It is written **whenever it changes value, and only then** — not at exit, and not on a
+report that names the session already remembered. Attach re-sends the current id and a session start
+names a session that may already be in front of the user; neither is a change, and neither writes.
+A force-kill therefore costs at most the single most recent change rather than the whole memory.
+*(FR-001a, SC-007)*
 
 **§2.4** With two windows open, both report through the same daemon, which serialises the writes.
 The last write wins. Neither window is blocked by the other, and the file is never left partially
@@ -38,6 +41,12 @@ written. *(Edge Cases)*
 
 **§2.5** Forgetting a project discards its memory, because the memory lives in the per-project state
 file that forgetting already deletes. *(FR-009)*
+
+**§2.6** A report of **no session** MUST NOT clear the memory. The pointer goes to nothing for
+reasons the user did not take — closing a session, an internal cleanup after a reconcile — and
+erasing the memory on those would silently cost them the place they would have returned to. The
+memory is replaced only by another session becoming current in that project. A memory naming a
+session that can no longer be restored is harmless, because §3.2 declines it. *(FR-005a)*
 
 ## §3 What a launch does with it
 
