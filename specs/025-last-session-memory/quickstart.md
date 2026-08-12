@@ -130,15 +130,42 @@ leaving the table blank and implying it was.
 
 | Recorded | |
 |---|---|
-| Date | 2026-08-11 |
-| Platform | Linux |
+| Date | 2026-08-11 (B1), 2026-08-12 (B3, B7) |
+| Platform | B1 on the user's own install; B3 and B7 on Xvfb + lavapipe in an isolated sandbox (see below) |
 | B1 — reopen lands on the session, first frame | **PASS** — confirmed by the user on their own install ("it works") |
-| B2 — nothing started | **NOT RUN** |
-| B3 — the restored terminal is ready to type; a switch still focuses | **NOT RUN** (see the note below — B3's wording changed) |
+| B2 — nothing started | **NOT RUN** — attempted; see why it does not count below |
+| B3 — the restored terminal is ready to type; a switch still focuses | **PASS** — [evidence](./evidence/B3-focus-states.png) |
 | B4 — per project, across several switches | **NOT RUN** |
 | B5 — closed / deleted worktree / empty session | **NOT RUN** |
 | B6 — closing a session does not erase the memory | **NOT RUN** |
-| B7 — a project with no memory is unchanged | **NOT RUN** |
+| B7 — a project with no memory is unchanged | **PASS** |
+
+### How B3 and B7 were run
+
+Not by hand at a desk, and not on the user's install. The client was launched on a private X server
+(`Xvfb :78`, lavapipe software Vulkan) against a **fully isolated world**: its own `XDG_DATA_HOME`
+(so a separate `projects.json`), its own `XDG_RUNTIME_DIR` (so a separate daemon socket — the client
+spawned its own daemon and could not reach the user's), and its own `HOME` (so a separate
+`~/.claude`). Two throwaway git repos stood in for projects. The user's running application and
+daemon were never touched, and everything started was stopped afterwards by PID.
+
+**B3 is the one that needed thought.** A restored session is not running, so nothing echoes what you
+type — "ready to type" has no observable in the terminal itself. The observable is the terminal
+bar's **release-focus control**, which is always present but enabled only while the terminal holds
+the keyboard (feature 023, FR-008a). The evidence image stacks three readings of that control:
+
+1. **green** — immediately after a restart that restored the session: **enabled**. The restored
+   terminal holds the keyboard.
+2. **orange** — after clicking it to release focus: **disabled**. This is what makes reading 1 mean
+   something; without it, "bright icon" is an assumption rather than a comparison.
+3. **blue** — after switching away to the other project and back: **enabled** again. A switch still
+   focuses (the second half of B3), and because this run *started* from the released state of
+   reading 2, the re-focus is unambiguously the switch's doing rather than something inherited.
+
+One false alarm worth recording: reading 3 first came out disabled, which looked like a failure to
+re-focus. The project switcher menu was still open, and an open overlay takes the keyboard by
+design. Closing it gave the reading above. A coordinate means something different with an overlay
+open — the same trap the `visual-pass` skill warns about.
 
 ### What was run, and what was not
 
@@ -146,10 +173,21 @@ leaving the table blank and implying it was.
 landed on the session they had been using. That is the claim the whole feature rests on, and it is
 the one no test in this repository can make — every test here runs in a single process.
 
-**The other six steps remain unrun.** Each needs the application quit and started again under
+**B2 was attempted and does not count.** The client was restarted, but the **daemon outlived it** —
+it is a separate process that owns sessions by design — so the session never stopped and its
+`claude` process was still running from before. Nothing was started *by the restore*, but that is
+not what the frame proves, because there was nothing to start. A real B2 needs the daemon stopped
+too, so the session is genuinely idle at launch. Recorded as not run rather than passed.
+
+**B4, B5 and B6 remain unrun.** Each needs the application quit and started again under
 particular conditions (two projects on different sessions, a closed session, a deleted worktree),
-and the user's own instance was running throughout the work — stopping it is not mine to do. They
-are not blocked on anything; they simply have not been exercised.
+and each needs the sandbox seeded into a particular shape first. They are not blocked on anything —
+the sandbox recipe above makes them cheap to run — they simply have not been exercised.
+
+Two findings that make a future run cheaper. The daemon socket path is bounded by `sun_path`
+(108 chars), so the isolated `XDG_RUNTIME_DIR` must be short — the application reports this clearly
+rather than failing obscurely. And a session's record is persisted *before* any `claude` spawn, so
+sessions can be created in a sandbox even where the AI CLI is unavailable.
 
 B1 passing does not carry the rest: **a green §A plus one passing step is not the whole of §B.**
 What §A establishes is narrower than it looks but is not nothing — the memory
