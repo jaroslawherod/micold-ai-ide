@@ -12,6 +12,7 @@ use iced::{Subscription, Task};
 mod shell;
 
 use crate::shell::capabilities::Capabilities;
+use crate::shell::daemon_sync::{reconcile_catalog, send_op, switch_daemon_attachment, PendingOp};
 use micold_client::app::{Message, State};
 use micold_client::features::session::SelectKind;
 use micold_client::features::worktree_form::{
@@ -31,21 +32,16 @@ use micold_core::fs_scan::FolderBrowser;
 use micold_core::git::Git;
 use micold_core::os_theme::OsThemeProbe;
 use micold_core::protocol::grid::LineId;
-use micold_core::protocol::messages::{
-    CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, SessionProcess, WireLifecycle,
-};
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, OperationResult, SessionProcess};
 use micold_core::selector::{Selector, SelectorStatus};
-use micold_core::session::{
-    Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
-    TerminalMode,
-};
+use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId, TerminalMode};
 use micold_core::settings::Settings;
 
 use micold_core::theme::{observe_system_scheme, SystemScheme};
 use micold_core::worktree::Worktree;
 use micold_core::worktree::{BranchOrigin, CreateMode};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -64,62 +60,6 @@ const OS_THEME_POLL: Duration = Duration::from_millis(500);
 const BACKGROUND_OS_THEME_POLL: Duration = Duration::from_secs(1);
 
 /// The binary's application state: the pure core plus gui-only runtime handles.
-/// A mutating RPC the client has sent to the daemon and is awaiting a reply for (T055). Tracked per
-/// correlation `req` so the reply can be matched, a duplicate submission avoided, and — if the
-/// connection drops before the reply arrives — the user can be told the outcome is unknown (FR-031/035).
-#[derive(Debug, Clone)]
-enum PendingOp {
-    /// A `SessionCreate`; on success the daemon-assigned session is selected + viewed. Further
-    /// variants (project/session-delete) are added as each mutation domain is migrated.
-    CreateSession,
-    DeleteSession,
-    WorktreeCreate(String),
-    WorktreeDelete(String),
-    /// A read-only `BranchPreflight` (feature 016). Carries what the reply needs to continue:
-    /// the project it was asked about, the derived names, whether the branch came from the
-    /// picker, and the remote the user named by picking that row — so nothing is recomputed when
-    /// the answer lands. `project` is what makes a reply that outlived its form (cancelled, or
-    /// the user switched project) detectable instead of acted upon.
-    BranchPreflight {
-        project: PathBuf,
-        names: micold_core::naming::DerivedNames,
-        picked: bool,
-        preferred_remote: Option<String>,
-    },
-    /// A read-only `BranchList` for the existing-branch picker (feature 016).
-    BranchList {
-        project: PathBuf,
-    },
-    WorktreeRename(String),
-    ProjectAdd,
-    ProjectRemove,
-    ProjectRename,
-    /// A `SettingsSet` (FR-012a/FR-012b, BUG-003/T100): the service echoes the persisted result
-    /// back as `SettingsChanged` to every connected client (including this one), which is what
-    /// actually applies it — this variant exists only so a failure reaches the user and a
-    /// disconnect-before-reply resolves to "unknown" like every other mutating RPC (T055).
-    SettingsSet,
-}
-
-impl PendingOp {
-    /// A short verb phrase for an error / unknown-outcome notification ("create the session …").
-    fn describe(&self) -> String {
-        match self {
-            PendingOp::CreateSession => "create the session".into(),
-            PendingOp::DeleteSession => "delete the session".into(),
-            PendingOp::WorktreeCreate(d) => format!("create the worktree \"{d}\""),
-            PendingOp::BranchPreflight { .. } => "check the branch".into(),
-            PendingOp::BranchList { .. } => "list the branches".into(),
-            PendingOp::WorktreeDelete(d) => format!("delete the worktree \"{d}\""),
-            PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
-            PendingOp::ProjectAdd => "add the project".into(),
-            PendingOp::ProjectRemove => "remove the project".into(),
-            PendingOp::ProjectRename => "rename the project".into(),
-            PendingOp::SettingsSet => "update the settings".into(),
-        }
-    }
-}
-
 struct App {
     core: State,
     /// Every service capability, chosen once at boot (feature 021, T049 — FR-018).
@@ -2037,44 +1977,6 @@ fn send_pane_size(app: &App, id: SessionId) {
     }
 }
 
-/// Map a wire lifecycle back to the domain one (inverse of the daemon's `wire_lifecycle`).
-/// `InterruptedResumable` — a session the daemon found durably-running after a restart, never
-/// auto-relaunched — is carried through as its own state so the sidebar/status can present it
-/// distinctly and its select action resumes it (FR-006a).
-fn wire_to_lifecycle(w: &WireLifecycle) -> SessionLifecycle {
-    match w {
-        WireLifecycle::Idle => SessionLifecycle::Idle,
-        WireLifecycle::InterruptedResumable => SessionLifecycle::InterruptedResumable,
-        WireLifecycle::Starting => SessionLifecycle::Starting,
-        WireLifecycle::Running => SessionLifecycle::Running,
-        WireLifecycle::Restarting { attempts } => SessionLifecycle::Restarting {
-            attempts: *attempts,
-        },
-        WireLifecycle::Failed { .. } => SessionLifecycle::Failed,
-    }
-}
-
-/// Send a correlated mutating RPC to the daemon: allocate a `req`, record the pending op (so the
-/// reply can be matched and a disconnect can resolve it as unknown), and send the message `build`s.
-/// A no-op that notifies the user when there is no daemon connection (T055).
-fn send_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64) -> ClientMsg) {
-    let Some(daemon) = &app.daemon else {
-        app.core.notify_error(format!(
-            "Not connected to the session service — can't {} right now.",
-            op.describe()
-        ));
-        return;
-    };
-    let req = app.next_req;
-    app.next_req += 1;
-    daemon.send(build(req));
-    app.pending_ops.insert(req, op);
-}
-
-/// Move this client's daemon attachment from `old` to `new` on a project switch: release the old
-/// (so another window can take it), attach the new, and set the viewed session — so the daemon
-/// streams grid frames and discovers worktrees for the project now in focus (T055). A no-op when
-/// disconnected; the initial attach on connect is handled by `DaemonConnected`.
 /// Append a line to the client's own log, beside the daemon's (`micold-client.log`).
 ///
 /// The client has no logging framework and this does not add one: a single appended line, opened
@@ -2128,25 +2030,6 @@ fn log_foreground_choice(app: &App, path: &Path) {
     ));
 }
 
-fn switch_daemon_attachment(app: &App, old: Option<PathBuf>, new: &Path) {
-    let Some(daemon) = &app.daemon else {
-        return;
-    };
-    if let Some(old) = old {
-        if old != new {
-            daemon.send(ClientMsg::Detach { project: old });
-        }
-    }
-    daemon.send(ClientMsg::Attach {
-        project: new.to_path_buf(),
-        force: false,
-    });
-    daemon.send(ClientMsg::SetViewedSession {
-        project: new.to_path_buf(),
-        session: app.core.active_session,
-    });
-}
-
 /// Phrase the surviving paths for a partial-success delete notice (FR-023d, BUG-002).
 ///
 /// Names the owner when the platform reported one, because that is what tells the user *why* the
@@ -2168,155 +2051,6 @@ fn describe_leftovers(leftovers: &[micold_core::worktree::Leftover]) -> String {
     match leftovers.len().saturating_sub(NAMED) {
         0 => format!("these paths could not be removed: {named}"),
         rest => format!("these paths could not be removed: {named}, and {rest} more"),
-    }
-}
-
-/// Reconcile the client's core session state from the daemon's authoritative catalog snapshot
-/// (FR-011). The daemon owns sessions now, so each project's session list is made to mirror the
-/// snapshot: existing sessions have their lifecycle + label updated; sessions the daemon reports
-/// but the client lacks are added; sessions the daemon no longer reports (archived/removed) are
-/// dropped. A dangling `active_session` pointer is cleared.
-fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktrees: bool) {
-    // Mirror the daemon's project list into the client (T055). Add projects the daemon reports that
-    // the client lacks (e.g. opened in another window), and adopt the daemon's display name for known
-    // ones. Deliberately NOT a full mirror: projects are not *removed* here — a `CatalogChanged` that
-    // predates this client's own in-flight `ProjectAdd` must not drop the project it just opened, and
-    // an ephemeral (non-persisting) daemon reporting an empty catalog must not wipe the list. Forget
-    // drops the record locally (optimistically) and durably on the daemon.
-    for snap in &snapshot.projects {
-        if let Some(existing) = core
-            .workspace
-            .projects
-            .iter_mut()
-            .find(|p| p.path == snap.path)
-        {
-            existing.display_name = snap.display_name.clone();
-        } else {
-            let availability = if snap.available {
-                micold_core::project::Availability::Available
-            } else {
-                micold_core::project::Availability::Unavailable
-            };
-            let mut project = micold_core::project::Project::new(
-                snap.path.clone(),
-                snap.is_git_repo,
-                availability,
-            );
-            project.display_name = snap.display_name.clone();
-            core.workspace.projects.push(project);
-        }
-    }
-    // Sessions observed transitioning into `Restarting` this reconciliation (feature 008,
-    // FR-011/SC-007) — collected here and applied after the loop below, since
-    // `note_background_restart` needs `&mut core` while `list` still holds `core.workspace`
-    // borrowed. `note_background_restart` itself no-ops for the active project's session, so
-    // background-ness isn't checked here.
-    let mut newly_restarting: Vec<SessionId> = Vec::new();
-    for project in &snapshot.projects {
-        let list = core
-            .workspace
-            .sessions
-            .entry(project.path.clone())
-            .or_default();
-        let snap_ids: HashSet<SessionId> = project.sessions.iter().map(|s| s.id).collect();
-        for summary in &project.sessions {
-            let lifecycle = wire_to_lifecycle(&summary.lifecycle);
-            if let Some(existing) = list.iter_mut().find(|s| s.id == summary.id) {
-                if !matches!(existing.lifecycle, SessionLifecycle::Restarting { .. })
-                    && matches!(lifecycle, SessionLifecycle::Restarting { .. })
-                {
-                    newly_restarting.push(existing.id);
-                }
-                existing.lifecycle = lifecycle;
-                existing.activity = summary.activity.clone();
-                // Adopt the daemon's title only when it has a real one. The daemon now overlays the
-                // live OSC-0 title onto the summary (T047), but a summary can still be `Pending`
-                // before the first title arrives; don't let that clobber a title already learned.
-                if let SessionLabel::Named(_) = summary.title {
-                    existing.label = summary.title.clone();
-                }
-            } else {
-                let location = summary
-                    .worktree_dir
-                    .clone()
-                    .map(SessionLocation::Worktree)
-                    .unwrap_or(SessionLocation::Default);
-                let mut s = Session::restored(
-                    summary.id,
-                    location,
-                    summary.title.clone(),
-                    TerminalMode::AiCli,
-                );
-                s.lifecycle = lifecycle;
-                s.activity = summary.activity.clone();
-                list.push(s);
-            }
-        }
-        // Drop sessions the daemon no longer reports (archived/removed on its side).
-        list.retain(|s| snap_ids.contains(&s.id));
-    }
-    for id in newly_restarting {
-        core.note_background_restart(id);
-    }
-    // Mirror the active project's worktrees from the daemon's git discovery into the render state
-    // (the sidebar reads `core.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
-    // the initial welcome: the welcome's worktree cache is empty until the post-attach refresh, so
-    // syncing it would briefly blank the list boot-time local discovery had populated (T055).
-    if sync_worktrees {
-        if let Some(active) = core.workspace.active.clone() {
-            if let Some(project) = snapshot.projects.iter().find(|p| p.path == active) {
-                let root = active.join(".claude/worktrees");
-                core.set_worktrees(
-                    project
-                        .worktrees
-                        .iter()
-                        .map(|w| micold_core::worktree::Worktree {
-                            dir_name: w.dir_name.clone(),
-                            path: root.join(&w.dir_name),
-                            branch: w.branch.clone(),
-                            status: wire_to_worktree_status(w.status),
-                        })
-                        .collect(),
-                );
-                // Mirror display-name overrides from the catalog (a second window sees a rename).
-                let names: std::collections::BTreeMap<String, String> = project
-                    .worktrees
-                    .iter()
-                    .filter(|w| w.display_name != w.dir_name)
-                    .map(|w| (w.dir_name.clone(), w.display_name.clone()))
-                    .collect();
-                if names.is_empty() {
-                    core.workspace.worktree_names.remove(&active);
-                } else {
-                    core.workspace.worktree_names.insert(active, names);
-                }
-            }
-        }
-    }
-    // Clear a dangling active-session pointer if its session is gone.
-    //
-    // Feature 024: through `set_current_session`, like every other app-initiated clear, so the row
-    // the vanished session was in is committed open rather than snapping shut under the user
-    // (FR-001c). Nothing is armed: there is no session to scroll to.
-    if let Some(id) = core.active_session {
-        if core.workspace.find_session(id).is_none() {
-            core.set_current_session(None);
-        }
-    }
-}
-
-/// Project the wire [`WorktreeStatus`] back onto the client's core status enum (T055). The inverse of
-/// the daemon's mapping; `Locked`/`Prunable` both collapse to `Invalid` (the client renders both as
-/// an unusable/removable worktree).
-fn wire_to_worktree_status(
-    status: micold_core::protocol::messages::WorktreeStatus,
-) -> micold_core::worktree::WorktreeStatus {
-    use micold_core::protocol::messages::WorktreeStatus as Wire;
-    use micold_core::worktree::WorktreeStatus as Core;
-    match status {
-        Wire::Clean => Core::Valid,
-        Wire::Missing => Core::Missing,
-        Wire::Locked | Wire::Prunable => Core::Invalid,
     }
 }
 
@@ -2639,10 +2373,14 @@ fn scan(browser: &dyn FolderBrowser, dir: PathBuf) -> Message {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    // The catalog fixtures moved to `shell/daemon_sync.rs` with the reconcile tests that are
+    // mostly what they were for; the stamper-seeding tests below still build a snapshot, so they
+    // import them back rather than keep a second copy.
+    use crate::shell::daemon_sync::tests::{snapshot_with, summary_at};
     use micold_client::features::settings::SettingsDraft;
-    use micold_core::protocol::messages::{ActivitySignal, ProjectSnapshot, SessionSummary};
+    use micold_core::protocol::messages::WireLifecycle;
 
     // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
     // own stderr, e.g. naming which submodule failed and why) was destructured with `..` and
@@ -2676,26 +2414,6 @@ mod tests {
             ),
             "git failed to create the worktree"
         );
-    }
-
-    fn summary(id: SessionId, title: &str, lifecycle: WireLifecycle) -> SessionSummary {
-        summary_at(id, title, lifecycle, 0)
-    }
-
-    fn summary_at(
-        id: SessionId,
-        title: &str,
-        lifecycle: WireLifecycle,
-        input_serial: u64,
-    ) -> SessionSummary {
-        SessionSummary {
-            id,
-            worktree_dir: None,
-            title: SessionLabel::Named(title.into()),
-            lifecycle,
-            activity: ActivitySignal::Unknown,
-            input_serial,
-        }
     }
 
     // --- T111 / FR-028a: seeding the stamper from the daemon's authoritative position (BUG-006) ---
@@ -2760,131 +2478,6 @@ mod tests {
             panic!("stamp must produce SessionInput");
         };
         assert_eq!(serial, 0);
-    }
-
-    fn snapshot_with(path: &str, sessions: Vec<SessionSummary>) -> CatalogSnapshot {
-        CatalogSnapshot {
-            schema_version: 1,
-            last_active: Some(PathBuf::from(path)),
-            projects: vec![ProjectSnapshot {
-                path: PathBuf::from(path),
-                display_name: "demo".into(),
-                is_git_repo: true,
-                available: true,
-                worktrees: Vec::new(),
-                sessions,
-            }],
-        }
-    }
-
-    #[test]
-    fn reconcile_adds_updates_and_drops_sessions_from_the_snapshot() {
-        let path = "/repo/demo";
-        let mut core = State::default();
-
-        // First snapshot: one Running session — added to the core.
-        let a = SessionId::new();
-        reconcile_catalog(
-            &mut core,
-            &snapshot_with(path, vec![summary(a, "A", WireLifecycle::Running)]),
-            false,
-        );
-        let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
-        assert_eq!(list.len(), 1);
-        assert_eq!(list[0].id, a);
-        assert_eq!(list[0].lifecycle, SessionLifecycle::Running);
-
-        // Second snapshot: A is now Idle, and a new session B appears — A updated, B added.
-        let b = SessionId::new();
-        reconcile_catalog(
-            &mut core,
-            &snapshot_with(
-                path,
-                vec![
-                    summary(a, "A", WireLifecycle::Idle),
-                    summary(b, "B", WireLifecycle::Running),
-                ],
-            ),
-            false,
-        );
-        let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
-        assert_eq!(list.len(), 2);
-        assert_eq!(
-            list.iter().find(|s| s.id == a).unwrap().lifecycle,
-            SessionLifecycle::Idle,
-            "existing session's lifecycle is reconciled"
-        );
-
-        // Third snapshot: only B remains (A archived/removed on the daemon) — A is dropped, and a
-        // dangling active pointer to A is cleared.
-        core.active_session = Some(a);
-        reconcile_catalog(
-            &mut core,
-            &snapshot_with(path, vec![summary(b, "B", WireLifecycle::Running)]),
-            false,
-        );
-        let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
-        assert_eq!(list.len(), 1);
-        assert_eq!(list[0].id, b);
-        assert_eq!(core.active_session, None, "dangling active pointer cleared");
-    }
-
-    // Convergence fix (retrofit session, 2026-07-27): a session transitioning to `Restarting` in
-    // a background (inactive) project's snapshot must raise the FR-011/SC-007 return notice.
-    // `State::note_background_restart` existed and was unit-tested in isolation
-    // (`tests/background_restart.rs`), but nothing called it from the daemon-driven reconcile
-    // path after feature 010 moved supervision into the daemon — so no background restart was
-    // ever actually detected or notified.
-    #[test]
-    fn reconcile_detects_a_background_restart_and_arms_the_return_notice() {
-        let mut core = State::default();
-        core.workspace.active = Some(PathBuf::from("/b")); // /a is the background project
-
-        let a = SessionId::new();
-        reconcile_catalog(
-            &mut core,
-            &snapshot_with("/a", vec![summary(a, "A", WireLifecycle::Running)]),
-            false,
-        );
-        assert!(core.restarted_while_inactive.is_empty());
-
-        // /a's session crashes and the daemon starts restarting it, while /a is still inactive.
-        reconcile_catalog(
-            &mut core,
-            &snapshot_with(
-                "/a",
-                vec![summary(a, "A", WireLifecycle::Restarting { attempts: 1 })],
-            ),
-            false,
-        );
-        assert!(
-            core.restarted_while_inactive.contains(&a),
-            "a background session's transition into Restarting must be detected and marked"
-        );
-
-        // A further Restarting snapshot (still retrying) must not re-mark or duplicate anything.
-        reconcile_catalog(
-            &mut core,
-            &snapshot_with(
-                "/a",
-                vec![summary(a, "A", WireLifecycle::Restarting { attempts: 2 })],
-            ),
-            false,
-        );
-        assert_eq!(core.restarted_while_inactive.len(), 1);
-
-        // Returning to /a fires the return notice (mirrors `background_restart.rs`).
-        core.record_foreground();
-        assert!(core.switch_active(Path::new("/a")));
-        let visible = core
-            .notify
-            .visible()
-            .expect("the return notice reached the queue");
-        assert_eq!(visible.level, micold_core::notify::Level::Info);
-        assert_eq!(
-            visible.message,
-            "A background session was restarted while you were away."
-        );
     }
 
     #[test]
@@ -3167,7 +2760,7 @@ mod tests {
     /// Builds an `App` with every field at a neutral default, so each test only spells out the
     /// fields it actually varies (mirrors the literal-construction pattern the other tests in this
     /// module already use, factored out because T100's tests need several variants of it).
-    fn base_app() -> App {
+    pub(crate) fn base_app() -> App {
         App {
             caps: Capabilities::real(),
             core: State::default(),
