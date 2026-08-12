@@ -219,3 +219,20 @@ Task: "Failing test that a launch does not focus the terminal, in tests/terminal
   belongs there rather than in a second mechanism bolted on beside it
 - No protocol message is added or changed, so no schema hash moves and no version handshake shifts
 - Commit after each task or logical group; stop at any checkpoint to validate a story on its own
+
+---
+
+## Phase 7: Convergence
+
+Appended by `/speckit-converge` after implementation, from assessing the merged code against this
+feature's spec, plan, and tasks. One gap found.
+
+- [X] T035 Add a daemon test in `crates/micold-daemon/tests/` that drives `DaemonState::set_viewed` directly: a report of **no session** leaves the project's memory naming the last real session, and a report naming a session records it — per FR-005a and contract §2.6 (partial)
+
+**Why this was missed.** T009 asked for exactly this and was satisfied with two tests that do not
+reach it: one calls `Catalog::remember_foreground` directly, the other archives the remembered
+session. Both are worth having, but the `Some`-only guard lives in `set_viewed`
+(`crates/micold-daemon/src/state.rs:485`), and **no test drives that function at all** — so a
+regression that started clearing the memory on a no-session report would pass the whole suite. That
+guard is the clause that stops closing a session from silently costing the user the place they would
+have returned to, which is why a HIGH rather than a note.
