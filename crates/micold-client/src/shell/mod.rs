@@ -14,3 +14,4 @@ pub mod capabilities;
 pub mod daemon_sync;
 pub mod persist;
 pub mod startup;
+pub mod subscriptions;
