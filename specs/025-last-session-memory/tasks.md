@@ -236,3 +236,24 @@ session. Both are worth having, but the `Some`-only guard lives in `set_viewed`
 regression that started clearing the memory on a no-session report would pass the whole suite. That
 guard is the clause that stops closing a session from silently costing the user the place they would
 have returned to, which is why a HIGH rather than a note.
+
+---
+
+## Phase 8: Bugfix BUG-001
+
+**Bugfix**: 2026-08-14 — [BUG-001](./bugs/BUG-001.md) Updated from bugfix patch. Three tasks added;
+none reopened, because no existing task claimed the main terminal area — which is the finding.
+
+The terminal area renders `Starting…` whenever it has no grid. A restored session has no grid and no
+process, so it says that permanently, while the status bar one row below says `interrupted` and
+offers `restart`. FR-004 is upheld and the screen contradicts it. See [BUG-001](./bugs/BUG-001.md)
+for why this is a spec gap rather than drift, and for the two fixes that were rejected.
+
+- [X] T036 Failing test in `crates/micold-client/src/ui/terminal.rs`'s test module (where `session_status` and the pane's other empty-state assertions already live): with a current session whose lifecycle is `InterruptedResumable`, `Idle`, or `Failed`, and no grid, the pane MUST NOT render `Starting…`. Drive the three separately — they are the three `attached_process_restartable` already names, and a fix that handles only `InterruptedResumable` would pass a single-case test while leaving a restored-then-stopped session lying (FR-014, §4.3). **Also added while implementing**: `crates/micold-client/tests/terminal_empty_state.rs`, a source-level gate. The unit tests drive the decision function directly, so reverting the pane to a hardcoded literal leaves all three green — verified by mutation. The gate reads the source and fails, following `tests/terminal_bar_stability.rs` under Principle I's GUI-wiring exception
+- [X] T037 Make the pane's `grid: None` arm consult the session's lifecycle instead of assuming one, in `crates/micold-client/src/ui/terminal.rs:356`. `Starting`/`Restarting` keep the existing wording; the not-running three say something true and point at the `restart` control already in the bar. Read the lifecycle the way `session_status` (same file) does rather than adding a second lookup — two mappings of one fact is how the bar and the body came to disagree in the first place
+- [X] T038 Add a row to quickstart §A for T036's gate, and a sentence to B2 in §B: the restored session's terminal must not claim to be starting. B2 is the step that found this, and it currently records the defect in prose while the step itself does not ask for it
+
+**Not in scope for this phase.** The wording belongs to every session with no grid, not only a
+restored one, so fixing it corrects feature 006's empty state for all callers. That is intended —
+there is one branch and it should be right — but it means the fix is not gated on this feature's
+tests alone, and `tests/terminal_bar_stability.rs` is the neighbour to check it against.
