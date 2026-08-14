@@ -158,15 +158,61 @@ claims to, that is not run either. B2 sat in that state for two days before bein
 
 | Recorded | |
 |---|---|
-| Date | 2026-08-11 (B1), 2026-08-12 (B3, B7), 2026-08-14 (B2, B4, B5, B6; then **all of §B re-run** after BUG-001 was fixed) |
+| Date | 2026-08-11 (B1), 2026-08-12 (B3, B7), 2026-08-14 (B2, B4, B5, B6; then **all of §B re-run** after BUG-001 was fixed; then **B2 re-run again** after BUG-002 reversed it) |
 | Platform | B1 on the user's own install; everything else on Xvfb + lavapipe in an isolated sandbox (see below) |
 | B1 — reopen lands on the session, first frame | **PASS** — confirmed by the user on their own install ("it works"), and reproduced in the sandbox on every restart below |
-| B2 — it came back up, and only it did | **NOT RUN against the current behaviour.** The recorded PASS — [evidence](./evidence/B2-restore-starts-nothing.png) — is of the *superseded* step: it confirms 0 `claude` processes after a restore, which [BUG-002](./bugs/BUG-002.md) reversed. The evidence is kept because it is accurate about what the build then did; it is no longer evidence of a passing step. Re-run needed: exactly one more `claude`, and the FR-014 wording reached via a second window holding the project |
+| B2 — it came back up, and only it did | **PASS** (2026-08-14, after BUG-002) — [evidence](./evidence/B2-postbug002-restore-resumes.png). From a genuinely idle sandbox (0 micold, 0 `claude`, verified), launching produced **exactly one** `claude`, and its command line is `claude --resume ede92724-a79a-444c-84f9-a6c67c91b08e` — the id `last_session` held on disk. Zero clicks. The terminal is live and rendering real output, not a placeholder. The earlier PASS — [superseded evidence](./evidence/B2-restore-starts-nothing.png) — recorded 0 `claude` after a restore, which was correct for the build it was taken on and is what BUG-002 reversed |
 | B3 — the restored terminal is ready to type; a switch still focuses | **PASS** — [evidence](./evidence/B3-focus-states.png) |
 | B4 — per project, across several switches | **PASS** — [evidence](./evidence/B4-per-project-memory.png) |
 | B5 — closed / deleted worktree / empty session | **PASS**, all three — [evidence](./evidence/B5-B6-kept-and-declined.png). B5.2 passes against the *corrected* expectation; the step as previously written would have failed |
 | B6 — closing a session does not erase the memory | **PASS**, both halves — [evidence](./evidence/B5-B6-kept-and-declined.png) |
 | B7 — a project with no memory is unchanged | **PASS** |
+
+### B2, re-run after BUG-002 (2026-08-14)
+
+Same method as the runs below — Xvfb `:79` + lavapipe, an isolated sandbox with its own
+`XDG_DATA_HOME`, `XDG_RUNTIME_DIR`, `CLAUDE_CONFIG_DIR` and `MICOLD_DAEMON_BIN`, and a throwaway git
+repo as the project. What is different, and worth copying next time:
+
+- **Both binaries were pinned to a private directory before the run.** `target-shared/` is shared
+  across worktrees, and midway through this pass another worktree rebuilt `micold-daemon` into it —
+  the client then showed a build-mismatch banner because it had spawned a daemon from a different
+  branch. Copy `micold-ai-ide` and `micold-daemon` out of the target dir and point
+  `MICOLD_DAEMON_BIN` at the copy, or the thing under test can change under you mid-run.
+- **`XDG_RUNTIME_DIR` must be short.** The scratchpad path exceeds `sun_path`'s 108 bytes, and the
+  client fails to connect with "local socket name length exceeds capacity of sun_path". `/tmp/<short>`
+  works.
+- **The session was created through the UI; only the *project* was seeded**, and the transcript was
+  written by hand at `<CLAUDE_CONFIG_DIR>/projects/<encoded-cwd>/<session-id>.jsonl` so
+  `prune_empty_sessions` would keep it. `last_session` was never seeded — the application wrote it,
+  and it is what the restore was then measured against.
+
+**Result: PASS.** From 0 micold and 0 `claude`, launching produced exactly one `claude`, whose
+command line is `claude --resume <the id in last_session>`, with no clicks. The terminal renders real
+output rather than a placeholder. A second window opened onto the same project was refused (read-only
+banner) and started **no** additional process, which is the SC-005a bound holding at the one seam
+where it could plausibly have been broken.
+
+**Two things this run could not establish, and did not:**
+
+- **A resumed *conversation*.** The sandbox's `CLAUDE_CONFIG_DIR` has no credentials, so `claude`
+  comes up at its first-run screen rather than replaying the seeded transcript. What is proven is
+  that the process is spawned, with `--resume` and the right id, and that its output reaches the
+  pane. That the conversation itself is restored is the provider's behaviour, not this feature's.
+- **FR-014 by the intended route.** Holding the project in a second window did not empty that
+  window's pane — the daemon was still hosting the session and still streamed it. The FR-014 wording
+  *was* seen on screen earlier in this pass, in the mismatched-daemon run, where the resume spawned a
+  process that then exited: the body read "This session is not running. Choose restart below to
+  resume it." with the bar at `idle` beside it
+  ([evidence](./evidence/B2-postbug002-refused-resume-fr014.png)). That is a real instance of the
+  state FR-014 exists for, reached by accident rather than by design, and it is weaker evidence than
+  a deliberate refusal would be.
+
+**One observation worth following up, not caused by BUG-002.** With the session live and streaming,
+the bottom bar continued to read `interrupted` and offer `restart` rather than `running`. It does the
+same after clicking the session row by hand, so it is not specific to the restore path and is not a
+regression from this change — but it is the bar and the body disagreeing about one session, which is
+the shape BUG-001 was about. Worth its own report.
 
 > **[BUG-002](./bugs/BUG-002.md) unsettles this table again, and only partly.** The fix changes what
 > a restored session *does* — it now resumes — so B2's recorded pass is of a rule that no longer
