@@ -256,7 +256,11 @@ way to reach a current-but-not-running session (clicking its row) *does* start i
 placeholder briefly honest. So this feature is what makes a misleading first screen the normal case
 for anyone who quits on an idle session. Visible in the left half of the B2 evidence image.
 
-Filed as [BUG-001](./bugs/BUG-001.md).
+Filed as [BUG-001](./bugs/BUG-001.md), and **fixed** — the empty state now answers from the same
+predicate that decides whether the `restart` control exists, so the two cannot disagree. Re-run
+under B2's conditions and confirmed on screen: [before and
+after](./evidence/BUG-001-before-after.png). The B2 evidence image above is the *pre-fix* state, and
+is kept because it is what the step actually found.
 
 **2. `last_active` no longer follows the user's project switches.** Switching projects sends no
 message that tells the daemon which project is active — there is no such message in the protocol —
