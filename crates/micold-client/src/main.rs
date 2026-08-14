@@ -12,6 +12,8 @@ mod shell;
 
 use crate::shell::capabilities::Capabilities;
 use crate::shell::daemon_sync::{reconcile_catalog, send_op, switch_daemon_attachment, PendingOp};
+use crate::shell::env_include::{default_resolution_cwd, refresh_env_include};
+use crate::shell::os_theme::detect_system_scheme;
 use micold_client::app::{Message, State};
 use micold_client::features::session::SelectKind;
 use micold_client::features::worktree_form::{
@@ -22,21 +24,20 @@ use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
 use micold_client::overlay::registry::Closing;
 use micold_client::selection::{self, Anchor, SelectGranularity, Selection};
-use micold_core::env_include::{self, EnvIncludeOutcome, EnvIncludeResolver, EnvIncludeSnapshot};
+use micold_core::env_include::{EnvIncludeOutcome, EnvIncludeSnapshot};
 use micold_core::frame_probe::{
     FrameProbe, ProbeConfig, Scene, SceneFacts, ENV_VAR as FRAME_PROBE_ENV,
     SCENE_ENV_VAR as FRAME_PROBE_SCENE_ENV,
 };
 use micold_core::fs_scan::FolderBrowser;
 use micold_core::git::Git;
-use micold_core::os_theme::OsThemeProbe;
 use micold_core::protocol::grid::LineId;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, OperationResult, SessionProcess};
 use micold_core::selector::{Selector, SelectorStatus};
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId, TerminalMode};
 use micold_core::settings::Settings;
 
-use micold_core::theme::{observe_system_scheme, SystemScheme};
+use micold_core::theme::observe_system_scheme;
 use micold_core::worktree::Worktree;
 use micold_core::worktree::{BranchOrigin, CreateMode};
 use std::cell::RefCell;
@@ -44,7 +45,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// The binary's application state: the pure core plus gui-only runtime handles.
 struct App {
@@ -316,62 +317,6 @@ fn report_probe_and_exit(probe: &FrameProbe, app: &App) -> ! {
             std::process::exit(1)
         }
     }
-}
-
-/// Resolve the environment-include snapshot for `cwd` from the given settings values.
-///
-/// A thin call into the core since T046: the short-circuit and the sourcing both live beside the
-/// engine now, and this is the shell picking the real resolver — the one decision that is the
-/// shell's to make (FR-017).
-fn resolve_env_include(
-    resolver: &dyn EnvIncludeResolver,
-    enabled: bool,
-    script_path: &str,
-    timeout_secs: u64,
-    cwd: &Path,
-) -> EnvIncludeSnapshot {
-    env_include::snapshot_for(
-        resolver,
-        enabled,
-        script_path,
-        Duration::from_secs(timeout_secs),
-        cwd,
-    )
-}
-
-/// The directory to use whenever a single representative directory is needed synchronously
-/// (boot, a Settings save) rather than a specific session's own directory (BUG-002): the active
-/// session's own directory if there is one (most relevant to what the user is currently looking
-/// at), else the active project's root, else the app process's own current directory.
-fn default_resolution_cwd(core: &State) -> PathBuf {
-    if let Some(id) = core.active_session {
-        if let Some((cwd, _, _)) = session_cwd_mode_and_active_shell(core, id) {
-            return cwd;
-        }
-    }
-    if let Some(repo) = core.workspace.active.clone() {
-        return repo;
-    }
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-}
-
-/// Force a fresh re-source of the environment-include script for `cwd`'s cache entry, updating
-/// `env_include_last_outcome` to this attempt's outcome (feature 011 FR-007, BUG-002). Called on
-/// `TerminalRestartRequested` for the restarted session's own directory (leaving every other
-/// cached directory untouched, since only this one needs a fresh attempt), and from
-/// `Message::SettingsSaved`'s handler after it clears the whole cache (every cached directory is
-/// stale once the enabled/path/timeout settings themselves changed) — the two refresh triggers
-/// the spec's Clarifications name.
-fn refresh_env_include(app: &mut App, cwd: &Path) {
-    let snapshot = resolve_env_include(
-        app.caps.env_include(),
-        app.env_include_enabled,
-        &app.env_include_script_path,
-        app.env_include_timeout_secs,
-        cwd,
-    );
-    app.env_include_last_outcome = snapshot.outcome.clone();
-    app.env_include_cache.insert(cwd.to_path_buf(), snapshot);
 }
 
 impl Drop for App {
@@ -2166,45 +2111,6 @@ fn send_worktree_create(
     );
 }
 
-fn map_system_scheme(mode: dark_light::Mode) -> SystemScheme {
-    match mode {
-        dark_light::Mode::Dark => SystemScheme::Dark,
-        dark_light::Mode::Light => SystemScheme::Light,
-        dark_light::Mode::Unspecified => SystemScheme::Unspecified,
-    }
-}
-
-/// Query the OS for its current light/dark preference (FR-005). `dark_light::detect()`'s Linux
-/// backend has a hardcoded 25 ms D-Bus timeout and returns `Err` under CPU contention with no
-/// relation to the actual OS preference — the caller falls this back to the last-known scheme
-/// via `theme::observe_system_scheme` rather than `SystemScheme::Unspecified` (FR-021; BUG-001).
-/// Deliberately takes no arguments (bugfix, found by `run` sanity check, 2026-07-23): it used to
-/// take `last_known: SystemScheme` and apply the fallback itself, but that meant
-/// `os_theme_poll`'s `Subscription::map` closure had to *capture* `last_known` to call it — and
-/// iced panics on boot if a subscription's mapping closure captures anything, since a capturing
-/// closure can't have the stable identity iced needs to avoid restarting the underlying timer
-/// every frame. The fallback now happens in the reducer (`Message::SystemThemeChanged`,
-/// `src/app.rs`), which already has the previous scheme in `self.system_scheme`.
-fn detect_system_scheme() -> Result<SystemScheme, ()> {
-    SystemThemeProbe.detect()
-}
-
-/// The real [`OsThemeProbe`] (feature 021, T047): the codebase's only direct operating-system
-/// branch, now behind the capability.
-///
-/// Here rather than in the core, where the trait and its fake live, because `dark-light` is a
-/// client dependency and `micold-core` deliberately has none on it — that is why
-/// [`SystemScheme`] mirrors `dark_light::Mode` instead of re-exporting it. Moving the call into
-/// the core to "isolate the OS branch" would have put the OS crate in the render-free half, which
-/// is the opposite of isolating it. The shell owns the concrete implementation; that is FR-017.
-struct SystemThemeProbe;
-
-impl OsThemeProbe for SystemThemeProbe {
-    fn detect(&self) -> Result<SystemScheme, ()> {
-        dark_light::detect().map(map_system_scheme).map_err(|_| ())
-    }
-}
-
 /// The worktree-creation failure text shown in the form (feature 010, FR-006/SC-003): appends
 /// `detail` (the daemon's `OperationError.detail`, git's own stderr verbatim) to `message` when
 /// present and non-blank. For a submodule fetch failure, `message` alone is the generic "git
@@ -2340,22 +2246,6 @@ pub(crate) mod tests {
             panic!("stamp must produce SessionInput");
         };
         assert_eq!(serial, 0);
-    }
-
-    #[test]
-    fn maps_dark_light_mode_onto_system_scheme() {
-        assert_eq!(
-            map_system_scheme(dark_light::Mode::Dark),
-            SystemScheme::Dark
-        );
-        assert_eq!(
-            map_system_scheme(dark_light::Mode::Light),
-            SystemScheme::Light
-        );
-        assert_eq!(
-            map_system_scheme(dark_light::Mode::Unspecified),
-            SystemScheme::Unspecified
-        );
     }
 
     #[test]
