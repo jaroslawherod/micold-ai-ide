@@ -41,7 +41,7 @@ use crate::shell::capabilities::Capabilities;
 use crate::shell::persist::prune_empty_sessions;
 use crate::{
     default_resolution_cwd, detect_system_scheme, discover_worktrees, observe_system_scheme,
-    probe_config, resolve_env_include, subscription, theme, update, view, App,
+    probe_config, resolve_env_include, theme, update, view, App,
 };
 
 /// The app window icon as raw 64x64 RGBA (generated from `assets/icon/icon.svg` by
@@ -90,7 +90,7 @@ pub fn run() -> iced::Result {
         // the interface composes its own strings from; user data is not so constrained.
         .font(micold_client::ui::MATERIAL_SYMBOLS_BYTES)
         .window(window_settings())
-        .subscription(subscription)
+        .subscription(crate::shell::subscriptions::subscription)
         .run()
 }
 
