@@ -147,7 +147,7 @@ claims to, that is not run either. B2 sat in that state for two days before bein
 
 | Recorded | |
 |---|---|
-| Date | 2026-08-11 (B1), 2026-08-12 (B3, B7), 2026-08-14 (B2, B4, B5, B6) |
+| Date | 2026-08-11 (B1), 2026-08-12 (B3, B7), 2026-08-14 (B2, B4, B5, B6; then **all of §B re-run** after BUG-001 was fixed) |
 | Platform | B1 on the user's own install; everything else on Xvfb + lavapipe in an isolated sandbox (see below) |
 | B1 — reopen lands on the session, first frame | **PASS** — confirmed by the user on their own install ("it works"), and reproduced in the sandbox on every restart below |
 | B2 — nothing started | **PASS** — [evidence](./evidence/B2-restore-starts-nothing.png) |
@@ -157,8 +157,15 @@ claims to, that is not run either. B2 sat in that state for two days before bein
 | B6 — closing a session does not erase the memory | **PASS**, both halves — [evidence](./evidence/B5-B6-kept-and-declined.png) |
 | B7 — a project with no memory is unchanged | **PASS** |
 
-Every step in §B has now been run. Two defects were found along the way, neither of them a failure
-of a §B step — see **Found while running this** below.
+Every step in §B has now been run, and then **run again end to end against the build with BUG-001
+fixed** — the fix changed what the terminal area says in exactly the state most of these steps land
+in, so the earlier evidence above is all pre-fix and no longer shows what the application does. Every
+step passed on the second pass too: [evidence](./evidence/B-postfix-pass.png),
+[B3](./evidence/B3-focus-postfix.png). See **The second pass** below, including the methodology
+hazard that nearly made it report a false failure.
+
+Two defects were found along the way, neither of them a failure of a §B step — see **Found while
+running this** below.
 
 ### How B3 and B7 were run
 
@@ -240,12 +247,65 @@ the restore declines a closed session. Closing the *other* session still lands y
 two together are the whole of FR-005a: the memory is **kept** on disk and **declined** at resolve
 time, which is why a stale memory costs nothing and an erased one would cost the user their place.
 
+### The second pass — every step, against the fixed build
+
+Run 2026-08-14 after [BUG-001](./bugs/BUG-001.md) merged, in the same isolated sandbox on `:80`.
+Every step of §B, in one sitting, in order. All pass.
+
+| Step | Result on the fixed build |
+|---|---|
+| B7 | project with no memory → overview, no session current, 0 processes |
+| B1 | restart → alpha A2, marked, location expanded, named in the bar |
+| B2 | 0 `claude` before and after; the terminal now reads *"This session is not running. Choose restart below to resume it."* and the bar beside it reads `interrupted` — they agree, which is the whole of the bugfix |
+| B3 | release-focus control **bright** after the restore, **dim** after clicking it, **bright** again after switching away and back |
+| B4 | switch → beta B1; then quit *while beta was in front* and restart → **alpha A2**, alpha's own memory rather than the session last seen |
+| B5 | closed → declined, overview, X listed but not chosen; empty → pruned, declined; worktree deleted → W restored under an error-tinted `missing` row |
+| B6 | closed the session I was on → overview, memory on disk still naming it; closed the other → still land on mine |
+
+**Why the whole pass rather than B2 alone.** The fix changed the sentence shown for a restored,
+not-running session — which is the state B1, B2, B4, B5 and B6 all end on. Re-running only the step
+that found the bug would have left every other step's evidence showing a screen the application no
+longer draws.
+
+#### The hazard that nearly produced a false failure
+
+Mid-pass, B4 showed `Starting…` again — the fixed build apparently regressing, 38 seconds in, with
+0 processes and the bar saying `interrupted`. That is impossible by construction: both derive from
+`attached_process_restartable`, and a test asserts they cannot disagree.
+
+They had not. `/proc/<pid>/exe` read `…/micold-ai-ide (deleted)`: **another worktree's build had
+replaced the binary on disk while the client was running**, and a later launch in the same pass
+picked up *their* build — at `380b570`, which predates the fix. Five worktrees share
+`target-shared/` (CLAUDE.md explains why), and several were building throughout.
+
+Two things made this worth an hour rather than a minute. The first is that the symptom is a perfect
+imitation of the bug the pass exists to check. The second is that the obvious diagnostic lied:
+`cp target-shared/debug/micold-ai-ide` from inside a worktree fails with *No such file or
+directory*, because `build-lock.sh` exports `CARGO_TARGET_DIR` to the directory beside the **main**
+checkout — so a copy loop that suppressed stderr reported "the fix is not in the binary" five times
+in a row while copying nothing at all. `./scripts/build-lock.sh --print-target-dir` resolves it, and
+CLAUDE.md says so.
+
+**The fix for the method: pin the binary.** Build, copy client and daemon into the sandbox, *verify
+the copy contains the change under test*, and launch from there. Then no concurrent build can swap
+the subject of the experiment halfway through. Everything above was run from a pinned, verified
+copy, and `readlink /proc/<pid>/exe` was checked once per pass to prove it.
+
+The general lesson is worth more than the specific one: **a visual pass must be able to name the
+build it ran.** Without that, every observation is conditional on an assumption the environment is
+actively falsifying — and the failure mode is not a crash, it is a plausible wrong answer.
+
+*(Noted in passing: a sibling worktree is named
+`fix-after-restart-the-session-is-stuck-at-starting`. Whether that is this bug, or the different one
+of a session whose lifecycle really is wrong after a restart, is not something this pass can say.)*
+
 ### Found while running this
 
 Neither is a §B step failing. Both are recorded rather than fixed here, because both are outside
 what this feature changed.
 
-**1. "Starting…" is the wrong thing to say about a restored session.** The terminal body renders a
+**1. "Starting…" is the wrong thing to say about a restored session.** *(Fixed — see
+[BUG-001](./bugs/BUG-001.md). Kept here as found, because the record of a pass is what it saw.)* The terminal body renders a
 `Starting…` placeholder whenever it has no grid yet (`ui/terminal.rs`, the `grid: None` branch). A
 restored session has no grid and is not running, so the placeholder sits there indefinitely while
 the status bar one row below says `interrupted` and offers `restart`, and no process exists. The
@@ -288,6 +348,19 @@ Not a defect against any stated requirement, and arguably the least-bad outcome.
 current session with no visible row is a state nothing in the spec anticipated.
 
 ### Notes for a future run
+
+**Pin the binary first.** Every worktree's `mise run` build compiles into one shared
+`target-shared/`, so a build in another checkout replaces the binary under a running client — and a
+later launch in the same pass silently runs someone else's branch. Build, copy the client *and* the
+daemon into the sandbox, assert the copy contains the change under test, and launch from there:
+
+```bash
+TD=$(./scripts/build-lock.sh --print-target-dir)     # NOT ./target-shared — see CLAUDE.md
+./scripts/build-lock.sh cargo build -p micold-client -p micold-daemon
+cp "$TD/debug/micold-ai-ide" "$TD/debug/micold-daemon" "$SB/bin/"
+strings "$SB/bin/micold-ai-ide" | grep -q '<a string only the new build has>' || exit 1
+readlink /proc/$CLIENT_PID/exe                        # confirm once per pass
+```
 
 The daemon socket path is bounded by `sun_path` (108 chars), so an isolated `XDG_RUNTIME_DIR` must
 be short — the application reports this clearly rather than failing obscurely. A session's record is
