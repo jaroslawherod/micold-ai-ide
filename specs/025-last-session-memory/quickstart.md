@@ -23,7 +23,9 @@ Green is the gate. What each gate is watching, for this feature:
 | `micold-core/tests/workspace.rs` | `foreground_by_project` keys by canonicalised path, the same as `sessions`, so the two cannot be looked up differently |
 | `micold-client/tests/features_session.rs` | the resolution is unchanged by the move — the four `ForegroundChoice` cases still hold when the map is read from `Workspace` (§3.2) |
 | `micold-client/tests/features_session.rs` | a memory naming a **closed** session is not restored, and one naming an **absent** session resolves to the existing fallbacks (§3.2, FR-005) |
-| `micold-client/tests/app_state.rs` | restoring starts nothing: session lifecycles after applying a memory are exactly what they were before (§3.3, SC-005) |
+| `micold-client/tests/app_state.rs` | restoring starts only what it displays: the reducer moves no lifecycle itself (the resume is a `SessionStart` to the daemon), and one project's restore leaves every other project's sessions and memory untouched (§3.3b, SC-005a, BUG-002) |
+| `micold-client/src/main.rs` (tests) | connecting **starts** the restored session rather than only viewing it, starts exactly one, and starts nothing when nothing is remembered (§3.3a, FR-004a, SC-005a, BUG-002) |
+| `micold-client/src/shell/daemon_sync.rs` (tests) | a project switch does the same, and orders the start between the attach and the view (§3.3a, BUG-002) |
 | `micold-client/tests/app_state.rs` | applying a memory leaves other locations' open/closed state alone (§3.6, FR-006) |
 | `micold-client/tests/switch_active.rs` | switching still works after the move, and still records into the new home (FR-008) |
 | `micold-client/tests/switcher_forget_menu.rs` | forgetting a project discards its memory (§2.5, FR-009) |
@@ -60,25 +62,34 @@ Watch for a frame that shows the project overview first and then jumps — the m
 application's own load, so the very first frame should already be right. A jump means the value is
 arriving from the daemon instead (research R3).
 
-### B2 — It did not start anything (FR-004, SC-005)
+### B2 — It came back up, and only it did (FR-004a, SC-005a)
 
-Immediately after B1, before touching anything: the restored session shows its previous output and
-its state, and its process is **not** running unless it already was. Nothing was resumed on your
-behalf.
+> **Reversed by [BUG-002](./bugs/BUG-002.md).** This step used to read "It did not start anything"
+> and asked you to confirm the process was **not** running — FR-004, now superseded. Restoring
+> resumes the session, as selecting it by hand always has.
 
-Confirm from outside as well — the number of `claude` processes should be what it was before the
-restart.
+Immediately after B1, before touching anything: the restored session's terminal is **live**. It came
+back up on its own, and you can work in it without pressing anything.
 
 **Stop the daemon too, not just the client.** The daemon outlives the client by design and owns the
 sessions, so restarting only the client leaves the remembered session's process running from before
-— "nothing was started" is then true but vacuous, because there was nothing to start. The step is
-only meaningful from a genuinely idle start.
+— the resume is then vacuous, because there was nothing to start. The step is only meaningful from a
+genuinely idle start.
 
-**And read what the terminal area says** (FR-014, [BUG-001](./bugs/BUG-001.md)). It must not claim
-the session is starting — nothing is, and nothing will be until you ask. It should say the session
-is not running and point at the `restart` control in the bar, which must agree with it. This is the
-half of B2 that was missing when the step first ran: the process count was checked, the sentence
-next to it was not.
+Then check the bound, which is the half that still matters. From outside:
+
+```bash
+pgrep -c claude     # before quitting, and again after reopening
+```
+
+Exactly **one** more than before — the session you were on. With two projects each remembering a
+different session, only the project that actually opened has resumed anything; the other project's
+session is still stopped until you switch to it.
+
+**The FR-014 case is now the exception, and still worth reaching** ([BUG-001](./bugs/BUG-001.md)).
+Open the project in a second window first, so the resume is refused, then reopen: the terminal must
+say the session is not running and point at the `restart` control, never claim to be starting. The
+ordinary path no longer reaches that screen — this one still does.
 
 ### B3 — The restored terminal is ready to type (FR-013)
 
@@ -150,12 +161,20 @@ claims to, that is not run either. B2 sat in that state for two days before bein
 | Date | 2026-08-11 (B1), 2026-08-12 (B3, B7), 2026-08-14 (B2, B4, B5, B6; then **all of §B re-run** after BUG-001 was fixed) |
 | Platform | B1 on the user's own install; everything else on Xvfb + lavapipe in an isolated sandbox (see below) |
 | B1 — reopen lands on the session, first frame | **PASS** — confirmed by the user on their own install ("it works"), and reproduced in the sandbox on every restart below |
-| B2 — nothing started | **PASS** — [evidence](./evidence/B2-restore-starts-nothing.png) |
+| B2 — it came back up, and only it did | **NOT RUN against the current behaviour.** The recorded PASS — [evidence](./evidence/B2-restore-starts-nothing.png) — is of the *superseded* step: it confirms 0 `claude` processes after a restore, which [BUG-002](./bugs/BUG-002.md) reversed. The evidence is kept because it is accurate about what the build then did; it is no longer evidence of a passing step. Re-run needed: exactly one more `claude`, and the FR-014 wording reached via a second window holding the project |
 | B3 — the restored terminal is ready to type; a switch still focuses | **PASS** — [evidence](./evidence/B3-focus-states.png) |
 | B4 — per project, across several switches | **PASS** — [evidence](./evidence/B4-per-project-memory.png) |
 | B5 — closed / deleted worktree / empty session | **PASS**, all three — [evidence](./evidence/B5-B6-kept-and-declined.png). B5.2 passes against the *corrected* expectation; the step as previously written would have failed |
 | B6 — closing a session does not erase the memory | **PASS**, both halves — [evidence](./evidence/B5-B6-kept-and-declined.png) |
 | B7 — a project with no memory is unchanged | **PASS** |
+
+> **[BUG-002](./bugs/BUG-002.md) unsettles this table again, and only partly.** The fix changes what
+> a restored session *does* — it now resumes — so B2's recorded pass is of a rule that no longer
+> exists, and B1, B4, B5 and B6 all end on a session that is now running rather than idle. Their
+> claims still hold (they are about *which* session, and about the memory), but the screenshots show
+> an idle terminal where a live one would now appear. B2 is marked NOT RUN above; the rest are left
+> as passes because what they assert did not change. Anyone re-running §B should expect the
+> difference and re-record B2 first.
 
 Every step in §B has now been run, and then **run again end to end against the build with BUG-001
 fixed** — the fix changed what the terminal area says in exactly the state most of these steps land

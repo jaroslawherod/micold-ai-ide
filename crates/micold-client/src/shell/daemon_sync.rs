@@ -15,7 +15,8 @@
 //!
 //! # `App` is the argument, and that is the plan rather than a shortcut
 //!
-//! `send_op` and `switch_daemon_attachment` take `&mut App` / `&App`, which `shell/mod.rs` said
+//! `send_op` and `switch_daemon_attachment` both take `&mut App` (the latter since BUG-002, which
+//! made the switch resume the session it restores), which `shell/mod.rs` said
 //! this module would when it was written at T050: these operate on the binary's own type. That is
 //! *not* what T051 did with `persist_settings`, and the difference is what each function needs.
 //! `persist_settings` needed one capability out of seven, so narrowing it to that was FR-016's
@@ -136,8 +137,8 @@ pub fn send_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64) -> ClientMs
 /// (so another window can take it), attach the new, and set the viewed session — so the daemon
 /// streams grid frames and discovers worktrees for the project now in focus (T055). A no-op when
 /// disconnected; the initial attach on connect is handled by `DaemonConnected`.
-pub fn switch_daemon_attachment(app: &App, old: Option<PathBuf>, new: &Path) {
-    let Some(daemon) = &app.daemon else {
+pub fn switch_daemon_attachment(app: &mut App, old: Option<PathBuf>, new: &Path) {
+    let Some(daemon) = app.daemon.clone() else {
         return;
     };
     if let Some(old) = old {
@@ -149,10 +150,21 @@ pub fn switch_daemon_attachment(app: &App, old: Option<PathBuf>, new: &Path) {
         project: new.to_path_buf(),
         force: false,
     });
-    daemon.send(ClientMsg::SetViewedSession {
-        project: new.to_path_buf(),
-        session: app.core.active_session,
-    });
+    // The session this switch restored is *started*, not merely viewed (BUG-002, FR-004a). Within a
+    // run this usually changes nothing — the session you switch to is normally still running, and a
+    // start naming a running session is a no-op — but a remembered session that has **stopped** is
+    // one the restore honours (feature 008's BUG-001), and it reached the same dead end a launch did:
+    // current, with no process the daemon could stream.
+    //
+    // `&mut App` for `crate::view_and_start`, which resets the selection and scroll offset. A switch
+    // wants both reset anyway — they belong to the session being left, not the one being shown.
+    match app.core.active_session {
+        Some(session) => crate::view_and_start(app, session),
+        None => daemon.send(ClientMsg::SetViewedSession {
+            project: new.to_path_buf(),
+            session: None,
+        }),
+    }
 }
 
 /// Reconcile the client's core session state from the daemon's authoritative catalog snapshot
@@ -345,6 +357,75 @@ pub(crate) mod tests {
         (app, rx)
     }
 
+    /// BUG-002 (FR-004a, contract §3.3a): a project switch **starts** the session it restores.
+    ///
+    /// The switch and the launch reach the same dead end for the same reason — `SetViewedSession`
+    /// opens a view stream only for a session the daemon is hosting — but the switch hides it,
+    /// because a session you switch to within a run is normally still running. It surfaces when the
+    /// remembered session has stopped, which since feature 008's BUG-001 is a session the restore
+    /// honours rather than skips.
+    #[test]
+    fn switching_projects_starts_the_session_it_restores() {
+        let old = PathBuf::from("/repo/old");
+        let new = PathBuf::from("/repo/new");
+        let id = SessionId::new();
+        let (mut app, mut rx) = connected_app();
+        // `restore_after_activation` has already run: the target is active and its remembered
+        // session is current.
+        app.core.workspace.active = Some(new.clone());
+        app.core.active_session = Some(id);
+
+        switch_daemon_attachment(&mut app, Some(old.clone()), &new);
+
+        let mut sent = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            sent.push(msg);
+        }
+        assert!(
+            sent.iter()
+                .any(|m| matches!(m, ClientMsg::Detach { project: p } if *p == old)),
+            "the outgoing project is released"
+        );
+        assert!(
+            sent.iter()
+                .any(|m| matches!(m, ClientMsg::Attach { project: p, .. } if *p == new)),
+            "the incoming project is attached"
+        );
+        assert!(
+            sent.iter()
+                .any(|m| matches!(m, ClientMsg::SessionStart { session } if *session == id)),
+            "and the restored session is started, exactly as selecting it by hand would"
+        );
+    }
+
+    /// The bound, at this seam: a switch that restores nothing starts nothing, and still tells the
+    /// daemon so (FR-007, SC-005a).
+    #[test]
+    fn switching_to_a_project_with_no_memory_starts_nothing() {
+        let new = PathBuf::from("/repo/new");
+        let (mut app, mut rx) = connected_app();
+        app.core.workspace.active = Some(new.clone());
+        assert_eq!(app.core.active_session, None);
+
+        switch_daemon_attachment(&mut app, None, &new);
+
+        let mut sent = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            sent.push(msg);
+        }
+        assert!(
+            !sent
+                .iter()
+                .any(|m| matches!(m, ClientMsg::SessionStart { .. })),
+            "arriving at a project overview runs nothing"
+        );
+        assert!(
+            sent.iter()
+                .any(|m| matches!(m, ClientMsg::SetViewedSession { session: None, .. })),
+            "the daemon is still told that no session is viewed"
+        );
+    }
+
     /// The disconnected path says *which* thing did not happen.
     ///
     /// `send_op` is the only place a mutating action learns there is no daemon, and it is reached
@@ -434,8 +515,13 @@ pub(crate) mod tests {
         let (mut app, mut rx) = connected_app();
         let viewed = SessionId::new();
         app.core.active_session = Some(viewed);
+        // The production precondition, now load-bearing (BUG-002): both callers activate the target
+        // before calling this, and the start goes through `view_and_start`, which reads the project
+        // from `workspace.active` rather than from `new`. Without it the switch would send nothing
+        // about the session at all.
+        app.core.workspace.active = Some(PathBuf::from("/b"));
 
-        switch_daemon_attachment(&app, Some(PathBuf::from("/a")), Path::new("/b"));
+        switch_daemon_attachment(&mut app, Some(PathBuf::from("/a")), Path::new("/b"));
 
         assert!(matches!(
             rx.try_recv(),
@@ -444,6 +530,12 @@ pub(crate) mod tests {
         assert!(matches!(
             rx.try_recv(),
             Ok(ClientMsg::Attach { project, force: false }) if project == Path::new("/b")
+        ));
+        // The start now sits between the attach and the view (BUG-002): the session is resumed, and
+        // the daemon must already hold this client's attachment when it is told to.
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMsg::SessionStart { session }) if session == viewed
         ));
         assert!(matches!(
             rx.try_recv(),
@@ -460,9 +552,9 @@ pub(crate) mod tests {
     /// project in between.
     #[test]
     fn re_entering_the_attached_project_does_not_release_it() {
-        let (app, mut rx) = connected_app();
+        let (mut app, mut rx) = connected_app();
 
-        switch_daemon_attachment(&app, Some(PathBuf::from("/a")), Path::new("/a"));
+        switch_daemon_attachment(&mut app, Some(PathBuf::from("/a")), Path::new("/a"));
 
         assert!(
             matches!(rx.try_recv(), Ok(ClientMsg::Attach { .. })),
@@ -488,7 +580,7 @@ pub(crate) mod tests {
         let mut app = base_app();
         assert!(app.daemon.is_none());
 
-        switch_daemon_attachment(&app, Some(PathBuf::from("/a")), Path::new("/b"));
+        switch_daemon_attachment(&mut app, Some(PathBuf::from("/a")), Path::new("/b"));
         assert!(
             app.core.notify.visible().is_none(),
             "an ordinary project switch must not report the connection"

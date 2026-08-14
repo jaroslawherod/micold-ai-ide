@@ -8,6 +8,12 @@
 about *which* session is current and about not starting it, and never asked what the terminal area
 already said about the state those two combine to produce. See the Complexity Tracking note.
 
+**Bugfix**: 2026-08-14 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch. And the "not
+starting it" half was itself wrong. Summary item 3 is amended below: applying the memory has a
+second half the plan never named — after deciding *which* session, the client must tell the daemon
+to **start** it. The Testing note's "binary glue" exception is withdrawn for that seam, and
+Constitution Check II is re-argued under FR-004a.
+
 ## Summary
 
 The memory already exists and is thrown away at exit. `State::foreground_by_project` maps each
@@ -28,6 +34,14 @@ Three changes, and none of them is new machinery:
    `focus_terminal()`; implementing it showed the requirement behind that was wrong. See research
    R5.)
 
+   **Amended by [BUG-002](./bugs/BUG-002.md).** `restore_after_activation` is a *client-state*
+   function: it chooses the session, reveals its row, and takes the keyboard. It says nothing to the
+   daemon. Making a session current has a second half — asking the daemon to start and stream it —
+   and only `view_and_start` performs it, which is why hand-selection worked and both restore paths
+   did not. Reusing the function was right and insufficient: the launch must additionally send the
+   start, and so must `switch_daemon_attachment`. One rule at one seam — displaying a remembered
+   session starts it (FR-004a) — rather than a third copy of the sequence.
+
 There is **no protocol change** and therefore no schema-hash churn: the wire message this needs is
 already sent, and the client reads the memory from its own load rather than waiting for the daemon.
 
@@ -45,9 +59,16 @@ compatibility argument `store.rs` records for feature 008's BUG-001 split, and t
 version moves.
 
 **Testing**: `mise run test` (whole workspace, matching CI); `mise run test-core` while iterating on
-the store and the resolution. The launch path itself is binary glue and falls under Principle I's
+the store and the resolution. ~~The launch path itself is binary glue and falls under Principle I's
 GUI/process-spawn exception — its decision (*which* session) is in the tested reducer, and only the
-call from `boot()` is glue.
+call from `boot()` is glue.~~
+
+**Amended by [BUG-002](./bugs/BUG-002.md).** That exception was claimed too widely, and it is where
+the bug hid. *Which* session is a reducer decision and is tested. *What the client then sends the
+daemon* is a second decision, made in the `DaemonConnected` arm and in `switch_daemon_attachment`,
+and it was covered by nothing — `Attach` + `SetViewedSession` with no `SessionStart` is a choice,
+not glue. The send sequence is ordinary logic over an outbox and is testable without a GUI; it is
+now required to be tested (T039/T040).
 
 **Target Platform**: Linux, macOS, Windows desktop (CI covers all three).
 
@@ -71,9 +92,17 @@ in `boot()`. Four files in `micold-core`/`micold-daemon`/`micold-client`, plus a
   testable: the store round-trip (`micold-core`), the daemon recording the viewed session, and the
   resolution at launch (`explain_foreground`, already tested). The only glue is `boot()` calling
   it — no branch of its own, which is what the exception covers.
-- [x] **II. Multi-Session Support**: PASS. No session is created, stopped, or mutated. FR-004 is
-  explicit that restoring starts nothing, and there is a test for it. The memory is one id per
+- [x] **II. Multi-Session Support**: PASS. ~~No session is created, stopped, or mutated. FR-004 is
+  explicit that restoring starts nothing, and there is a test for it.~~ The memory is one id per
   project, so no session's state can leak into another's.
+
+  **Re-argued under FR-004a ([BUG-002](./bugs/BUG-002.md))**: restoring now *resumes* the one session
+  it displays, so "nothing is mutated" no longer holds, and T011 changed with it. Still PASS, and
+  the reason is the bound rather than the prohibition: exactly one session is resumed, it is the one
+  the user is being shown, and no other session — in this project or any other — changes state
+  (SC-005a). Nothing is created or stopped; no background project is woken. The principle's concern
+  is sessions interfering with each other, and one resume of the session in front of the user does
+  not.
 - [x] **III. Worktree Integration**: PASS. No worktree is created, switched or removed. A remembered
   session whose worktree is gone simply fails to resolve (FR-005) — the same path a stale id
   already takes.

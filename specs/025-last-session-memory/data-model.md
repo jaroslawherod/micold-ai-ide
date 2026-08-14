@@ -66,8 +66,16 @@ feature 008's BUG-001 split (research R7).
 4. **I3 — Usability is decided by `explain_foreground`, not by the store.** A remembered session is
    restored when it is present and not `archived`; otherwise the existing fallbacks apply. There is
    one implementation of that question (feature 008 FR-003a).
-5. **I4 — Restoring never starts anything.** Applying the memory sets which session is displayed and
-   nothing else (FR-004).
+5. **I4 — ~~Restoring never starts anything.~~** ~~Applying the memory sets which session is
+   displayed and nothing else (FR-004).~~ **Superseded by I4a (BUG-002)** — it was the invariant
+   form of FR-004, and it contradicted I3: the resolution `explain_foreground` answers is the same
+   one hand-selection uses, and hand-selection resumes.
+6. **I4a — Restoring resumes exactly one session, and only the one it displays.** Applying the
+   memory brings the restored session up if it is not running — the same act selecting it performs —
+   and changes no other session's run state, in this project or any other. The bound is the
+   invariant; the resume is not (FR-004a, SC-005a). A memory that resolves to nothing starts
+   nothing. The *client* still moves no lifecycle itself: it sends a `SessionStart` and the daemon
+   reports back, because the daemon is the only thing that may say a session is running.
 
 ## Reading it at launch
 

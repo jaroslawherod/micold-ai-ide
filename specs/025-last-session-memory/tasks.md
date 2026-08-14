@@ -66,7 +66,7 @@ front of you, with no clicks.
 - [X] T008 [P] [US1] Failing test in `crates/micold-daemon/` covering `SetViewedSession`: a report naming a session records it against that project and persists; a second report naming the **same** session writes nothing (§2.3, FR-001a) — attach re-sends the current id and a session start may name the session already in front of the user
 - [X] T009 [P] [US1] Failing test in `crates/micold-daemon/`: a report of **no session** leaves the memory untouched (§2.6, FR-005a). This is the clause that stops closing a session from silently costing the user the place they would have returned to
 - [X] T010 [P] [US1] Failing test in `crates/micold-client/tests/app_state.rs`: applying a project's memory makes that session current — and does so through the path that arms feature 024's reveal, so the row is listed open (§4.1, FR-012)
-- [X] T011 [P] [US1] Failing test in `crates/micold-client/tests/app_state.rs`: applying a memory **starts nothing** — every session's lifecycle after is exactly what it was before (§3.3, FR-004, SC-005)
+- [X] T011 [P] [US1] ⚠️ **Rewritten — [BUG-002](./bugs/BUG-002.md).** ~~Failing test in `crates/micold-client/tests/app_state.rs`: applying a memory **starts nothing** — every session's lifecycle after is exactly what it was before (§3.3, FR-004, SC-005)~~ The test *passed* and encoded the rule FR-004a reverses, which is how it survived to become a bug. Now asserts what still holds: the reducer moves no lifecycle itself (the resume is a `SessionStart` to the daemon — a client that set `Starting` locally would render a running session with no process behind it), and one project's restore leaves every other project's sessions and memory untouched (§3.3b, SC-005a, invariant I4a)
 - [X] T012 [P] [US1] Failing test in `crates/micold-client/tests/terminal_focus.rs`: applying a memory leaves `terminal_focused` false, while a project *switch* still focuses. The two paths differ here deliberately and only a test keeps them apart (§3.4, FR-013, research R5)
 
 ### Implementation for User Story 1
@@ -75,7 +75,7 @@ front of you, with no clicks.
 - [X] T014 [US1] Call it from `State::set_viewed` in `crates/micold-daemon/src/state.rs:485`, guarded by the two conditions from T008/T009: only when the reported session is `Some`, and only when it differs from what is remembered
 - [X] T015 [US1] Apply the memory at launch in `boot()` in `crates/micold-client/src/main.rs` (after `prune_empty_sessions`, which is what makes a memory naming a pruned session stop resolving): resolve with `explain_foreground` and apply with `set_current_session`
 - [X] T016 [US1] ~~Do **not** call `restore_after_activation` from `boot()` in `crates/micold-client/src/main.rs`, and say why in a comment there: feature 023 added `focus_terminal()` to it, and FR-013 says a launch must not put keystrokes into a terminal. Reusing the function would import the focus with the restore (research R5)
-- [X] T017 [US1] Document reopening in `docs/user-guide/worktrees-and-sessions.md` under `## Starting, switching, and closing sessions`: the app reopens on the session you were last using in that project, whether or not it is still running, and it does not start or focus anything
+- [X] T017 [US1] Document reopening in `docs/user-guide/worktrees-and-sessions.md` under `## Starting, switching, and closing sessions`: the app reopens on the session you were last using in that project, whether or not it is still running, ~~and it does not start or focus anything~~ — **and it brings that session back up and puts the keyboard in it**. Both halves of the struck clause turned out wrong, and separately: focus was reversed during implementation (research R5), starting by [BUG-002](./bugs/BUG-002.md). The guide now says reopening resumes one session — the one you were on — and no others
 
 **Checkpoint**: US1 is the feature. Shippable alone — the remaining stories are about behaving
 sensibly when it cannot be honoured.
@@ -257,3 +257,37 @@ for why this is a spec gap rather than drift, and for the two fixes that were re
 restored one, so fixing it corrects feature 006's empty state for all callers. That is intended —
 there is one branch and it should be right — but it means the fix is not gated on this feature's
 tests alone, and `tests/terminal_bar_stability.rs` is the neighbour to check it against.
+
+---
+
+## Phase 9: Bugfix BUG-002
+
+**Bugfix**: 2026-08-14 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch. Four tasks added,
+T011 rewritten. Phase 8 made the screen honest about a session nothing had started; this removes the
+thing it had to be honest about.
+
+Deciding *which* session to display and asking the daemon to run it are two halves of one act, and
+only `view_and_start` performed the second. `restore_after_activation` — the function both restore
+paths call — touches client state only and never speaks to the daemon, so the launch produced a
+current session the daemon was not hosting and could not stream. FR-004 said that was correct;
+FR-003 said the opposite, and FR-003 wins. See [BUG-002](./bugs/BUG-002.md) for the conflict, and
+research R4/R5 for where the evidence already was.
+
+### Tests for BUG-002 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T039 [P] Failing tests in `crates/micold-client/src/main.rs`'s test module for the launch seam: with the memory naming a session the catalog reports as `InterruptedResumable` — what every durable session is after a restart — `DaemonConnected` sends `Attach`, then `SessionStart`, then `SetViewedSession`, in that order; it sends **exactly one** start even when other stopped sessions exist in this and other projects (SC-005a); and it sends **no** start at all when nothing is remembered, while still reporting `SetViewedSession { session: None }` (FR-007). The seam had no tests: the plan called `boot()` glue because the decision (*which* session) is in the tested reducer, and what the client then sends is a second decision
+- [X] T040 [P] Failing test in `crates/micold-client/src/shell/daemon_sync.rs`'s test module: a project switch starts the session it restores, and a switch that restores nothing starts nothing. Same defect as T039, hidden within a run because the session you switch to is normally still running
+
+### Implementation for BUG-002
+
+- [X] T041 Start the restored session at launch, in the `Message::DaemonConnected` arm of `crates/micold-client/src/main.rs`, through `view_and_start` rather than a third copy of its sends — it already orders the pane size before the start (BUG-003, `006` FR-014a) and the view after. **Ordering trap**: `view_and_start` reads `app.daemon`, which that arm assigned *after* the sends; assign it first. A start naming an already-running session is a no-op on the daemon (`Session::start`), so no liveness check is needed and none should be added
+- [X] T042 The same at the switch seam, in `switch_daemon_attachment` (`crates/micold-client/src/shell/daemon_sync.rs`). It took `&App` and `view_and_start` needs `&mut App`; widen the signature rather than duplicating the send. **Found while doing it**: `view_and_start` derives the project from `workspace.active`, not from the `new` argument, so the existing order test had to gain the activation its production callers always perform — a precondition that was invisible while the function only echoed `new` back
+
+**Kept, not replaced.** FR-014/SC-008 and Phase 8's tests stand. The resume removes the *ordinary*
+path into the empty pane, not the residual one — a start the daemon refuses because the project is
+held by another window or is unavailable. That case is rarer and less expected, so the pane telling
+the truth matters more rather than less.
+
+**Still open.** Quickstart B2's recorded PASS is of the superseded step (0 `claude` processes after a
+restore). It is marked NOT RUN against the current behaviour and needs re-running: exactly one more
+`claude`, plus the FR-014 wording reached deliberately via a second window holding the project.
