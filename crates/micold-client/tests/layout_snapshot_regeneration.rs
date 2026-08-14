@@ -185,3 +185,46 @@ fn only_the_documented_variable_triggers_regeneration() {
          some builds rewrite the baseline as a matter of course. Call site:\n{call}"
     );
 }
+
+/// Every printed regeneration hint must actually regenerate.
+///
+/// The hint said `cargo test -p micold-client layout_snapshot`. That trailing word is a **test-name
+/// filter**, not a target selector, and no test in `layout_snapshot.rs` is called
+/// `layout_snapshot` — so the command matched nothing, every binary reported `0 passed; N filtered
+/// out`, and it **exited 0 having regenerated nothing**. Someone following it after a real layout
+/// change would read the success and believe they had accepted a baseline they had not; the next
+/// run fails again with the same instruction, which is the shape of an advice loop.
+///
+/// That is the mirror image of the failure the rest of this file exists to prevent. Those tests
+/// stop the gate from rewriting its baseline and *reporting success*; this one stops the gate from
+/// telling you to rewrite the baseline in a way that reports success without doing it. Both are
+/// silent, and both end with a fixture nobody actually agreed to.
+///
+/// Checked by reading the strings themselves, in every place one is printed or written — a
+/// convention that lives only in review decays between reviews, and this one did.
+#[test]
+fn the_regenerate_hint_selects_this_target() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let sources = [
+        ("tests/layout_snapshot.rs", "the failure message and module doc"),
+        ("tests/support/layout.rs", "the fixture header and the missing-fixture panic"),
+    ];
+
+    for (rel, what) in sources {
+        let src = fs::read_to_string(dir.join(rel)).expect("read source");
+        for (i, line) in src.lines().enumerate() {
+            if !line.contains("UPDATE_LAYOUT_SNAPSHOT=1 cargo test") {
+                continue;
+            }
+            assert!(
+                line.contains("--test layout_snapshot"),
+                "{rel}:{} ({what}) prints a regeneration command without `--test`. A bare \
+                 `layout_snapshot` is a test-name filter matching nothing, so the command exits 0 \
+                 and regenerates nothing — the reader is told it worked. Use `--test \
+                 layout_snapshot`, which selects the target.\n  {}",
+                i + 1,
+                line.trim(),
+            );
+        }
+    }
+}

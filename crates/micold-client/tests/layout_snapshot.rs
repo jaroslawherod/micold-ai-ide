@@ -21,7 +21,12 @@
 //! at-rest sampling point is asserted about a tree in which something actually scrolls.
 //!
 //! Regenerate deliberately, only when a layout change is *intended*:
-//! `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot`
+//! `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot`
+//!
+//! `--test` selects this *target*. Without it the bare word is a **test-name filter**, and no test
+//! in here is called `layout_snapshot` — every binary reports `0 passed; N filtered out`, the
+//! command exits 0, and nothing is regenerated. `the_regenerate_hint_selects_this_target` in
+//! `layout_snapshot_regeneration.rs` is what keeps the printed hint honest.
 
 mod support;
 
@@ -602,7 +607,9 @@ fn describe_difference(recorded: &str, observed: &str) -> String {
     let mut out = String::from(
         "the resolved layout differs from tests/fixtures/layout_snapshot.txt\n\n\
          If this change is intended, accept it deliberately:\n  \
-         UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot\n",
+         UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot\n\n\
+         (`--test` selects the target. Drop it and the bare word is a test-name filter matching \
+         nothing: the run exits 0 having regenerated nothing.)\n",
     );
 
     let rec: Vec<&str> = recorded.lines().collect();

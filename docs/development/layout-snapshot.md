@@ -256,7 +256,7 @@ fix for the bug it was written against.
 ### Accepting an intended change
 
 ```sh
-UPDATE_LAYOUT_SNAPSHOT=1 mise exec -- cargo test -p micold-client layout_snapshot
+UPDATE_LAYOUT_SNAPSHOT=1 mise exec -- cargo test -p micold-client --test layout_snapshot
 ```
 
 Then read the diff. It is the reviewable artefact — a reviewer who has not run the application
