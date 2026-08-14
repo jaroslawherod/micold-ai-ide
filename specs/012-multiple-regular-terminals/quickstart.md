@@ -99,3 +99,26 @@ Open the project, select a session already in Regular Terminal mode (one instanc
   in, with **at most one** freshly-started instance if `Regular` — the prior instance count is
   not restored (same restart behavior feature 010 already established for the single-instance
   case).
+
+### 8. The switcher reads as a tab strip — FR-004a, FR-011a, SC-007, SC-008 (BUG-001)
+
+Scenario 2 above checks that you can tell *which* instance is active. These check that the row
+looks like a tab strip while you do — the half no automated gate can see, and the half BUG-001
+shipped without. Run each in **both** the light and the dark theme; the original defect was far
+worse in one of them.
+
+With two or more instances open:
+
+- **Every entry is a tab.** Each one sits in a container of the same shape and size — active and
+  inactive alike. No entry is bare text with a close glyph floating beside it. The active tab
+  differs by *emphasis* (a filled background) and by nothing structural.
+- **Label centred, close trailing.** Within each tab, the number is horizontally centred and the
+  close control sits at the tab's right edge — not immediately beside the number.
+- **Nothing reflows.** Select a different tab. Every tab keeps its position and size; only the
+  emphasis moves. Nothing shifts under the pointer, so a second press lands where you aimed the
+  first. Open a tenth instance if you can, and confirm a two-digit label does not resize its tab
+  either.
+- **The close control is visible on the *active* tab.** This is the one to look at hardest: the
+  close glyph on the highlighted tab must read at the same strength as that tab's own number. If
+  it is a faint ghost against the fill, that is the original bug — the glyph kept the bar's
+  foreground colour instead of the tab's (FR-011a).

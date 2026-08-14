@@ -79,7 +79,7 @@ blink (§B2). A press into an unfocused pane running `vim` reaches `vim` (§B6).
 ### Implementation for User Story 1
 
 - [X] T012 [US1] Delete the click-outside release block from `TerminalPane::update` in `crates/micold-client/src/ui/material/terminal_pane.rs` — the `if self.focused { … shell.publish(Message::TerminalFocusReleased) }` guarded on `!cursor.is_over(bounds)`. A press on a control that types nothing must not touch focus (FR-005, FR-006).
-- [X] T013 [US1] In `crates/micold-client/src/ui/terminal.rs`, push the release-focus `IconButton` **unconditionally** into the bottom bar and gate only its `on_press` on `state.terminal_focused()`. The bar's child list must not depend on focus (research R1); this is what T009 checks.
+- [X] T013 [US1] ⚠️ **Superseded** (BUG-001, not reopened — this task was correct as written; its *subject* is retired) In `crates/micold-client/src/ui/terminal.rs`, push the release-focus `IconButton` **unconditionally** into the bottom bar and gate only its `on_press` on `state.terminal_focused()`. The bar's child list must not depend on focus (research R1); this is what T009 checks. → The button itself is removed from the bar entirely per FR-021b (`specs/012-multiple-regular-terminals/tasks.md` T038). Only its *subject* goes: this task's structural half — the bar's child list not varying with focus — survives unchanged, and T009's gate still enforces it. Removing the control unconditionally satisfies both.
 - [X] T014 [US1] In `crates/micold-client/src/ui/material/terminal_pane.rs`, add `pub(crate) fn press_grants_focus(focused: bool, is_left_press: bool, over_bounds: bool) -> bool` (`!focused && is_left_press && over_bounds`) beside `press_routing`, and use it in `Widget::update`: publish `Message::TerminalFocused` when it is true, and pass `self.focused || grants` to `press_routing` at **both** call sites (FR-008b). The decision is a tested pure function, not a branch in `update` — Principle I's GUI-wiring exception does not cover code with a rule of its own.
 - [X] T015 [US1] Delete both `Task::done(Message::TerminalFocused)` re-assertions from `crates/micold-client/src/main.rs` (the BUG-001 workarounds). The race they won no longer exists, and re-asserting is the intermediate-holder shape FR-008a forbids.
 - [X] T016 [P] [US1] Update `docs/user-guide/worktrees-and-sessions.md`: one press activates any control regardless of what the terminal holds; a press into an unfocused terminal both focuses it and reaches the program, even if a field held the keyboard.
@@ -273,3 +273,13 @@ visual pass.
 - Commit after each task or logical group, except T005–T008, which must land together.
 - Verify each test fails before implementing it (Principle I, non-negotiable).
 - The `visual-pass` skill runs §B headlessly (Xvfb + `xdotool` + `import`). Do not ask a human.
+
+---
+
+**Bugfix**: 2026-08-14 — `012-multiple-regular-terminals` BUG-001 Updated from bugfix patch. T013 is
+annotated **superseded**, not reopened: the bottom bar's release-focus button is retired entirely
+(FR-021b), but T013's structural half — the bar's child list must not vary with focus (research R1,
+FR-008a) — survives untouched, and T009's `bar_does_not_branch_on_focus` gate still enforces it.
+Removing the control unconditionally satisfies both. No other task in this file is affected; the
+removal task (T038), its gate (T037), the docs sweep (T041) and the §B3 re-run (T042) live in
+`../012-multiple-regular-terminals/tasks.md` Phase 9, with the tab-strip work in the same bar.

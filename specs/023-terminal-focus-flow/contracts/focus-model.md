@@ -103,9 +103,17 @@ explicitly:
 
 **Structural precondition.** The terminal's bottom bar MUST NOT add or remove children as a function
 of focus. A focus-conditional child shifts every sibling after it, and iced's positional tree diff
-then drops the pressed sibling's `is_pressed` state, swallowing the click (research R1). The
-release-focus affordance is therefore always present, with only its `on_press` gated. Enforced by
+then drops the pressed sibling's `is_pressed` state, swallowing the click (research R1). ~~The
+release-focus affordance is therefore always present, with only its `on_press` gated.~~ Enforced by
 `tests/terminal_bar_stability.rs`.
+
+*(Bugfix `012-multiple-regular-terminals` BUG-001: the release-focus affordance is removed from the
+bar entirely — FR-021b. The precondition above is **unchanged and still binding** — it is a rule
+about the bar, not about that one control. The affordance was its motivating example, and removing
+the control satisfies it the same way keeping it unconditionally did: a child that never exists
+cannot shift its siblings. Removing it *conditionally* would violate the precondition and is
+forbidden. `tests/terminal_bar_stability.rs` keeps enforcing it, and gains
+`bar_has_no_release_focus_control` alongside.)*
 
 ## Routing rule (the gate) — unchanged from 006
 
@@ -134,8 +142,10 @@ is not running, and what the user types is discarded exactly as today.
 
 ## Visual
 
-- The focused pane shows a visible focus indicator, and the release affordance is always present in
-  the status bar — enabled only while focused (FR-024).
+- The focused pane shows a visible focus indicator~~, and the release affordance is always present in
+  the status bar — enabled only while focused~~ (FR-024). *(Affordance clause superseded — BUG-001,
+  FR-021b: the bar carries no release-focus control. The focus indicator requirement is unchanged,
+  and remains the only visual guarantee this section makes.)*
 - The indication MUST match the actual holder at every observed moment, including transitions the
   user did not initiate by pressing, and MUST show no intermediate state (FR-024, FR-008a).
 

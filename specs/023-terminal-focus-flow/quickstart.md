@@ -22,8 +22,8 @@ Green is the gate. The gates that matter to this feature, and what each is watch
 | `terminal_focus.rs` | the predicate's truth table over all four terms; only the displayed session's terminal is ever eligible (FR-020); each navigation clearing a release; a release surviving a dialog and a window switch; launch focusing a restored session |
 | `terminal_focus.rs` (kept from 006) | `route_key`'s truth table — unchanged by this feature, and the regression check that says so |
 | `terminal_pane.rs`'s inline `mod tests` | `press_routing`; `press_grants_focus`, the press that grants focus (FR-008b) — the case that made a TUI need two presses; and **no press outside the pane's bounds produces a `TerminalAction(Write(..))`** (FR-003, SC-008). Inline because both functions are `pub(crate)` |
-| `terminal_bar_stability.rs` | **the bottom bar does not branch on terminal focus**, and `terminal_released` is written only by the two helpers, anywhere in `crates/micold-client/src/`. The gate most likely to catch a real regression: a focus-conditional child shifts its siblings and iced silently swallows the press on them (research R1) |
-| `keymap.rs` (pre-existing, from 006) | the reserved release chord still encodes per platform. This feature adds nothing here; it is listed because a regression would look like FR-021 breaking |
+| `terminal_bar_stability.rs` | **the bottom bar does not branch on terminal focus**, and `terminal_released` is written only by the two helpers, anywhere in `crates/micold-client/src/`. The gate most likely to catch a real regression: a focus-conditional child shifts its siblings and iced silently swallows the press on them (research R1). Also **that the bar carries no release-focus control** (FR-021b, BUG-001) — the two together pass only for an unconditional removal |
+| `keymap.rs` (pre-existing, from 006) | the reserved release chord still encodes per platform. This feature adds nothing here; it is listed because a regression would look like FR-021/FR-021b breaking — and with the affordance gone, the chord is the only explicit release left, so this gate now carries the whole "never trapped" guarantee |
 
 ### The three assertions to read before believing the suite
 
@@ -78,9 +78,11 @@ lands on the mode toggle. The ring must be continuously present. A pass that sho
 frame is a fail even though the click worked: that is the release-and-reacquire shape the contract
 forbids.
 
-The release affordance is always in the bar, greyed when the terminal does not hold the keyboard.
-Confirm it does not appear and disappear as focus changes — that appearing/disappearing is precisely
-what swallowed the press.
+Confirm no control in the bar appears or disappears as focus changes — that appearing/disappearing is
+precisely what swallowed the press. (This paragraph used to say the release affordance is always in
+the bar, greyed when the terminal does not hold the keyboard. The affordance is gone entirely —
+FR-021b, BUG-001 — which satisfies the same rule: a child that never exists cannot shift its
+siblings. The rule itself is unchanged and still watched by `terminal_bar_stability.rs`.)
 
 ### B3 — Away and back (US2, SC-003)
 
@@ -91,9 +93,11 @@ what swallowed the press.
 3. Open Settings, type into a field, switch away → back. The field still has the caret and the
    characters go into it.
 4. **The process is undisturbed (FR-025).** Run `yes | nl` in the pane so it prints numbered lines
-   continuously, then release and re-acquire focus half a dozen times — chord, affordance, press back
-   into the pane. The line numbers must be unbroken, with no gap, no restart from 1, and no reflow.
-   Focus is not something the attached process is allowed to notice.
+   continuously, then release and re-acquire focus half a dozen times — chord, press back into the
+   pane. The line numbers must be unbroken, with no gap, no restart from 1, and no reflow. Focus is
+   not something the attached process is allowed to notice. (The release affordance was a third
+   route here; it is gone — FR-021b, BUG-001. Two routes still alternate the state, which is what
+   this step actually exercises.)
 
 ### B4 — Landing ready to type (US3, SC-004)
 

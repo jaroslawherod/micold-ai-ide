@@ -27,7 +27,7 @@ Governs FR-009, FR-010, FR-011, FR-012, FR-012a. The goal: keys reach the `claud
 |-----------|---------|
 | unfocused → focused | A session becomes the displayed session — `SessionStarted` or `SessionSelected` — auto-focuses that session's terminal (bugfix BUG-001, FR-010/FR-010a). |
 | unfocused → focused | Explicit user action: click on the terminal pane (`Message::TerminalFocused`). (FR-010) |
-| focused → unfocused | Click outside the pane; reserved chord `Ctrl+Shift+E` / `Cmd+Shift+E`; or the pane header "release focus" affordance (all → `Message::TerminalFocusReleased`). (FR-011) |
+| focused → unfocused | ~~Click outside the pane;~~ reserved chord `Ctrl+Shift+E` / `Cmd+Shift+E` ~~; or the pane header "release focus" affordance~~ (→ `Message::TerminalFocusReleased`). (FR-011; click-outside superseded by feature 023 FR-005/FR-006, affordance superseded by 023 FR-021b — `012-multiple-regular-terminals` BUG-001. The chord is the only explicit release; it alone satisfies FR-011's "never trapped" guarantee.) |
 | focused → unfocused | Session close (the displayed session goes away). |
 | focused → unfocused | Project switch/open: focus does not carry across; the restored session (if any) is displayed unfocused until the user selects/starts it or clicks (BUG-001). |
 
@@ -73,8 +73,12 @@ focused session's `RuntimeTerminal` — never a background session (FR-012).
 
 ## Visual & tests
 
-- The focused pane MUST show a visible focus indicator (e.g. a border/ring in an accent role),
-  and an always-visible affordance to release focus.
+- The focused pane MUST show a visible focus indicator (e.g. a border/ring in an accent role)~~,
+  and an always-visible affordance to release focus~~. *(The affordance clause is superseded —
+  `012-multiple-regular-terminals` BUG-001, specified in `023-terminal-focus-flow` FR-021b. It dates
+  from when focus was acquired only by an explicit click and lost by clicking outside, where an
+  always-visible way out was a real safety valve; feature 023 replaced both halves of that model, so
+  the reserved chord now carries FR-011's guarantee alone. The focus indicator is unchanged.)*
 - Tests: `route_key` truth table (focused vs not, each `KeyOutput`), incl. `ReleaseFocus` never
   producing PTY bytes; write-gating asserted at the reducer/binary seam using the 005 session
   lifecycle fake.

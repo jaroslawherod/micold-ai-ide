@@ -55,8 +55,10 @@ Open the project, expand a worktree, and start (or select) a session so its term
 - **Expect**: every interaction behaves exactly as in a standalone terminal.
 
 ### 4. Move focus out — SC-005 (US3)
-- Press the reserved chord **Ctrl+Shift+E** (macOS **Cmd+Shift+E**) — or click outside the pane,
-  or use the header "release focus" affordance.
+- Press the reserved chord **Ctrl+Shift+E** (macOS **Cmd+Shift+E**) ~~— or click outside the pane,
+  or use the header "release focus" affordance~~. *(Both alternatives are gone: click-outside by
+  feature 023 FR-005/FR-006, the affordance by 023 FR-021b — `012-multiple-regular-terminals`
+  BUG-001. The chord is the only explicit release, and this step now validates it alone.)*
 - **Expect**: focus returns to the app; subsequent keys drive the app; the `claude` session keeps
   running uninterrupted. Confirm **Esc** while focused reaches `claude` (does not close overlays).
 

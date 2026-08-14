@@ -88,6 +88,25 @@ is discovered, and today there is exactly one place that needs this shape. If a 
 switcher need appears later, promoting the two call sites' common shape into a shared component
 then is the right sequencing.
 
+**Bugfix note** (2026-08-14, BUG-001): the decision above stands — the switcher stays composed from
+the shared primitives, and the fix adds no new component. What went wrong is a step this record did
+not take. Rejecting `TreeView` as a *widget* left the row's visual form unspecified, and
+`contracts/terminal-instance-switcher-ui.md` filled the gap by borrowing `TreeItem`'s *selected-state
+styling* as its only description of appearance. That half of the analogy does not survive the same
+argument this record makes against the widget: a full-width sidebar row reads fine with an
+uncontained inactive state, a strip of short numeric labels in a status bar does not, and taken
+literally it produced container-vs-bare-text — not a tab strip. Declining to reuse a component means
+owning the form yourself; FR-004a/FR-011a now specify it. Two consequences worth carrying forward:
+
+- The bar's "three other controls built the same inline way" is now two — the release-focus control
+  is retired (`023-terminal-focus-flow` FR-021b). The argument is unaffected; the count is not.
+- Composing shared primitives reuses the *widgets*, not the *colour roles*. `IconButton` defaults its
+  tint to `on_surface`, right on a surface and wrong nested inside a filled container, which is what
+  made the close control near-invisible on the active tab. If the "chip list / selector strip"
+  promotion above is ever taken up, that tint-in-context rule is the thing the shared component
+  should own — it is exactly the kind of detail that a second call site would otherwise get wrong
+  independently.
+
 ## R4 — The new-instance keyboard shortcut: a new `KeyOutput` variant, same precedence tier as the existing reserved chords
 
 **Decision**: Extend `src/keymap.rs`'s `KeyOutput` with `NewTerminalInstance`, detected by a new

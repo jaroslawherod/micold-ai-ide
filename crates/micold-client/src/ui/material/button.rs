@@ -36,7 +36,13 @@ pub enum Variant {
 impl Variant {
     /// The content colour this variant draws its label in — and therefore the colour its ripple
     /// takes, since a state layer is the content colour over the container (contract §5).
-    fn content(self, roles: Roles) -> micold_core::tokens::Rgb {
+    ///
+    /// `pub(crate)` for controls *nested inside* a button, which have to match it: a `Button` sets
+    /// `text_color` for its own label, but a nested `IconButton` sets an explicit glyph colour that
+    /// overrides anything inherited, and its default is the roles' `on_surface` — wrong on any
+    /// variant that paints its own fill. Asking the variant is what keeps the two in step; feature
+    /// 012 BUG-001 is what happens when they are not.
+    pub(crate) fn content(self, roles: Roles) -> micold_core::tokens::Rgb {
         match self {
             Variant::Filled => roles.on_primary,
             Variant::Outlined | Variant::Text => roles.primary,

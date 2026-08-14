@@ -99,6 +99,7 @@ A developer has several Regular Terminal instances open, one of them exits (the 
 - **FR-002**: Each Regular Terminal instance MUST run as an independent shell process with its own pty, scoped to the session's working directory (its worktree or the project's Default root, per the session's existing location).
 - **FR-003**: Opening a new Regular Terminal instance MUST NOT affect the session's AI CLI process or any other already-open Regular Terminal instance for that session.
 - **FR-004**: The system MUST let the user see a list of all currently open Regular Terminal instances for a session and switch the visible pane to any one of them.
+- **FR-004a** (bugfix BUG-001): The instance-switching control MUST present its entries as **tabs**: every entry — active and inactive alike — MUST render inside a container of the same shape and size, so the control reads as a tab strip rather than as loose text in the status bar. Within a tab, the instance's label MUST be horizontally centred and its close control MUST sit at the tab's trailing (right) edge, not immediately adjacent to the label. A tab's size MUST NOT depend on whether it is the active one, so changing which instance is active MUST NOT reflow the row. The active/inactive distinction (FR-004, SC-004) MUST be carried by the containers' emphasis, never by one entry having a container and another having none.
 - **FR-005**: The instance-switching control MUST be visible only once a session has more than one open Regular Terminal instance; it MUST remain hidden while the session has zero or one open instance, matching today's single-terminal experience.
 - **FR-006**: The existing primary AI-CLI/Regular mode-toggle control MUST continue to work as it does today: a single icon-button that switches the visible pane between the session's AI CLI process and Regular Terminal mode.
 - **FR-007**: Activating the primary toggle to switch a session into Regular Terminal mode MUST show whichever Regular Terminal instance was last active for that session, or start a first instance if the session has never had one, never an arbitrary instance.
@@ -106,6 +107,7 @@ A developer has several Regular Terminal instances open, one of them exits (the 
 - **FR-009**: A transition in one Regular Terminal instance's lifecycle (starting, running, exiting) MUST NOT cause a lifecycle transition in any sibling instance or in the session's AI CLI process.
 - **FR-010**: The system MUST let the user manually restart an individual Regular Terminal instance after it has exited, restarting only that instance without affecting sibling instances or the AI CLI process.
 - **FR-011**: The system MUST let the user close an individual Regular Terminal instance; closing MUST terminate only that instance's shell process and MUST NOT affect any sibling instance or the AI CLI process.
+- **FR-011a** (bugfix BUG-001): A control nested inside a tab — the close control, and the per-instance restart affordance of FR-010 — MUST take its colour from the tab it sits in, so it stays legible on every tab state. In particular the close control on the **active** (highlighted) tab MUST read at the same emphasis as that tab's own label; it MUST NOT keep a colour chosen for the surrounding bar's background.
 - **FR-012**: When the user closes the Regular Terminal instance that is currently visible and at least one sibling instance remains open, the system MUST automatically make the next instance in the list the new visible instance (or, if the closed instance was last in the list, the new last instance), so the pane is never left showing a closed instance.
 - **FR-013**: Closing the last remaining Regular Terminal instance for a session MUST revert that session to AI CLI mode, matching today's single-terminal close behavior.
 - **FR-014**: All real-terminal behavior already guaranteed for a Regular Terminal instance (colored/styled output, live per-keystroke input, scrollback, mouse/selection handling, copy/paste, focus gating) MUST apply identically and independently to every open instance of a session.
@@ -131,6 +133,8 @@ A developer has several Regular Terminal instances open, one of them exits (the 
 - **SC-004**: Users can identify, from the instance-switching control alone, every currently open instance and which one is currently active, without issuing any command, in every observed case where more than one instance is open.
 - **SC-005**: An exit, crash, or manual restart of one Regular Terminal instance never disrupts any sibling instance or the AI CLI process, in 100% of observed cases.
 - **SC-006**: Opening, switching, or closing Regular Terminal instances in one session produces zero observable effect on any other concurrently open session, on Linux, macOS, and Windows alike.
+- **SC-007** (bugfix BUG-001): Every open instance's close control is legible on the tab it belongs to — including the active, highlighted tab — in every observed case, in both the light and the dark theme. SC-004 alone does not cover this: a user can tell *which* tab is active while still being unable to see how to close it.
+- **SC-008** (bugfix BUG-001): Switching which instance is active leaves every tab's position and size unchanged, so no tab moves under the pointer when the user selects one.
 
 ## Assumptions
 
@@ -140,3 +144,19 @@ A developer has several Regular Terminal instances open, one of them exits (the 
 - There is no artificial cap on the number of concurrent Regular Terminal instances a session may have open; the practical limit is whatever the host system's resources allow, consistent with there being no such cap on the number of sessions today.
 - New Regular Terminal instances are appended to the end of the instance list in the order they are opened; closed instances are removed from the list and their position is not reused by later instances.
 - As today, only the persisted Terminal Mode value survives an application restart; the set and count of open Regular Terminal instances is not persisted — this matches the non-goal of adding no new persistence beyond what already exists for the single-terminal case.
+
+**Bugfix**: 2026-08-14 — BUG-001 The instance switcher did not read as tabs and its close control was
+illegible on the active tab. Only the active entry had a container (a filled pill); every inactive
+entry was bare text with a loose close glyph beside it, and inside a tab the label and close sat
+adjacent rather than centred/trailing. The close control also kept the surrounding bar's foreground
+colour instead of the tab's, so on the active tab's fill it was near-invisible. FR-004a added (tabs:
+uniform containers for active and inactive alike, centred label, trailing close, active-independent
+size) and FR-011a added (a control nested in a tab takes that tab's colour), plus SC-007 (close
+control legible on every tab, both themes) and SC-008 (no reflow on activation). The root cause was
+an under-specified contract: `contracts/terminal-instance-switcher-ui.md` said "one small entry per
+instance" and delegated appearance to a `TreeItem::selected` analogy, which does not transfer from a
+full-width sidebar row to a strip of short numeric labels; nested-control tint was never constrained
+because the nesting was not anticipated. That contract's "Instance-switcher row" section is updated
+accordingly. The same bug report also retires the bottom bar's release-focus affordance — specified
+in `023-terminal-focus-flow` FR-021 and `006-real-terminal-emulator` `contracts/focus-model.md`, and
+amended there.

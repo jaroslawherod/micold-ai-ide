@@ -72,3 +72,42 @@ fn icon_role_maps_each_surface_to_its_expected_foreground() {
 fn all_surfaces_are_covered() {
     assert_eq!(IconSurface::ALL.len(), 5, "surface contexts");
 }
+
+/// BUG-001 (feature 012 FR-011a, SC-007): a glyph nested inside a **filled** container must take
+/// that container's foreground, not the bar's.
+///
+/// `IconButton::new` defaults its tint to the roles' `on_surface` — correct on a surface, and the
+/// wrong half of a pair the moment the button is nested inside something that paints its own fill.
+/// The terminal's instance-switcher put a close `IconButton` inside a `ButtonVariant::Filled` tab,
+/// which `style::filled` paints `primary`/`on_primary`, and the glyph kept `on_surface`. The tab's
+/// *label* was fine — plain `Text` inherits the button's `text_color` — so only the icon opted out,
+/// and the close control all but vanished on the one tab a user is most likely to want to close.
+///
+/// The second assertion is the one that makes this a standing gate rather than a fixed bug: it
+/// pins the *wrong* pairing as measurably wrong, so re-introducing the default tint inside a filled
+/// container fails here instead of needing an eye at a display. If a future palette ever makes
+/// `on_surface` legible on `primary`, this assertion inverts — revisit it then rather than deleting
+/// it, because the roles would still be wrong even where the contrast happened to survive.
+#[test]
+fn a_glyph_in_a_filled_container_takes_the_containers_foreground() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = roles(scheme);
+        let right = contrast(icon_role(IconSurface::PrimaryButton, r), r.primary);
+        assert!(
+            right >= ICON_MIN,
+            "{scheme:?}: a nested glyph tinted `on_primary` must be legible on the `primary` fill \
+             its container paints — contrast {right:.2} < {ICON_MIN}"
+        );
+
+        let default_tint = icon_role(IconSurface::AppBarAction, r);
+        assert_eq!(default_tint, r.on_surface, "IconButton's default tint");
+        let wrong = contrast(default_tint, r.primary);
+        assert!(
+            wrong < ICON_MIN,
+            "{scheme:?}: `on_surface` on a `primary` fill reads {wrong:.2} — at or above \
+             {ICON_MIN}, so this assertion no longer describes the BUG-001 defect. The pairing is \
+             still wrong (a nested control must take its container's foreground, FR-011a); revisit \
+             this gate rather than deleting it"
+        );
+    }
+}

@@ -20,7 +20,10 @@
 //!
 //! Deleting the click-outside release removed today's trigger. This removes the class: as long as
 //! the bar's child list is the same length whatever focus is doing, no sibling can shift under a
-//! press. The release affordance is therefore always pushed, with only its `on_press` gated.
+//! press. The release affordance was therefore always pushed, with only its `on_press` gated —
+//! until BUG-001 retired the control outright (FR-021b), which satisfies the same rule from the
+//! other direction: a child that never exists cannot shift its siblings either. See
+//! `the_bar_has_no_release_focus_control` below for why the removal had to be unconditional.
 //!
 //! ## `no_scattered_release_writes`
 //!
@@ -140,6 +143,48 @@ fn the_bar_does_not_branch_on_focus() {
          and iced's positional tree diff then drops the pressed sibling's `is_pressed` state — the \
          press is silently swallowed and the user has to press twice. Push the affordance \
          unconditionally and gate its `on_press` instead:\n{}",
+        found.join("\n")
+    );
+}
+
+// ---- BUG-001/T037: the bar carries no release-focus control ----
+
+/// Feature 023 FR-021b: the bottom bar must not carry a release-focus affordance.
+///
+/// It dates from feature 006, when focus was acquired only by an explicit click and lost by
+/// clicking outside — an always-visible way out was a real safety valve then. Feature 023 replaced
+/// both halves of that model: navigation acquires the keyboard automatically and the click-outside
+/// release is gone. What was left was a permanently-visible button, disabled in every state where
+/// the terminal does not hold the keyboard, doing a job the reserved `Ctrl+Shift+E` / `Cmd+Shift+E`
+/// chord already does — and that chord is what carries 006 FR-011's "never trapped" guarantee.
+///
+/// Note what this gate does *not* relax. `the_bar_does_not_branch_on_focus` above still applies:
+/// the removal has to be unconditional. A child that never exists cannot shift its siblings, so
+/// deleting the control satisfies the structural precondition the same way pushing it
+/// unconditionally did — but making it *conditional* on focus would reintroduce the swallowed
+/// press. Both gates pass only for the unconditional removal.
+#[test]
+fn the_bar_has_no_release_focus_control() {
+    let src = crate_sources()
+        .into_iter()
+        .find(|(rel, _)| rel == "ui/terminal.rs" || rel == "ui\\terminal.rs")
+        .map(|(_, src)| src)
+        .expect("ui/terminal.rs must exist");
+
+    let found: Vec<String> = src
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.contains("Icon::ReleaseFocus"))
+        .map(|(i, line)| format!("ui/terminal.rs:{}  {}", i + 1, line.trim()))
+        .collect();
+
+    assert!(
+        found.is_empty(),
+        "the terminal's bottom bar must not carry a release-focus affordance (feature 023 \
+         FR-021b, BUG-001). The reserved Ctrl+Shift+E / Cmd+Shift+E chord is the only explicit \
+         release, and navigation clears a release on its own. Remove the control \
+         **unconditionally** — gating it on focus instead would satisfy this gate while violating \
+         `the_bar_does_not_branch_on_focus`:\n{}",
         found.join("\n")
     );
 }

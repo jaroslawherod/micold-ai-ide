@@ -483,3 +483,120 @@ implementation, found by `/speckit-converge` after Phase 7 was completed.
   Deduplicated the repeated spawn-success/failure block across all three call sites into
   `spawn_and_register_shell_instance`. Re-verified clean after this follow-up: `cargo fmt --check`,
   both build configs, both test suites, `cargo clippy --all-targets` (both configs).
+
+---
+
+## Phase 9: Bugfix BUG-001 — tab strip, close-control legibility, release-focus removal
+
+**Bugfix**: 2026-08-14 — BUG-001 Updated from bugfix patch.
+
+**Purpose**: `bugs/BUG-001.md`. The switcher does not read as tabs (only the active entry has a
+container; inside a tab the label and close sit adjacent rather than centred/trailing), its close
+control is near-invisible on the active tab, and the bar's release-focus button is obsolete.
+All four defects live in one bar (`src/ui/terminal.rs`), so they are fixed as one pass.
+
+**Requirements**: FR-004a, FR-011a, SC-007, SC-008 (this feature);
+`023-terminal-focus-flow` FR-021b. Contracts: `contracts/terminal-instance-switcher-ui.md`,
+`../006-real-terminal-emulator/contracts/focus-model.md`.
+
+**No task is reopened.** T021, T025 and `023`'s T013 were each correct against their own text —
+the text did not cover the visual form. This is a spec gap plus one superseded requirement, not
+implementation drift.
+
+### Tests for BUG-001 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T035 [P] Extend `crates/micold-client/tests/icon_roles.rs` to cover a glyph nested inside a
+  filled container: assert `icon_role(IconSurface::PrimaryButton, roles)` has AA contrast against
+  `roles.primary` (the fill `style::filled` paints) in **both** schemes, and — as the regression
+  the bug actually was — that `icon_role(IconSurface::AppBarAction, roles)` (`on_surface`, the
+  `IconButton` default) does **not**, so the wrong pairing is a failing assertion rather than a
+  judgement call (FR-011a, SC-007). The existing file already has the WCAG helpers; this is a new
+  case in it, not a new file. Pure — runs under `cargo test --no-default-features`.
+- [X] T036 [P] Add a source gate in the new file
+  `crates/micold-client/tests/terminal_tabs.rs` for the tab form (FR-004a). **Deviation, and the
+  reason**: the gate as specified — scan `instance_switcher_row` and fail on `ButtonVariant::Text` —
+  was written and *did* fail against correct code, because a tab legitimately **contains** a
+  `Text`-variant button (the per-instance restart affordance) and a body scan cannot tell a nested
+  control's variant from the tab's own. The rule was extracted instead into a pure
+  `tab_variant(is_active)` in `src/ui/terminal.rs`, whose inline tests assert both arms draw a
+  container and that the two differ (SC-004) — a value test rather than a text pattern. The source
+  gate narrowed to `the_tab_variant_comes_from_the_shared_rule`, checking only that the call site
+  still delegates, so the rule cannot be bypassed by choosing a variant inline again. Shape follows
+  `crates/micold-client/tests/terminal_bar_stability.rs`.
+- [X] T037 [P] Add `bar_has_no_release_focus_control` to
+  `crates/micold-client/tests/terminal_bar_stability.rs`: fail if `src/ui/terminal.rs` still
+  mentions `Icon::ReleaseFocus` (`023` FR-021b). Put it beside the existing
+  `bar_does_not_branch_on_focus`, which must keep passing — the removal is unconditional precisely
+  so that gate stays green.
+
+### Implementation for BUG-001
+
+- [X] T038 Remove the release-focus `IconButton` and its `Tooltip` from `pane()`'s bottom bar
+  (`crates/micold-client/src/ui/terminal.rs`), together with the comment block explaining why it
+  was pushed unconditionally. Delete nothing else: `Message::TerminalFocusReleased`,
+  `release_terminal()`, and the reserved `Ctrl+Shift+E` / `Cmd+Shift+E` chord all stay — the chord
+  is now the only explicit release (`023` FR-021b, `006` FR-011). `Icon::ReleaseFocus` stays in
+  the shared vocabulary unless `tests/icons.rs` shows no remaining user; if it has none, remove it
+  there too and update that test's pinned codepoint table and `Icon::ALL.len()`. (Depends on T037;
+  supersedes `023`'s T013.)
+- [X] T039 Rebuild each switcher entry in `instance_switcher_row`
+  (`crates/micold-client/src/ui/terminal.rs`) as a tab (depends on T036; FR-004a, SC-008):
+  wrap **every** entry, active and inactive alike, in the `Button` it already uses, keeping
+  `ButtonVariant::Filled` for the active one and giving the inactive ones a low-emphasis
+  *container* variant instead of `Text`; lay the content out as centred label + trailing close —
+  replace `row![label, close].spacing(XS)` with a row that puts a `Space::new().width(Fill)`
+  between them and centres the label in its own leading space, so the label sits at the tab's
+  centre and the close sits at its right edge; and give the label a minimum width so neither a
+  wider id nor a change of active tab reflows the row.
+- [X] T040 Tint the controls nested inside a tab from the tab's own foreground rather than the
+  `IconButton` default (depends on T035, T039; FR-011a, SC-007): pass
+  the tab's own foreground instead of letting it fall through to `on_surface`
+  (`src/ui/material/icon_button.rs`). **Deviation**: specified as
+  `.tint(icon_role(IconSurface::PrimaryButton, r))`, which only covers the *active* tab —
+  `icon_role` has no surface whose foreground is `primary`, the colour an `Outlined` inactive tab
+  draws its label in. Both tabs now take `variant.content(r)` (made `pub(crate)`), the colour that
+  variant draws its own label in: identical to `on_primary` for the filled case, correct for the
+  outlined one, and automatically right for any variant added later. The per-entry restart affordance
+  in the same tab took the same treatment — it is `Text`-variant and had the identical problem on a
+  filled tab.
+- [X] T041 [P] Update `docs/user-guide/worktrees-and-sessions.md` (Principle VII): it currently
+  documents the release-focus affordance as one of the ways out of the terminal — leave the
+  reserved chord and remove the affordance, matching `023`'s T032 cross-cutting rule that nothing
+  in `docs/` may describe a release mechanism that no longer exists.
+- [X] T043 [P] Patch `../023-terminal-focus-flow/quickstart.md`, which still treats the release
+  affordance as a live control and would make T042's §B3 re-run unexecutable (FR-021b): in **§B2**
+  delete the paragraph beginning "The release affordance is always in the bar, greyed when the
+  terminal does not hold the keyboard" — §B2's own subject, the focus ring never blinking, is
+  unaffected and stays; in **§B3.4** drop "affordance" from the release-method list, leaving
+  "chord, press back into the pane". Do not touch `visual-pass.md` or `visual-pass-baseline.md` —
+  those are records of passes already run, not instructions. While there, point the test-map row
+  that reads "a regression would look like FR-021 breaking" at FR-021b as well, since FR-021 is now
+  half superseded.
+- [X] T044 [P] Add "### 8. The switcher reads as a tab strip — FR-004a, FR-011a, SC-007, SC-008
+  (BUG-001)" to `quickstart.md`'s manual GUI section, giving T042 something to pass *against*.
+  Scenario 2 covers SC-004 behaviourally (which instance is active) and stops there; the visual
+  requirements have no written standard, which is how BUG-001 shipped. With two or more instances
+  open, check: every tab sits in a container of the same shape and size, active and inactive alike
+  — no entry is bare text; each tab's label is horizontally centred and its close control sits at
+  the tab's right edge; selecting a different tab changes only the emphasis, leaving every tab's
+  position and size untouched (nothing moves under the pointer); the close control is clearly
+  visible on the **active**, highlighted tab, not just the inactive ones. Run all four in **both**
+  the light and the dark theme.
+- [X] T042 Run the visual pass with the `visual-pass` skill and record it: `quickstart.md`'s new
+  §8 (T044) in **both** themes, plus `../023-terminal-focus-flow/visual-pass.md` §B3 re-run — as
+  amended by T043 — to confirm focus behaviour is unchanged with the button gone. Append the §B3
+  result to `../023-terminal-focus-flow/visual-pass.md` and the §8 result to a new
+  `visual-pass.md` here. This is the class of defect the geometry gates cannot see — it is what let
+  BUG-001 ship (depends on T038–T041, T043, T044).
+
+**Checkpoint**: the switcher reads as a tab strip in both themes, every tab's close control is
+legible including on the active tab, activation does not reflow the row, and the bar no longer
+carries a release-focus button while `Ctrl+Shift+E` still releases.
+
+### Phase 9 execution order
+
+T035–T037 (gates, all [P], written failing first per Principle I) → T038 (needs T037), T039 (needs
+T036) → T040 (needs T035, T039). T041, T043, T044 are docs/quickstart edits with no code
+dependency and can run any time after their subject is settled; T043 and T044 must land **before**
+T042, which executes what they specify. T041 and T043 both edit prose about the same removed
+control — do them together to keep the wording consistent.
