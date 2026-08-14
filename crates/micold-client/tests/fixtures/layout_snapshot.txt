@@ -3,7 +3,7 @@
 # font: Roboto-Regular.ttf
 # window: 1280.0x800.0
 # scheme: light (dark asserted byte-identical, not recorded)
-# regenerate: UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot
+# regenerate: UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot
 
 ## main-shell-sidebar-expanded
 @ shell.root -> 0

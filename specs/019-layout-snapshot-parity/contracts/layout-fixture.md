@@ -20,7 +20,7 @@ header    := "# layout snapshot v1" NL
              "# font: " font-file NL
              "# window: " W "x" H NL
              "# scheme: light (dark asserted byte-identical, not recorded)" NL
-             "# regenerate: UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot" NL
+             "# regenerate: UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot" NL
 state-block := state-header NL anchor-block? record+ blank
 state-header:= "## " name
 anchor-block:= ("@ " anchor-name " -> " path NL)+
@@ -67,7 +67,7 @@ Within a state block, the `base` pass is emitted in full, then the `over` pass i
 # font: Roboto-Regular.ttf
 # window: 1280.0x800.0
 # scheme: light (dark asserted byte-identical, not recorded)
-# regenerate: UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot
+# regenerate: UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot
 
 ## main-shell-sidebar-expanded
 @ toolbar.title -> 0/0/0/0/0
@@ -102,7 +102,7 @@ aligned regardless of depth. A depth change therefore shifts one column and is v
 ## 6. Regeneration
 
 ```sh
-UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot
+UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot
 ```
 
 - This is the only way the fixture is written (FR-013). A normal run never writes it, not even on

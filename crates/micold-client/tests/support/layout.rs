@@ -705,7 +705,7 @@ pub fn emit_from(states: &[CoveredState], records: &[Vec<LayoutRecord>]) -> Stri
     ));
     out.push_str("# scheme: light (dark asserted byte-identical, not recorded)\n");
     out.push_str(
-        "# regenerate: UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot\n",
+        "# regenerate: UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot\n",
     );
 
     for (covered, records) in states.iter().zip(records.iter()) {
@@ -761,7 +761,7 @@ pub fn compare_or_regenerate(
     let committed = std::fs::read_to_string(fixture_path).unwrap_or_else(|_| {
         panic!(
             "{} is missing. It is never written by a normal run — regenerate it deliberately with \
-             UPDATE_LAYOUT_SNAPSHOT=1",
+             UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot",
             fixture_path.display(),
         )
     });

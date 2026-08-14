@@ -44,7 +44,7 @@ Confirm the check needs nothing from the environment:
 
 ```sh
 # no DISPLAY, no WAYLAND_DISPLAY — must still pass
-env -u DISPLAY -u WAYLAND_DISPLAY cargo test -p micold-client layout_snapshot
+env -u DISPLAY -u WAYLAND_DISPLAY cargo test -p micold-client --test layout_snapshot
 ```
 
 ---
@@ -56,7 +56,7 @@ env -u DISPLAY -u WAYLAND_DISPLAY cargo test -p micold-client layout_snapshot
 Pick any covered component and increase one padding value by 8.
 
 ```sh
-cargo test -p micold-client layout_snapshot
+cargo test -p micold-client --test layout_snapshot
 ```
 
 - [x] The check **fails**.
@@ -139,7 +139,7 @@ Revert.
 Make a real, intentional layout change.
 
 ```sh
-UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot
+UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot
 git diff crates/micold-client/tests/fixtures/layout_snapshot.txt
 ```
 
@@ -153,7 +153,7 @@ Check the negative case explicitly:
 
 ```sh
 git checkout crates/micold-client/tests/fixtures/layout_snapshot.txt
-cargo test -p micold-client layout_snapshot   # fails
+cargo test -p micold-client --test layout_snapshot   # fails
 git status --short                            # fixture must be UNMODIFIED
 ```
 
