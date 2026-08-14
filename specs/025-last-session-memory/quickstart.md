@@ -30,6 +30,8 @@ Green is the gate. What each gate is watching, for this feature:
 | daemon tests (`micold-daemon/`) | a report of **no session** leaves the memory untouched (§2.6, FR-005a) — the clause that stops closing a session from silently costing the user their place |
 | daemon tests (`micold-daemon/`) | a report naming the session already remembered writes nothing; one naming a different session writes (§2.3, FR-001a) |
 | `micold-core/tests/schema_hash.rs` | **unchanged hash** — this feature adds no protocol message and edits none. If this moves, something reached for the wire that did not need to (research R3) |
+| `micold-client/src/ui/terminal.rs` (unit tests) | a session that is **not running** is not described as starting, and one that is still says so — the empty state and the `restart` control derive from one predicate, so they cannot disagree (FR-014, §4.3, BUG-001) |
+| `micold-client/tests/terminal_empty_state.rs` | the pane still *asks*. The unit tests above drive the decision function directly, so reverting the pane to a hardcoded string leaves them green; this reads the source and fails (BUG-001) |
 
 **What §A cannot tell you**: whether any of this survives an actual restart. Every test above runs in
 one process. That is §B, and it is not a formality here — it is the feature.
@@ -71,6 +73,12 @@ restart.
 sessions, so restarting only the client leaves the remembered session's process running from before
 — "nothing was started" is then true but vacuous, because there was nothing to start. The step is
 only meaningful from a genuinely idle start.
+
+**And read what the terminal area says** (FR-014, [BUG-001](./bugs/BUG-001.md)). It must not claim
+the session is starting — nothing is, and nothing will be until you ask. It should say the session
+is not running and point at the `restart` control in the bar, which must agree with it. This is the
+half of B2 that was missing when the step first ran: the process count was checked, the sentence
+next to it was not.
 
 ### B3 — The restored terminal is ready to type (FR-013)
 
@@ -189,7 +197,7 @@ too, and setting it explicitly is clearer than relying on `HOME`. Two throwaway 
 **Sessions were seeded, the behaviour was not.** Each scenario needs a project in a particular shape
 (two live sessions, one closed, one in a worktree), and creating those by hand costs a lot of
 clicking. They were written straight into `projects.json` using the **pre-split** `StoredProject.
-sessions` shape, which `JsonFileStore::load` still honours as the BUG-001 migration fallback for any
+sessions` shape, which `JsonFileStore::load` still honours as the feature 008 BUG-001 migration fallback for any
 project with no per-project state file. That is a real load path with its own tests, so the fixture
 goes in through the application's own reader rather than a format invented for the sandbox.
 

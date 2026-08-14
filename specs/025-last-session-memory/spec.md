@@ -6,6 +6,10 @@
 
 **Status**: Draft
 
+**Bugfix**: 2026-08-14 — [BUG-001](./bugs/BUG-001.md) added FR-014 and SC-008 (the terminal area must
+not say a restored session is starting), a fourth US1 acceptance scenario, and a correction to the
+assumption that output survives a restart — it does not.
+
 **Input**: User description: "Remember which session I was on in each project across application restarts. Today the foreground session per project is remembered only while the app is running; nothing is persisted, so at launch no session is current and I land on the project overview instead of where I left off."
 
 ## Clarifications
@@ -50,6 +54,10 @@ The same session is in front of you, with no clicks.
    **When** the application starts,
    **Then** that session is still the one in front of me, showing its state and whatever output was
    preserved — the same as selecting it by hand.
+4. **Given** the remembered session is not running and no output survived the restart,
+   **When** the application starts,
+   **Then** the terminal area tells me the session is not running and how to run it — it does not
+   tell me it is starting, because nothing is (BUG-001).
 
 ---
 
@@ -168,6 +176,12 @@ that no longer exists is worse than not remembering at all.
 - **FR-013**: The restored session MUST be ready to type in, exactly as a session reached by any
   other navigation is. Reopening the application is not a special case: the user is looking at the
   session they left, and typing belongs to it.
+- **FR-014**: When the restored session has no output to show, the terminal area MUST describe the
+  session's actual state, and MUST NOT say that it is starting. FR-004 forbids the launch from
+  starting anything, so a launch that says "starting" is telling the user to wait for an event that
+  will never arrive. The wording MUST distinguish a session that is genuinely being launched from
+  one that is merely not running, and MUST agree with the state shown elsewhere for the same session
+  (BUG-001).
 
 ### Key Entities
 
@@ -196,6 +210,9 @@ that no longer exists is worse than not remembering at all.
 - **SC-007**: Force-killing the application costs at most the most recently made choice: the session
   in front of the user at the moment of the kill is restored on the next launch, provided it had
   been current long enough for the change to be recorded.
+- **SC-008**: No launch describes a session as starting when nothing is starting. Every statement
+  the launch screen makes about the restored session's state agrees with every other statement made
+  about it on the same screen.
 
 ## Assumptions
 
@@ -207,6 +224,10 @@ that no longer exists is worse than not remembering at all.
   of the user once it has.
 - Restoring is display only. A stopped session shows its state and whatever output was preserved,
   exactly as it does when selected by hand; making it run again remains an explicit action.
+  **Corrected 2026-08-14 (BUG-001)**: across a restart, *no* output is preserved — terminal output
+  lives only in the client's memory and is rebuilt from frames the daemon streams for a running
+  process. So the ordinary case is a restored session with nothing to show, and what the terminal
+  area says in that case is a decision this feature has to make rather than inherit (FR-014).
 - Sessions' run state is not remembered across restarts and this feature does not change that — so
   the common case at launch is restoring a session that is not running.
 - Nothing about the side panel's own open/closed rows is persisted by this feature; the panel's

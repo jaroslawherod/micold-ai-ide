@@ -353,10 +353,12 @@ pub fn pane<'a>(
             .display_offset(display_offset)
             .focused(state.terminal_focused())
             .into(),
-        None => container(Text::new("Starting…", TypeRole::Caption, r).muted())
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .into(),
+        None => container(
+            Text::new(empty_terminal_message(state, active), TypeRole::Caption, r).muted(),
+        )
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .into(),
     };
     // Measured whether the pane, the placeholder, or nothing at all is inside it (see above).
     let body: Element<'a, Message> = GridSizeReporter::new(body).into();
@@ -539,6 +541,30 @@ fn session_status(state: &State, id: SessionId) -> &'static str {
     }
 }
 
+/// What the terminal area says when it has no grid to render (feature 025 FR-014, BUG-001;
+/// contracts/last-session-memory.md §4.3).
+///
+/// "No grid" used to have one cause. Feature 006 wrote this branch when the only way to reach it
+/// was a session whose process was on its way, and `Starting…` named that cause correctly. Feature
+/// 025 added a second: a session restored at launch, which is current, has no process, and has no
+/// output — none survives a restart, because output lives in the client's memory and is rebuilt
+/// from frames the daemon streams for a *running* process. Left alone, the pane told every such
+/// user to wait for something that would never happen, while the bar one row below said
+/// `interrupted` and offered `restart`.
+///
+/// Answered from [`attached_process_restartable`] rather than from a second match on
+/// `SessionLifecycle`. That predicate already means "the attached process is not running", already
+/// handles the `TerminalMode` split, and is already what decides whether the `restart` control is
+/// there to be pointed at. Deriving both from it is what makes the two *unable* to disagree —
+/// which they did, for exactly as long as they were two readings of one fact.
+fn empty_terminal_message(state: &State, id: SessionId) -> &'static str {
+    if attached_process_restartable(state, id) {
+        "This session is not running. Choose restart below to resume it."
+    } else {
+        "Starting…"
+    }
+}
+
 /// Whether the bottom-bar restart control should show (FR-013): the currently-attached process
 /// (per `Session.mode`) is not running (contracts/terminal-mode-lifecycle.md's predicate).
 fn attached_process_restartable(state: &State, id: SessionId) -> bool {
@@ -637,6 +663,105 @@ mod tests {
     //! run with `cargo test --features gui`. See contracts/terminal-render-input.md.
     use super::*;
     use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Rgb as AnsiRgb};
+    use micold_core::project::{Availability, Project};
+    use micold_core::session::{Session, SessionLifecycle, SessionLocation};
+
+    /// A state with one project and one session at `lifecycle`, made current.
+    fn state_showing(lifecycle: SessionLifecycle) -> (State, SessionId) {
+        let mut state = State::default();
+        let path = std::path::PathBuf::from("/repo");
+        state.workspace.projects.push(Project {
+            path: path.clone(),
+            display_name: "repo".to_string(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        });
+        state.workspace.active = Some(path.clone());
+        let mut session = Session::start_new(SessionLocation::Default);
+        session.lifecycle = lifecycle;
+        let id = session.id;
+        state.workspace.sessions.insert(path, vec![session]);
+        state.active_session = Some(id);
+        (state, id)
+    }
+
+    /// BUG-001 (feature 025), FR-014 / contract §4.3.
+    ///
+    /// The terminal area falls to an empty state whenever it has no grid, and a restored session
+    /// has none — output lives only in the client's memory and is rebuilt from frames the daemon
+    /// streams for a *running* process, so nothing survives a restart. Saying "Starting…" there
+    /// tells the user to wait for an event that will never arrive, while the bar one row below
+    /// says `interrupted` and offers `restart`.
+    ///
+    /// Driven over all three not-running lifecycles rather than the one that reaches this at
+    /// launch: they are the set [`attached_process_restartable`] already names, and a fix keyed to
+    /// `InterruptedResumable` alone would pass a single-case test while leaving a session that was
+    /// restored and then stopped saying the same false thing.
+    #[test]
+    fn a_session_that_is_not_running_is_not_described_as_starting() {
+        for lifecycle in [
+            SessionLifecycle::InterruptedResumable,
+            SessionLifecycle::Idle,
+            SessionLifecycle::Failed,
+        ] {
+            let (state, id) = state_showing(lifecycle);
+            let message = empty_terminal_message(&state, id);
+            assert!(
+                !message.contains("Starting"),
+                "{lifecycle:?} is not starting and nothing will start it, yet the terminal area \
+                 said {message:?} (FR-014)"
+            );
+            assert!(
+                message.contains("restart"),
+                "{lifecycle:?} offers `restart` in the bar below (attached_process_restartable), \
+                 so the empty state should point at the control that resolves it — {message:?}"
+            );
+        }
+    }
+
+    /// The other half, without which the test above passes on a blank string: a session that
+    /// genuinely is coming up must still say so. FR-014 asks the wording to *distinguish* the two,
+    /// not to stop mentioning starting.
+    #[test]
+    fn a_session_that_is_starting_still_says_so() {
+        for lifecycle in [
+            SessionLifecycle::Starting,
+            SessionLifecycle::Restarting { attempts: 1 },
+            SessionLifecycle::Running,
+        ] {
+            let (state, id) = state_showing(lifecycle);
+            assert_eq!(
+                empty_terminal_message(&state, id),
+                "Starting…",
+                "{lifecycle:?} has a process up or on its way, so an empty pane really is waiting \
+                 for the first frame"
+            );
+        }
+    }
+
+    /// The guarantee the fix is built on, and the reason this is one predicate rather than two
+    /// mappings of one fact: the body and the bar cannot disagree, because both derive from
+    /// `attached_process_restartable`. A future lifecycle added to one is added to the other.
+    #[test]
+    fn the_empty_state_and_the_restart_control_never_disagree() {
+        for lifecycle in [
+            SessionLifecycle::Idle,
+            SessionLifecycle::Starting,
+            SessionLifecycle::Running,
+            SessionLifecycle::Restarting { attempts: 1 },
+            SessionLifecycle::Failed,
+            SessionLifecycle::InterruptedResumable,
+        ] {
+            let (state, id) = state_showing(lifecycle);
+            let restartable = attached_process_restartable(&state, id);
+            let says_starting = empty_terminal_message(&state, id).contains("Starting");
+            assert_ne!(
+                restartable, says_starting,
+                "{lifecycle:?}: the bar offers restart = {restartable}, and the body claims to be \
+                 starting = {says_starting}. Exactly one of those is true of any session"
+            );
+        }
+    }
 
     #[test]
     fn spec_maps_to_truecolor() {

@@ -4,6 +4,10 @@
 
 **Input**: Feature specification from `/specs/025-last-session-memory/spec.md`
 
+**Bugfix**: 2026-08-14 — [BUG-001](./bugs/BUG-001.md) Updated from bugfix patch. This plan reasoned
+about *which* session is current and about not starting it, and never asked what the terminal area
+already said about the state those two combine to produce. See the Complexity Tracking note.
+
 ## Summary
 
 The memory already exists and is thrown away at exit. `State::foreground_by_project` maps each
@@ -37,8 +41,8 @@ share `micold_core::store::JsonFileStore`.
 **Storage**: The existing per-project state file (`projects/<hash>.json`, `StoredProjectState`),
 which already holds that project's sessions and worktree display names. One added field, defaulted,
 so an older file loads unchanged and a newer file is ignored by an older reader — the same
-compatibility argument `store.rs` records for BUG-001's split, and the reason no schema version
-moves.
+compatibility argument `store.rs` records for feature 008's BUG-001 split, and the reason no schema
+version moves.
 
 **Testing**: `mise run test` (whole workspace, matching CI); `mise run test-core` while iterating on
 the store and the resolution. The launch path itself is binary glue and falls under Principle I's
@@ -149,3 +153,22 @@ the sessions it refers to — the same file, the same load, the same writer.
 |-----------|------------------------|---------------------|
 | Add `last_session` to `ProjectSnapshot` and carry it over the wire | The daemon owns persistence, so the client "should" learn it from the catalog | It is a protocol change — schema hash, version handshake, both sides — to deliver a value the client can already read from its own load at boot. It would also arrive *later* than the first frame, so the launch would still start on the overview and then jump. (research R3) |
 | Keep the map on the client's `State` and persist it separately | Smallest diff; nothing moves | Two homes for one fact, which can disagree — and the client cannot write the store without clobbering the daemon (`store.rs` has no locking). The map has to move to be persistable by the writer that owns the file. (research R2) |
+
+### Added by [BUG-001](./bugs/BUG-001.md) — a new state, an inherited sentence
+
+This feature adds no widget and no screen, which is why the whole plan reads as persistence work.
+What it does add is a **state that was previously unreachable**: a session current at launch with no
+process and no output. The terminal area already had wording for "nothing to show" —
+`Starting…` — written for feature 006, where the only way to have no grid was that a process was on
+its way. That assumption is what this feature invalidates.
+
+So the cost of this feature was not only the field and the lookup. It was also every inherited
+sentence whose truth depended on a state being unreachable. Nothing in the plan prompted anyone to
+go looking for those, and a diff that adds no UI does not show them.
+
+The rejected fixes are worth recording beside the rejected designs above:
+
+| Considered | Why it looked necessary | Why it was not taken |
+|-----------|------------------------|---------------------|
+| Render nothing at all when there is no grid | The placeholder is wrong, so remove it | Trades a wrong sentence for a blank rectangle. The user is looking at a session they asked to return to; "nothing here, no reason given" is not an improvement on a wrong reason |
+| Have the restore populate an empty grid | Then the pane has something to render and the branch is unreachable again | The client would be fabricating terminal state for a process that never ran. It also re-hides the branch rather than fixing it, so the next feature to reach it inherits the same trap |

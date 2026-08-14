@@ -49,7 +49,7 @@ when a project is forgotten, which is FR-009 with no extra code.
 **Why no `schema_version` bump**: `#[serde(default)]` makes an old file load with `None` — which
 means "no memory", the behaviour the application has today. A new file read by an older build
 carries one unknown field, which `serde` ignores. `store.rs` records this same argument for the
-BUG-001 split (research R7).
+feature 008's BUG-001 split (research R7).
 
 ### Invariants
 

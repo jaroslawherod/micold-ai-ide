@@ -86,6 +86,17 @@ location is revealed in the side panel, because that follows from the session be
 **§4.2** A user MUST NOT be able to tell from the panel how the session became current. There is no
 "restored" styling, badge or notice.
 
+**§4.3** The **main terminal area** MUST NOT describe a session as starting unless it is. A restored
+session that is not running has no terminal output — none survives a restart — so the area falls to
+its empty state, and that empty state's wording is a claim about why there is nothing to show. It
+MUST agree with the session's lifecycle, and therefore with the status shown for the same session in
+the bar below it. *(FR-014, BUG-001)*
+
+Added by bugfix rather than by design: §4.1 and §4.2 both concern the side panel, and the main area
+went unstated. It is not in §5's exclusions either, so this was a gap in coverage rather than a
+deliberate omission — the sort that is invisible because the offending text was inherited from a
+feature whose assumptions this one invalidates.
+
 ## §5 What this contract does not cover
 
 - **Which project opens at launch.** Existing behaviour, decided by the stored last-active project.

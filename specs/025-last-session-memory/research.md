@@ -143,7 +143,7 @@ change anyway.
 **Decision**: Yes, with `#[serde(default)]`, and no schema version moves.
 
 **Rationale**: `StoredProjectState` already relies on this exact argument. `store.rs` records it for
-the BUG-001 split: *"`#[serde(default)]` lets an old (pre-split) `projects.json` […] deserialize
+feature 008's BUG-001 split: *"`#[serde(default)]` lets an old (pre-split) `projects.json` […] deserialize
 normally. No `schema_version` bump (an old reader already tolerates unknown/missing fields; a new
 reader tolerates these being present or absent)."*
 
