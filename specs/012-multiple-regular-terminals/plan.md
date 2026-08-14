@@ -126,6 +126,29 @@ the number of concurrently open sessions or AI CLI processes.
 
 **Result: PASS — no violations. Complexity Tracking left empty.**
 
+**Bugfix**: 2026-08-14 — BUG-001 Updated from bugfix patch. The Principle VIII reasoning above holds
+— the switcher stays composed from the shared `IconButton`/`Tooltip`/`Button` primitives, and BUG-001
+adds no new widget — but two of its consequences need recording, because both defects came from
+composing primitives rather than from any of them being wrong:
+
+- **A shared primitive's default is only right in the context it was written for.** `IconButton`
+  tints its glyph `on_surface` (`src/ui/material/icon_button.rs`), correct on a surface and wrong
+  inside a filled container, where the enclosing `Button` supplies `on_primary`
+  (`src/ui/material/style.rs::filled`). Nesting one in the other silently produced a near-invisible
+  close control on the active tab. Reuse composes the *widgets*; it does not compose the *colour
+  roles*, so any control nested inside a filled container must take its tint explicitly (FR-011a).
+- **The tab strip's visual form is this feature's to specify, not a borrowed one.** research.md R2
+  correctly rejected `TreeView`/`TreeItem` as a widget; the contract then borrowed `TreeItem`'s
+  *selected-state styling* anyway as its only description of appearance, and that half of the
+  analogy does not transfer either — a full-width sidebar row reads fine uncontained, a strip of
+  short numeric labels in a status bar does not. FR-004a now specifies the form directly: uniform
+  containers on every tab, centred label, trailing close, size independent of which tab is active.
+
+The bar also loses the release-focus control (`023-terminal-focus-flow` FR-021b), which the
+Principle VIII bullet above cites as one of the sibling controls the switcher's composition style
+follows. That citation is now historical; the restart control and the mode toggle remain as the
+live examples.
+
 ## Project Structure
 
 ### Documentation (this feature)

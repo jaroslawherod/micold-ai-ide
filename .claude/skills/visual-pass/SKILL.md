@@ -37,13 +37,38 @@ It also does not work for driving: XWayland windows cannot raise themselves abov
 ones, so `xdotool windowactivate` silently leaves your app behind the user's browser and you
 screenshot the browser.
 
-### 2. Build the binary first, out of band
+### 2. Build the binary first, out of band — **then copy it somewhere only you write**
 
 ```bash
 ./scripts/build-lock.sh --no-lock cargo build -p micold-client --bin micold-showcase
 ```
 
 Detach it (`setsid nohup … &`) and poll the log — it queues behind any other worktree's build.
+
+**Never launch straight out of `target-shared/`.** Every checkout on this machine builds into that
+one directory (CLAUDE.md), so `target-shared/debug/<bin>` is whatever branch built *last* — and the
+worktrees that made you wait for the lock are exactly the ones that overwrite it the moment you stop
+waiting. A pass that launches from there can screenshot another branch's code and report the wrong
+result with a perfectly clear conscience. This has happened: a bar screenshot showed a control the
+branch under test had deleted, while the source contained no reference to it and its gate passed.
+
+```bash
+scripts/build-lock.sh bash -c \
+  'cargo build -p micold-client --bin micold-ai-ide -p micold-daemon &&
+   cp "$CARGO_TARGET_DIR/debug/micold-ai-ide" "$CARGO_TARGET_DIR/debug/micold-daemon" ~/vp/bin/'
+```
+
+One invocation, both binaries, copy inside the lock — then run the copies. Three details:
+
+- **The client and the daemon must come from the same build.** The client refuses a daemon whose
+  protocol *schema hash* differs (`handshake::evaluate`), and the daemon logs that as `refusing
+  client: contract or build mismatch` **while printing matching versions on both sides**
+  (`client_version=5 … daemon_version=5`, same package version). The message reads like a
+  contradiction; it is the hash, which it does not print.
+- **`cp` fails with "Text file busy" if your previous run is still using the destination.** Stop it
+  first, or the `&&` chain aborts after the first copy and you launch a mismatched pair.
+- **Verify what you pinned**, cheaply: `strings <binary> | grep -c "<a string your change adds or
+  removes>"`. One grep is much shorter than the detour it saves.
 
 ### 3. A private X server
 
@@ -136,6 +161,32 @@ position is **not** preserved across the toggle, so re-locate.
 
 Kill **only what you started**, by PID. Never `pkill -f` — the user's own app and daemon may be
 running, and stopping those is not yours to do.
+
+`pgrep -f` is the wrong instrument here, twice over. It matches **your own shell**, whose command
+line contains the pattern you are searching for, so the cleanup loop kills the script running it —
+which surfaces as a bare `exit 144` and a half-executed command. And it matches on the whole command
+line, so `pgrep -f micold-ai-ide` also finds `micold-daemon` when the daemon's *path* contains
+`.../workspaces/micold-ai-ide/...`; killing "the app" then takes the daemon with it.
+
+Match the executable name and confirm the instance is yours by its environment:
+
+```bash
+for n in micold-ai-ide micold-daemon; do
+  for p in $(pgrep -x "$n"); do
+    rt=$(tr '\0' '\n' < /proc/$p/environ 2>/dev/null | grep '^XDG_RUNTIME_DIR=' | cut -d= -f2)
+    [ "$rt" = "/tmp/vp77" ] && kill "$p"
+  done
+done
+```
+
+Give the run its own `XDG_RUNTIME_DIR` (and `XDG_DATA_HOME`) precisely so this test exists — it is
+both the isolation and the "is this mine?" predicate. If `/proc/<pid>/environ` is unreadable, the
+process is not yours: leave it.
+
+**Keep that runtime dir short.** `$XDG_RUNTIME_DIR/micold/daemon.sock` must fit in `sun_path`
+(~108 bytes), and the session scratchpad path alone is longer than that — the daemon fails with
+"local socket name length exceeds capacity of sun_path". `/tmp/vp77` works; the scratchpad does not.
+Everything else (data home, screenshots) can live in the scratchpad as usual.
 
 ## What this still cannot answer
 

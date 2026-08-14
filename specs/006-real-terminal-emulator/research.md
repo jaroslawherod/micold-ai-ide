@@ -55,6 +55,10 @@ Acquire focus by clicking the terminal pane (explicit action, FR-010), shown by 
 focus ring on the pane. Release focus by (a) clicking outside the pane, (b) a reserved chord
 **Ctrl+Shift+E** (macOS **Cmd+Shift+E**), or (c) an on-screen "release focus" affordance in the
 pane header. The reserved chord is intercepted by the widget and never written to the PTY.
+*(Superseded in part — feature 023 dropped (a) (FR-005/FR-006) and `012-multiple-regular-terminals`
+BUG-001 dropped (c) (023 FR-021b). Only (b) remains, and it is what carries FR-011's "never trapped"
+guarantee; the boolean itself became a derived predicate in 023. Recorded here rather than rewritten:
+this is the decision as taken, and all three mechanisms did ship.)*
 
 Key routing (the "propagate only when focused" requirement):
 - **Focused**: `TerminalPane::on_event` handles key/mouse events and returns `Captured`; the

@@ -509,9 +509,11 @@ Keystrokes stream straight to `claude` as you press them, exactly like a standal
   including Escape and shortcuts the app would otherwise use — goes to `claude`; when not focused,
   those keys drive the application instead. Input is only delivered while the session's process
   is running (otherwise keystrokes are ignored and the header shows the session status).
-- **Leaving focus**: press **Ctrl+Shift+E** (Cmd+Shift+E on macOS), or use the **release focus**
-  control in the terminal's bottom bar. Releasing focus never interrupts the running session.
-  Clicking on empty app chrome no longer does it — see below.
+- **Leaving focus**: press **Ctrl+Shift+E** (Cmd+Shift+E on macOS). Releasing focus never
+  interrupts the running session. Clicking on empty app chrome no longer does it — see below.
+  You rarely need this: going anywhere else in the application hands the keyboard over on its
+  own, so the chord is for the times you want the app's shortcuts back without leaving the
+  terminal you are looking at.
 
 ### One press does what you pressed
 

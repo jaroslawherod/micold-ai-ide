@@ -94,9 +94,10 @@ terminal on return.
 
 1. **Given** a focused terminal, **When** the user switches to another application window and back,
    **Then** typing goes to the terminal's process with no press in between.
-2. **Given** a terminal the user deliberately released (via the release shortcut or the release
-   affordance in the pane), **When** the user switches away and back, **Then** the terminal does not
-   take the keyboard, and application shortcuts still work.
+2. **Given** a terminal the user deliberately released (via the release shortcut ~~or the release
+   affordance in the pane~~ — the shortcut is the only release now, FR-021b), **When** the user
+   switches away and back, **Then** the terminal does not take the keyboard, and application
+   shortcuts still work.
 3. **Given** an open dialog with a text field the user was typing into, **When** the user switches
    away and back, **Then** that field still holds the keyboard and the terminal does not take it.
 4. **Given** the application window has no input focus, **When** output arrives in a background
@@ -176,7 +177,8 @@ session's state change) — the typed characters must all land in the field.
 - A menu opened from a control while the terminal was focused: the open menu holds the keyboard so
   it can be driven with arrows and Escape; when it closes — by choosing an item or by dismissing it
   — the keyboard goes back to the terminal.
-- A user who explicitly released the terminal (the reserved shortcut or the release affordance) then
+- A user who explicitly released the terminal (the reserved shortcut ~~or the release affordance~~,
+  FR-021b) then
   opens and closes a dialog: the keyboard returns to the application, not to the terminal. An
   explicit release is a decision, and no automatic rule may quietly reverse it.
 - Returning to the application by pressing directly on the terminal pane: one press, and the
@@ -269,9 +271,21 @@ session's state change) — the typed characters must all land in the field.
 #### Preserved behaviour
 
 - **FR-021**: The existing explicit ways to give and take the terminal's keyboard — pressing the
-  pane, the reserved release shortcut, and the release affordance in the pane — MUST continue to
-  work unchanged. An explicit release MUST hold until the user gives the keyboard back or navigates
-  (FR-021a), and MUST NOT be undone by FR-010's return-to-terminal rule.
+  pane, the reserved release shortcut, ~~and the release affordance in the pane~~ — MUST continue to
+  work unchanged. *(The affordance clause is superseded — bugfix `012-multiple-regular-terminals`
+  BUG-001: this feature listed the bottom bar's release-focus button under "Preserved behaviour"
+  without re-examining whether it still earned its place after the focus model changed underneath
+  it. See FR-021b.)* An explicit release MUST hold until the user gives the keyboard back or
+  navigates (FR-021a), and MUST NOT be undone by FR-010's return-to-terminal rule.
+- **FR-021b** (bugfix BUG-001): The bottom bar MUST NOT carry a release-focus affordance. This
+  feature made every navigation acquire the keyboard automatically (FR-011, FR-021a) and removed the
+  click-outside release (FR-005, FR-006), which left that button permanently visible while doing
+  nothing a user needs it for: the reserved shortcut covers the keyboard-only user — the "never
+  trapped" guarantee `006-real-terminal-emulator` FR-011 actually protects — and navigating anywhere
+  covers everyone else. Its removal MUST be **unconditional**: the bar's child list must still not
+  vary with focus (FR-008a), so the control must not merely become conditional on
+  `terminal_focused()`. `Message::TerminalFocusReleased` itself MUST remain — the reserved shortcut
+  dispatches it.
 - **FR-021a**: An explicit release MUST be a single application-wide state, not a property remembered
   per session. Any navigation covered by FR-011 MUST clear it, so the terminal the user navigated to
   holds the keyboard regardless of a release that preceded the navigation.
@@ -353,3 +367,20 @@ session's state change) — the typed characters must all land in the field.
 - Focus behaviour is not user-configurable; there is no setting to turn automatic focusing off.
 - Keyboard-only focus traversal (moving focus between controls with Tab) is out of scope for this
   feature except where it already exists; this feature is about pointer presses and automatic focus.
+
+**Bugfix**: 2026-08-14 — `012-multiple-regular-terminals` BUG-001 The bottom bar's release-focus
+button is retired. This feature listed it under "Preserved behaviour" (FR-021) without re-examining
+whether it still earned its place after the focus model changed underneath it: navigation now
+acquires the keyboard automatically (FR-011, FR-021a) and the click-outside release is gone (FR-005,
+FR-006), leaving a permanently-visible control — disabled in every state where the terminal does not
+hold the keyboard — whose job the reserved `Ctrl+Shift+E` / `Cmd+Shift+E` chord already does.
+FR-021's affordance clause struck through and FR-021b added (the bar must not carry the affordance;
+removal is unconditional so FR-008a's "child list does not vary with focus" invariant and its gate
+`tests/terminal_bar_stability.rs::bar_does_not_branch_on_focus` still hold;
+`Message::TerminalFocusReleased` stays, since the chord dispatches it). US1 Scenario 2 and the
+edge-case list annotated to match. T013 in `tasks.md` is superseded, not reopened — it was correct
+when written. `006-real-terminal-emulator` `contracts/focus-model.md` is amended in the same pass;
+006 FR-011 itself is untouched, as it only ever mandated two ways out and the chord satisfies the
+"never trapped" guarantee it protects. The fix tasks live in
+`specs/012-multiple-regular-terminals/tasks.md` Phase 9, alongside BUG-001's tab-strip work in the
+same bar.

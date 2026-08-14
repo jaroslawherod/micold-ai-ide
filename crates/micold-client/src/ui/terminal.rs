@@ -23,7 +23,7 @@ use iced::{Alignment, Color, Element, Font, Length};
 use micold_core::protocol::grid::{WireColor, WireStyle};
 use micold_core::session::{SessionId, SessionLifecycle, ShellLifecycle, TerminalMode};
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing, Rgb};
+use micold_core::tokens::{self, anatomy, spacing, Rgb};
 
 /// The terminal font size (monospace). Cell metrics are derived from it.
 pub const TERM_FONT_SIZE: f32 = 13.0;
@@ -411,36 +411,24 @@ pub fn pane<'a>(
             .on_press(Message::TerminalRestartRequested),
         );
     }
-    // An explicit way out of the terminal (FR-021) alongside the reserved Ctrl+Shift+E chord.
-    // Icon-only (with a tooltip carrying the label and chord) rather than an icon+text button —
-    // keeps the bar compact; `Icon::ReleaseFocus` reads clearly on its own and the tooltip still
-    // surfaces the reserved chord on hover.
+    // The bar carried a release-focus `IconButton` here until BUG-001 (feature 023 FR-021b). It
+    // dated from feature 006, when the terminal took focus only from an explicit click and lost it
+    // by clicking outside — an always-visible way out was a real safety valve then. Feature 023
+    // replaced both halves of that model: navigation acquires the keyboard on its own, and the
+    // click-outside release is gone. What survived was a permanently-visible button, disabled in
+    // every state where the terminal did not hold the keyboard, duplicating the reserved
+    // Ctrl+Shift+E / Cmd+Shift+E chord — which is what actually carries 006 FR-011's "never
+    // trapped" guarantee, and still does.
     //
-    // **Always pushed, enabled only while focused** (feature 023, FR-008a). This used to be
-    // `if state.terminal_focused()`, and that conditional is what made every control to its right
-    // need two presses: a press that changed focus re-ran `view()` between its own press and
-    // release, this child vanished, the mode toggle and the "+" each shifted one index left, and
-    // iced's `Tree::diff_children` — which zips by position — handed the pressed control its
-    // neighbour's node, dropping the `is_pressed` that `on_press` fires from (research R1). The
-    // bar's child list must not depend on focus; `tests/terminal_bar_stability.rs` fails if it
-    // does again.
-    bar = bar.push(
-        Tooltip::new(
-            {
-                let button = IconButton::new(Icon::ReleaseFocus, r).padding(spacing::SM);
-                if state.terminal_focused() {
-                    button.on_press(Message::TerminalFocusReleased)
-                } else {
-                    button
-                }
-            },
-            "Release focus (Ctrl+Shift+E)",
-            r,
-        )
-        // This control sits mid-bar, not at an edge — opening below would run past the
-        // window's bottom edge since the bar is the last row on screen, so open upward.
-        .position(TooltipPosition::Top),
-    );
+    // Its removal had to be **unconditional**. The bar's child list must not vary with focus
+    // (feature 023 FR-008a): a focus-conditional child shifts every sibling after it, and iced's
+    // positional `Tree::diff_children` then hands the pressed control its neighbour's node,
+    // dropping the `is_pressed` that `on_press` fires from — the press vanishes and the user has
+    // to press twice (research R1). A child that never exists cannot shift anything, so deleting
+    // it satisfies that rule exactly as pushing it unconditionally did; gating it on focus would
+    // not. `tests/terminal_bar_stability.rs` holds both ends: `the_bar_does_not_branch_on_focus`
+    // and `the_bar_has_no_release_focus_control`.
+    //
     // The instance-switching control: one entry per open Regular Terminal instance, visible only
     // once a session has more than one (feature 011, FR-004/FR-005). Placed just before the
     // "open a new instance" control, both ahead of the primary mode toggle.
@@ -559,6 +547,40 @@ fn attached_process_restartable(state: &State, id: SessionId) -> bool {
     }
 }
 
+/// The container variant a switcher tab draws in (BUG-001, FR-004a).
+///
+/// Both arms draw a container. That is the whole rule, and it is the one the original code broke:
+/// the inactive arm was `Text`, which paints neither background nor outline, so the row rendered
+/// as one filled pill among loose numbers instead of as a tab strip. The active/inactive
+/// difference has to be *emphasis between two containers* — never container against nothing.
+///
+/// Its own function so the rule is a pure value test rather than a claim about a `view()` no unit
+/// test can reach; `tab_variant_always_draws_a_container` below is that test.
+pub(crate) fn tab_variant(is_active: bool) -> ButtonVariant {
+    if is_active {
+        ButtonVariant::Filled
+    } else {
+        ButtonVariant::Outlined
+    }
+}
+
+/// A switcher tab's label box (BUG-001, FR-004a/SC-008). Wide enough for a two-digit instance id
+/// at `TypeRole::Label`, and fixed so the tab does not resize when a session reaches ten open
+/// instances — a tab that grows mid-row moves every tab after it.
+const TAB_LABEL_WIDTH: f32 = 20.0;
+
+/// The trailing close control's layout footprint. A leading spacer of the same width balances it,
+/// putting the label on the tab's midline rather than off-centre toward the leading edge
+/// (FR-004a).
+///
+/// It is §7.3's 48dp minimum touch target, **not** the glyph's visible size: a pressable, non-
+/// compact `IconButton` wraps itself in a `MIN_TOUCH_TARGET` box so a small pill still gets a large
+/// target (`icon_button.rs`). Measuring the visible pill instead — this was 24 in the first cut of
+/// the fix — leaves the spacer narrower than the control it balances, and the label lands
+/// `(48 - 24) / 2 = 12`dp left of centre. That is exactly what the visual pass caught, and it is why
+/// this reads the anatomy constant rather than naming a number: the two must move together.
+const TAB_CLOSE_WIDTH: f32 = anatomy::button::MIN_TOUCH_TARGET;
+
 /// The instance-switching control (feature 011, FR-004/FR-005; contracts/terminal-instance-
 /// switcher-ui.md): one tab per open Regular Terminal instance, in creation order, labeled by
 /// its `ShellInstanceId`'s numeric value (the only display identity an instance has). `None`
@@ -570,9 +592,36 @@ fn attached_process_restartable(state: &State, id: SessionId) -> bool {
 /// buttons. iced's `Button` always gives its content first crack at an event, so a press that
 /// lands on the nested close/restart button is captured there and never reaches the tab's own
 /// `on_press`; a press anywhere else on the tab falls through to select it. The active tab is
-/// marked with a solid fill (`style::filled`) vs. the low-emphasis `style::text_button` every
-/// other tab uses — a background-color difference is legible at a glance, unlike a thin edge
-/// accent (SC-004: users must be able to tell which instance is active from this row alone).
+/// marked with a solid fill (`style::filled`) vs. the outlined container every other tab uses —
+/// a background-color difference is legible at a glance, unlike a thin edge accent (SC-004: users
+/// must be able to tell which instance is active from this row alone).
+///
+/// # Why every tab draws a container (BUG-001, FR-004a)
+///
+/// The inactive tabs used `ButtonVariant::Text`, which paints neither background nor outline. The
+/// row therefore rendered as one filled pill among loose numbers with close glyphs floating beside
+/// them — not a tab strip. Every behavioural test passed and SC-004 was met: you could tell which
+/// instance was active, and the row still looked wrong. The active/inactive distinction has to be
+/// *emphasis between two containers*, never container-versus-nothing, which is what `Outlined`
+/// gives the inactive ones.
+///
+/// Two sizing rules keep activation from reflowing the row (SC-008). Both variants get the same
+/// explicit `padding`, so neither §7.3 default applies and the two tabs measure alike; and the
+/// label sits in a fixed-width centred box, so a two-digit instance id does not resize its tab
+/// either. Nothing about *which* tab is active changes any child's size, so selecting a tab moves
+/// only colour — nothing shifts under the pointer between a press and its release.
+///
+/// # Why the nested controls are tinted explicitly (BUG-001, FR-011a)
+///
+/// `IconButton::new` defaults its glyph to the roles' `on_surface`. That is right on a surface and
+/// wrong the moment the button is nested inside something painting its own fill: on the active
+/// tab, `style::filled` lays down `primary` and `on_surface` over it is near tone-on-tone, so the
+/// close control all but disappeared on the one tab a user is most likely to want to close. The
+/// tab's *label* was fine — plain `Text` inherits the button's `text_color` — so only the icon
+/// opted out. Both nested controls now take `variant.content(r)`, the colour that variant draws
+/// its own label in, which is the same rule the label follows and stays right for any variant
+/// added later. `tests/icon_roles.rs` holds the contrast arithmetic; `tests/terminal_tabs.rs`
+/// holds the call site.
 fn instance_switcher_row<'a>(
     state: &'a State,
     id: SessionId,
@@ -584,31 +633,50 @@ fn instance_switcher_row<'a>(
     }
     let mut entries = row![].spacing(spacing::SM).align_y(Alignment::Center);
     for instance in &session.shells {
-        let is_active = session.active_shell == Some(instance.id);
-        let label = Text::new(instance.id.0.to_string(), TypeRole::Label, r);
+        // The active tab reads as filled, the rest as outlined — two containers differing in
+        // emphasis (FR-004a), never a container against bare text.
+        let variant = tab_variant(session.active_shell == Some(instance.id));
+        // Both nested controls take the colour this tab draws its own label in (FR-011a), rather
+        // than `IconButton`'s `on_surface` default, which vanishes on the filled tab.
+        let tint = variant.content(r);
+        // Fixed-width and centred, so the label sits on the tab's midline and a two-digit id
+        // does not resize the tab (SC-008).
+        let label = container(Text::new(instance.id.0.to_string(), TypeRole::Label, r))
+            .center_x(Length::Fixed(TAB_LABEL_WIDTH));
         let close = Tooltip::new(
             IconButton::new(Icon::Close, r)
                 .size(TypeRole::Label)
                 .padding(spacing::XS)
                 .circular()
+                .tint(tint)
                 .on_press(Message::ShellInstanceCloseRequested(id, instance.id)),
             "Close this terminal instance",
             r,
         )
         .position(TooltipPosition::Top);
-        let mut content = row![label, close]
-            .spacing(spacing::XS)
-            .align_y(Alignment::Center);
+        // A leading spacer the width of the trailing close control, so the label centres about
+        // the tab's own midpoint rather than about the space left over beside the close: the two
+        // ends are then equal and the label's box sits exactly between them. A `Fill` spacer
+        // would do nothing here — the tab sizes to its content, so there is no slack to push
+        // against, and it would only add a gap on one side of the label.
+        let mut content = row![
+            Space::new().width(Length::Fixed(TAB_CLOSE_WIDTH)),
+            label,
+            close,
+        ]
+        .spacing(spacing::XS)
+        .align_y(Alignment::Center);
         // Per-instance restart affordance (feature 011 FR-010): shown exactly when this
         // instance's own lifecycle is not-running, independent of every sibling — a background
-        // instance can be restarted without switching to it first.
+        // instance can be restarted without switching to it first. It widens its own tab, which
+        // SC-008 permits: that is a lifecycle change, not a change of which tab is active.
         if matches!(
             instance.lifecycle,
             ShellLifecycle::NotStarted | ShellLifecycle::Exited
         ) {
             content = content.push(
                 Button::with_content(
-                    Text::new("restart", TypeRole::Label, r).muted(),
+                    Text::new("restart", TypeRole::Label, r).tint(tint),
                     ButtonVariant::Text,
                     r,
                 )
@@ -616,14 +684,10 @@ fn instance_switcher_row<'a>(
                 .on_press(Message::ShellInstanceRestartRequested(id, instance.id)),
             );
         }
-        // The active instance reads as filled, the rest as low-emphasis tabs.
-        let variant = if is_active {
-            ButtonVariant::Filled
-        } else {
-            ButtonVariant::Text
-        };
         entries = entries.push(
             Button::with_content(content, variant, r)
+                // The same explicit padding on both variants, so §7.3's per-variant default never
+                // applies and the two tabs measure alike (SC-008).
                 .padding(spacing::SM)
                 .on_press(Message::ShellInstanceSelected(id, instance.id)),
         );
@@ -633,10 +697,41 @@ fn instance_switcher_row<'a>(
 
 #[cfg(test)]
 mod tests {
-    //! Colour-mapping tests for `TermPalette` (feature 006, FR-001/FR-003). Bin unit tests —
-    //! run with `cargo test --features gui`. See contracts/terminal-render-input.md.
+    //! Colour-mapping tests for `TermPalette` (feature 006, FR-001/FR-003), and the switcher
+    //! tab's variant rule (feature 012 BUG-001). Bin unit tests — run with
+    //! `cargo test --features gui`. See contracts/terminal-render-input.md.
     use super::*;
     use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Rgb as AnsiRgb};
+
+    /// BUG-001, FR-004a: neither arm may be the variant that paints nothing.
+    ///
+    /// Asserted over both arms rather than pinning each to a named variant, because the rule is
+    /// "every tab draws a container", not "the inactive tab is outlined" — swapping `Outlined` for
+    /// another container variant is a design choice this test should not litigate, while dropping
+    /// back to `Text` is the regression it exists to catch.
+    #[test]
+    fn tab_variant_always_draws_a_container() {
+        for is_active in [true, false] {
+            assert_ne!(
+                tab_variant(is_active),
+                ButtonVariant::Text,
+                "a switcher tab (is_active={is_active}) must draw a container — `Text` paints \
+                 neither background nor outline, which is what made the row read as loose \
+                 characters in the status bar instead of a tab strip (BUG-001, FR-004a)"
+            );
+        }
+    }
+
+    /// The two arms must also be distinguishable from each other, or SC-004 is lost — a row of
+    /// identical tabs says nothing about which instance is active.
+    #[test]
+    fn tab_variant_distinguishes_the_active_tab() {
+        assert_ne!(
+            tab_variant(true),
+            tab_variant(false),
+            "the active tab must differ in emphasis from the rest (SC-004)"
+        );
+    }
 
     #[test]
     fn spec_maps_to_truecolor() {

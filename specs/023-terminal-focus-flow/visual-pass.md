@@ -178,3 +178,64 @@ In the run's scratchpad, not committed:
 - `v-b3-released-rt.png` — the empty prompt after a released terminal came back
 - `w-b4-released.png` / `w-b4-typed.png` — released, navigated, typed with no press
 - `w-b5-menu.png` / `w-b5-closed-bar.png` / `w-b5-final.png` — the keyboard lent to a menu and returned
+
+---
+
+## 2026-08-14 — §B3 re-run after BUG-001 removed the release affordance
+
+**Ran on**: Xvfb `:77` (1600×1400) + lavapipe (Mesa's software Vulkan), not a physical display.
+Client and daemon both `debug`, built from `fix/small-visual-improvements` and **copied out of
+`target-shared/` before launching** — see the hazard note below. Isolated `XDG_DATA_HOME` and a
+private `XDG_RUNTIME_DIR=/tmp/vp77`; the user's own app, daemon and project catalog were untouched
+throughout, and only processes whose `XDG_RUNTIME_DIR` read `/tmp/vp77` were ever stopped.
+
+**Why re-run**: `012-multiple-regular-terminals` BUG-001 removes the bottom bar's release-focus
+affordance (FR-021b). That leaves the reserved `Ctrl+Shift+E` chord as the only explicit release, so
+the question is whether the release path still works when the button that used to sit beside it is
+gone — and whether removing a bar child reintroduced the swallowed press FR-008a exists to prevent.
+
+### Passed
+
+- **Press-to-focus, then type.** Pressed the pane, typed `echo VP_FOCUSED_OK` — it reached the shell
+  and ran. The granting press still both takes the keyboard and lets the keys through (FR-008b).
+- **The chord still releases (FR-021, 006 FR-011).** Pressed `Ctrl+Shift+E`, then typed
+  `echo VP_SHOULD_NOT_APPEAR`. **Nothing reached the process** — the pane was byte-for-byte
+  unchanged, still showing the previous prompt. With the affordance gone, the chord alone carries
+  the "never trapped" guarantee, and it does.
+- **Re-acquisition.** Pressed the pane again, typed `echo VP_REACQUIRED` — it ran. The full
+  release → re-acquire cycle works with one control fewer in the bar.
+- **The process was undisturbed across the cycle (FR-025).** Scrollback stayed continuous over all
+  three steps: no gap, no restart, no reflow. Focus is still not something the shell notices.
+- **One press does what you pressed (FR-008a, the regression this risked).** Every control pressed
+  during the session acted on its *first* press while the terminal held the keyboard: the mode
+  toggle, the "+" that opens an instance, and a switcher tab. Removing the affordance
+  unconditionally kept the bar's child list focus-independent, exactly as
+  `terminal_bar_stability.rs` requires — and that gate plus its new sibling
+  `the_bar_has_no_release_focus_control` now pass together, which only an unconditional removal can
+  do.
+- **The bar no longer shows the control.** Confirmed by eye in both modes: in AI CLI mode the bar is
+  session name · status · mode toggle; in Regular mode it gains the switcher and the "+". No
+  keyboard-hide glyph in either.
+
+### Not run — and why
+
+- **B3.1 / B3.3, the window round trips** (switch to another application and back; a dialog field
+  keeping its caret). There is no window manager on `:77` and no second application: `xterm` was
+  installed but would not start on the private display, so nothing could take X input focus away
+  from the app and give it back. These paths are untouched by BUG-001 — the removed button plays no
+  part in window focus or field focus — but untouched is not tested, and they are recorded here as
+  unrun rather than passed.
+- **Mid-flight animation and perceived smoothness**, as always with this harness.
+
+### Hazard worth carrying forward
+
+The first bar screenshot of this run still showed the release-focus button, which looked like the
+change having failed. It had not: `ui/terminal.rs` contains no `Icon::ReleaseFocus` and its gate
+passes. The binary was another worktree's. `target-shared/` is shared by every checkout on this
+machine (CLAUDE.md), so `target-shared/debug/micold-ai-ide` is whatever branch built last, and four
+other worktrees were building throughout. A second trap sits behind it: the client refuses to talk to
+a daemon whose protocol **schema hash** differs (`handshake::evaluate`), and the log reports that as
+"contract or build mismatch" while printing matching v5/0.8.0 versions on both sides — so a client
+and daemon picked up from `target-shared/` at different moments will not connect, and the message
+does not say why. Build both in one invocation and copy them aside; run the copies. The skill has
+been updated with this.
