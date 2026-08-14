@@ -24,12 +24,12 @@
 //! poll that stopped on blur left a fully visible window showing the wrong theme indefinitely
 //! (003 FR-006). Both cadences stay inside SC-003's one second.
 //!
-//! # `detect_system_scheme` is still in `main.rs`
+//! # `detect_system_scheme` belongs to a different external system
 //!
-//! It, `SystemThemeProbe` and `map_system_scheme` are the OS-theme *probe*, which T054 moves to
-//! `shell/os_theme.rs`. What lives here is the clock that drives it. The two split cleanly along
-//! FR-019a's line — the runtime schedules, the probe asks the operating system — so [`os_theme_poll`]
-//! imports the one function it calls and leaves the rest for T054.
+//! It, `SystemThemeProbe` and `map_system_scheme` are the OS-theme *probe*, and T054 moved them
+//! to `shell/os_theme.rs`. What lives here is the clock that drives it. The two split cleanly
+//! along FR-019a's line — the runtime schedules, the probe asks the operating system — so
+//! [`os_theme_poll`] imports the one function it calls and owns none of it.
 
 use std::time::Duration;
 
@@ -38,7 +38,8 @@ use iced::Subscription;
 
 use micold_client::app::Message;
 
-use crate::{detect_system_scheme, probe_config, App};
+use crate::shell::os_theme::detect_system_scheme;
+use crate::{probe_config, App};
 
 /// How often the OS light/dark preference is polled while the window has input focus
 /// (research R4).
