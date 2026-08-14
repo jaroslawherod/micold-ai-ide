@@ -161,7 +161,7 @@ claims to, that is not run either. B2 sat in that state for two days before bein
 | Date | 2026-08-11 (B1), 2026-08-12 (B3, B7), 2026-08-14 (B2, B4, B5, B6; then **all of §B re-run** after BUG-001 was fixed; then **B2 re-run again** after BUG-002 reversed it) |
 | Platform | B1 on the user's own install; everything else on Xvfb + lavapipe in an isolated sandbox (see below) |
 | B1 — reopen lands on the session, first frame | **PASS** — confirmed by the user on their own install ("it works"), and reproduced in the sandbox on every restart below |
-| B2 — it came back up, and only it did | **PASS** (2026-08-14, after BUG-002) — [evidence](./evidence/B2-postbug002-restore-resumes.png). From a genuinely idle sandbox (0 micold, 0 `claude`, verified), launching produced **exactly one** `claude`, and its command line is `claude --resume ede92724-a79a-444c-84f9-a6c67c91b08e` — the id `last_session` held on disk. Zero clicks. The terminal is live and rendering real output, not a placeholder. The earlier PASS — [superseded evidence](./evidence/B2-restore-starts-nothing.png) — recorded 0 `claude` after a restore, which was correct for the build it was taken on and is what BUG-002 reversed |
+| B2 — it came back up, and only it did | **PASS** on the resume half (2026-08-14, after BUG-002) — [evidence](./evidence/B2-postbug002-restore-resumes.png). From a genuinely idle sandbox (0 micold, 0 `claude`, verified), launching produced **exactly one** `claude`, and its command line is `claude --resume ede92724-a79a-444c-84f9-a6c67c91b08e` — the id `last_session` held on disk. Zero clicks. The terminal is live and rendering real output, not a placeholder. **Reproduced by a second, independent run** the same day — [evidence](./evidence/B2-resumes-exactly-one.png) — which also held the *"and only it did"* clause across two projects: beta's remembered session stayed stopped. **The FR-014 half is NOT REACHED by either run**; between them three routes were tried and none produces a refused resume. The earlier PASS — [superseded evidence](./evidence/B2-restore-starts-nothing.png) — recorded 0 `claude` after a restore, which was correct for the build it was taken on and is what BUG-002 reversed |
 | B3 — the restored terminal is ready to type; a switch still focuses | **PASS** — [evidence](./evidence/B3-focus-states.png) |
 | B4 — per project, across several switches | **PASS** — [evidence](./evidence/B4-per-project-memory.png) |
 | B5 — closed / deleted worktree / empty session | **PASS**, all three — [evidence](./evidence/B5-B6-kept-and-declined.png). B5.2 passes against the *corrected* expectation; the step as previously written would have failed |
@@ -291,6 +291,14 @@ gives it meaning: clicking a session row in the sidebar **does** resume it — o
 appears within seconds, and the terminal fills with real output. Same session state, two routes,
 opposite outcomes. The restore path is inert *by comparison*, not by assertion.
 
+> **That contrast was the bug, and this pass called it a pass.** [BUG-002](./bugs/BUG-002.md) later
+> found FR-003 and FR-004 could not both hold — FR-003 requires the restore to match hand-selection,
+> and hand-selection resumes — and resolved it in FR-003's favour. So "restore starts nothing, click
+> starts one" is not two correct behaviours; it is one seam missing the start the other has. The
+> evidence image above is an accurate record of a defect, presented at the time as proof of
+> correctness. Left in place, with this note, because deleting it would hide how the reading went
+> wrong: every observation in it is right, and the conclusion drawn from it was not.
+
 **B4** used both projects. Alpha was left on `A1` and beta on `B1`; the client and daemon were both
 stopped, so the memory could only come from disk. The restart landed on **alpha A1** — not `beta B1`,
 which was the session actually in front of the user at the moment of quitting. That is the
@@ -321,7 +329,7 @@ Every step of §B, in one sitting, in order. All pass.
 |---|---|
 | B7 | project with no memory → overview, no session current, 0 processes |
 | B1 | restart → alpha A2, marked, location expanded, named in the bar |
-| B2 | 0 `claude` before and after; the terminal now reads *"This session is not running. Choose restart below to resume it."* and the bar beside it reads `interrupted` — they agree, which is the whole of the bugfix |
+| B2 | ~~0 `claude` before and after; the terminal now reads *"This session is not running…"* and the bar beside it reads `interrupted` — they agree~~ **Superseded by BUG-002**: this recorded the pre-resume behaviour as a pass. Re-run separately, twice — see *B2, re-run after BUG-002* above and *B2 under FR-004a* below |
 | B3 | release-focus control **bright** after the restore, **dim** after clicking it, **bright** again after switching away and back |
 | B4 | switch → beta B1; then quit *while beta was in front* and restart → **alpha A2**, alpha's own memory rather than the session last seen |
 | B5 | closed → declined, overview, X listed but not chosen; empty → pruned, declined; worktree deleted → W restored under an error-tinted `missing` row |
@@ -363,6 +371,68 @@ actively falsifying — and the failure mode is not a crash, it is a plausible w
 *(Noted in passing: a sibling worktree is named
 `fix-after-restart-the-session-is-stuck-at-starting`. Whether that is this bug, or the different one
 of a session whose lifecycle really is wrong after a restart, is not something this pass can say.)*
+
+### B2 under FR-004a — a second, independent run
+
+The run recorded above was done separately and found first. This one was run in parallel, without
+sight of it, against `2cf6cea` (BUG-001 and BUG-002 both in), in its own sandbox on `:81`, binary
+pinned and `readlink /proc/<pid>/exe` confirmed. It is kept rather than folded in because two
+observers reached the same verdict by different setups, and because it reaches two bounds the other
+run did not: **two projects** rather than one, which is what the step's *"and only it did"* clause
+actually asks about, and a **second FR-014 route**. Where the two overlap they agree.
+
+Two projects, alpha remembering `A2`, beta remembering `B1`, both running before the quit.
+
+**The resume half passes.** Client *and* daemon stopped — `0` `claude` verified, a genuinely idle
+start — then reopened:
+
+| | |
+|---|---|
+| `claude` after reopening | **1** |
+| which one | `--resume 9707d1f0…` = **alpha A2**, the remembered session of the project that opened |
+| beta's remembered `B1` | **still stopped** — not woken by a project the user did not open (SC-005a) |
+| terminal | **live**, real output, no clicks (FR-004a) |
+
+[Evidence](./evidence/B2-resumes-exactly-one.png).
+
+**The FR-014 half is not reached, and both suggested routes fail to reach it.** Recorded rather
+than quietly dropped, because the step asks for it:
+
+- *A second window holding the project* — the newcomer **takes over** rather than being refused. The
+  first window gets "Another window took over this project… read-only until you take it back", and
+  the second attaches and resumes normally. Takeover is automatic, so this route produces a
+  displaced *first* window, never a refused resume in the second.
+- *A session whose worktree was deleted* — **still resumed**. The row is tagged `missing`, and the
+  daemon starts the process anyway, with cwd `$HOME` rather than the vanished worktree.
+
+Taken with the run above, which tried the second-window route in its own sandbox and saw the pane
+keep streaming, that is three attempts and no refusal. So on this build the FR-014 wording appears
+to have no reachable path at all through the UI *by design* — the one time it was seen (that run's
+mismatched-daemon accident) the process had started and then died, which is not a refusal. That is
+consistent with BUG-002's own framing ("the ordinary path no longer reaches that screen"), but the
+extraordinary path was not found either. The requirement and its tests stand; what is unverified is
+that any user can still arrive there. Someone who knows a way the daemon refuses a start should say
+so here.
+
+#### Two findings from this run
+
+**1. A resumed session's status stays `interrupted`, and keeps offering `restart`.** The terminal is
+live and streaming, the process has been up for over a minute — and the bar still reads
+`interrupted` beside a `restart` control, which would restart a running session. It does not settle
+(checked at 12s, 24s and 1m45s) and it survives switching away and back. This is the mirror image of
+BUG-001: there the bar was right and the body lied; here the body is right and the bar lies. Visible
+in the lower half of the evidence image. **The other run saw the same thing independently**, and
+established what this one did not: it happens after clicking the session row by hand too, so it is
+not specific to the restore path and is not a regression from BUG-002.
+
+**2. A session whose worktree is gone is resumed in `$HOME`.** `readlink /proc/<pid>/cwd` gives
+`/tmp/mb81/home`, not the worktree path that no longer exists. Under FR-004 this could not arise —
+nothing was started. Under FR-004a, reopening can silently start an AI CLI session rooted at the
+user's home directory rather than in the project, which is a different thing from declining to start
+it. Whether that fallback is deliberate is not something this pass can tell.
+
+Neither is a §B step failing, and neither is in this feature's scope to fix — both belong to what
+BUG-002 changed rather than to the memory itself.
 
 ### Found while running this
 
