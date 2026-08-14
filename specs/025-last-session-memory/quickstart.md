@@ -67,6 +67,11 @@ behalf.
 Confirm from outside as well — the number of `claude` processes should be what it was before the
 restart.
 
+**Stop the daemon too, not just the client.** The daemon outlives the client by design and owns the
+sessions, so restarting only the client leaves the remembered session's process running from before
+— "nothing was started" is then true but vacuous, because there was nothing to start. The step is
+only meaningful from a genuinely idle start.
+
 ### B3 — The restored terminal is ready to type (FR-013)
 
 Immediately after B1, type something.
@@ -94,7 +99,10 @@ Each of these, from a clean restart:
 1. **Closed session**: close the session you were on, quit, restart. You land on the project
    overview or another session — never on the closed one, which is not listed at all.
 2. **Deleted worktree**: delete the worktree holding the remembered session outside the app, quit,
-   restart. Nothing is restored for that project, and the project's other rows are untouched.
+   restart. That session **is** restored, shown the way any session in a missing worktree is shown
+   — an error-tinted location row carrying a `missing` tag. The project's other rows are untouched.
+
+   *(This step formerly asked for the opposite. See the note at the end.)*
 3. **Empty session**: start a session, type nothing, quit, restart. It was pruned at boot, so it is
    not restored — and nothing else breaks.
 
@@ -126,19 +134,23 @@ the platform, and any step that did not behave as written. A step that fails is 
 **On honesty about what was checked.** B1 is the feature; B2 and B3 are the two ways it could be
 right and still wrong. None of the three can be automated, because all three need the process to
 stop and start. A green §A is not this feature working. If §B was not run, say so here rather than
-leaving the table blank and implying it was.
+leaving the table blank and implying it was — and if a step was attempted but does not prove what it
+claims to, that is not run either. B2 sat in that state for two days before being redone properly.
 
 | Recorded | |
 |---|---|
-| Date | 2026-08-11 (B1), 2026-08-12 (B3, B7) |
-| Platform | B1 on the user's own install; B3 and B7 on Xvfb + lavapipe in an isolated sandbox (see below) |
-| B1 — reopen lands on the session, first frame | **PASS** — confirmed by the user on their own install ("it works") |
-| B2 — nothing started | **NOT RUN** — attempted; see why it does not count below |
+| Date | 2026-08-11 (B1), 2026-08-12 (B3, B7), 2026-08-14 (B2, B4, B5, B6) |
+| Platform | B1 on the user's own install; everything else on Xvfb + lavapipe in an isolated sandbox (see below) |
+| B1 — reopen lands on the session, first frame | **PASS** — confirmed by the user on their own install ("it works"), and reproduced in the sandbox on every restart below |
+| B2 — nothing started | **PASS** — [evidence](./evidence/B2-restore-starts-nothing.png) |
 | B3 — the restored terminal is ready to type; a switch still focuses | **PASS** — [evidence](./evidence/B3-focus-states.png) |
-| B4 — per project, across several switches | **NOT RUN** |
-| B5 — closed / deleted worktree / empty session | **NOT RUN** |
-| B6 — closing a session does not erase the memory | **NOT RUN** |
+| B4 — per project, across several switches | **PASS** — [evidence](./evidence/B4-per-project-memory.png) |
+| B5 — closed / deleted worktree / empty session | **PASS**, all three — [evidence](./evidence/B5-B6-kept-and-declined.png). B5.2 passes against the *corrected* expectation; the step as previously written would have failed |
+| B6 — closing a session does not erase the memory | **PASS**, both halves — [evidence](./evidence/B5-B6-kept-and-declined.png) |
 | B7 — a project with no memory is unchanged | **PASS** |
+
+Every step in §B has now been run. Two defects were found along the way, neither of them a failure
+of a §B step — see **Found while running this** below.
 
 ### How B3 and B7 were run
 
@@ -167,37 +179,135 @@ re-focus. The project switcher menu was still open, and an open overlay takes th
 design. Closing it gave the reading above. A coordinate means something different with an overlay
 open — the same trap the `visual-pass` skill warns about.
 
-### What was run, and what was not
+### How B2, B4, B5 and B6 were run
 
-**B1 passed on the user's own install**, reported after the feature merged: they restarted and
-landed on the session they had been using. That is the claim the whole feature rests on, and it is
-the one no test in this repository can make — every test here runs in a single process.
+Same sandbox as above, on `:79`, with `CLAUDE_CONFIG_DIR` pointed into it as well — the provider's
+transcript store decides which sessions survive `prune_empty_sessions`, so it has to be isolated
+too, and setting it explicitly is clearer than relying on `HOME`. Two throwaway git repos (`alpha`,
+`beta`) stood in for projects.
 
-**B2 was attempted and does not count.** The client was restarted, but the **daemon outlived it** —
-it is a separate process that owns sessions by design — so the session never stopped and its
-`claude` process was still running from before. Nothing was started *by the restore*, but that is
-not what the frame proves, because there was nothing to start. A real B2 needs the daemon stopped
-too, so the session is genuinely idle at launch. Recorded as not run rather than passed.
+**Sessions were seeded, the behaviour was not.** Each scenario needs a project in a particular shape
+(two live sessions, one closed, one in a worktree), and creating those by hand costs a lot of
+clicking. They were written straight into `projects.json` using the **pre-split** `StoredProject.
+sessions` shape, which `JsonFileStore::load` still honours as the BUG-001 migration fallback for any
+project with no per-project state file. That is a real load path with its own tests, so the fixture
+goes in through the application's own reader rather than a format invented for the sandbox.
 
-**B4, B5 and B6 remain unrun.** Each needs the application quit and started again under
-particular conditions (two projects on different sessions, a closed session, a deleted worktree),
-and each needs the sandbox seeded into a particular shape first. They are not blocked on anything —
-the sandbox recipe above makes them cheap to run — they simply have not been exercised.
+What was deliberately **not** seeded is `last_session` itself. It exists only in the per-project
+state file, and it is the value under test — every memory asserted below was written by the
+application, in response to a session being selected in the UI.
 
-Two findings that make a future run cheaper. The daemon socket path is bounded by `sun_path`
-(108 chars), so the isolated `XDG_RUNTIME_DIR` must be short — the application reports this clearly
-rather than failing obscurely. And a session's record is persisted *before* any `claude` spawn, so
-sessions can be created in a sandbox even where the AI CLI is unavailable.
+Assertions are against **the file on disk** (`projects/<hash>.json`) as well as the screen, because
+the memory is a durable claim and a screenshot cannot show whether it survived the process.
 
-B1 passing does not carry the rest: **a green §A plus one passing step is not the whole of §B.**
-What §A establishes is narrower than it looks but is not nothing — the memory
-round-trips through the real store including the backward-compatible read, the daemon writes it and
-declines to write when nothing changed, a no-session report leaves it alone, applying it starts no
-process, forgetting a project discards it, and a corrupt project file yields no memory rather than
-an error. What no test touches is the actual sequence: quit, start, land.
+**B2 is the one that changed.** The earlier attempt did not count, because only the client was
+restarted and the daemon outlived it, so the session's `claude` process was still running from
+before — nothing was started by the restore, but there was nothing to start. This run stopped the
+client **and** the daemon (0 `micold` and 0 `claude` processes in the sandbox, verified), then
+launched. After the restore: still **0**, and still 0 twelve seconds later.
 
-**B3 changed during implementation** and its old form would now fail. It asked that the restored
-session's terminal *not* take the keyboard; feature 023 has since made focus derived from a session
-being displayed, so the restored terminal is ready to type — which is what the step now checks, in
-both directions. Recorded here because a reviewer holding the original quickstart would otherwise
-read a passing implementation as a defect.
+That alone would only show the restore is inert. The evidence image pairs it with the contrast that
+gives it meaning: clicking a session row in the sidebar **does** resume it — one `claude --resume`
+appears within seconds, and the terminal fills with real output. Same session state, two routes,
+opposite outcomes. The restore path is inert *by comparison*, not by assertion.
+
+**B4** used both projects. Alpha was left on `A1` and beta on `B1`; the client and daemon were both
+stopped, so the memory could only come from disk. The restart landed on **alpha A1** — not `beta B1`,
+which was the session actually in front of the user at the moment of quitting. That is the
+discriminating half of the step: a per-project memory and a "last session anywhere" memory would
+agree on every simpler scenario and disagree only here.
+
+**B5** ran all three cases, each from a clean restart:
+
+- *closed session* — the row is not listed at all, and the project overview is shown. The
+  application did not quietly pick the surviving session instead (FR-007).
+- *empty session* — started, never typed into, pruned at boot. The memory named it, the restore
+  declined it, the overview was shown, and the other session was untouched (FR-006).
+- *deleted worktree* — the session **is** restored, under a location row tinted as an error and
+  tagged `missing`. See the correction note at the end: this step used to ask for the opposite.
+
+**B6** ran both halves. Closing the session you are *on* leaves the memory pointing at it — verified
+on disk, `last_session` unchanged after the close — and the next launch shows the overview, because
+the restore declines a closed session. Closing the *other* session still lands you on yours. Those
+two together are the whole of FR-005a: the memory is **kept** on disk and **declined** at resolve
+time, which is why a stale memory costs nothing and an erased one would cost the user their place.
+
+### Found while running this
+
+Neither is a §B step failing. Both are recorded rather than fixed here, because both are outside
+what this feature changed.
+
+**1. "Starting…" is the wrong thing to say about a restored session.** The terminal body renders a
+`Starting…` placeholder whenever it has no grid yet (`ui/terminal.rs`, the `grid: None` branch). A
+restored session has no grid and is not running, so the placeholder sits there indefinitely while
+the status bar one row below says `interrupted` and offers `restart`, and no process exists. The
+two contradict each other, and the placeholder is the one that is wrong.
+
+This is not a new branch — but before this feature no session was current at launch, and the other
+way to reach a current-but-not-running session (clicking its row) *does* start it, which makes the
+placeholder briefly honest. So this feature is what makes a misleading first screen the normal case
+for anyone who quits on an idle session. Visible in the left half of the B2 evidence image.
+
+**2. `last_active` no longer follows the user's project switches.** Switching projects sends no
+message that tells the daemon which project is active — there is no such message in the protocol —
+so the daemon's `workspace.active` stays at whatever it loaded, and every save rewrites `last_active`
+from that stale value. The effect is that *which project opens at launch* stops tracking what the
+user did. Observed directly: after switching to beta and working there, `last_active` was still
+alpha across many daemon writes, so it is not an artefact of how the sandbox was shut down.
+
+Out of scope for this feature — contract §5 explicitly excludes which project opens — and this
+feature's own memory is per project and was correct throughout. Recorded because it shapes what B1
+and B4 look like, and because it is likely a consequence of the daemon split (feature 021 T052)
+rather than anything intended.
+
+### An edge the spec does not cover
+
+The two ways to delete a worktree do not present the same way, and only one of them is written down:
+
+- `rm -rf` the directory leaves git's record, so the worktree is still discovered and shown as
+  `missing`. The restored session appears under it. This is the case B5.2 now describes.
+- `git worktree remove` deletes git's record too, so the worktree is not discovered at all. The
+  session is still restored and still named in the status bar — but it has **no row anywhere in the
+  sidebar**, so FR-012's "its location is revealed in the side panel" has no location to reveal.
+
+Not a defect against any stated requirement, and arguably the least-bad outcome. Noted because a
+current session with no visible row is a state nothing in the spec anticipated.
+
+### Notes for a future run
+
+The daemon socket path is bounded by `sun_path` (108 chars), so an isolated `XDG_RUNTIME_DIR` must
+be short — the application reports this clearly rather than failing obscurely. A session's record is
+persisted *before* any `claude` spawn, so sessions can be created in a sandbox even where the AI CLI
+is unavailable. A seeded `projects.json` that fails to deserialize is moved aside to
+`projects.json.bak` and the app recovers to empty — so a sandbox that opens on "No project open" is
+usually a malformed fixture, not a broken build (`mode` must be `AiCli` or `Regular`; `Default` is
+not a variant). And a worktree session's cwd is `<repo>/.claude/worktrees/<dir>`, which is where its
+transcript has to be for `prune_empty_sessions` to spare it.
+
+What §A establishes is narrower than it looks but is not nothing — the memory round-trips through
+the real store including the backward-compatible read, the daemon writes it and declines to write
+when nothing changed, a no-session report leaves it alone, applying it starts no process, forgetting
+a project discards it, and a corrupt project file yields no memory rather than an error. What no
+test here touches is the actual sequence — quit, start, land — because every test in this repository
+runs in a single process. That sequence is now covered by §B rather than by argument.
+
+### Two steps changed during implementation
+
+Both asked for the opposite of what the feature now does, and both would now fail as originally
+written. Recorded here because a reviewer holding the original quickstart would otherwise read a
+passing implementation as a defect — twice.
+
+**B3** asked that the restored session's terminal *not* take the keyboard. Feature 023 has since
+made focus derived from a session being displayed, so the restored terminal is ready to type —
+which is what the step now checks, in both directions.
+
+**B5.2** asked that a session whose worktree was deleted *not* be restored. The spec was reversed
+during implementation (clarification Q4) for two reasons: the application already lists such a
+session and lets the user select it, so declining to *return* them to it would repeat the
+inconsistency feature 008's BUG-001 was about; and declining would need the project's worktree list
+at resolve time, which a project switch discovers asynchronously and does not have — so the same
+rule would break switching in order to decline a case the user can see for themselves.
+
+The step's text was stale until this run: the spec changed, the quickstart did not. It was caught
+only because B5.2 was actually executed, which is the argument for running §B rather than reasoning
+about it.
