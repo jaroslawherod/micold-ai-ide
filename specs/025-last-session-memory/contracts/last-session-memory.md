@@ -58,9 +58,23 @@ session is restored **whether or not its process is running**, provided it is pr
 `archived`; otherwise the existing fallbacks apply (first running session, then none).
 *(FR-003, FR-005, feature 008 FR-003a)*
 
-**§3.3** Restoring **starts nothing**. No process is spawned, resumed, or signalled. The number of
+**§3.3** ~~Restoring **starts nothing**. No process is spawned, resumed, or signalled. The number of
 running sessions immediately after launch is what it would have been without this feature.
-*(FR-004, SC-005, Invariant I4)*
+*(FR-004, SC-005, Invariant I4)*~~ **Superseded by §3.3a/§3.3b (BUG-002)** — it contradicted §3.2's
+"the same one a project switch uses" and FR-003's "matching what selecting the session by hand
+does": selecting by hand resumes.
+
+**§3.3a** Restoring **resumes** the session it restores, when that session is not already running —
+the same act selecting it by hand performs. This MUST hold at every seam that makes a remembered
+session current: application launch and project switch alike, so the two routes §3.2 equates cannot
+diverge. Concretely, the client sends the session's start before the message that makes it the
+viewed one; a start naming an already-running session is a no-op and needs no guard.
+*(FR-004a, Invariant I4a)*
+
+**§3.3b** Restoring resumes **exactly one** session: the one being displayed, in the project being
+opened. No other session's run state changes — not another session in the same project, and not any
+session in a project the user has not opened, whose memory is left untouched and unresolved.
+*(SC-005a, FR-004a, Invariant I4a)*
 
 **§3.4** The restored session's terminal **is** ready to type in, exactly as one reached by any
 other navigation is. Focus is derived from a session being displayed and the user not having given

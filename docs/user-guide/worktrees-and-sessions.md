@@ -343,11 +343,16 @@ The app remembers, per project, which session you had in front of you — and it
 restarts. Quit with a session open and reopen later, and that session is in front of you again,
 ready to type in, with no clicks.
 
-- It comes back **whether or not it is still running**. Sessions do not keep running while the app
-  is closed, so the usual case is returning to a stopped one: you see its previous output and its
-  state, exactly as if you had clicked it in the sidebar.
-- **Nothing is started for you.** Reopening selects a session; it does not resume a `claude`
-  process. Starting one stays an explicit action.
+- It comes back **whether or not it was still running**, and it **comes back up**. Sessions do not
+  keep running while the app is closed, so the usual case is returning to a stopped one — and
+  reopening resumes it, exactly as if you had clicked it in the sidebar. Arriving by reopening is
+  not treated differently from arriving by clicking.
+- **One session is resumed, not several**: the one you were looking at, in the project that opens.
+  Other sessions in that project stay as they were, and a project you have not opened is untouched —
+  its own last session waits until you switch to it.
+- If the resume cannot happen — the project is open in another window, or its folder is unavailable
+  — the terminal says what is actually true of the session rather than looking as though it were
+  starting, and the `restart` control in the bar is there when you want it.
 - Each project remembers its own, so switching projects takes you to that project's last session.
 - If the session you were on has been **closed**, or its record has gone, the app opens the project
   as it otherwise would and leaves everything else alone. Closing a session does not wipe the

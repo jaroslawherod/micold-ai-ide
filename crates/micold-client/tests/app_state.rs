@@ -1734,7 +1734,7 @@ fn applying_the_memory_makes_that_session_current_and_reveals_it() {
 }
 
 #[test]
-fn applying_the_memory_starts_nothing() {
+fn applying_the_memory_starts_only_the_session_it_displays() {
     let (mut state, id) = state_with_remembered_session();
     let path = state.workspace.active.clone().unwrap();
     let before: Vec<_> = state
@@ -1752,10 +1752,50 @@ fn applying_the_memory_starts_nothing() {
         .collect();
     assert_eq!(
         before, after,
-        "restoring is a display decision; starting a process is not. A stopped session comes back \
-         stopped, showing what it showed before (FR-004, SC-005)"
+        "the reducer moves no lifecycle. Under FR-004a the restore resumes, but by sending the \
+         daemon a `SessionStart` — the daemon is the only thing that may say a session is running. \
+         Setting one here would render a session as running with no process behind it, which is the \
+         lie BUG-001 fixed, arrived at from the other direction"
     );
-    assert_eq!(state.active_session, Some(id));
+    assert_eq!(
+        state.active_session,
+        Some(id),
+        "and exactly one session is made current — the one the start will name"
+    );
+}
+
+/// The other half of the bound (SC-005a, FR-008): restoring one project's memory resolves nothing
+/// for any other project, so a launch cannot fan out into a resume per remembered project.
+#[test]
+fn applying_one_projects_memory_leaves_every_other_project_alone() {
+    let (mut state, _id) = state_with_remembered_session();
+    let opened = state.workspace.active.clone().unwrap();
+    // A second project the user has not opened, carrying a memory of its own.
+    let elsewhere = PathBuf::from("/repo/elsewhere");
+    let other_session = SessionId::new();
+    state.workspace.sessions.insert(
+        elsewhere.clone(),
+        vec![Session::start_new(SessionLocation::Default)],
+    );
+    state
+        .workspace
+        .foreground_by_project
+        .insert(elsewhere.clone(), other_session);
+    let untouched = state.workspace.sessions.get(&elsewhere).cloned().unwrap();
+
+    state.set_current_session(state.explain_foreground(&opened).session());
+
+    assert_eq!(
+        state.workspace.sessions.get(&elsewhere),
+        Some(&untouched),
+        "the unopened project's sessions are not read, resolved, or altered by another project's \
+         restore — nothing will be started for it until the user switches there"
+    );
+    assert_eq!(
+        state.workspace.foreground_by_project.get(&elsewhere),
+        Some(&other_session),
+        "and its memory is still waiting, unspent"
+    );
 }
 
 #[test]

@@ -38,7 +38,7 @@ already has:
 | Question | Answered by | Reasoning |
 |---|---|---|
 | Remembered session's record or worktree is gone | FR-005, FR-006, US3 | Fall back to no-memory behaviour and disturb nothing else. A memory pointing at something absent is worse than none. |
-| Does restoring start a process? | FR-004, SC-005 | No. Restoring is display; starting is an explicit act. This is the rule feature 008's FR-001/FR-002 already keep on a switch. |
+| Does restoring start a process? | ~~FR-004, SC-005~~ → **FR-004a, SC-005a** | ~~No. Restoring is display; starting is an explicit act. This is the rule feature 008's FR-001/FR-002 already keep on a switch.~~ **Reversed by [BUG-002](../bugs/BUG-002.md): yes.** The default was not defensible — it read "an explicit act" as meaning *display-only*, but the explicit act it pointed at (selecting the session) resumes. Restoring resumes the one session it displays, and no other. |
 | Does it take keyboard focus? | FR-013 | No. Focus is a separate deliberate act — the same call BUG-001/focus-model already make for arriving somewhere. |
 | The last-used session was closed | FR-005, US3 scenario 1 | Not restored. A closed session is not listed at all, so restoring one would display something the user cannot see in the panel. |
 

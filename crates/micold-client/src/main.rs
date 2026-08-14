@@ -551,17 +551,40 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.daemon_catalog = Some(catalog);
             // Attach to the active project and view its active session so the daemon starts
             // streaming grid frames for it (FR-011/FR-016).
-            if let Some(project) = app.core.workspace.active_project().map(|p| p.path.clone()) {
-                outbox.send(ClientMsg::Attach {
+            //
+            // `app.daemon` is assigned before the sends, not after, because `view_and_start` below
+            // reads it (BUG-002). Nothing between here and there can observe the difference: no
+            // message is dispatched and no frame is drawn inside this arm.
+            let project = app.core.workspace.active_project().map(|p| p.path.clone());
+            app.daemon = Some(outbox);
+            if let (Some(project), Some(daemon)) = (project, app.daemon.clone()) {
+                daemon.send(ClientMsg::Attach {
                     project: project.clone(),
                     force: false,
                 });
-                outbox.send(ClientMsg::SetViewedSession {
-                    project,
-                    session: app.core.active_session,
-                });
+                match app.core.active_session {
+                    // Feature 025 restored a session at boot. Displaying it means *starting* it,
+                    // exactly as selecting it by hand does (FR-004a, contract §3.3a) — BUG-002.
+                    //
+                    // Viewing alone was not enough: `SetViewedSession` opens a view stream only for
+                    // a session the daemon is hosting, and after a restart it is hosting none, so
+                    // the restore produced a current session with no process and no way to get one
+                    // but the `restart` control. BUG-001 made that screen honest; this makes it
+                    // unnecessary.
+                    //
+                    // Through `view_and_start` rather than a third copy of its sends: it already
+                    // orders the pane size before the start (BUG-003, `006` FR-014a) and the view
+                    // after, and a start naming an already-running session is a no-op on the daemon
+                    // (`Session::start`), so a reconnect onto a live session costs nothing.
+                    Some(session) => view_and_start(app, session),
+                    // Landing on the project overview. FR-007 forbids choosing a session here, and
+                    // starting one would be that choice made twice — so only the view goes out.
+                    None => daemon.send(ClientMsg::SetViewedSession {
+                        project,
+                        session: None,
+                    }),
+                }
             }
-            app.daemon = Some(outbox);
             Task::none()
         }
         Message::DaemonEvent(event) => {
@@ -2240,7 +2263,7 @@ pub(crate) mod tests {
     // The catalog fixtures moved to `shell/daemon_sync.rs` with the reconcile tests that are
     // mostly what they were for; the stamper-seeding tests below still build a snapshot, so they
     // import them back rather than keep a second copy.
-    use crate::shell::daemon_sync::tests::{snapshot_with, summary_at};
+    use crate::shell::daemon_sync::tests::{snapshot_with, summary, summary_at};
     use micold_client::features::settings::SettingsDraft;
     use micold_core::protocol::messages::WireLifecycle;
 
@@ -2515,6 +2538,187 @@ pub(crate) mod tests {
                 Ok(ClientMsg::SessionStart { session }) if session == id
             ),
             "the first message is the start itself"
+        );
+    }
+
+    // --- BUG-002 (feature 025): the restored session is started, not only viewed ----------------
+    //
+    // Deciding which session to display and asking the daemon to run it are two halves of one act,
+    // and only `view_and_start` performed the second. `restore_after_activation` is client state
+    // only — it resolves the memory, reveals the row, takes the keyboard, and says nothing to the
+    // daemon. So the launch made a session current that the daemon was not hosting, and
+    // `SetViewedSession` had no stream to open. BUG-001 made that screen say so; these make it not
+    // happen.
+    //
+    // The seam had no tests at all: the plan reasoned `boot()` was glue because the decision
+    // (*which* session) lives in the tested reducer. What the client then sends is a second
+    // decision, and this is where it is now pinned.
+
+    /// Settings that change nothing and source no environment script — these tests are about which
+    /// session messages go out, and env-include would reach for the filesystem on the way.
+    fn quiet_settings() -> micold_core::protocol::messages::DaemonSettings {
+        micold_core::protocol::messages::DaemonSettings {
+            scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
+            env_include_enabled: false,
+            env_include_script_path: String::new(),
+            env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
+        }
+    }
+
+    /// Drive a daemon connection for `app` and return every `ClientMsg` it sent, in order.
+    fn connect(
+        app: &mut App,
+        catalog: micold_core::protocol::messages::CatalogSnapshot,
+    ) -> Vec<ClientMsg> {
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        let _ = update_inner(
+            app,
+            Message::DaemonConnected {
+                outbox: micold_client::daemon::Outbox::new(tx),
+                catalog,
+                settings: quiet_settings(),
+            },
+        );
+        let mut sent = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            sent.push(msg);
+        }
+        sent
+    }
+
+    /// Connecting must **start** the restored session, not only view it (FR-004a, contract §3.3a).
+    ///
+    /// `InterruptedResumable` is deliberate rather than incidental: it is what every durable session
+    /// is after a restart, which makes this the ordinary launch and not an edge case.
+    #[test]
+    fn connecting_starts_the_restored_session_rather_than_only_viewing_it() {
+        let project = PathBuf::from("/repo/demo");
+        let id = SessionId::new();
+        let mut app = base_app();
+        app.core.workspace.active = Some(project.clone());
+        // What `boot()`'s `restore_after_activation` leaves behind: the session is already current
+        // when the connection arrives, chosen from the memory loaded off disk.
+        app.core.active_session = Some(id);
+
+        let sent = connect(
+            &mut app,
+            snapshot_with(
+                "/repo/demo",
+                vec![summary(
+                    id,
+                    "left off here",
+                    WireLifecycle::InterruptedResumable,
+                )],
+            ),
+        );
+
+        let attach = sent
+            .iter()
+            .position(|m| matches!(m, ClientMsg::Attach { project: p, .. } if *p == project))
+            .expect("the project is attached first");
+        let start = sent
+            .iter()
+            .position(|m| matches!(m, ClientMsg::SessionStart { session } if *session == id))
+            .expect("the restored session must be started, or no frame will ever arrive for it");
+        let view = sent
+            .iter()
+            .position(
+                |m| matches!(m, ClientMsg::SetViewedSession { session: Some(s), .. } if *s == id),
+            )
+            .expect("and it must still be the session the daemon streams");
+        assert!(
+            attach < start,
+            "nothing about a session precedes the attach"
+        );
+        assert!(
+            start < view,
+            "the start precedes the view, the order `view_and_start` already establishes"
+        );
+    }
+
+    /// Exactly one start, naming the restored session (SC-005a, contract §3.3b).
+    ///
+    /// This is the bound that replaces FR-004's prohibition. Resuming the one session the user is
+    /// being shown is the feature; resuming every session the application happens to remember would
+    /// be a launch that spawns a process per project, which is what "restoring starts nothing" was
+    /// really protecting against.
+    #[test]
+    fn connecting_starts_only_the_session_it_restores() {
+        let project = PathBuf::from("/repo/demo");
+        let restored = SessionId::new();
+        let sibling = SessionId::new();
+        let elsewhere = SessionId::new();
+        let mut app = base_app();
+        app.core.workspace.active = Some(project.clone());
+        app.core.active_session = Some(restored);
+
+        let mut catalog = snapshot_with(
+            "/repo/demo",
+            vec![
+                summary(restored, "restored", WireLifecycle::InterruptedResumable),
+                summary(sibling, "same project", WireLifecycle::Idle),
+            ],
+        );
+        let mut other = snapshot_with(
+            "/repo/other",
+            vec![summary(
+                elsewhere,
+                "another project entirely",
+                WireLifecycle::InterruptedResumable,
+            )],
+        );
+        catalog.projects.append(&mut other.projects);
+
+        let sent = connect(&mut app, catalog);
+
+        let started: Vec<SessionId> = sent
+            .iter()
+            .filter_map(|m| match m {
+                ClientMsg::SessionStart { session } => Some(*session),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            started,
+            vec![restored],
+            "one start, naming the restored session — not its neighbours, not another project's"
+        );
+    }
+
+    /// With nothing remembered, a launch starts nothing at all (FR-007, SC-005a).
+    ///
+    /// The overview is a legitimate place to land, and landing there must stay free of side effects:
+    /// FR-007 forbids choosing a session on the user's behalf, and starting one would be that choice
+    /// made twice over.
+    #[test]
+    fn connecting_with_no_remembered_session_starts_nothing() {
+        let project = PathBuf::from("/repo/demo");
+        let unchosen = SessionId::new();
+        let mut app = base_app();
+        app.core.workspace.active = Some(project.clone());
+        assert_eq!(
+            app.core.active_session, None,
+            "the memory resolved to nothing"
+        );
+
+        let sent = connect(
+            &mut app,
+            snapshot_with(
+                "/repo/demo",
+                vec![summary(unchosen, "not chosen", WireLifecycle::Idle)],
+            ),
+        );
+
+        assert!(
+            !sent
+                .iter()
+                .any(|m| matches!(m, ClientMsg::SessionStart { .. })),
+            "landing on the project overview must not run anything (FR-007)"
+        );
+        assert!(
+            sent.iter()
+                .any(|m| matches!(m, ClientMsg::SetViewedSession { session: None, .. })),
+            "the daemon is still told that no session is viewed"
         );
     }
 

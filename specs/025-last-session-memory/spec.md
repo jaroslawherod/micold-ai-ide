@@ -10,6 +10,12 @@
 not say a restored session is starting), a fourth US1 acceptance scenario, and a correction to the
 assumption that output survives a restart — it does not.
 
+**Bugfix**: 2026-08-14 — [BUG-002](./bugs/BUG-002.md) supersedes FR-004 with **FR-004a** and SC-005
+with **SC-005a**: restoring a session now resumes it, the same as selecting it by hand. BUG-001 made
+the screen honest about a session nothing had started; this removes the thing it had to be honest
+about. FR-014 and SC-008 stand unchanged — the pane must still tell the truth in the one case a
+resume cannot happen.
+
 **Input**: User description: "Remember which session I was on in each project across application restarts. Today the foreground session per project is remembered only while the app is running; nothing is persisted, so at launch no session is current and I land on the project overview instead of where I left off."
 
 ## Clarifications
@@ -20,6 +26,29 @@ assumption that output survives a restart — it does not.
 - Q: Should a session whose worktree was deleted outside the application be restored? → A: Yes, and shown as any missing-worktree session is shown. Two reasons, found while implementing: the application already lists such a session and lets the user select it, so declining to *return* them to it would repeat the inconsistency feature 008's BUG-001 was about; and declining would require the project's worktree list at resolve time, which on a project switch is discovered asynchronously and is not there yet — so the same rule would break switching to restore a case the user can see for themselves.
 - Q: When should the memory be written to disk? → A: Whenever it changes value, and only then. Reports that name the session already remembered — an attach re-sending the current id, a session start for the session already in front of the user — write nothing. A force-kill therefore loses at most the single most recent change, never the whole memory, which writing only at shutdown would risk in exactly the case the feature exists for.
 - Q: When the current session goes away (closed, or nothing current) the client already reports "no session" — should that clear the project's remembered session? → A: No. A "no session" report is ignored; the memory keeps naming the last session actually in front of the user. Clearing on every incidental loss of the pointer would erase the memory for reasons the user never took (a close, an internal cleanup), and the restore already refuses a session that is closed or gone (FR-005), so a stale memory is harmless where a lost one is not.
+
+### Session 2026-08-14 (BUG-002)
+
+- Q: FR-003 said the restore must match "what selecting the session by hand does"; FR-004 said it
+  must start nothing. Selecting by hand *starts* the session — `view_and_start` sends
+  `SessionStart`. Which wins? → A: **FR-003.** Restoring resumes the session. The two were written
+  as if selecting by hand were display-only; it never was. FR-004 is superseded by FR-004a.
+- Q: BUG-001 already fixed the reported symptom by making the pane honest. Why change the behaviour
+  as well? → A: Because honest and useful are different. BUG-001 stopped the screen lying about a
+  session nothing had started; the user still had to press `restart` to use the session they had
+  just been returned to. The complaint was that reopening did not *work* without switching away and
+  back, and switching away and back worked precisely because selecting a session starts it. Making
+  the restore do what a selection does is the fix for that complaint; making the pane truthful was
+  the fix for what the screen said about it. Both are wanted, and FR-014 keeps the second.
+- Q: FR-004 existed to stop a launch running processes the user did not ask for. What is left of
+  that protection? → A: The scope, not the prohibition. A launch resumes **exactly one** session —
+  the one the user was looking at when they quit — and touches no other session's run state.
+  Resuming every remembered session across every project, which is what FR-004 was really guarding
+  against, remains forbidden (FR-004a, SC-005a).
+- Q: Does the same apply to a project switch within a run? → A: Yes. FR-003 names both "switching
+  projects within a run" and "selecting the session by hand" as the behaviour to match, and those
+  two diverge for the same reason: the switch sends `Attach` + `SetViewedSession` and no start. One
+  rule at one seam, or the divergence returns.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -145,8 +174,16 @@ that no longer exists is worse than not remembering at all.
 - **FR-003**: The remembered session MUST be restored whether or not its process is still running,
   matching what already happens when switching projects within a run, and matching what selecting
   the session by hand does.
-- **FR-004**: Restoring a session MUST NOT start, resume, or otherwise change any process. It
-  selects and displays; it does not run anything.
+- **FR-004**: ~~Restoring a session MUST NOT start, resume, or otherwise change any process. It
+  selects and displays; it does not run anything.~~ **Superseded by FR-004a (BUG-002)** — it
+  contradicted FR-003's "matching what selecting the session by hand does", because selecting by
+  hand resumes.
+- **FR-004a**: Restoring a session MUST bring it up the same way selecting it by hand does,
+  **including resuming its process when it is not running**. This MUST hold at every seam that makes
+  a remembered session current — application launch and project switch alike — so the three routes
+  FR-003 names cannot diverge. Restoring MUST NOT change the run state of any session other than the
+  one restored: at most one session is resumed, in the project being opened, and no other project's
+  remembered session is touched.
 - **FR-005**: The application MUST NOT restore a session that has been closed, or whose record no
   longer exists. In those cases it MUST fall back to the same behaviour as a project with no
   memory.
@@ -183,6 +220,13 @@ that no longer exists is worse than not remembering at all.
   one that is merely not running, and MUST agree with the state shown elsewhere for the same session
   (BUG-001).
 
+  **Still required under FR-004a (BUG-002).** Its premise narrows but does not go away: the launch
+  now *does* start the restored session, so the ordinary path no longer reaches this state at all.
+  What remains is the resume that cannot happen — the project is held by another window, or is
+  unavailable — which leaves a current session with no process and none coming. That case is rarer
+  and worse, because the user has no reason to expect it, so the pane telling the truth matters more
+  rather than less.
+
 ### Key Entities
 
 - **Last-used session**: for one project, the session that was most recently in front of the user.
@@ -204,8 +248,13 @@ that no longer exists is worse than not remembering at all.
   lands on the correct session for each, 100% of the time.
 - **SC-004**: No launch fails, stalls, or shows an error because of the stored memory — including
   when it is absent, unreadable, or refers to sessions that no longer exist.
-- **SC-005**: Restoring a session starts no process: the number of running sessions immediately
-  after launch is the same as it would be without this feature.
+- **SC-005**: ~~Restoring a session starts no process: the number of running sessions immediately
+  after launch is the same as it would be without this feature.~~ **Superseded by SC-005a
+  (BUG-002).**
+- **SC-005a**: Restoring starts **exactly one** process — the restored session's — and no other
+  session's run state changes. Immediately after launch the number of running sessions is one more
+  than it would be without this feature, never two or more, and never any session in a project the
+  user has not opened.
 - **SC-006**: A user who has never used a session in a project sees no change in behaviour.
 - **SC-007**: Force-killing the application costs at most the most recently made choice: the session
   in front of the user at the moment of the kill is restored on the next launch, provided it had

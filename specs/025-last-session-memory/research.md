@@ -103,14 +103,31 @@ a third writer appears. So honouring the original FR-013 meant either lying abou
 breaking the test that protects it, to produce behaviour that is worse: you reopen on your session
 and cannot type into it.
 
-Everything else `restore_after_activation` does is already true at boot, so reusing it costs
-nothing:
+Everything else `restore_after_activation` does is already true at boot, so ~~reusing it costs
+nothing~~ **reusing it costs nothing *it does* — which was the wrong thing to audit (BUG-002)**:
 
 - `default_expanded = false` — already the default
 - `show_agent_worktrees = false` — already the default
 - `arm_notice(&key)` — `restarted_while_inactive` is empty at boot, so no notice is raised
 
 And feature 024's reveal arms from `set_current_session` inside it, so FR-012 still comes free.
+
+> **Amended 2026-08-14 by [BUG-002](./bugs/BUG-002.md).** The list above is complete and each item
+> holds. The conclusion drawn from it does not, because the audit ranged over the function's
+> *effects* and the gap was in its *silence*: `restore_after_activation` touches client state only —
+> it chooses the session, reveals its row, takes the keyboard — and never speaks to the daemon.
+> Displaying a session has a second half, asking the daemon to start and stream it, and that half
+> lives in `view_and_start`, which no restore path called. So the launch made a session current that
+> the daemon was not hosting, and no frame could arrive for it. Reusing the function was still the
+> right call; it was simply half of what a launch has to do.
+>
+> **The evidence was already in this document.** [R4](#r4--does-the-daemon-already-know-which-session-is-in-front-of-the-user)
+> enumerates the four `SetViewedSession` call sites and names `view_and_start` as "what runs when a
+> session is selected" — precisely the observation that the selection path sends something the
+> restore paths do not. R4 was researching who *records* the memory, R5 who *applies* it, and
+> neither was read against the other. Nothing here was under-researched; two adjacent sections were
+> never compared. Worth remembering as the failure mode: a per-question audit that is individually
+> right and jointly blind.
 
 **Alternatives considered**: a launch-only path resolving and applying the memory directly (the
 original plan) — rejected once FR-013 reversed, because it is a second implementation of a sequence
