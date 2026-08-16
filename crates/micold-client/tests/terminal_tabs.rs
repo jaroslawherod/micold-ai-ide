@@ -1,4 +1,4 @@
-//! BUG-001 (feature 012, T036): the instance switcher's entries must all be tabs.
+//! The instance switcher's entries must read as a tab strip (feature 012, BUG-001 then BUG-002).
 //!
 //! # Why a source-level test
 //!
@@ -10,11 +10,17 @@
 //! (you could tell which instance was active) and the row still looked wrong, which is exactly the
 //! gap `FR-004a` was added to close.
 //!
-//! What is checked here is only that the call site still delegates its two rules — which variant a
-//! tab draws in, and what colour a control nested inside it takes — to the places that test them
-//! (`tab_variant` in `ui/terminal.rs`, and `tests/icon_roles.rs`'s contrast arithmetic). The
-//! centred label, the trailing close and the no-reflow rule are visual and belong to the
-//! `visual-pass` skill against `quickstart.md` §8 (T042/T044).
+//! BUG-001 fixed that by giving every entry a container. BUG-002 corrected the idiom again: a tab
+//! strip carries **no** container and marks its active member with an indicator, so the rule these
+//! tests pin has changed once already. That is the argument for pinning it at all — each time the
+//! decision moved, the test that held the old one failed loudly instead of the row quietly drifting.
+//!
+//! What is checked here is only that the call site still delegates its two rules — which tab is
+//! marked, and what colour a control nested inside it takes — to the places that test them
+//! (`tab_indicator_colour` in `ui/terminal.rs`, and `tests/icon_roles.rs`'s contrast arithmetic),
+//! plus the one structural trap a value test cannot see: that both arms reserve the indicator's
+//! height. The centred label, the trailing close and the indicator's *appearance* are visual and
+//! belong to the `visual-pass` skill against `quickstart.md` §8.
 
 use std::fs;
 use std::path::Path;
@@ -66,35 +72,38 @@ fn switcher_row_body(src: &str) -> String {
     rest[..end].to_string()
 }
 
-/// The rule itself — "every tab draws a container, active and inactive alike" — is a pure value
-/// test, `tab_variant_always_draws_a_container` in `ui/terminal.rs`'s inline `mod tests`. This
-/// gate only checks that the call site still *asks* that function, so the rule cannot be bypassed
-/// by choosing a variant inline again.
+/// BUG-002, FR-004b/SC-008: every tab reserves the indicator's height, and the mark comes from the
+/// shared rule.
 ///
-/// Scanning the function body for `ButtonVariant::Text` outright does not work, and the first
-/// draft of this gate proved it: a tab legitimately *contains* a `Text`-variant button — the
-/// per-instance restart affordance — and the scan cannot tell a nested control's variant from the
-/// tab's own. The distinction the rule cares about is which variant the *tab* draws in, and that
-/// is exactly what delegating to `tab_variant` makes checkable.
+/// Replaces `the_tab_variant_comes_from_the_shared_rule`, which checked delegation to
+/// `tab_variant` — a function that chose between two container variants and no longer exists. The
+/// delegation half is kept because its reasoning still holds: choosing inline puts the rule back
+/// where no test can see it. What changed is the rule.
+///
+/// The reserved-height half is the SC-008 trap specific to this design. An indicator drawn only on
+/// the active tab grows that tab by its own thickness, pushing every tab after it — and it does so
+/// between a press and its release, which is the same shape as the swallowed-press bug feature 023
+/// spent a whole feature removing. Both arms of the match must produce something of the
+/// indicator's height.
 #[test]
-fn the_tab_variant_comes_from_the_shared_rule() {
+fn every_tab_reserves_the_indicators_height() {
     let body = switcher_row_body(&terminal_source());
 
     assert!(
-        body.contains("tab_variant("),
-        "each switcher entry's variant must come from `tab_variant(..)` (feature 012 FR-004a, \
-         BUG-001), whose own test asserts both arms draw a container. Choosing the variant inline \
-         here puts the rule back where no test can see it — which is how the inactive entries \
-         ended up as `ButtonVariant::Text`, painting neither background nor outline, so the row \
-         read as loose characters in the status bar instead of a tab strip."
+        body.contains("tab_indicator_colour("),
+        "the active/inactive mark must come from `tab_indicator_colour(..)` (feature 012 FR-004b, \
+         BUG-002), whose own tests assert exactly the active tab carries one. Choosing inline here \
+         puts the rule back where no test can see it."
     );
 
-    // Whatever the emphasis choice is, every entry is still wrapped in the same builder.
+    let indicator_arms = body.matches("anatomy::tab::INDICATOR").count();
     assert!(
-        body.contains("Button::with_content(content, variant, r)"),
-        "each entry must still be wrapped in a `Button` spanning the whole tab, taking the variant \
-         from `tab_variant`, so a press anywhere on it selects that instance \
-         (contracts/terminal-instance-switcher-ui.md)"
+        indicator_arms >= 2,
+        "every tab must reserve the indicator's height, drawn or not — found \
+         `anatomy::tab::INDICATOR` {indicator_arms} time(s), so one arm of the active/inactive \
+         choice is not sizing itself by it (feature 012 SC-008). An indicator that appears only on \
+         activation grows its tab by that thickness and pushes every tab after it, under the \
+         pointer, between a press and its release."
     );
 }
 

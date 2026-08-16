@@ -600,3 +600,90 @@ T036) → T040 (needs T035, T039). T041, T043, T044 are docs/quickstart edits wi
 dependency and can run any time after their subject is settled; T043 and T044 must land **before**
 T042, which executes what they specify. T041 and T043 both edit prose about the same removed
 control — do them together to keep the wording consistent.
+
+---
+
+## Phase 10: Bugfix BUG-002 — the tabs are an indicator strip, not containers
+
+**Bugfix**: 2026-08-16 — BUG-002 Updated from bugfix patch.
+
+**Purpose**: `bugs/BUG-002.md`. "Tab" meant a Material **primary tab** — bare label plus an active
+indicator — not the container-per-entry strip BUG-001 specified. The indicator sits at the tab's
+**top** edge, because this bar is anchored to the window's bottom and the pane a tab selects is
+above it.
+
+**Requirements**: FR-004b, SC-009 (new); FR-004a's container clauses struck, its layout clauses and
+FR-011a unchanged. Contract: "Tab form", "Active entry", "Active indicator".
+
+**Two of BUG-001's gates encode the superseded rule and are replaced, not deleted.** A test that
+pins a decision *should* fail when the decision changes — that is it working. What would be wrong is
+deleting it and leaving the new rule unpinned, so each is replaced by its indicator equivalent.
+
+### Tests for BUG-002 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T050 Replace `tab_variant_always_draws_a_container` and `tab_variant_distinguishes_the_active_tab`
+  (inline `mod tests` in `src/ui/terminal.rs`) with the indicator rule: a pure
+  `tab_indicator_colour(is_active, r) -> Option<Rgb>` returning `Some(accent)` for the active tab and
+  `None` otherwise, tested over both arms — exactly one tab in a row can carry an indicator, and the
+  active one always does (FR-004b, SC-004). Keep the shape of the tests being replaced; only the
+  decision they pin changes.
+- [X] T051 Replace `the_tab_variant_comes_from_the_shared_rule` in `tests/terminal_tabs.rs` with
+  `the_active_tab_is_marked_by_an_indicator`: read `instance_switcher_row` and fail if it does not
+  reserve the indicator's height for **every** tab (SC-008 — an indicator that appears on activation
+  would push the row) and if the active/inactive choice does not come from `tab_indicator_colour`.
+  Keep `the_nested_close_control_is_tinted_from_its_tab` (FR-011a) — it matters more without a
+  container, since the close glyph now follows the accent.
+
+### Implementation for BUG-002
+
+- [X] T052 Add `anatomy::tab` to `crates/micold-core/src/tokens/anatomy.rs` with the indicator's
+  thickness — §7's tab indicator, not the 1dp `text_field::INDICATOR` hairline. The tokens module is
+  where a figure like this belongs; naming it locally in `terminal.rs` is how the 24-vs-48 error in
+  BUG-001 happened.
+- [X] T053 Rewrite each entry in `instance_switcher_row` (`src/ui/terminal.rs`) as an indicator tab
+  (depends on T050–T052; FR-004b): `ButtonVariant::Text` for every tab, no container; a
+  `column![indicator, content]` where the indicator is a `Space`-height accent bar on the active tab
+  and an equally tall transparent gap on the others; the active label tinted with the accent, the
+  inactive ones muted. Strike the doc comment's "a background-color difference is legible at a
+  glance, unlike a thin edge accent" — that is the rationale BUG-002 overturns, and the reason it is
+  now safe is that the cue is carried twice, by indicator *and* label colour.
+- [X] T054 Size the label to its content with a maximum and ellipsis instead of the two-digit
+  `TAB_LABEL_WIDTH` box (BUG-002 "Related"): an instance is to become renameable from a right-click
+  menu, and a fixed two-digit width would have to be undone that day. Keep the leading spacer
+  balancing the close control so the label stays centred (FR-004a's surviving clause).
+- [X] T055 [P] Reword `quickstart.md` §8, which was written for containers — "every tab sits in a
+  container of the same shape and size" is now false by design. It becomes: no tab draws a
+  container; exactly one carries a top-edge indicator; the active label takes the accent; nothing
+  reflows on activation.
+- [X] T056 Run the visual pass with the `visual-pass` skill against the reworded §8, both themes,
+  and append to `visual-pass.md` (depends on T053–T055). Pin the binaries per the skill's build
+  section — this is the pass that caught the 12dp centring error last time, and the same class of
+  error is live again here since the layout is being rebuilt. **Done, and the warning was right**:
+  the first build had the active tab several times wider than the rest, because `Divider`'s
+  `Length::Fill` resolved against the button's available space rather than the label's. The
+  reserved-height gate passed throughout — the height was always correct; the defect was width.
+  Fixed with a uniform `TAB_WIDTH`, and the pass then confirmed both themes, no reflow at identical
+  crop geometry, and the squint test.
+
+- [ ] T057 [P] **Follow-up, not required by BUG-002**: register a covered state with two or more
+  Regular Terminal instances in `019-layout-snapshot-parity`'s set, so the tab strip's geometry is
+  under the snapshot gate at all. Discovered by this bugfix: the strip was rebuilt — containers to
+  indicator, fixed tab width, an extra row per tab — and `layout_snapshot.txt` did not change one
+  byte, because `session-terminal-bottom-bar` renders with at most one instance and the switcher
+  returns `None` below two. Both defects the visual passes caught (a 12dp centring error, a tab
+  several times too wide) are *pure geometry* and would have been in range of the fixture had the
+  control ever been rendered into it. One registration by 019's FR-016; belongs to 019's covered
+  set, and churns its fixture, which is why it is not done here.
+
+**Checkpoint**: the strip reads as a tab bar with the active tab underlined from above, no
+containers, and activation moves colour only.
+
+### Deferred — recorded so it is not lost
+
+Renaming an instance from a right-click menu, so a tab shows a name rather than an ordinal, is a
+**feature and not part of BUG-002**. It is named here because it constrained T054, and because the
+pieces already exist: `ContextMenu` is imported by `terminal.rs` today for the terminal pane's own
+menu, and `ShellInstance` would need a `title: Option<String>` beside its `lifecycle`. Worth its own
+spec rather than an ad-hoc addition — it touches persistence (does a name survive a restart, given
+FR-017 restores at most one instance?) and the daemon's session state, neither of which this bug
+should decide.

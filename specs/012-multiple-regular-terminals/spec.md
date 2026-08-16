@@ -99,7 +99,9 @@ A developer has several Regular Terminal instances open, one of them exits (the 
 - **FR-002**: Each Regular Terminal instance MUST run as an independent shell process with its own pty, scoped to the session's working directory (its worktree or the project's Default root, per the session's existing location).
 - **FR-003**: Opening a new Regular Terminal instance MUST NOT affect the session's AI CLI process or any other already-open Regular Terminal instance for that session.
 - **FR-004**: The system MUST let the user see a list of all currently open Regular Terminal instances for a session and switch the visible pane to any one of them.
-- **FR-004a** (bugfix BUG-001): The instance-switching control MUST present its entries as **tabs**: every entry — active and inactive alike — MUST render inside a container of the same shape and size, so the control reads as a tab strip rather than as loose text in the status bar. Within a tab, the instance's label MUST be horizontally centred and its close control MUST sit at the tab's trailing (right) edge, not immediately adjacent to the label. A tab's size MUST NOT depend on whether it is the active one, so changing which instance is active MUST NOT reflow the row. The active/inactive distinction (FR-004, SC-004) MUST be carried by the containers' emphasis, never by one entry having a container and another having none.
+- **FR-004a** (bugfix BUG-001; container clauses superseded by BUG-002): The instance-switching control MUST present its entries as **tabs**. ~~every entry — active and inactive alike — MUST render inside a container of the same shape and size, so the control reads as a tab strip rather than as loose text in the status bar.~~ Within a tab, the instance's label MUST be horizontally centred and its close control MUST sit at the tab's trailing (right) edge, not immediately adjacent to the label. A tab's size MUST NOT depend on whether it is the active one, so changing which instance is active MUST NOT reflow the row. ~~The active/inactive distinction (FR-004, SC-004) MUST be carried by the containers' emphasis, never by one entry having a container and another having none.~~ *(The two struck clauses are superseded — BUG-002: they were written to rule out the original container-against-bare-text defect and over-corrected, forbidding the intended idiom along with it. A tab strip carries no container; it marks the active tab with an **indicator** — see FR-004b. The layout and no-reflow clauses above are unaffected and still binding.)*
+- **FR-004c** (bugfix BUG-002, added during implementation): Every tab MUST have the **same fixed width**, independent of its label's content. This is what makes the indicator possible at all: an indicator is a rule, and a rule spans the width it is given — sized against a content-width tab it resolves against whatever space the bar happens to offer, stretching the active tab and resizing it on activation, which is the SC-008 reflow. A fixed width makes SC-008 hold by construction rather than by arithmetic. A label longer than the tab MUST ellipsise rather than widen it, which is also what a tab must do once instances can be renamed.
+- **FR-004b** (bugfix BUG-002): The active tab MUST be marked by an **active indicator** — an accent bar spanning the tab's width, of a thickness that reads at a glance rather than a hairline — and the active tab's label MUST take the accent colour, so the cue is carried by both weight and colour (SC-004). Inactive tabs MUST be low-emphasis labels with no container and no indicator. The indicator MUST sit at the tab's **top** edge: this control is anchored to the bottom of the window, so the content a tab selects lies above it, and an indicator on the bottom edge would point away from what it marks.
 - **FR-005**: The instance-switching control MUST be visible only once a session has more than one open Regular Terminal instance; it MUST remain hidden while the session has zero or one open instance, matching today's single-terminal experience.
 - **FR-006**: The existing primary AI-CLI/Regular mode-toggle control MUST continue to work as it does today: a single icon-button that switches the visible pane between the session's AI CLI process and Regular Terminal mode.
 - **FR-007**: Activating the primary toggle to switch a session into Regular Terminal mode MUST show whichever Regular Terminal instance was last active for that session, or start a first instance if the session has never had one, never an arbitrary instance.
@@ -135,6 +137,7 @@ A developer has several Regular Terminal instances open, one of them exits (the 
 - **SC-006**: Opening, switching, or closing Regular Terminal instances in one session produces zero observable effect on any other concurrently open session, on Linux, macOS, and Windows alike.
 - **SC-007** (bugfix BUG-001): Every open instance's close control is legible on the tab it belongs to — including the active, highlighted tab — in every observed case, in both the light and the dark theme. SC-004 alone does not cover this: a user can tell *which* tab is active while still being unable to see how to close it.
 - **SC-008** (bugfix BUG-001): Switching which instance is active leaves every tab's position and size unchanged, so no tab moves under the pointer when the user selects one.
+- **SC-009** (bugfix BUG-002): The active tab is identifiable at a glance from its indicator and label colour together, in both themes, without a container to distinguish it — the cue survives being read quickly and at the small size a status bar allows.
 
 ## Assumptions
 
@@ -160,3 +163,22 @@ because the nesting was not anticipated. That contract's "Instance-switcher row"
 accordingly. The same bug report also retires the bottom bar's release-focus affordance — specified
 in `023-terminal-focus-flow` FR-021 and `006-real-terminal-emulator` `contracts/focus-model.md`, and
 amended there.
+
+
+**Bugfix**: 2026-08-16 — BUG-002 "Tab" meant a Material **primary tab** — bare label plus an active
+indicator — not the container-per-entry strip FR-004a specified. BUG-001 read the original defect
+(one filled pill among loose numbers) as "the entries need containers", which the visible symptom
+supported; the missing container was half the bug, and the half never stated anywhere is that a tab
+strip marks its active member with an indicator. FR-004a's two container clauses struck, FR-004b
+added (indicator plus accent label, no container on any tab), SC-009 added. **The indicator sits on
+the tab's top edge**, against Material's placement: this control is anchored to the bottom of the
+window, so the content a tab selects is above it and a bottom indicator would point away from what
+it marks. FR-004a's layout clauses — centred label, trailing close, size independent of activation —
+and FR-011a's nested-control colour rule are untouched and matter more without a container to carry
+the emphasis. Two gates added by BUG-001 encode the superseded rule and are replaced rather than
+deleted: a test that pins a decision should fail when the decision changes, and the replacement pins
+the indicator instead. Deferred but recorded, because it constrains this fix: a terminal instance
+should become renameable from a right-click menu, so a tab must be able to show a *name* rather than
+an ordinal — every tab has one fixed width and a longer label ellipsises inside it rather than widening the strip
+(FR-004c, added during implementation after the visual pass found the indicator stretching its own
+tab).

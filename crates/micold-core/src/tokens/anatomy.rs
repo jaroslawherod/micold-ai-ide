@@ -165,6 +165,22 @@ pub mod text_field {
 }
 
 /// §7.8 — the snackbar. Fixed height: it is sized by its message, not by the density axis.
+/// §7 — the tab's active indicator (feature 012, BUG-002).
+///
+/// The bar that marks which tab is selected. Its own module rather than a constant in
+/// `ui/terminal.rs`, because a figure named at the call site is a figure nobody can check against
+/// the one it is meant to balance — which is precisely how BUG-001 sized a spacer from a glyph's
+/// visible pill (24dp) when the control it balanced occupies [`button::MIN_TOUCH_TARGET`] (48dp).
+pub mod tab {
+    /// The active indicator's thickness.
+    ///
+    /// Deliberately not [`text_field::INDICATOR`]'s 1.0: a hairline under a label reads as a border
+    /// artefact rather than a selection, and this indicator has no container to help it — the tab it
+    /// marks draws none (feature 012 FR-004b). 3dp is §7's figure for a tab, and it is the thickness
+    /// at which the mark survives being read quickly at status-bar size (SC-009).
+    pub const INDICATOR: f32 = 3.0;
+}
+
 pub mod snackbar {
     /// The shortest a snackbar can be; a longer message grows it.
     pub const MIN_HEIGHT: f32 = 48.0;
@@ -199,7 +215,7 @@ pub mod progress {
 /// it, which is the same shape as a figure nothing applies, one level further out.
 /// `tokens_anatomy::the_listed_table_holds_every_constant` now holds this against the module's own
 /// source, which is the only thing that can notice.
-pub const ALL: [(&str, f32); 44] = [
+pub const ALL: [(&str, f32); 45] = [
     ("app_bar::HEIGHT", app_bar::HEIGHT),
     ("app_bar::PADDING", app_bar::PADDING),
     (
@@ -241,6 +257,7 @@ pub const ALL: [(&str, f32); 44] = [
     ("text_field::INDICATOR", text_field::INDICATOR),
     ("text_field::INDICATOR_ACTIVE", text_field::INDICATOR_ACTIVE),
     ("text_field::TRAILING_ICON", text_field::TRAILING_ICON),
+    ("tab::INDICATOR", tab::INDICATOR),
     ("snackbar::MIN_HEIGHT", snackbar::MIN_HEIGHT),
     ("snackbar::PADDING_H", snackbar::PADDING_H),
     ("snackbar::PADDING_V", snackbar::PADDING_V),

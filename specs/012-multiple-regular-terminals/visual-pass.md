@@ -90,3 +90,83 @@ In the run's scratchpad, not committed:
 - `bar-light.png` — the whole strip, light theme
 - `bar-b3.png` — one instance, no switcher
 - `term-e1/e2/e3.png` — the §B3 focus cycle (recorded in `023`'s own pass)
+
+---
+
+## 2026-08-16 — §8 re-run for BUG-002, the indicator tabs
+
+**Ran on**: Xvfb `:77` (1600×1400) + lavapipe, not a physical display. Client and daemon built
+together and **copied out of `target-shared/` before launching**, per the skill — the hazard that
+nearly invalidated the previous pass. Isolated `XDG_DATA_HOME`, `XDG_RUNTIME_DIR=/tmp/vp77`, project
+at `/tmp/vpproj`; only processes whose runtime dir read `/tmp/vp77` were ever stopped.
+
+**Subject**: BUG-002 replaced BUG-001's container tabs with Material primary tabs — bare label plus
+an accent indicator on the tab's **top** edge, since this bar is anchored to the window's bottom and
+the pane a tab selects is above it.
+
+### Passed — both themes
+
+- **No tab draws a container.** Every entry is a bare label. The strip reads as a tab bar, not a row
+  of pills.
+- **Exactly one indicator, on the top edge.** The accent bar spans the active tab's width along its
+  upper edge; no other tab has one. Dark: light lavender on near-black. Light: deep purple on the
+  light surface.
+- **The active label takes the accent**, and its `×` with it (FR-011a) — the cue is carried twice.
+- **No reflow on activation.** Captured before and after switching the active tab at *identical*
+  crop geometry and stacked: `starting…`, both labels, both close controls, the "+" and the mode
+  toggle all hold their exact x positions. Only the indicator and the colour move.
+- **The squint test (SC-009).** Blurred to where no label is legible, the accent bar still says
+  which tab is active, in both themes. This was the real risk of dropping containers and it is the
+  check worth keeping: without a container the accent *is* the entire cue.
+
+### The defect this pass caught
+
+The first build made **the active tab several times wider than the inactive ones**. `Divider` is
+`Length::Fill`, and inside a content-sized button that resolves against the *button's* available
+space rather than the label's — so drawing the indicator stretched its own tab, and activation
+resized a tab under the pointer. Precisely the SC-008 reflow the design was meant to avoid.
+
+Note what did not catch it. `every_tab_reserves_the_indicators_height` passed throughout, correctly:
+both arms *do* use `anatomy::tab::INDICATOR`, and the **height** was always right. The defect was in
+the **width**, and every node was exactly where its own layout said it was — the same blind spot as
+BUG-001's 12dp centring error, one dimension over. Two visual passes, two width/position defects
+invisible to a green suite.
+
+Fixed by giving every tab one fixed width (`TAB_WIDTH`), so the indicator's `Fill` resolves to the
+tab rather than to whatever space the bar offers. SC-008 then holds by construction instead of by
+arithmetic, and a renamed tab will ellipsise rather than resize the strip — how a browser tab bar
+behaves. The figure is set by what must fit: two `MIN_TOUCH_TARGET` widths (the close, and the
+spacer balancing it) plus a readable label.
+
+### Not run — and why
+
+- **Ten or more instances**, for the two-digit/ellipsis case. Still unexercised, as in the BUG-001
+  pass; the fixed width makes it less interesting than it was, since the tab can no longer grow.
+- **Mid-flight animation and perceived smoothness** — out of reach of this harness.
+
+### Frames
+
+In the run's scratchpad, not committed: `tabs-ind-dark.png` (first build, the width defect),
+`tabs2-dark.png`, `tabs2-light.png`, `reflow2.png` (before/after at identical geometry),
+`squint.png` (both themes, blurred).
+
+### A coverage finding, from the fixture that did not move
+
+This change rebuilt the tab strip — containers replaced by an indicator, a fixed 128dp tab width,
+a new row in each tab's column — and `layout_snapshot.txt` did not change by a single byte.
+
+That is not the gate being tolerant. `session-terminal-bottom-bar`, the covered state that renders
+this bar, is built with at most one shell instance, so `instance_switcher_row` returns `None` and
+**the tab strip is in no covered state at all**. The geometry fixture has never had coverage of this
+control.
+
+It reframes both defects these passes caught. The comfortable reading — "geometry gates cannot see
+centring or colour" — is true but not what happened here. A 12dp centring error and a tab several
+times too wide are both *pure geometry*, exactly what this fixture exists to catch, and it missed
+them because the control is never rendered into it. BUG-001's edit did move the fixture, which made
+the coverage look real; what moved was the release-focus button's removal from the same bar, not
+anything about the tabs.
+
+Registering a covered state with two or more instances is a single step by feature 019's FR-016, and
+would put this strip's geometry under the gate for the first time. Recorded here rather than done
+here: it belongs to 019's covered set, and adding a state churns the fixture in its own right.
