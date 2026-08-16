@@ -27,7 +27,7 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
 use iced::advanced::widget::{tree, Tree};
 use iced::advanced::{mouse, renderer, Widget};
-use iced::widget::{button, column, row, Space};
+use iced::widget::{button, column, opaque, row, Space};
 use iced::{alignment, Element, Length, Pixels, Rectangle, Size};
 use micold_core::tokens::{density, motion::duration, shape, spacing, Rgb, Roles};
 use micold_core::typeahead::fit_around;
@@ -149,7 +149,16 @@ pub(super) fn row_element<'a, M: Clone + 'a>(
         // A row with nothing to press must not ripple. The ripple's whole message is "that did
         // something", and pressing an unavailable branch does nothing at all (FR-012a) — so the
         // wrapper is absent rather than present and lying.
-        None => pressable.into(),
+        //
+        // `opaque`, though, because "does nothing" has to mean the press **stops here**. Withholding
+        // `on_press` is what makes the row unpressable, and it also makes the library's button
+        // decline the event — so the press carried on past the row, past the floating list (which
+        // claims only presses outside itself) and onto whatever was behind. Behind the branch list
+        // is the add-worktree dialog's scrim, whose press message is its cancellation: reaching for
+        // an in-use branch closed the form and discarded every input in it (016 BUG-002, FR-035).
+        // `opaque` draws the content unchanged and swallows presses over its own bounds, so the row
+        // stays exactly as unpressable and exactly as quiet as it looks.
+        None => opaque(pressable),
     }
 }
 

@@ -23,7 +23,7 @@ use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
 use crate::ui::material::{menu_panel, IconButton, Text, TypeRole};
-use iced::widget::{button, column, mouse_area, row, Space};
+use iced::widget::{button, column, mouse_area, opaque, row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
 use micold_core::tokens::{anatomy, density, motion::duration, shape, spacing, Rgb, Roles};
@@ -211,6 +211,7 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
             .style(style::text_button(r));
         // An item with no message is shown and not pressable — `on_press` is what makes a `button`
         // interactive, so withholding it is the whole of "listed but not selectable".
+        let inert = item.message.is_none();
         if let Some(message) = item.message {
             pressable = pressable.on_press(message);
         }
@@ -219,6 +220,11 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
             Some(message) => mouse_area(entry).on_right_press(message).into(),
             None => entry.into(),
         };
+        // …and "not pressable" has to mean the press stops here. A button without `on_press`
+        // declines the event, so it went on to whatever was behind the panel — the defect
+        // `picker::row_element` carries the full account of (016 BUG-002, FR-035). Same shape here,
+        // same answer, so the two kinds of inert row cannot diverge.
+        let entry = if inert { opaque(entry) } else { entry };
         list = list.push(entry);
     }
     list.into()
