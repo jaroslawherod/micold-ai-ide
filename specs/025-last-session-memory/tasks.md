@@ -288,6 +288,18 @@ path into the empty pane, not the residual one — a start the daemon refuses be
 held by another window or is unavailable. That case is rarer and less expected, so the pane telling
 the truth matters more rather than less.
 
-**Still open.** Quickstart B2's recorded PASS is of the superseded step (0 `claude` processes after a
-restore). It is marked NOT RUN against the current behaviour and needs re-running: exactly one more
-`claude`, plus the FR-014 wording reached deliberately via a second window holding the project.
+**Re-run and recorded, twice.** Quickstart B2's earlier PASS was of the superseded step (0 `claude`
+processes after a restore); it has since been run against the current behaviour, by two independent
+sandboxes on the same commit, and passes in both. From a verified-idle start, launching produced
+exactly one `claude`, whose command line is `claude --resume <the id last_session held on disk>`,
+with no clicks and the terminal rendering real output. The *"and only it did"* clause is bounded at
+both seams it could break: a second window on the same project started nothing further (first run),
+and with two projects each remembering a different session only the one actually opened resumed
+(second run).
+
+**The FR-014 half is not reached, and that is now a question rather than a gap.** Three routes have
+been tried across the two runs — a second window holding the project, a session whose worktree was
+deleted, and the ordinary resume — and none produces a refused start. The FR-014 wording was seen
+once, when a resume spawned a process that then exited; that is the state existing, not a refusal
+reaching it. So the "Kept, not replaced" argument above rests on a path nobody has yet shown the UI
+can walk. See quickstart §B2 for the routes and their evidence.

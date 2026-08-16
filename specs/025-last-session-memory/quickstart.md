@@ -218,9 +218,9 @@ the shape BUG-001 was about. Worth its own report.
 > a restored session *does* — it now resumes — so B2's recorded pass is of a rule that no longer
 > exists, and B1, B4, B5 and B6 all end on a session that is now running rather than idle. Their
 > claims still hold (they are about *which* session, and about the memory), but the screenshots show
-> an idle terminal where a live one would now appear. B2 is marked NOT RUN above; the rest are left
-> as passes because what they assert did not change. Anyone re-running §B should expect the
-> difference and re-record B2 first.
+> an idle terminal where a live one would now appear. B2 has since been re-run against the current
+> behaviour and re-recorded above; the rest are left as passes because what they assert did not
+> change. Anyone re-running §B should still expect the difference in their screenshots.
 
 Every step in §B has now been run, and then **run again end to end against the build with BUG-001
 fixed** — the fix changed what the terminal area says in exactly the state most of these steps land
