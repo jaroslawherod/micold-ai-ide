@@ -152,27 +152,39 @@ mod tests {
     use micold_core::fs_scan::FakeFolderScanner;
     use micold_core::project::FolderEntry;
 
-    /// A directory that is not a git repository is refused, and nothing reaches the daemon.
+    /// `base_app` carries the real git capability, and a temp dir is reliably not a repo root.
+    fn choose_a_non_repository() -> App {
+        let mut app = base_app();
+        app.core.selector = Some(Selector::open_at(PathBuf::from("/tmp")));
+        let dir = std::env::temp_dir().join("micold-t055-not-a-repo");
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = on_folder_chosen(&mut app, dir);
+        app
+    }
+
+    /// A directory that is not a git repository is refused.
     ///
     /// The refusal is the whole of FR-001a, and the failure it prevents is not a bad error
     /// message: a non-repository opened as a project produces a workspace entry whose worktree
     /// discovery, branch listing and worktree creation all fail separately and later.
     #[test]
     fn a_folder_that_is_not_a_repository_is_refused() {
-        let mut app = base_app();
-        app.core.selector = Some(Selector::open_at(PathBuf::from("/tmp")));
-
-        // `base_app` carries the real git capability, and a temp dir is reliably not a repo root.
-        let dir = std::env::temp_dir().join("micold-t055-not-a-repo");
-        let _ = std::fs::create_dir_all(&dir);
-        let _ = on_folder_chosen(&mut app, dir.clone());
-
         assert!(
-            app.core.workspace.active.is_none(),
+            choose_a_non_repository().core.workspace.active.is_none(),
             "a non-repository must not become the active project"
         );
+    }
+
+    /// …and the picker closes *before* the refusal is reported.
+    ///
+    /// Its own test, because it is its own bug and it fails silently: notifications render inside
+    /// `base`, which every modal wraps behind its scrim, so a refusal raised while the selector is
+    /// still open is dimmed out of view. The project is still correctly refused — the user simply
+    /// sees nothing happen and clicks again.
+    #[test]
+    fn the_picker_closes_before_the_refusal_is_reported() {
         assert!(
-            app.core.selector.is_none(),
+            choose_a_non_repository().core.selector.is_none(),
             "the picker must close before the refusal is reported, or the notification renders \
              behind the modal's scrim and the user sees nothing happen"
         );
