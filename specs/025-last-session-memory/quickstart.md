@@ -87,9 +87,13 @@ different session, only the project that actually opened has resumed anything; t
 session is still stopped until you switch to it.
 
 **The FR-014 case is now the exception, and still worth reaching** ([BUG-001](./bugs/BUG-001.md)).
-Open the project in a second window first, so the resume is refused, then reopen: the terminal must
-say the session is not running and point at the `restart` control, never claim to be starting. The
-ordinary path no longer reaches that screen — this one still does.
+Make the resume **fail**, then reopen: the terminal must say the session is not running and point at
+the `restart` control, never claim to be starting. The ordinary path no longer reaches that screen.
+
+The route that works is to take `claude` off `PATH` before reopening — the daemon is asked to start
+the session, cannot spawn the process, and leaves it exactly as FR-014 describes. A second window
+holding the project does **not** work, and neither does a deleted worktree: in both the daemon keeps
+streaming, so the pane is never empty. See the recorded runs below.
 
 ### B3 — The restored terminal is ready to type (FR-013)
 
@@ -158,10 +162,10 @@ claims to, that is not run either. B2 sat in that state for two days before bein
 
 | Recorded | |
 |---|---|
-| Date | 2026-08-11 (B1), 2026-08-12 (B3, B7), 2026-08-14 (B2, B4, B5, B6; then **all of §B re-run** after BUG-001 was fixed; then **B2 re-run again** after BUG-002 reversed it) |
+| Date | 2026-08-11 (B1), 2026-08-12 (B3, B7), 2026-08-14 (B2, B4, B5, B6; then **all of §B re-run** after BUG-001 was fixed; then **B2 re-run again** after BUG-002 reversed it); 2026-08-16 (B2's FR-014 half, reached at last) |
 | Platform | B1 on the user's own install; everything else on Xvfb + lavapipe in an isolated sandbox (see below) |
 | B1 — reopen lands on the session, first frame | **PASS** — confirmed by the user on their own install ("it works"), and reproduced in the sandbox on every restart below |
-| B2 — it came back up, and only it did | **PASS** on the resume half (2026-08-14, after BUG-002) — [evidence](./evidence/B2-postbug002-restore-resumes.png). From a genuinely idle sandbox (0 micold, 0 `claude`, verified), launching produced **exactly one** `claude`, and its command line is `claude --resume ede92724-a79a-444c-84f9-a6c67c91b08e` — the id `last_session` held on disk. Zero clicks. The terminal is live and rendering real output, not a placeholder. **Reproduced by a second, independent run** the same day — [evidence](./evidence/B2-resumes-exactly-one.png) — which also held the *"and only it did"* clause across two projects: beta's remembered session stayed stopped. **The FR-014 half is NOT REACHED by either run**; between them three routes were tried and none produces a refused resume. The earlier PASS — [superseded evidence](./evidence/B2-restore-starts-nothing.png) — recorded 0 `claude` after a restore, which was correct for the build it was taken on and is what BUG-002 reversed |
+| B2 — it came back up, and only it did | **PASS** on the resume half (2026-08-14, after BUG-002) — [evidence](./evidence/B2-postbug002-restore-resumes.png). From a genuinely idle sandbox (0 micold, 0 `claude`, verified), launching produced **exactly one** `claude`, and its command line is `claude --resume ede92724-a79a-444c-84f9-a6c67c91b08e` — the id `last_session` held on disk. Zero clicks. The terminal is live and rendering real output, not a placeholder. **Reproduced by a second, independent run** the same day — [evidence](./evidence/B2-resumes-exactly-one.png) — which also held the *"and only it did"* clause across two projects: beta's remembered session stayed stopped. **The FR-014 half is now PASS too** (2026-08-16) — [evidence](./evidence/B2-fr014-refused-start.png). Neither of the two runs above reached it; between them three routes were tried and none produces a refused resume. A fourth does: with `claude` off `PATH`, the daemon logs `session start failed … No viable candidates found in PATH`, and the pane reads "This session is not running. Choose restart below to resume it." with `restart` beside it. The earlier PASS — [superseded evidence](./evidence/B2-restore-starts-nothing.png) — recorded 0 `claude` after a restore, which was correct for the build it was taken on and is what BUG-002 reversed |
 | B3 — the restored terminal is ready to type; a switch still focuses | **PASS** — [evidence](./evidence/B3-focus-states.png) |
 | B4 — per project, across several switches | **PASS** — [evidence](./evidence/B4-per-project-memory.png) |
 | B5 — closed / deleted worktree / empty session | **PASS**, all three — [evidence](./evidence/B5-B6-kept-and-declined.png). B5.2 passes against the *corrected* expectation; the step as previously written would have failed |
@@ -206,13 +210,54 @@ where it could plausibly have been broken.
   resume it." with the bar at `idle` beside it
   ([evidence](./evidence/B2-postbug002-refused-resume-fr014.png)). That is a real instance of the
   state FR-014 exists for, reached by accident rather than by design, and it is weaker evidence than
-  a deliberate refusal would be.
+  a deliberate refusal would be. **Since resolved** — see *FR-014, reached deliberately* below.
 
 **One observation worth following up, not caused by BUG-002.** With the session live and streaming,
 the bottom bar continued to read `interrupted` and offer `restart` rather than `running`. It does the
 same after clicking the session row by hand, so it is not specific to the restore path and is not a
 regression from this change — but it is the bar and the body disagreeing about one session, which is
-the shape BUG-001 was about. Worth its own report.
+the shape BUG-001 was about. Now reported as
+[`010` BUG-011](../010-daemon-session-persistence/bugs/BUG-011.md): the daemon never records that a
+started process is running, so no session reaches `Running` except by crashing and being respawned.
+
+### FR-014, reached deliberately (2026-08-16)
+
+**Result: PASS** — [evidence](./evidence/B2-fr014-refused-start.png). Three routes had been tried
+across the two runs above and none produced a refused start. The fourth does: **take `claude` off
+`PATH` and reopen.** The daemon is asked to start the remembered session, cannot spawn the process,
+and logs it —
+
+```
+WARN micold_daemon::server: session start failed session=7f230d6e-… err=Unable to spawn claude
+because: No viable candidates found in PATH "/usr/bin:/bin"
+```
+
+— leaving the session exactly where FR-014 describes: current, displayed, no process, no grid. The
+pane reads *"This session is not running. Choose restart below to resume it."* and the bar beside it
+reads `interrupted` with `restart`. No claim to be starting, at either.
+
+**Why this route and not the others.** The three that failed all leave the daemon *hosting* the
+session, so frames keep arriving and the pane is never empty — a second window is refused the
+attachment but not the stream, and a deleted worktree is started anyway (in `$HOME`). The empty pane
+needs a start that produced no process at all, which means the spawn itself has to fail. That is not
+a contrivance: an uninstalled, unlinked or not-yet-on-`PATH` `claude` is exactly this, and is a
+thing that happens on a developer machine after a reboot.
+
+**Run conditions.** Xvfb `:81` + lavapipe, isolated `XDG_*` / `CLAUDE_CONFIG_DIR` /
+`MICOLD_DAEMON_BIN`, throwaway git repo, no provider credentials — `claude` was a stub script that
+prints its arguments and then `exec cat`, so "the process is alive and its output reaches the pane"
+is observable without authenticating anything. `last_session` was written by the application, not
+seeded. The same pass confirmed both faces of
+[`010` BUG-011](../010-daemon-session-persistence/bugs/BUG-011.md), whose evidence image is the bar
+from this state and from the *running* state cropped at identical geometry: they are
+indistinguishable.
+
+**One method note, learned the hard way again.** The first launch of this pass refused its own
+daemon — `contract or build mismatch` with *matching* version numbers printed on both sides, which
+is the schema-hash case. The worktree `fix-can-t-select-existing-branch-and-existing-worktree` sits
+on a different protocol commit and builds into the same `target-shared`, so pinning the two binaries
+is not enough on its own: pin them, then **verify the pair connects** before believing anything on
+screen. The daemon log says `client attached to daemon` when it is sound.
 
 > **[BUG-002](./bugs/BUG-002.md) unsettles this table again, and only partly.** The fix changes what
 > a restored session *does* — it now resumes — so B2's recorded pass is of a rule that no longer
@@ -414,6 +459,11 @@ extraordinary path was not found either. The requirement and its tests stand; wh
 that any user can still arrive there. Someone who knows a way the daemon refuses a start should say
 so here.
 
+**Answered, 2026-08-16.** All three failed routes share one property: the daemon keeps hosting the
+session, so frames keep arriving and the pane is never empty. The empty pane needs a start that
+produced *no process*, which means the spawn has to fail — remove `claude` from `PATH` and reopen.
+Recorded above under **FR-014, reached deliberately**.
+
 #### Two findings from this run
 
 **1. A resumed session's status stays `interrupted`, and keeps offering `restart`.** The terminal is
@@ -430,6 +480,10 @@ not specific to the restore path and is not a regression from BUG-002.
 > without touching the durable record, and the live overlay does not project `lifecycle`, so the
 > daemon's own catalog is wrong rather than the client being out of date. FR-006a specifies how a
 > session *enters* that state and never how it leaves.
+>
+> A later pass added the second face: `Running` is reachable **only** by crashing a session and
+> letting supervision respawn it, so a *newly created* session reads `starting…` for its whole life
+> by the same omission. Both faces are now confirmed on screen there.
 
 **2. A session whose worktree is gone is resumed in `$HOME`.** `readlink /proc/<pid>/cwd` gives
 `/tmp/mb81/home`, not the worktree path that no longer exists. Under FR-004 this could not arise —

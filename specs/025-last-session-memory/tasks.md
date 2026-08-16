@@ -297,9 +297,12 @@ both seams it could break: a second window on the same project started nothing f
 and with two projects each remembering a different session only the one actually opened resumed
 (second run).
 
-**The FR-014 half is not reached, and that is now a question rather than a gap.** Three routes have
-been tried across the two runs — a second window holding the project, a session whose worktree was
-deleted, and the ordinary resume — and none produces a refused start. The FR-014 wording was seen
-once, when a resume spawned a process that then exited; that is the state existing, not a refusal
-reaching it. So the "Kept, not replaced" argument above rests on a path nobody has yet shown the UI
-can walk. See quickstart §B2 for the routes and their evidence.
+**The FR-014 half is reached too, on the fourth route** (2026-08-16). Three had been tried across
+those two runs — a second window holding the project, a session whose worktree was deleted, and the
+ordinary resume — and none produces a refused start, because all three leave the daemon hosting the
+session and streaming it, so the pane is never empty. The empty pane needs a start that produced no
+process: remove `claude` from `PATH` and reopen. The daemon logs `session start failed … No viable
+candidates found in PATH`, the pane reads "This session is not running. Choose restart below to
+resume it.", and the bar offers `restart`. So the "Kept, not replaced" argument above holds on a
+path the UI demonstrably can walk — and one a user reaches by having no `claude` installed, not by
+contrivance. See quickstart §B2, *FR-014, reached deliberately*.
