@@ -344,6 +344,14 @@ a session survived; confirm it does not survive without the setting.
   explicit resume, a restore on reopening, and an automatic respawn after a crash. The check MUST be
   made against the filesystem at the moment of the spawn rather than against a cached worktree
   status, since a directory can be removed between a refresh and a start (BUG-012).
+- **FR-006d** *(added — BUG-011)*: A session whose process the service has started MUST be reported
+  as **running**, from the moment the process exists until it exits, and MUST NOT be offered for
+  resumption or restart while it runs. This holds for every route into a live process — a session
+  created fresh, one resumed out of the interrupted-resumable state of FR-006a, and one restarted
+  after stopping — and the report MUST reach already-attached clients without them re-attaching.
+  FR-006a specifies only how a session *enters* the interrupted-resumable state; without this, the
+  implementation could satisfy every clause written and still leave a streaming session labelled
+  `interrupted` beside a `restart` control, which is what it did. See `bugs/BUG-011.md`.
 - **FR-007**: Terminating the user interface MUST NOT terminate sessions. Session termination MUST
   only occur on explicit user request or by the service's own supervision rules.
 - **FR-007a**: Automatic pruning of empty sessions MUST run only for a project that currently has an
@@ -710,6 +718,11 @@ plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
   location names. A start whose directory does not exist is refused in 100% of cases and registers no
   process, and a start whose directory exists is unaffected — proven by an executable test covering
   both outcomes, since a guard that refused everything would satisfy the first alone.
+- **SC-025** (bugfix BUG-011): A session the service is hosting is reported as running in 100% of
+  cases, from the moment its process exists. Proven by an executable test asserting on **the snapshot
+  a client would receive** rather than on the lifecycle state machine — every pre-existing lifecycle
+  test drives the machine directly, which is how a correct machine that production never called
+  stayed green for the whole of this defect's life.
 
 ---
 

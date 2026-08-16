@@ -890,6 +890,24 @@ impl DaemonState {
         // Session-start event with the launch reason (FR-045). No terminal content — id + mode only.
         tracing::info!(session = %id.0, mode = ?plan.mode, ?launch, "session started");
         self.register_session(session);
+        // The durable record has to learn that the process exists (FR-006d, BUG-011). Nothing else
+        // will tell it: the live registry above is a separate map, and `overlay_live_summaries`
+        // projects activity/title/input-serial onto the wire snapshot but not `lifecycle`. Without
+        // this the record keeps whatever it held before the spawn — `InterruptedResumable` for a
+        // resume, `Starting` for a session created and never advanced — for the whole life of the
+        // process, and the client dutifully renders it: `restart` offered for a running agent.
+        //
+        // Marked here rather than in the `ClientMsg::SessionStart` handler because this is the one
+        // place that knows a process now exists; `SessionCreate` and the restart path reach it too.
+        // Not persisted, deliberately — lifecycle is runtime state (FR-021) and every durable
+        // session loads `Idle`.
+        let owner = self.lock().catalog.mark_session_running(id);
+        if owner.is_some() {
+            // Outside the lock: `broadcast_catalog` takes it. And unconditionally rather than only
+            // on a reply, which is what `spawn_session_start` used to do — `SessionStart` carries
+            // no reply, so a resume changed the world and announced nothing.
+            self.broadcast_catalog();
+        }
         Ok(())
     }
 

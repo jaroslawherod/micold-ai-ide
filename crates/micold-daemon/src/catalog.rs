@@ -531,6 +531,27 @@ impl Catalog {
         }
     }
 
+    /// Record that `id`'s process is live: **any** lifecycle → `Running` (FR-006d, BUG-011).
+    /// Returns the owning project when it transitioned, for a `CatalogChanged` broadcast, and
+    /// `None` for an unknown session or one already `Running` — so a redundant start announces
+    /// nothing.
+    ///
+    /// Ungated, unlike [`Self::mark_running_if_restarting`] beside it, and deliberately: this is
+    /// called from the one place that knows a process now exists, so every state it can be reached
+    /// from is a state the durable record has fallen behind. `Starting` (a session created but
+    /// never advanced), `InterruptedResumable` (a resume the user asked for), `Idle`/`Failed` (a
+    /// restart) are all the same fact — the daemon is hosting it. The narrow gate next door exists
+    /// because *its* caller is a supervision tick observing liveness it did not cause, where
+    /// `Restarting` is the only state that means anything.
+    pub fn mark_session_running(&mut self, id: SessionId) -> Option<PathBuf> {
+        let (project, session) = self.workspace.find_session_mut(id)?;
+        if matches!(session.lifecycle, SessionLifecycle::Running) {
+            return None;
+        }
+        session.mark_running();
+        Some(project)
+    }
+
     /// Present interrupted-but-resumable sessions after a service restart (FR-006a/b).
     ///
     /// Every durable session loads `Idle`. This walks the non-archived sessions and, for each one
