@@ -205,3 +205,6 @@ The transition's *look* is not. Report which half you covered.
 The pass is evidence, so write down what a reader would need to disbelieve it: the date, that it ran
 on Xvfb + lavapipe rather than on a real display, which checks were exercised, and which were left
 unrun and why. Attach or reference the comparison images.
+
+Commit the cropped image rather than the full frame, and only once you are satisfied with it — PNGs
+do not delta-compress, so every superseded copy stays in history forever.
