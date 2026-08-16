@@ -14,6 +14,7 @@ fn worktree(dir: &str, status: WorktreeStatus) -> Worktree {
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),
         status,
+        included: false,
     }
 }
 
@@ -404,6 +405,7 @@ fn agent_worktree(hex: &str, status: WorktreeStatus) -> Worktree {
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("worktree-agent-{hex}")),
         status,
+        included: false,
     }
 }
 
@@ -777,12 +779,14 @@ fn state_with_filterable_worktrees(dir: &str) -> State {
             path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
             branch: Some("feat/a".to_string()),
             status: WorktreeStatus::Valid,
+            included: false,
         },
         Worktree {
             dir_name: "fix-b".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/fix-b"),
             branch: Some("fix/b".to_string()),
             status: WorktreeStatus::Valid,
+            included: false,
         },
         // A real agent id: 16+ hex characters, which is what classifies a worktree as
         // agent-owned and so hidden by default (feature 014).

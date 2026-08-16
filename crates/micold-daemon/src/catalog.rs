@@ -30,6 +30,7 @@ use micold_core::settings::{
 };
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
+use micold_core::worktree::worktrees_root;
 
 /// Record the durable, provider-side suppression marker for `session` (bugfix BUG-003, FR-020c)
 /// so reconciliation (FR-020b) never reconstructs it again, even if the catalog's own `archived`
@@ -167,10 +168,16 @@ impl Catalog {
                             .cloned()
                             .unwrap_or_else(|| dir_name.clone());
                         WorktreeSnapshot {
+                            // The durable half knows a worktree only by the key its sessions were
+                            // stored against, so the location is the one the app manages. The live
+                            // discovery overlay in `state.rs` replaces this whole list with the
+                            // real paths as soon as it has run.
+                            path: worktrees_root(&p.path).join(&dir_name),
                             dir_name,
                             branch: None,
                             display_name,
                             status: WorktreeStatus::Clean,
+                            included: false,
                         }
                     })
                     .collect();
@@ -265,6 +272,50 @@ impl Catalog {
             .entry(project.to_path_buf())
             .or_default()
             .insert(dir_name.to_string(), name.to_string());
+        self.persist()
+    }
+
+    /// The worktrees `project` shows from outside the directory the app creates its own in
+    /// (016 BUG-002, FR-030). Empty for a project that has included none, which is most of them.
+    pub fn included_worktrees(&self, project: &Path) -> Vec<PathBuf> {
+        self.workspace
+            .included_worktrees
+            .get(project)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Start showing `path` among `project`'s worktrees, persisting it (016 BUG-002, FR-027).
+    ///
+    /// Idempotent: including what is already included writes nothing. Records a location and
+    /// nothing else — no git command runs here, and nothing on disk is touched (FR-028).
+    pub fn include_worktree(&mut self, project: &Path, path: &Path) -> io::Result<()> {
+        let entry = self
+            .workspace
+            .included_worktrees
+            .entry(project.to_path_buf())
+            .or_default();
+        if entry.iter().any(|p| p == path) {
+            return Ok(());
+        }
+        entry.push(path.to_path_buf());
+        self.persist()
+    }
+
+    /// Stop showing `path` (016 BUG-002, FR-030). Idempotent, and equally non-destructive: the
+    /// worktree stays exactly where it is, registered with git exactly as it was.
+    pub fn exclude_worktree(&mut self, project: &Path, path: &Path) -> io::Result<()> {
+        let Some(entry) = self.workspace.included_worktrees.get_mut(project) else {
+            return Ok(());
+        };
+        let before = entry.len();
+        entry.retain(|p| p != path);
+        if entry.len() == before {
+            return Ok(());
+        }
+        if entry.is_empty() {
+            self.workspace.included_worktrees.remove(project);
+        }
         self.persist()
     }
 

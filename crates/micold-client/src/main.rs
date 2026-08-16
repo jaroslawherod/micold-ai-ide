@@ -619,6 +619,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::WorktreeDeleteConfirmed => shell::daemon_sync::on_worktree_delete_confirmed(app),
+        Message::WorktreeIncludeRequested(path) => {
+            shell::daemon_sync::on_worktree_include_requested(app, path)
+        }
+        Message::WorktreeExcludeRequested(dir) => {
+            shell::daemon_sync::on_worktree_exclude_requested(app, dir)
+        }
         other => {
             app.core.update(other);
             Task::none()

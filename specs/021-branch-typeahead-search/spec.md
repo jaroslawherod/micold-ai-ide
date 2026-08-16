@@ -262,6 +262,11 @@ individually legible.
   row. Attempting to pick it MUST do nothing — in particular it MUST NOT close the result list, and it
   MUST NOT become the selected branch. This supersedes the previous behaviour, in which such a branch
   could be selected and the refusal happened only on attempting to create.
+  **Clarified by 016 BUG-002 (2026-08-14)**: "does nothing" means the press is **consumed** by the
+  row, not merely unhandled by it. A press nothing claims travels on to whatever sits behind — and
+  behind a list that floats past the form's edges is the form's own dismissal, so "nothing happens"
+  became "the form closes". Unpressable and transparent-to-presses are different properties, and this
+  requirement asks for the first and forbids the second.
 - **FR-012b**: An unavailable row MUST be distinguishable from an available one by more than the
   absence of emphasis, so that "unavailable" and "did not match here" never look alike.
 - **FR-013**: Picking an available branch from the search results MUST have exactly the effect that

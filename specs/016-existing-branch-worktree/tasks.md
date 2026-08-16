@@ -230,6 +230,58 @@ full path — not a bare folder name.
 
 ---
 
+## Phase 10: BUG-002 — a refusal that closes the form, and a holder that cannot be included
+
+**Bugfix**: 2026-08-14 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch. Twenty tasks added
+(T073–T092); no earlier task reopened — every one of them is complete against the requirement it was
+written for, and both halves of this bug are requirements that did not exist.
+
+**Goal (A)**: reaching for a branch the app refuses costs the user nothing — the press is consumed
+where it lands and the form survives (FR-034, FR-035, SC-009).
+
+**Goal (B)**: a branch held by a worktree the app does not manage stops being a dead end — the
+worktree can be included, exactly where it is (FR-027–FR-033, SC-010, SC-011).
+
+**Independent Test (A)**: with the branch list open, press an in-use row that renders below the
+dialog's lower edge; the form is still there with every input intact.
+**Independent Test (B)**: `git worktree add ../elsewhere feat/x` outside the app, select `feat/x`,
+include the worktree it names, and confirm it appears in the list, hosts a session, survives a
+restart, and is unchanged on disk.
+
+### Tests for BUG-002 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T073 [P] Failing test: an unavailable row consumes its press — a left press inside a disabled row publishes no message **and reports the event captured**, so nothing behind it can see it, in `crates/micold-client/src/ui/material/picker_press.rs` (new, in-crate: `material` is `pub(crate)` and the type-ahead cannot be built from `tests/`, the same reason `picker_parity` gives)
+- [X] T074 [P] Failing test: with the branch list open and a disabled row laid out **past the dialog's own bounds**, a press on that row publishes no `AddWorktreeCancelled` (FR-034/FR-035, SC-009) — the position is the whole test, and it is *measured* rather than assumed, in `crates/micold-client/tests/add_worktree_form_survives_a_refusal.rs` (new)
+- [X] T075 [P] Failing tests: `reconcile()` keeps a record whose path is in the included set and marks it `included`, still drops one that is neither, and reports an included path git no longer registers as missing rather than inventing it (FR-029/FR-031), in `crates/micold-core/tests/worktree_discovery.rs`
+- [X] T076 [P] Failing tests: holder classification follows the same widened predicate — an included holder is `CheckedOutAt`, an unincluded one `CheckedOutOutsideApp`, the project root unaffected (FR-032), in `crates/micold-core/tests/branch_conflict.rs`
+- [X] T077 [P] Failing tests: `StoredProjectState` round-trips `included_worktrees`; a file written before the field loads empty; unknown fields are still ignored (FR-030), in `crates/micold-core/tests/store_roundtrip.rs`
+- [X] T078 [P] Failing tests: include and exclude are idempotent in both directions, and including a path the repository does not report as a worktree is rejected rather than recorded (contract `branch-rpc.md` §3a, FR-028), in `crates/micold-daemon/tests/mutation_semantics.rs`
+
+### Implementation for BUG-002 — Goal A (the press)
+
+- [X] T079 Make an unavailable row consume its press — still unpressable, no longer transparent (research R14, FR-035). The picker's rows are `row_element()` in `crates/micold-client/src/ui/material/picker.rs`, **not** `material::menu` as BUG-002 first recorded; `menu::item_column()` carries the same shape for message-less menu items and is fixed with it, so the two kinds of inert row cannot diverge
+- [X] T080 Belt-and-braces: `Menu::update()` captures a left press within its own bounds even when its content declines it, in `crates/micold-client/src/ui/cdk/picker.rs`
+- [X] T081 [P] Record in the module doc of `crates/micold-client/tests/branch_search_state.rs` that it covers the reducer only, and point at T073/T074 for the press — the seam that let a stated requirement (021 FR-012a) ship violated
+
+### Implementation for BUG-002 — Goal B (inclusion)
+
+- [X] T082 Add `included_worktrees: Vec<PathBuf>` to `StoredProjectState` — `#[serde(default, skip_serializing_if = "Vec::is_empty")]`, no `schema_version` bump, per `data-model.md` — in `crates/micold-core/src/store.rs`
+- [X] T083 Widen `reconcile()` with the included set and add `Worktree::included`; thread it through `discover()` so every consumer inherits it, in `crates/micold-core/src/worktree.rs` (blocks T084)
+- [X] T084 Apply that same predicate in `checked_out_branches()`, so FR-032 holds by construction rather than by two rules kept in step (BUG-001's invariant), in `crates/micold-core/src/worktree.rs`
+- [X] T085 `WorktreeInclude` / `WorktreeExclude` messages and their results, in `crates/micold-core/src/protocol/messages.rs` — **this file is inside the `SCHEMA_HASH` guard**, so the hash changes (`branch-rpc.md` §1). No test edit was needed: `build.rs` bakes the hash and `tests/schema_hash.rs` recomputes it from the same source, so the guard updated itself — a mismatched client/daemon pair now fails the handshake, which is the intent
+- [X] T086 Daemon handlers: validate the path against the repository's own records, write the project's included set, and answer with the worktree `discover()` now returns, in `crates/micold-daemon/src/server.rs`
+- [X] T087 [P] Offer "Include that worktree" in the blocked explanation — for `CheckedOutOutsideApp` and no other holder (FR-033) — and wire `WorktreeIncludeRequested`, in `crates/micold-client/src/ui/worktree_form.rs` and `crates/micold-client/src/app.rs`
+- [X] T088 [P] Show an included worktree's location in its sidebar row, and name that location in its delete confirmation before anything is removed (FR-029/FR-033), in `crates/micold-client/src/features/worktree.rs` and `crates/micold-client/src/ui/`
+- [X] T089 [P] "Stop showing" from the worktree's own context menu, leaving it untouched on disk (FR-030) — offered only on the rows inclusion produced, in `crates/micold-client/src/ui/mod.rs` and `crates/micold-client/src/app.rs`
+- [X] T090 Document inclusion in `docs/user-guide/worktrees-and-sessions.md`: what it shows, what it does **not** touch, and how to undo it (Principle VII, FR-026)
+
+### Validation for BUG-002
+
+- [X] T091 Run the repo's `visual-pass` skill over both flows: a press on an in-use branch row rendered past the dialog's edge (SC-009), and include → start a session → restart → stop showing (SC-010, SC-011) — **passed** 2026-08-14 on Xvfb + lavapipe; evidence and the two things it could not answer are in [bugs/evidence/BUG-002-visual-pass.md](./bugs/evidence/BUG-002-visual-pass.md)
+- [X] T092 `mise run test` and `cargo clippy --workspace --all-targets -- -D warnings` green from the repository root (the `gui` feature no longer exists — the client is its own crate since the workspace split, so the whole workspace is the gate)
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -242,6 +294,10 @@ full path — not a bare folder name.
 - **US4 (T046–T052)**: depends on Foundational
 - **US5 (T053–T057)**: depends on Foundational
 - **Polish (T058–T063)**: depends on every story you intend to ship
+- **BUG-001 (T064–T072)**: depends on US5
+- **BUG-002 Goal A (T073–T074, T079–T081)**: depends on US2 only — the press fix is independent of everything else in this phase and ships on its own
+- **BUG-002 Goal B (T075–T078, T082–T090)**: depends on US5 and on BUG-001's holder taxonomy. T082 blocks T083; T083 blocks T084 and T086; T085 blocks T086; T086 blocks T087–T089
+- **BUG-002 validation (T091–T092)**: depends on whichever of the two goals is being shipped
 
 ### Within Foundational
 

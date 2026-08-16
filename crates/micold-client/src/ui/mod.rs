@@ -312,7 +312,11 @@ pub fn view<'a>(
     // 152dp to 200, and nothing was stopping it running off the bottom of a short window.
     let worktree_menu: Option<cdk::overlay::Surface<'a, Message>> =
         state.worktree_menu_open.as_ref().map(|dir| {
-            let items = worktree_menu_items(dir, &state.worktree_display_name(dir));
+            let included = state
+                .worktrees
+                .iter()
+                .any(|w| &w.dir_name == dir && w.included);
+            let items = worktree_menu_items(dir, &state.worktree_display_name(dir), included);
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 SIDEBAR_MENU_ANCHOR,
                 material::menu_panel_size(items.len()),
@@ -419,8 +423,12 @@ pub fn view<'a>(
 
 /// The items in a worktree's right-click context menu (feature 008, FR-013; "Copy name" added
 /// for cross-application clipboard access to labels the app doesn't render as selectable text).
-fn worktree_menu_items(dir: &str, display_name: &str) -> Vec<material::MenuItem<Message>> {
-    vec![
+fn worktree_menu_items(
+    dir: &str,
+    display_name: &str,
+    included: bool,
+) -> Vec<material::MenuItem<Message>> {
+    let mut items = vec![
         material::MenuItem::new(
             Icon::Copy,
             "Copy name",
@@ -431,12 +439,23 @@ fn worktree_menu_items(dir: &str, display_name: &str) -> Vec<material::MenuItem<
             "Rename",
             Message::WorktreeRenameStarted(dir.to_string()),
         ),
-        material::MenuItem::new(
-            Icon::Unavailable,
-            "Delete",
-            Message::WorktreeDeleteRequested(dir.to_string()),
-        ),
-    ]
+    ];
+    // 016 BUG-002 (FR-030): inclusion is reversible from the row it produced. Offered only for the
+    // rows it produced — "stop showing" means nothing for a worktree the app created, whose place
+    // in the list follows from where it lives.
+    if included {
+        items.push(material::MenuItem::new(
+            Icon::Close,
+            "Stop showing",
+            Message::WorktreeExcludeRequested(dir.to_string()),
+        ));
+    }
+    items.push(material::MenuItem::new(
+        Icon::Unavailable,
+        "Delete",
+        Message::WorktreeDeleteRequested(dir.to_string()),
+    ));
+    items
 }
 
 /// The items in a session's right-click context menu (bugfix BUG-003): "Close" archives (kept,

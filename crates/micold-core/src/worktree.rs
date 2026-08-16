@@ -108,6 +108,11 @@ pub fn folder_name(path: &Path) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Worktree {
     /// Directory component under `.claude/worktrees/` (`${type}-${ticket}-${name}`). Identity.
+    ///
+    /// For an [included](Self::included) worktree this is its folder name, which is *not* under that
+    /// root and could therefore collide with one that is. [`reconcile`] disambiguates when it does —
+    /// this is a key (sessions are addressed by it), so it has to be unique per project even though
+    /// nothing on disk is renamed to make it so.
     pub dir_name: String,
     /// Absolute path to the worktree directory.
     pub path: PathBuf,
@@ -115,6 +120,12 @@ pub struct Worktree {
     pub branch: Option<String>,
     /// Health on disk (FR-018a).
     pub status: WorktreeStatus,
+    /// Shown because the user asked for it rather than because of where it lives — a worktree the
+    /// repository knows about, outside the directory this app creates its own in (BUG-002, FR-027).
+    ///
+    /// The list shows these by location as well as by name (FR-029): a folder name alone says
+    /// nothing about where a worktree the app did not create actually is.
+    pub included: bool,
 }
 
 impl Worktree {
@@ -218,45 +229,91 @@ pub fn classify(record: &WorktreeRecord, dir_exists: bool) -> WorktreeStatus {
 pub fn reconcile(
     records: &[WorktreeRecord],
     worktrees_root: &Path,
+    included: &[PathBuf],
     on_disk_dir_names: &[String],
     exists: &dyn Fn(&Path) -> bool,
 ) -> Vec<Worktree> {
     let mut out = Vec::new();
     let mut registered_dirs = Vec::new();
 
+    // The app's own first, so their names are the ones an included worktree has to work around
+    // rather than the other way about: a folder the app created is addressed by its own name in
+    // sessions that already exist, and inclusion must not move that key out from under them.
     for rec in records {
-        // Only worktrees under this project's `.claude/worktrees/` are ours.
         if rec.path.parent() != Some(worktrees_root) {
             continue;
         }
-        let dir_name = rec
-            .path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
+        let dir_name = folder_name(&rec.path);
         registered_dirs.push(dir_name.clone());
         out.push(Worktree {
             dir_name,
             path: rec.path.clone(),
             branch: rec.branch.clone(),
             status: classify(rec, exists(&rec.path)),
+            included: false,
         });
     }
 
     // Directories present on disk but not registered with git → Invalid (orphan).
     for name in on_disk_dir_names {
         if !registered_dirs.contains(name) {
+            registered_dirs.push(name.clone());
             out.push(Worktree {
                 dir_name: name.clone(),
                 path: worktrees_root.join(name),
                 branch: None,
                 status: WorktreeStatus::Invalid,
+                included: false,
             });
         }
     }
 
+    // …then the ones the user asked for, wherever they live (BUG-002, FR-027/FR-029).
+    for path in included {
+        // Only what git actually reports. A recorded location the repository no longer registers is
+        // not a worktree, and inventing a row for it would be exactly the stale entry FR-031 asks
+        // to be told about instead.
+        let Some(rec) = records.iter().find(|r| &r.path == path) else {
+            continue;
+        };
+        // An app-managed record is already above; including one is a no-op rather than a duplicate.
+        if rec.path.parent() == Some(worktrees_root) {
+            continue;
+        }
+        let dir_name = unique_dir_name(&rec.path, &registered_dirs);
+        registered_dirs.push(dir_name.clone());
+        out.push(Worktree {
+            dir_name,
+            path: rec.path.clone(),
+            branch: rec.branch.clone(),
+            status: classify(rec, exists(&rec.path)),
+            included: true,
+        });
+    }
+
     out.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
     out
+}
+
+/// A `dir_name` for an included worktree that no other entry is already using.
+///
+/// Its folder name if that is free — which is the ordinary case and the one the user recognises.
+/// Otherwise the folder qualified by its parent, and failing that the whole path, which cannot
+/// collide with anything. Nothing on disk is renamed by any of it (FR-028): this is the key the
+/// app addresses the worktree by, and sessions are stored against it, so two worktrees sharing one
+/// would hand each other's sessions out.
+fn unique_dir_name(path: &Path, taken: &[String]) -> String {
+    let folder = folder_name(path);
+    if !taken.contains(&folder) {
+        return folder;
+    }
+    if let Some(parent) = path.parent().map(folder_name) {
+        let qualified = format!("{folder} ({parent})");
+        if !taken.contains(&qualified) {
+            return qualified;
+        }
+    }
+    path.display().to_string()
 }
 
 // ---------------------------------------------------------------------------------------
@@ -530,7 +587,11 @@ fn sort_candidates(candidates: &mut [BranchCandidate]) {
 ///
 /// The app-managed test is [`reconcile`]'s own, applied to the same [`worktrees_root`], so the set
 /// of holders called "one of your worktrees" is exactly the set [`discover`] returns.
-fn checked_out_branches(records: &[WorktreeRecord], repo: &Path) -> Vec<(String, BlockReason)> {
+fn checked_out_branches(
+    records: &[WorktreeRecord],
+    repo: &Path,
+    included: &[PathBuf],
+) -> Vec<(String, BlockReason)> {
     let root = worktrees_root(repo);
     records
         .iter()
@@ -538,7 +599,10 @@ fn checked_out_branches(records: &[WorktreeRecord], repo: &Path) -> Vec<(String,
             let branch = rec.branch.clone()?;
             let reason = if rec.path == repo {
                 BlockReason::CheckedOutInProjectRoot
-            } else if rec.path.parent() == Some(root.as_path()) {
+            } else if rec.path.parent() == Some(root.as_path()) || included.contains(&rec.path) {
+                // The included half is what keeps FR-032 true by construction rather than by
+                // agreement: this is `reconcile`'s test, so a holder described as one of the app's
+                // worktrees is one the list is showing — before inclusion and after it (BUG-002).
                 BlockReason::CheckedOutAt {
                     path: rec.path.clone(),
                     owner: classify_owner(&folder_name(&rec.path), rec.branch.as_deref()),
@@ -567,6 +631,7 @@ pub fn preflight(
     target_path: &Path,
     branch: &str,
     target_exists: bool,
+    included: &[PathBuf],
 ) -> io::Result<BranchSituation> {
     let porcelain = git.worktree_list_porcelain(repo)?;
     let records = parse_worktrees(&porcelain);
@@ -579,7 +644,7 @@ pub fn preflight(
     }
 
     // 2. Checked out somewhere: neither reusable nor overwritable (FR-021).
-    if let Some((_, reason)) = checked_out_branches(&records, repo)
+    if let Some((_, reason)) = checked_out_branches(&records, repo, included)
         .into_iter()
         .find(|(b, _)| b == branch)
     {
@@ -625,10 +690,14 @@ pub fn preflight(
 ///
 /// One ref listing plus the worktree records already needed elsewhere — no second git call per
 /// candidate.
-pub fn branch_candidates(git: &dyn Git, repo: &Path) -> io::Result<Vec<BranchCandidate>> {
+pub fn branch_candidates(
+    git: &dyn Git,
+    repo: &Path,
+    included: &[PathBuf],
+) -> io::Result<Vec<BranchCandidate>> {
     let refs = git.list_branch_refs(repo)?;
     let porcelain = git.worktree_list_porcelain(repo)?;
-    let held = checked_out_branches(&parse_worktrees(&porcelain), repo);
+    let held = checked_out_branches(&parse_worktrees(&porcelain), repo, included);
 
     let mut candidates = parse_branch_refs(&refs);
     for candidate in &mut candidates {
@@ -648,12 +717,15 @@ pub fn branch_candidates(git: &dyn Git, repo: &Path) -> io::Result<Vec<BranchCan
 /// client (its sidebar) and the daemon (its catalog snapshot) so the two never drift in *how* a
 /// worktree is discovered. A git failure degrades to "no registrations" — an unavailable repo simply
 /// surfaces its on-disk orphan dirs (as `Invalid`), never a panic.
-pub fn discover(git: &dyn Git, repo: &Path) -> Vec<Worktree> {
+/// `included` is the project's own set of worktrees to show from elsewhere (BUG-002, FR-030) — the
+/// one input here that is not derived, because nothing git reports distinguishes a worktree the user
+/// asked for from one they have never heard of.
+pub fn discover(git: &dyn Git, repo: &Path, included: &[PathBuf]) -> Vec<Worktree> {
     let porcelain = git.worktree_list_porcelain(repo).unwrap_or_default();
     let records = parse_worktrees(&porcelain);
     let root = worktrees_root(repo);
     let on_disk = list_dir_names(&root);
-    reconcile(&records, &root, &on_disk, &|p| p.exists())
+    reconcile(&records, &root, included, &on_disk, &|p| p.exists())
 }
 
 /// The immediate sub-directory names of `dir` (non-recursive), used to surface on-disk worktree
@@ -912,6 +984,13 @@ pub struct CreateProgressEvent {
 /// and, for the (potentially slow) submodule fetch, its live output — so the caller can surface
 /// progress instead of the operation appearing to hang (feature 010 follow-up; stage tags added
 /// feature 013). Callers that don't care about progress can pass `&mut |_| {}`.
+///
+/// The parameter list is at the lint's limit plus one, and deliberately so: every argument here is
+/// an independent input the caller genuinely has, and bundling them into a struct would only move
+/// the same eight names one indirection away. `included` is the newest of them (016 BUG-002) and
+/// exists for one reason — the re-verification below classifies the holder, and it must classify it
+/// exactly as the list does (FR-032).
+#[allow(clippy::too_many_arguments)]
 pub fn create_worktree(
     git: &dyn Git,
     repo: &Path,
@@ -919,6 +998,7 @@ pub fn create_worktree(
     names: &DerivedNames,
     target_exists: bool,
     mode: &CreateMode,
+    included: &[PathBuf],
     on_progress: &mut dyn FnMut(CreateProgressEvent),
 ) -> Result<Worktree, CreateError> {
     // Pre-flight (fail fast, no mutation). Re-run here rather than trusting whatever the caller
@@ -928,8 +1008,15 @@ pub fn create_worktree(
         stage: CreateStage::PreflightCheck,
         line: "Checking for naming conflicts…".to_string(),
     });
-    let situation = preflight(git, repo, target_path, &names.branch, target_exists)
-        .map_err(|e| CreateError::RolledBack(e.to_string()))?;
+    let situation = preflight(
+        git,
+        repo,
+        target_path,
+        &names.branch,
+        target_exists,
+        included,
+    )
+    .map_err(|e| CreateError::RolledBack(e.to_string()))?;
     match &situation {
         BranchSituation::DirectoryTaken { .. } => return Err(CreateError::DuplicateDir),
         BranchSituation::Blocked { branch, reason } => {
@@ -1002,6 +1089,9 @@ pub fn create_worktree(
         path: target_path.to_path_buf(),
         branch: Some(names.branch.clone()),
         status: WorktreeStatus::Valid,
+        // Created where the app creates its own, so it is listed for that reason and not because
+        // anyone asked for it by location (FR-027).
+        included: false,
     })
 }
 

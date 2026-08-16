@@ -63,8 +63,12 @@ fn scan(browser: &dyn FolderBrowser, dir: PathBuf) -> Message {
     }
 }
 
+/// The included set is deliberately empty here (016 BUG-002): it is the daemon's, persisted per
+/// project, and this call is only the local seed that shows *something* while the daemon's own
+/// discovery is still in flight. The catalog push that follows replaces this list entirely, included
+/// worktrees and all.
 pub(crate) fn discover_worktrees(git: &dyn Git, repo: &Path) -> Vec<Worktree> {
-    micold_core::worktree::discover(git, repo)
+    micold_core::worktree::discover(git, repo, &[])
 }
 
 /// Open the folder picker at the user's home directory and start listing it.

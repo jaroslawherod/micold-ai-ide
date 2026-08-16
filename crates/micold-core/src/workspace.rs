@@ -30,6 +30,16 @@ pub struct Workspace {
     /// path, then by worktree `dir_name`. Purely a display label — never the folder or branch
     /// on disk. Persisted; absent for worktrees never renamed.
     pub worktree_names: BTreeMap<PathBuf, BTreeMap<String, String>>,
+    /// Worktrees the user asked this app to show that live outside the directory it creates its own
+    /// in (016 BUG-002, FR-027/FR-030). Keyed by project path, exactly as [`Self::sessions`] is.
+    ///
+    /// Absolute paths, and the only thing recorded: everything *about* an included worktree — its
+    /// branch, its health, whether it is still there at all — is derived from git and the filesystem
+    /// at read time, like every other worktree. What cannot be derived is the wish, because git
+    /// reports the same records whether or not the user wants one of them shown (research R13).
+    ///
+    /// Written by the **daemon**, for the reason [`Self::foreground_by_project`] gives.
+    pub included_worktrees: BTreeMap<PathBuf, Vec<PathBuf>>,
     /// The session each project was last showing (feature 025, FR-001). Keyed by the project's
     /// canonical path, exactly as [`Self::sessions`] is, so the two are found by the same key.
     ///
@@ -111,6 +121,7 @@ impl Workspace {
         self.projects.retain(|p| p.path != path);
         self.sessions.remove(&path);
         self.worktree_names.remove(&path);
+        self.included_worktrees.remove(&path);
         // Feature 025: the memory is keyed by project path like everything above, so it goes with
         // the project. Leaving it would restore a session from a life the user deliberately ended,
         // and would name a session whose record has just gone with it.

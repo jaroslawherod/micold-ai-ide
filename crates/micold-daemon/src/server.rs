@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
-use micold_core::git::GitCli;
+use micold_core::git::{Git, GitCli};
 use micold_core::naming::DerivedNames;
 use micold_core::project::validate_rename;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
@@ -20,8 +20,8 @@ use micold_core::protocol::messages::{
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
-    branch_candidates, create_worktree, preflight, remove_worktree, remove_worktree_dir,
-    CreateError, CreateProgressEvent, Leftover,
+    branch_candidates, create_worktree, parse_worktrees, preflight, remove_worktree,
+    remove_worktree_dir, CreateError, CreateProgressEvent, Leftover,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
@@ -724,6 +724,10 @@ where
                 // this arm may block the loop again: every reply below goes through the client's
                 // ordered frame channel, which is exactly what a departed client drops harmlessly.
                 let progress_tx = state.frame_sender(id);
+                // Read before the blocking task, like `repo`: the included set decides how a
+                // blocked holder is described (016 BUG-002, FR-032), and the lock must not be held
+                // across the git work.
+                let included = state.included_worktrees(&project);
                 let task_state = Arc::clone(state);
                 tokio::spawn(async move {
                     let state = &task_state;
@@ -768,6 +772,7 @@ where
                             &names,
                             target_exists,
                             &mode,
+                            &included,
                             &mut on_progress,
                         );
                         // `RolledBack` is the only outcome in which this attempt created anything
@@ -821,13 +826,21 @@ where
                     reject_non_repo(state, id, req, &project);
                     continue;
                 };
+                let included = state.included_worktrees(&project);
                 let situation = tokio::task::spawn_blocking(move || {
                     let target = repo.join(".claude/worktrees").join(&dir_name);
                     let target_exists = target.exists()
                         && std::fs::read_dir(&target)
                             .map(|mut d| d.next().is_some())
                             .unwrap_or(false);
-                    preflight(&GitCli::new(), &repo, &target, &branch, target_exists)
+                    preflight(
+                        &GitCli::new(),
+                        &repo,
+                        &target,
+                        &branch,
+                        target_exists,
+                        &included,
+                    )
                 })
                 .await;
                 match situation {
@@ -863,9 +876,11 @@ where
                     reject_non_repo(state, id, req, &project);
                     continue;
                 };
-                let listed =
-                    tokio::task::spawn_blocking(move || branch_candidates(&GitCli::new(), &repo))
-                        .await;
+                let included = state.included_worktrees(&project);
+                let listed = tokio::task::spawn_blocking(move || {
+                    branch_candidates(&GitCli::new(), &repo, &included)
+                })
+                .await;
                 match listed {
                     Ok(Ok(candidates)) => state.send(
                         id,
@@ -1104,6 +1119,112 @@ where
                             kind: ErrorKind::InvalidInput,
                             message: rename_error_message(e).into(),
                             detail: None,
+                        },
+                    ),
+                }
+            }
+            // --- 016 BUG-002: showing a worktree the app does not manage (FR-027/FR-030) ---
+            ClientMsg::WorktreeInclude { req, project, path } => {
+                let Some((repo, true)) = state.project_repo(&project) else {
+                    reject_non_repo(state, id, req, &project);
+                    continue;
+                };
+                // The repository has to actually know this worktree. Recording a location git does
+                // not report would persist a wish that can never resolve into a row — and the whole
+                // point of including one is that it already exists (contract `branch-rpc.md` §3a).
+                let probe = path.clone();
+                let known = tokio::task::spawn_blocking(move || {
+                    let porcelain = GitCli::new()
+                        .worktree_list_porcelain(&repo)
+                        .unwrap_or_default();
+                    parse_worktrees(&porcelain)
+                        .into_iter()
+                        .any(|rec| rec.path == probe)
+                })
+                .await;
+                match known {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        state.send(
+                            id,
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::NotFound,
+                                message: "that is not one of this repository's worktrees".into(),
+                                detail: Some(path.display().to_string()),
+                            },
+                        );
+                        continue;
+                    }
+                    Err(e) => {
+                        state.send(
+                            id,
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::Internal,
+                                message: "could not check the repository's worktrees".into(),
+                                detail: Some(e.to_string()),
+                            },
+                        );
+                        continue;
+                    }
+                }
+                // Settings only — no git command runs, and nothing on disk moves (FR-028).
+                match state.include_worktree(&project, &path) {
+                    Ok(()) => {
+                        refresh_worktrees_and_broadcast(state, project.clone()).await;
+                        match state.worktree_snapshot_at(&project, &path) {
+                            Some(worktree) => state.send(
+                                id,
+                                DaemonMsg::OperationOk {
+                                    req,
+                                    result: OperationResult::WorktreeIncluded { worktree },
+                                },
+                            ),
+                            // Discovery ran and did not produce it — the worktree went away between
+                            // the check above and the refresh. Say so rather than acknowledging a
+                            // row the client would then wait for.
+                            None => state.send(
+                                id,
+                                DaemonMsg::OperationError {
+                                    req,
+                                    kind: ErrorKind::NotFound,
+                                    message: "the worktree is no longer there".into(),
+                                    detail: Some(path.display().to_string()),
+                                },
+                            ),
+                        }
+                    }
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::IoFailed,
+                            message: "failed to persist the included worktree".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
+                }
+            }
+            ClientMsg::WorktreeExclude { req, project, path } => {
+                match state.exclude_worktree(&project, &path) {
+                    Ok(()) => {
+                        refresh_worktrees_and_broadcast(state, project).await;
+                        state.send(
+                            id,
+                            DaemonMsg::OperationOk {
+                                req,
+                                result: OperationResult::WorktreeExcluded { path },
+                            },
+                        );
+                    }
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::IoFailed,
+                            message: "failed to stop showing the worktree".into(),
+                            detail: Some(e.to_string()),
                         },
                     ),
                 }

@@ -29,6 +29,7 @@ fn worktree(dir_name: &str) -> Worktree {
         path: Path::new("/p/.claude/worktrees").join(dir_name),
         branch: Some(format!("feat/{dir_name}")),
         status: WorktreeStatus::Valid,
+        included: false,
     }
 }
 

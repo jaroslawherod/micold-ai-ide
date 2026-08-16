@@ -69,6 +69,27 @@ BranchList { req, project }
   renders it as-is and does not re-sort.
 - Sent when the form's source switches to `Existing`, not on every keystroke.
 
+## 3a. `ClientMsg::WorktreeInclude` / `WorktreeExclude` (BUG-002, FR-027–FR-032)
+
+```
+WorktreeInclude { req, project, path }
+  → OperationOk { req, result: WorktreeIncluded { worktree } }
+WorktreeExclude { req, project, path }
+  → OperationOk { req, result: WorktreeExcluded { path } }
+```
+
+- **The daemon owns the catalog**, so it owns the included set: it writes `included_worktrees` in
+  the project's state and answers with the worktree as `discover()` now sees it. The client renders
+  the reply; it does not maintain a second copy of the rule.
+- **Mutates nothing but the app's own settings** (FR-028). No git command runs — the worktree is
+  already registered, which is precisely why it can block a branch. The daemon MUST reject a `path`
+  the repository does not report as a worktree, rather than recording a location that will never
+  resolve.
+- **Idempotent both ways**: including an already-included path, or excluding one that is not
+  included, succeeds and changes nothing.
+- The daemon's next catalog snapshot carries the worktree like any other, so every existing consumer
+  — sidebar, sessions, deletion — needs no new case (FR-029).
+
 ## 4. `ClientMsg::WorktreeCreate` gains `mode: CreateMode`
 
 The daemon passes it straight to `create_worktree`, which **re-runs pre-flight and re-verifies the

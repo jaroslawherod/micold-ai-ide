@@ -66,7 +66,7 @@ branch refs/heads/feat/login
 
     let root = Path::new("/repo/.claude/worktrees");
     let on_disk = vec!["feat-login".to_string()];
-    let worktrees = reconcile(&records, root, &on_disk, &|_| true);
+    let worktrees = reconcile(&records, root, &[], &on_disk, &|_| true);
 
     assert_eq!(
         worktrees.len(),
@@ -84,7 +84,7 @@ fn reconcile_classifies_registered_and_orphan_dirs() {
     let on_disk = vec!["feat-login".to_string(), "feat-orphan".to_string()];
     let exists = |p: &Path| p == Path::new("/repo/.claude/worktrees/feat-login");
 
-    let worktrees = reconcile(&records, root, &on_disk, &exists);
+    let worktrees = reconcile(&records, root, &[], &on_disk, &exists);
 
     // The top-level /repo worktree is filtered out (not under .claude/worktrees).
     let by_name = |name: &str| {
@@ -98,4 +98,169 @@ fn reconcile_classifies_registered_and_orphan_dirs() {
     assert_eq!(by_name("feat-login"), WorktreeStatus::Valid);
     assert_eq!(by_name("fix-gone"), WorktreeStatus::Missing);
     assert_eq!(by_name("feat-orphan"), WorktreeStatus::Invalid);
+}
+
+// ---------------------------------------------------------------------------------------------
+// 016 BUG-002 (T075): a worktree the app does not manage, shown because the user asked for it.
+//
+// `reconcile` decides what the list holds, and until now it decided it entirely from where a
+// worktree lives. Inclusion adds the one thing that cannot be derived — the user's wish — and
+// nothing else: what the entry then says about itself is still read from git and the filesystem
+// (FR-028/FR-029/FR-031, research R13).
+// ---------------------------------------------------------------------------------------------
+
+const WITH_OUTSIDER: &str = "\
+worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo/.claude/worktrees/feat-login
+HEAD def456
+branch refs/heads/feat/login
+
+worktree /elsewhere/worktrees/fix-olx
+HEAD 111111
+branch refs/heads/fix/olx
+";
+
+#[test]
+fn an_included_worktree_is_listed_where_it_is() {
+    let records = parse_worktrees(WITH_OUTSIDER);
+    let root = Path::new("/repo/.claude/worktrees");
+    let outsider = PathBuf::from("/elsewhere/worktrees/fix-olx");
+
+    let listed = reconcile(
+        &records,
+        root,
+        std::slice::from_ref(&outsider),
+        &[],
+        &|_| true,
+    );
+
+    let found = listed
+        .iter()
+        .find(|w| w.path == outsider)
+        .expect("an included worktree must appear in the list — that is the whole of FR-027");
+    assert_eq!(found.dir_name, "fix-olx", "named by its own folder");
+    assert_eq!(
+        found.branch.as_deref(),
+        Some("fix/olx"),
+        "its branch is read from git like any other worktree's, never recorded (FR-028)"
+    );
+    assert!(
+        found.included,
+        "the entry must say it is included, because the list shows these by location too (FR-029)"
+    );
+    assert!(
+        listed
+            .iter()
+            .any(|w| w.dir_name == "feat-login" && !w.included),
+        "the app's own worktrees are unaffected and are not marked included"
+    );
+}
+
+#[test]
+fn a_worktree_nobody_included_is_still_dropped() {
+    let records = parse_worktrees(WITH_OUTSIDER);
+    let root = Path::new("/repo/.claude/worktrees");
+
+    let listed = reconcile(&records, root, &[], &[], &|_| true);
+
+    assert!(
+        !listed
+            .iter()
+            .any(|w| w.path == Path::new("/elsewhere/worktrees/fix-olx")),
+        "inclusion is per worktree and per project. A worktree outside the app's own directory is \
+         listed because someone asked for it, never because it exists"
+    );
+    assert!(
+        !listed.iter().any(|w| w.path == Path::new("/repo")),
+        "and the project's own checkout is still not one of its worktrees"
+    );
+}
+
+#[test]
+fn an_included_path_git_no_longer_registers_is_not_invented() {
+    let records = parse_worktrees(WITH_OUTSIDER);
+    let root = Path::new("/repo/.claude/worktrees");
+    let gone = PathBuf::from("/elsewhere/worktrees/deleted-by-hand");
+
+    let listed = reconcile(&records, root, std::slice::from_ref(&gone), &[], &|_| true);
+
+    assert!(
+        !listed.iter().any(|w| w.path == gone),
+        "the recorded path is a wish, not a fact. Git no longer reports this worktree, so there is \
+         nothing to show — a row conjured from the recorded path alone is precisely the stale entry \
+         FR-031 exists to prevent"
+    );
+}
+
+#[test]
+fn an_included_worktree_reports_its_health_like_any_other() {
+    let records = parse_worktrees(WITH_OUTSIDER);
+    let root = Path::new("/repo/.claude/worktrees");
+    let outsider = PathBuf::from("/elsewhere/worktrees/fix-olx");
+
+    // Registered with git, but its directory is no longer on disk.
+    let listed = reconcile(&records, root, std::slice::from_ref(&outsider), &[], &|p| {
+        p != outsider
+    });
+
+    assert_eq!(
+        listed.iter().find(|w| w.path == outsider).map(|w| w.status),
+        Some(WorktreeStatus::Missing),
+        "status is derived, so an included worktree that has been deleted says so rather than \
+         going quiet (FR-031)"
+    );
+}
+
+#[test]
+fn an_included_worktree_never_takes_a_name_the_app_is_already_using() {
+    const COLLIDING: &str = "\
+worktree /repo/.claude/worktrees/fix-olx
+HEAD def456
+branch refs/heads/fix/olx-ours
+
+worktree /elsewhere/worktrees/fix-olx
+HEAD 111111
+branch refs/heads/fix/olx
+";
+    let records = parse_worktrees(COLLIDING);
+    let root = Path::new("/repo/.claude/worktrees");
+    let outsider = PathBuf::from("/elsewhere/worktrees/fix-olx");
+
+    let listed = reconcile(
+        &records,
+        root,
+        std::slice::from_ref(&outsider),
+        &[],
+        &|_| true,
+    );
+
+    assert_eq!(
+        listed.len(),
+        2,
+        "both are shown; neither displaces the other"
+    );
+    let names: Vec<&str> = listed.iter().map(|w| w.dir_name.as_str()).collect();
+    assert_eq!(
+        names.iter().collect::<std::collections::HashSet<_>>().len(),
+        2,
+        "`dir_name` is the key sessions are stored against, so two worktrees sharing one would \
+         hand each other's sessions out. Got {names:?}"
+    );
+    assert_eq!(
+        listed
+            .iter()
+            .find(|w| !w.included)
+            .map(|w| w.dir_name.as_str()),
+        Some("fix-olx"),
+        "the app's own keeps its name — sessions already address it by that key, and inclusion \
+         must not move it out from under them"
+    );
+    assert_eq!(
+        listed.iter().find(|w| w.included).map(|w| w.path.clone()),
+        Some(outsider),
+        "and nothing on disk was renamed to make room (FR-028)"
+    );
 }

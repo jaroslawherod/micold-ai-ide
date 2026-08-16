@@ -410,3 +410,142 @@ fn closing_the_remembered_session_does_not_erase_the_memory() {
          pointer going away (FR-005a, invariant I0)"
     );
 }
+
+// --- 016 BUG-002 (T077): the worktrees a project shows from elsewhere ---------------------------
+//
+// The one thing inclusion persists, in the same file, with the same writer and the same deletion
+// on forget as everything else per project. Everything *about* those worktrees stays derived.
+
+#[test]
+fn included_worktrees_survive_save_and_load() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a/one", "one", true));
+    ws.included_worktrees.insert(
+        PathBuf::from("/a/one"),
+        vec![
+            PathBuf::from("/elsewhere/worktrees/fix-olx"),
+            PathBuf::from("/other/checkout"),
+        ],
+    );
+
+    store.save(&ws).unwrap();
+    let loaded = store.load().workspace;
+
+    assert_eq!(
+        loaded.included_worktrees.get(Path::new("/a/one")),
+        Some(&vec![
+            PathBuf::from("/elsewhere/worktrees/fix-olx"),
+            PathBuf::from("/other/checkout"),
+        ]),
+        "the whole of FR-030: a worktree you asked the app to show is still shown after a restart"
+    );
+}
+
+#[test]
+fn included_worktrees_are_per_project() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a/one", "one", true));
+    ws.projects.push(project("/b/two", "two", true));
+    ws.included_worktrees.insert(
+        PathBuf::from("/a/one"),
+        vec![PathBuf::from("/elsewhere/worktrees/fix-olx")],
+    );
+
+    store.save(&ws).unwrap();
+    let loaded = store.load().workspace;
+
+    assert!(
+        !loaded.included_worktrees.contains_key(Path::new("/b/two")),
+        "asking one project to show a worktree says nothing about any other project — the two are \
+         different repositories and the path means nothing in the second"
+    );
+}
+
+#[test]
+fn a_project_that_included_nothing_loads_with_nothing() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a/one", "one", true));
+
+    store.save(&ws).unwrap();
+    let loaded = store.load().workspace;
+
+    assert!(
+        loaded.included_worktrees.is_empty(),
+        "every worktree comes from where it lives until someone says otherwise"
+    );
+}
+
+#[test]
+fn a_state_file_written_before_inclusion_still_loads() {
+    let dir = tempdir().unwrap();
+    let root = dir.path().join("projects.json");
+    let store = JsonFileStore::at(root.clone());
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a/one", "one", true));
+    ws.included_worktrees.insert(
+        PathBuf::from("/a/one"),
+        vec![PathBuf::from("/elsewhere/worktrees/fix-olx")],
+    );
+    store.save(&ws).unwrap();
+
+    // Strip the field, which is the shape every installation has on disk today.
+    let state_dir = root.parent().unwrap().join("projects");
+    let state_file = std::fs::read_dir(&state_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|p| p.extension().is_some_and(|e| e == "json"))
+        .expect("the project's state file");
+    let text = std::fs::read_to_string(&state_file).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert!(
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("included_worktrees")
+            .is_some(),
+        "the field must actually be written, or the rest of this test proves nothing"
+    );
+    std::fs::write(&state_file, serde_json::to_string(&value).unwrap()).unwrap();
+
+    let loaded = store.load();
+
+    assert_eq!(
+        loaded.status,
+        LoadStatus::Loaded,
+        "a file written before inclusion existed must load normally rather than as corrupt — this \
+         is the claim that lets the field ship without a schema_version bump"
+    );
+    assert!(
+        loaded.workspace.included_worktrees.is_empty(),
+        "and absent means nothing included, which is exactly the behaviour that file was written by"
+    );
+}
+
+#[test]
+fn forgetting_a_project_forgets_what_it_included() {
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a/one", "one", true));
+    ws.included_worktrees.insert(
+        PathBuf::from("/a/one"),
+        vec![PathBuf::from("/elsewhere/worktrees/fix-olx")],
+    );
+
+    ws.forget(Path::new("/a/one"));
+
+    assert!(
+        ws.included_worktrees.is_empty(),
+        "inclusion is metadata keyed by project path, so it goes when the project does (feature \
+         014, FR-003/FR-005). Nothing on disk is touched either way (FR-028)"
+    );
+}

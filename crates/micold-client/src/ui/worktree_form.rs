@@ -22,7 +22,7 @@ use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
-use micold_core::worktree::{BranchOrigin, BranchSituation, CreateMode};
+use micold_core::worktree::{BlockReason, BranchOrigin, BranchSituation, CreateMode};
 
 /// The add-worktree form as the dialog body; `ui::view` wraps it in the shared
 /// [`Modal`](crate::ui::material::Modal) transition.
@@ -385,19 +385,41 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
             }
 
             // FR-021 (US5): explain and name the holder — no reuse, no overwrite offered.
-            BranchSituation::Blocked { branch, reason } => column![
-                Text::new(reason.explain(branch), TypeRole::Body, r).tint(r.error),
-                Text::new(
-                    "A branch can only be checked out in one place at a time. Open that \
-                     location to continue there, or choose a different name.",
-                    TypeRole::Caption,
-                    r
-                )
-                .muted(),
-                row![cancel("OK")].spacing(spacing::SM),
-            ]
-            .spacing(spacing::SM)
-            .into(),
+            //
+            // One holder now carries an action (016 BUG-002, FR-027). A worktree outside this app
+            // is the only kind the user can do anything about from here: the project's own checkout
+            // is the project, and a worktree the app already manages is already in the list. So that
+            // case, and only that case, is offered inclusion — which does not unblock the branch
+            // (git still refuses the second checkout) but does put the holder somewhere reachable.
+            BranchSituation::Blocked { branch, reason } => {
+                let mut actions = row![].spacing(spacing::SM);
+                if let BlockReason::CheckedOutOutsideApp { path } = reason {
+                    actions = actions.push(
+                        Button::filled("Include that worktree", r)
+                            .on_press(Message::WorktreeIncludeRequested(path.clone())),
+                    );
+                }
+                column![
+                    Text::new(reason.explain(branch), TypeRole::Body, r).tint(r.error),
+                    Text::new(
+                        match reason {
+                            BlockReason::CheckedOutOutsideApp { .. } =>
+                                "A branch can only be checked out in one place at a time. Include \
+                                 that worktree to work in it from here — nothing is moved or \
+                                 changed — or choose a different name.",
+                            _ =>
+                                "A branch can only be checked out in one place at a time. Open \
+                                 that location to continue there, or choose a different name.",
+                        },
+                        TypeRole::Caption,
+                        r
+                    )
+                    .muted(),
+                    actions.push(cancel("OK")),
+                ]
+                .spacing(spacing::SM)
+                .into()
+            }
 
             // FR-022: no branch choice can resolve a directory clash.
             BranchSituation::DirectoryTaken { dir } => {

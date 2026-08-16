@@ -216,6 +216,8 @@ fn sample_catalog() -> CatalogSnapshot {
                 branch: Some("feat/x".into()),
                 display_name: "X".into(),
                 status: WorktreeStatus::Clean,
+                path: PathBuf::from("/a/.claude/worktrees/feat-x"),
+                included: false,
             }],
             sessions: vec![sample_summary()],
         }],

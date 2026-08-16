@@ -442,6 +442,13 @@ fn build_items(
         if node.shown_for_current_session {
             tags.push(("current session".to_string(), r.secondary));
         }
+        // 016 BUG-002 (FR-029): a worktree shown because the user asked for it does not live where
+        // the others do, and its folder name says nothing about where it does live. The chip is the
+        // always-visible half of that; the row tooltip below carries the full path, which for these
+        // rows is absolute rather than project-relative.
+        if wt.included {
+            tags.push(("outside this app".to_string(), r.secondary));
+        }
         let dir = wt.dir_name.clone();
 
         let mut item = TreeItem::new(0, node.display_name.clone(), tint)

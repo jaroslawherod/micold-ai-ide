@@ -50,12 +50,13 @@ Decided from the blocking record's `path` alone, first match wins (FR-021, FR-02
 | # | The record's path | `BlockReason` | Shown as |
 |---|---|---|---|
 | a | equals `repo` | `CheckedOutInProjectRoot` | "checked out in the project itself" |
-| b | parent is `repo/.claude/worktrees` | `CheckedOutAt { path, owner }` | the folder name — this holder is in the sidebar |
+| b | parent is `repo/.claude/worktrees` **or the path is in the project's included set** (BUG-002) | `CheckedOutAt { path, owner }` | the folder name — this holder is in the sidebar |
 | b′ | …and `owner` is `Agent` | `CheckedOutAt { path, owner: Agent }` | the folder name **plus** that it is a hidden assistant worktree and how to reveal it |
 | c | anything else | `CheckedOutOutsideApp { path }` | "outside this app", with the **full path** |
 
 Case (b)'s test is `reconcile()`'s, so the set of holders described as "one of your worktrees" is
-exactly the set the sidebar renders. Case (b′)'s `owner` comes from the same name-derived rule as
+exactly the set the sidebar renders — which is why BUG-002's inclusion widens *that* test rather
+than adding a rule here: the equality holds by construction, not by two rules being kept in step. Case (b′)'s `owner` comes from the same name-derived rule as
 `Worktree::owner()` (feature 014, FR-005) — the holder really is the app's, so it is named as such;
 only the current view omits it, and the message says so. Case (c) is the one BUG-001 found: git
 enforces the block whatever the holder is, but a folder name for a worktree that can never appear
@@ -82,6 +83,22 @@ would silently decide where a later `push` goes.
 | `RemoteOnly` | Continue from each of `remotes`, Start fresh at HEAD, Cancel (FR-016/018) | Overwrite — there is no local branch to destroy |
 | `Blocked` | Dismiss only (FR-021) | Reuse, Overwrite |
 | `DirectoryTaken` | Dismiss only (FR-022) | every branch action |
+
+**Amended by BUG-002** — one blocked case now carries an action:
+
+| `Blocked` holder | Offered | Not offered |
+|---|---|---|
+| `CheckedOutInProjectRoot` | Dismiss only | inclusion — the project checkout is not a worktree to add |
+| `CheckedOutAt { owner: User }` | Dismiss only | inclusion — already in the list |
+| `CheckedOutAt { owner: Agent }` | Dismiss, plus how to reveal it (FR-021b) | inclusion — already the app's; only the view omits it |
+| `CheckedOutOutsideApp { path }` | Dismiss, **plus "Include that worktree"** (FR-027) | Reuse, Overwrite — still never offered |
+
+Including does **not** resolve the situation and does not close the form: the branch remains checked
+out where it was, so the block stands. What changes is that the holder becomes a place the user can
+reach (FR-029), and the next explanation for that branch describes it as one of the app's own
+(FR-032) — because inclusion widened the test in rule 2, not because the message special-cases it.
+Reuse and overwrite stay unreachable from every row of this table; git refuses the second checkout
+regardless of who is showing the holder.
 
 The "Start fresh at HEAD" answer for `RemoteOnly` resolves to `CreateMode::NewBranch` and **must**
 be presented alongside the statement that the resulting branch will diverge from the remote branch

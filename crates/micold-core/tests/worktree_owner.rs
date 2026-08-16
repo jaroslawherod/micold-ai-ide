@@ -21,6 +21,7 @@ fn wt_with_status(dir_name: &str, branch: Option<&str>, status: WorktreeStatus) 
         path: PathBuf::from("/repo/.claude/worktrees").join(dir_name),
         branch: branch.map(str::to_string),
         status,
+        included: false,
     }
 }
 

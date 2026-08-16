@@ -1184,3 +1184,216 @@ async fn worktree_create_streams_its_stages_before_the_terminal_reply() {
         "Checking out existing branch"
     );
 }
+
+// -----------------------------------------------------------------------------------------------
+// 016 BUG-002 (T078): showing a worktree the app does not manage.
+//
+// The daemon owns the included set, as it owns every other piece of durable state. What these pin
+// is the part a client could get wrong on its own: that inclusion runs no git command and moves
+// nothing, that it refuses a path the repository does not report, and that both directions are
+// idempotent (contract `branch-rpc.md` §3a, FR-028).
+// -----------------------------------------------------------------------------------------------
+
+/// Add a worktree at `path` on a new branch, using git directly — i.e. the way the worktrees this
+/// app does not manage come to exist in the first place.
+fn add_worktree_outside(repo: &Path, path: &Path, branch: &str) {
+    let ok = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["worktree", "add", "-b", branch])
+        .arg(path)
+        .output()
+        .expect("git runs")
+        .status
+        .success();
+    assert!(ok, "git worktree add {} failed", path.display());
+}
+
+/// The paths the daemon reports for `project`.
+fn worktree_paths_for(snapshot: &CatalogSnapshot, project: &Path) -> Vec<std::path::PathBuf> {
+    snapshot
+        .projects
+        .iter()
+        .find(|p| p.path == project)
+        .map(|p| p.worktrees.iter().map(|w| w.path.clone()).collect())
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn including_a_worktree_lists_it_and_touches_nothing_on_disk() {
+    let project = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let outside = elsewhere.path().join("olx");
+    add_worktree_outside(project.path(), &outside, "fix/olx");
+    let head_before = std::fs::read_to_string(project.path().join(".git/HEAD")).unwrap();
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    // Not listed until asked for — that is the whole distinction inclusion draws.
+    let (before, _) = state.welcome_payload();
+    assert!(
+        !worktree_paths_for(&before, project.path()).contains(&outside),
+        "a worktree outside the app's own directory must not be listed until the user includes it"
+    );
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeInclude {
+            req: 1,
+            project: project.path().to_path_buf(),
+            path: outside.clone(),
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 1, .. })
+    })
+    .await;
+    match reply {
+        DaemonMsg::OperationOk {
+            result: OperationResult::WorktreeIncluded { worktree },
+            ..
+        } => {
+            assert_eq!(worktree.path, outside);
+            assert_eq!(worktree.branch.as_deref(), Some("fix/olx"));
+            assert!(
+                worktree.included,
+                "the row must say it is included — the list shows these by location too (FR-029)"
+            );
+        }
+        other => panic!("expected WorktreeIncluded, got {other:?}"),
+    }
+
+    let (after, _) = state.welcome_payload();
+    assert!(
+        worktree_paths_for(&after, project.path()).contains(&outside),
+        "and the catalog now lists it, so every consumer sees it without a case of its own"
+    );
+
+    // FR-028: settings only. Nothing about the repository or the worktree changed.
+    assert!(outside.join(".git").exists(), "the worktree is still there");
+    assert_eq!(
+        std::fs::read_to_string(project.path().join(".git/HEAD")).unwrap(),
+        head_before,
+        "including a worktree ran no git command, so the repository is untouched"
+    );
+    assert!(
+        branch_exists(project.path(), "fix/olx"),
+        "and its branch is exactly as it was"
+    );
+}
+
+#[tokio::test]
+async fn including_a_path_the_repository_does_not_know_is_refused() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeInclude {
+            req: 1,
+            project: project.path().to_path_buf(),
+            path: std::path::PathBuf::from("/nowhere/in/particular"),
+        }))
+        .await
+        .unwrap();
+
+    let reply = expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationError { req: 1, .. })
+    })
+    .await;
+    match reply {
+        DaemonMsg::OperationError { kind, .. } => assert_eq!(
+            kind,
+            ErrorKind::NotFound,
+            "a location git does not report is not a worktree, and recording it would persist a \
+             wish that can never become a row"
+        ),
+        other => panic!("expected OperationError, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn including_and_excluding_are_both_idempotent_and_reversible() {
+    let project = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let outside = elsewhere.path().join("olx");
+    add_worktree_outside(project.path(), &outside, "fix/olx");
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    for req in [1u64, 2] {
+        client
+            .send(Frame::Control(ClientMsg::WorktreeInclude {
+                req,
+                project: project.path().to_path_buf(),
+                path: outside.clone(),
+            }))
+            .await
+            .unwrap();
+        expect_control(
+            &mut client,
+            |m| matches!(m, DaemonMsg::OperationOk { req: r, .. } if *r == req),
+        )
+        .await;
+    }
+
+    let (after, _) = state.welcome_payload();
+    assert_eq!(
+        worktree_paths_for(&after, project.path())
+            .iter()
+            .filter(|p| *p == &outside)
+            .count(),
+        1,
+        "including twice includes once — a second ask is the same ask, not a second row"
+    );
+
+    for req in [3u64, 4] {
+        client
+            .send(Frame::Control(ClientMsg::WorktreeExclude {
+                req,
+                project: project.path().to_path_buf(),
+                path: outside.clone(),
+            }))
+            .await
+            .unwrap();
+        expect_control(
+            &mut client,
+            |m| matches!(m, DaemonMsg::OperationOk { req: r, .. } if *r == req),
+        )
+        .await;
+    }
+
+    let (excluded, _) = state.welcome_payload();
+    assert!(
+        !worktree_paths_for(&excluded, project.path()).contains(&outside),
+        "and stopping is as reversible as starting (FR-030)"
+    );
+    assert!(
+        outside.join(".git").exists(),
+        "the worktree itself is untouched by either direction — only the app stopped showing it"
+    );
+}

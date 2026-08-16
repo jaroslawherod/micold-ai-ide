@@ -16,6 +16,13 @@
 > `DaemonMsg::OperationProgress` push carrying the typed stage — the daemon reports the fact, the
 > client owns the wording.
 
+> **Bugfix**: 2026-08-14 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch. Two amendments,
+> both recorded in place below: **Storage** and **Principle IV** gain the first persisted state this
+> feature has ever carried (the per-project set of included worktrees, FR-030), and **Principle
+> VIII** gains the rule that a shared component's "unavailable" state must consume its own presses
+> rather than decline them (FR-035). The two-phase creation design is untouched; nothing about
+> pre-flight, `CreateMode`, or rollback changes.
+
 ## Summary
 
 Today `create_worktree` treats an existing branch as a dead end: its pre-flight returns
@@ -56,6 +63,14 @@ remains rejected).
 **Storage**: N/A — no new persisted state. The branch-source toggle, the candidate list, the
 detected conflict, and the pending resolution are all transient `WorktreeForm` state, discarded
 when the overlay closes. Constitution Principle IV is unaffected.
+
+**Amended for BUG-002**: inclusion (FR-027–FR-032) is the one exception, and a deliberate one. An
+included worktree cannot be derived from the repository — git reports the same records whether or
+not the user wants that worktree shown — so the wish itself has to be recorded. It is a per-project
+list of absolute paths in the project's existing local settings, alongside the project's other
+preferences: no new store, no new file, nothing that leaves the device. Everything *about* an
+included worktree is still derived at read time from git and the filesystem, so the persisted value
+stays the smallest thing that cannot be recomputed.
 
 **Testing**: `mise run test` (`cargo test --no-default-features --all-targets`) is the gate. The
 render-free core carries all decision logic: `preflight()` classification, `CreateMode` dispatch,
@@ -113,6 +128,11 @@ list with no pagination (an ordinary project's branch count, not a mirror of a m
   awareness* is derived entirely from `refs/remotes` already in the local repository; FR-020
   forbids contacting a remote and the UI discloses that the view reflects the last fetch. Nothing
   leaves the device. No new persisted state.
+  **Amended for BUG-002**: PASS, with one persisted value — the per-project set of included worktree
+  paths (FR-030). It is local, in the project's existing settings store, and user-owned: the user
+  put it there and can take it out. It records a *preference*, never a copy of anything git or the
+  filesystem already knows, so the derived-at-read-time discipline the rest of the feature follows is
+  intact.
 - [x] **V. Rust + iced Stack**: PASS. Invalid states are made unrepresentable: `BranchSituation`,
   `CreateMode`, `BlockReason`, and `BranchOrigin` are closed enums, so "reuse a branch that is
   checked out elsewhere" and "overwrite a remote branch" cannot be constructed, let alone
@@ -127,6 +147,13 @@ list with no pagination (an ordinary project's branch count, not a mirror of a m
   existing `material::ToggleChip` pair; the choice panel composes existing `button`/`text`/
   `container` inside the current `Modal`. No new shared component is required, and none is forked.
   If `Select` needs any extension it stays in its chainable builder-into-`Element` form.
+  **Amended for BUG-002**: a shared component's "unavailable" state MUST consume its own presses,
+  not merely decline to act on them (FR-035). Withholding a press message is how "not selectable" is
+  expressed, and in this rendering stack a widget with no press handler does not capture the event —
+  so the press keeps travelling and is caught by whatever sits beneath, which for a floating list
+  over a dialog is the dialog's own scrim. "Unpressable" and "transparent to presses" are different
+  properties, and the components conflated them. The obligation belongs to the component, not to
+  each caller, or every future picker inherits the same defect.
 
 **Re-check after Phase 1 design**: PASS — unchanged. The Phase 1 contracts introduce four new
 `Git` trait methods, two new pure functions, and one new form sub-state; no design decision moved

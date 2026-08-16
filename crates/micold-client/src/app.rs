@@ -175,6 +175,19 @@ pub enum Message {
     WorktreeMenuDismissed,
     /// Request deletion of a worktree; opens the confirm dialog (FR-018), by `dir_name`.
     WorktreeDeleteRequested(String),
+
+    // ---- 016 BUG-002: showing a worktree the app does not manage ----
+    /// Ask the daemon to show the worktree at this absolute path among the project's own
+    /// (FR-027). Raised from the blocked-branch explanation, which is where the user meets a
+    /// holder they cannot otherwise reach.
+    WorktreeIncludeRequested(PathBuf),
+    /// The daemon is now showing it. The row also arrives with the next catalog push; this is what
+    /// makes it appear at the moment the user asked rather than at the next refresh.
+    WorktreeIncluded(Worktree),
+    /// Stop showing an included worktree, by `dir_name` (FR-030). Nothing on disk is touched.
+    WorktreeExcludeRequested(String),
+    /// The daemon has stopped showing the worktree at this path.
+    WorktreeExcluded(PathBuf),
     /// Confirm deletion. The binary terminates the worktree's sessions, removes its git
     /// worktree + branch and directory, then persists (FR-020); the reducer drops the records.
     WorktreeDeleteConfirmed,
@@ -1100,6 +1113,23 @@ impl State {
             }
             Message::WorktreeMenuDismissed => {
                 self.worktree_menu_open = None;
+            }
+            // 016 BUG-002. The request itself changes nothing here: the daemon owns the included
+            // set, as it owns every other piece of durable state, and answers with the worktree as
+            // its own discovery sees it.
+            Message::WorktreeIncludeRequested(_) => {}
+            Message::WorktreeIncluded(worktree) => {
+                if !self.worktrees.iter().any(|w| w.path == worktree.path) {
+                    self.worktrees.push(worktree);
+                    self.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
+                }
+                self.worktree_error = None;
+            }
+            Message::WorktreeExcludeRequested(_) => {
+                self.worktree_menu_open = None;
+            }
+            Message::WorktreeExcluded(path) => {
+                self.worktrees.retain(|w| w.path != path);
             }
             Message::WorktreeDeleteRequested(dir) => {
                 self.clear_for_dialog();

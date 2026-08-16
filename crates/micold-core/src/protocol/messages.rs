@@ -223,6 +223,28 @@ pub enum ClientMsg {
         /// Project path.
         project: PathBuf,
     },
+    /// Show a worktree the repository already knows about that lives outside the directory this
+    /// app creates its own in (016 BUG-002, FR-027). **Mutates nothing but the app's own settings**
+    /// — no git command runs, because the worktree is already registered, which is precisely why it
+    /// could block a branch. Idempotent.
+    WorktreeInclude {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// Absolute path of the worktree to show.
+        path: PathBuf,
+    },
+    /// Stop showing an included worktree (016 BUG-002, FR-030). Removes it from the list and leaves
+    /// it exactly as it is on disk. Idempotent.
+    WorktreeExclude {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// Absolute path of the worktree to stop showing.
+        path: PathBuf,
+    },
     /// Delete a worktree. `stop_sessions` MUST be true if sessions are live, else it fails (W2).
     WorktreeDelete {
         /// Correlation id.
@@ -641,6 +663,12 @@ pub struct WorktreeSnapshot {
     pub display_name: String,
     /// Its status.
     pub status: WorktreeStatus,
+    /// Where it is on disk (016 BUG-002, FR-029). Carried for every worktree so one type answers
+    /// for all of them, and load-bearing for the [included](Self::included) ones: a folder name
+    /// says nothing about where a worktree the app did not create actually lives.
+    pub path: PathBuf,
+    /// Shown because the user asked for it, not because of where it lives (016 BUG-002, FR-027).
+    pub included: bool,
 }
 
 /// Worktree status (data-model §Worktree).
@@ -705,6 +733,17 @@ pub enum OperationResult {
     BranchList {
         /// Every branch, ordered and annotated with any block reason.
         candidates: Vec<BranchCandidate>,
+    },
+    /// A worktree is now shown (016 BUG-002, FR-027). Carries it as discovery sees it, so the
+    /// client renders the daemon's answer rather than deriving a second one.
+    WorktreeIncluded {
+        /// The worktree, exactly as the catalog now lists it.
+        worktree: WorktreeSnapshot,
+    },
+    /// A worktree is no longer shown (016 BUG-002, FR-030). Nothing on disk changed.
+    WorktreeExcluded {
+        /// The path that is no longer shown.
+        path: PathBuf,
     },
 }
 
