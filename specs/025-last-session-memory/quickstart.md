@@ -425,11 +425,27 @@ in the lower half of the evidence image. **The other run saw the same thing inde
 established what this one did not: it happens after clicking the session row by hand too, so it is
 not specific to the restore path and is not a regression from BUG-002.
 
+> Filed as [`010` BUG-011](../010-daemon-session-persistence/bugs/BUG-011.md). The lifecycle is never
+> advanced out of `InterruptedResumable` — `start_session` spawns the process and registers it live
+> without touching the durable record, and the live overlay does not project `lifecycle`, so the
+> daemon's own catalog is wrong rather than the client being out of date. FR-006a specifies how a
+> session *enters* that state and never how it leaves.
+
 **2. A session whose worktree is gone is resumed in `$HOME`.** `readlink /proc/<pid>/cwd` gives
 `/tmp/mb81/home`, not the worktree path that no longer exists. Under FR-004 this could not arise —
 nothing was started. Under FR-004a, reopening can silently start an AI CLI session rooted at the
 user's home directory rather than in the project, which is a different thing from declining to start
 it. Whether that fallback is deliberate is not something this pass can tell.
+
+> Filed as [`010` BUG-012](../010-daemon-session-persistence/bugs/BUG-012.md), and the fallback is
+> **not** deliberate: nothing in this project chooses it. `start_session` never checks the directory
+> exists, and `portable-pty` filters a non-existent `cwd` out and substitutes `$HOME` without an
+> error. The daemon computes `WorktreeStatus::Missing` for the badge and never reads it on the spawn
+> path. Raised to High there rather than noted here, because the session an agent is given
+> instructions in can now be rooted at the user's home directory with nothing on screen saying so.
+> It also bears on this feature: 025's clarification that a deleted-worktree session should still be
+> restored was decided when restoring started nothing, and BUG-002 changed what restoring means
+> without that answer being revisited.
 
 Neither is a §B step failing, and neither is in this feature's scope to fix — both belong to what
 BUG-002 changed rather than to the memory itself.
