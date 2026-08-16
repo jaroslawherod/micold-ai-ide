@@ -23,16 +23,27 @@ pub fn modal<'a>(
     dir_name: &str,
     friendly: &str,
     branch: Option<&str>,
+    outside: Option<&std::path::Path>,
     keep_branch: bool,
     scheme: ColorScheme,
     focused: Option<FieldId>,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
-    let warning = format!(
-        "This permanently removes the worktree directory \
-         (.claude/worktrees/{dir_name}) and all of its sessions. This cannot be undone."
-    );
+    // 016 BUG-002 (FR-033): an included worktree is not under the directory this app manages, and
+    // saying it is would name a folder that does not exist while deleting one the user may not have
+    // realised was in reach. So the sentence gives its real location, and says whose it is.
+    let warning = match outside {
+        Some(path) => format!(
+            "This permanently removes {} — a worktree outside this app, which you included — and \
+             all of its sessions. This cannot be undone.",
+            path.display()
+        ),
+        None => format!(
+            "This permanently removes the worktree directory \
+             (.claude/worktrees/{dir_name}) and all of its sessions. This cannot be undone."
+        ),
+    };
 
     let mut fields = material::dialog::fields(column![
         Text::new(format!("Delete “{friendly}”?"), TypeRole::Headline, r),
@@ -83,15 +94,14 @@ pub fn dialog<'a>(
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
     state.worktree_delete_target.as_ref().map(|dir| {
-        let branch = state
-            .worktrees
-            .iter()
-            .find(|w| &w.dir_name == dir)
-            .and_then(|w| w.branch.as_deref());
+        let worktree = state.worktrees.iter().find(|w| &w.dir_name == dir);
+        let branch = worktree.and_then(|w| w.branch.as_deref());
+        let outside = worktree.filter(|w| w.included).map(|w| w.path.as_path());
         modal(
             dir,
             &state.worktree_display_name(dir),
             branch,
+            outside,
             state.worktree_delete_keep_branch,
             scheme,
             state.focused_field,

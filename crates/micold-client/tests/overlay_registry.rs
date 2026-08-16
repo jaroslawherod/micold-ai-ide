@@ -590,6 +590,7 @@ fn a_dialog_draws_from_its_own_state() {
             path: std::path::PathBuf::from("/p/.claude/worktrees/feat-x"),
             branch: Some("feat/x".to_string()),
             status: micold_core::worktree::WorktreeStatus::Valid,
+            included: false,
         }];
         state
     }

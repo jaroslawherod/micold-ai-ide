@@ -65,6 +65,7 @@ fn failed_create_rolls_back_leaving_no_orphan_branch_or_worktree() {
         &names,
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |e| events.push(e),
     )
     .unwrap_err();
@@ -112,6 +113,7 @@ fn failed_submodule_fetch_rolls_back_the_whole_worktree() {
         &names,
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |e| events.push(e),
     )
     .unwrap_err();
@@ -157,6 +159,7 @@ fn submodule_failure_message_is_preserved_verbatim_for_the_user() {
         &names,
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |_| {},
     )
     .unwrap_err();
@@ -250,6 +253,7 @@ fn a_failed_reuse_preserves_the_pre_existing_branch() {
         &names,
         false,
         &CreateMode::ReuseLocal,
+        &[],
         &mut |_| {},
     )
     .unwrap_err();
@@ -283,6 +287,7 @@ fn a_failed_overwrite_deletes_the_branch_it_created() {
         &names,
         false,
         &CreateMode::Overwrite,
+        &[],
         &mut |_| {},
     )
     .unwrap_err();
@@ -316,6 +321,7 @@ fn a_failed_remote_track_deletes_the_local_branch_but_not_the_remote_one() {
         &CreateMode::TrackRemote {
             remote: "origin".to_string(),
         },
+        &[],
         &mut |_| {},
     )
     .unwrap_err();

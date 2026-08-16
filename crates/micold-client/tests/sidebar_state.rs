@@ -309,6 +309,7 @@ fn default_entry_stays_visible_with_an_active_tag_filter() {
         path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
         branch: Some("feat/a".to_string()),
         status: WorktreeStatus::Valid,
+        included: false,
     }];
 
     // Sanity: a filter matching nothing still leaves worktree entries empty...
@@ -349,6 +350,7 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
         path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
         branch: Some("feat/feat-a".to_string()),
         status: WorktreeStatus::Valid,
+        included: false,
     }]);
     let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
     let id = session.id;
@@ -367,12 +369,14 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
             path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
             branch: Some("feat/feat-a".to_string()),
             status: WorktreeStatus::Valid,
+            included: false,
         },
         Worktree {
             dir_name: "feat-new".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/feat-new"),
             branch: Some("feat/feat-new".to_string()),
             status: WorktreeStatus::Valid,
+            included: false,
         },
     ]);
 

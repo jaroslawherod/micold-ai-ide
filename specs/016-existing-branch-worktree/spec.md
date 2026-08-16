@@ -8,6 +8,11 @@
 
 **Input**: User description: "Creation of worktree creates a new branch but if the branch already exists should ask user what to do. Overwrite the branch or reuse it. It's required e.g. to continue the work that was started outside of micold ide"
 
+**Bugfix**: 2026-08-14 — [BUG-002](./bugs/BUG-002.md) added User Story 6 (including a worktree that
+already exists), FR-027–FR-033 for it and FR-034–FR-035 for refusals that must not dismiss the form,
+six Edge Cases, the "Included worktree" entity, SC-009–SC-011, and three Assumptions; annotated
+FR-007, FR-012, and FR-021a.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Continue work on a branch that already exists (Priority: P1)
@@ -99,6 +104,48 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 
 ---
 
+### User Story 6 - Include a worktree that already exists (Priority: P6)
+
+*(Added by BUG-002.)*
+
+A developer's branch is held by a worktree that already exists on disk — created by another tool, or
+by hand in a sibling directory — and the app refuses the branch and explains where it is. The
+explanation is now accurate and still a dead end: the work is right there, and the only ways to reach
+it are to leave the app or to destroy something. What the developer wants is the obvious third
+answer: **include that worktree** — tell the app to show it too, exactly where it is.
+
+**Why this priority**: It is the answer to the question User Story 5 leaves the user holding, and
+the one BUG-001 deferred as a product decision ("hard block by accident, not by decision"). Every
+story above it can ship without this; this cannot ship without the block that names the holder.
+
+**Independent Test**: Can be fully tested by creating a worktree outside the app's own worktree
+directory (`git worktree add ../elsewhere feat/x`), opening the create form, selecting `feat/x`,
+choosing to include the worktree it names, and confirming the worktree appears in the list, hosts a
+session, and is byte-for-byte unchanged on disk.
+
+**Acceptance Scenarios**:
+
+1. **Given** a branch is blocked because it is checked out in a worktree the app does not manage,
+   **When** the block is explained, **Then** the user is offered the option to include that worktree
+   in the app, alongside the explanation of where it is.
+2. **Given** the user chooses to include it, **When** inclusion completes, **Then** the worktree
+   appears in the worktree list, its location is visible because it does not live where the app's own
+   worktrees do, and it can host sessions like any other.
+3. **Given** a worktree was included, **When** the app is restarted, **Then** it is still included —
+   and still included only for the project it belongs to.
+4. **Given** a worktree was included, **When** the user stops including it, **Then** it disappears
+   from the list and nothing on disk or in the repository has changed.
+5. **Given** the user chooses to include a worktree, **When** inclusion completes, **Then** nothing
+   has been moved, copied, re-registered, or checked out — the app recorded a location and did no more.
+6. **Given** a worktree has been included, **When** the user later attempts to create a worktree on
+   the branch it holds, **Then** the branch is still blocked, but the holder is now described as one
+   of the app's own worktrees rather than as one outside it.
+7. **Given** the holder is the project's own checkout, or an assistant worktree the app already
+   manages but is currently hiding, **When** the block is explained, **Then** inclusion is not
+   offered — neither is a worktree the app is missing.
+
+---
+
 ### Edge Cases
 
 - **Branch exists and the target directory also exists**: the directory conflict is reported as it is today; the existing-branch choice is not offered, because creation cannot proceed at that location regardless of which branch option is chosen.
@@ -113,6 +160,12 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 - **The branch is held by an assistant-created worktree while those are hidden**: creation is blocked, and the explanation says the holder is a hidden assistant worktree and how to reveal it. The holder is one of the app's own, so it is named as such — it is only the current view that omits it.
 - **The repository's worktree list changes while the form is open**: the holder shown in a blocked explanation is whatever the pre-flight check observed; the check runs again at the moment of action, so a holder that has since released the branch does not block creation.
 - **The repository has no remotes at all**: only local branches are considered; nothing in the flow requires a remote to exist.
+- **A press on an unavailable branch row lands beyond the form's own edges** (the result list floats over and past the form): the press is consumed where it lands and nothing happens. It MUST NOT reach whatever sits behind the form, and in particular MUST NOT dismiss the form — a refusal that closes the form is indistinguishable from a cancel the user never made (BUG-002).
+- **An included worktree's folder name matches one the app already lists**: both are shown and told apart by their locations. Inclusion never renames anything, because the folder is not the app's to rename.
+- **An included worktree is removed, or unregistered, outside the app**: the entry is reported as missing rather than silently dropped, so removing it from the list stays the user's deliberate act.
+- **A directory under the app's own worktree directory that git no longer knows about**: already listed as an invalid worktree, and not what inclusion covers — git holds no branch for it, so it never produces the block that offers inclusion. Repairing such a directory is out of scope.
+- **The holder is the project's own checkout**: inclusion is not offered. The project checkout is already the project; there is nothing to add.
+- **The holder is an assistant worktree the app manages but is currently hiding**: inclusion is not offered either, for the opposite reason — it is already included. The explanation says how to reveal it (FR-021b).
 
 ## Requirements *(mandatory)*
 
@@ -126,7 +179,7 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 - **FR-004**: On reuse, the system MUST create the worktree checked out on the existing branch, leaving that branch's commit history unmodified.
 - **FR-005**: On overwrite, the system MUST require an explicit confirmation of the destructive outcome before modifying anything, and MUST allow the user to back out of that confirmation to the original choice.
 - **FR-006**: On confirmed overwrite, the system MUST replace the existing branch with a new branch of the same name starting from the same point used for a conflict-free new worktree, and create the worktree on it.
-- **FR-007**: On cancel — at either the choice or the overwrite confirmation — the system MUST leave the repository, the branch, and the filesystem completely unmodified, and MUST return the user to the creation form with their entered values preserved.
+- **FR-007**: On cancel — at either the choice or the overwrite confirmation — the system MUST leave the repository, the branch, and the filesystem completely unmodified, and MUST return the user to the creation form with their entered values preserved. *(BUG-002: this describes a cancel the user chose. Only a deliberate cancel may close the form at all — see FR-034.)*
 - **FR-008**: Failure recovery for a reuse-based creation MUST NOT delete the pre-existing branch; only branches the operation itself created may be removed during recovery.
 - **FR-009**: The system MUST re-verify the existing branch's state immediately before acting on the user's choice, and MUST abandon the operation with an explanatory message if that state no longer matches what the user was shown.
 
@@ -134,7 +187,7 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 
 - **FR-010**: The create-worktree form MUST let the user work from an existing branch chosen from a list, as an alternative to entering inputs for a new branch.
 - **FR-011**: The list MUST include the repository's local branches and branches known on its remotes, indicating for each whether it is local, remote-only, and — for remote-only entries — which remote it comes from.
-- **FR-012**: Branches that cannot be checked out because they are already in use MUST appear in the list marked unavailable with the reason, rather than being omitted without explanation.
+- **FR-012**: Branches that cannot be checked out because they are already in use MUST appear in the list marked unavailable with the reason, rather than being omitted without explanation. *(BUG-002: reaching for such a branch must cost the user nothing — see FR-034/FR-035. A reason that can only be read by losing the form is not a reason the user can act on.)*
 - **FR-013**: When no branch in the repository is available to reuse, the system MUST say so explicitly instead of presenting an empty list.
 - **FR-014**: When an existing branch is selected, the system MUST derive the worktree directory from that branch name using the same naming rules as new-branch creation, and MUST show the user the directory that will be created before they commit to it.
 - **FR-015**: Selecting an existing branch and then returning to new-branch creation MUST clear the selection and restore the form's new-branch inputs, leaving no residual state.
@@ -150,7 +203,7 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 #### Blocked cases, parity, and reporting
 
 - **FR-021**: When the existing branch is already checked out anywhere the repository knows about, the system MUST block creation with an explanation identifying where the branch is in use, and MUST NOT offer reuse or overwrite. There are three kinds of holder and the explanation MUST distinguish them: another worktree managed by the app, the repository's own current checkout, and a worktree the repository knows about that the app does not manage.
-- **FR-021a**: When the holder is a worktree the app does not manage — one living outside the directory the app creates its worktrees in — the explanation MUST say that it is outside the app, and MUST identify it by its full location rather than by a bare folder name. A bare folder name is indistinguishable from an entry in the app's worktree list, which sends the user looking for something that is not there (BUG-001).
+- **FR-021a**: When the holder is a worktree the app does not manage — one living outside the directory the app creates its worktrees in — the explanation MUST say that it is outside the app, and MUST identify it by its full location rather than by a bare folder name. A bare folder name is indistinguishable from an entry in the app's worktree list, which sends the user looking for something that is not there (BUG-001). *(BUG-002: this is also the one holder the user can do something about from here — the explanation MUST offer to include it, per FR-027.)*
 - **FR-021b**: When the holder is a worktree the app manages but is not currently showing — an assistant-created worktree while the reveal control is off — the explanation MUST say that the holder is hidden and how to reveal it, rather than naming a worktree the user cannot see (BUG-001).
 - **FR-022**: A pre-existing target directory MUST continue to block creation as it does today, and MUST be reported without offering the existing-branch choice.
 - **FR-023**: A worktree created by reusing, overwriting, or continuing from a remote branch MUST be indistinguishable from any other worktree in subsequent use — listing, sessions, and deletion (including the option to delete the branch) behave identically.
@@ -158,11 +211,27 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 - **FR-025**: Creating a worktree on a branch name that does not exist anywhere MUST behave exactly as it does today, with no additional prompts or steps.
 - **FR-026**: User-facing documentation MUST describe the existing-branch choice, selecting a branch from the list, what reuse, overwrite, and remote continuation each do, and when none of them is available.
 
+#### Including a worktree that already exists *(added by BUG-002)*
+
+- **FR-027**: When a branch is blocked because it is checked out in a worktree the app does not manage (FR-021a), the system MUST offer to include that worktree in the app, from the same explanation that reports the block.
+- **FR-028**: Including a worktree MUST NOT move, copy, rename, re-register, check out, or otherwise modify it, and MUST NOT modify the repository. The system records that it also shows this location, and does no more.
+- **FR-029**: An included worktree MUST appear in the worktree list and behave as any other worktree in subsequent use — listing, sessions, selection, deletion — and MUST show its location, since it does not live where the app's own worktrees do and its folder name alone would not say where it is.
+- **FR-030**: Inclusion MUST persist per project across restarts, and MUST be reversible: the user can stop including a worktree, which removes it from the list and leaves it exactly as it was on disk.
+- **FR-031**: An included worktree that has since been removed from disk, or that the repository no longer registers, MUST be reported as such in the list rather than silently dropped or shown as if it were intact.
+- **FR-032**: Once a worktree is included, the explanation for a branch it holds MUST describe it as one of the app's worktrees (FR-021) rather than as one outside the app (FR-021a). The two descriptions MUST follow from the same test that decides what the list shows, so "described as yours" and "shown in your list" cannot disagree — the rule BUG-001 established, extended to cover inclusion.
+- **FR-033**: Inclusion MUST NOT be offered for a holder that is the project's own checkout, or a worktree the app already manages (including one it is currently hiding); and deleting an included worktree from the app MUST state that it lives outside the directory the app manages, and give its location, before anything is removed.
+
+#### Refusals never dismiss the form *(added by BUG-002)*
+
+- **FR-034**: An action the form refuses — in particular attempting to choose a branch that is unavailable — MUST leave the form open with every input intact. A refusal MUST NOT be indistinguishable from a cancellation the user did not make.
+- **FR-035**: A press that lands on any surface the form is showing, including a result list that floats over and beyond the form's own edges, MUST be consumed there. It MUST NOT reach whatever is behind the form, and in particular MUST NOT reach the form's dismissal. Only a press genuinely outside every surface the form is showing may dismiss it.
+
 ### Key Entities
 
 - **Existing branch conflict**: the situation where the branch name derived from the user's creation inputs matches a branch already present locally or on a remote. Carries the branch name, whether it is local or remote-only (and on which remote), whether it is currently checked out anywhere, and if so which location holds it.
 - **Branch candidate**: an entry in the existing-branch list — its name, its origin (local or a named remote), and whether it is available for a new worktree or blocked with a reason.
 - **Conflict resolution choice**: the user's decision for a given conflict — reuse, overwrite, continue from remote, start fresh, or cancel — together with, for overwrite, the separate explicit confirmation of the destructive outcome.
+- **Included worktree** *(BUG-002)*: a worktree the repository already knows about, living outside the directory the app creates its own in, that the user has asked the app to show. It carries its location and the project it belongs to, and nothing else — no copy of the worktree's state, which stays where it has always been read from.
 
 ## Success Criteria *(mandatory)*
 
@@ -176,6 +245,9 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 - **SC-006**: 100% of attempts to create a worktree on a branch that is already checked out elsewhere produce an explanation the user can act on — one that identifies the holder well enough to reach it: a listed worktree named, a hidden worktree named together with how to reveal it, or an unmanaged worktree given by its full location. Naming a holder that has no corresponding entry in the app's worktree list, and no way to find it, counts as a failure of this criterion even though a location was printed (BUG-001).
 - **SC-007**: Cancelling at any point in the flow leaves the repository unchanged, verified by comparing the branch list, the worktree list, and the target directory before and after.
 - **SC-008**: Creating a worktree whose branch name does not exist anywhere is unaffected — the same number of steps, the same prompts, and the same outcome as before this feature.
+- **SC-009**: 100% of presses on an unavailable branch row leave the form open with every input unchanged — at every position the row can occupy on screen, including rows the result list renders beyond the form's own edges. A press that closes the form counts as a failure of this criterion however plausible the reason (BUG-002).
+- **SC-010**: A user whose branch is held by a worktree the app does not manage can bring that worktree into the app and start a session in it without leaving the app and without typing a git command, in under 30 seconds from the block being explained.
+- **SC-011**: Including a worktree changes nothing outside the app's own settings: the worktree's location, its git registration, its branch, and its working tree are identical before and after, verified by comparing all four.
 
 ## Assumptions
 
@@ -188,3 +260,6 @@ Some existing branches cannot be reused or overwritten at all — most commonly 
 - Behavior is identical across Linux, macOS, and Windows; nothing in this flow is platform-specific.
 - The feature builds on the existing create-worktree form, its name derivation, and its progress reporting; it adds a decision point and an alternative branch source to that flow rather than introducing a separate creation path.
 - The existing-branch list is a selection control of the kind the form already uses; it is expected to reuse the shared UI primitives rather than introduce a bespoke one-off widget.
+- **Inclusion is by reference** *(BUG-002)*: the app records a location it also shows. It never moves a worktree into the directory it manages, because the holder is frequently another tool's and relocating it would break that tool's own reference to it. Relocation, if it is ever wanted, is a separate and explicitly destructive action.
+- Inclusion is the first persisted state this feature adds, and it is per project — the same scope as the project's other local settings. Nothing about it leaves the device.
+- Re-registering a directory git has forgotten — repairing an orphaned worktree — is out of scope. Such directories are already listed as invalid, and they never produce the block that offers inclusion, because git holds no branch for them.

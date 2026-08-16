@@ -295,6 +295,9 @@ impl StoredCatalog {
             active,
             sessions,
             worktree_names,
+            // 016 BUG-002: same as `foreground_by_project` below — per project, never in the
+            // catalog, filled in by `load` from each project's own state file.
+            included_worktrees: BTreeMap::new(),
             // Feature 025: never carried by the catalog itself. It lives in each project's own
             // state file and is filled in by `load` after this, alongside that project's sessions.
             foreground_by_project: BTreeMap::new(),
@@ -321,6 +324,13 @@ struct StoredProjectState {
     /// one unknown field that `serde` ignores.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_session: Option<SessionId>,
+    /// Worktrees outside `.claude/worktrees/` this project shows anyway (016 BUG-002, FR-030).
+    ///
+    /// `#[serde(default)]` and no `schema_version` bump, for the reason `last_session` records: a
+    /// file written before this field existed loads with none, which is exactly today's behaviour,
+    /// and an older build reading one that carries it ignores an unknown field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    included_worktrees: Vec<PathBuf>,
 }
 
 impl StoredProjectState {
@@ -338,6 +348,11 @@ impl StoredProjectState {
                 .cloned()
                 .unwrap_or_default(),
             last_session: ws.foreground_by_project.get(project_path).copied(),
+            included_worktrees: ws
+                .included_worktrees
+                .get(project_path)
+                .cloned()
+                .unwrap_or_default(),
         }
     }
 }
@@ -544,6 +559,15 @@ impl ProjectStore for JsonFileStore {
                             .worktree_names
                             .insert(project.path.clone(), state.worktree_display_names);
                     }
+                    // 016 BUG-002. Absent in a file written before the field existed, which is
+                    // "nothing included" — every worktree comes from where it lives, as before.
+                    if state.included_worktrees.is_empty() {
+                        workspace.included_worktrees.remove(&project.path);
+                    } else {
+                        workspace
+                            .included_worktrees
+                            .insert(project.path.clone(), state.included_worktrees);
+                    }
                     // Feature 025. Absent in a file written before this field existed, which is
                     // "no memory" — the behaviour this application had until now.
                     match state.last_session {
@@ -564,6 +588,8 @@ impl ProjectStore for JsonFileStore {
                 ProjectStateLoad::Corrupt => {
                     workspace.sessions.remove(&project.path);
                     workspace.worktree_names.remove(&project.path);
+                    // …and shows no worktree it could only have learned about from that file.
+                    workspace.included_worktrees.remove(&project.path);
                     // A project whose state cannot be read has no memory either — a launch must
                     // start normally rather than restore against sessions it could not load
                     // (feature 025, FR-010).

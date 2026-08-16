@@ -20,6 +20,7 @@ fn worktree(dir_name: &str, branch: &str) -> Worktree {
         path: PathBuf::from("/p/.claude/worktrees").join(dir_name),
         branch: Some(branch.into()),
         status: WorktreeStatus::Valid,
+        included: false,
     }
 }
 

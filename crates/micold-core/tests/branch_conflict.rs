@@ -38,7 +38,7 @@ fn snapshot(git: &FakeGit, repo: &Path) -> (Vec<String>, Vec<(PathBuf, String)>)
 #[test]
 fn an_unused_name_is_free() {
     let git = FakeGit::new().with_repo("/repo");
-    let s = preflight(&git, &repo(), &target(), "feat/login", false).unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(s, BranchSituation::Free);
 }
 
@@ -49,7 +49,7 @@ fn an_existing_local_branch_is_available_not_an_error() {
     let git = FakeGit::new()
         .with_repo("/repo")
         .with_branch("/repo", "feat/login");
-    let s = preflight(&git, &repo(), &target(), "feat/login", false).unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::LocalAvailable {
@@ -63,7 +63,7 @@ fn a_branch_only_on_a_remote_is_remote_only() {
     let git = FakeGit::new()
         .with_repo("/repo")
         .with_remote_branch("/repo", "origin", "feat/login");
-    let s = preflight(&git, &repo(), &target(), "feat/login", false).unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::RemoteOnly {
@@ -81,7 +81,7 @@ fn a_branch_checked_out_in_another_worktree_is_blocked_and_names_it() {
         .with_branch("/repo", "feat/login")
         .with_worktree("/repo", &holder, "feat/login");
 
-    let s = preflight(&git, &repo(), &target(), "feat/login", false).unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::Blocked {
@@ -113,7 +113,7 @@ fn a_branch_held_by_a_worktree_the_app_does_not_manage_is_blocked_as_outside_the
             .with_branch("/repo", "feat/login")
             .with_worktree("/repo", &holder, "feat/login");
 
-        let s = preflight(&git, &repo(), &target(), "feat/login", false).unwrap();
+        let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
         assert_eq!(
             s,
             BranchSituation::Blocked {
@@ -139,7 +139,7 @@ fn a_branch_held_by_an_agent_worktree_is_blocked_and_says_who_owns_it() {
         .with_branch("/repo", "feat/login")
         .with_worktree("/repo", &holder, "feat/login");
 
-    let s = preflight(&git, &repo(), &target(), "feat/login", false).unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::Blocked {
@@ -168,6 +168,7 @@ fn an_agent_holder_is_recognised_by_its_branch_when_its_directory_was_renamed() 
         &target(),
         "worktree-agent-deadbeefdeadbeef",
         false,
+        &[],
     )
     .unwrap();
     assert_eq!(
@@ -198,11 +199,11 @@ fn only_holders_the_sidebar_would_list_are_described_as_the_apps_own() {
             .with_branch("/repo", "feat/login")
             .with_worktree("/repo", &holder, "feat/login");
 
-        let listed = micold_core::worktree::discover(&git, &repo())
+        let listed = micold_core::worktree::discover(&git, &repo(), &[])
             .iter()
             .any(|w| w.path == holder);
         let described_as_ours = matches!(
-            preflight(&git, &repo(), &target(), "feat/login", false).unwrap(),
+            preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap(),
             BranchSituation::Blocked {
                 reason: BlockReason::CheckedOutAt { .. },
                 ..
@@ -228,7 +229,7 @@ fn a_branch_checked_out_in_the_project_root_is_blocked_as_the_project_checkout()
         .with_branch("/repo", "main")
         .with_worktree("/repo", "/repo", "main");
 
-    let s = preflight(&git, &repo(), &target(), "main", false).unwrap();
+    let s = preflight(&git, &repo(), &target(), "main", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::Blocked {
@@ -241,7 +242,7 @@ fn a_branch_checked_out_in_the_project_root_is_blocked_as_the_project_checkout()
 #[test]
 fn an_existing_target_directory_is_a_directory_clash() {
     let git = FakeGit::new().with_repo("/repo");
-    let s = preflight(&git, &repo(), &target(), "feat/login", true).unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", true, &[]).unwrap();
     assert_eq!(s, BranchSituation::DirectoryTaken { dir: target() });
 }
 
@@ -258,7 +259,7 @@ fn a_directory_clash_outranks_every_branch_situation() {
 
     // Branch is both existing AND checked out, but the directory is what blocks first: no branch
     // choice could resolve it (FR-022).
-    let s = preflight(&git, &repo(), &target(), "feat/login", true).unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", true, &[]).unwrap();
     assert_eq!(s, BranchSituation::DirectoryTaken { dir: target() });
 }
 
@@ -270,7 +271,7 @@ fn a_checked_out_branch_outranks_a_merely_existing_one() {
         .with_branch("/repo", "feat/login")
         .with_worktree("/repo", &holder, "feat/login");
 
-    let s = preflight(&git, &repo(), &target(), "feat/login", false).unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert!(matches!(s, BranchSituation::Blocked { .. }));
 }
 
@@ -282,7 +283,7 @@ fn a_local_branch_outranks_a_remote_one_of_the_same_name() {
         .with_branch("/repo", "feat/login")
         .with_remote_branch("/repo", "origin", "feat/login");
 
-    let s = preflight(&git, &repo(), &target(), "feat/login", false).unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::LocalAvailable {
@@ -300,7 +301,7 @@ fn the_same_name_on_several_remotes_reports_all_of_them() {
         .with_remote_branch("/repo", "upstream", "feat/login")
         .with_remote_branch("/repo", "origin", "feat/login");
 
-    let s = preflight(&git, &repo(), &target(), "feat/login", false).unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::RemoteOnly {
@@ -422,7 +423,7 @@ fn preflight_never_mutates_the_repository() {
         ("feat/nothing", false),
         ("feat/nothing", true),
     ] {
-        let _ = preflight(&git, &repo(), &target(), branch, dir_taken).unwrap();
+        let _ = preflight(&git, &repo(), &target(), branch, dir_taken, &[]).unwrap();
     }
     assert_eq!(snapshot(&git, &repo()), before);
 }
@@ -518,6 +519,7 @@ fn every_mode_situation_pair_matches_the_contract_and_incompatible_ones_never_mu
                 &names,
                 dir_taken,
                 mode,
+                &[],
                 &mut |_| {},
             );
 
@@ -558,6 +560,7 @@ fn a_situation_that_changed_since_the_prompt_is_reported_as_such() {
         &names,
         false,
         &CreateMode::ReuseLocal,
+        &[],
         &mut |_| {},
     )
     .unwrap_err();
@@ -586,6 +589,7 @@ fn a_blocked_branch_reports_who_holds_it_rather_than_a_raw_git_failure() {
         &names,
         false,
         &CreateMode::ReuseLocal,
+        &[],
         &mut |_| {},
     )
     .unwrap_err();
@@ -641,6 +645,7 @@ fn tracking_the_second_remote_creates_a_branch_tracking_that_remote() {
         &CreateMode::TrackRemote {
             remote: "upstream".to_string(),
         },
+        &[],
         &mut |_| {},
     )
     .unwrap();
@@ -648,5 +653,120 @@ fn tracking_the_second_remote_creates_a_branch_tracking_that_remote() {
     assert_eq!(
         git.upstream(&repo(), "feat/login").as_deref(),
         Some("upstream/feat/login")
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// 016 BUG-002 (T076): including a holder changes how it is described, because it changes what the
+// list shows — and both answers come from one predicate, never from two kept in step (FR-032).
+// ---------------------------------------------------------------------------------------------
+
+/// The holder's own worktree, outside anything this app created.
+fn outsider() -> PathBuf {
+    PathBuf::from("/elsewhere/worktrees/feat-login")
+}
+
+fn held_by_the_outsider() -> FakeGit {
+    FakeGit::new()
+        .with_repo("/repo")
+        .with_branch("/repo", "feat/login")
+        .with_worktree("/repo", outsider(), "feat/login")
+}
+
+/// Before inclusion: the holder is somewhere the user has to be given directions to (BUG-001).
+#[test]
+fn an_unincluded_holder_is_still_described_as_outside_the_app() {
+    let git = held_by_the_outsider();
+
+    assert_eq!(
+        preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap(),
+        BranchSituation::Blocked {
+            branch: "feat/login".to_string(),
+            reason: BlockReason::CheckedOutOutsideApp { path: outsider() },
+        },
+    );
+}
+
+/// After it: the same holder, the same block, described as one of the user's own — because it now
+/// is one. Nothing about the branch changed; git still refuses the second checkout.
+#[test]
+fn an_included_holder_is_described_as_one_of_the_apps_own() {
+    let git = held_by_the_outsider();
+    let included = [outsider()];
+
+    assert_eq!(
+        preflight(&git, &repo(), &target(), "feat/login", false, &included).unwrap(),
+        BranchSituation::Blocked {
+            branch: "feat/login".to_string(),
+            reason: BlockReason::CheckedOutAt {
+                path: outsider(),
+                owner: WorktreeOwner::User,
+            },
+        },
+        "including a worktree puts it in the list, so the explanation must stop sending the user \
+         outside the app to find it (FR-032). Reuse and overwrite stay unavailable either way",
+    );
+}
+
+/// The same guarantee BUG-001 established, now asked with inclusion in play: "described as ours"
+/// and "shown in the list" must still be the same set, whichever way inclusion goes. Asked of
+/// `discover()` rather than of a restatement of the rule, so a second rule cannot appear and drift.
+#[test]
+fn description_and_listing_agree_with_or_without_inclusion() {
+    for included in [Vec::new(), vec![outsider()]] {
+        let git = held_by_the_outsider();
+
+        let listed = micold_core::worktree::discover(&git, &repo(), &included)
+            .iter()
+            .any(|w| w.path == outsider());
+        let described_as_ours = matches!(
+            preflight(&git, &repo(), &target(), "feat/login", false, &included).unwrap(),
+            BranchSituation::Blocked {
+                reason: BlockReason::CheckedOutAt { .. },
+                ..
+            }
+        );
+
+        assert_eq!(
+            described_as_ours, listed,
+            "with included = {included:?}, the holder is described as the app's own ({described_as_ours}) \
+             but listed = {listed}. These are one predicate or they are a defect (BUG-001, FR-032)",
+        );
+    }
+}
+
+/// Inclusion changes the wording and nothing else: the branch is still refused, and still offers
+/// neither reuse nor overwrite.
+#[test]
+fn including_a_holder_does_not_free_its_branch() {
+    let git = held_by_the_outsider();
+
+    let situation =
+        preflight(&git, &repo(), &target(), "feat/login", false, &[outsider()]).unwrap();
+
+    assert!(
+        matches!(situation, BranchSituation::Blocked { .. }),
+        "git refuses a second checkout wherever the branch is held, and inclusion is not a git \
+         operation — it changed where the user can *find* the holder, not who holds it. Got \
+         {situation:?}"
+    );
+}
+
+/// The project's own checkout is not a worktree to include, and saying it is must not change how
+/// it is described.
+#[test]
+fn the_project_checkout_is_unaffected_by_inclusion() {
+    let git = FakeGit::new()
+        .with_repo("/repo")
+        .with_branch("/repo", "main")
+        .with_worktree("/repo", "/repo", "main");
+
+    assert_eq!(
+        preflight(&git, &repo(), &target(), "main", false, &[repo()]).unwrap(),
+        BranchSituation::Blocked {
+            branch: "main".to_string(),
+            reason: BlockReason::CheckedOutInProjectRoot,
+        },
+        "the project checkout is the project. It is named as such whatever the included set says",
     );
 }

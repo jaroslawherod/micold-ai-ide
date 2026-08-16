@@ -220,7 +220,11 @@ through both controls. Every one must be defined once and pass for both.
 - **FR-016**: An opened select with no options MUST say so on the list surface in the same muted
   treatment the search picker uses for a search with no matches.
 - **FR-017**: A select option MAY be presented as unavailable: shown, muted and unpressable, matching
-  how the search picker presents an unavailable row.
+  how the search picker presents an unavailable row. **Unpressable means the press stops there** — the
+  row consumes it and does nothing. It MUST NOT pass the press through to whatever is behind the list,
+  which for a list floating over a dialog is the dialog's own dismissal. *(Clarified by 016 BUG-002,
+  2026-08-14: a row implemented as "a button with no press message" is not pressable and not opaque
+  either, and pressing an unavailable branch closed the whole form.)*
 
 **Motion**
 

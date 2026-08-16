@@ -23,6 +23,7 @@ fn wt(dir: &str, repo: &Path) -> Worktree {
         path: repo.join(".claude/worktrees").join(dir),
         branch: Some(format!("feat/{dir}")),
         status: WorktreeStatus::Valid,
+        included: false,
     }
 }
 

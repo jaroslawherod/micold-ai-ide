@@ -4,6 +4,11 @@ Types are grouped by the module that owns them. Everything here is transient —
 state** (Constitution Principle IV). Enums are closed so unreachable combinations are
 unrepresentable (Principle V).
 
+> **Bugfix**: 2026-08-14 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch. The "no new
+> persisted state" claim above holds for everything written before this line; inclusion (FR-030) is
+> the one exception, and it is a per-project list of paths in the existing project-state file. See
+> *Included worktrees* at the end of the `src/worktree.rs` section.
+
 ---
 
 ## `src/naming.rs`
@@ -156,6 +161,54 @@ git command and runs the existing submodule step unchanged. On failure it runs
 
 Stage set unchanged; `CreatingWorktree`'s text becomes mode-dependent (research R12, FR-024).
 
+### Included worktrees (new — BUG-002, FR-027–FR-032)
+
+The **one** persisted addition in this feature (research R13): a per-project set of absolute paths
+the app also shows.
+
+| Where | Field | Type | Notes |
+|---|---|---|---|
+| `StoredProjectState` (`src/store.rs`) | `included_worktrees` | `Vec<PathBuf>` | `#[serde(default, skip_serializing_if = "Vec::is_empty")]`, no `schema_version` bump — a file written before the field loads as empty, which is exactly today's behaviour, and an older build ignores it as an unknown field. The same forward-compatibility rule `last_session` follows. |
+
+Paths are **absolute and canonical**, the same normalization projects themselves use, so a path
+recorded once matches the record git reports for it.
+
+**Nothing else is persisted.** Branch, status, and existence are derived at read time from the same
+`worktree list --porcelain` records everything else here reads — an included worktree that has been
+deleted or unregistered surfaces through the existing `WorktreeStatus`, never as a stale row
+(FR-031).
+
+#### `reconcile()` (changed signature)
+
+Gains the included set, and widens its parent test by exactly that set:
+
+```
+reconcile(records, worktrees_root, included: &[PathBuf], on_disk_dir_names, exists)
+```
+
+| Record | Kept? |
+|---|---|
+| parent is `worktrees_root` | yes — unchanged |
+| `path` is in `included` | **yes — new** |
+| anything else | no — unchanged |
+
+One test, widened rather than forked, which is what keeps FR-032 true for free: `checked_out_branches()`
+applies the same predicate, so an included holder classifies as `CheckedOutAt` and an excluded one as
+`CheckedOutOutsideApp`, with no second rule to drift (BUG-001's invariant, extended).
+
+#### `Worktree` (extended)
+
+| New field | Type | Notes |
+|---|---|---|
+| `included` | `bool` | `true` for a worktree kept by the included set rather than by its parent directory. The list shows its location for these (FR-029), and deletion names that location before removing anything (FR-033). |
+
+#### `BlockReason::CheckedOutOutsideApp` — offered action
+
+Unchanged in shape. What changes is that this is now the **only** `BlockReason` that carries an
+action: the explanation offers "Include that worktree" (FR-027). `CheckedOutInProjectRoot` and
+`CheckedOutAt` offer nothing new — the first is the project itself, the second is already included
+(FR-033).
+
 ---
 
 ## `src/app.rs`
@@ -206,6 +259,11 @@ prompt cannot coexist.
 `AddWorktreeResolutionChosen(CreateMode)`, `AddWorktreeOverwriteRequested`,
 `AddWorktreeOverwriteConfirmed`, `AddWorktreeResolutionCancelled`.
 
+**Added by BUG-002**: `WorktreeIncludeRequested(PathBuf)` (from the blocked explanation),
+`WorktreeIncluded(Worktree)`, `WorktreeExcluded(PathBuf)`. Inclusion does not close the form and does
+not resolve the situation — the branch is still checked out where it was, so the block stands; what
+changes is that the holder is now somewhere the user can go.
+
 ---
 
 ## Entity mapping to the spec
@@ -215,3 +273,4 @@ prompt cannot coexist.
 | Existing branch conflict | `BranchSituation` (+ `BlockReason` for the "where" half) |
 | Branch candidate | `BranchCandidate` (+ `BranchOrigin`, `blocked_by`) |
 | Conflict resolution choice | `CreateMode`, gated by `ResolutionState` |
+| Included worktree (BUG-002) | `StoredProjectState::included_worktrees` + `Worktree::included` |

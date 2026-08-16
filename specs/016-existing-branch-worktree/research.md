@@ -295,3 +295,73 @@ unchanged (same four phases in the same order), so the existing progress plumbin
 
 **Alternatives considered**: new stage variants per mode — multiplies a closed enum by four for
 labels alone, and every consumer would have to treat the variants as equivalent anyway. Rejected.
+
+---
+
+## R13 — How a worktree the app does not manage becomes one it shows (BUG-002)
+
+**Decision**: include it **by reference** — persist the worktree's absolute path in the project's
+existing local settings, and have discovery keep records at those paths in addition to the ones
+whose parent is `.claude/worktrees/`. Nothing on disk moves; nothing in the repository changes.
+
+**Rationale**: the app's worktree list is derived — `reconcile()` filters `git worktree list`
+records by their parent directory — and derivation is exactly why an unmanaged worktree cannot be
+shown: git reports the same records whether or not the user wants that one included. The wish is
+not recoverable from the repository, so it is the one thing that has to be written down, and the
+smallest thing that will do. Everything else about an included worktree — its branch, its status,
+whether it still exists — stays derived at read time, so an included entry cannot go stale in the
+way a cached copy would.
+
+Keeping the path *outside* `.claude/worktrees/` matters as much as recording it. The holders BUG-001
+catalogued are mostly another tool's (`.git-paw/worktrees/`, `.worktrees/`), and that tool holds its
+own reference to the location. Relocating the worktree to satisfy this app's filter would break it.
+
+**Alternatives considered**:
+
+- **`git worktree move` into `.claude/worktrees/`** — makes the existing filter true instead of
+  widening it, and needs no persisted state. Rejected: it mutates another tool's worktree to suit
+  this app, breaks that tool's reference, and turns "show me this" into a destructive operation the
+  user did not ask for. FR-028 forbids it outright.
+- **Widen `reconcile()` to accept every record git reports** — no persisted state, no UI. Rejected:
+  it re-creates the confusion BUG-001 fixed, filling the sidebar with worktrees the user never
+  associated with this app, and removes the distinction FR-021a's message depends on.
+- **Persist the included worktree's branch and status alongside its path** — avoids a git call.
+  Rejected: it is a cache of facts git owns, and the first stale entry is a worktree the list claims
+  exists after the user deleted it. FR-031 wants the opposite — the absence noticed and reported.
+
+**Consequence for the block message**: once a path is included, it passes the same test the list
+uses, so the holder classifies as `CheckedOutAt` rather than `CheckedOutOutsideApp` with no
+special-casing (FR-032). That the two follow from one test is the invariant BUG-001 established;
+inclusion has to widen the test, never fork it.
+
+---
+
+## R14 — Why an unavailable row must consume its press (BUG-002)
+
+**Decision**: an unavailable row stays a real press target that deliberately does nothing. The
+component consumes the event; it does not decline it.
+
+**Rationale**: "listed but not selectable" was implemented as "a button with no press message", and
+in this rendering stack a button without a handler does not capture the mouse event. The event
+therefore continues past the row — past the floating list, which captures only presses *outside*
+itself — and past the dialog panel, whose opaque guard covers its own rectangle only. A result list
+floats over and beyond the dialog's edges by design (feature 021, FR-011/AS8), so a press on a row
+below the dialog's lower edge reaches the full-window scrim behind it, whose press message is the
+dialog's cancellation. Pressing an unavailable branch closed the whole form.
+
+The fix belongs to the component for the same reason R8's trade did: every caller that marks a row
+unavailable inherits the behaviour, and no caller can be expected to reason about which of its rows
+happen to render outside its parent's bounds. It is also geometry-dependent, which is why it
+survived — a short list keeps every row inside the dialog, where the opaque panel swallows the press
+and the requirement appears to hold.
+
+**Alternatives considered**:
+
+- **Have the floating list capture every press within its own bounds** — one place, no per-row
+  change. Kept as a belt-and-braces measure (it is the same handler that already computes those
+  bounds), but not as the primary fix: it makes the list responsible for the failure of things
+  inside it, and a row that is transparent to presses stays wrong wherever else it is used.
+- **Omit unavailable rows from the list** — no press to mishandle. Rejected outright: FR-012 exists
+  because a branch that vanishes from the list is a branch the user cannot find out about.
+- **Leave it and rely on the dialog's opaque panel** — rejected; it only holds while the list fits
+  inside the dialog, which is precisely the condition nobody can guarantee.

@@ -9,6 +9,7 @@ fn worktree(status: WorktreeStatus) -> Worktree {
         path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
         branch: Some("feat/x".to_string()),
         status,
+        included: false,
     }
 }
 

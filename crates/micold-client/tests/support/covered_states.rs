@@ -85,6 +85,7 @@ fn worktree(dir_name: &str, branch: &str) -> Worktree {
             .join(dir_name),
         branch: Some(branch.to_string()),
         status: WorktreeStatus::Valid,
+        included: false,
     }
 }
 

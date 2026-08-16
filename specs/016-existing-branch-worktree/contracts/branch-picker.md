@@ -69,6 +69,19 @@ only branches are checked out; "This repository has no other branches" when ther
 
 ## 3. Selection behavior
 
+> **Superseded in part by feature 021 (FR-012a), and amended by BUG-002.** A blocked candidate is no
+> longer selectable at all: it is listed, marked, and refuses the pick where the pick happens, rather
+> than being accepted and refused at Create. The paragraph below records the original trade and why
+> it was made; research R8's reasoning still explains the *listing*, not the selection.
+>
+> **What the refusal must do (BUG-002, FR-034/FR-035)**: consume the press and nothing else. The row
+> stays a real press target that deliberately does nothing — the list stays open, the selection is
+> unchanged, every form input survives. Withholding the row's press *message* is how "not selectable"
+> is expressed, but it must not also make the row transparent to the press: an unclaimed press
+> travels past the floating list to whatever sits beneath, and beneath a list that floats past the
+> dialog's edges is the dialog's own scrim. The user reached for a branch and lost the form. See
+> research R14.
+
 Blocked candidates remain **selectable** (research R8). On selecting one:
 
 - the blocked explanation is shown inline, naming the holder (FR-012, FR-021)
@@ -139,6 +152,10 @@ it.
 7. `preview()` under `Existing` derives from the selected candidate; under `New` it is unchanged
    (FR-014).
 8. Selecting a blocked candidate disables submit; selecting an available one re-enables it.
+8a. *(BUG-002)* A press on a blocked row leaves the form open, its inputs unchanged and its list
+    open — **including when the row renders outside the dialog's own bounds**, which is the only
+    position where the defect appears. A state-level assertion cannot see this; the test has to
+    drive a press at a coordinate (FR-034/FR-035, SC-009).
 9. The §5 skip rule: a picked `LocalAvailable` submits `ReuseLocal` directly, a picked `RemoteOnly`
    submits `TrackRemote`, and neither path can reach `Overwrite`.
 

@@ -321,6 +321,8 @@ impl DaemonState {
                             .cloned()
                             .unwrap_or_else(|| wt.dir_name.clone()),
                         status: wire_worktree_status(wt.status),
+                        path: wt.path.clone(),
+                        included: wt.included,
                     })
                     .collect();
             }
@@ -589,7 +591,8 @@ impl DaemonState {
         let repo = self.lock().catalog.project_repo(project);
         match repo {
             Some((repo, true)) => {
-                let discovered = worktree::discover(&GitCli::new(), &repo);
+                let included = self.included_worktrees(project);
+                let discovered = worktree::discover(&GitCli::new(), &repo, &included);
                 self.lock()
                     .worktrees
                     .insert(project.to_path_buf(), discovered);
@@ -598,6 +601,42 @@ impl DaemonState {
                 self.lock().worktrees.remove(project);
             }
         }
+    }
+
+    /// The worktrees `project` shows from outside the app's own directory (016 BUG-002, FR-030).
+    ///
+    /// Read under the lock and returned by value, never held across the git subprocess that uses it
+    /// — the same discipline [`Self::refresh_worktrees`] states for the repo path.
+    pub fn included_worktrees(&self, project: &Path) -> Vec<PathBuf> {
+        self.lock().catalog.included_worktrees(project)
+    }
+
+    /// Start showing `path` among `project`'s worktrees, persisting it (016 BUG-002, FR-027).
+    pub fn include_worktree(&self, project: &Path, path: &Path) -> io::Result<()> {
+        self.lock().catalog.include_worktree(project, path)
+    }
+
+    /// Stop showing `path` (016 BUG-002, FR-030).
+    pub fn exclude_worktree(&self, project: &Path, path: &Path) -> io::Result<()> {
+        self.lock().catalog.exclude_worktree(project, path)
+    }
+
+    /// `project`'s worktree at `path`, as the catalog snapshot now presents it (016 BUG-002).
+    ///
+    /// Read after a refresh, so it answers from live discovery rather than from what the caller
+    /// hoped: a path that was included but is no longer there simply is not here.
+    pub fn worktree_snapshot_at(
+        &self,
+        project: &Path,
+        path: &Path,
+    ) -> Option<micold_core::protocol::messages::WorktreeSnapshot> {
+        self.catalog_snapshot()
+            .projects
+            .into_iter()
+            .find(|p| p.path == project)?
+            .worktrees
+            .into_iter()
+            .find(|w| w.path == path)
     }
 
     /// Set a worktree's display-name override for `project` (validated by the caller), persisting.

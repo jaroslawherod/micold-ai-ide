@@ -44,6 +44,7 @@ fn happy_path_creates_branch_and_worktree() {
         &names(),
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |_| {},
     )
     .unwrap();
@@ -72,6 +73,7 @@ fn a_new_branch_create_against_a_taken_name_is_rejected_without_mutation() {
         &names(),
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |_| {},
     )
     .unwrap_err();
@@ -91,6 +93,7 @@ fn duplicate_target_dir_is_rejected() {
         &names(),
         true,
         &CreateMode::NewBranch,
+        &[],
         &mut |_| {},
     )
     .unwrap_err();
@@ -113,6 +116,7 @@ fn submodules_are_fetched_when_present() {
         &names(),
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |e| events.push(e),
     )
     .unwrap();
@@ -155,6 +159,7 @@ fn submodule_fetch_is_skipped_when_absent() {
         &names(),
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |_| {},
     )
     .unwrap();
@@ -176,6 +181,7 @@ fn plain_repo_stage_sequence_has_no_submodule_stage() {
         &names(),
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |e| events.push(e),
     )
     .unwrap();
@@ -220,6 +226,7 @@ fn duplicate_registered_worktree_is_rejected() {
         &names(),
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |_| {},
     )
     .unwrap();
@@ -235,6 +242,7 @@ fn duplicate_registered_worktree_is_rejected() {
         &other,
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |_| {},
     )
     .unwrap_err();
@@ -260,6 +268,7 @@ fn reuse_checks_out_the_existing_branch_without_recreating_it() {
         &names(),
         false,
         &CreateMode::ReuseLocal,
+        &[],
         &mut |_| {},
     )
     .unwrap();
@@ -289,6 +298,7 @@ fn reuse_progress_names_the_checkout_step() {
         &names(),
         false,
         &CreateMode::ReuseLocal,
+        &[],
         &mut |e| events.push(e),
     )
     .unwrap();
@@ -324,6 +334,7 @@ fn overwrite_replaces_the_branch_and_creates_the_worktree() {
         &names(),
         false,
         &CreateMode::Overwrite,
+        &[],
         &mut |_| {},
     )
     .unwrap();
@@ -353,6 +364,7 @@ fn tracking_a_remote_branch_creates_a_local_branch_that_tracks_it() {
         &CreateMode::TrackRemote {
             remote: "origin".to_string(),
         },
+        &[],
         &mut |_| {},
     )
     .unwrap();
@@ -388,6 +400,7 @@ fn starting_fresh_over_a_remote_only_name_creates_an_untracked_branch() {
         &names(),
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |_| {},
     )
     .unwrap();
@@ -410,6 +423,7 @@ fn a_free_name_still_creates_exactly_as_before() {
         &names(),
         false,
         &CreateMode::NewBranch,
+        &[],
         &mut |e| events.push(e),
     )
     .unwrap();

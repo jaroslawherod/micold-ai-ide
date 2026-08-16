@@ -213,6 +213,7 @@ fn state_with_current_session() -> State {
         path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
         branch: Some("feat/a".to_string()),
         status: WorktreeStatus::Valid,
+        included: false,
     }];
     let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
     let id = session.id;

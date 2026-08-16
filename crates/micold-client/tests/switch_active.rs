@@ -104,6 +104,7 @@ fn two_projects_with_worktrees() -> State {
         path: PathBuf::from("/a/.claude/worktrees/wa2"),
         branch: Some("feat/wa2".to_string()),
         status: WorktreeStatus::Valid,
+        included: false,
     }];
     st
 }
@@ -115,6 +116,7 @@ fn b_worktrees() -> Vec<Worktree> {
         path: PathBuf::from("/b/.claude/worktrees/wb"),
         branch: Some("feat/wb".to_string()),
         status: WorktreeStatus::Valid,
+        included: false,
     }]
 }
 

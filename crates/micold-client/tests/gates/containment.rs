@@ -360,6 +360,7 @@ fn the_recorded_scroll_overflow_is_the_sidebar_list() {
                     path: std::path::PathBuf::from("/fixture/project").join(format!("feat-{i:02}")),
                     branch: Some(format!("feat/{i:02}")),
                     status: micold_core::worktree::WorktreeStatus::Valid,
+                    included: false,
                 })
                 .collect(),
             sidebar_width: 260,

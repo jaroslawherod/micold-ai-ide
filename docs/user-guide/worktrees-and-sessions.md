@@ -294,6 +294,36 @@ That last case is worth knowing about if a branch looks perfectly ordinary and i
 It usually means a worktree you created outside the app — or a tool you used before this one —
 still holds it. Removing that worktree (`git worktree remove <path>`) releases the branch.
 
+### Including a worktree that already exists
+
+For that last case there is a better answer than deleting anything: **Include that worktree**, the
+button the message offers. The work is already there, in a worktree you or another tool created —
+including it simply tells the app to show it too, exactly where it is.
+
+What it does **not** do matters as much as what it does:
+
+- Nothing is moved, copied, renamed, or re-registered. The worktree stays where it is, and the tool
+  that created it goes on finding it there.
+- No git command runs at all. The branch, its commits, and the repository are untouched.
+- The branch is still checked out in that worktree, so it still can't back a *second* one. What
+  changes is that you can now work in the one that holds it, from here.
+
+An included worktree behaves like any other: it appears in the sidebar, hosts sessions, and can be
+renamed or deleted. Two things mark it out. Its row carries an **outside this app** tag, and hovering
+it shows the full path — a folder name alone wouldn't tell you where a worktree the app didn't create
+actually lives. And if its folder name happens to match one of the app's own worktrees, the app shows
+it under a qualified name rather than renaming anything on disk.
+
+Inclusion is remembered per project, across restarts, and is reversible: right-click the row and
+choose **Stop showing**. That removes it from the sidebar and leaves it completely untouched on
+disk — it is the opposite of Delete, not a milder version of it. Deleting an included worktree is
+still possible, and its confirmation names the full path it is about to remove, precisely because
+that path is somewhere the app didn't put it.
+
+One case inclusion does not cover: a folder under `.claude/worktrees/` that git has *forgotten*
+about. That is already listed, marked invalid, and no branch is held for it — so it never produces
+the refusal above. Repairing one is a `git worktree repair` job, outside the app.
+
 ## Managing a worktree (right-click)
 
 Right-click a worktree in the sidebar to open its context menu:
@@ -305,9 +335,14 @@ Right-click a worktree in the sidebar to open its context menu:
   rename the folder on disk or the git branch, and the type/issue tags are unaffected (they
   keep deriving from the branch). The custom name is remembered across app restarts. Clearing
   it is not needed — just rename again.
+- **Stop showing** — only on a worktree you *included* (see
+  [Including a worktree that already exists](#including-a-worktree-that-already-exists)). Removes
+  the row from the sidebar and changes nothing on disk: the worktree, its branch, and its files are
+  exactly as they were. Include it again at any time.
 - **Delete** — removes the worktree completely. A confirmation dialog first spells out exactly
   what will be removed: the worktree directory under `.claude/worktrees/` and **all of its
-  sessions** — this part is unconditional. If the worktree has an associated git branch, the
+  sessions** — this part is unconditional. (For an *included* worktree the dialog gives its full
+  path instead, and says it is one outside the app, because that is where the deletion lands.) If the worktree has an associated git branch, the
   dialog also offers an **"Also delete the branch"** checkbox, **checked by default** so
   confirming without changing anything behaves exactly as before (the branch is deleted along
   with everything else). Uncheck it to keep the branch — the directory and sessions are still

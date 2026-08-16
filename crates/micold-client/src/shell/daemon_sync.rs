@@ -83,6 +83,10 @@ pub enum PendingOp {
     BranchList {
         project: PathBuf,
     },
+    /// A `WorktreeInclude` / `WorktreeExclude` (016 BUG-002). Both carry the path so a failure can
+    /// name what it was about, and so the reply is recognisable without re-deriving it.
+    WorktreeInclude(PathBuf),
+    WorktreeExclude(PathBuf),
     WorktreeRename(String),
     ProjectAdd,
     ProjectRemove,
@@ -105,6 +109,10 @@ impl PendingOp {
             PendingOp::BranchList { .. } => "list the branches".into(),
             PendingOp::WorktreeDelete(d) => format!("delete the worktree \"{d}\""),
             PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
+            PendingOp::WorktreeInclude(p) => format!("include the worktree at {}", p.display()),
+            PendingOp::WorktreeExclude(p) => {
+                format!("stop showing the worktree at {}", p.display())
+            }
             PendingOp::ProjectAdd => "add the project".into(),
             PendingOp::ProjectRemove => "remove the project".into(),
             PendingOp::ProjectRename => "rename the project".into(),
@@ -275,16 +283,20 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
     if sync_worktrees {
         if let Some(active) = core.workspace.active.clone() {
             if let Some(project) = snapshot.projects.iter().find(|p| p.path == active) {
-                let root = active.join(".claude/worktrees");
                 core.set_worktrees(
                     project
                         .worktrees
                         .iter()
                         .map(|w| micold_core::worktree::Worktree {
                             dir_name: w.dir_name.clone(),
-                            path: root.join(&w.dir_name),
+                            // The daemon's path, not one rebuilt from the app's own worktree root:
+                            // an included worktree is not under that root, and reconstructing the
+                            // location would put every one of them somewhere they are not
+                            // (016 BUG-002, FR-029).
+                            path: w.path.clone(),
                             branch: w.branch.clone(),
                             status: wire_to_worktree_status(w.status),
+                            included: w.included,
                         })
                         .collect(),
                 );
@@ -490,6 +502,8 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                             path,
                             branch: None,
                             status: micold_core::worktree::WorktreeStatus::Valid,
+                            // The app made this one, so it is not an inclusion (016 BUG-002).
+                            included: false,
                         }));
                 }
             }
@@ -544,6 +558,26 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                                 .update(Message::AddWorktreeConflictDetected(situation)),
                         }
                     }
+                }
+            }
+            // 016 BUG-002: the daemon answers with the row its own discovery produced, so
+            // the worktree appears at the moment the user asked for it rather than at the
+            // next catalog push — which also arrives, and agrees.
+            Some(PendingOp::WorktreeInclude(_)) => {
+                if let OperationResult::WorktreeIncluded { worktree } = result {
+                    app.core
+                        .update(Message::WorktreeIncluded(micold_core::worktree::Worktree {
+                            dir_name: worktree.dir_name,
+                            path: worktree.path,
+                            branch: worktree.branch,
+                            status: wire_to_worktree_status(worktree.status),
+                            included: worktree.included,
+                        }));
+                }
+            }
+            Some(PendingOp::WorktreeExclude(_)) => {
+                if let OperationResult::WorktreeExcluded { path } = result {
+                    app.core.update(Message::WorktreeExcluded(path));
                 }
             }
             // Same staleness guard: a listing for a project that is no longer the active
@@ -1250,6 +1284,44 @@ pub fn on_terminal_resized(app: &mut App, cols: u16, rows: u16) -> Task<Message>
 ///
 /// NOTE: the daemon keeps the branch (no keep/delete wire flag yet), so the confirm dialog's
 /// "delete branch" choice is currently a no-op — branch deletion needs a wire field (deferred).
+/// 016 BUG-002 (FR-027/FR-030). Both are settings-only on the daemon side: no git command runs, and
+/// the worktree stays exactly where it is. The reply carries the row as the daemon's own discovery
+/// sees it, so the client renders that rather than deriving a second answer to the same question.
+pub fn on_worktree_include_requested(app: &mut App, path: PathBuf) -> Task<Message> {
+    if let Some(project) = app.core.workspace.active.clone() {
+        let p = path.clone();
+        send_op(app, PendingOp::WorktreeInclude(path), move |req| {
+            ClientMsg::WorktreeInclude {
+                req,
+                project,
+                path: p,
+            }
+        });
+    }
+    Task::none()
+}
+
+pub fn on_worktree_exclude_requested(app: &mut App, dir: String) -> Task<Message> {
+    let path = app
+        .core
+        .worktrees
+        .iter()
+        .find(|w| w.dir_name == dir && w.included)
+        .map(|w| w.path.clone());
+    if let (Some(path), Some(project)) = (path, app.core.workspace.active.clone()) {
+        let p = path.clone();
+        send_op(app, PendingOp::WorktreeExclude(path), move |req| {
+            ClientMsg::WorktreeExclude {
+                req,
+                project,
+                path: p,
+            }
+        });
+    }
+    app.core.update(Message::WorktreeExcludeRequested(dir));
+    Task::none()
+}
+
 pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
     let target = app.core.worktree_delete_target.clone();
     if let (Some(dir), Some(project)) = (target, app.core.workspace.active.clone()) {

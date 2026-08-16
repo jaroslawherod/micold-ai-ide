@@ -77,6 +77,7 @@ fn created_worktree_is_added_and_form_closed() {
         path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
         branch: Some("feat/x".to_string()),
         status: WorktreeStatus::Valid,
+        included: false,
     };
     state.update(Message::WorktreeCreated(wt));
     assert_eq!(open_dialog(&state), None);
@@ -195,6 +196,7 @@ fn session_started_selected_and_closed() {
         path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
         branch: Some("feat/x".to_string()),
         status: WorktreeStatus::Valid,
+        included: false,
     }]);
 
     let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
@@ -282,6 +284,7 @@ fn state_with_worktree_and_session(dir: &str) -> State {
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),
         status: WorktreeStatus::Valid,
+        included: false,
     });
     let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
     state.update(Message::SessionStarted(session));
@@ -411,6 +414,7 @@ fn agent_worktree(hex: &str) -> Worktree {
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("worktree-agent-{hex}")),
         status: WorktreeStatus::Valid,
+        included: false,
     }
 }
 
@@ -1327,6 +1331,7 @@ fn state_with_current_session_in(dir: &str) -> State {
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),
         status: WorktreeStatus::Valid,
+        included: false,
     }];
     let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
     let id = session.id;
@@ -1362,6 +1367,7 @@ fn collapsing_the_revealed_row_closes_it_and_it_stays_closed() {
         path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
         branch: Some("feat/feat-a".to_string()),
         status: WorktreeStatus::Valid,
+        included: false,
     }]);
     assert!(
         !state.location_open(&location),
@@ -1516,6 +1522,7 @@ fn state_with_many_worktrees(count: usize) -> State {
             path: PathBuf::from(format!("/repo/.claude/worktrees/feat-{i:02}")),
             branch: Some(format!("feat/{i:02}")),
             status: WorktreeStatus::Valid,
+            included: false,
         })
         .collect();
     let session = Session::start_new(SessionLocation::Worktree(format!("feat-{:02}", count - 1)));
@@ -1603,12 +1610,14 @@ fn starting_a_session_reveals_it() {
             path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
             branch: Some("feat/feat-a".to_string()),
             status: WorktreeStatus::Valid,
+            included: false,
         },
         Worktree {
             dir_name: "feat-b".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/feat-b"),
             branch: Some("feat/feat-b".to_string()),
             status: WorktreeStatus::Valid,
+            included: false,
         },
     ]);
     state.pending_reveal_scroll = false;
