@@ -338,6 +338,12 @@ a session survived; confirm it does not survive without the setting.
 - **FR-006b**: The restart supervision of FR-005 applies only to a process that exits while the
   service is running. It MUST NOT be triggered by service startup, so a service restart can never
   cause an agent to take action without the user asking for it.
+- **FR-006c**: Starting a session whose working directory does not exist MUST be refused. The service
+  MUST NOT substitute another directory — not the user's home directory, not the project root — and
+  MUST NOT leave a process registered for a refused start. This applies to every start: a user's
+  explicit resume, a restore on reopening, and an automatic respawn after a crash. The check MUST be
+  made against the filesystem at the moment of the spawn rather than against a cached worktree
+  status, since a directory can be removed between a refresh and a start (BUG-012).
 - **FR-007**: Terminating the user interface MUST NOT terminate sessions. Session termination MUST
   only occur on explicit user request or by the service's own supervision rules.
 - **FR-007a**: Automatic pruning of empty sessions MUST run only for a project that currently has an
@@ -700,6 +706,10 @@ plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
   spawned at, in 100% of cases; the service's default size appears only for a session no size was ever
   reported for. Proven by an executable test, not a walkthrough, and covering the crash respawn and
   additional-terminal-instance spawn paths as well as the first start.
+- **SC-024** (bugfix BUG-012): Zero sessions are started in a directory other than the one their
+  location names. A start whose directory does not exist is refused in 100% of cases and registers no
+  process, and a start whose directory exists is unaffected — proven by an executable test covering
+  both outcomes, since a guard that refused everything would satisfy the first alone.
 
 ---
 
@@ -716,6 +726,17 @@ changes). See `bugs/BUG-005.md`.
 position, so a client that did not start a session can still drive it), FR-045a (discarding user
 input must be logged at the shipped verbosity and reach the FR-046 surface), a new Edge Case (a new
 client process attaching to a session it did not start), and SC-020. See `bugs/BUG-006.md`.
+
+**Bugfix**: 2026-08-16 — BUG-012 Added FR-006c (a start whose working directory does not exist is
+refused, with no substituted directory and no registered process, checked against the filesystem at
+spawn time) and SC-024. The substituted directory was never chosen here: `portable-pty` filters a
+missing `cwd` out and falls back to `$HOME`, which also changes how the command binary is resolved, so
+a session whose worktree was deleted outside the application ran an agent against the user's home
+directory with nothing on screen saying so. The daemon already computed `WorktreeStatus::Missing` for
+the row badge and never read it on the spawn path. Found by feature 025's §B2 pass, which had
+recorded this route as a dead end for that feature's FR-014 — it was this defect, not a dead end, so
+the refusal turns it into a second way to reach that screen alongside the `PATH` route found
+independently the same day. See `bugs/BUG-012.md`.
 
 **Bugfix**: 2026-08-07 — BUG-010 Added FR-016g (the activity receiver must accept every signal the
 agent legitimately emits, including payloads sized by the agent's own tool I/O; a size bound must be

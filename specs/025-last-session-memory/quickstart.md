@@ -92,8 +92,12 @@ the `restart` control, never claim to be starting. The ordinary path no longer r
 
 The route that works is to take `claude` off `PATH` before reopening — the daemon is asked to start
 the session, cannot spawn the process, and leaves it exactly as FR-014 describes. A second window
-holding the project does **not** work, and neither does a deleted worktree: in both the daemon keeps
-streaming, so the pane is never empty. See the recorded runs below.
+holding the project does **not** work: the daemon keeps streaming, so the pane is never empty. A
+deleted worktree did not work either when this was recorded, for the same reason — but that was
+[`010` BUG-012](../010-daemon-session-persistence/bugs/BUG-012.md), fixed the same day, and since
+`010`'s FR-006c refuses a start whose directory is gone that route now fails the spawn too. The
+`PATH` route is still the one to use: it is the one whose pane was watched. See the recorded runs
+below.
 
 ### B3 — The restored terminal is ready to type (FR-013)
 
@@ -464,6 +468,14 @@ session, so frames keep arriving and the pane is never empty. The empty pane nee
 produced *no process*, which means the spawn has to fail — remove `claude` from `PATH` and reopen.
 Recorded above under **FR-014, reached deliberately**.
 
+> **And since [`010` BUG-012](../010-daemon-session-persistence/bugs/BUG-012.md) was fixed the same
+> day, the deleted-worktree route reaches it too.** That route was not a dead end but a *defect*: the
+> daemon started the session anyway, in `$HOME`, which is why it streamed. `010`'s FR-006c now refuses
+> a start whose directory is gone, so the spawn produces no process — the same mechanism the `PATH`
+> route uses, arrived at from the other side. Noted as a consequence of that fix rather than as a
+> second recorded run: the refusal has executable coverage (`010` SC-024), but the `PATH` route above
+> is the one whose pane was actually watched, and it stays the route this step asks for.
+
 #### Two findings from this run
 
 **1. A resumed session's status stays `interrupted`, and keeps offering `restart`.** The terminal is
@@ -499,7 +511,10 @@ it. Whether that fallback is deliberate is not something this pass can tell.
 > instructions in can now be rooted at the user's home directory with nothing on screen saying so.
 > It also bears on this feature: 025's clarification that a deleted-worktree session should still be
 > restored was decided when restoring started nothing, and BUG-002 changed what restoring means
-> without that answer being revisited.
+> without that answer being revisited. **Fixed 2026-08-16** (`010` FR-006c/SC-024): such a start is
+> now refused rather than redirected. The clarification still holds as written — the session is still
+> *restored*, listed and selectable as any missing-worktree session is; what no longer happens is a
+> process being started for it somewhere else.
 
 Neither is a §B step failing, and neither is in this feature's scope to fix — both belong to what
 BUG-002 changed rather than to the memory itself.

@@ -82,9 +82,35 @@ pub struct PtySession {
     reader: Option<JoinHandle<()>>,
 }
 
+/// Refuse a spawn whose working directory does not exist (FR-006c, BUG-012).
+///
+/// [`CommandBuilder`] does **not** fail on a missing `cwd`: it filters the path out and substitutes
+/// the user's home directory, which also changes how the command binary itself is resolved. So a
+/// session whose worktree was deleted outside the application would otherwise start — silently, and
+/// against `$HOME` rather than the project it names. For an AI-CLI session, which is a thing the
+/// user gives instructions to, that is the wrong tree to act on rather than a cosmetic detail.
+///
+/// Checked against the filesystem at spawn time rather than against the daemon's cached worktree
+/// statuses: the cache is refreshed on its own schedule, and the directory can vanish between a
+/// refresh and this call. The cache remains the right source for the row's `missing` badge.
+fn ensure_cwd_exists(cwd: &std::path::Path) -> io::Result<()> {
+    if cwd.is_dir() {
+        return Ok(());
+    }
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!(
+            "session working directory does not exist: {}",
+            cwd.display()
+        ),
+    ))
+}
+
 impl PtySession {
     /// Spawn `claude` for `spec` as a daemon-owned session (FR-006). `scrollback_lines` sets the VT
     /// history depth; `initial_size` seeds the grid (falls back to the standard seed).
+    ///
+    /// Refused if `spec.cwd` does not exist (FR-006c, BUG-012).
     pub fn spawn_claude(
         id: SessionId,
         spec: &LaunchSpec,
@@ -92,6 +118,7 @@ impl PtySession {
         initial_size: Option<(u16, u16)>,
         settings_file: Option<&std::path::Path>,
     ) -> io::Result<Self> {
+        ensure_cwd_exists(&spec.cwd)?;
         let mut cmd = CommandBuilder::new(ClaudeProvider.command());
         cmd.cwd(&spec.cwd);
         for (k, v) in &spec.env {
@@ -111,6 +138,8 @@ impl PtySession {
 
     /// Spawn the platform's plain interactive shell in `cwd` as a daemon-owned session
     /// (contracts/shell-process.md). No `claude`-specific args apply.
+    ///
+    /// Refused if `cwd` does not exist (FR-006c, BUG-012).
     pub fn spawn_shell(
         id: SessionId,
         cwd: &std::path::Path,
@@ -118,6 +147,7 @@ impl PtySession {
         scrollback_lines: usize,
         initial_size: Option<(u16, u16)>,
     ) -> io::Result<Self> {
+        ensure_cwd_exists(cwd)?;
         let shell = std::env::var("SHELL").ok();
         let comspec = std::env::var("COMSPEC").ok();
         let command = default_shell_command(shell.as_deref(), comspec.as_deref());
