@@ -31,7 +31,7 @@
 //! A constructor taking seven supplied implementations is the obvious next thing to write, and it
 //! was written and then deleted: nothing called it. A seam nobody drives is not evidence that
 //! anything is substitutable — the same argument T042 makes about a fake no test constructs. What
-//! the capabilities actually bought is demonstrated where it is real, in `main.rs`'s
+//! the capabilities actually bought is demonstrated where it is real, in `shell/persist.rs`'s
 //! `boot_drops_a_session_the_provider_has_no_conversation_for`: that pruning rule could not be
 //! tested at all before, because it reached `ClaudeProvider` and the user's home directory
 //! directly. Add the constructor when a caller needs it.
