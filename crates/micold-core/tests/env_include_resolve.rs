@@ -491,27 +491,12 @@ fn a_hanging_script_costs_its_own_budget_and_not_the_baselines_as_well() {
 /// port reported itself as a live violation.
 #[test]
 fn every_test_that_sources_a_script_takes_the_spawn_lock() {
-    let src = include_str!("env_include_resolve.rs");
-    let writes = format!("{}_{}(", "write", "script");
-    let guards = format!("{}_{}()", "spawn", "guard");
-
-    let mut spawning = Vec::new();
-    let mut unguarded = Vec::new();
-    let mut non_spawning = Vec::new();
-
-    for (name, body) in test_bodies(src) {
-        if name == "every_test_that_sources_a_script_takes_the_spawn_lock" {
-            continue;
-        }
-        if !body.contains(&writes) {
-            non_spawning.push(name);
-            continue;
-        }
-        spawning.push(name.clone());
-        if !body.contains(&guards) {
-            unguarded.push(name);
-        }
-    }
+    let (spawning, _non_spawning) = classify_tests();
+    let unguarded: Vec<&String> = spawning
+        .iter()
+        .filter(|(_, guarded)| !guarded)
+        .map(|(name, _)| name)
+        .collect();
 
     assert!(
         unguarded.is_empty(),
@@ -519,9 +504,19 @@ fn every_test_that_sources_a_script_takes_the_spawn_lock() {
          other spawning test in this binary (BUG-004): {unguarded:?}\n\nAdd `let _guard = \
          spawn_guard();` as the first statement, before any `Instant::now()`."
     );
+}
 
-    // Vacuity. A scan that matched nothing would pass the assertion above without looking at
-    // anything, and this file's whole failure mode is a check that quietly stops checking.
+/// The vacuity check for the rule above, and its own test rather than a third assertion inside it.
+///
+/// A scan that matched nothing would satisfy "no test is unguarded" without having looked at
+/// anything — and a check that quietly stops checking is this file's entire failure mode, twice
+/// over now. Kept separate because two probes that both land on one test cannot be told apart by
+/// which tests they break: feature 021 T055 hit exactly that and the answer was to split the test,
+/// not to drop a probe.
+#[test]
+fn the_body_scan_finds_the_tests_it_is_meant_to_read() {
+    let (spawning, non_spawning) = classify_tests();
+
     assert!(
         spawning.len() >= 14,
         "expected at least the fourteen spawning tests both platform modules declare, found {}: \
@@ -537,6 +532,35 @@ fn every_test_that_sources_a_script_takes_the_spawn_lock() {
         "expected both platforms' missing-script tests to be classified as non-spawning; found \
          {non_spawning:?}. If they now write a script they need the guard like everything else."
     );
+}
+
+/// Reads this file and sorts its tests into `(spawning, guarded?)` and the rest.
+///
+/// A test **spawns** if it writes a script and resolves it. The two `nonexistent_path_…` tests
+/// resolve a path that does not exist, so `resolve()` returns `MissingScript` before touching a
+/// shell; they contend for nothing and are correctly unguarded.
+fn classify_tests() -> (Vec<(String, bool)>, Vec<String>) {
+    let src = include_str!("env_include_resolve.rs");
+    let writes = format!("{}_{}(", "write", "script");
+    let guards = format!("{}_{}()", "spawn", "guard");
+
+    let mut spawning = Vec::new();
+    let mut non_spawning = Vec::new();
+    for (name, body) in test_bodies(src) {
+        // This helper's own body names both needles; so would either test that calls it.
+        if name == "classify_tests"
+            || name == "every_test_that_sources_a_script_takes_the_spawn_lock"
+            || name == "the_body_scan_finds_the_tests_it_is_meant_to_read"
+        {
+            continue;
+        }
+        if body.contains(&writes) {
+            spawning.push((name, body.contains(&guards)));
+        } else {
+            non_spawning.push(name);
+        }
+    }
+    (spawning, non_spawning)
 }
 
 /// `(name, body)` for every `fn name() {` in `src`, the body matched by brace depth.
