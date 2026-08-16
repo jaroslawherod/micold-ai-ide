@@ -12,8 +12,8 @@ use crate::grid::GridCache;
 use crate::icons::Icon;
 use crate::icons::{mode_glyph, mode_tooltip};
 use crate::ui::material::{
-    self, Button, ButtonVariant, ContextMenu, GridSizeReporter, IconButton, MenuItem, SurfaceKind,
-    TerminalPane, Text, Tooltip, TooltipPosition, TypeRole,
+    self, Button, ButtonVariant, ContextMenu, Divider, GridSizeReporter, IconButton, MenuItem,
+    SurfaceKind, TerminalPane, Text, Tooltip, TooltipPosition, TypeRole,
 };
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
@@ -573,27 +573,43 @@ fn attached_process_restartable(state: &State, id: SessionId) -> bool {
     }
 }
 
-/// The container variant a switcher tab draws in (BUG-001, FR-004a).
+/// The accent an active switcher tab's indicator is drawn in — `None` for an inactive tab
+/// (BUG-002, FR-004b).
 ///
-/// Both arms draw a container. That is the whole rule, and it is the one the original code broke:
-/// the inactive arm was `Text`, which paints neither background nor outline, so the row rendered
-/// as one filled pill among loose numbers instead of as a tab strip. The active/inactive
-/// difference has to be *emphasis between two containers* — never container against nothing.
+/// A tab strip marks its selected member with an **indicator**, not with a container. BUG-001 had
+/// this as `tab_variant`, choosing `Filled` for the active tab and `Outlined` for the rest, and
+/// that was the wrong idiom: it read the original defect (one filled pill among loose numbers) as
+/// "the entries need containers", when the missing container was only half of it. The half nothing
+/// had ever written down is that a tab strip underlines the active tab. Neither tab draws a
+/// container now.
 ///
-/// Its own function so the rule is a pure value test rather than a claim about a `view()` no unit
-/// test can reach; `tab_variant_always_draws_a_container` below is that test.
-pub(crate) fn tab_variant(is_active: bool) -> ButtonVariant {
-    if is_active {
-        ButtonVariant::Filled
-    } else {
-        ButtonVariant::Outlined
-    }
+/// Its own function for the same reason its predecessor was: the rule is then a pure value test
+/// rather than a claim about a `view()` no unit test can reach.
+pub(crate) fn tab_indicator_colour(is_active: bool, r: tokens::Roles) -> Option<Rgb> {
+    is_active.then_some(r.primary)
 }
 
-/// A switcher tab's label box (BUG-001, FR-004a/SC-008). Wide enough for a two-digit instance id
-/// at `TypeRole::Label`, and fixed so the tab does not resize when a session reaches ten open
-/// instances — a tab that grows mid-row moves every tab after it.
-const TAB_LABEL_WIDTH: f32 = 20.0;
+/// A switcher tab's width (BUG-002).
+///
+/// Uniform and fixed, which is what makes the indicator work at all. The indicator is a rule, and a
+/// rule spans the width it is given — `Length::Fill` inside a content-sized tab resolves against the
+/// *button's* available space, not the label's, so the active tab stretched to several times its
+/// neighbour's width and activation resized it under the pointer. Found by the visual pass; no gate
+/// could see it, because every node was exactly where its own layout said it was.
+///
+/// A fixed width fixes it at the root rather than by measuring: the indicator's `Fill` resolves to
+/// this, every tab measures the same whatever it contains, and SC-008 holds by construction instead
+/// of by arithmetic. It also survives the rename feature — a name ellipsises inside the tab rather
+/// than resizing the strip, which is how a browser tab bar behaves.
+const TAB_WIDTH: f32 = 128.0;
+
+/// The widest a switcher tab's label may grow before it ellipsises (BUG-002, T054).
+///
+/// A *maximum*, not the fixed two-digit box BUG-001 used. That box was sized for an ordinal, and an
+/// instance is to become renameable from a right-click menu — a tab will show a name, and a width
+/// chosen for `99` would have to be undone that day. Content-sized under a ceiling serves both, and
+/// costs nothing now.
+const TAB_LABEL_MAX_WIDTH: f32 = 120.0;
 
 /// The trailing close control's layout footprint. A leading spacer of the same width balances it,
 /// putting the label on the tab's midline rather than off-centre toward the leading edge
@@ -659,16 +675,19 @@ fn instance_switcher_row<'a>(
     }
     let mut entries = row![].spacing(spacing::SM).align_y(Alignment::Center);
     for instance in &session.shells {
-        // The active tab reads as filled, the rest as outlined — two containers differing in
-        // emphasis (FR-004a), never a container against bare text.
-        let variant = tab_variant(session.active_shell == Some(instance.id));
-        // Both nested controls take the colour this tab draws its own label in (FR-011a), rather
-        // than `IconButton`'s `on_surface` default, which vanishes on the filled tab.
-        let tint = variant.content(r);
-        // Fixed-width and centred, so the label sits on the tab's midline and a two-digit id
-        // does not resize the tab (SC-008).
-        let label = container(Text::new(instance.id.0.to_string(), TypeRole::Label, r))
-            .center_x(Length::Fixed(TAB_LABEL_WIDTH));
+        // No tab draws a container (FR-004b). The active one is marked by an indicator and by its
+        // label taking the accent; the rest are muted labels.
+        let indicator = tab_indicator_colour(session.active_shell == Some(instance.id), r);
+        // Every nested control takes the colour this tab draws its own label in (FR-011a). That
+        // matters more without a container than it did with one: the accent is now the only thing
+        // separating the active tab from its neighbours, so a close glyph left on `on_surface`
+        // would read as belonging to a different tab than the label beside it.
+        let tint = indicator.unwrap_or(r.on_surface_variant);
+        // Content-sized under a ceiling, centred (FR-004a's surviving clause). Not a fixed
+        // two-digit box: a tab is to show a name once instances can be renamed.
+        let label = container(Text::new(instance.id.0.to_string(), TypeRole::Label, r).tint(tint))
+            .max_width(TAB_LABEL_MAX_WIDTH)
+            .center_x(Length::Shrink);
         let close = Tooltip::new(
             IconButton::new(Icon::Close, r)
                 .size(TypeRole::Label)
@@ -710,10 +729,31 @@ fn instance_switcher_row<'a>(
                 .on_press(Message::ShellInstanceRestartRequested(id, instance.id)),
             );
         }
+        // The indicator sits at the tab's **top** edge, not Material's bottom: this bar is anchored
+        // to the window's bottom, so the pane a tab selects is *above* it and a bottom indicator
+        // would point away from what it marks (FR-004b).
+        //
+        // Every tab reserves the bar's height whether or not it draws one — an inactive tab gets a
+        // transparent rule of the same thickness. An indicator that appeared only on activation
+        // would grow its tab by 3dp and push the row, which is exactly the reflow SC-008 forbids,
+        // and it would do it under the pointer between a press and its release.
+        let marked = column![
+            match indicator {
+                Some(accent) => Divider::horizontal(r)
+                    .thickness(anatomy::tab::INDICATOR)
+                    .tint(accent)
+                    .into(),
+                None => Element::from(Space::new().height(Length::Fixed(anatomy::tab::INDICATOR))),
+            },
+            content,
+        ]
+        .align_x(Alignment::Center);
         entries = entries.push(
-            Button::with_content(content, variant, r)
-                // The same explicit padding on both variants, so §7.3's per-variant default never
-                // applies and the two tabs measure alike (SC-008).
+            Button::with_content(marked, ButtonVariant::Text, r)
+                // `Text` on every tab: no background, no outline (FR-004b). One fixed width for all
+                // of them, so the indicator's `Fill` resolves to the tab rather than to whatever
+                // space the bar happens to offer, and every tab measures the same (SC-008).
+                .width(Length::Fixed(TAB_WIDTH))
                 .padding(spacing::SM)
                 .on_press(Message::ShellInstanceSelected(id, instance.id)),
         );
@@ -828,34 +868,48 @@ mod tests {
         }
     }
 
-    /// BUG-001, FR-004a: neither arm may be the variant that paints nothing.
+    /// BUG-002, FR-004b: exactly the active tab carries an indicator.
     ///
-    /// Asserted over both arms rather than pinning each to a named variant, because the rule is
-    /// "every tab draws a container", not "the inactive tab is outlined" — swapping `Outlined` for
-    /// another container variant is a design choice this test should not litigate, while dropping
-    /// back to `Text` is the regression it exists to catch.
+    /// Replaces `tab_variant_always_draws_a_container`, which asserted neither arm was
+    /// `ButtonVariant::Text`. That test was right for BUG-001 and is wrong now — every tab is
+    /// `Text`, because no tab draws a container. It is replaced rather than deleted: a test that
+    /// pins a decision *should* fail when the decision changes, and what would be wrong is leaving
+    /// the new rule unpinned afterwards.
     #[test]
-    fn tab_variant_always_draws_a_container() {
-        for is_active in [true, false] {
-            assert_ne!(
-                tab_variant(is_active),
-                ButtonVariant::Text,
-                "a switcher tab (is_active={is_active}) must draw a container — `Text` paints \
-                 neither background nor outline, which is what made the row read as loose \
-                 characters in the status bar instead of a tab strip (BUG-001, FR-004a)"
+    fn only_the_active_tab_carries_an_indicator() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            assert_eq!(
+                tab_indicator_colour(true, r),
+                Some(r.primary),
+                "{scheme:?}: the active tab must be marked by an accent indicator (FR-004b)"
+            );
+            assert_eq!(
+                tab_indicator_colour(false, r),
+                None,
+                "{scheme:?}: an inactive tab draws no indicator — the mark is what distinguishes \
+                 the active one, so a second bar would say two tabs are selected"
             );
         }
     }
 
-    /// The two arms must also be distinguishable from each other, or SC-004 is lost — a row of
-    /// identical tabs says nothing about which instance is active.
+    /// The indicator is the *only* difference between the two states, and it must be an accent —
+    /// not the surrounding bar's foreground, which would read as a border artefact rather than a
+    /// selection (SC-009).
     #[test]
-    fn tab_variant_distinguishes_the_active_tab() {
-        assert_ne!(
-            tab_variant(true),
-            tab_variant(false),
-            "the active tab must differ in emphasis from the rest (SC-004)"
-        );
+    fn the_indicator_is_an_accent_not_a_surface_colour() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            let accent = tab_indicator_colour(true, r).expect("active tab has an indicator");
+            assert_ne!(
+                accent, r.on_surface,
+                "{scheme:?}: the indicator must be an accent, not the bar's own foreground"
+            );
+            assert_ne!(
+                accent, r.surface,
+                "{scheme:?}: an indicator painted in the surface colour is invisible"
+            );
+        }
     }
 
     #[test]

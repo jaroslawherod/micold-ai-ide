@@ -39,19 +39,37 @@ that.)*
   spec's own "sequentially numbered" assumption — no separate title source exists for a shell
   instance). *(Bugfix BUG-001: "small entry" left the entries' visual form open, and the row was
   built with a container on the active entry only. Every entry is a tab — FR-004a.)*
-- **Tab form** (BUG-001, FR-004a): every tab — active and inactive alike — is a container of the
-  same shape and size. Inside it, the label is horizontally centred and the close control is
-  pinned to the trailing edge (a fill between them, not a fixed gap). A tab's size does not depend
-  on whether it is active, so activation never reflows the row (SC-008); give the label a minimum
-  width so single- and double-digit ids do not resize their tab either.
-- **Active entry** (`session.active_shell == Some(entry.id)`) is visually distinguished
-  (highlight/selected style), ~~mirroring `TreeItem::selected` visually even though this row is not
-  a `TreeItem` (research.md R3)~~ — a user must be able to tell which instance is active from this
-  row alone (FR-004, SC-004), without opening it. *(Bugfix BUG-001: the `TreeItem::selected`
-  analogy does not transfer — `TreeItem` is a full-width sidebar row where an uncontained inactive
-  state reads fine, and taken literally here it produced container-vs-bare-text.)* The distinction
-  MUST be **container versus container** (active: filled/high-emphasis; inactive: low-emphasis
-  container), never container versus nothing (FR-004a).
+- **Tab form** (BUG-001, FR-004a; container rule superseded by BUG-002, FR-004b): ~~every tab —
+  active and inactive alike — is a container of the same shape and size.~~ **No tab draws a
+  container.** Inside a tab, the label is horizontally centred and the close control is pinned to
+  the trailing edge (a fill between them, not a fixed gap). A tab's size does not depend on whether
+  it is active, so activation never reflows the row (SC-008) — which now means the *indicator* must
+  occupy its space whether or not it is drawn, rather than appearing and pushing the row.
+  ~~give the label a minimum width so single- and double-digit ids do not resize their tab either.~~
+  **Every tab is one fixed width** (`TAB_WIDTH`), the same whatever it contains (FR-004c). That is
+  not cosmetic: the indicator is a rule, and a rule spans the width it is given. Sized inside a
+  content-width tab, its `Length::Fill` resolves against the *button's* available space rather than
+  the label's — the active tab stretched to several times its neighbour's width, and activation
+  resized it under the pointer. The visual pass caught it; no gate could, because every node was
+  where its own layout said it was. The figure is set by what must fit: `spacing::SM` either side,
+  then two `anatomy::button::MIN_TOUCH_TARGET` widths (the close control, and the leading spacer
+  balancing it) plus a readable label. A longer label ellipsises within the tab rather than widening
+  it, which is also the behaviour a name needs once instances can be renamed (BUG-002, "Related").
+- **Active entry** (`session.active_shell == Some(entry.id)`) is marked by an **active indicator**
+  — a user must be able to tell which instance is active from this row alone (FR-004, SC-004),
+  without opening it. ~~mirroring `TreeItem::selected`~~ ~~The distinction MUST be **container
+  versus container** (active: filled/high-emphasis; inactive: low-emphasis container), never
+  container versus nothing.~~ *(Both superseded: the `TreeItem` analogy by BUG-001, the
+  container-versus-container rule by BUG-002. Each was reaching for "make the active one obvious"
+  without naming the idiom, and a tab strip's idiom is an indicator.)*
+- **Active indicator** (BUG-002, FR-004b): an accent bar spanning the active tab's width, thick
+  enough to read at a glance rather than a hairline, drawn at the tab's **top** edge — this bar is
+  anchored to the window's bottom, so the pane a tab selects is above it and a bottom indicator
+  would point away from what it marks. The active tab's label additionally takes the accent colour,
+  so the cue is carried twice: without a container, one thin line alone is what the original
+  rationale rightly warned against (SC-004, SC-009). Inactive tabs are low-emphasis labels — no
+  container, no indicator. Every tab reserves the indicator's height whether or not it draws one,
+  so activation moves colour and nothing else (SC-008).
 - Clicking an entry's body dispatches `Message::ShellInstanceSelected(entry.id)`.
 - Each entry carries its own close action (a small trailing icon/button, reusing ~~`Icon::Delete`
   — the same icon feature 008's delete affordance already uses~~ **`Icon::Close`**) dispatching
