@@ -15,7 +15,7 @@ order is not arbitrary: every tier needs the one before it.
 | 1 | **Feature modules** — one module per feature, holding its types together with the functions over them | landed |
 | 2 | **Overlay registry** — floating surfaces register themselves instead of being enumerated in a match | landed |
 | 3 | **Reducer modules + outcomes** — per-feature reducers, and cross-feature effects expressed as returned outcomes rather than direct writes | pending |
-| — | **Shell split** — `main.rs` divided along the same seams, with capabilities assembled at boot | pending |
+| — | **Shell split** — `main.rs` divided by external system, with capabilities assembled at boot | landed |
 
 Tier 1 is the foundation: without per-feature boundaries there is nothing for the overlay registry
 to register into, and nothing for a per-feature reducer to be a reducer *of*.
@@ -70,9 +70,10 @@ module anything lives *in* — and Tier 2 is what fixed it: each surface is desc
 module that owns it, and `overlay/` holds only the shared type and the registration list.
 
 If a feature needs two modules, that is the signal something is misfiled — with one current
-exception, recorded rather than hidden: the Settings form's validation still lives in `main.rs`'s
-`Message::SettingsSaved` arm, because it is reducer code returning a `Task`. It joins
-`features/settings.rs` in Tier 3.
+exception, recorded rather than hidden: the Settings form's validation still lives in the
+`Message::SettingsSaved` arm — `shell/persist.rs::on_settings_saved` since the shell split moved it
+out of `main.rs` — because it is reducer code returning a `Task`. It joins `features/settings.rs` in
+Tier 3.
 
 ### What is still in `app.rs`
 
@@ -221,7 +222,207 @@ surface with no exit.
 
 ## Adding a capability
 
-_(Shell split — pending: fill when capabilities are assembled at boot, per task T057.)_
+A **capability** is a narrow trait in `micold-core` naming one thing the application needs from
+outside the process: run a git command, read the settings file, list a directory, ask the desktop
+whether it prefers dark. The core declares what it needs; the shell supplies it. Everything between
+those two — every feature module, every reducer arm, every view — sees only the trait.
+
+Adding one costs **a trait and a fake in the core, one line in the port list, one line in
+`Capabilities::real`, and an accessor.** The steps below are the whole of it.
+
+### 1. Declare the trait in the core, beside what it is about
+
+`micold-core/src/git.rs` holds `Git`; `env_include.rs` holds `EnvIncludeResolver`; `os_theme.rs`
+holds `OsThemeProbe`. Not a `ports/` directory — a capability lives with the domain it serves, for
+the same reason a feature's types live with the functions over them.
+
+**Narrow, and the test is stated rather than judged.**
+`specs/021-mvu-slice-architecture/contracts/service-capabilities.md`: *if a test must implement a
+method it does not exercise merely to satisfy the trait, the capability is too wide and must be
+split*. That is FR-016, and it is checked —
+`no_test_is_forced_to_supply_an_operation_it_does_not_use` flags any port method in a test whose
+parameters are all `_`-prefixed and whose body never mentions `self`, because such a method can
+only return a constant.
+
+It fired six times when it was written, and the answers went two different ways. `FolderScanner`
+genuinely was too wide: every consumer that took it as a trait asked only `is_git_repo` and
+`is_available`, while the one caller of `list_subdirs` reached for `StdFolderScanner` concretely —
+so listing became `FolderBrowser`, a second capability the same type implements. `ProjectStore` was
+**not** too wide; its only trait consumer exercises all three operations, and the stubs were
+hand-rolled fakes written because no shared fake existed. Splitting it would have made the codebase
+worse to score a check green. **A width failure is a question, not a verdict** — but the check is
+never the thing that gets relaxed.
+
+### 2. Write the fake next to it
+
+```rust
+/// A resolver that spawns nothing and remembers what it was asked (FR-019).
+pub struct FakeEnvIncludeResolver { inner: RefCell<FakeResolverState> }
+```
+
+An ordinary `pub` item in the core, beside the capability. **Not behind a `cfg`, not in a separate
+crate** — a fake any crate's tests can reach without configuration is worth more than the dead code
+it costs, and `FakeGit` set that precedent long before this feature.
+
+**Record what it was asked, not only what it answered.** `FakeEnvIncludeResolver::calls()` returns
+every `(path, cwd, timeout)` in order, and that is what lets a test assert the *absence* of a call:
+the env-include short-circuit's claim is not that the outcome is `Disabled`, it is that no
+subprocess was spawned at all. An outcome can be right for the wrong reason. Where answers change
+over time, script them — `FakeOsThemeProbe` consumes a list and repeats the last entry, so a test
+says how many *distinct* answers it cares about rather than how many times something polls.
+
+**The `Fake` prefix is load-bearing.** It is how the guards tell a double from a real
+implementation, so a real one named `FakeSomething` would be waved through every check in
+`no_concrete_implementations.rs`. `the_only_excluded_implementations_are_fakes` holds a list of the
+nine that exist; add yours in the commit it appears in.
+
+### 3. Add the port to `tests/inventory/mod.rs::PORTS`
+
+```rust
+pub const PORTS: &[&str] = &["Git", "ProjectStore", …, "EnvIncludeResolver", "OsThemeProbe"];
+```
+
+One list, read by both capability guards, because two scanners that happen to agree today is exactly
+how a check keeps passing while its idea of the subject quietly diverges. Every gate that needs to
+know what a capability is shares this definition rather than writing a second one — the same reason
+`tests/inventory/` exists at all. Add the name **the moment the trait exists**: a capability the
+guards do not know about is one FR-017 and FR-019 are not holding, and the omission is silent —
+every check still passes, having looked at nothing.
+
+### 4. Choose the real implementation in `Capabilities::real`, once
+
+```rust
+// crates/micold-client/src/shell/capabilities.rs
+pub fn real() -> Self {
+    Self {
+        git: Arc::new(GitCli::new()),
+        env_include: Arc::new(SubprocessResolver),
+        …
+    }
+}
+
+/// Sourcing the environment-include script.
+pub fn env_include(&self) -> &dyn EnvIncludeResolver { &*self.env_include }
+```
+
+**This function is the single assembly point** (FR-018), and "once" is literal:
+`each_implementation_is_chosen_in_exactly_one_place` counts occurrences of the type name across the
+shell and fails at anything but exactly one. That is why `StdFolderScanner` — which implements both
+folder capabilities — is built into a local and shared rather than named twice.
+
+Return `&dyn Trait` from the accessor. Return an `Arc` only when a consumer genuinely cannot borrow
+the application: `browser()` does, because the folder listing runs inside `Task::perform`'s
+`async move`, which is `'static`. Wrap in `Option` only when the real implementation can fail to
+*locate itself* — both stores resolve from a per-user data directory that a headless container may
+not have. That is not an error the application reports; it runs without persistence, and the value
+of the `Option` is that the question is asked once instead of at every call site.
+
+Capabilities are supplied by dynamic dispatch on purpose (FR-019b). Every call here is already
+gated behind disk, a subprocess or an OS query, none is reachable from the rendering path, and
+threading generic parameters through to preserve static dispatch would make FR-018's single
+assembly point harder to express for a cost that does not exist.
+
+### 5. Use it from the shell module for its external system
+
+| Module | The system it addresses |
+|---|---|
+| `shell/capabilities.rs` | none — it is the list of which implementation to use |
+| `shell/startup.rs` | boot: the window, the assembly, the first frame |
+| `shell/persist.rs` | the on-disk catalog and settings file |
+| `shell/daemon_sync.rs` | a running session daemon, over the protocol |
+| `shell/service_control.rs` | the session service as an OS process — pids, `loginctl` |
+| `shell/subscriptions.rs` | the iced runtime and the OS events it carries |
+| `shell/workspace.rs` | the user's filesystem and their git working copies |
+| `shell/env_include.rs` | a subprocess running the user's own script |
+| `shell/os_theme.rs` | the desktop's light/dark preference |
+| `shell/clipboard.rs` | the system clipboard |
+
+**One module per external system, and never per feature** (FR-019a). The question the split answers
+is "what can a change to this one outside thing reach", so the module boundary follows the system,
+not the caller: `default_resolution_cwd` is in `env_include.rs` because it exists to answer *which
+directory to source in*, though its five call sites span boot and a settings save.
+
+That rule cuts both ways. `daemon_sync` and `service_control` are two modules for one service,
+because a daemon speaking the protocol and a daemon that must be killed by pid are different
+systems — the second is used precisely *when* the first is unusable. The OS theme is split the same
+way: `subscriptions` owns the clock that decides when to ask, `os_theme` owns the asking. And two
+systems can share one module when they are one conversation — `workspace.rs` holds `FolderBrowser`
+and `Git` together because the picker exists to find a repository and the same arm asks git what
+worktrees it holds, so splitting it would put two halves of one decision in two files.
+
+If two capabilities are one conversation, one module. If one capability is reached two ways, two.
+
+### What you do *not* do
+
+**Name a real implementation outside `shell/`.** The guard
+`no_code_outside_the_shell_names_a_real_implementation` reads every client source and fails on the
+mention — not the construction, the *mention*, because a file that names one has already decided
+which is used. Comments are exempt.
+
+**Add a `from_parts` constructor so a test can inject fakes.** One was written and deleted for want
+of a caller. A seam nobody drives is not evidence that anything is substitutable; what the
+capabilities actually bought is demonstrated where it is real, in `shell/persist.rs`'s
+`boot_drops_a_session_the_provider_has_no_conversation_for`, a pruning rule that could not be tested
+at all while it reached `ClaudeProvider` and the user's home directory directly. Add the constructor
+when a caller needs it.
+
+**Reach a capability from a feature module.** They cannot name a real implementation and must not
+name the rendering framework either; a feature that needs something from outside says so in its
+return value.
+
+### The three ports that are not in `Capabilities`, and why each is not an oversight
+
+`OsThemeProbe` is chosen at its call site. Its only consumer is `os_theme_poll`'s
+`Subscription::map` closure, and iced panics on boot if a subscription's mapping closure captures
+anything — a capturing closure has no stable identity, so the runtime restarts the underlying timer
+every frame. A closure that cannot capture cannot be handed a capability. It is a real exception to
+FR-018, recorded at `shell/capabilities.rs` rather than enforced anywhere, because the guard cannot
+see it either way: that derivation reads `micold-core`, and `SystemThemeProbe` is defined in the
+client — `dark-light` is a client dependency and the core deliberately has none on it.
+
+`TerminalBackend` and `TerminalHandle` have only fakes in the workspace, so there is no real
+implementation for an assembly point to choose. They predate this feature and FR-015 lists them as
+already satisfactory.
+
+### The one I/O concern that is not a capability at all
+
+**The clipboard.** All three of its call sites return a deferred `Task` rather than a value, so a
+synchronous port cannot wrap them without blocking — which is what FR-015a is for: where the GUI
+framework makes a synchronous capability impossible, the concern becomes an explicit **effect
+request** in the outcome vocabulary, and the shell interprets it.
+
+```rust
+// crates/micold-client/src/shell/clipboard.rs
+pub fn interpret(outcome: Outcome) -> Task<Message> {
+    match outcome {
+        Outcome::ClipboardWrite(text) => iced::clipboard::write(text),
+    }
+}
+```
+
+The obligations do not weaken. FR-017 still applies (no feature reaches `iced::clipboard`), and so
+does FR-019/SC-005 — the request must be assertable with zero real I/O, which is what
+`tests/clipboard_request.rs` checks. `interpret` is the whole translation, one arm per variant and
+no branch, and `the_shells_translation_decides_nothing` reads its body to keep it that way: a body
+that grew an `if` would still compile and still pass every behaviour test.
+
+The paste does **not** convert. Reads arrive back as an ordinary message exactly as before, and no
+feature requests one — `clipboard::read` is a shell call, not an effect a reducer asks for.
+
+### The guards, and what each would catch
+
+| Guard | Catches |
+|---|---|
+| `no_concrete_implementations.rs` | a real implementation named outside `shell/`, or chosen in more or fewer than exactly one place |
+| `service_capability_fakes.rs` | a capability with no fake, a fake no test constructs, a capability wider than its consumers |
+| `clipboard_request.rs` | a feature reaching the framework's clipboard, and a shell translation that decides anything |
+| `features_are_render_free.rs` | a feature module naming the rendering framework |
+
+Both capability guards derive their subject rather than listing it — every `impl <Port> for <Type>`
+in the core, minus the fakes. The argument for that is one line long: a hardcoded list of four was
+already missing `ClaudeProvider` on the day it was written. Each file carries a vacuity test
+holding the derivation to finding what it must, so a scan blinded by a reformatted `impl` header
+fails loudly instead of passing everything.
 
 ## Reading and writing across features
 
