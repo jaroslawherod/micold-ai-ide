@@ -472,3 +472,112 @@ fn a_hanging_script_costs_its_own_budget_and_not_the_baselines_as_well() {
          baseline probe above all — has to come out of it rather than be added to it (BUG-003)."
     );
 }
+
+/// Every test that sources a real script takes the spawn lock (BUG-004).
+///
+/// Structural, because forgetting the guard is **silent**: the test passes locally, passes on unix
+/// where the guard is a no-op anyway, and passes on Windows most of the time. It shows up as one
+/// more process in a race that four other tests then lose — which is the failure BUG-004 is about,
+/// and it took five CI re-runs and two bug reports to attribute. A ninth spawning test added
+/// without the guard would put it straight back.
+///
+/// A test **spawns** if it writes a script and resolves it. The two `nonexistent_path_…` tests
+/// resolve a path that does not exist, so `resolve()` returns `MissingScript` before touching a
+/// shell; they contend for nothing and are correctly unguarded.
+///
+/// The needles are assembled at runtime rather than written as literals. This test reads the file
+/// it is written in, so a literal `"write_script("` here would be found in its own body — the same
+/// self-matching trap `service_capability_fakes.rs` records hitting, where a fixture naming a real
+/// port reported itself as a live violation.
+#[test]
+fn every_test_that_sources_a_script_takes_the_spawn_lock() {
+    let src = include_str!("env_include_resolve.rs");
+    let writes = format!("{}_{}(", "write", "script");
+    let guards = format!("{}_{}()", "spawn", "guard");
+
+    let mut spawning = Vec::new();
+    let mut unguarded = Vec::new();
+    let mut non_spawning = Vec::new();
+
+    for (name, body) in test_bodies(src) {
+        if name == "every_test_that_sources_a_script_takes_the_spawn_lock" {
+            continue;
+        }
+        if !body.contains(&writes) {
+            non_spawning.push(name);
+            continue;
+        }
+        spawning.push(name.clone());
+        if !body.contains(&guards) {
+            unguarded.push(name);
+        }
+    }
+
+    assert!(
+        unguarded.is_empty(),
+        "these tests source a real script but do not take the spawn lock, so they race every \
+         other spawning test in this binary (BUG-004): {unguarded:?}\n\nAdd `let _guard = \
+         spawn_guard();` as the first statement, before any `Instant::now()`."
+    );
+
+    // Vacuity. A scan that matched nothing would pass the assertion above without looking at
+    // anything, and this file's whole failure mode is a check that quietly stops checking.
+    assert!(
+        spawning.len() >= 14,
+        "expected at least the fourteen spawning tests both platform modules declare, found {}: \
+         {spawning:?}. The body scan has drifted from the source it reads.",
+        spawning.len()
+    );
+    assert_eq!(
+        non_spawning
+            .iter()
+            .filter(|n| n.as_str() == "nonexistent_path_is_missing_script_with_no_vars")
+            .count(),
+        2,
+        "expected both platforms' missing-script tests to be classified as non-spawning; found \
+         {non_spawning:?}. If they now write a script they need the guard like everything else."
+    );
+}
+
+/// `(name, body)` for every `fn name() {` in `src`, the body matched by brace depth.
+///
+/// Depth-matched rather than "up to the next `}`", because a test body contains braces — a `match`
+/// arm, a format string's `{elapsed:?}` — and stopping at the first one would read a fraction of
+/// the body and call it whole.
+fn test_bodies(src: &str) -> Vec<(String, String)> {
+    let code: String = src
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let mut out = Vec::new();
+    let mut rest = code.as_str();
+    while let Some(at) = rest.find("fn ") {
+        let after = &rest[at + 3..];
+        let Some(paren) = after.find('(') else { break };
+        let name = after[..paren].trim().to_string();
+        let Some(open) = after.find('{') else { break };
+
+        let mut depth = 0usize;
+        let mut end = after.len();
+        for (i, c) in after.char_indices().skip(open) {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            out.push((name, after[open..end].to_string()));
+        }
+        rest = &after[end.min(after.len())..];
+    }
+    out
+}
