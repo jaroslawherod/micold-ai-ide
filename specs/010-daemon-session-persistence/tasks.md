@@ -1586,3 +1586,34 @@ reopened** — T053's spawn sites and the `SessionResize` arm implement what was
 never made session size service-owned state (its "Resize while detached" edge case said so and no FR
 carried it). Added FR-020a and SC-023 to `spec.md`, the third bullet to `contracts/protocol.md`'s
 spawned-start section, and Phase 25 (T131–T132). See `../006-real-terminal-emulator/bugs/BUG-003.md`.
+
+---
+
+## Phase 26: Bugfix BUG-012 — a session whose directory is gone is started in `$HOME`
+
+**Goal**: Refuse a start whose working directory does not exist, instead of letting the PTY library
+substitute the user's home directory (FR-006c, SC-024). Found by feature 025's §B2 pass, where a
+session in a deleted worktree resumed with cwd `$HOME`.
+
+- [X] T133 [BUG-012] Failing tests in `crates/micold-daemon/tests/session_cwd_guard.rs`: spawning
+  into a directory that does not exist is refused with `ErrorKind::NotFound`; `start_session` for a
+  session whose worktree was deleted returns an error and registers **no** live session; and a
+  session whose directory *does* exist still starts — the third case is what stops the guard being
+  satisfied by refusing everything (SC-024's both-outcomes clause). Uses Regular/shell sessions, so
+  no `claude` binary is needed; both modes pass through the same guard.
+- [X] T134 [BUG-012] In `crates/micold-daemon/src/supervisor.rs`, add `ensure_cwd_exists` and call it
+  at the top of `spawn_claude` and `spawn_shell` — beside the `cmd.cwd(...)` that hands the path to
+  `CommandBuilder`, whose `.filter(|dir| Path::new(dir).is_dir()).unwrap_or(home)` is the
+  substitution being prevented. Guarding there rather than in `start_session` covers
+  `respawn_primary` in the same change: a crash respawn has no client request behind it and so no
+  other place to be refused. Makes T133 pass (FR-006c).
+
+**Checkpoint**: A session whose worktree was deleted outside the application does not start, and no
+process is left registered for it. The terminal area shows the not-running state and its `restart`
+control — feature 025's FR-014. That §B2 had recorded this route as a dead end; it was this defect,
+so the refusal turns it into a second route to that screen, beside the `PATH` one found the same day.
+
+**Bugfix**: 2026-08-16 — BUG-012 **No task reopened.** No requirement covered what a start must do
+when its directory is gone, so the behaviour was decided by a dependency's silent fallback rather
+than by this project; T031's spawn sites implement what was specified. Added FR-006c and SC-024 to
+`spec.md`, and Phase 26 (T133–T134). See `bugs/BUG-012.md`.
