@@ -35,8 +35,16 @@
 
 use std::path::Path;
 
+use iced::Task;
+
+use micold_client::app::Message;
+use micold_core::protocol::messages::ClientMsg;
 use micold_core::provider::AiCliProvider;
 use micold_core::settings::{Settings, SettingsStore};
+
+use crate::shell::daemon_sync::PendingOp;
+use crate::shell::env_include::{default_resolution_cwd, refresh_env_include};
+use crate::App;
 
 use crate::{session_cwd_for_location, State};
 
@@ -96,6 +104,131 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
             core.notify_error(format!("Couldn't save your settings: {err}"));
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The arms (feature 021, T055)
+//
+// The Settings overlay is where this module's external system meets two others: the save writes
+// the file *and* tells a connected daemon to apply the service-owned fields *and* re-sources the
+// environment include. It is filed here because the write is the part that must not be lost — the
+// daemon send is best-effort (the next daemon boot reads the file regardless) and the re-source is
+// delegated to `shell::env_include`.
+// ---------------------------------------------------------------------------------------------
+
+/// Poll terminals: feed streamed bytes into the VT emulators, then detect unexpected
+/// exits and apply the crash-restart policy (FR-012, FR-022).
+/// Open Settings: let the reducer show the overlay, then seed the draft with the current
+/// scrollback value (FR-019/FR-020).
+pub fn on_settings_opened(app: &mut App) -> Task<Message> {
+    app.core.update(Message::SettingsOpened);
+    if let Some(draft) = app.core.settings_draft.as_mut() {
+        draft.scrollback_lines = app.scrollback_lines.to_string();
+        draft.env_include_enabled = app.env_include_enabled;
+        draft.env_include_script_path = app.env_include_script_path.clone();
+        draft.env_include_timeout = app.env_include_timeout_secs.to_string();
+    }
+    Task::none()
+}
+
+/// Save Settings: validate the scrollback and environment-include timeout fields; on
+/// success persist + apply + refresh + close, on failure keep the form open with an error
+/// (FR-020/FR-021; environment-include: FR-014, contracts/settings-ui.md).
+pub fn on_settings_saved(app: &mut App) -> Task<Message> {
+    let Some(draft) = app.core.settings_draft.clone() else {
+        return Task::none();
+    };
+
+    let scrollback_min = micold_core::settings::MIN_SCROLLBACK_LINES;
+    let scrollback_max = micold_core::settings::MAX_SCROLLBACK_LINES;
+    let scrollback_lines = match draft.scrollback_lines.trim().parse::<usize>() {
+        Ok(n) if (scrollback_min..=scrollback_max).contains(&n) => n,
+        Ok(_) => {
+            if let Some(d) = app.core.settings_draft.as_mut() {
+                d.error = Some(format!(
+                    "Enter a number between {scrollback_min} and {scrollback_max}."
+                ));
+            }
+            return Task::none();
+        }
+        Err(_) => {
+            if let Some(d) = app.core.settings_draft.as_mut() {
+                d.error = Some("Enter a whole number of lines.".to_string());
+            }
+            return Task::none();
+        }
+    };
+
+    let timeout_min = micold_core::settings::MIN_ENV_INCLUDE_TIMEOUT_SECS;
+    let timeout_max = micold_core::settings::MAX_ENV_INCLUDE_TIMEOUT_SECS;
+    let env_include_timeout_secs = match draft.env_include_timeout.trim().parse::<u64>() {
+        Ok(t) if (timeout_min..=timeout_max).contains(&t) => t,
+        Ok(_) => {
+            if let Some(d) = app.core.settings_draft.as_mut() {
+                d.error = Some(format!(
+                    "Enter a timeout between {timeout_min} and {timeout_max} seconds."
+                ));
+            }
+            return Task::none();
+        }
+        Err(_) => {
+            if let Some(d) = app.core.settings_draft.as_mut() {
+                d.error = Some("Enter a whole number of seconds.".to_string());
+            }
+            return Task::none();
+        }
+    };
+
+    app.scrollback_lines = scrollback_lines;
+    app.env_include_enabled = draft.env_include_enabled;
+    app.env_include_script_path = draft.env_include_script_path;
+    app.env_include_timeout_secs = env_include_timeout_secs;
+    if let Some(store) = app.caps.settings() {
+        if let Err(err) = store.save(&Settings {
+            theme: app.core.theme_pref,
+            scrollback_lines,
+            env_include_enabled: app.env_include_enabled,
+            env_include_script_path: app.env_include_script_path.clone(),
+            env_include_timeout_secs,
+        }) {
+            app.core
+                .notify_error(format!("Couldn't save your settings: {err}"));
+        }
+    }
+    // Also ask a connected daemon to apply the service-owned fields (scrollback,
+    // FR-012a; environment-include, FR-012b) so the change takes effect immediately for
+    // every session the daemon spawns — not just after its next restart re-reads the file
+    // this save just wrote (T100). Silently skipped while disconnected: unlike every other
+    // `send_op` caller, saving settings already has a fully-functional local-only path (the
+    // write above), so there's no "can't do this at all without a daemon" error to raise —
+    // the next daemon boot picks up the file regardless.
+    if let Some(daemon) = &app.daemon {
+        let req = app.next_req;
+        app.next_req += 1;
+        daemon.send(ClientMsg::SettingsSet {
+            req,
+            scrollback_lines: Some(scrollback_lines),
+            env_include_enabled: Some(app.env_include_enabled),
+            env_include_script_path: Some(app.env_include_script_path.clone()),
+            env_include_timeout_secs: Some(env_include_timeout_secs),
+        });
+        app.pending_ops.insert(req, PendingOp::SettingsSet);
+    }
+    // The enabled/path/timeout settings themselves changed, so every previously cached
+    // directory's snapshot is stale (BUG-002) — clear all of them, then eagerly re-source
+    // one representative directory so Settings shows fresh feedback immediately; every
+    // other directory lazily re-resolves the next time a session in it launches.
+    app.env_include_cache.clear();
+    let cwd = default_resolution_cwd(&app.core);
+    refresh_env_include(app, &cwd);
+    app.core.update(Message::SettingsSaved); // closes the overlay
+    Task::none()
+}
+
+pub fn on_theme_changed(app: &mut App, message: Message) -> Task<Message> {
+    app.core.update(message);
+    persist_settings(app.caps.settings(), &mut app.core);
+    Task::none()
 }
 
 #[cfg(test)]

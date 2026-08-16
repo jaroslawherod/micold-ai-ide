@@ -19,8 +19,11 @@
 //! `Err` is not an I/O concern, it is `theme::observe_system_scheme`, pure and tested in the core
 //! (FR-016). The split is three ways on purpose.
 
+use micold_client::app::Message;
 use micold_core::os_theme::OsThemeProbe;
 use micold_core::theme::SystemScheme;
+
+use crate::App;
 
 /// Translate the OS crate's own enum into the core's.
 ///
@@ -54,6 +57,22 @@ pub(crate) fn map_system_scheme(mode: dark_light::Mode) -> SystemScheme {
 /// widening the error type to satisfy a lint would not be.
 pub(crate) fn detect_system_scheme() -> Result<SystemScheme, ()> {
     SystemThemeProbe.detect()
+}
+
+/// Ask the OS again on the way back into the window (feature 021, T055).
+///
+/// Rather than waiting out the next poll tick: coming back from the OS theme settings is the
+/// single most likely moment for the app's idea of the scheme to be stale (003 FR-006), and the
+/// poll's unfocused cadence is a whole second.
+///
+/// Only on the way *in*. Probing on the way out would spend a D-Bus round trip to learn what the
+/// window is about to stop showing, and the poll never suspends anyway — see
+/// [`crate::shell::subscriptions`], where suspending it was the 003 bug.
+pub(crate) fn redetect_on_focus(app: &mut App, focused: bool) {
+    if focused {
+        app.core
+            .update(Message::SystemThemeChanged(detect_system_scheme()));
+    }
 }
 
 /// The real [`OsThemeProbe`] (feature 021, T047): the codebase's only direct operating-system

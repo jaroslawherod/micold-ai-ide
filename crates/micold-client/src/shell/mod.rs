@@ -17,9 +17,12 @@
 //! one message.
 
 pub mod capabilities;
+pub mod clipboard;
 pub mod daemon_sync;
 pub mod env_include;
 pub mod os_theme;
 pub mod persist;
+pub mod service_control;
 pub mod startup;
 pub mod subscriptions;
+pub mod workspace;
