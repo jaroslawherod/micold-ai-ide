@@ -39,6 +39,7 @@ expect README.md                                  set
 expect CLAUDE.md                                  set
 expect LICENSE                                    set
 expect dialog-list.png                            set
+expect .claude/skills/visual-pass/SKILL.md        set
 
 echo
 echo "== deleted paths still classify (check-attr never touches the worktree) =="
@@ -67,6 +68,9 @@ expect packaging/micold-ai-ide.desktop            unspecified
 expect .gitattributes                             unspecified
 # Markdown is documentation only at the repository root; a .md that is part of a crate is not.
 expect crates/micold-core/README.md               unspecified
+# Only `skills/` under `.claude`; the rest of that directory is the app's runtime state.
+expect .claude/worktrees/feat-x/src/lib.rs        unspecified
+expect .claude/settings.local.json                unspecified
 
 echo
 if [ "$failures" -ne 0 ]; then

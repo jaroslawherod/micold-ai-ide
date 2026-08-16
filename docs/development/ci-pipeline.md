@@ -41,6 +41,7 @@ specs/**      micold-docs
 /*.md         micold-docs
 /LICENSE      micold-docs
 /*.png        micold-docs
+.claude/skills/** micold-docs
 /CHANGELOG.md -micold-docs
 ```
 
@@ -53,6 +54,11 @@ That file is the single source of truth. Two consumers read it, both through the
 **Anything not listed is code.** Source, manifests, `Cargo.lock`, toolchain and tool
 configuration, `scripts/`, `packaging/`, `assets/`, and the workflows themselves are all
 code-affecting — even when only their comments change.
+
+**Only `skills/` under `.claude/` is documentation.** Those files instruct the coding agent and
+nothing in the build, the suite or the package opens them. The rest of that directory is the app's
+own runtime state — `worktrees/`, local settings — which is untracked, so it stays code by default
+rather than being declared prose it is not.
 
 **`CHANGELOG.md` is a build input, not documentation.** `micold-core`'s `metadata.rs` does
 `include_str!("../../../CHANGELOG.md")` so the app can show a "what's new" view offline, which

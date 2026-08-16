@@ -20,6 +20,11 @@ specs/**      micold-docs
 /LICENSE      micold-docs
 /*.png        micold-docs
 
+# Instructions the coding agent reads; nothing in the build, the suite or the package opens them.
+# Scoped to `skills/` rather than all of `.claude/` because the rest of that directory is the app's
+# own runtime state (`worktrees/`, local settings), which is untracked and not prose.
+.claude/skills/** micold-docs
+
 # Compiled into the binary, so a build input rather than documentation: micold-core's
 # `metadata.rs` does `include_str!("../../../CHANGELOG.md")` so the app can show a "what's new"
 # view with no filesystem or network access (Constitution Principle IV). Changing it changes the
