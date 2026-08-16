@@ -109,6 +109,15 @@ UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot
   failure, not even when the file is missing.
 - The variable name deliberately mirrors `UPDATE_STYLE_SNAPSHOT` from feature 017, so the two gates
   read as one idea rather than two conventions.
+- **`--test` is load-bearing** (BUG-001, FR-013a). It selects the *target*. Written as a bare
+  `layout_snapshot` it is a **test-name filter**, and no test here carries that name — the run
+  matches nothing, prints `0 passed; N filtered out`, and exits 0, so the caller is told it worked
+  while the fixture is untouched. Every place this command appears — the failure message, the
+  fixture's own header line (§2), the module doc, this contract, and
+  `docs/development/layout-snapshot.md` — must carry the identical form, and
+  `the_regenerate_hint_selects_this_target` asserts it rather than leaving it to review.
+- **Judge a regeneration by the fixture, not the exit code.** The broken form's exit code was 0, and
+  so is a correct run's; only one of them changes the file.
 
 ## 7. Stability guarantees this format does *not* make
 
