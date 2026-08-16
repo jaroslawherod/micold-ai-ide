@@ -306,3 +306,66 @@ Appended by `/speckit-converge` on 2026-08-05, after the feature's 41 tasks were
   **Done, 2026-08-05.** Both corrected, and in `docs/development/layout-snapshot.md` too, which had the typography row right but still told a reader scrolling was uncovered.
 
   The exclusion is struck from `contracts/layout-fixture.md` with a note saying it was there and why it went, rather than deleted silently — **a stale exclusion is the same defect as an unclear one, pointing the other way.** It tells a reader the gate is narrower than it is, and the cost is that nobody looks for coverage they already have. Both stale sites *understated* the gate, which is why nothing failed and why it took a converge pass to find (FR-015, SC-007)
+
+---
+
+## Phase 9: Bugfix BUG-001 — the documented commands ran nothing
+
+**Bugfix**: 2026-08-16 — BUG-001 Updated from bugfix patch.
+
+**Purpose**: `bugs/BUG-001.md`. Every documented invocation omitted `--test`, so
+`cargo test -p micold-client layout_snapshot` was a test-name filter matching nothing: it exited 0
+having run nothing. Eleven occurrences across five files, in both the regeneration hints and the
+quickstart's *run the gate* commands.
+
+**Requirements**: FR-013 (annotated), FR-013a, SC-005 (annotated), SC-007a. Contract §6.
+
+**No task is reopened, and that is the finding.** T024, T026 and T027 were each correct against
+their own text and their subjects work. T027 put regeneration behind `UPDATE_LAYOUT_SNAPSHOT=1` and
+proved it; T026 even read the gate's *source* rather than trusting behaviour, on the explicit
+reasoning that "the behavioural tests pass the flag in directly and therefore cannot see the trigger
+widening". That reasoning was right and stopped one step short: the tests also pass the *target* in
+directly, so nothing could see the printed invocation being unrunnable. The variable was verified;
+the command printed beside it was not.
+
+- [X] T045 Add `--test` to all eleven occurrences: `tests/support/layout.rs` (the fixture header
+  line, the missing-fixture panic), `tests/layout_snapshot.rs` (module doc, failure message),
+  `contracts/layout-fixture.md` (×3), `quickstart.md` (×4), `docs/development/layout-snapshot.md`.
+  The quickstart four are the ones that do not regenerate anything — Part A's headless "must still
+  pass", B1's deliberate-failure check, and the negative case — and they had been exercising nothing
+  (FR-013a). **Done** in PR #176.
+- [X] T046 Make the failure message explain the trap, so a reader who mistypes it learns why the run
+  said nothing rather than concluding the gate is broken (FR-004's spirit: a message that does not
+  let you act is not a message). **Done** in PR #176.
+- [X] T047 Add `the_regenerate_hint_selects_this_target` to `tests/layout_snapshot_regeneration.rs`:
+  read every printed `UPDATE_LAYOUT_SNAPSHOT=1 cargo test` line in both sources and fail if it lacks
+  `--test` (FR-013a). It belongs in *that* file, not a new one — the file exists to stop the gate
+  rewriting its baseline and reporting success, and this is its mirror image: telling the user to
+  rewrite the baseline in a way that reports success without doing it. **Done** in PR #176;
+  6 passed including the new gate.
+- [X] T048 Regenerate the fixture for its header line, and confirm **no geometry moved** — the
+  mechanical evidence that this was a tooling defect and not a layout one. **Done** in PR #176: the
+  diff is one line.
+- [X] T049 Re-run `quickstart.md` Part B1 and Part C with the corrected commands and settle their
+  recorded `[x]` marks. **Done, 2026-08-16 — both sections pass, and the marks stand.**
+
+  **B1**: bumped the terminal bar's mode-toggle padding by 8 (`spacing::SM + 8.0`), exactly as the
+  section prescribes, and ran the gate with `--test`. It **failed** (rc 101), named the covered
+  state `session-terminal-bottom-bar`, and named the elements with recorded-vs-observed geometry —
+  `0/0/0/1/1/1/0/5/0` moving 1228.0 → 1224.0 and resizing 40.0×47.2 → 48.0×48.0, plus its child.
+  All three recorded marks reproduce.
+
+  **C**: regenerated with that same intended change in place. `REGEN_RC=0` **and the fixture
+  actually changed** — 2 lines added, 2 removed, limited to the perturbed elements — then the
+  re-run passed, 23 tests. Both marks reproduce.
+
+  Perturbation and the fixture it produced were reverted; the tree is clean.
+
+  **What this settles**: the original `[x]` marks were *accurate observations recorded against a
+  mistyped command*. The gate does everything B1 and C claimed for it; only the written invocation
+  was wrong. BUG-001 therefore stays a documentation defect and does **not** become a coverage
+  finding — which was the open question, and it is worth having asked it rather than assumed the
+  gentler answer. SC-007a is now demonstrated: following the printed instruction verbatim accepts
+  the pending change, evidenced by the fixture moving.
+**Checkpoint**: every documented command selects the gate, one test enforces that, and the two old
+checkboxes have been re-run and stand.

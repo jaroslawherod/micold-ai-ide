@@ -189,3 +189,18 @@ than an observation (FR-019).
 |----------|------------|--------------------------------------|
 | Commit a Roboto binary as the measuring basis | FR-006 requires byte-identical output on three platforms; the host's fonts otherwise decide every text width (measured: 391 faces loaded, `Family::SansSerif` resolved per-platform) | Using the platform default produces a fixture that passes only where generated — the one option the spec explicitly rules out. Excluding text-derived geometry instead does not stay local: text width propagates into every ancestor that hugs its content, gutting the tree rather than one leaf category. |
 | Named anchors alongside index paths | FR-004 requires a failure to identify *the element*; `layout::Node` carries no name, type or id, so a bare path is the only identity available | Paths alone satisfy FR-002 but make FR-004's message weak and FR-018's demonstration unassertable. iced's `Operation` traversal can reach widget `Id`s but only for widgets implementing `operate` — most do not, so coverage would be partial *and silently so*, which is the failure FR-015 exists to prevent. |
+
+**Bugfix**: 2026-08-16 — BUG-001 Updated from bugfix patch. **This plan needed no change, and that
+is the point worth recording.** Every design decision above held: layout resolved headlessly, the
+fixture recorded and asserted byte-for-byte, and the write gate reached only through
+`UPDATE_LAYOUT_SNAPSHOT`. The defect was entirely in the strings that tell a human how to invoke the
+result — eleven of them, each missing `--test`, so the documented command was a test-name filter
+matching nothing and exited 0 having run nothing (FR-013a).
+
+The lesson is one this plan's own testing posture nearly reached. `layout_snapshot_regeneration.rs`
+was written on the insight that a test which passes the trigger in directly cannot see the trigger
+widening, so it reads the gate's *source* instead. The same is true one step over: those tests also
+pass the *target* in directly, so nothing could see the printed invocation being unrunnable. A
+string printed to a human was the one output of this feature that nothing verified — in a feature
+whose subject is that unverified claims decay. Where a plan schedules a gate, it is worth asking
+which of the feature's outputs the gate cannot see; here the answer was its own instructions.

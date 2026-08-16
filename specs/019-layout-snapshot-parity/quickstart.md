@@ -59,6 +59,18 @@ Pick any covered component and increase one padding value by 8.
 cargo test -p micold-client --test layout_snapshot
 ```
 
+> ✅ **Re-run and confirmed, 2026-08-16** (BUG-001, T049). Until that date the command above was
+> written without `--test`, which made it a test-name filter matching nothing — it reported
+> `0 passed` and exited 0, and a run like that cannot fail. The marks below were therefore recorded
+> against an invocation that could not have produced them. Re-running with the corrected command
+> reproduces **every behaviour they assert**: the gate failed (rc 101), named the covered state, and
+> named the moved elements with recorded-vs-observed geometry side by side, not a bare "the layout
+> changed". Note the *values* below are not reproduced and are not expected to be — this step says
+> "pick any covered component", and the re-run picked the terminal bar's mode toggle
+> (`session-terminal-bottom-bar`, `0/0/0/1/1/1/0/5/0`, 40.0×47.2 → 48.0×48.0) where the original
+> picked a sidebar element. The marks were accurate observations recorded against a mistyped
+> command; the gate itself was never at fault.
+
 - [x] The check **fails**.
 - [x] The message names the **covered state** (`main-shell-sidebar-expanded`).
 - [x] The message names the **element** — path `0/0/0/2/0/0/0/0`, and by anchor where one covers it.
@@ -142,6 +154,12 @@ Make a real, intentional layout change.
 UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot
 git diff crates/micold-client/tests/fixtures/layout_snapshot.txt
 ```
+
+> ✅ **Re-run and confirmed, 2026-08-16** (BUG-001, T049). The command above lacked `--test` until
+> that date, making it a filter that matched nothing and regenerated nothing. Re-running it with an
+> intended change in place regenerated the fixture (which **actually changed** — the only evidence
+> that counts here, since both the broken and the correct form exit 0) and the re-run passed. The
+> marks stand.
 
 - [x] The fixture updates and the check passes.
 - [x] The diff is **limited to the affected elements**: 610 changed against 610 removed — nothing

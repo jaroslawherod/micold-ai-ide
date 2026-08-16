@@ -107,7 +107,8 @@ A developer adds a new screen or dialog. Bringing it under the gate is a small, 
 - **FR-010**: Elements whose geometry depends on an animation MUST be recorded at a defined, reproducible point in that animation.
 - **FR-011**: Elements whose geometry depends on scroll position MUST be recorded at a defined, reproducible scroll offset.
 - **FR-012**: Recorded values MUST be normalised to a fixed precision sufficient to absorb floating-point noise while still distinguishing any difference a person could see.
-- **FR-013**: The system MUST provide a single documented command that regenerates the fixture deliberately, and MUST NOT regenerate it as a side effect of a normal run.
+- **FR-013**: The system MUST provide a single documented command that regenerates the fixture deliberately, and MUST NOT regenerate it as a side effect of a normal run. *(Annotated 2026-08-16 by BUG-001: the second clause always held; the first was violated in effect for the feature's whole life, because the command every artefact documented was missing `--test` and therefore ran nothing. The mechanism was correct throughout — only the written invocation was wrong, which is why nothing failed. See FR-013a.)*
+- **FR-013a** (bugfix BUG-001): The documented regeneration command MUST be **verified to select this gate**, not merely written down. A command that names the target as a bare test-name filter matches no test, reports `0 passed`, and exits 0 — so a reader following it accepts no baseline while being told it worked. Every place the command is printed or committed — the failure message, the fixture's own header line, the module doc, the contract, and the user-facing docs — MUST carry the same verified form, and that agreement MUST be asserted mechanically rather than maintained by review.
 - **FR-014**: The check MUST fail when a covered state can no longer be constructed, so removing a screen is a visible event rather than a silent loss of coverage.
 - **FR-015**: The check MUST document what it covers and — explicitly — what it does not, including every category of geometry excluded under FR-006.
 - **FR-016**: Registering an additional covered state MUST require changes in one place only.
@@ -130,7 +131,8 @@ A developer adds a new screen or dialog. Bringing it under the gate is a small, 
 - **SC-002**: The check yields identical results across all three supported platforms and across repeated runs, with zero spurious failures over a full release cycle.
 - **SC-003**: The specific defect that motivated this feature — an over-long label overlapping its adjacent control — is reproduced and caught by the check, demonstrated as part of delivery.
 - **SC-004**: Every screen named in feature 017's reduced parity set is covered, so the manual walkthrough that feature could only close by eye becomes automated — together with the empty and error layouts of FR-008c, which no walkthrough reliably reached at all.
-- **SC-005**: Accepting an intended layout change takes one documented command, and the resulting diff is understandable by a reviewer who has not run the application.
+- **SC-005**: Accepting an intended layout change takes one documented command, and the resulting diff is understandable by a reviewer who has not run the application. *(Annotated 2026-08-16 by BUG-001: the diff half held; the one-documented-command half did not, since the documented command accepted nothing. Measure this by the fixture changing, never by the command's exit code — the broken form exited 0.)*
+- **SC-007a** (bugfix BUG-001): Following the printed regeneration instruction verbatim, with no prior knowledge of cargo's argument forms, accepts the pending change — demonstrated by the fixture actually changing, not by the command succeeding.
 - **SC-006**: The gates stay cheap enough that nobody is tempted to skip the suite: `mise run test` completes in **under 60 seconds** locally on a developer machine.
 - **SC-006a**: That cost grows with coverage and with nothing else: **one additional covered state adds no more than 3 seconds** to the suite, across both schemes.
 
@@ -199,3 +201,20 @@ A developer adds a new screen or dialog. Bringing it under the gate is a small, 
 - **No change to the application's appearance is in scope** (FR-019). This feature adds a check.
 
 **Bugfix**: 2026-08-07 — [feature 018](../018-material3-visual-system/bugs/BUG-002.md)'s BUG-002 is the "known, not correct" assumption above arriving in practice, and is worth recording here rather than only there. The fixture held a 499.9 × 64.0 icon button in the app bar — §7.3 states 48 × 48 — as its expected value from the day it was generated, and was green on it throughout. Nothing about the gate misbehaved; a snapshot records what it is shown, so a defect older than the fixture becomes the baseline. What the gate *did* do is prove the fix, in a diff that moves the trigger to the trailing edge it belongs on. Two consequences: 018 added SC-008b, an assertion about laid-out size that a snapshot structurally cannot make, and the covered set gained `session-terminal-bottom-bar` (FR-016, one registration) — the terminal screen had no geometry coverage at all, which is why only half of that defect was recorded anywhere.
+
+**Bugfix**: 2026-08-16 — BUG-001 Every documented invocation of this gate omitted `--test`, so
+`cargo test -p micold-client layout_snapshot` read the target's name as a **test-name filter**,
+matched nothing, and exited 0 having run nothing. Eleven occurrences across five files. Two classes:
+the regeneration hints (the failure message, the fixture's own header line, the module doc, the
+contract, the user-facing docs), where following one accepted no baseline while reporting success;
+and the quickstart's *run the gate* commands, which do not regenerate anything and exist purely to
+exercise the check — Part A's headless "must still pass" therefore passed vacuously. FR-013
+annotated and FR-013a added (the documented command must be verified to select the gate, asserted
+mechanically); SC-005 annotated and SC-007a added (measured by the fixture changing, never by an exit
+code). The requirements themselves needed no correction and the plan needed no change: the mechanism
+behind FR-013 was right the whole time. What was missing is that a string printed to a human sat
+outside everything verifying a feature whose subject is that unverified claims decay —
+`layout_snapshot_regeneration.rs` already stops the gate from rewriting its baseline and *reporting
+success*, and this was that file's mirror image. `the_regenerate_hint_selects_this_target` now reads
+every printed command and fails if it lacks `--test`. Fixed in PR #176 before the report was filed;
+the fixture's only change was its header line, and no geometry moved.
