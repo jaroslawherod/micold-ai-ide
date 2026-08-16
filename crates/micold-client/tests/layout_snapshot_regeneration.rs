@@ -206,8 +206,14 @@ fn only_the_documented_variable_triggers_regeneration() {
 fn the_regenerate_hint_selects_this_target() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let sources = [
-        ("tests/layout_snapshot.rs", "the failure message and module doc"),
-        ("tests/support/layout.rs", "the fixture header and the missing-fixture panic"),
+        (
+            "tests/layout_snapshot.rs",
+            "the failure message and module doc",
+        ),
+        (
+            "tests/support/layout.rs",
+            "the fixture header and the missing-fixture panic",
+        ),
     ];
 
     for (rel, what) in sources {
