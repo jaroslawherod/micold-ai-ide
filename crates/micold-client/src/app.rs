@@ -328,6 +328,11 @@ pub enum Message {
     /// the durable suppression marker; this archives (not deletes) the record.
     SessionCloseRequested(SessionId),
     /// The session's `claude` process reported it is running (FR-010).
+    ///
+    /// **Emitted nowhere in production** — the daemon owns this transition and publishes it in the
+    /// catalog snapshot (FR-006d, `010` BUG-011), which `reconcile_catalog` adopts unconditionally.
+    /// Kept as the reducer's own `→ Running` edge, which the state tests drive directly; deleting it
+    /// is a separate change from the one that made the daemon report the transition at all.
     SessionRunning(SessionId),
     /// The session's `claude` title became available/changed (FR-011a).
     SessionTitleUpdated { id: SessionId, title: String },
@@ -1525,9 +1530,13 @@ impl State {
                 self.focus_terminal();
             }
             Message::TerminalRestartRequested => {
-                // No pure state to update here — the binary decides which process to spawn
-                // based on the current mode and follows up with SessionRunning/
-                // ShellInstanceRunning once it's actually up (mirrors SessionStartRequested).
+                // No pure state to update here — the binary decides which process to spawn based on
+                // the current mode. For an AI-CLI session the daemon owns the lifecycle and
+                // announces `Running` in the catalog snapshot once the process exists (FR-006d,
+                // `010` BUG-011); `reconcile_catalog` adopts it. This comment used to claim a
+                // follow-up `SessionRunning` message, which is emitted nowhere — believing it cost
+                // BUG-011 a round of investigation, because it made a state bug look like a
+                // transport one.
             }
             Message::ShellInstanceOpenRequested => {
                 // No session state to update here — the binary decides whether the active session

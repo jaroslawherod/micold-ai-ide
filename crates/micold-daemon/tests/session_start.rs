@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line};
 use micold_core::project::{Availability, Project};
+use micold_core::protocol::messages::WireLifecycle;
 use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
@@ -343,4 +344,175 @@ fn a_session_spawns_at_the_size_last_requested_for_it() {
         pty.kill().expect("kill");
     }
     drop(live);
+}
+
+// ---------------------------------------------------------------------------------------
+// BUG-011 — a session whose process the daemon has started must be reported as running.
+//
+// These sit at the seam nothing covered. Every existing lifecycle test drives the FSM directly
+// (`session_lifecycle.rs`, `session_crash_restart.rs`, `supervision_restart.rs` all call `start()`
+// and `mark_running()` themselves), which is why the state machine is provably correct and was
+// provably unreached: `Session::start` had no production callers at all, and `mark_running` had one
+// — `mark_running_if_restarting`, gated to `Restarting`. So they assert on **the snapshot a client
+// would receive**, not on the record.
+// ---------------------------------------------------------------------------------------
+
+/// The reported lifecycle for `id`, as a connected client would read it.
+fn reported_lifecycle(state: &DaemonState, id: SessionId) -> WireLifecycle {
+    state
+        .welcome_payload()
+        .0
+        .projects
+        .into_iter()
+        .flat_map(|p| p.sessions)
+        .find(|s| s.id == id)
+        .expect("the session is in the snapshot")
+        .lifecycle
+}
+
+#[test]
+fn the_snapshot_reports_a_started_session_as_running() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(0x5E55));
+    let state = DaemonState::new(catalog_with_shell_session(project.path(), store.path()));
+
+    assert_ne!(
+        reported_lifecycle(&state, id),
+        WireLifecycle::Running,
+        "nothing has been started yet"
+    );
+
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect("start must spawn the shell session");
+    let live = state.live_session(id).expect("registered");
+    assert!(wait_until(Duration::from_secs(5), || live.is_alive()));
+
+    assert_eq!(
+        reported_lifecycle(&state, id),
+        WireLifecycle::Running,
+        "a session the daemon is hosting must be reported as running — before this, the durable \
+         record kept whatever it held before the spawn, so the bar read `interrupted` (or \
+         `starting…`) beside a live terminal and offered `restart` for a running agent"
+    );
+
+    live.kill().expect("kill");
+}
+
+#[test]
+fn starting_a_session_announces_the_new_lifecycle_to_connected_clients() {
+    use micold_core::protocol::codec::Frame;
+    use micold_core::protocol::messages::DaemonMsg;
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(0x5E55));
+    let state = DaemonState::new(catalog_with_shell_session(project.path(), store.path()));
+    let (_client, mut rx) = state.register("test".to_string());
+
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect("start must spawn the shell session");
+    let live = state.live_session(id).expect("registered");
+    assert!(wait_until(Duration::from_secs(5), || live.is_alive()));
+
+    // `SessionStart` carries no reply, and the only `broadcast_catalog` on that path used to sit
+    // inside `if let Some(reply)` — so a resume changed the world and told nobody. A client that
+    // never re-attaches would keep the stale value forever.
+    let mut announced = None;
+    while let Ok(frame) = rx.try_recv() {
+        if let Frame::Control(DaemonMsg::CatalogChanged { catalog }) = frame {
+            if let Some(summary) = catalog
+                .projects
+                .iter()
+                .flat_map(|p| &p.sessions)
+                .find(|s| s.id == id)
+            {
+                announced = Some(summary.lifecycle.clone());
+            }
+        }
+    }
+    assert_eq!(
+        announced,
+        Some(WireLifecycle::Running),
+        "starting a session must broadcast the catalog, carrying the session as running"
+    );
+
+    live.kill().expect("kill");
+}
+
+/// The headline case, at the catalog level so it needs no `claude` on `PATH`: a session presented
+/// as interrupted-resumable at service startup (FR-006a) must leave that state once the user's one
+/// explicit action has actually started it. FR-006a said how a session *enters*; nothing said how
+/// it leaves, which is the gap BUG-011 sits in.
+#[test]
+fn a_resumed_session_leaves_the_interrupted_resumable_state() {
+    use micold_core::session::SessionLifecycle;
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(0xA11E));
+    let session = Session::restored(
+        id,
+        SessionLocation::Default,
+        SessionLabel::Named("Agent".into()),
+        TerminalMode::AiCli,
+    );
+    let mut sessions = BTreeMap::new();
+    sessions.insert(project.path().to_path_buf(), vec![session]);
+    let workspace = Workspace {
+        projects: vec![Project::new(
+            project.path().to_path_buf(),
+            false,
+            Availability::Available,
+        )],
+        active: Some(project.path().to_path_buf()),
+        sessions,
+        worktree_names: BTreeMap::new(),
+        ..Default::default()
+    };
+    let projects_path = store.path().join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&workspace)
+        .unwrap();
+    let mut catalog = Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    );
+
+    // As the daemon does at startup for a session with a recorded conversation.
+    assert_eq!(catalog.present_interrupted_resumable(|_, _, _| true), 1);
+    let lifecycle_of = |catalog: &Catalog| {
+        catalog
+            .workspace()
+            .sessions
+            .values()
+            .flatten()
+            .find(|s| s.id == id)
+            .expect("session")
+            .lifecycle
+    };
+    assert_eq!(
+        lifecycle_of(&catalog),
+        SessionLifecycle::InterruptedResumable
+    );
+
+    let owner = catalog.mark_session_running(id);
+    assert_eq!(
+        owner,
+        Some(project.path().to_path_buf()),
+        "the transition names its project, so the caller knows what to broadcast"
+    );
+    assert_eq!(lifecycle_of(&catalog), SessionLifecycle::Running);
+
+    // Already running: no transition, so nothing to announce. A steady `Running` must not
+    // re-broadcast on every redundant start.
+    assert_eq!(catalog.mark_session_running(id), None);
+    assert_eq!(lifecycle_of(&catalog), SessionLifecycle::Running);
+
+    // An unknown id is not a panic.
+    assert_eq!(catalog.mark_session_running(SessionId::new()), None);
 }

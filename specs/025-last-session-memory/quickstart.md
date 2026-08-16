@@ -242,10 +242,12 @@ reads `interrupted` with `restart`. No claim to be starting, at either.
 
 **Why this route and not the others.** The three that failed all leave the daemon *hosting* the
 session, so frames keep arriving and the pane is never empty — a second window is refused the
-attachment but not the stream, and a deleted worktree is started anyway (in `$HOME`). The empty pane
-needs a start that produced no process at all, which means the spawn itself has to fail. That is not
-a contrivance: an uninstalled, unlinked or not-yet-on-`PATH` `claude` is exactly this, and is a
-thing that happens on a developer machine after a reboot.
+attachment but not the stream, and a deleted worktree is started anyway (in `$HOME` — that was
+[`010` BUG-012](../010-daemon-session-persistence/bugs/BUG-012.md), fixed the same day, so that route
+now fails the spawn and reaches this screen too). The empty pane needs a start that produced no
+process at all, which means the spawn itself has to fail. That is not a contrivance: an uninstalled,
+unlinked or not-yet-on-`PATH` `claude` is exactly this, and is a thing that happens on a developer
+machine after a reboot.
 
 **Run conditions.** Xvfb `:81` + lavapipe, isolated `XDG_*` / `CLAUDE_CONFIG_DIR` /
 `MICOLD_DAEMON_BIN`, throwaway git repo, no provider credentials — `claude` was a stub script that
@@ -495,7 +497,11 @@ not specific to the restore path and is not a regression from BUG-002.
 >
 > A later pass added the second face: `Running` is reachable **only** by crashing a session and
 > letting supervision respawn it, so a *newly created* session reads `starting…` for its whole life
-> by the same omission. Both faces are now confirmed on screen there.
+> by the same omission. Both faces were confirmed on screen there.
+>
+> **Fixed** (2026-08-16, `010` Phase 26): `start_session` now marks the durable record `Running` and
+> broadcasts it. Anyone re-running §B should expect `running` in the bar where these screenshots show
+> `interrupted`, and no `restart` control beside a live session.
 
 **2. A session whose worktree is gone is resumed in `$HOME`.** `readlink /proc/<pid>/cwd` gives
 `/tmp/mb81/home`, not the worktree path that no longer exists. Under FR-004 this could not arise —

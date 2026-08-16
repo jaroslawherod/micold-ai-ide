@@ -1617,3 +1617,58 @@ so the refusal turns it into a second route to that screen, beside the `PATH` on
 when its directory is gone, so the behaviour was decided by a dependency's silent fallback rather
 than by this project; T031's spawn sites implement what was specified. Added FR-006c and SC-024 to
 `spec.md`, and Phase 26 (T133–T134). See `bugs/BUG-012.md`.
+
+---
+
+## Phase 27: Bugfix BUG-011 — a session whose process is live is never reported as running
+
+**Goal**: Advance the durable lifecycle where the process actually becomes live, and announce it
+(FR-006d, SC-025).
+
+The state machine was never wrong. `Session::start` had **no production callers at all**, and
+`Session::mark_running` had one — `Catalog::mark_running_if_restarting`, gated to `Restarting`, which
+only `on_unexpected_exit` sets. So the sole route to `Running` in this application was to crash a
+session and let supervision respawn it, which is precisely and only what `supervision_restart.rs`
+asserts. A resumed session stayed `InterruptedResumable` and a newly created one stayed `Starting`,
+each for the whole life of its process, with the client rendering both faithfully.
+
+### Tests for BUG-011 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T135 [BUG-011] Failing tests in `crates/micold-daemon/tests/session_start.rs`, asserting on
+  **the snapshot a client would receive** rather than on the FSM: `start_session` leaves the session
+  reported `Running`; the start broadcasts a `CatalogChanged` carrying it, so an already-attached
+  client is told without re-attaching. Plus a catalog-level test that the transition applies from
+  `InterruptedResumable` (FR-006a's state), names its project so the caller knows what to broadcast,
+  and is a no-op for an already-`Running` or unknown session. **The seam was the gap**: every
+  pre-existing lifecycle test (`session_lifecycle.rs`, `session_crash_restart.rs`,
+  `supervision_restart.rs`) calls `start()`/`mark_running()` itself and the client's fixtures call
+  `mark_running()` by hand, so both sides proved a machine that production never reached
+- [X] T136 [BUG-011] `Catalog::mark_session_running` in `crates/micold-daemon/src/catalog.rs`: any
+  lifecycle → `Running`, returning the owning project on a transition and `None` for unknown or
+  already-running. **Ungated**, unlike `mark_running_if_restarting` beside it, and the doc comment
+  says why: its caller knows a process exists, so every state it is reached from is one the record
+  has fallen behind; the narrow gate's caller is a supervision tick observing liveness it did not
+  cause
+- [X] T137 [BUG-011] Call it from `DaemonState::start_session` in `crates/micold-daemon/src/state.rs`
+  after `register_session`, and `broadcast_catalog()` outside the lock when it transitioned. In
+  `start_session` rather than the `ClientMsg::SessionStart` handler because that is the one place
+  that knows a process now exists — `SessionCreate` and the restart path reach it too. Not persisted:
+  lifecycle is runtime state (FR-021) and every durable session loads `Idle`
+- [X] T138 [BUG-011] Correct the two comments in `crates/micold-client/src/app.rs` that claimed the
+  binary "follows up with `SessionRunning`/`ShellInstanceRunning` once it's actually up". Neither is
+  emitted anywhere. Believing that comment cost this investigation a round, because it made a state
+  bug look like a transport one. `Message::SessionRunning` is kept and documented as the reducer's own
+  edge, exercised by the state tests; deleting it is a separate change from making the daemon report
+  the transition at all
+
+**Checkpoint**: Every route into a live process — fresh, resumed, restarted — reports `Running`, and
+`restart` is no longer offered for a session the user is working in.
+
+**Not covered here.** Regular-mode shell *instances* have the same shape from a different cause: no
+`ShellLifecycle` ever leaves `NotStarted`, because `mark_shell_running` is only reachable from the
+equally-unemitted `Message::ShellInstanceRunning`, and the daemon does not model shell instances at
+all. That is a client-side defect with its own seam, not this one.
+
+**Bugfix**: 2026-08-16 — BUG-011. Added FR-006d and SC-025 to `spec.md`, and Phase 27 (T135–T138).
+**No task reopened**: T053 and the FR-006a work implement what was specified, and what was specified
+never said how a session *leaves* the interrupted-resumable state. See `bugs/BUG-011.md`.
