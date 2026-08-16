@@ -161,7 +161,13 @@ fn the_guard_is_reading_the_shell_it_exempts() {
     // evidence that any of the three is false is that the exempted file still matches.
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let all = inventory::sources_under(&src);
-    let shell = all.get("main.rs").expect("main.rs is the shell");
+    // Feature 021 T055 moved the write out of `main.rs` and into `shell/clipboard.rs`, which is
+    // the move the failure message below anticipated. The exemption follows the code: what this
+    // asserts is that *somewhere the guard exempts* still performs the write, or the guard above
+    // is passing because nothing does.
+    let shell = all
+        .get("shell/clipboard.rs")
+        .expect("shell/clipboard.rs is where the shell reaches the clipboard");
 
     assert!(
         shell.contains("clipboard::write("),
@@ -179,8 +185,9 @@ fn the_guard_is_reading_the_shell_it_exempts() {
 fn the_shells_translation_decides_nothing() {
     // C3. Read from the source, because the property is about the *shape* of the translation, and
     // a body that grew an `if` would still compile and still pass every behaviour test above.
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/main.rs");
-    let code = inventory::code_only(&std::fs::read_to_string(&src).expect("read main.rs"));
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shell/clipboard.rs");
+    let code =
+        inventory::code_only(&std::fs::read_to_string(&src).expect("read shell/clipboard.rs"));
     let at = code
         .find("fn interpret(")
         .expect("the shell interprets effect requests in `interpret`");

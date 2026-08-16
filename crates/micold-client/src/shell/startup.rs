@@ -41,7 +41,8 @@ use crate::shell::capabilities::Capabilities;
 use crate::shell::env_include::{default_resolution_cwd, resolve_env_include};
 use crate::shell::os_theme::detect_system_scheme;
 use crate::shell::persist::prune_empty_sessions;
-use crate::{discover_worktrees, observe_system_scheme, probe_config, theme, update, view, App};
+use crate::shell::workspace::discover_worktrees;
+use crate::{observe_system_scheme, probe_config, theme, update, view, App};
 
 /// The app window icon as raw 64x64 RGBA (generated from `assets/icon/icon.svg` by
 /// `assets/icon/generate.py`). Embedded directly so no runtime image decoder is needed.
