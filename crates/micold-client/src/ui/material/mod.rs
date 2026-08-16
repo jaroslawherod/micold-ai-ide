@@ -69,6 +69,10 @@ mod picker_motion;
 /// the comparison is of geometry (feature 022, SC-001).
 #[cfg(test)]
 mod picker_parity;
+/// Whether a press on an unavailable row stops at it — the half of "not pickable" that no
+/// state-level test can see, and the one that closed the add-worktree form (016 BUG-002, FR-035).
+#[cfg(test)]
+mod picker_press;
 mod progress;
 mod resize_handle;
 mod ripple;

@@ -4,6 +4,20 @@
 //! the results are after a keystroke, where the keyboard highlight lands when the list changes
 //! under it, what survives a query being cleared, and what a blocked branch is allowed to do. None
 //! of that is glue, so none of it may live where only a person clicking around could find it out.
+//!
+//! # What this file cannot see (016 BUG-002)
+//!
+//! "What a blocked branch is allowed to do" is asserted here as *no message arrives* — and that is
+//! the whole of the reducer's part in it. It is not the whole of FR-012a. A press that produces no
+//! message may still not have been **claimed**, and an unclaimed press travels on to whatever is
+//! behind the list: for the branch picker, the add-worktree dialog's scrim, whose press message
+//! closes the form. Every assertion below stayed green while pressing an in-use branch discarded
+//! the user's form.
+//!
+//! That half is geometry and event routing, so it is asserted where those exist:
+//! `material::picker_press` (the component's rule) and
+//! `tests/add_worktree_form_survives_a_refusal.rs` (the consequence, at real coordinates). Green
+//! here means the reducer is right; it has never meant the requirement is met.
 
 use micold_client::app::{Message, State};
 use micold_client::features::worktree_form::{BranchSource, WorktreeForm};

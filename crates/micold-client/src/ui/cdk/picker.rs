@@ -514,6 +514,23 @@ where
             shell,
             &layout.bounds(),
         );
+
+        // A press that landed *on* the list belongs to the list, whatever the row under it decided
+        // to do with it. Rows that do something claim it themselves; a row that deliberately does
+        // nothing declines it, and an unclaimed press carries on to whatever sits behind — which
+        // for a list floating past a dialog's edges is that dialog's scrim, and its cancellation
+        // (016 BUG-002, FR-035, research R14).
+        //
+        // `row_element` makes each inert row opaque, which is the fix; this is the same rule stated
+        // once for the whole surface, so a future row that forgets cannot reopen the hole.
+        if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
+            if cursor
+                .position()
+                .is_some_and(|p| layout.bounds().contains(p))
+            {
+                shell.capture_event();
+            }
+        }
     }
 
     fn mouse_interaction(
