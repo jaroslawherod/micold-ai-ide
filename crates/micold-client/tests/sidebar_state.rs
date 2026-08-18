@@ -108,12 +108,12 @@ fn text_copy_requested_is_a_no_op_in_the_pure_reducer() {
 fn worktree_rename_seeds_edits_and_applies() {
     let mut state = state_with_active();
     state.update(Message::WorktreeRenameStarted(
-        "feat-abc-123-login-page".to_string(),
+        "feat-abc-123_login-page".to_string(),
     ));
     assert_eq!(open_dialog(&state), Some("rename_worktree"));
     assert!(state.worktree_menu_open.is_none());
     let draft = state.worktree_rename_draft.as_ref().unwrap();
-    assert_eq!(draft.dir_name, "feat-abc-123-login-page");
+    assert_eq!(draft.dir_name, "feat-abc-123_login-page");
     assert_eq!(draft.text, "Login page"); // seeded from the derived name
 
     state.update(Message::WorktreeRenameTextChanged("My Login".to_string()));
@@ -126,7 +126,7 @@ fn worktree_rename_seeds_edits_and_applies() {
     assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_rename_draft.is_none());
     assert_eq!(
-        state.worktree_display_name("feat-abc-123-login-page"),
+        state.worktree_display_name("feat-abc-123_login-page"),
         "My Login"
     );
 }

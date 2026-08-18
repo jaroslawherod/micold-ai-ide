@@ -126,7 +126,7 @@ fn worktree_display_name_override_roundtrips() {
     let mut ws = Workspace::empty();
     ws.projects.push(project("/repo", "repo", true));
     ws.active = Some(PathBuf::from("/repo"));
-    ws.set_worktree_name("feat-abc-123-login-page", "My Login")
+    ws.set_worktree_name("feat-abc-123_login-page", "My Login")
         .unwrap();
     store.save(&ws).unwrap();
 
@@ -134,7 +134,7 @@ fn worktree_display_name_override_roundtrips() {
     assert_eq!(out.status, LoadStatus::Loaded);
     assert_eq!(out.workspace.active, Some(PathBuf::from("/repo")));
     assert_eq!(
-        out.workspace.worktree_name("feat-abc-123-login-page"),
+        out.workspace.worktree_name("feat-abc-123_login-page"),
         Some("My Login")
     );
 }
