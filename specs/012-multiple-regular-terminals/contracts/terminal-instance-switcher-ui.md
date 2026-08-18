@@ -55,6 +55,16 @@ that.)*
   then two `anatomy::button::MIN_TOUCH_TARGET` widths (the close control, and the leading spacer
   balancing it) plus a readable label. A longer label ellipsises within the tab rather than widening
   it, which is also the behaviour a name needs once instances can be renamed (BUG-002, "Related").
+  *(Bugfix BUG-004: that list is the derivation with a child missing from it. A tab that is
+  individually restartable carries the **restart affordance** below as a fourth child, wider than
+  the other three together, and the figure was set without it — so the affordance laid out at 0.0dp
+  and the close control was squeezed to 45.2, below the target the same sentence names. The width
+  MUST be **derived** from every child the widest tab can hold, including the restart affordance,
+  and MUST NOT be a number chosen against an observed arrangement: a `Length::Fixed` on the tab is a
+  budget for its children, and iced settles a shortfall by shrinking the trailing ones rather than
+  by overflowing — so the failure is a control disappearing, which no layout invariant reports.
+  The leading spacer must likewise balance the whole trailing group, not the close control alone,
+  or the label is off centre by a restart button's width on any tab that has one — FR-004a.)*
 - **Active entry** (`session.active_shell == Some(entry.id)`) is marked by an **active indicator**
   — a user must be able to tell which instance is active from this row alone (FR-004, SC-004),
   without opening it. ~~mirroring `TreeItem::selected`~~ ~~The distinction MUST be **container
@@ -85,7 +95,9 @@ that.)*
   a filled container that default is wrong and must be overridden explicitly.
 - Each entry that is individually "restartable" (its own `lifecycle ∈ {NotStarted, Exited}`,
   contracts/shell-instance-lifecycle.md) shows its own restart affordance, dispatching
-  `Message::ShellInstanceRestartRequested(entry.id)` — **independent** per entry; the existing
+  `Message::ShellInstanceRestartRequested(entry.id)` — **independent** per entry, and (BUG-004,
+  FR-010a) **laid out at its full size**, since "shows" is satisfied by a control the user cannot
+  press and FR-010 is not; the existing
   session-level restart control in this same bar continues to reflect only the *currently
   attached* process's overall restartability (AI CLI in `AiCli` mode; the active shell instance
   in `Regular` mode) and is unaffected by a background sibling instance's state.

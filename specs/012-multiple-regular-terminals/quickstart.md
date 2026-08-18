@@ -77,6 +77,12 @@ Open the project, select a session already in Regular Terminal mode (one instanc
   unaffected.
 - Press that instance's restart affordance. **Expect**: only that instance starts a fresh shell;
   the sibling instance is not restarted, the AI CLI process is not restarted.
+- **Do this on the instance that is *not* the active one** (bugfix BUG-004, FR-010a). Restarting a
+  background instance without selecting it first is the whole point of addressing the restart by
+  instance id, and it is the case that was broken: the affordance was laid out at zero width inside a
+  tab too narrow to hold it, so it was present in the tree, correctly conditioned, dispatching the
+  right message, and impossible to press. **Expect**: the affordance is a full-size control on the
+  tab, and the close control beside it is a full 48dp target.
 
 ### 5. The keyboard shortcut and its mode gating — FR-019
 

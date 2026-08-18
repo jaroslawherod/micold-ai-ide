@@ -665,7 +665,12 @@ deleting it and leaving the new rule unpinned, so each is replaced by its indica
   Fixed with a uniform `TAB_WIDTH`, and the pass then confirmed both themes, no reflow at identical
   crop geometry, and the squint test.
 
-- [X] T057 [P] **Follow-up, not required by BUG-002**: register a covered state with two or more
+- [X] T063 [P] *(filed and completed as **T057**; renumbered by BUG-004's patch — Phase 11's
+  T057–T062 were written in a parallel worktree against the same highest id and merged two days
+  earlier, so two different tasks carried T057 in one file. The contiguous BUG-003 block keeps
+  its numbers because its bug report, its commits and its checkpoint all name them; this one
+  moves. Commit `fcc2f2a`, PR #194 and the comments in `tests/support/covered_states.rs` say
+  T057 and mean this task.)* **Follow-up, not required by BUG-002**: register a covered state with two or more
   Regular Terminal instances in `019-layout-snapshot-parity`'s set, so the tab strip's geometry is
   under the snapshot gate at all. Discovered by this bugfix: the strip was rebuilt — containers to
   indicator, fixed tab width, an extra row per tab — and `layout_snapshot.txt` did not change one
@@ -782,3 +787,88 @@ and FR-010's per-instance restart control appears for the instance that needs it
 no task is reopened — the client-side machinery T029/T030 built is correct and was simply never
 driven. `PROTOCOL_VERSION` 5 → 6 is the visible cost; a client and service across that boundary refuse
 each other and the service must be restarted once (`010` FR-021/FR-022). See `bugs/BUG-003.md`.
+
+---
+
+## Phase 12: Bugfix BUG-004 — the tab that offers a restart cannot fit one
+
+**Goal**: Make FR-010 reachable from the tab strip, and make the class of defect that hid it
+reportable.
+
+Phase 11's checkpoint reads "FR-010's per-instance restart control **appears** for the instance that
+needs it", and it does — at 0.0dp wide. `TAB_WIDTH` gives a tab's content row 112dp and a restartable
+tab's children ask for 166.3, so iced settles the 54.3dp shortfall by shrinking the trailing two: the
+restart button vanishes and the close control beside it drops to 45.2, under the 48dp target feature
+018 FR-027 sets. Nothing overflows, nothing escapes, and `mise run test` is green over all of it.
+
+The width is the fix. The gate is the point: a squeezed child satisfies every invariant this
+repository currently checks, which is why a control could be reduced to nothing between two bugfixes
+that were each looking straight at it.
+
+### Tests for BUG-004 (MANDATORY — Constitution Principle I) ⚠️
+
+- [ ] T064 [BUG-004] Failing test in `crates/micold-client/tests/` (new `tab_children_fit.rs`, or a
+  gate compiled into the `layout_snapshot` binary beside `sibling_parity` if it needs the shared
+  record cache): in the `session-terminal-instance-tabs` covered state, **no child of a tab is laid
+  out narrower than the width it asks for** (SC-010). Ask it the way the defect presents: the two
+  interactive controls in every tab — close, and restart where present — must each measure at least
+  `anatomy::button::MIN_TOUCH_TARGET` wide, and the sum of a tab's children plus its gaps and padding
+  must not exceed the tab. Must **fail on today's `main`**, naming the exited tab's restart control
+  at 0.0 and its close at 45.2. This is the gate the whole phase exists for: it is the first check
+  here that reads a laid-out child against *what it requested* rather than against a constant or
+  against its parent's bounds, and it is what feature 018's BUG-002 (a 48dp figure written and then
+  overwritten) and this bug (the same figure competed away) would both have failed
+- [ ] T065 [P] [BUG-004] Failing value test beside `tab_indicator_colour` in
+  `src/ui/terminal.rs`'s `mod tests`: `TAB_WIDTH` equals the sum its derivation requires (FR-004c),
+  computed from `anatomy::button::MIN_TOUCH_TARGET`, `spacing::SM`, `spacing::XS` and the restart
+  affordance's own width rather than written as a literal. A test that re-states a magic number
+  proves nothing; this one fails if any constant it is built from moves, which is the property
+  FR-004c now requires and the one a chosen figure cannot have
+
+### Implementation for BUG-004
+
+- [ ] T066 [BUG-004] Derive `TAB_WIDTH` in `src/ui/terminal.rs` from the constants a restartable tab
+  needs (depends on T064–T065; FR-004c, FR-010a). Keep it a single `const` — every tab is still one
+  width and SC-008 still holds by construction; what changes is where the number comes from. The
+  restart affordance's contribution has to be a constant too, not a measured string: a label's
+  shaped width is not available at const time, so reserve a named figure for it and let T064 catch
+  the day it is not enough
+- [ ] T067 [BUG-004] Make the leading spacer balance the **whole** trailing group rather than the
+  close control alone (FR-004a's annotation), so the label is centred on a restartable tab as well as
+  on a plain one. `TAB_CLOSE_WIDTH` is the current spacer width and is right for a tab with one
+  trailing child; a tab with two needs the sum. Watch for the trap BUG-002 already paid for once —
+  the spacer must not become a `Fill`, which resolves against the button's available space rather
+  than the content's
+- [ ] T068 [BUG-004] Correct the comment in `src/ui/terminal.rs` on the restart affordance — "It
+  widens its own tab, which SC-008 permits: that is a lifecycle change, not a change of which tab is
+  active." That was true before T056 introduced a fixed width and false from that commit on, in the
+  same file, and no test reads comments. It should say what is now true: the tab is one derived width
+  wide enough to hold the affordance, so a lifecycle change moves no tab at all
+- [ ] T069 [BUG-004] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` with
+  `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` (depends on
+  T066–T067). The diff is the artefact: `terminal.tabs.exited.restart` moves from 0.0 to its full
+  width, the exited tab's close returns to 48.0, and all three tabs and the strip widen together.
+  Every other covered state must be untouched — the strip is in one state only
+- [ ] T070 [P] [BUG-004] Re-run `quickstart.md` §4 "Independent lifecycle and restart" with the
+  `visual-pass` skill and record it in `visual-pass.md` (depends on T066–T067). §4 is the section
+  that would have caught this and it has not been run since `TAB_WIDTH` existed — BUG-002's pass ran
+  §8, the appearance section, which was right about its own subject. Pin the binaries per the skill's
+  build section. Exercise a **background** exit specifically: the whole of FR-010a is about the
+  instance that is not the active one
+- [ ] T071 [P] [BUG-004] Update `contracts/terminal-instance-switcher-ui.md` — its "Tab form" section
+  states the fixed width and lists what sets it ("`spacing::SM` either side, then two
+  `anatomy::button::MIN_TOUCH_TARGET` widths … plus a readable label"), which is the derivation with
+  the restart affordance missing from it. Add that child, and record that the figure is derived
+  rather than chosen
+
+**Checkpoint**: an instance that exits in the background can be restarted from its own tab without
+being selected first, its close control is a full 48dp target, and a gate fails if any tab's child is
+ever squeezed again.
+
+**Bugfix**: 2026-08-18 — BUG-004 Updated from bugfix patch. Phase 12 added (T064–T071). **No task
+reopened**: T029 built the affordance correctly and its condition is still right, and T056 chose a
+width that solved the defect its visual pass could see, against three tab states none of which was
+exited. The conflict is between two requirements written for two different bugfixes — FR-004c
+(BUG-002) and FR-011a (BUG-001) — and is invisible from either one alone. **One renumbering**: Phase
+10's T057 becomes T063, because Phase 11's T057–T062 were written in a parallel worktree against the
+same highest id; the note on T063 records what its commits and PR call it. See `bugs/BUG-004.md`.
