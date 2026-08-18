@@ -82,6 +82,7 @@ Re-measure at each phase checkpoint and append a row.
 | T021 (session) | 3,567 | 1,727 | −149; at the phase checkpoint's ~1,700 target |
 | T022 (connection) | 3,561 | 1,727 | first `main.rs` movement; source was `ui/mod.rs` |
 | T023 (re-exports gone) | 3,561 | 1,689 | −38; every call site imports from `features::*` |
+| **T058 (SC-004b checkpoint)** | **1,672** | **1,872** | Tiers 1–2 + shell split merged; `app.rs` grew, see below |
 
 ## T025 — SC-010 review at the Tier 1 checkpoint
 
@@ -125,3 +126,114 @@ six lines are `connection_status` losing its inlined precedence to `features/con
 - **Dead code found and removed**: 1 (`app::Notification`, never constructed).
 - **Task mis-groupings corrected**: 3 (`SelectKind` T017→T021; the three sidebar projections
   T019→`features/sidebar.rs`; `sidebar_entries`, which T016 left behind).
+
+## T058 — the SC-004b checkpoint
+
+SC-004b: *"Tiers 1, 2 and the shell split are each demonstrated green with no part of Tier 3
+merged."* Two claims, and both are checked below rather than asserted.
+
+**Commit**: `e91d468` on `main`, 2026-08-18. **CI run**: [32175454220][run], all eight checks green
+— `classify change`, `docs check`, `fmt + clippy`, `assertion freeze (advisory)`, the three
+`build + test` matrix jobs, `ci complete`.
+
+[run]: https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32175454220
+
+### The green, and what "all three platforms" actually covers
+
+| Platform | What CI runs there | Suites | Tests | Result |
+|---|---|---:|---:|---|
+| ubuntu-latest | core `--all-targets`, workspace build, the 11 all-platform gates, **`cargo test --workspace`** | 272 | 2,625 | pass |
+| macos-latest | core `--all-targets`, workspace build, the 11 all-platform gates | 72 | 709 | pass |
+| windows-latest | same as macOS | 72 | 706 | pass |
+
+**T058's own wording overstates what this demonstrates, and the difference is worth writing down
+rather than rounding off.** The task says "full suite green on all three platforms". CI runs the
+full workspace suite on **Linux only** — `.github/workflows/ci.yml`'s "Test (full workspace)" step
+carries `if: runner.os == 'Linux'`, because the client and daemon suites need the iced system
+dependencies the Linux job installs. macOS and Windows get the render-free core, a workspace
+*build* (so the GUI binary is proven to compile everywhere), and the eleven client gates that read
+source text or a reducer and open no window.
+
+So what is demonstrated here is: **the full suite green on Linux, and everything that can run
+without a window green on all three.** That is enough for SC-004b, whose subject is the tiers, and
+every structural guard this feature added is in the Linux run. It is *not* enough for **SC-006**
+— *"The complete pre-existing test suite passes … on all three supported platforms"* — which
+**T077 owns and cannot satisfy against this workflow as configured**. T077 will have to either run
+the client suite on macOS and Windows (which is a CI change, not a code change) or restate SC-006
+against what the matrix covers. Flagged here so it is a decision at T077 rather than a discovery.
+
+### Zero Tier 3 merged — checked step by step
+
+research.md §6 defines Tier 3 as steps 17–20. Each was checked against the tree at `e91d468`:
+
+| # | Tier 3 step | Merged? | How that was checked |
+|---|---|---|---|
+| 17 | Per-feature reducer modules, root retains routing | **no** | No `reducers/` module exists. `State::update` is still one function (`app.rs:902`, 834 lines) and `update_inner` is still one function (`main.rs:450`) |
+| 18 | Worktree form as a nested unit with its own message type | **no** | No `Message` enum anywhere under `features/`; the form's 14 variants are still in the root enum |
+| 19 | `Outcome` + worktree-delete returning consequences | **partial, and deliberately** | `features/mod.rs:33` holds `Outcome` with **exactly one** variant, `ClipboardWrite` — see below |
+| 20 | Guard: no feature reducer writes another feature's data | **no** | Feature 021's FR-024a/SC-007 appear in no test. (Both identifiers do occur in `crates/`, belonging to features 017 and 018 — different features' numbering, not this one's) |
+
+**The one thing that looks like Tier 3 and is not.** `Outcome` exists before its own task (T065,
+Phase 6) because T045 and T056 sit in Phase 5 and ask for it. T045's record argues the distinction
+and it holds up on inspection: FR-021's `Outcome` is a feature reducer handing a consequence to the
+**root** to route to another feature, and none of that is here — there is no root interpreter, no
+reducer split, and no feature learning anything about another. FR-015a borrows the same vocabulary
+for a different job and names the **shell** as interpreter. One variant, one emitter
+(`selection::copy_request`), shell-interpreted. T065 extends it; its text needs "introduce" → "extend".
+
+### What is merged, in one place
+
+- **Tier 1** — ten feature modules under `features/`: `connection`, `help`, `notifications`,
+  `project`, `session`, `settings`, `sidebar`, `worktree`, `worktree_form`, plus `mod`
+- **Tier 2** — `overlay/{mod,registry}.rs`. The `Overlay` (10) and `ClosingOverlay` (9) enums are
+  **gone from `app.rs` entirely**; `app.rs:538` documents the single field that is their last remnant
+- **Shell split** — eleven modules under `shell/`: `capabilities`, `clipboard`, `daemon_sync`,
+  `env_include`, `os_theme`, `persist`, `service_control`, `startup`, `subscriptions`, `workspace`,
+  plus `mod`
+
+### Structural counts re-measured
+
+| Concern | Baseline (T002) | At T058 | Δ |
+|---|---:|---:|---|
+| `main.rs` total / production body | 3,567 / 2,715 | **1,672 / 861** | −53% / **−68%** |
+| `app.rs` (no inline tests) | 2,434 | **1,872** | −23% |
+| `update_inner` | 1,253 | **185** | **−85%** |
+| `State::update` | 778 | **834** | **+7%** |
+| `State` fields | 37 | 41 | +4 |
+| `Message` variants | 130 | 137 | +7 |
+| `Overlay` / `ClosingOverlay` variants | 10 / 9 | **0 / 0** | enums deleted |
+| Service ports | 7 | **10** | `EnvIncludeResolver`, `OsThemeProbe`, `FolderBrowser` (split from `FolderScanner` at T048) |
+
+**Two of these numbers went the wrong way and neither is a surprise.** `State::update` grew because
+Phase 5 moved `update_inner`'s *pure* arms down into it while its effectful arms went to `shell/` —
+which is why one reducer shrank 85% and the other did not shrink at all. That 834-line function is
+precisely Tier 3 step 17's subject, so the checkpoint's job is to record it as the remaining work,
+not to have fixed it. `Message` and `State` grew because the feature is not the only thing landing
+on `main`; other features' work continues alongside.
+
+### SC-003 is not met at this checkpoint, and was not due to be
+
+SC-003 reads against the ten-largest table above: success is `main.rs` and `app.rs` no longer near
+the top. Current top three: `shell/daemon_sync.rs` **1,960** (1,517 production + an inline test
+module), `app.rs` **1,872**, `ui/material/terminal_pane.rs` **1,745**. `main.rs` has left the top
+three; `app.rs` has not, and it will not until step 17 takes the 834-line reducer out of it.
+`daemon_sync.rs` is the largest file in the repository, which is the shell split concentrating one
+external system in one module — FR-005 governs (a file holding exactly one feature satisfies the
+criterion at any length), but it is worth watching rather than assuming.
+
+### The caveat on the Windows green
+
+**A green Windows job is weaker evidence here than it looks.** `crates/micold-core/tests/env_include_resolve.rs`
+flaked intermittently on `windows-latest` throughout Phases 4–5; it is diagnosed and fixed in
+[BUG-004](../011-env-include-script/bugs/BUG-004.md), which landed one commit before this
+checkpoint. That job has now passed five consecutive runs — but three of those were *before* the
+fix, so the streak is not evidence the fix worked, and BUG-004 says so in its own words. A red
+Windows job at T077 should be read against that report before it is read as a regression.
+
+**Also unresolved and pointed at T077**: `crates/micold-core/tests/typeahead_budget.rs` fails
+load-dependently on this machine, filed as
+[021-branch-typeahead-search BUG-003](../021-branch-typeahead-search/bugs/BUG-003.md). It measures a
+debug build against a release budget, so its margin is ≈ 0. It has not failed in CI — but it is a
+*core* test, so unlike the client suite it runs on **all three** matrix jobs, and a loaded runner
+can fail it anywhere. That makes it the second known load-sensitive test standing between this
+checkpoint and T077's three-platform green.
