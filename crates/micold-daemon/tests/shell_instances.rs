@@ -214,3 +214,78 @@ fn a_shell_opened_without_a_primary_is_reclaimed_when_the_session_is_removed() {
         "the shell process must be reclaimed with the session, not leaked"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// `012` BUG-003 — the daemon knows which shell instances are live and never said so.
+//
+// `LiveSession.procs` is keyed by `SessionProcess::Shell(id)`, so a live instance is already a key
+// in that map; it simply had no wire field. Without this the client cannot honour `012` FR-008
+// ("each Regular Terminal instance MUST independently track its own shell lifecycle"), because
+// nothing tells it — three of that requirement's four states were unreachable in production.
+// ---------------------------------------------------------------------------------------
+
+/// The live shell instances the daemon reports for `id`, as a connected client would read them.
+fn reported_live_shells(
+    state: &DaemonState,
+    id: SessionId,
+) -> Vec<micold_core::session::ShellInstanceId> {
+    state
+        .welcome_payload()
+        .0
+        .projects
+        .into_iter()
+        .flat_map(|p| p.sessions)
+        .find(|s| s.id == id)
+        .expect("the session is in the snapshot")
+        .live_shells
+}
+
+#[test]
+fn the_snapshot_reports_which_shell_instances_are_live() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let sid = SessionId::new();
+    let state = DaemonState::new(catalog_with_session(project.path(), store.path(), sid));
+
+    // A session the daemon is not hosting has none — and that is the honest answer, not a default
+    // standing in for one (mirrors `input_serial`'s reasoning).
+    assert!(reported_live_shells(&state, sid).is_empty());
+
+    let mut cmd = CommandBuilder::new("cat");
+    cmd.cwd(std::env::temp_dir());
+    let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
+    let primary = state.register_session(primary);
+
+    // A live Primary is not a shell instance: the field names instances, not processes.
+    assert!(
+        reported_live_shells(&state, sid).is_empty(),
+        "the Primary process must not be reported as a shell instance"
+    );
+
+    let a = ShellInstanceId(0);
+    let b = ShellInstanceId(1);
+    state.open_shell(sid, a).expect("open a");
+    state.open_shell(sid, b).expect("open b");
+
+    let mut live = reported_live_shells(&state, sid);
+    live.sort_by_key(|i| i.0);
+    assert_eq!(
+        live,
+        vec![a, b],
+        "every open instance is reported, so the client can mark each one running (FR-008)"
+    );
+
+    // Closing one removes it, which is the signal that makes `exited` reachable at all: the client
+    // cannot tell a dead shell from a quiet one by watching for frames.
+    let _ = state.close_shell(sid, a);
+    assert_eq!(
+        reported_live_shells(&state, sid),
+        vec![b],
+        "a closed instance stops being reported; its sibling is untouched"
+    );
+
+    for pty in state.session_ptys(sid) {
+        pty.kill().ok();
+    }
+    drop(primary);
+}

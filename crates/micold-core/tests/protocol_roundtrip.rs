@@ -16,7 +16,7 @@ use micold_core::protocol::messages::{
     LogEntry, LogSink, OperationResult, ProjectSnapshot, RefusalReason, SessionSummary,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::session::{SessionId, SessionLabel};
+use micold_core::session::{SessionId, SessionLabel, ShellInstanceId};
 use micold_core::worktree::{CreateMode, CreateStage};
 use uuid::Uuid;
 
@@ -199,6 +199,9 @@ fn sample_summary() -> SessionSummary {
         // Non-zero on purpose: a summary for a session the daemon has already accepted input for is
         // the case that matters (FR-028a), and a zero here would let a dropped field round-trip.
         input_serial: 4_096,
+        // Two, for the same reason: an empty vec would survive a field that never encoded
+        // (`012` FR-008, BUG-003).
+        live_shells: vec![ShellInstanceId(1), ShellInstanceId(7)],
     }
 }
 

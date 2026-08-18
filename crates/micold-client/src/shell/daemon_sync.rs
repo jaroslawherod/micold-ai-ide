@@ -47,7 +47,7 @@ use micold_core::protocol::messages::{
 };
 use micold_core::session::{
     Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
-    TerminalMode,
+    ShellLifecycle, TerminalMode,
 };
 use micold_core::worktree::{BranchOrigin, CreateMode};
 
@@ -252,6 +252,21 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                 // before the first title arrives; don't let that clobber a title already learned.
                 if let SessionLabel::Named(_) = summary.title {
                     existing.label = summary.title.clone();
+                }
+                // Shell-instance liveness (`012` FR-008, BUG-003). The client allocates the ids and
+                // owns the set; the daemon owns which of them have a process. Adopted here with
+                // every other value it publishes, rather than from a `ShellInstanceRunning` message
+                // — that variant exists and nothing has ever emitted it.
+                //
+                // Absence is read as death only for an instance already seen `Running`: a spawn is
+                // in flight for a tick or two after `SessionOpenShell`, and treating that as an exit
+                // would flap the bar and offer `restart` for a shell on its way up.
+                for instance in existing.shells.iter_mut() {
+                    if summary.live_shells.contains(&instance.id) {
+                        instance.lifecycle.mark_running();
+                    } else if matches!(instance.lifecycle, ShellLifecycle::Running) {
+                        instance.lifecycle.mark_exited();
+                    }
                 }
             } else {
                 let location = summary
@@ -1572,6 +1587,20 @@ pub(crate) mod tests {
             lifecycle,
             activity: ActivitySignal::Unknown,
             input_serial,
+            live_shells: Vec::new(),
+        }
+    }
+
+    /// `012` BUG-003: a session summary that names live shell instances.
+    pub(crate) fn summary_with_live_shells(
+        id: SessionId,
+        title: &str,
+        lifecycle: WireLifecycle,
+        live_shells: Vec<micold_core::session::ShellInstanceId>,
+    ) -> SessionSummary {
+        SessionSummary {
+            live_shells,
+            ..summary(id, title, lifecycle)
         }
     }
 
@@ -1846,6 +1875,120 @@ pub(crate) mod tests {
                 sessions,
             }],
         }
+    }
+
+    /// `012` BUG-003 / FR-008. Before this, `mark_shell_running` and `mark_shell_exited` were
+    /// reachable only from `Message::ShellInstanceRunning`/`ShellInstanceExited`, which nothing in
+    /// the client emits, so every instance sat at `Starting` for its whole life and the bar read
+    /// `starting…` beside a shell the user was typing into.
+    ///
+    /// Asserted here rather than by driving those messages — `tests/app_state.rs` already does
+    /// that, and proving the transitions correct is exactly what failed to notice nothing invoked
+    /// them.
+    #[test]
+    fn reconcile_marks_shell_instances_running_and_exited_from_the_snapshot() {
+        use micold_core::session::{ShellInstanceId, ShellLifecycle};
+
+        let path = "/repo/demo";
+        let mut core = State::default();
+        let id = SessionId::new();
+
+        // The client owns the instances: it allocates the ids and creates them locally.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(path, vec![summary(id, "S", WireLifecycle::Running)]),
+            false,
+        );
+        let (a, b) = {
+            let (_, s) = core.workspace.find_session_mut(id).expect("session");
+            (s.open_shell_instance(), s.open_shell_instance())
+        };
+        let lifecycle_of = |core: &State, inst: ShellInstanceId| {
+            core.workspace
+                .sessions
+                .values()
+                .flatten()
+                .find(|s| s.id == id)
+                .expect("session")
+                .shells
+                .iter()
+                .find(|i| i.id == inst)
+                .expect("instance")
+                .lifecycle
+        };
+
+        // The daemon reports `a` live and says nothing about `b`.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![summary_with_live_shells(
+                    id,
+                    "S",
+                    WireLifecycle::Running,
+                    vec![a],
+                )],
+            ),
+            false,
+        );
+        assert_eq!(lifecycle_of(&core, a), ShellLifecycle::Running);
+        assert_eq!(
+            lifecycle_of(&core, b),
+            ShellLifecycle::Starting,
+            "an instance the daemon has not (yet) spawned stays where `open_shell_instance` left \
+             it — a spawn in flight must not read as an absence"
+        );
+
+        // `a` stops being reported: it exited. This is the transition no client-side inference can
+        // make, because no frames is indistinguishable from a quiet shell.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![summary_with_live_shells(
+                    id,
+                    "S",
+                    WireLifecycle::Running,
+                    vec![],
+                )],
+            ),
+            false,
+        );
+        assert_eq!(lifecycle_of(&core, a), ShellLifecycle::Exited);
+        assert_eq!(
+            lifecycle_of(&core, b),
+            ShellLifecycle::Starting,
+            "an instance never seen live stays starting rather than being reported as exited"
+        );
+
+        // The client stays the allocator: a snapshot naming an instance the client does not have
+        // creates nothing.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![summary_with_live_shells(
+                    id,
+                    "S",
+                    WireLifecycle::Running,
+                    vec![ShellInstanceId(99)],
+                )],
+            ),
+            false,
+        );
+        let count = core
+            .workspace
+            .sessions
+            .values()
+            .flatten()
+            .find(|s| s.id == id)
+            .expect("session")
+            .shells
+            .len();
+        assert_eq!(
+            count, 2,
+            "the snapshot reports liveness; it never adds instances"
+        );
     }
 
     #[test]

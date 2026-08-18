@@ -130,8 +130,21 @@ struct SessionSummary {
     title: SessionLabel,
     lifecycle: SessionLifecycle,     // incl. InterruptedResumable, Failed { reason, attempts }
     activity: ActivitySignal,        // Unknown | Working | AwaitingInput | Ended
+    input_serial: u64,               // FR-028a, BUG-006 — the serial the service expects next
+    live_shells: Vec<ShellInstanceId>, // `012` FR-008, BUG-003 — which instances have a process
 }
 ```
+
+The last three are **runtime-only and overlaid** from the live registry
+(`DaemonState::overlay_live_summaries`), not projected from the durable catalog, which cannot see it:
+`activity`, `input_serial`, `live_shells`, and the live OSC-0 title. A session the service is not
+hosting reports each one's default, and those defaults are correct answers rather than placeholders —
+no receiver means no input accepted, and no live entry means no live shell instances.
+
+`live_shells` is asymmetric on purpose. An id present means that instance's process exists; an id
+absent means the service is not hosting it, which covers a spawn still in flight as much as a shell
+that exited. A client MUST NOT read a first absence as death. It is still the only way to observe an
+exit at all — no frames is a quiet shell as much as a dead one.
 
 Every connected client affected by a mutation receives the update without further user action
 (FR-011). `SessionSummary` is sent for **every** session, viewed or not, so the client can render the
