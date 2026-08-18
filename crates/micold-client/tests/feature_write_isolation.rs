@@ -421,18 +421,37 @@ struct Operation {
     body: String,
 }
 
-/// Byte ranges of each `impl <name> { … }` block body.
+/// Byte ranges of each `impl … <name> { … }` block body, inherent or trait.
 ///
-/// Anchored to the start of a line so `impl Default for State {` is not mistaken for one.
+/// **The type is matched by its last path segment, and a probe is why.** An earlier version looked
+/// for the literal `impl State {`, so a module writing `impl crate::app::State { … }` — which
+/// compiles identically and is what a fresh feature module is most likely to write, having no
+/// `use` for it yet — was invisible to the whole scan. Two live-fire probes planted a cross-feature
+/// write that way and fired nothing at all.
+///
+/// Trait impls count too: `impl SomeTrait for State` can carry `&mut self` methods just as an
+/// inherent block can. `impl Default for State` is swept in by the same rule and contributes
+/// nothing, its `default()` taking no receiver.
 fn impl_blocks(src: &str, name: &str) -> Vec<(usize, usize)> {
-    let needle = format!("\nimpl {name} {{");
     let mut out = Vec::new();
     let mut from = 0usize;
-    while let Some(at) = src[from..].find(&needle) {
-        let start = from + at + needle.len();
-        let len = block_len(&src[start..]);
-        out.push((start, start + len));
-        from = start + len;
+    while let Some(at) = src[from..].find("\nimpl ") {
+        let head_start = from + at + "\nimpl ".len();
+        let Some(brace) = src[head_start..].find('{') else {
+            break;
+        };
+        let body_start = head_start + brace + 1;
+        from = body_start;
+        let header = src[head_start..head_start + brace].trim();
+        // `impl Trait for Type` — the target is what follows `for`.
+        let target = header.rsplit(" for ").next().unwrap_or(header).trim();
+        let target = target.split_whitespace().next().unwrap_or(target);
+        let target = target.split('<').next().unwrap_or(target);
+        if target.rsplit("::").next() == Some(name) {
+            let len = block_len(&src[body_start..]);
+            out.push((body_start, body_start + len));
+            from = body_start + len;
+        }
     }
     out
 }

@@ -1817,6 +1817,79 @@ impl State {
     }
 }
 
+/// How many outcomes one drain may apply before it gives up (feature 021, T060 — FR-024,
+/// contract O4).
+///
+/// **A bound, not a capacity.** Interpreting one outcome may emit another — the spec's Edge Cases
+/// name that case — so the queue has no natural end and a cycle would otherwise hang the UI with
+/// no error and no frame. Sixty-four is far above any real cascade (the longest known is two: a
+/// worktree delete closing sessions, whose closure raises a notification) and far below anything a
+/// person would wait through.
+pub const OUTCOME_BUDGET: usize = 64;
+
+/// What one drain did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Drained {
+    /// How many outcomes were applied.
+    pub applied: usize,
+    /// Whether the bound was reached with work still queued.
+    ///
+    /// Unreachable in debug — [`drain`] asserts before it can be returned — so this is what a
+    /// release build hands the shell to log. `false` on every ordinary drain.
+    pub overflowed: bool,
+}
+
+/// Apply outcomes until none remain, following any that interpreting one produces (FR-022, FR-024).
+///
+/// `apply` is the root's interpretation of a single outcome; whatever it returns is queued behind
+/// what is already waiting. The loop is the whole of contracts O4 and O5, and each half is a
+/// deliberate choice rather than an implementation detail:
+///
+/// **Bounded (O4).** Exceeding [`OUTCOME_BUDGET`] trips a `debug_assert`, so a cycle fails loudly
+/// in every test run rather than freezing the window. A release build stops at the bound and
+/// reports it through [`Drained::overflowed`] instead of panicking at a user — this function has
+/// no logger of its own, and inventing one here would put an I/O concern in the reducer.
+///
+/// **First in, first out (O5).** A stack would let one feature's cascade run to completion ahead
+/// of an outcome another feature had already emitted, which makes the interleaving depend on which
+/// feature was composed first — exactly what O5 forbids. A queue applies each feature's outcomes in
+/// its own emission order no matter where it sits in the composition.
+///
+/// Generic over `apply` because the properties above are properties of the loop, not of any
+/// variant: `tests/outcome_termination.rs` drives it with a cycle no real interpretation can
+/// produce, which is the only way to observe the bound being reached at all.
+pub fn drain<F>(
+    initial: impl IntoIterator<Item = crate::features::Outcome>,
+    mut apply: F,
+) -> Drained
+where
+    F: FnMut(crate::features::Outcome) -> Vec<crate::features::Outcome>,
+{
+    let mut queue: std::collections::VecDeque<crate::features::Outcome> =
+        initial.into_iter().collect();
+    let mut applied = 0usize;
+    while let Some(outcome) = queue.pop_front() {
+        if applied == OUTCOME_BUDGET {
+            debug_assert!(
+                false,
+                "outcome interpretation exceeded {OUTCOME_BUDGET} applications with {} still \
+                 queued — an outcome cycle (FR-024, contract O4)",
+                queue.len() + 1
+            );
+            return Drained {
+                applied,
+                overflowed: true,
+            };
+        }
+        applied += 1;
+        queue.extend(apply(outcome));
+    }
+    Drained {
+        applied,
+        overflowed: false,
+    }
+}
+
 /// Map an Escape key press to a [`Message`] given the current state.
 ///
 /// Returns `Some(AboutClosed)` only while the About overlay is open (FR-011); returns
