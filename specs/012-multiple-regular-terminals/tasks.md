@@ -704,6 +704,14 @@ deleting it and leaving the new rule unpinned, so each is replaced by its indica
   or the restart affordance moves out of the tab (a context menu is the obvious home, and the
   deferred rename below wants one anyway).
 
+  **Cost, per 019 SC-006a**: the twelfth state adds **0.01s** — `layout_snapshot` 0.26s with it
+  against 0.25s without, three runs each — against a 3s ceiling, with the suite at 27.0s against a
+  60s budget. Measured warm by removing the state and putting it back, not derived. Recorded in
+  `019-layout-snapshot-parity/quickstart.md` and `docs/development/layout-snapshot.md` with the
+  thing worth flagging: the eleventh state cost 2.09s and `layout_snapshot` took 17.0s two weeks
+  ago, and nothing committed to the apparatus since accounts for the difference. Both documents now
+  say to re-measure rather than trust either figure.
+
 **Checkpoint**: the strip reads as a tab bar with the active tab underlined from above, no
 containers, and activation moves colour only.
 

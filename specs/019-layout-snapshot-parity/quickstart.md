@@ -221,14 +221,23 @@ is an implementation detail rather than something anyone waits on.
 time mise run test
 ```
 
-- [x] Completes in **under 60 seconds** locally. *(35.1s on 2026-07-29; 37.0s on 2026-08-04 with eleven states.)*
+- [x] Completes in **under 60 seconds** locally. *(35.1s on 2026-07-29; 37.0s on 2026-08-04 with eleven states; 27.0s on 2026-08-18 with twelve — see the note below, the suite got faster while gaining a state and no change here explains it.)*
 
 Then confirm the cost still scales with coverage and nothing else. Add one covered state to
 `tests/support/covered_states.rs`, time `layout_snapshot` and `layout_text_overflow` with and
 without it, and remove it again — the fixture will not match while it is there, which is expected
 and does not affect the measurement, since the records are resolved before they are compared.
 
-- [x] One additional covered state adds **no more than 3 seconds**. *(2.21s on 2026-07-29; the tenth 2.44s and the eleventh 2.09s on 2026-08-04. Measure **warm** — a first run after an edit rebuilds the test binaries and that compile lands inside the timing, which once read 6.23s for a state that costs 2.09s.)*
+- [x] One additional covered state adds **no more than 3 seconds**. *(2.21s on 2026-07-29; the tenth 2.44s and the eleventh 2.09s on 2026-08-04; the twelfth **0.01s** on 2026-08-18 — `layout_snapshot` 0.26s with it against 0.25s without, over three runs each, with the suite moving 27.04s → 26.81s, inside its own noise. Measure **warm** — a first run after an edit rebuilds the test binaries and that compile lands inside the timing, which once read 6.23s for a state that costs 2.09s.)*
+
+> **The twelfth state cost two orders of magnitude less than the eleventh, and that is unexplained.**
+> `layout_snapshot` was 17.0s when the eleventh was added and is 0.26s now, over more states; no
+> functional commit to `tests/support/layout.rs` or `tests/layout_apparatus.rs` sits between the two
+> measurements. Both are real, on the same machine, taken warm. The likeliest subject is font
+> loading, which the original work measured as dominant and which depends on the host's installed
+> faces rather than on anything in this repository — but that is a hypothesis and was not verified.
+> The criterion is met by an enormous margin either way; what is *not* safe is to reuse either
+> figure as a prediction. Measure the state you are adding.
 
 > Both numbers were budgets set before this work was measured, and both were amended once it was —
 > see SC-006 in `spec.md` for what the original said and why it could not be met or, in the case of
