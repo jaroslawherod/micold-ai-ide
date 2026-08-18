@@ -200,7 +200,7 @@ Single Rust crate: render-free core in `src/` (`--no-default-features`), `gui`-o
 - [X] T060 Run `cargo clippy --features gui --all-targets` clean from the repository root
 - [X] T061 Run `mise run test` and `cargo test --features gui` and confirm the full suite is green
 - [ ] T062 Verify build and tests pass on Linux, macOS, and Windows via the matrix in `.github/workflows/ci.yml` (Constitution Principle VI)
-- [ ] T063 Run all seven [quickstart.md](./quickstart.md) scenarios manually, including Scenario 4's offline check (the GUI-wiring validation Principle I's exception requires)
+- [X] T063 Run all seven [quickstart.md](./quickstart.md) scenarios manually, including Scenario 4's offline check (the GUI-wiring validation Principle I's exception requires) — all seven pass; recorded in [bugs/evidence/T063-quickstart-pass.md](./bugs/evidence/T063-quickstart-pass.md)
 
 ---
 
