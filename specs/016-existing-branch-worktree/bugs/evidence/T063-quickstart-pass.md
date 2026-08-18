@@ -111,7 +111,7 @@ test can see any of them, which is the reason a pass like this exists. All three
    knowing the inner input carries a leading icon, so every searchable picker built this way
    overlaps them.
 2. **A worktree on `feat/reporting-2` renders as "Feat reporting 2" with a bogus `REPORTING-2`
-   issue tag**, while `feat/reporting` renders correctly as "Reporting". First noted here as a
+   issue tag** — *fixed 2026-08-18, see BUG-003* —, while `feat/reporting` renders correctly as "Reporting". First noted here as a
    divergence between the picked-branch and typed-name creation paths; it is not — both call the
    same function, and the trailing `-2` is the whole of the difference. It is misread as an issue
    key, which empties the descriptive remainder and makes `display_name` fall back to the whole

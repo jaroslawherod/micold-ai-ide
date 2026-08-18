@@ -126,9 +126,9 @@ fn node<'a>(
 
 #[test]
 fn worktree_node_exposes_type_and_issue_tags() {
-    let state = state_with_named_worktrees(&[("feat-abc-123-login-page", WorktreeStatus::Valid)]);
+    let state = state_with_named_worktrees(&[("feat-abc-123_login-page", WorktreeStatus::Valid)]);
     let tree = state.worktree_tree();
-    let n = node(&tree, "feat-abc-123-login-page");
+    let n = node(&tree, "feat-abc-123_login-page");
     assert_eq!(
         n.tags,
         vec![
@@ -177,12 +177,12 @@ fn worktree_node_type_only_and_untyped() {
 #[test]
 fn worktree_node_display_name_derived_when_no_override() {
     let state = state_with_named_worktrees(&[
-        ("feat-abc-123-login-page", WorktreeStatus::Valid),
+        ("feat-abc-123_login-page", WorktreeStatus::Valid),
         ("my-experiment", WorktreeStatus::Valid),
     ]);
     let tree = state.worktree_tree();
     assert_eq!(
-        node(&tree, "feat-abc-123-login-page").display_name,
+        node(&tree, "feat-abc-123_login-page").display_name,
         "Login page"
     );
     assert_eq!(node(&tree, "my-experiment").display_name, "My experiment");
@@ -219,9 +219,9 @@ fn dirs(tree: &[micold_client::features::sidebar::WorktreeNode]) -> Vec<String> 
 
 fn filtered_state() -> State {
     state_with_named_worktrees(&[
-        ("feat-abc-123-login", WorktreeStatus::Valid),
+        ("feat-abc-123_login", WorktreeStatus::Valid),
         ("fix-crash", WorktreeStatus::Valid),
-        ("fix-def-9-thing", WorktreeStatus::Valid),
+        ("fix-def-9_thing", WorktreeStatus::Valid),
         ("my-experiment", WorktreeStatus::Valid),
     ])
 }
@@ -240,7 +240,7 @@ fn type_filter_selects_only_that_type() {
     )));
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
-        vec!["fix-crash", "fix-def-9-thing"]
+        vec!["fix-crash", "fix-def-9_thing"]
     );
 }
 
@@ -270,7 +270,7 @@ fn filters_combine_with_or() {
     // feat + untyped ⇒ the feat worktree and the non-conforming one.
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
-        vec!["feat-abc-123-login", "my-experiment"]
+        vec!["feat-abc-123_login", "my-experiment"]
     );
 }
 
@@ -280,7 +280,7 @@ fn has_issue_filter_selects_issue_bearing() {
     state.update(Message::SidebarFilterToggled(TagFilter::HasIssue));
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
-        vec!["feat-abc-123-login", "fix-def-9-thing"]
+        vec!["feat-abc-123_login", "fix-def-9_thing"]
     );
 }
 
@@ -322,7 +322,7 @@ fn filter_recomputes_after_delete(/* FR-028 / C1 */) {
     state.set_worktrees(surviving);
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
-        vec!["fix-def-9-thing"]
+        vec!["fix-def-9_thing"]
     );
 }
 

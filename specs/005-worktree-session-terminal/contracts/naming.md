@@ -24,6 +24,9 @@ without touching the creation flow.
 Output alphabet `[a-z0-9-]` is valid as BOTH a git ref component (git check-ref-format) and a
 cross-OS directory name.
 
+**`slugify` can never emit `_`.** That is what makes `_` usable as the ticket boundary below
+(BUG-003): a character the derivation cannot produce is free to mean exactly one thing.
+
 ## Derivation
 
 ```
@@ -31,17 +34,27 @@ type_str = lowercase Conventional type (e.g. "feat")
 t = slugify(ticket)   // when ticket provided and non-empty after slug
 n = slugify(name)
 
-with ticket:     dir_name = "{type_str}-{t}-{n}"   branch = "{type_str}/{t}-{n}"
+with ticket:     dir_name = "{type_str}-{t}_{n}"   branch = "{type_str}/{t}-{n}"
 without ticket:  dir_name = "{type_str}-{n}"        branch = "{type_str}/{n}"
 ```
+
+The directory carries the `_` boundary and the branch does not. The directory is this app's own
+name for the worktree and is what the sidebar re-reads to recover the ticket
+(`008-worktree-sidebar-refinement/contracts/naming-tags.md`), so it is worth making unambiguous.
+The branch is pushed, reviewed and matched by CI branch filters, so it keeps the shape everyone
+already expects.
+
+The consequence is an asymmetry: `dir_name_from_branch` (feature 016, FR-014) cannot recover a
+ticket, because the branch never carried the boundary. A worktree created from a selected branch
+is therefore ticketless. See the naming-tags contract for why guessing is the worse option.
 
 ### Examples
 
 | type | ticket | name | dir_name | branch |
 |------|--------|------|----------|--------|
-| feat | ABC-123 | Login page | `feat-abc-123-login-page` | `feat/abc-123-login-page` |
+| feat | ABC-123 | Login page | `feat-abc-123_login-page` | `feat/abc-123-login-page` |
 | chore | (none) | cleanup | `chore-cleanup` | `chore/cleanup` |
-| fix | #42! | Race/cond | `fix-42-race-cond` | `fix/42-race-cond` |
+| fix | #42! | Race/cond | `fix-42_race-cond` | `fix/42-race-cond` |
 
 ## Validation (`Result<DerivedNames, NamingError>`)
 
@@ -57,5 +70,6 @@ derives + validates shape.
 ## Guarantees (test targets — SC-003b)
 
 - Deterministic: same inputs → same `DerivedNames`.
-- Ticket omitted ⟺ no empty separator in either output.
+- Ticket omitted ⟺ no empty separator in either output, and no `_` in `dir_name`.
+- Ticket present ⟺ exactly one `_` in `dir_name`, and none in `branch`.
 - Derived `dir_name` never contains `/`; derived `branch` contains exactly one `/` (after type).

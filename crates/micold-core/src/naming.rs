@@ -181,9 +181,15 @@ fn is_valid_branch(branch: &str) -> bool {
 
 /// Derive and validate the directory + branch names from form inputs (FR-006, FR-008).
 ///
-/// - With a ticket: `dir = "{type}-{ticket}-{name}"`, `branch = "{type}/{ticket}-{name}"`.
+/// - With a ticket: `dir = "{type}-{ticket}_{name}"`, `branch = "{type}/{ticket}-{name}"`.
 /// - Without a ticket (or blank after slug): the ticket segment is dropped entirely — no
 ///   empty separators (FR-005b).
+///
+/// The directory carries [`TICKET_SEP`] and the branch does not (BUG-003). The directory is this
+/// app's own name for the worktree and is the thing the sidebar re-reads, so it is worth making
+/// unambiguous; the branch is pushed, reviewed and matched by CI filters, so it keeps the shape
+/// everyone already expects. The cost is that [`dir_name_from_branch`] cannot recover a ticket —
+/// see its documentation for why guessing is worse.
 pub fn derive(input: &WorktreeNaming) -> Result<DerivedNames, NamingError> {
     let type_ = input.type_.ok_or(NamingError::NoType)?;
     let type_str = type_.as_str();
@@ -201,7 +207,7 @@ pub fn derive(input: &WorktreeNaming) -> Result<DerivedNames, NamingError> {
 
     let (dir_name, branch) = match ticket {
         Some(t) => (
-            format!("{type_str}-{t}-{name}"),
+            format!("{type_str}-{t}{TICKET_SEP}{name}"),
             format!("{type_str}/{t}-{name}"),
         ),
         None => (format!("{type_str}-{name}"), format!("{type_str}/{name}")),
@@ -217,9 +223,13 @@ pub fn derive(input: &WorktreeNaming) -> Result<DerivedNames, NamingError> {
 /// Derive the worktree directory name for an EXISTING branch (feature 016, FR-014).
 ///
 /// The inverse of [`derive`]'s branch→directory mapping: `feat/abc-123-login` →
-/// `feat-abc-123-login`. A worktree created from a *selected* branch therefore lands in the same
-/// directory it would have had if the user had typed the inputs, so the sidebar's existing
-/// [`parse_tags`] / [`display_name`] derivation keeps working with no special case.
+/// `feat-abc-123-login`.
+///
+/// It never emits [`TICKET_SEP`] — `slugify` cannot produce one — so a directory derived this way
+/// reads as having no ticket, even when the branch was originally derived *from* one (BUG-003).
+/// That is deliberate. Recovering the ticket would mean guessing where it ends, which is the guess
+/// that produced BUG-003, and here it would be made against a branch that may never have come from
+/// this app. A ticketless reading loses a chip; a guessed one loses the name.
 ///
 /// Routing each segment through [`slugify`] inherits its guarantees: `[a-z0-9-]` only, collapsed
 /// separators, and the Windows reserved-device-name guard (Constitution Principle VI).
@@ -256,28 +266,82 @@ pub enum Tag {
     Agent,
 }
 
-/// True when `seg` looks like a Jira project key component: starts with a letter, then
-/// letters/digits (e.g. `abc`, `abc2`). Lowercase because directory names are slugified.
-fn is_issue_project(seg: &str) -> bool {
-    let mut chars = seg.chars();
-    matches!(chars.next(), Some(c) if c.is_ascii_lowercase())
-        && seg
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+/// The boundary between a ticket and the descriptive name in a directory name (BUG-003).
+///
+/// [`slugify`] maps every non-alphanumeric character to `-`, so a derived name can never contain
+/// `_` — which is exactly what frees the character to mean one thing. A directory name with no
+/// boundary was not given a ticket, and that is the whole rule: nothing here inspects the *shape*
+/// of a segment to decide whether it is one.
+///
+/// It replaced a rule that did. Any lowercase word followed by any all-digit word was read as a
+/// Jira-style key, so `feat-reporting-2` reported issue `REPORTING-2`, emptied its own descriptive
+/// remainder, and fell back to a label with the type token still in it. The shapes are genuinely
+/// indistinguishable — `feat-abc-123` and `feat-auth-2` are one pattern — so no sharper heuristic
+/// exists. The name has to carry the answer instead of implying it.
+pub const TICKET_SEP: char = '_';
+
+/// What a worktree directory name encodes, once split at the boundary.
+struct NameParts {
+    type_: Option<ConventionalType>,
+    /// The slugified ticket exactly as [`derive`] wrote it — whatever shape it has, because it is
+    /// what the user typed rather than something matched out of the name. `None` when there is no
+    /// boundary, or nothing before it.
+    ticket: Option<String>,
+    /// The descriptive segments, separators dropped.
+    desc: Vec<String>,
 }
 
-/// Whether the first two segments of `rest` form an issue key: a project part (starts with a
-/// letter, letters/digits only) followed by an all-digit number, e.g. `abc` + `123`.
+/// Split on `[-_]`, dropping empties — used for the descriptive half and for the never-empty
+/// fallback, so both read a hand-made name the same way.
+fn segments(s: &str) -> Vec<String> {
+    s.split(['-', TICKET_SEP])
+        .filter(|part| !part.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// The single reading of a directory name that [`parse_tags`] and [`display_name`] both use, so
+/// the chip and the label can never disagree about where the ticket ended.
+fn split_name(dir_name: &str) -> NameParts {
+    // Only the FIRST boundary divides: a derived name has at most one, and a hand-made name with
+    // several still has to render rather than lose everything after the second.
+    let (head, desc) = match dir_name.split_once(TICKET_SEP) {
+        Some((head, desc)) => (head, Some(desc)),
+        None => (dir_name, None),
+    };
+    let head_segments: Vec<&str> = head.split('-').filter(|s| !s.is_empty()).collect();
+    let type_ = head_segments
+        .first()
+        .and_then(|token| ConventionalType::from_token(token));
+    let after_type = &head_segments[usize::from(type_.is_some())..];
+
+    match desc {
+        Some(desc) => NameParts {
+            type_,
+            ticket: (!after_type.is_empty()).then(|| after_type.join("-")),
+            desc: segments(desc),
+        },
+        // No boundary, so no ticket: everything after the type is descriptive.
+        None => NameParts {
+            type_,
+            ticket: None,
+            desc: after_type.iter().map(|s| s.to_string()).collect(),
+        },
+    }
+}
+
+/// Render a slugified ticket the way its tracker writes it: an all-digit reference is a
+/// GitHub/GitLab issue number, anything else a Jira-style key.
 ///
-/// Only the START of the descriptive remainder is considered, because the naming convention
-/// places the ticket immediately after the type (`{type}-{ticket}-{name}`). Scanning the whole
-/// name would misread a trailing number in the descriptive part (e.g. `feat-add-retry-3`) as an
-/// issue key.
-fn issue_at_start(rest: &[&str]) -> bool {
-    rest.len() >= 2
-        && is_issue_project(rest[0])
-        && !rest[1].is_empty()
-        && rest[1].chars().all(|c| c.is_ascii_digit())
+/// The numeric case is not cosmetic — before the boundary existed, a ticket entered as `#123`
+/// slugified to `123`, failed the old rule's "starts with a letter" test, and was dropped
+/// entirely while its digits leaked into the display name.
+fn issue_label(ticket: &str) -> String {
+    if ticket.chars().all(|c| c.is_ascii_digit()) {
+        format!("#{ticket}")
+    } else {
+        ticket.to_ascii_uppercase()
+    }
 }
 
 /// Sentence-case a string whose remainder is already lowercase (slugified): upper-case only
@@ -292,71 +356,37 @@ fn sentence_case(s: &str) -> String {
 
 /// Parse the tags embedded in a worktree directory name (FR-002, FR-003, FR-008).
 ///
-/// Returns at most one [`Tag::Type`] (when the leading segment is a known type) followed by
-/// at most one [`Tag::Issue`] (when an adjacent project+number pair is present). Never returns
-/// a [`Tag::Status`] — health is injected by the caller. A non-conforming name yields no
-/// `Type` tag (it is matched by the "untyped" filter bucket instead).
+/// Returns at most one [`Tag::Type`] (when the leading segment is a known type) followed by at
+/// most one [`Tag::Issue`] (when the name carries a [`TICKET_SEP`] with something before it).
+/// Never returns a [`Tag::Status`] — health is injected by the caller. A non-conforming name
+/// yields no `Type` tag (it is matched by the "untyped" filter bucket instead).
 pub fn parse_tags(dir_name: &str) -> Vec<Tag> {
-    let segments: Vec<&str> = dir_name.split('-').filter(|s| !s.is_empty()).collect();
+    let parts = split_name(dir_name);
     let mut tags = Vec::new();
-
-    // Type: the leading segment, if it is a known Conventional-Commits token.
-    let type_offset = match segments
-        .first()
-        .and_then(|s| ConventionalType::from_token(s))
-    {
-        Some(t) => {
-            tags.push(Tag::Type(t));
-            1
-        }
-        None => 0,
-    };
-
-    // Issue: the ticket sits immediately after the type (naming convention), so only the first
-    // pair of the remaining segments is considered.
-    let rest = &segments[type_offset..];
-    if issue_at_start(rest) {
-        let key = format!("{}-{}", rest[0], rest[1]).to_ascii_uppercase();
-        tags.push(Tag::Issue(key));
+    if let Some(type_) = parts.type_ {
+        tags.push(Tag::Type(type_));
     }
-
+    if let Some(ticket) = parts.ticket.as_deref() {
+        tags.push(Tag::Issue(issue_label(ticket)));
+    }
     tags
 }
 
 /// Derive a human-friendly display name from a worktree directory name (FR-017).
 ///
-/// Removes the leading type token and any embedded issue key, turns `-` separators into
-/// spaces, and sentence-cases. Falls back to a readable form of the whole `dir_name` when the
-/// descriptive remainder is empty (e.g. a name that is only a type + issue). Never empty.
+/// Removes the leading type token and the ticket, turns separators into spaces, and
+/// sentence-cases. Never empty: a name with nothing descriptive left — a bare type, or a
+/// boundary with nothing after it — falls back to a readable form of the whole `dir_name`,
+/// because a blank row is worse than a redundant one.
 pub fn display_name(dir_name: &str) -> String {
-    let segments: Vec<&str> = dir_name.split('-').filter(|s| !s.is_empty()).collect();
-
-    let type_offset = match segments
-        .first()
-        .and_then(|s| ConventionalType::from_token(s))
-    {
-        Some(_) => 1,
-        None => 0,
-    };
-
-    // The issue key, when present, occupies the two segments right after the type; the
-    // descriptive name is whatever follows it.
-    let rest = &segments[type_offset..];
-    let desc_offset = type_offset + if issue_at_start(rest) { 2 } else { 0 };
-
-    let remainder: Vec<&str> = segments.iter().skip(desc_offset).copied().collect();
-
-    let joined = if remainder.is_empty() {
-        // Fallback: the whole directory name, dashes as spaces.
-        segments.join(" ")
-    } else {
-        remainder.join(" ")
-    };
-
-    let out = sentence_case(&joined);
-    if out.is_empty() {
-        sentence_case(dir_name)
-    } else {
-        out
+    let descriptive = sentence_case(&split_name(dir_name).desc.join(" "));
+    if !descriptive.is_empty() {
+        return descriptive;
     }
+    let whole = sentence_case(&segments(dir_name).join(" "));
+    if !whole.is_empty() {
+        return whole;
+    }
+    // A name that is nothing but separators. Show it as it is rather than an empty row.
+    sentence_case(dir_name)
 }

@@ -32,13 +32,24 @@ color-coded **tags** beneath it:
 - A **type tag** — the Conventional-Commits type from the worktree's branch (`feat`, `fix`,
   `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`, `style`). Each type has its own
   fixed color, so you can recognize what a worktree is for at a glance.
-- An **issue tag** — the Jira-style key (e.g. `ABC-123`) when the worktree's name embeds one.
+- An **issue tag** — the ticket you entered when you created the worktree. A Jira-style key is
+  shown upper-cased (`ABC-123`); a GitHub or GitLab issue number is shown as `#123`.
 - A **status tag** — `missing` or `invalid` for a worktree that is not usable (see above).
 
-The name is derived from the descriptive part of the branch: `feat/abc-123-login-page` shows as
-**Login page** with `feat` and `ABC-123` tags. The tags are display-only — the underlying branch
-and directory names are unchanged, and a worktree that does not follow the naming convention
+The name is derived from the descriptive part of the worktree's folder: `feat-abc-123_login-page`
+shows as **Login page** with `feat` and `ABC-123` tags. The tags are display-only — the underlying
+branch and directory names are unchanged, and a worktree that does not follow the naming convention
 simply shows no type tag.
+
+The `_` in the folder name is what separates the ticket from the description, so the app never has
+to guess where one ends. A folder without one has no ticket, which is exactly right for a name like
+`feat-reporting-2` — the trailing `2` is part of the name, not an issue number. Two consequences
+worth knowing:
+
+- Worktrees created before this rule existed have no `_`, so their issue tag is gone. Their names
+  read correctly, and you can always [rename](#managing-a-worktree-right-click) one.
+- A worktree created by **picking an existing branch** has no ticket tag either. Branches do not
+  carry the separator, and guessing where the ticket ends is what the separator exists to avoid.
 
 The sidebar is intentionally compact — tight left/right padding and a slightly smaller font — so
 long names and their tags get as much width as possible. It stays legible in both light and dark
@@ -157,12 +168,17 @@ With **New branch** selected:
 
 The form shows the derived names before you create:
 
-- **Directory**: `.claude/worktrees/${type}-${ticket}-${name}`
+- **Directory**: `.claude/worktrees/${type}-${ticket}_${name}`
 - **Branch**: `${type}/${ticket}-${name}`
 
 For example, `feat` + `ABC-123` + `Login page` creates the branch `feat/abc-123-login-page` and a
-worktree at `.claude/worktrees/feat-abc-123-login-page`. With no ticket, `chore` + `cleanup` gives
-`chore/cleanup`. Illegal characters in the ticket or name are automatically simplified (slugified).
+worktree at `.claude/worktrees/feat-abc-123_login-page`. With no ticket, `chore` + `cleanup` gives
+`chore/cleanup` and a folder with no `_` at all. Illegal characters in the ticket or name are
+automatically simplified (slugified), so `#123` is a perfectly good ticket — it shows up as a `#123`
+tag in the sidebar.
+
+The `_` appears in the folder name only. The branch keeps the plain shape everyone expects, since
+it is what you push and what your CI matches on.
 
 Creating a worktree makes the new git branch and worktree for you — no manual git commands. If the
 derived name collides with a branch that already exists, the app asks what you want to do rather
@@ -247,7 +263,9 @@ If nothing matches what you typed, the list says so. Clear the field or shorten 
 everything again.
 
 The worktree folder is derived from the branch name — `feat/abc-123-login` becomes
-`.claude/worktrees/feat-abc-123-login` — and the form shows it before you create.
+`.claude/worktrees/feat-abc-123-login` — and the form shows it before you create. There is no `_`
+in it, so the worktree gets no issue tag: a branch does not record where its ticket ends, and the
+app does not guess.
 
 > **Remote branches reflect your last fetch.** The app never contacts a remote here; it reads
 > only what's already in your repository. Run `git fetch` yourself first if you want the list to
@@ -333,7 +351,7 @@ Right-click a worktree in the sidebar to open its context menu:
   label itself isn't a text field you can select from directly.
 - **Rename** — changes only the name shown for the worktree in the sidebar. It does **not**
   rename the folder on disk or the git branch, and the type/issue tags are unaffected (they
-  keep deriving from the branch). The custom name is remembered across app restarts. Clearing
+  keep deriving from the folder name). The custom name is remembered across app restarts. Clearing
   it is not needed — just rename again.
 - **Stop showing** — only on a worktree you *included* (see
   [Including a worktree that already exists](#including-a-worktree-that-already-exists)). Removes
