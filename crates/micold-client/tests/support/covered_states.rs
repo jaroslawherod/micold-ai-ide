@@ -64,6 +64,20 @@ const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 2];
 const TERMINAL_BOTTOM_BAR: &[usize] = &[0, 0, 1, 1, 1];
 const TERMINAL_MODE_TOGGLE: &[usize] = &[0, 0, 1, 1, 1, 0, 5];
 
+/// The instance tab strip, and three of its tabs (feature 012 T057). The bar's row holds its title,
+/// a filling spacer and the status text, then whichever optional controls the session's state calls
+/// for; with every instance already running there is no session-level restart, so the strip is the
+/// row's fourth child. Its own children are one tab per element of `Session.shells`, in order.
+const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
+const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 0];
+const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 1];
+const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 2];
+/// Inside a tab: the button's content column, whose first child is the active indicator (or, on an
+/// inactive tab, the transparent rule reserving its height) and whose second is the tab's content
+/// row — leading spacer, label, close, and a restart affordance on an instance that is not running.
+const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 1, 0, 0, 0];
+const TERMINAL_TAB_EXITED_RESTART: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 2, 0, 0, 1, 3];
+
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
 /// the `Default` project row, then `feat-short`, then its session, then the two remaining
@@ -480,6 +494,107 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "terminal.bottom_bar.mode_toggle",
                     path: TERMINAL_MODE_TOGGLE,
+                },
+            ],
+        },
+        // --- BUG-002's tab strip (feature 012 T057) ---------------------------------------------
+        //
+        // The state above renders the bottom bar with **one** shell instance, and the switcher
+        // returns `None` below two — so the instance tab strip was under no covered state at all.
+        // That was found the hard way. Feature 012's BUG-002 rebuilt every tab in the strip —
+        // containers became an indicator, each tab gained a row above its content, and the whole
+        // set was given a fixed width — and `layout_snapshot.txt` came out byte-identical. Both
+        // defects the visual passes caught along the way, a 12dp centring error and an active tab
+        // several times wider than its neighbours, are *pure geometry*: in range of this fixture,
+        // and out of range of every gate, because the control was never rendered into it.
+        //
+        // Three instances rather than two, and the active one in the middle. A uniform tab width
+        // (feature 012 FR-004c) is a claim about neighbours, and with two tabs "both the same
+        // width" and "each the width its own content wants" are indistinguishable whenever the two
+        // contents want the same thing. The trailing instance is `Exited`, so it draws the
+        // per-entry restart affordance its siblings do not: the tab whose contents differ most from
+        // the rest is the one that shows whether the width follows them.
+        //
+        // **It found one on the first regeneration, and the fixture pins it rather than hiding it.**
+        // A restartable tab does not fit inside `TAB_WIDTH`: the content row is given 112dp and its
+        // children want 48 (leading spacer) + 4 + 6.8 (label) + 4 + 48 (close) + 4 + 51.5 (restart)
+        // = 166.3, so iced shrinks the last two — the restart button collapses to **0.0 wide** and
+        // the close control drops to 45.2, below `anatomy::button::MIN_TOUCH_TARGET`. An instance
+        // that exits in the background therefore cannot be restarted from its own tab, which is
+        // exactly the affordance feature 011 FR-010 put there, and `ui/terminal.rs` asserts the
+        // opposite in a comment — "It widens its own tab, which SC-008 permits" — which is what a
+        // fixed width makes impossible.
+        //
+        // Recorded here and pinned as the baseline, on 019 spec.md's own precedent: a snapshot
+        // records what it is shown, so a defect older than the fixture becomes its expected value,
+        // and the gate's contribution is to prove the fix when one lands. Every other gate in the
+        // suite is green over a zero-width button, which is the measure of how far outside their
+        // reach this control was.
+        CoveredState {
+            name: "session-terminal-instance-tabs",
+            build: || {
+                let mut session = Session::restored(
+                    SessionId::new(),
+                    SessionLocation::Worktree("feat-short".to_string()),
+                    SessionLabel::Named("feat/short".to_string()),
+                    TerminalMode::Regular,
+                );
+                let leading = session.open_shell_instance();
+                let active_shell = session.open_shell_instance();
+                let exited = session.open_shell_instance();
+                session.mark_shell_running(leading);
+                session.mark_shell_running(active_shell);
+                session.mark_shell_exited(exited);
+                // Not the last-opened one, which `open_shell_instance` would have left active —
+                // an active *trailing* tab cannot tell "the indicator spans its own tab" from
+                // "the indicator spans everything after the tab before it".
+                session.select_shell(active_shell);
+
+                let active = session.id;
+                let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
+                workspace.active = workspace.projects.first().map(|p| p.path.clone());
+
+                let mut state = with_project();
+                state.workspace = workspace;
+                state.active_session = Some(active);
+                StateUnderTest::new(state)
+            },
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "toolbar.title",
+                    path: TOOLBAR_TITLE,
+                },
+                Anchor {
+                    name: "terminal.bottom_bar",
+                    path: TERMINAL_BOTTOM_BAR,
+                },
+                Anchor {
+                    name: "terminal.tabs",
+                    path: TERMINAL_TAB_STRIP,
+                },
+                Anchor {
+                    name: "terminal.tabs.leading",
+                    path: TERMINAL_TAB_LEADING,
+                },
+                Anchor {
+                    name: "terminal.tabs.active",
+                    path: TERMINAL_TAB_ACTIVE,
+                },
+                Anchor {
+                    name: "terminal.tabs.active.indicator",
+                    path: TERMINAL_TAB_ACTIVE_INDICATOR,
+                },
+                Anchor {
+                    name: "terminal.tabs.exited",
+                    path: TERMINAL_TAB_EXITED,
+                },
+                Anchor {
+                    name: "terminal.tabs.exited.restart",
+                    path: TERMINAL_TAB_EXITED_RESTART,
                 },
             ],
         },

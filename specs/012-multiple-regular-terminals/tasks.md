@@ -665,7 +665,7 @@ deleting it and leaving the new rule unpinned, so each is replaced by its indica
   Fixed with a uniform `TAB_WIDTH`, and the pass then confirmed both themes, no reflow at identical
   crop geometry, and the squint test.
 
-- [ ] T057 [P] **Follow-up, not required by BUG-002**: register a covered state with two or more
+- [X] T057 [P] **Follow-up, not required by BUG-002**: register a covered state with two or more
   Regular Terminal instances in `019-layout-snapshot-parity`'s set, so the tab strip's geometry is
   under the snapshot gate at all. Discovered by this bugfix: the strip was rebuilt — containers to
   indicator, fixed tab width, an extra row per tab — and `layout_snapshot.txt` did not change one
@@ -674,6 +674,35 @@ deleting it and leaving the new rule unpinned, so each is replaced by its indica
   several times too wide) are *pure geometry* and would have been in range of the fixture had the
   control ever been rendered into it. One registration by 019's FR-016; belongs to 019's covered
   set, and churns its fixture, which is why it is not done here.
+
+  **Done, and it found a defect on its first regeneration.** Registered as
+  `session-terminal-instance-tabs` in `crates/micold-client/tests/support/covered_states.rs` — one
+  entry, per 019 FR-016 — with three instances, the **middle** one active (an active *trailing* tab
+  cannot tell "the indicator spans its own tab" from "the indicator spans everything after the tab
+  before it") and the trailing one `Exited`, so one tab draws the per-instance restart affordance
+  its siblings do not. Eight anchors, so a failure names the strip, each tab, the active indicator
+  and the exited tab's restart control rather than printing a path.
+
+  What it recorded of BUG-002's own work is green: all three tabs measure **128.0 × 40.0**, the
+  active tab's indicator is **112.0 × 3.0**, and the inactive tabs reserve a 3.0-high rule they do
+  not draw. FR-004c and SC-008 hold, now against a fixture rather than against a screenshot.
+
+  **The defect is the tab that restarts.** `TAB_WIDTH` gives the content row 112dp; its children
+  want `48 (leading spacer) + 4 + 6.8 (label) + 4 + 48 (close) + 4 + 51.5 (restart) = 166.3`, so
+  iced shrinks the trailing two — the restart button lays out **0.0 wide** and the close control at
+  **45.2**, under `anatomy::button::MIN_TOUCH_TARGET`. A background instance that exits cannot be
+  restarted from its own tab (feature 011 FR-010), and `ui/terminal.rs`'s comment on that affordance
+  — "It widens its own tab, which SC-008 permits" — describes behaviour a fixed width forbids. The
+  contradiction is between the comment and `TAB_WIDTH`, both written by BUG-002 and neither visible
+  to any test until this state existed.
+
+  Pinned as the fixture's baseline rather than fixed here, on 019 spec.md's own precedent — a
+  snapshot records what it is shown, so a pre-existing defect becomes the expected value and the
+  gate's contribution is to prove the fix. **`mise run test`: 1914 passed, 0 failed**, every gate
+  green over a zero-width button, which measures how far outside their reach this control was.
+  Needs its own bug report against feature 012: either `TAB_WIDTH` grows to fit a restartable tab,
+  or the restart affordance moves out of the tab (a context menu is the obvious home, and the
+  deferred rename below wants one anyway).
 
 **Checkpoint**: the strip reads as a tab bar with the active tab underlined from above, no
 containers, and activation moves colour only.
