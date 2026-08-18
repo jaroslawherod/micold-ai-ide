@@ -384,9 +384,18 @@ pub enum Message {
     /// A Regular Terminal instance reported it is running (feature 011; replaces feature 010's
     /// `ShellSessionRunning(SessionId)`, now id-addressed since a session may have more than one
     /// instance).
+    ///
+    /// **Emitted nowhere in production**, like [`Self::SessionRunning`]. The daemon owns this
+    /// transition and publishes it as `SessionSummary::live_shells`, which `reconcile_catalog`
+    /// adopts (`012` FR-008, BUG-003). Kept as the reducer's own `→ Running` edge: it is the only
+    /// lever the integration tests in `tests/` have, since `reconcile_catalog` lives in the binary
+    /// crate and those tests can only reach the library.
     ShellInstanceRunning(SessionId, ShellInstanceId),
     /// A Regular Terminal instance's shell process exited (intentional or crash) — never
     /// auto-restarted (FR-008; replaces feature 010's `ShellSessionExited(SessionId)`).
+    ///
+    /// Emitted nowhere in production, for the same reason and with the same caveat as
+    /// [`Self::ShellInstanceRunning`] above.
     ShellInstanceExited(SessionId, ShellInstanceId),
 
     /// Periodic redraw tick while a terminal is live (drives streamed-output repaint).
@@ -1541,7 +1550,10 @@ impl State {
             Message::ShellInstanceOpenRequested => {
                 // No session state to update here — the binary decides whether the active session
                 // is in Regular mode, opens the instance (`Session::open_shell_instance`), and
-                // spawns its process, following up with `ShellInstanceRunning` once it's up.
+                // spawns its process. The daemon then reports it in `SessionSummary::live_shells`
+                // and `reconcile_catalog` marks it running (`012` FR-008, BUG-003); this used to
+                // claim a follow-up `ShellInstanceRunning` message, which is emitted nowhere and
+                // is why every instance sat at `NotStarted` for its whole life.
                 // The new instance is what the user will be looking at, so it holds the keyboard
                 // (FR-011).
                 self.focus_terminal();
@@ -1560,8 +1572,9 @@ impl State {
                 self.focus_terminal();
             }
             Message::ShellInstanceRestartRequested(..) => {
-                // No pure state to update here — the binary spawns the process and follows up
-                // with ShellInstanceRunning once it's up (mirrors TerminalRestartRequested).
+                // No pure state to update here — the binary spawns the process, and the daemon's
+                // next snapshot reports the instance live (`012` FR-008, BUG-003). Mirrors
+                // `TerminalRestartRequested`, including that neither emits a follow-up message.
             }
             Message::ShellInstanceRunning(session_id, shell_id) => {
                 if let Some(session) = self.session_mut(session_id) {

@@ -640,6 +640,7 @@ fn session_summary(session: &Session) -> SessionSummary {
         lifecycle: wire_lifecycle(session.lifecycle),
         activity: ActivitySignal::Unknown,
         input_serial: 0,
+        live_shells: Vec::new(),
     }
 }
 

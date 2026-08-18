@@ -687,3 +687,61 @@ menu, and `ShellInstance` would need a `title: Option<String>` beside its `lifec
 spec rather than an ad-hoc addition — it touches persistence (does a name survive a restart, given
 FR-017 restores at most one instance?) and the daemon's session state, neither of which this bug
 should decide.
+---
+
+## Phase 11: Bugfix BUG-003 — an instance's lifecycle never leaves `Starting`
+
+**Goal**: Make FR-008 true. Three of its four states were unreachable in production: an instance was
+set `Starting` by `open_shell_instance` and never moved again, so a live shell read `starting…` for
+its whole life and an exited one read the same.
+
+The transitions existed and were tested. `mark_shell_running`/`mark_shell_exited` were reachable only
+from `Message::ShellInstanceRunning`/`ShellInstanceExited`, which nothing in the client emits — and
+there was nothing to emit them *from*, because the daemon modelled shell instances in its live
+registry and not on the wire at all. Same shape as `010` BUG-011, one layer out.
+
+### Tests for BUG-003 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T057 [BUG-003] Failing test in `crates/micold-daemon/tests/shell_instances.rs`: the catalog
+  snapshot reports which of a session's shell instances are live — none for a session the daemon is
+  not hosting, none for a live `Primary` (the field names instances, not processes), both ids after
+  two opens, and one after a close. The close case is the point: it is the only signal that makes
+  `exited` reachable, since a client watching for frames cannot tell a dead shell from a quiet one
+- [X] T058 [BUG-003] Failing test in `crates/micold-client/src/shell/daemon_sync.rs`'s test module:
+  `reconcile_catalog` marks an instance `Running` when the snapshot lists it and `Exited` when it
+  stops being listed; leaves an instance never seen live alone; and creates nothing for an id the
+  client does not have. Asserted through the snapshot rather than by driving the messages —
+  `tests/app_state.rs` already drives those, and proving the transitions correct is precisely what
+  failed to notice nothing invoked them. **This test corrected the bug report**: it was written
+  expecting `NotStarted` and found `Starting`, because `open_shell_instance` calls `start_shell()`
+
+### Implementation for BUG-003
+
+- [X] T059 [BUG-003] Add `live_shells: Vec<ShellInstanceId>` to `SessionSummary`
+  (`crates/micold-core/src/protocol/messages.rs`) and bump `PROTOCOL_VERSION` 5 → 6 — wire-visible,
+  so the integer moves with it (`010` FR-021). The doc comment carries the asymmetry that matters:
+  an id present means the process exists; an id absent means "not hosting", which covers a spawn in
+  flight as well as an exit
+- [X] T060 [BUG-003] Fill it in `DaemonState::overlay_live_summaries`
+  (`crates/micold-daemon/src/state.rs`) from `LiveSession.procs`' `SessionProcess::Shell` keys, beside
+  the `activity`/`input_serial`/title overlays already there and for the same reason; the durable
+  projection in `catalog.rs` defaults it empty
+- [X] T061 [BUG-003] Adopt it in `reconcile_catalog`
+  (`crates/micold-client/src/shell/daemon_sync.rs`), beside every other value the daemon publishes.
+  Absence is read as death **only** for an instance already seen `Running`: a spawn is in flight for
+  a tick or two after `SessionOpenShell`, and treating that as an exit would flap the bar for every
+  terminal opened
+- [X] T062 [BUG-003] Correct the two comments in `crates/micold-client/src/app.rs` claiming the binary
+  "follows up with `ShellInstanceRunning` once it's up", and document both variants as emitted
+  nowhere. **Kept rather than deleted**, unlike the temptation: `shell/daemon_sync.rs` lives in the
+  binary crate, so `reconcile_catalog` is unreachable from `tests/`, and these variants are the only
+  lever the integration tests have — deleting them would delete that coverage, including feature
+  023's FR-019 rule that a session reaching `Running` must not move the keyboard
+
+**Checkpoint**: a Regular Terminal reads `running` while its shell is up, `exited` once it is not,
+and FR-010's per-instance restart control appears for the instance that needs it.
+
+**Bugfix**: 2026-08-16 — BUG-003. **No requirement added**: FR-008 already stated this exactly, and
+no task is reopened — the client-side machinery T029/T030 built is correct and was simply never
+driven. `PROTOCOL_VERSION` 5 → 6 is the visible cost; a client and service across that boundary refuse
+each other and the service must be restarted once (`010` FR-021/FR-022). See `bugs/BUG-003.md`.

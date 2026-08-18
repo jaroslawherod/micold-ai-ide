@@ -575,6 +575,20 @@ pub struct SessionSummary {
     /// [`Stale`](crate::input::InputOutcome::Stale), and silently dropped — along with every one
     /// after it. Sessions the service is not hosting have no receiver and report `0`.
     pub input_serial: u64,
+    /// Which of this session's Regular-terminal shell instances the service currently hosts
+    /// (`012` FR-008, BUG-003).
+    ///
+    /// Runtime-only and overlaid from the live registry, exactly like `activity` and
+    /// `input_serial`: `LiveSession.procs` is keyed by [`SessionProcess::Shell`], so the service
+    /// already knows, and the durable catalog cannot. The **client** allocates instance ids and
+    /// owns the set of instances; this reports which of them are alive, and never introduces one.
+    ///
+    /// Absence is meaningful in one direction only. An id here means that instance's process
+    /// exists; an id missing means the service is not hosting it, which is a spawn still in flight
+    /// as well as a shell that exited — so a client MUST NOT read a first absence as death. It is
+    /// still the only signal that can distinguish an exited shell from a quiet one, which no
+    /// amount of watching for frames can do.
+    pub live_shells: Vec<ShellInstanceId>,
 }
 
 /// The wire form of a session's lifecycle (data-model §SessionLifecycle state machine).

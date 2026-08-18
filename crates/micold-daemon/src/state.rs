@@ -345,6 +345,17 @@ impl DaemonState {
             if let Some(live) = inner.sessions.get(&summary.id) {
                 summary.activity = live.activity.signal().clone();
                 summary.input_serial = live.input.expected();
+                // `012` FR-008/BUG-003: which shell instances exist is durable-ish client state,
+                // but which are *alive* is only knowable here. The client cannot infer it — no
+                // frames is a quiet shell as much as a dead one.
+                summary.live_shells = live
+                    .procs
+                    .keys()
+                    .filter_map(|p| match p {
+                        SessionProcess::Shell(id) => Some(*id),
+                        SessionProcess::Primary => None,
+                    })
+                    .collect();
                 if let Some(title) = &live.last_title {
                     summary.title = SessionLabel::Named(title.clone());
                 }
