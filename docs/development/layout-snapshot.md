@@ -270,10 +270,21 @@ fails loudly rather than being recreated.
 One entry in `tests/support/covered_states.rs`, and nothing else. That promise is enforced:
 `tests/layout_coverage_registry.rs` scans for a second registration site and fails if it finds one.
 
-Then regenerate the fixture. A new state costs roughly 2 seconds of suite time — the tenth measured
-at 2.4s and the eleventh at 2.1s, each by timing the suite with and without it rather than deriving
-it from a resolution count. Measure warm: a first run after any edit rebuilds the test binaries, and
-that compile lands inside the timing. Doing it cold once put a state at 6.2s that is actually 2.1s.
+Then regenerate the fixture, and measure what the state cost by timing the suite with and without
+it rather than deriving it from a resolution count. Measure warm: a first run after any edit
+rebuilds the test binaries, and that compile lands inside the timing. Doing it cold once put a state
+at 6.2s that is actually 2.1s.
+
+**The figure to expect has moved, and by a lot.** The tenth state measured 2.4s and the eleventh
+2.1s. The twelfth (2026-08-18, `session-terminal-instance-tabs`) measured **0.01s** inside
+`layout_snapshot` — 0.26s with it against 0.25s without, over three runs each — and the whole suite
+moved 27.04s → 26.81s, a difference inside its own run-to-run noise. Nothing in the apparatus
+changed to earn that; `git log` shows no functional commit to `tests/support/layout.rs` or
+`tests/layout_apparatus.rs` since the eleventh was measured. **The cause is not established.** The
+most likely subject is font loading, which the original measurements found dominant and which
+depends on the host's installed faces rather than on this repository. So treat both figures as
+observations rather than as a model: measure your own state, and if it comes out near 2s rather than
+near nothing, that is informative and worth recording here.
 
 One caveat the tenth state exposed. If the screen renders a sidebar, its collapsed filter accordion
 is a clip-revealing wrapper, and the containment check used to need a second entry naming that
@@ -281,6 +292,16 @@ state. It is now keyed by node path alone, since being a clip-reveal is a proper
 not of the screen — so registering really is one edit. Had that not been fixed, FR-016 would have
 been false in exactly the way nobody notices: the claim held for the first nine states because they
 were all added at once.
+
+A second caveat, this one from the twelfth. **A control that renders only above a threshold is not
+covered by a state that sits below it**, and nothing says so. The terminal's instance tab strip
+returns `None` until a session holds more than one shell instance, and the covered state that draws
+the terminal's bottom bar was built with none — so the strip was in the fixture's scope, in the
+covered set's screen, and in no record. It was rebuilt wholesale (containers to indicator, a row
+added above each tab, a fixed width for the set) and `layout_snapshot.txt` came out byte-identical,
+which read as "nothing moved". When you register a state, name the conditional children on the
+screen and check the fixture actually contains each one; an anchor per conditional child is the
+cheap way to make its absence fail rather than pass.
 
 ### Reading a failure
 
@@ -290,11 +311,18 @@ path: look it up directly in `layout_snapshot.txt`.
 
 ## Cost
 
-The gates are about 32 seconds of a 37 second suite — `layout_snapshot` 17.0s (the fixture, the
-containment invariant and the mid-reveal pin, sharing one process), `layout_text_overflow` 8.5s,
-`layout_apparatus` 3.5s, and under 3s for the record-format, registry and regeneration checks.
-Dominated by shaping real text across eleven screens in two schemes. Records are resolved once per
+Measured 2026-08-18 across twelve screens in two schemes: the gates are about **0.5 seconds of a
+27 second suite** — `layout_snapshot` 0.26s (the fixture, the containment invariant and the
+mid-reveal pin, sharing one process), `layout_text_overflow` 0.15s, `layout_apparatus` 0.06s, and
+under 0.1s for the record-format, registry and regeneration checks. Records are resolved once per
 scheme and shared between checks; the naive form resolved the same views about 71 times.
+
+**These are not the numbers this section held before**, which were 32s of a 37s suite with
+`layout_snapshot` at 17.0s and eleven screens — shaping real text was measured to dominate, and on
+that showing the gates were most of the suite. Both sets are real measurements on the same machine;
+what changed between them is not established, and no commit to the apparatus explains it. See
+[Adding a covered state](#adding-a-covered-state) for the same discrepancy seen from the per-state
+side, and re-measure rather than trusting either figure.
 
 Those binaries run in parallel with the rest of the suite, so their share of the total is smaller
 than their sum — which is exactly why SC-006 budgets the suite rather than any one binary.
