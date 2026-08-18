@@ -849,12 +849,16 @@ that were each looking straight at it.
   T066–T067). The diff is the artefact: `terminal.tabs.exited.restart` moves from 0.0 to its full
   width, the exited tab's close returns to 48.0, and all three tabs and the strip widen together.
   Every other covered state must be untouched — the strip is in one state only
-- [ ] T070 [P] [BUG-004] Re-run `quickstart.md` §4 "Independent lifecycle and restart" with the
-  `visual-pass` skill and record it in `visual-pass.md` (depends on T066–T067). §4 is the section
-  that would have caught this and it has not been run since `TAB_WIDTH` existed — BUG-002's pass ran
-  §8, the appearance section, which was right about its own subject. Pin the binaries per the skill's
-  build section. Exercise a **background** exit specifically: the whole of FR-010a is about the
-  instance that is not the active one
+- [ ] T070 [P] [BUG-004] Re-run `quickstart.md` **§4 and §8** with the `visual-pass` skill and record
+  both in `visual-pass.md` (depends on T066–T067). §4 "Independent lifecycle and restart" is the
+  section that would have caught this and it has not been run since `TAB_WIDTH` existed — BUG-002's
+  pass ran §8, the appearance section, which was right about its own subject. **§8 is here because
+  T067 moves the label**: balancing the leading spacer against the whole trailing group changes where
+  the label sits, which is FR-004a's centring clause and §8's subject, and the fixture cannot report
+  it — a 12dp centring error is precisely what it missed last time, every node being where its own
+  layout said it was. Running only §4 would repeat BUG-004's own finding in the opposite direction.
+  Pin the binaries per the skill's build section. In §4, exercise a **background** exit specifically:
+  the whole of FR-010a is about the instance that is not the active one
 - [ ] T071 [P] [BUG-004] Update `contracts/terminal-instance-switcher-ui.md` — its "Tab form" section
   states the fixed width and lists what sets it ("`spacing::SM` either side, then two
   `anatomy::button::MIN_TOUCH_TARGET` widths … plus a readable label"), which is the derivation with
@@ -865,7 +869,9 @@ that were each looking straight at it.
 being selected first, its close control is a full 48dp target, and a gate fails if any tab's child is
 ever squeezed again.
 
-**Bugfix**: 2026-08-18 — BUG-004 Updated from bugfix patch. Phase 12 added (T064–T071). **No task
+**Bugfix**: 2026-08-18 — BUG-004 Updated from bugfix patch. Phase 12 added (T064–T071); T070
+widened to §8 as well as §4 by the verify pass, since T067 moves the label and §8 is the section that
+reads where the label sits. **No task
 reopened**: T029 built the affordance correctly and its condition is still right, and T056 chose a
 width that solved the defect its visual pass could see, against three tab states none of which was
 exited. The conflict is between two requirements written for two different bugfixes — FR-004c
