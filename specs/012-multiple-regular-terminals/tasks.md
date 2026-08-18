@@ -775,8 +775,24 @@ registry and not on the wire at all. Same shape as `010` BUG-011, one layer out.
   lever the integration tests have — deleting them would delete that coverage, including feature
   023's FR-019 rule that a session reaching `Running` must not move the keyboard
 
+- [X] T063 [BUG-003] **The fix above was incomplete; a visual pass found it.** Two gaps, neither
+  caught by T057/T058: the `SessionOpenShell`/`CloseShell`/`RestartShell` arms in
+  `crates/micold-daemon/src/server.rs` never called `broadcast_catalog`, so the value was published
+  and never announced — on screen the instance sat at `starting…` more than 20 s after its shell was
+  up and printing a prompt; and `live_shells` reported *presence* in `procs` rather than *liveness*,
+  so a shell that exits on its own (which is deliberately not removed, its PTY holds the final
+  screen) went on being reported live and `exited` stayed unreachable. Now: the three arms broadcast,
+  `overlay_live_summaries` filters on `pty.is_alive()`, and the supervision tick announces each death
+  once via an `announced_dead_shells` marker in `Inner`. Two more tests in
+  `crates/micold-daemon/tests/shell_instances.rs` — a shell that exits **by itself** stops being
+  reported live, and the tick names its project exactly once. T057 had used `close_shell`, an explicit
+  close that *does* remove the process, so no test had ever let a shell die on its own
+
 **Checkpoint**: a Regular Terminal reads `running` while its shell is up, `exited` once it is not,
-and FR-010's per-instance restart control appears for the instance that needs it.
+and FR-010's per-instance restart control appears for the instance that needs it. **Confirmed on
+screen** 2026-08-18 (Xvfb + lavapipe, stub `claude`): AI CLI session `running`, Regular Terminal
+`running` while up, `exited` with `restart` after typing `exit` —
+[evidence](./evidence/BUG-003-status-after-fix.png).
 
 **Bugfix**: 2026-08-16 — BUG-003. **No requirement added**: FR-008 already stated this exactly, and
 no task is reopened — the client-side machinery T029/T030 built is correct and was simply never
