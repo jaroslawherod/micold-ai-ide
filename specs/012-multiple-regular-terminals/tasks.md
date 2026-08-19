@@ -1025,3 +1025,60 @@ was never offered. It was already fixed on `main` by BUG-003's second commit, wh
 two commits behind — a pass on a branch is a pass on its dependencies too. After merging, §4 runs end
 to end: a background instance exited, restarted from its own tab's menu without being selected, and
 its sibling and the active tab untouched.
+
+---
+
+## Phase 14: Close the seam BUG-003, BUG-004 and `010` BUG-011 all lived in
+
+**Goal**: Make the *join* testable. Not a bugfix — a fix to why three bugfixes were needed.
+
+`reconcile_catalog` is where the daemon's snapshot becomes what the client renders. It sat in the
+**binary** crate (`shell/daemon_sync.rs`), and nothing in any `tests/` directory can reach a binary
+crate. So the two sides of that fold were each well tested and the fold itself was not:
+
+| Bug | Both halves tested | What no test could see |
+|---|---|---|
+| `010` BUG-011 | `Session::start`, `mark_running` | nothing on the start path called them |
+| `012` BUG-003 | the daemon's registry; the client's adoption | liveness was never put on the wire |
+| `012` BUG-004 | `restart_message`'s decision | the button never asked for it |
+
+BUG-003 is the sharpest evidence, because its **first** fix shipped still broken *past* both suites:
+the daemon-side test ended its shell with `close_shell`, which removes the process, so no test ever
+let a shell die on its own and `live_shells` went on reporting presence rather than liveness. A
+visual pass caught it (T063). That is the cost this phase is paying down.
+
+### Tests for Phase 14 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T081 Add `crates/micold-daemon/tests/catalog_join.rs`, holding **both** ends —
+  `micold-daemon` already dev-depends on `micold-client` (not a cycle; the client never depends on
+  the daemon). The snapshot under test is **not written by the test**: it is what
+  `DaemonState::welcome_payload` would hand a connecting client, taken after driving a real PTY, and
+  folded through the real `reconcile_catalog`. Two cases, one per seam — a shell instance up and
+  then dead **by the user's own `exit`** (never `close_shell`, the shortcut that let the incomplete
+  fix through), and a session through the real `start_session`
+- [X] T082 Prove both are guards rather than decoration, by reverting each fix and observing the
+  matching failure: dropping BUG-003's `pty.is_alive()` filter fails with `left: Running, right:
+  Exited`; dropping BUG-011's `mark_session_running` fails with `left: Idle, right: Running`. Each
+  is the original defect's exact symptom, which is what says the test would have caught it
+
+### Implementation for Phase 14
+
+- [X] T083 Move `reconcile_catalog`, `wire_to_lifecycle` and `wire_to_worktree_status` from
+  `crates/micold-client/src/shell/daemon_sync.rs` into the library as
+  `micold_client::catalog_sync`. **Bodies verbatim** — a behavioural difference between the moved
+  code and what was reviewed would be a defect, not a decision. T052's argument for grouping the
+  three together was right and is untouched; what was wrong was the *crate*
+- [X] T084 Correct `app.rs`'s note on `ShellInstanceRunning`/`ShellInstanceExited`. They **stay** —
+  feature 023's FR-019 rule (a session reaching `Running` must not move the keyboard) is asserted
+  through them — but the reason recorded for keeping them, that they were "the only lever the
+  integration tests have", is now false, and it was a poor stand-in: it is what let BUG-003 ship an
+  incomplete fix. T062 kept them for exactly this reason and worked *around* the seam; T083 removes
+  the need to
+
+**Deliberately not done**: the three `reconcile_*` unit tests stay in `daemon_sync.rs`. They still
+exercise the function through the new import, and they share `snapshot_with`/`summary`/`summary_at`
+with `main.rs`'s tests — moving them would duplicate those fixtures to buy nothing. What was missing
+was never a unit test of the fold; it was a test of the *join*, which is T081.
+
+**Checkpoint**: a change that breaks the daemon → wire → client path fails a test, rather than
+waiting for someone to look at a screen.
