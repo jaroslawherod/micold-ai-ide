@@ -55,7 +55,7 @@ that.)*
   then two `anatomy::button::MIN_TOUCH_TARGET` widths (the close control, and the leading spacer
   balancing it) plus a readable label. A longer label ellipsises within the tab rather than widening
   it, which is also the behaviour a name needs once instances can be renamed (BUG-002, "Related").
-  *(Bugfix BUG-004: that list is the derivation with a child missing from it. A tab that is
+  *(Bugfix BUG-005: that list is the derivation with a child missing from it. A tab that is
   individually restartable carries the **restart affordance** below as a fourth child, wider than
   the other three together, and the figure was set without it — so the affordance laid out at 0.0dp
   and the close control was squeezed to 45.2, below the target the same sentence names. The width
@@ -101,9 +101,9 @@ that.)*
   a filled container that default is wrong and must be overridden explicitly.
 - Each entry that is individually "restartable" (its own `lifecycle ∈ {NotStarted, Exited}`,
   contracts/shell-instance-lifecycle.md) shows its own restart affordance, dispatching
-  `Message::ShellInstanceRestartRequested(entry.id)` — **independent** per entry, and (BUG-004,
+  `Message::ShellInstanceRestartRequested(entry.id)` — **independent** per entry, and (BUG-005,
   FR-010a) **laid out at its full size**, since "shows" is satisfied by a control the user cannot
-  press and FR-010 is not. *(BUG-004, FR-010b: it is **not drawn in the tab**. A secondary (right)
+  press and FR-010 is not. *(BUG-005, FR-010b: it is **not drawn in the tab**. A secondary (right)
   press on a tab opens a context menu for that instance — "Restart" when its own lifecycle offers
   it, "Close" always — anchored at the press point on the window's overlay. Not the pane's: that
   hosts the terminal's own copy/paste menu because its anchor is pane-local, and a tab's press point

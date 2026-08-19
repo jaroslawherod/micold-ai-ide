@@ -101,7 +101,7 @@ pub fn surfaces<'a>(
         // window's bottom edge instead of its top edge at the cursor. Posed beside the default so
         // the difference is visible by comparison — a menu opened from a control in a bottom bar
         // has no room to hang downward, which is how the terminal's tab menu came to be drawn
-        // half outside the window (012 BUG-004, the 2026-08-19 visual pass).
+        // half outside the window (012 BUG-005, the 2026-08-19 visual pass).
         out.push(
             material::ContextMenu::new(menu_items(), (420, 220), Message::Dismissed, roles)
                 .rising_above(anatomy::app_bar::HEIGHT)

@@ -79,7 +79,7 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
     ("terminal_context_menu", "terminal_context_menu", |s| {
         s.terminal_context_menu = Some((4, 2))
     }),
-    // The terminal *tab's* menu, not the terminal's own (feature 012, BUG-004). Two context menus
+    // The terminal *tab's* menu, not the terminal's own (feature 012, BUG-005). Two context menus
     // on the same screen, on different things: this one acts on an instance, that one on the
     // content. It carries the instance because the menu belongs to the tab it was opened on rather
     // than to the active one — FR-010a is about restarting an instance you have not selected.
@@ -264,7 +264,7 @@ fn the_guard_is_actually_looking_at_something() {
     assert_eq!(
         POPOVERS.len(),
         8,
-        "the seven FR-007 names, plus the terminal tab menu (`012` BUG-004, FR-010b). A shorter \
+        "the seven FR-007 names, plus the terminal tab menu (`012` BUG-005, FR-010b). A shorter \
          list is a guard that has stopped covering them."
     );
 }

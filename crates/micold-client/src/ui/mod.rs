@@ -342,7 +342,7 @@ pub fn view<'a>(
                 .into()
         });
 
-    // A terminal tab's right-click context menu (feature 012, BUG-004, FR-010b). Only present while
+    // A terminal tab's right-click context menu (feature 012, BUG-005, FR-010b). Only present while
     // a tab's menu is open.
     //
     // Anchored at the point the tab was clicked, in **window** space — unlike the sidebar's two
@@ -500,7 +500,7 @@ fn worktree_menu_items(
     items
 }
 
-/// The items in a terminal tab's right-click context menu (feature 012, BUG-004, FR-010b).
+/// The items in a terminal tab's right-click context menu (feature 012, BUG-005, FR-010b).
 ///
 /// "Restart" is offered exactly when *that* instance's own lifecycle offers it — the same
 /// per-instance predicate the tab used to draw a button from, and independent of every sibling and

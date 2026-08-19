@@ -229,3 +229,30 @@ fn no_scattered_release_writes() {
         found.join("\n")
     );
 }
+
+/// `012` BUG-004 / FR-010 — the wiring half, which a unit test cannot reach.
+///
+/// `restart_message` decides what the bar's restart control must act on, and `ui/terminal.rs`'s own
+/// unit tests prove that decision correct. Neither notices if the button stops asking: the defect
+/// was `.on_press(Message::TerminalRestartRequested)` written straight into the bar, restarting the
+/// session while the bar described a shell instance — and the session's AI CLI primary is still
+/// alive in Regular mode, so pressing it did nothing at all.
+///
+/// This is the same shape as `the_bar_does_not_branch_on_focus` above: a precondition of the bar
+/// that no ordinary test can observe, so it is read out of the source instead.
+#[test]
+fn the_bars_restart_control_asks_which_process_it_is_restarting() {
+    let src = fs::read_to_string(src_dir().join("ui").join("terminal.rs")).expect("terminal.rs");
+    let code = code_only(&src);
+
+    assert!(
+        code.contains("on_press(restart_message("),
+        "the bar's restart control must take its message from `restart_message`, which splits on \
+         the attached process the way `attached_process_restartable` already does"
+    );
+    assert!(
+        !code.contains("on_press(Message::TerminalRestartRequested)"),
+        "a bare session-level restart in the bar is BUG-004: in Regular mode the session's primary \
+         is still running, so the request is a no-op and the control does nothing"
+    );
+}

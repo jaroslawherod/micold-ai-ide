@@ -76,7 +76,7 @@ const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 2];
 /// inactive tab, the transparent rule reserving its height) and whose second is the tab's content
 /// row — leading spacer, label and close.
 ///
-/// It held a fourth child until BUG-004: a restart affordance on an instance that was not running,
+/// It held a fourth child until BUG-005: a restart affordance on an instance that was not running,
 /// which the tab was too narrow to hold and which is offered from the tab's context menu now
 /// (FR-010b). Its anchor is deleted with it rather than left pointing at nothing —
 /// `an_anchor_whose_path_does_not_resolve_fails_naming_it` would fail on a stale one, which is the
@@ -520,7 +520,7 @@ pub fn covered_states() -> &'static [CoveredState] {
         // per-entry restart affordance its siblings do not: the tab whose contents differ most from
         // the rest is the one that shows whether the width follows them.
         //
-        // **It found one on the first regeneration** — and BUG-004 then fixed it, so what follows is
+        // **It found one on the first regeneration** — and BUG-005 then fixed it, so what follows is
         // the history rather than the current reading.
         //
         // A restartable tab does not fit inside `TAB_WIDTH`: the content row is given 112dp and its
@@ -533,7 +533,7 @@ pub fn covered_states() -> &'static [CoveredState] {
         // fixed width makes impossible.
         //
         // It was pinned as the baseline first, on 019 spec.md's own precedent — a snapshot records
-        // what it is shown — and the fix then moved it: BUG-004 took the affordance out of the tab
+        // what it is shown — and the fix then moved it: BUG-005 took the affordance out of the tab
         // for a context menu on it (FR-010b), since sizing every tab to hold a child only a stopped
         // instance draws comes to 204dp against 136. Every other gate in the suite had been green
         // over that zero-width button, which is the measure of how far outside their reach this

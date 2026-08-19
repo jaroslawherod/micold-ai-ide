@@ -1,11 +1,11 @@
 //! A secondary (right) click on arbitrary content, reported with the point it happened at
-//! (feature 012, BUG-004, FR-010b).
+//! (feature 012, BUG-005, FR-010b).
 //!
 //! # Why this exists as a primitive
 //!
 //! One widget in this application already answers a right click — `material::terminal_pane` — and
 //! it cannot be reused, because the handling is fused into a bespoke widget that draws a terminal
-//! grid. There was no way to give a *button* a context menu, and that is the whole of BUG-004's fix:
+//! grid. There was no way to give a *button* a context menu, and that is the whole of BUG-005's fix:
 //! a terminal instance's restart affordance moves off its tab, where a fixed tab width had squeezed
 //! it to nothing, and onto a menu the tab opens.
 //!

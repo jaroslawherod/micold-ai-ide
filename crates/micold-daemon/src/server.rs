@@ -589,7 +589,13 @@ where
                         tracing::warn!(session = %session.0, instance = instance.0, %err, "open shell failed")
                     }
                     Ok(()) => {
-                        tracing::info!(session = %session.0, instance = instance.0, "shell instance opened")
+                        tracing::info!(session = %session.0, instance = instance.0, "shell instance opened");
+                        // The set of live shell instances just changed, so say so (`012` FR-008,
+                        // BUG-003). Publishing `live_shells` in the snapshot is not enough on its
+                        // own: nothing else broadcasts on this path, so without this the client
+                        // holds the instance at `Starting` until some unrelated change happens to
+                        // push a snapshot — which is exactly what the visual pass found.
+                        state.broadcast_catalog();
                     }
                 }
             }
@@ -597,6 +603,8 @@ where
                 if let Some((pty, framer)) = state.close_shell(session, instance) {
                     restart_view(state, id, &mut view_stream, pty, framer);
                 }
+                // Closed or not (the id may name nothing), the live set may have changed.
+                state.broadcast_catalog();
             }
             ClientMsg::SessionRestartShell { session, instance } => {
                 // `close_shell` returns the primary it reattached to iff this instance was attached.
@@ -621,6 +629,8 @@ where
                         }
                     }
                 }
+                // A restart is a death and a birth; both change the live set (`012` BUG-003).
+                state.broadcast_catalog();
             }
             ClientMsg::SessionResize {
                 session,

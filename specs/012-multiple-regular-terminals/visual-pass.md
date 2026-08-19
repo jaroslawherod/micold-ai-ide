@@ -173,7 +173,7 @@ here: it belongs to 019's covered set, and adding a state churns the fixture in 
 
 ---
 
-## 2026-08-19 — §4 and §8, re-run for BUG-004 (T073)
+## 2026-08-19 — §4 and §8, re-run for BUG-005 (T076)
 
 **Ran on**: Xvfb `:77` (1600×1400) + lavapipe, not a physical display. Client and daemon built
 together from `fix/terminal-tab-restart-width` and copied out of `target-shared/` before launching;
@@ -209,7 +209,7 @@ which is exactly what two earlier passes concluded about it.
 - **The squint test (SC-009).** Blurred to where no digit is legible, the bar and the tinted glyphs
   still say which tab is active, in both schemes.
 - **A primary press still selects, through the new `ContextArea` wrapper** (§4). Pressing an inactive
-  tab activated it; the wrapper intercepts only the right button, as T066 asserts and as this
+  tab activated it; the wrapper intercepts only the right button, as T069 asserts and as this
   confirms end to end.
 - **The menu belongs to the tab it was opened on** (FR-010a). Right-clicked instance 1's tab while
   instance 4 was active and pressed **Close**: instance 1 went, instance 4 stayed active. The menu
@@ -240,7 +240,7 @@ leading edge. Half the 9.2dp slack is the shift.
 
 It is older than this bugfix and was *amplified* by it. The same asymmetry existed at
 `TAB_WIDTH = 128`, where the slack was 1.2dp and the offset **0.6** — under any tolerance, invisible
-at any magnification. FR-004c's derivation corrected the width to 136 (T065), which had nothing to do
+at any magnification. FR-004c's derivation corrected the width to 136 (T068), which had nothing to do
 with centring and multiplied the defect by eight into visibility.
 
 Fixed by giving the column `Length::Fill`, so every tab measures its content box and centres its row
@@ -257,7 +257,7 @@ window and ran to the frame's last row — about 27px of a ~48dp item, its label
 instance exited, **Restart** and **Close** would both be offered and the second would be entirely
 outside the window.
 
-That is the same defect BUG-004 is about, one layer out: an affordance present in the tree, correctly
+That is the same defect BUG-005 is about, one layer out: an affordance present in the tree, correctly
 conditioned, dispatching the right message, and impossible to press. `Anchor::Point`'s own
 documentation says "the caller is responsible for clamping the point so the panel cannot open
 off-screen" — and this caller cannot clamp it, because the room below any press inside a bar pinned

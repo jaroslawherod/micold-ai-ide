@@ -381,7 +381,7 @@ pub enum Message {
     /// body: mirrors `TerminalRestartRequested`, which only triggers binary-side spawn logic.
     /// Carries the owning session explicitly for the same reason as `ShellInstanceSelected`.
     ShellInstanceRestartRequested(SessionId, ShellInstanceId),
-    /// Open the context menu for one terminal tab, at a window-pixel point (feature 012, BUG-004,
+    /// Open the context menu for one terminal tab, at a window-pixel point (feature 012, BUG-005,
     /// FR-010b). Dispatched by a secondary (right) press on the tab.
     ShellInstanceMenuRequested(ShellInstanceId, u16, u16),
     /// Dismiss the terminal-tab context menu.
@@ -649,7 +649,7 @@ pub struct State {
     /// no menu is showing (feature 006, FR-013).
     pub terminal_context_menu: Option<(u16, u16)>,
     /// The open terminal-tab context menu — which instance it belongs to, and where it was opened
-    /// in window pixels — or `None` when no menu is showing (feature 012, BUG-004, FR-010b).
+    /// in window pixels — or `None` when no menu is showing (feature 012, BUG-005, FR-010b).
     ///
     /// Carries the instance because the menu acts on the tab it was opened on, **not** on the
     /// active one: restarting a background instance without selecting it first is the whole of
@@ -1692,7 +1692,7 @@ impl State {
                 self.terminal_context_menu = None;
             }
 
-            // ---- Feature 012 (BUG-004) ----
+            // ---- Feature 012 (BUG-005) ----
             Message::ShellInstanceMenuRequested(instance, x, y) => {
                 // Replaces rather than stacks: a second right-click, on this tab or another, moves
                 // the one menu. Two menus open at once would each claim the next click.

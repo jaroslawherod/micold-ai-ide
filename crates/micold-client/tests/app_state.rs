@@ -605,7 +605,7 @@ fn shell_instance_running_and_exited_update_that_instances_lifecycle() {
     );
 }
 
-/// The tab context menu remembers **which tab** it was opened on (feature 012, BUG-004, FR-010b).
+/// The tab context menu remembers **which tab** it was opened on (feature 012, BUG-005, FR-010b).
 ///
 /// The whole reason the menu carries an instance id rather than reading the active one: FR-010a is
 /// about restarting an instance that is *not* selected, and reading `active_shell` at the moment the

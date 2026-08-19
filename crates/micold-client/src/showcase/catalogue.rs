@@ -751,7 +751,7 @@ pub const EXEMPTIONS: &[Exemption] = &[
         reason: "a behaviour-layer wrapper, for the same reason as the three above: it delegates \
                  layout, draw, operate and overlay to its single child and intercepts one event — a \
                  secondary press over its own bounds — publishing the point so a caller can open a \
-                 menu there (`012` BUG-004, FR-010b). It names no colour, size or spacing and adds \
+                 menu there (`012` BUG-005, FR-010b). It names no colour, size or spacing and adds \
                  no pixel to what it wraps. What a secondary press *produces* is the `ContextMenu` \
                  the floating section poses, on both of its anchors.",
     },

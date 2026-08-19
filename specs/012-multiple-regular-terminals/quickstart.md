@@ -79,7 +79,7 @@ Open the project, select a session already in Regular Terminal mode (one instanc
   a *running* tab and the menu offers **Close** only (FR-010b).
 - Press **Restart**. **Expect**: only that instance starts a fresh shell; the sibling instance is
   not restarted, the AI CLI process is not restarted.
-- **Do all of this on the instance that is *not* the active one** (bugfix BUG-004, FR-010a).
+- **Do all of this on the instance that is *not* the active one** (bugfix BUG-005, FR-010a).
   Restarting a background instance without selecting it first is the whole point of addressing the
   restart by instance id, and it is the case that was broken: the affordance used to live *in* the
   tab, where it was laid out at zero width inside a tab too narrow to hold it — present in the tree,

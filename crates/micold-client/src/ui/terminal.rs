@@ -411,7 +411,7 @@ pub fn pane<'a>(
                 r,
             )
             .padding(spacing::SM)
-            .on_press(Message::TerminalRestartRequested),
+            .on_press(restart_message(state, active)),
         );
     }
     // The bar carried a release-focus `IconButton` here until BUG-001 (feature 023 FR-021b). It
@@ -554,6 +554,30 @@ fn empty_terminal_message(state: &State, id: SessionId) -> &'static str {
     }
 }
 
+/// What the bottom-bar restart control must ask for (`012` FR-010, BUG-004).
+///
+/// The same question [`attached_process_restartable`] asks to decide *whether* to offer a restart —
+/// which process is attached — asked again to decide *what* the restart acts on. It used to press
+/// `TerminalRestartRequested` unconditionally, which restarts the **session**; in Regular mode the
+/// session's AI CLI primary is still alive, so `start_session` took its already-live early return
+/// and the control did nothing. With a single instance there is no tab strip either, so FR-010's
+/// affordance had no reachable route at all.
+///
+/// A session with no instance yet keeps the session-level request: there is nothing instance-shaped
+/// to name, and that path lazily opens the first one.
+fn restart_message(state: &State, id: SessionId) -> Message {
+    let instance = state
+        .active_sessions()
+        .iter()
+        .find(|s| s.id == id)
+        .filter(|s| s.mode == TerminalMode::Regular)
+        .and_then(|s| s.active_shell);
+    match instance {
+        Some(instance) => Message::ShellInstanceRestartRequested(id, instance),
+        None => Message::TerminalRestartRequested,
+    }
+}
+
 /// Whether the bottom-bar restart control should show (FR-013): the currently-attached process
 /// (per `Session.mode`) is not running (contracts/terminal-mode-lifecycle.md's predicate).
 fn attached_process_restartable(state: &State, id: SessionId) -> bool {
@@ -603,14 +627,14 @@ pub(crate) fn tab_indicator_colour(is_active: bool, r: tokens::Roles) -> Option<
 /// of by arithmetic. It also survives the rename feature — a name ellipsises inside the tab rather
 /// than resizing the strip, which is how a browser tab bar behaves.
 ///
-/// **Derived, not chosen** (BUG-004, FR-004c). It was written as a literal `128.0` — a number that
+/// **Derived, not chosen** (BUG-005, FR-004c). It was written as a literal `128.0` — a number that
 /// made the three tab states the BUG-002 visual pass drew look right, and that no test could
 /// disagree with. There is a fourth state, and 128 is not enough for it: a tab whose instance has
 /// stopped carried a restart button too, and the row settled the 54.3dp shortfall by shrinking its
 /// trailing children until the button was 0.0 wide and the close control was 45.2, under §7.3's
 /// target. Nothing overflowed, so nothing failed.
 ///
-/// BUG-004 answered that by moving the restart affordance out to a context menu (FR-010b) rather
+/// BUG-005 answered that by moving the restart affordance out to a context menu (FR-010b) rather
 /// than by widening every tab to 204dp for a child only a stopped instance draws. What changed here
 /// is that the width is *computed from the things it has to hold*, so it moves when any of them
 /// does and a fifth child cannot be added without this sum being confronted.
@@ -639,7 +663,7 @@ const TAB_WIDTH: f32 = 2.0 * spacing::SM      // the tab button's own padding, b
 const TAB_LABEL_MAX_WIDTH: f32 = 120.0;
 
 /// The label's share of the derived [`TAB_WIDTH`] — what a tab reserves for its own name before the
-/// two touch targets and the gaps are counted (BUG-004, FR-004c).
+/// two touch targets and the gaps are counted (BUG-005, FR-004c).
 ///
 /// A floor, where [`TAB_LABEL_MAX_WIDTH`] is the ceiling at which a label ellipsises. It is not
 /// measured text: a shaped width is not available in a `const`, and reserving one would make the
@@ -758,7 +782,7 @@ fn instance_switcher_row<'a>(
         // over a control a user could not press, and the instance FR-010 exists for — one that
         // exited in the background — could not be restarted from its own tab at all.
         //
-        // It is offered from a context menu on the tab now (BUG-004, FR-010b). Widening the tab
+        // It is offered from a context menu on the tab now (BUG-005, FR-010b). Widening the tab
         // instead was measured first and rejected: the derivation comes to 204dp against 136, so
         // three instances would take 628dp of a 1014dp bar that also carries a title, a status, the
         // "+" and the mode toggle — every tab paying for a child only a stopped instance draws.
@@ -838,6 +862,59 @@ mod tests {
         state.workspace.sessions.insert(path, vec![session]);
         state.active_session = Some(id);
         (state, id)
+    }
+
+    /// `012` BUG-004 / FR-010. The bar's `restart` control restarted the **session**, whose AI CLI
+    /// primary is still alive in Regular mode — so `start_session` took its already-live early
+    /// return and pressing the control did nothing at all. With a single instance there is no tab
+    /// strip either, so FR-010 had no reachable route in the commonest case.
+    ///
+    /// Asserted on the message rather than on the presence of a control: `attached_process_restartable`
+    /// already decides *whether* to offer a restart by asking which process is attached, and the
+    /// defect was the button not asking the same question about *what to restart*. Both now come
+    /// from one reading, which is what stops them disagreeing again (this feature's BUG-001, and
+    /// `025`'s, are the same shape).
+    #[test]
+    fn the_bars_restart_targets_the_process_the_bar_is_describing() {
+        // AI CLI mode: the session is the attached process, so the session-level restart is right.
+        let (state, id) = state_showing(SessionLifecycle::Idle);
+        assert_eq!(
+            restart_message(&state, id),
+            Message::TerminalRestartRequested
+        );
+
+        // Regular mode with an instance: that instance is what the bar reports on, and what
+        // `restart` must act on.
+        let (mut state, id) = state_showing(SessionLifecycle::Running);
+        let instance = {
+            let (_, session) = state.workspace.find_session_mut(id).expect("session");
+            session.mode = TerminalMode::Regular;
+            session.open_shell_instance()
+        };
+        assert_eq!(
+            restart_message(&state, id),
+            Message::ShellInstanceRestartRequested(id, instance),
+            "in Regular mode the bar describes the attached shell instance, so its restart must \
+             name that instance — restarting the session leaves the dead shell dead"
+        );
+
+        // Regular mode with no instance yet: nothing instance-shaped to name, so the session-level
+        // request stands and lazily opens the first one.
+        let (mut state, id) = state_showing(SessionLifecycle::Running);
+        {
+            let (_, session) = state.workspace.find_session_mut(id).expect("session");
+            session.mode = TerminalMode::Regular;
+        }
+        assert_eq!(
+            restart_message(&state, id),
+            Message::TerminalRestartRequested
+        );
+
+        // An unknown session must not panic the render path.
+        assert_eq!(
+            restart_message(&state, SessionId::new()),
+            Message::TerminalRestartRequested
+        );
     }
 
     /// BUG-001 (feature 025), FR-014 / contract §4.3.
@@ -943,7 +1020,7 @@ mod tests {
         }
     }
 
-    /// BUG-004, FR-004c: the tab's width is the sum of what it has to hold, not a number.
+    /// BUG-005, FR-004c: the tab's width is the sum of what it has to hold, not a number.
     ///
     /// The test that would have failed the day `TAB_WIDTH` was written as `128.0`. It cannot catch
     /// a *missing* child on its own — a sum is only as complete as its terms, and the term this bug

@@ -149,7 +149,7 @@ Principle VIII bullet above cites as one of the sibling controls the switcher's 
 follows. That citation is now historical; the restart control and the mode toggle remain as the
 live examples.
 
-**Bugfix**: 2026-08-18 — BUG-004 Updated from bugfix patch. A third consequence of composing
+**Bugfix**: 2026-08-18 — BUG-005 Updated from bugfix patch. A third consequence of composing
 primitives, and the one the two above did not anticipate: **a `Length::Fixed` on the composite is a
 promise about the parent, not about the children**. BUG-002 gave every tab a fixed `TAB_WIDTH` to
 stop the active tab stretching — correct, and FR-004c records why — and that fixed width is also a

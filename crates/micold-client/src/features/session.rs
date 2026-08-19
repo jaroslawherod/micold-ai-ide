@@ -371,7 +371,7 @@ impl Registered for TerminalContextMenu {
     }
 }
 
-/// A terminal tab's right-click menu, as a floating surface (feature 012, BUG-004, FR-010b).
+/// A terminal tab's right-click menu, as a floating surface (feature 012, BUG-005, FR-010b).
 ///
 /// Separate from [`TerminalContextMenu`] because they are different menus on different things — one
 /// acts on the terminal's *content* (copy, paste) and one on an *instance* (restart, close) — and

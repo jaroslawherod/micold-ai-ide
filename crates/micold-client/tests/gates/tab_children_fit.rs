@@ -1,4 +1,4 @@
-//! No child of a tab is laid out narrower than the width it asked for (BUG-004, SC-010).
+//! No child of a tab is laid out narrower than the width it asked for (BUG-005, SC-010).
 //!
 //! The sixth gate, and the first to read a laid-out child against **what it requested** rather than
 //! against a constant, against its parent's bounds, or against a sibling.
@@ -108,7 +108,7 @@ fn descendants<'r>(records: &'r [LayoutRecord], tab: &LayoutRecord) -> Vec<&'r L
 /// The interactive controls inside a tab.
 ///
 /// A tab is a button wrapping a column — the active indicator, then a row of children. That row's
-/// direct children are the leading spacer, the label, the close control, and (before BUG-004 moved
+/// direct children are the leading spacer, the label, the close control, and (before BUG-005 moved
 /// it out) a restart button. A **control is a direct child of that row as tall as the row itself**:
 /// a button fills its row's cross axis, and a text label does not. In the recorded tabs the row is
 /// 21.0 tall, the close and restart controls are 21.0, the label is 16.0 and the leading spacer is
@@ -195,7 +195,7 @@ fn every_control_inside_a_tab_holds_its_touch_target() {
          parent by shrinking its trailing children, so this is what a tab too narrow for its \
          contents looks like from the outside: no overflow, no error, a control that is simply not \
          there. The figure is intact in the source both when it is overwritten (018 BUG-002) and \
-         when it is competed away (012 BUG-004), which is why this reads the laid-out box.",
+         when it is competed away (012 BUG-005), which is why this reads the laid-out box.",
         failures.join("\n")
     );
     assert!(
