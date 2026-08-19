@@ -178,7 +178,7 @@ Single Rust crate: render-free core in `src/` (`--no-default-features`), `gui`-o
 
 ### Tests for User Story 5 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T053 [P] [US5] Failing tests: `Blocked` distinguishes `CheckedOutInProjectRoot` from `CheckedOutAt { path }` and carries the holder's path, in `tests/branch_conflict.rs` — **reopened by BUG-001**: two variants is one too few; superseded by T064
+- [X] T053 [P] [US5] Failing tests: `Blocked` distinguishes `CheckedOutInProjectRoot` from `CheckedOutAt { path }` and carries the holder's path, in `tests/branch_conflict.rs` — **reopened by BUG-001**: two variants is one too few; superseded by T064. *(Closed 2026-08-19 as superseded, not by new work: T064's four-shape classification is a strict superset of this two-shape one, and writing a test for the subset would duplicate assertions that already exist. Verified rather than assumed — `a_branch_checked_out_in_another_worktree_is_blocked_and_names_it` asserts `CheckedOutAt` by whole-value equality, so the holder's absolute path is checked and not merely present; `a_branch_checked_out_in_the_project_root_is_blocked_as_the_project_checkout` asserts the other variant, which is a unit variant and structurally cannot carry a path; and `only_holders_the_sidebar_would_list_are_described_as_the_apps_own` (T066) asserts the split between them. All three pass.)*
 - [X] T054 [P] [US5] Failing test: a `Blocked` or `DirectoryTaken` situation offers no actionable resolution and returns to `Idle` on dismiss, leaving inputs intact, in `tests/app_state.rs`
 
 ### Implementation for User Story 5
