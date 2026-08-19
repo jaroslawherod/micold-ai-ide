@@ -42,6 +42,8 @@ of the *strip*. The alternative reading — that the strip as a whole should be 
 bar — is already true today, which is why the strip reading is the more likely intent. If it is
 wrong, FR-002 is the only line that changes.
 
-FR-012 (the AI tab reflects its process's lifecycle) is stated as a requirement but serves User
-Story 3 at P3. It is genuinely severable: the strip is correct and useful without it, and a plan may
-schedule it last.
+FR-012 (a tab whose process is not running is visually distinct) was stated at P3 and **raised to
+P2** by the 2026-08-19 clarification session. It was scoped as consistency polish — "the AI tab
+should not silently omit what the terminal tabs show" — and feature 012's BUG-005 then moved the
+restart affordance off the tab into a menu, so no tab shows lifecycle and no cue points at the one
+action the strip offers. It is still severable from Story 1, which is why it is not P1.
