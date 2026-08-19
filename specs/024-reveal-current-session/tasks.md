@@ -189,6 +189,18 @@ stays hidden.
 - [X] T054 Run the whole automated gate: `mise run test`, and record which of quickstart §A's rows each new test satisfies
 - [X] T055 Add the two assertions §A cannot currently claim: exactly one session row carries the mark when several sessions share a location (FR-002, contract §4.1) in `crates/micold-client/tests/features_sidebar.rs`, and the mark is independent of `terminal_focused` and of `lifecycle` (FR-014, FR-015, §4.4) in `crates/micold-client/tests/terminal_focus.rs`
 - [X] T056 Run quickstart §B B1–B6 with the repo's `visual-pass` skill and fill in the recording table in [quickstart.md](./quickstart.md) — a step that fails is a defect, not a note. B1, B2 and B4 are the three headline claims and none can be automated; if §B was not run, say so rather than leaving the table blank
+
+**§B was run on 2026-08-18** (T056/T057), against the client rather than the showcase, with the
+`visual-pass` skill. B1, B3, B5 and B6 pass. **B2 and B4 fail**, and per T056's own rule a step that
+fails is a defect: [BUG-001](./bugs/BUG-001.md) — the current session's name is not drawn heavier,
+because `Ellipsized::at_role` keeps only the role's size — and [BUG-002](./bugs/BUG-002.md) — a
+project switch never scrolls the current session's row into view in a list long enough to need it.
+Both are FR-level failures with no fix in this change; the recording table in
+[quickstart.md](./quickstart.md) carries the measurements and the evidence. **T058's branch is now
+answerable**: R4's fallback was for a 500 weight that proved too subtle, and the honest finding is
+that the weight is absent rather than subtle — so BUG-001 comes first, and R4's question can only be
+re-asked once there is a weight on screen to judge.
+
 - [X] T057 Capture the §B screenshots with `mise run screenshot` — B1's first frame after a switch and B2's pair of schemes — and check B2's pair in greyscale, which is the only real test of FR-003a
 - [X] T058 If §B judges the 500-weight name too subtle, apply R4's pre-argued fallback (an outline on the pill) rather than inventing a third cue — and record the decision in [research.md](./research.md) R4
 - [X] T059 [P] Cross-cutting docs review in `docs/`: confirm the two edited sections still read as one narrative and that nothing else in the user guide now describes the old collapsed-after-switch behaviour
