@@ -185,8 +185,10 @@ branch and the tag comes back, instead of the app having to guess where the tick
 Creating a worktree makes the new git branch and worktree for you — no manual git commands. If the
 derived name collides with a branch that already exists, the app asks what you want to do rather
 than refusing — see [Working from an existing branch](#working-from-an-existing-branch). If the
-worktree *folder* already exists, creation is blocked with a message, because no branch choice can
-resolve that. If anything fails partway, the app rolls back so no half-created branch or directory
+worktree *folder* already exists, creation is blocked with a message that names the folder and tells
+you to pick a different name or remove that folder — no branch choice can resolve it, so there is
+only the one answer. You get the same sentence whether the app catches the clash while you are
+filling the form in or only when it tries to create. If anything fails partway, the app rolls back so no half-created branch or directory
 is left behind.
 
 If the project uses git submodules, they're fetched automatically as part of creating the

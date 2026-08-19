@@ -392,6 +392,52 @@ impl BlockReason {
     }
 }
 
+/// A directory clash in the words the user reads (feature 016, FR-022; BUG-003 item 3).
+///
+/// Two parts because the two surfaces that report this clash need different shapes of it — the
+/// form draws the fact and the guidance as separate lines, in different roles, and the daemon
+/// sends one string down the wire. Neither *writes* either part, which is the point: before this,
+/// the form said "A worktree folder named 'x' already exists." + "Choose a different name, or
+/// remove the existing folder first." and the daemon said "a worktree with that name already
+/// exists" for the identical condition, and only one of them told the user what to do. That is the
+/// shape BUG-001's holder taxonomy had, one arm lower in the same `match`.
+pub struct DirectoryClash {
+    /// What happened, named by the folder the user would go looking for.
+    pub fact: String,
+    /// What to do about it. `&'static str` rather than `String` because it does not vary: no
+    /// branch choice can resolve a directory clash (FR-022), so there is exactly one answer.
+    pub guidance: &'static str,
+}
+
+impl std::fmt::Display for DirectoryClash {
+    /// Both parts, for a surface that has room for one string — the daemon's wire error.
+    ///
+    /// The form has two lines and uses the fields; this is the same words in one line rather than
+    /// a third wording of them.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.fact, self.guidance)
+    }
+}
+
+/// Explain the clash on `dir` (FR-022, BUG-003 item 3).
+///
+/// Lives here rather than in the two renderers for the reasons [`BlockReason::explain`] gives, and
+/// it is the arm that was left behind when that one was fixed after BUG-001.
+///
+/// Unlike `explain`, this carries its guidance as well as its fact. A branch block's guidance
+/// depends on which action the *form* is currently offering — "Include that worktree" exists for
+/// one holder and not the others — so it belongs to the form. A directory clash offers nothing,
+/// ever, so there is one answer and no reason for the daemon's copy of it to go without.
+pub fn explain_directory_taken(dir: &Path) -> DirectoryClash {
+    DirectoryClash {
+        fact: format!(
+            "A worktree folder named '{}' already exists.",
+            folder_name(dir)
+        ),
+        guidance: "Choose a different name, or remove the existing folder first.",
+    }
+}
+
 /// One row of the existing-branch picker (feature 016, FR-010–FR-012).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BranchCandidate {
@@ -746,7 +792,10 @@ fn list_dir_names(dir: &Path) -> Vec<String> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CreateError {
     /// A worktree with the derived directory name already exists (FR-009).
-    DuplicateDir,
+    ///
+    /// Carries the directory for the same reason [`Self::BranchInUse`] carries the branch: the
+    /// sentence the user reads is built from it, and it is built in one place (BUG-003 item 3).
+    DuplicateDir { dir: PathBuf },
     /// The branch is checked out elsewhere and cannot back another worktree (feature 016,
     /// FR-021). Carries enough to name the holder rather than just failing.
     BranchInUse { branch: String, reason: BlockReason },
@@ -1018,7 +1067,9 @@ pub fn create_worktree(
     )
     .map_err(|e| CreateError::RolledBack(e.to_string()))?;
     match &situation {
-        BranchSituation::DirectoryTaken { .. } => return Err(CreateError::DuplicateDir),
+        BranchSituation::DirectoryTaken { dir } => {
+            return Err(CreateError::DuplicateDir { dir: dir.clone() })
+        }
         BranchSituation::Blocked { branch, reason } => {
             return Err(CreateError::BranchInUse {
                 branch: branch.clone(),
