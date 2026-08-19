@@ -27,8 +27,8 @@ retires a group.
 | C | The popover mutual-exclusion rule (features 009, 015) | 12 | **not uniform — see below** |
 | D | `Workspace::forget` — forgetting a project drops what three features hold against its path | 4 | **maybe none — see below** |
 | E | `State::push_notification` | 2 | `NotificationRaised` — **exists** (T065) |
-| F | The reveal: displaying a session opens the row holding it | 4 | `SessionRevealed(SessionId)` |
-| G | worktree_form creates; worktree owns the list | 4 | `WorktreeCreated` / `WorktreeCreateFailed` |
+| F | Not the reveal — the *commit* of the outgoing one | 4 | **two outcomes; see below** |
+| G | worktree_form creates; worktree owns the list | 4 | **done (T067a-4)** — 3 were a mis-owned field |
 | — | `session::switch_active` → `workspace.active` | 1 | see note below |
 | — | `sidebar::toggle_location` → `reveal_suppressed_for` | 1 | see note below |
 | — | `session::restore_after_activation` → `show_agent_worktrees` | 1 | see note below |
@@ -133,8 +133,18 @@ vocabulary is done, so this is a pure call-site change and the cheapest proof T0
 `session::set_current_session` → `default_expanded`, `expanded`, `pending_reveal_scroll`;
 `sidebar::toggle_location` → `reveal_suppressed_for`.
 
-Displaying a session opens the row that holds it, commits the outgoing one, drops a stale
-suppression and arms a scroll. `SessionRevealed(SessionId)` covers the first three. The fourth is
+**This entry named the write backwards; corrected before implementing.** `set_current_session`
+calls `current_session_location()` *before* assigning `active_session`, so the location it resolves
+is the **outgoing** session's. And `location_open` derives the current reveal as the union of the
+user's expansion set with the one revealed row — the incoming reveal is never written at all. So
+these writes do not reveal anything: they **commit the reveal that is ending** into the user's own
+set, so the row does not silently close underneath them.
+
+`SessionRevealed(SessionId)` would therefore have been wrong in both subject and direction. The
+vocabulary wants to be about the location being left. `pending_reveal_scroll = true` *is* about the
+incoming session, which makes F two outcomes with different subjects rather than one.
+
+Displaying a session commits the outgoing row, drops a stale suppression and arms a scroll. The fourth is
 the mirror in the other direction — collapsing a row cancels a suppression a session close armed —
 and may want its own variant; grouped here because the two are one conversation.
 
@@ -148,7 +158,25 @@ goes through `set_current_session`. Converting F must not give a second path a w
 
 `worktree_form` is a separate feature precisely because its lifecycle is independent (FR-003, and
 T064 gave it its own message type), but what it creates lands in `worktree`'s list and its failures
-land in `worktree`'s error slot. `WorktreeCreated(Worktree)` / `WorktreeCreateFailed(String)`.
+land in `worktree`'s error slot.
+
+**Done (T067a-4), and only one of the four was coupling.** The placement check landed on a *field*
+this time rather than a function: `worktree_error` is named for the worktree feature but
+`crate::ui::worktree_form` is its only render site, so it is the modal's error line. Three comments
+already in the tree said so, and one is load-bearing — `tests/open_project_git_gate.rs` exists
+because an assertion on this field passed green for as long as a refusal wrote to it with the modal
+shut, invisible to users. `OWNERS` had it wrong; moving it to `worktree_form` retired three rows
+with no outcome written.
+
+The fourth was real: `worktree_form::created` pushed into `worktree`'s list. That became
+`Outcome::WorktreeCreated(Worktree)` routed to a new `worktree::created`. No
+`WorktreeCreateFailed` was needed — the failure only ever wrote the form's own field.
+
+`created` and `included` stayed two functions although their inserts look identical: they dedupe by
+different keys (a create names the directory it made, a daemon include answers with a path), so
+collapsing them would have quietly changed what counts as the same worktree.
+
+**ALLOWED 28 → 24.**
 
 ### The three singletons
 
