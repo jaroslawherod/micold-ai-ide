@@ -275,10 +275,14 @@ margin a 400 → 500 step produces, not by the 0.3% measured on 2026-08-18.
 
 ### Verification for BUG-001
 
-- [ ] T065 [BUG-001] Re-run quickstart §B2 with the `visual-pass` skill against the fixed build, in
+- [X] T065 [BUG-001] Re-run quickstart §B2 with the `visual-pass` skill against the fixed build, in
   both schemes, and record the ink-area measurement in [quickstart.md](./quickstart.md) beside the
   2026-08-18 numbers. Only then is T058's R4 question answerable — whether a 500 weight that is
   actually on screen is *sufficient*, or whether R4's outline fallback is still needed
+  - **Done 2026-08-19**: ink-area ratio **1.222** dark and **1.221** light, against 1.003/1.002
+    before the fix; measured on the luminance channel, so it is also the greyscale check SC-005 and
+    FR-003a ask for. **R4's fallback is not needed** — the weight carries on its own in both
+    schemes, so T058 stands as closed rather than reopened
 
 ---
 
