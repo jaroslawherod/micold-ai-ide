@@ -223,6 +223,60 @@ impl State {
         self.arm_notice(&key); // STEP 4
     }
 
+    /// Re-run the active project's foreground resolve when the first one ran before the daemon's
+    /// catalog had arrived (`010` BUG-013).
+    ///
+    /// The client boots, restores its project and asks which session to show — all before the
+    /// welcome catalog lands. Sessions live on the daemon, so at that instant the project has none
+    /// and [`Self::explain_foreground`] answers [`ForegroundChoice::NoSessionsForKey`], which is
+    /// correct. The defect was that it was *final*: the catalog then filed the sessions under the
+    /// project and nothing asked again.
+    ///
+    /// What made it look like data loss rather than a missing selection is the sidebar. A location
+    /// row opens when it holds the current session (`features::sidebar::effective_open`), so with
+    /// nothing current the Default row stayed shut and the sessions inside it were never drawn —
+    /// present in state, listed in the catalog, invisible. The session survived the restart in
+    /// every layer except the one the user can see.
+    ///
+    /// Returns whether anything changed.
+    ///
+    /// # Why the guard is exactly `NoSessionsForKey`
+    ///
+    /// FR-007 forbids choosing a session for the user when they are landing on the project
+    /// overview, and `on_connected` cannot tell a boot from a mid-session reconnect. So the
+    /// condition is not "nothing is current" — it is the *reason* nothing is current.
+    /// `NoSessionsForKey` is the one answer that indicts the key rather than the sessions: it
+    /// means the resolve looked somewhere empty. `NoneActive` is a real overview landing (the
+    /// project has sessions, none running) and is left alone, as is any session already chosen.
+    pub fn resolve_foreground_after_catalog(&mut self) -> bool {
+        if self.active_session.is_some() {
+            return false;
+        }
+        if !matches!(
+            self.last_foreground_choice,
+            Some(ForegroundChoice::NoSessionsForKey)
+        ) {
+            return false;
+        }
+        let Some(active) = self.workspace.active.clone() else {
+            return false;
+        };
+        let key = canonicalize_best_effort(&active);
+        let choice = self.explain_foreground(&key);
+        // Still nothing filed under the key: the catalog did not bring this project's sessions, so
+        // leave the recorded reason as it was rather than overwrite it with the same answer.
+        if matches!(choice, ForegroundChoice::NoSessionsForKey) {
+            return false;
+        }
+        let session = choice.session();
+        self.last_foreground_choice = Some(choice);
+        // Through `set_current_session` like every other app-initiated move, so the row the
+        // session is in is revealed rather than left shut (feature 024, FR-001) — which is the
+        // half of this bug the user actually saw.
+        self.set_current_session(session);
+        true
+    }
+
     /// The session to display when entering `key`, and why: the session this project was left on
     /// if it still exists and was not closed — running or not (FR-003a) — else the project's first
     /// running one, else none (FR-003).
