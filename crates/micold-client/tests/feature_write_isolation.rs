@@ -373,9 +373,10 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "features/project.rs::forget_confirmed",
     ),
     // --- via `State::push_notification`, a root helper (T067) ------------------------------------
-    // The contract already names this one: `NotificationRaised`, listed under "emitted by: any
-    // feature". Same as `session::arm_notice` above, reached from the project side.
-    ("project", "notify", "features/project.rs::open_refused"),
+    // `session::arm_notice` above is what is left of this group: T067a converted
+    // `project::open_refused` to `notifications::error(..)` -> `Outcome::NotificationRaised`, the
+    // first conversion of the burn-down, and `arm_notice` follows once its three-function chain
+    // (`switch_active` -> `restore_after_activation` -> `arm_notice`) is converted with it.
     // (T066 converted `worktree::loaded` -> `expanded`, the entry that used to sit here. It is the
     // first conversion of this feature and the proof the mechanism works end to end: `set_worktrees`
     // now returns `Outcome::WorktreesReplaced` and the sidebar prunes its own expansion. The

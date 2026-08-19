@@ -377,6 +377,6 @@ pub fn forget_cancelled(state: &mut State) {
 /// The active project is unchanged. Reported through the global surface rather than
 /// `worktree_error`: the refusal arrives with the selector already closed, so the Add Worktree
 /// modal that owns `worktree_error` is not open and the message would never be drawn.
-pub fn open_refused(state: &mut State, message: String) {
-    state.notify_error(message);
+pub fn open_refused(_state: &mut State, message: String) -> Vec<crate::features::Outcome> {
+    vec![crate::features::notifications::error(message)]
 }

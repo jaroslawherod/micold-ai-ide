@@ -878,7 +878,8 @@ impl State {
                 crate::features::settings::system_theme_changed(self, detected)
             }
             Message::ProjectOpenRefused(message) => {
-                crate::features::project::open_refused(self, message)
+                let outcomes = crate::features::project::open_refused(self, message);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::WorktreesLoaded(worktrees) => {
                 // The root is the only interpreter (FR-022, contract O3), and this is where the
