@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-17
 
-**Status**: Implemented (retrofitted specification)
+**Status**: Closed (retrofitted specification)
 
 **Input**: User description: "Cross-application clipboard support for non-editable labels in the
 sidebar. Users can right-click a worktree row and choose \"Copy name\" to copy its displayed name

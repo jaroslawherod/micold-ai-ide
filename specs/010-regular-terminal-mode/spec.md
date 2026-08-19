@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-18
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "Let the user switch a session's embedded terminal between running the `claude` CLI (the current default) and a regular shell, without losing the terminal pane's real-terminal behavior (colors, live keystroke input, scrollback, focus gating) established in feature 006. The user needs to occasionally run ordinary shell commands (git, package managers, ad-hoc scripts) in the same worktree the session is scoped to, without leaving the app or losing their place in the `claude` conversation. Add a toggle/action (e.g. in the terminal's toolbar dropdown, alongside the existing Settings item) that switches the active pane between 'AI CLI' mode and 'regular terminal' mode for the current session. Switching to regular terminal mode should start (or resume) a plain shell process in the session's worktree directory. Switching back to AI CLI mode should resume the existing `claude` session (same session id, `--resume`) rather than starting a new conversation — the `claude` conversation must survive round-trips through regular-terminal mode. Decide and specify: whether the `claude` process is suspended/killed while in regular-terminal mode or kept running in the background; what happens to a regular shell process when switching away (killed vs. kept alive and resumable); whether each session remembers its own last-used mode across restarts of the app; and how the current mode is indicated visually so the user always knows which process their keystrokes are going to."
 

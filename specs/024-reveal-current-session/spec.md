@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-09
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "when I switch between project I would like to know at which session I'm currently. So the session to which I'm switched should be expanded in side panel and highlighted"
 

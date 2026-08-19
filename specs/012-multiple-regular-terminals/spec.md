@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-20
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "Extend the existing session mode toggle (see specs/010-regular-terminal-mode) so a session can run many concurrent Regular Terminal instances instead of just one. Today TerminalMode toggles a single session between its AI CLI (Claude) process and one Regular Terminal process. This feature removes the 'at most one shell process per session' limitation that specs/010-regular-terminal-mode/spec.md explicitly calls out as a non-goal, and supersedes it. From within a single session, users should be able to: open additional Regular Terminal instances alongside the existing one, each an independent shell process; see and switch between all open Regular Terminal instances for that session, reusing the 'list of instances + one active index' pattern already used for switching between sessions; toggle between the AI CLI pane and whichever Regular Terminal instance was last active for that session, preserving today's single mode-toggle icon-button as the primary toggle, with terminal-instance switching as a secondary control visible only once more than one instance is open; close an individual terminal instance without affecting siblings or the AI CLI process, with closing the last remaining instance falling back to today's single-terminal close behavior; and have each terminal instance independently track its own shell lifecycle and be independently restartable. Non-goals: no change to the number of AI CLI processes per session (still exactly one); no change to cross-session behavior; no new persistence of terminal instances across app restart beyond whatever already exists for the single-terminal case today."
 

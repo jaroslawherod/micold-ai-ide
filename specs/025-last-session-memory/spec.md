@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-11
 
-**Status**: Draft
+**Status**: Closed
 
 **Bugfix**: 2026-08-14 — [BUG-001](./bugs/BUG-001.md) added FR-014 and SC-008 (the terminal area must
 not say a restored session is starting), a fourth US1 acceptance scenario, and a correction to the

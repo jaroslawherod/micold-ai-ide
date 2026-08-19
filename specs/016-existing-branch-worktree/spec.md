@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-26
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "Creation of worktree creates a new branch but if the branch already exists should ask user what to do. Overwrite the branch or reuse it. It's required e.g. to continue the work that was started outside of micold ide"
 
