@@ -25,7 +25,7 @@ retires a group.
 | A | `State::clear_for_dialog` — a dialog opening clears the focus slot and closes every popover | 8 | `DialogOpened` |
 | B | `State::focus_terminal` — a terminal taking the keyboard clears the focused field | 5 | `TerminalFocused` |
 | C | The popover mutual-exclusion rule (features 009, 015) | 12 | **not uniform — see below** |
-| D | `Workspace::forget` — forgetting a project drops what three features hold against its path | 4 | `ProjectForgotten(PathBuf)` |
+| D | `Workspace::forget` — forgetting a project drops what three features hold against its path | 4 | **maybe none — see below** |
 | E | `State::push_notification` | 2 | `NotificationRaised` — **exists** (T065) |
 | F | The reveal: displaying a session opens the row holding it | 4 | `SessionRevealed(SessionId)` |
 | G | worktree_form creates; worktree owns the list | 4 | `WorktreeCreated` / `WorktreeCreateFailed` |
@@ -97,9 +97,30 @@ a burn-down step should decide on its own. Left for an explicit call.
 `workspace.sessions`, `workspace.worktree_names`.
 
 Forgetting a project drops everything held against its path, and three features hold something. The
-write is *one call* in `micold-core`; the four members it reaches are what make it four rows. The
-clearest case in the catalogue: `ProjectForgotten(path)` with session and worktree each answering
-for their own.
+write is *one call* in `micold-core`; the four members it reaches are what make it four rows.
+
+**Placement check (the one A and B both rewarded) says this group is different, and may not want
+converting at all.** `Workspace::forget` is not a misplaced helper that can move into a feature —
+`Workspace` is a **core type** and those four maps are its own members. `forget` is that type's
+invariant-preserving operation: *everything keyed by this path goes*. Its body says so, including
+the `foreground_by_project` line whose comment argues the invariant explicitly ("leaving it would
+restore a session from a life the user deliberately ended").
+
+Converting it to `ProjectForgotten` would have three client features each re-implement one clause
+of a core invariant, and a forget that half-applied would leave the workspace internally
+inconsistent — precisely what an atomic core operation exists to prevent.
+
+**So the open question here is about the guard's model, not the code**: `OWNERS` maps
+`workspace.sessions`, `workspace.worktree_names`, `workspace.included_worktrees` and
+`workspace.foreground_by_project` to three different features, which is right for *ordinary* writes
+and wrong for `Workspace`'s own atomic operations. The candidate fix is to let the guard treat a
+core-type operation on its own members as not-a-cross-feature-write, the way it already treats a
+feature writing its own field. That is a change to the guard's premise and wants an explicit
+decision — recorded here rather than made inside a burn-down step.
+
+Note this is the **third** distinct outcome from a placement check: A and B retired 14 rows by
+moving a function, D argues for retiring 4 by amending what the guard counts. Only T066 and
+T067a-1 have actually needed an outcome written.
 
 ### E — `push_notification` (2 writes, `notify`)
 
