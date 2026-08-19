@@ -47,7 +47,7 @@ use iced::Task;
 use micold_client::app::Message;
 // Moved to the library (see `micold_client::catalog_sync` for why): the fold has to be reachable
 // from `tests/`, and a binary-crate function is not.
-use micold_client::catalog_sync::{reconcile_catalog, wire_to_worktree_status};
+use micold_client::catalog_sync::{attach_log_line, reconcile_catalog, wire_to_worktree_status};
 use micold_client::features::worktree_form::{
     BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
@@ -211,6 +211,7 @@ pub fn on_grid_frame(
 }
 
 pub fn on_disconnected(app: &mut App) -> Task<Message> {
+    crate::log_line("attach: disconnected");
     app.daemon = None;
     // Content on screen is now stale; the banner says so (FR-027). The subscription is
     // already auto-reconnecting with backoff.
@@ -231,6 +232,9 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
 }
 
 pub fn on_connect_failed(app: &mut App, reason: String) -> Task<Message> {
+    // The other half of `attach_log_line`'s job (`010` BUG-013): "never attached" and "attached and
+    // got nothing" are different bugs, so the log has to be able to say the first one too.
+    crate::log_line(&format!("attach: failed reason={reason}"));
     app.disconnected = true;
     app.core
         .notify_error(format!("Could not connect to the session daemon: {reason}"));
@@ -595,6 +599,18 @@ pub fn on_connected(
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
     reconcile_catalog(&mut app.core, &catalog, false);
+    // The boot-time foreground resolve ran before this catalog existed, so for a client that has
+    // just started it answered `NoSessionsForKey` against a project whose sessions were still on
+    // the wire. Ask again now that they are here (`010` BUG-013) — before `active_session` is read
+    // below, so the attach that follows views the restored session rather than the overview.
+    // Guarded to that one case; a mid-session reconnect changes nothing.
+    app.core.resolve_foreground_after_catalog();
+    // Record what this attach actually produced (`010` BUG-013). Written after the fold and the
+    // re-resolve, so the counts describe the state the window is about to render from.
+    crate::log_line(&attach_log_line(
+        &catalog,
+        app.core.workspace.active.as_deref(),
+    ));
     // Adopt the daemon's per-session input position (FR-028a, T111). This process may be a
     // *new* client attached to sessions it did not start — after a package upgrade, or a
     // plain quit-and-reopen — in which case its stamper is empty and starting those counters

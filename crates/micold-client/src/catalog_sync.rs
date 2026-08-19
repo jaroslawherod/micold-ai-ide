@@ -28,6 +28,7 @@
 //! difference between this and what was reviewed would be a defect and not a decision.
 
 use std::collections::HashSet;
+use std::path::Path;
 
 use micold_core::protocol::messages::{CatalogSnapshot, WireLifecycle};
 use micold_core::session::{
@@ -219,5 +220,107 @@ pub fn wire_to_worktree_status(
         Wire::Clean => Core::Valid,
         Wire::Missing => Core::Missing,
         Wire::Locked | Wire::Prunable => Core::Invalid,
+    }
+}
+
+/// One line describing what attaching to the daemon actually produced (`010` BUG-013).
+///
+/// Written to `micold-client.log` at every connect outcome. It exists because BUG-013 could not be
+/// diagnosed from outside the process: the client's whole log for a failing run was a single
+/// project-switch line emitted *before* any catalog could arrive, and byte-identical in the run
+/// that worked and the run that failed. Three layers had to be eliminated by rebuilding old
+/// commits and probing on-disk stores, and the question that would have settled it in one glance —
+/// *did this client attach, and what did it receive?* — had no answer anywhere.
+///
+/// So the counts are the point, not the fact of connecting. "Attached" with `sessions=0` against a
+/// daemon that is hosting one is a different bug from never attaching, and the two want opposite
+/// fixes. Formatting lives here, in the library, so it can be asserted on: a diagnostic nothing
+/// tests is a diagnostic that quietly stops being written, which is the failure mode this whole
+/// report is about.
+pub fn attach_log_line(catalog: &CatalogSnapshot, active: Option<&Path>) -> String {
+    let sessions: usize = catalog.projects.iter().map(|p| p.sessions.len()).sum();
+    let active_sessions = active
+        .and_then(|a| catalog.projects.iter().find(|p| p.path == a))
+        .map(|p| p.sessions.len());
+    format!(
+        "attach: connected projects={} sessions={} active={} active_sessions={}",
+        catalog.projects.len(),
+        sessions,
+        active
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "<none>".into()),
+        active_sessions
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "<project not in catalog>".into()),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use micold_core::protocol::messages::{ProjectSnapshot, SessionSummary};
+    use micold_core::session::SessionId;
+    use std::path::PathBuf;
+
+    fn snapshot(projects: Vec<(&str, usize)>) -> CatalogSnapshot {
+        CatalogSnapshot {
+            schema_version: 1,
+            last_active: None,
+            projects: projects
+                .into_iter()
+                .map(|(path, n)| ProjectSnapshot {
+                    path: PathBuf::from(path),
+                    display_name: "p".into(),
+                    is_git_repo: true,
+                    available: true,
+                    worktrees: Vec::new(),
+                    sessions: (0..n)
+                        .map(|_| SessionSummary {
+                            id: SessionId::new(),
+                            worktree_dir: None,
+                            title: SessionLabel::Pending,
+                            lifecycle: WireLifecycle::Idle,
+                            activity: micold_core::protocol::messages::ActivitySignal::Unknown,
+                            input_serial: 0,
+                            live_shells: Vec::new(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+
+    /// `010` BUG-013. The counts are the whole value: "attached with zero sessions" and "never
+    /// attached" are different bugs wanting opposite fixes, and the log has to tell them apart.
+    #[test]
+    fn the_attach_line_reports_what_arrived_not_merely_that_something_did() {
+        let line = attach_log_line(&snapshot(vec![("/a", 2), ("/b", 1)]), Some(Path::new("/a")));
+        assert!(line.contains("projects=2"), "{line}");
+        assert!(line.contains("sessions=3"), "{line}");
+        assert!(line.contains("active=/a"), "{line}");
+        assert!(
+            line.contains("active_sessions=2"),
+            "the active project's own count is the one that answers \"my session vanished\": {line}"
+        );
+    }
+
+    /// The case BUG-013 presents: a catalog arrives and the project the window is showing has no
+    /// sessions in it. That must be visibly different from not attaching at all.
+    #[test]
+    fn an_attach_that_brought_nothing_is_still_recorded_as_an_attach() {
+        let line = attach_log_line(&snapshot(vec![("/a", 0)]), Some(Path::new("/a")));
+        assert!(line.starts_with("attach: connected"), "{line}");
+        assert!(line.contains("active_sessions=0"), "{line}");
+    }
+
+    /// A project the daemon does not list at all is a third state again — and saying `0` for it
+    /// would claim the daemon answered about a project it never mentioned.
+    #[test]
+    fn a_project_absent_from_the_catalog_is_not_reported_as_zero_sessions() {
+        let line = attach_log_line(&snapshot(vec![("/a", 1)]), Some(Path::new("/elsewhere")));
+        assert!(
+            line.contains("active_sessions=<project not in catalog>"),
+            "{line}"
+        );
     }
 }
