@@ -199,7 +199,7 @@ Single Rust crate: render-free core in `src/` (`--no-default-features`), `gui`-o
 - [X] T059 [P] Confirm no `CreateError::DuplicateBranch` references or other dead code remain: `grep -rn "DuplicateBranch" src/ tests/ docs/` returns nothing
 - [X] T060 Run `cargo clippy --features gui --all-targets` clean from the repository root
 - [X] T061 Run `mise run test` and `cargo test --features gui` and confirm the full suite is green
-- [ ] T062 Verify build and tests pass on Linux, macOS, and Windows via the matrix in `.github/workflows/ci.yml` (Constitution Principle VI)
+- [X] T062 Verify build and tests pass on Linux, macOS, and Windows via the matrix in `.github/workflows/ci.yml` (Constitution Principle VI) — all three green on [run 32263815467](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32263815467) (PR #200), alongside `fmt + clippy`, `docs check` and `assertion freeze`; recorded in [bugs/evidence/T062-three-os-matrix.md](./bugs/evidence/T062-three-os-matrix.md), **including what the two non-Linux platforms do not run**
 - [X] T063 Run all seven [quickstart.md](./quickstart.md) scenarios manually, including Scenario 4's offline check (the GUI-wiring validation Principle I's exception requires) — all seven pass; recorded in [bugs/evidence/T063-quickstart-pass.md](./bugs/evidence/T063-quickstart-pass.md)
 
 ---
