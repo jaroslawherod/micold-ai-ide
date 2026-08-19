@@ -227,7 +227,7 @@ impl State {
                                                                        // not the same as asking to type — true of arriving somewhere by accident, but a project
                                                                        // switch is deliberate, and the terminal you are looking at is the one you meant. The two
                                                                        // features agree here: 024 reveals the row, 023 gives its terminal the keyboard.
-        self.focus_terminal();
+        outcomes.extend(self.focus_terminal());
         // `default_expanded` is not keyed per project (unlike `expanded`, which is pruned by
         // worktree `dir_name` in `set_worktrees`), and feature 014's reveal of agent worktrees
         // (FR-010e) is remembered nowhere — both would otherwise render in a project that never
@@ -241,7 +241,7 @@ impl State {
         // `None`. The commit cannot fire on this path at all. Kept in this order because it is the
         // one that stays correct if that ever changes.
         outcomes.push(crate::features::Outcome::ProjectEntered);
-        self.arm_notice(&key); // STEP 4
+        outcomes.extend(self.arm_notice(&key)); // STEP 4
         outcomes
     }
 
@@ -285,7 +285,8 @@ impl State {
 
     /// If any session of the just-activated project was restarted while inactive, raise the
     /// return notice and consume those markers (FR-011 / SC-007).
-    fn arm_notice(&mut self, key: &Path) {
+    #[must_use = "the notice reaches the queue by draining this (T067a-9)"]
+    fn arm_notice(&mut self, key: &Path) -> Vec<crate::features::Outcome> {
         let restarted: Vec<SessionId> = self
             .workspace
             .sessions
@@ -306,8 +307,11 @@ impl State {
             // `if state.active_session.is_some()` — and returning to a project restores its
             // foreground session, so the banner was unreachable in exactly the case it exists
             // for (FR-011 / SC-007).
-            self.notify_info("A background session was restarted while you were away.");
+            return vec![crate::features::notifications::info(
+                "A background session was restarted while you were away.",
+            )];
         }
+        Vec::new()
     }
 
     /// Mark a session as auto-restarted while its owning project was inactive (feature 008,
@@ -443,7 +447,7 @@ pub fn started(state: &mut State, session: Session) -> Vec<crate::features::Outc
     }
     let mut outcomes = vec![crate::features::Outcome::LocationOpened(location)];
     outcomes.extend(state.set_current_session(Some(id)));
-    state.focus_terminal();
+    outcomes.extend(state.focus_terminal());
     outcomes
 }
 
@@ -453,11 +457,11 @@ pub fn started(state: &mut State, session: Session) -> Vec<crate::features::Outc
 /// could already see, so revealing it would open nothing they had not opened and would scroll a
 /// list they were reading (FR-006). `tests/current_session_writers.rs` knows this exemption by
 /// name; any other direct write to `active_session` fails that gate.
-pub fn selected(state: &mut State, id: SessionId) {
+pub fn selected(state: &mut State, id: SessionId) -> Vec<crate::features::Outcome> {
     state.active_session = Some(id);
     // Selecting a session displays its terminal, so it holds the keyboard, clearing any earlier
     // release (FR-011, FR-021a).
-    state.focus_terminal();
+    state.focus_terminal()
 }
 
 /// The daemon reported a session's process running.
@@ -479,32 +483,40 @@ pub fn title_updated(state: &mut State, id: SessionId, title: String) {
 /// Switching mode puts a different terminal in front of the user, so it holds the keyboard
 /// (FR-011). That is the navigation the reported bug was about: it used to take two presses to
 /// reach and then left you looking at a terminal that ignored the keyboard.
-pub fn mode_toggled(state: &mut State) {
+pub fn mode_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
     if let Some(id) = state.active_session {
         if let Some(session) = state.session_mut(id) {
             let next = session.mode.other();
             session.set_mode(next);
         }
     }
-    state.focus_terminal();
+    state.focus_terminal()
 }
 
 /// A shell instance was selected (feature 012).
-pub fn shell_instance_selected(state: &mut State, id: SessionId, shell_id: ShellInstanceId) {
+pub fn shell_instance_selected(
+    state: &mut State,
+    id: SessionId,
+    shell_id: ShellInstanceId,
+) -> Vec<crate::features::Outcome> {
     if let Some(session) = state.session_mut(id) {
         session.select_shell(shell_id);
     }
-    state.focus_terminal(); // FR-011
+    state.focus_terminal() // FR-011
 }
 
 /// A shell instance was closed (feature 012).
 ///
 /// Whichever instance takes its place is what the user is now looking at (FR-011).
-pub fn shell_instance_close_requested(state: &mut State, id: SessionId, shell_id: ShellInstanceId) {
+pub fn shell_instance_close_requested(
+    state: &mut State,
+    id: SessionId,
+    shell_id: ShellInstanceId,
+) -> Vec<crate::features::Outcome> {
     if let Some(session) = state.session_mut(id) {
         session.close_shell(shell_id);
     }
-    state.focus_terminal();
+    state.focus_terminal()
 }
 
 /// The daemon reported a shell instance live (feature 012, FR-008).
@@ -648,9 +660,10 @@ impl State {
     /// terminal is the session's pane, `terminal_released` is session-owned, and every caller is a
     /// session operation. Leaving it in the root made five session reducers each look like they
     /// wrote window state, when one function does.
-    pub(crate) fn focus_terminal(&mut self) {
+    #[must_use = "the field that holds the keyboard gives it up by draining this (T067a-9)"]
+    pub(crate) fn focus_terminal(&mut self) -> Vec<crate::features::Outcome> {
         self.terminal_released = false;
-        self.focused_field = None;
+        vec![crate::features::Outcome::FieldFocusCleared]
     }
 
     /// The user handed the keyboard back to the application (FR-021) — the reserved chord or the

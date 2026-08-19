@@ -93,6 +93,13 @@ pub enum Outcome {
     /// The sidebar owns the row and knows the twisty was clicked; whether that suppresses the
     /// reveal is a fact about the *session*, which is why it travels rather than being written.
     RevealSuppressed(bool),
+    /// A terminal took the keyboard, so no text field holds it any more (FR-018; T067a-9).
+    ///
+    /// Unconditional, unlike `window::field_focus_changed`'s guarded blur: a press on the pane is
+    /// a request for *that* terminal and must not be defeated by whichever field still believes it
+    /// has focus. The session feature knows the terminal was asked for; the window feature owns
+    /// what having focus means.
+    FieldFocusCleared,
 }
 
 pub mod connection;

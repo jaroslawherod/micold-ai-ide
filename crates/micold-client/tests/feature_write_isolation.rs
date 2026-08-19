@@ -164,9 +164,6 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // `focus_terminal` was a session operation sitting in the wrong file. **T067a-7 answered: the
     // wrong file.** The function moved into `features/session.rs` and this row, with five others,
     // collapsed into the single `focus_terminal` entry below.)
-    // Via `State::push_notification`. The contract already names the outcome for this one:
-    // `NotificationRaised`, listed under "emitted by: any feature".
-    ("session", "notify", "features/session.rs::arm_notice"),
     // Via `Workspace::activate`. Switching the active project *is* a project operation; the
     // session feature calls it because the switch is what its own step 1 and step 3 bracket.
     (
@@ -204,11 +201,6 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // out of `app.rs`.** Converting first would have given six reducers an outcome apiece for a
     // write none of them performs — the guard reported callers because the writer was root code it
     // could not attribute. One function writes it; one row names it.
-    (
-        "session",
-        "focused_field",
-        "features/session.rs::focus_terminal",
-    ),
     // --- the popover mutual-exclusion rule (features 009 and 015; T067) --------------------------
     // At most one lightweight popover is open, and the project context menu is exclusive with all
     // of them. It is **one rule about the toolbar** that no single feature owns, so each toggle

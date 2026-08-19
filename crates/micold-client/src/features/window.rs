@@ -78,6 +78,13 @@ pub fn field_focus_changed(state: &mut State, field: FieldId, focused: bool) {
     }
 }
 
+/// A terminal took the keyboard (FR-018; T067a-9).
+///
+/// Reached from `Outcome::FieldFocusCleared`. Unconditional by design — see the outcome's own note.
+pub fn field_focus_cleared(state: &mut State) {
+    state.focused_field = None;
+}
+
 /// The pointer moved (feature 015).
 ///
 /// Tracked only while the project switcher is open — see the shell's cursor subscription — purely

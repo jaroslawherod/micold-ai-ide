@@ -2099,7 +2099,12 @@ pub(crate) mod tests {
 
         // Returning to /a fires the return notice (mirrors `background_restart.rs`).
         core.record_foreground();
-        assert!(core.switch_active(Path::new("/a")).is_some());
+        // Drained the way the root does: the return notice is an outcome now (T067a-9), so
+        // producing it is not the same as raising it.
+        let arrival = core
+            .switch_active(Path::new("/a"))
+            .expect("the switch happened");
+        micold_client::app::drain(arrival, |o| micold_client::app::interpret(&mut core, o));
         let visible = core
             .notify
             .visible()

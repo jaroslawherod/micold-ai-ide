@@ -927,12 +927,18 @@ impl State {
                 let outcomes = crate::features::session::started(self, session);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::SessionSelected(id) => crate::features::session::selected(self, id),
+            Message::SessionSelected(id) => {
+                let outcomes = crate::features::session::selected(self, id);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::SessionRunning(id) => crate::features::session::running(self, id),
             Message::SessionTitleUpdated { id, title } => {
                 crate::features::session::title_updated(self, id, title)
             }
-            Message::TerminalModeToggled => crate::features::session::mode_toggled(self),
+            Message::TerminalModeToggled => {
+                let outcomes = crate::features::session::mode_toggled(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::TerminalRestartRequested => {
                 // No pure state to update here — the binary decides which process to spawn based on
                 // the current mode. For an AI-CLI session the daemon owns the lifecycle and
@@ -951,13 +957,17 @@ impl State {
                 // is why every instance sat at `NotStarted` for its whole life.
                 // The new instance is what the user will be looking at, so it holds the keyboard
                 // (FR-011).
-                self.focus_terminal();
+                let outcomes = self.focus_terminal();
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ShellInstanceSelected(id, shell_id) => {
-                crate::features::session::shell_instance_selected(self, id, shell_id)
+                let outcomes = crate::features::session::shell_instance_selected(self, id, shell_id);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ShellInstanceCloseRequested(id, shell_id) => {
-                crate::features::session::shell_instance_close_requested(self, id, shell_id)
+                let outcomes =
+                    crate::features::session::shell_instance_close_requested(self, id, shell_id);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ShellInstanceRestartRequested(..) => {
                 // No pure state to update here — the binary spawns the process, and the daemon's
@@ -991,7 +1001,8 @@ impl State {
 
             // ---- Feature 006 ----
             Message::TerminalFocused => {
-                self.focus_terminal();
+                let outcomes = self.focus_terminal();
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::TerminalFocusReleased => {
                 self.release_terminal();
@@ -1170,6 +1181,7 @@ pub fn interpret(
         Outcome::RevealScrollArmed => state.reveal_scroll_armed(),
         Outcome::ProjectEntered => state.project_entered(),
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
+        Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
         Outcome::ClipboardWrite(_) => {}
     }
     Vec::new()
