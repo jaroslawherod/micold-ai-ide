@@ -410,7 +410,7 @@ pub fn pane<'a>(
                 r,
             )
             .padding(spacing::SM)
-            .on_press(Message::TerminalRestartRequested),
+            .on_press(restart_message(state, active)),
         );
     }
     // The bar carried a release-focus `IconButton` here until BUG-001 (feature 023 FR-021b). It
@@ -550,6 +550,30 @@ fn empty_terminal_message(state: &State, id: SessionId) -> &'static str {
         "This session is not running. Choose restart below to resume it."
     } else {
         "Starting…"
+    }
+}
+
+/// What the bottom-bar restart control must ask for (`012` FR-010, BUG-004).
+///
+/// The same question [`attached_process_restartable`] asks to decide *whether* to offer a restart —
+/// which process is attached — asked again to decide *what* the restart acts on. It used to press
+/// `TerminalRestartRequested` unconditionally, which restarts the **session**; in Regular mode the
+/// session's AI CLI primary is still alive, so `start_session` took its already-live early return
+/// and the control did nothing. With a single instance there is no tab strip either, so FR-010's
+/// affordance had no reachable route at all.
+///
+/// A session with no instance yet keeps the session-level request: there is nothing instance-shaped
+/// to name, and that path lazily opens the first one.
+fn restart_message(state: &State, id: SessionId) -> Message {
+    let instance = state
+        .active_sessions()
+        .iter()
+        .find(|s| s.id == id)
+        .filter(|s| s.mode == TerminalMode::Regular)
+        .and_then(|s| s.active_shell);
+    match instance {
+        Some(instance) => Message::ShellInstanceRestartRequested(id, instance),
+        None => Message::TerminalRestartRequested,
     }
 }
 
@@ -788,6 +812,59 @@ mod tests {
         state.workspace.sessions.insert(path, vec![session]);
         state.active_session = Some(id);
         (state, id)
+    }
+
+    /// `012` BUG-004 / FR-010. The bar's `restart` control restarted the **session**, whose AI CLI
+    /// primary is still alive in Regular mode — so `start_session` took its already-live early
+    /// return and pressing the control did nothing at all. With a single instance there is no tab
+    /// strip either, so FR-010 had no reachable route in the commonest case.
+    ///
+    /// Asserted on the message rather than on the presence of a control: `attached_process_restartable`
+    /// already decides *whether* to offer a restart by asking which process is attached, and the
+    /// defect was the button not asking the same question about *what to restart*. Both now come
+    /// from one reading, which is what stops them disagreeing again (this feature's BUG-001, and
+    /// `025`'s, are the same shape).
+    #[test]
+    fn the_bars_restart_targets_the_process_the_bar_is_describing() {
+        // AI CLI mode: the session is the attached process, so the session-level restart is right.
+        let (state, id) = state_showing(SessionLifecycle::Idle);
+        assert_eq!(
+            restart_message(&state, id),
+            Message::TerminalRestartRequested
+        );
+
+        // Regular mode with an instance: that instance is what the bar reports on, and what
+        // `restart` must act on.
+        let (mut state, id) = state_showing(SessionLifecycle::Running);
+        let instance = {
+            let (_, session) = state.workspace.find_session_mut(id).expect("session");
+            session.mode = TerminalMode::Regular;
+            session.open_shell_instance()
+        };
+        assert_eq!(
+            restart_message(&state, id),
+            Message::ShellInstanceRestartRequested(id, instance),
+            "in Regular mode the bar describes the attached shell instance, so its restart must \
+             name that instance — restarting the session leaves the dead shell dead"
+        );
+
+        // Regular mode with no instance yet: nothing instance-shaped to name, so the session-level
+        // request stands and lazily opens the first one.
+        let (mut state, id) = state_showing(SessionLifecycle::Running);
+        {
+            let (_, session) = state.workspace.find_session_mut(id).expect("session");
+            session.mode = TerminalMode::Regular;
+        }
+        assert_eq!(
+            restart_message(&state, id),
+            Message::TerminalRestartRequested
+        );
+
+        // An unknown session must not panic the render path.
+        assert_eq!(
+            restart_message(&state, SessionId::new()),
+            Message::TerminalRestartRequested
+        );
     }
 
     /// BUG-001 (feature 025), FR-014 / contract §4.3.
