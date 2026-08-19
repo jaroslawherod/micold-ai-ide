@@ -47,6 +47,19 @@ always marks one of them.
 - Q: What happens when the tabs outgrow the bar? → A: The terminal tabs scroll horizontally; the AI
   tab is pinned outside the scrolling region.
 
+### Session 2026-08-19 (second pass)
+
+- Q: What form does the not-running cue take? → A: A small state mark beside the label, in an error
+  or warning role, drawn in the leading spacer the tab already reserves.
+- Q: What holds SC-003 when the marked tab is scrolled out of view? → A: Auto-scroll it into view on
+  selection, plus an edge indicator pointing to it whenever it is off-screen.
+- Q: How is the strip scrolled, and how is overflow announced? → A: Mouse wheel over the strip, plus
+  a persistent edge fade on whichever side holds more tabs.
+- Q: Does a starting process wear the not-running mark? → A: No — the mark means actionable, shown
+  for not-started and exited only; starting keeps the existing in-progress treatment.
+- Q: Is keyboard access to the strip in scope? → A: No — explicitly out of scope; the strip is
+  pointer-driven and the existing mode toggle stays the non-tab route to the AI pane.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The strip says what the pane is showing, always (Priority: P1)
@@ -71,6 +84,15 @@ terminal and switch to it (that tab is marked, the AI tab is not), switch back.
    terminal area, **Then** the strip is visible and shows the AI tab alone, marked.
 4. **Given** any session state, **When** the user counts the marked tabs, **Then** exactly one tab
    is marked — never zero, never two.
+5. **Given** more open instances than the bar can show at once, **When** the user looks at the
+   strip, **Then** the AI tab is still at the right-hand end at full size, the "+" and the mode
+   toggle are still present at full size, and the edge the hidden tabs lie beyond is faded.
+6. **Given** that same strip, **When** the user turns the mouse wheel over it, **Then** the terminal
+   tabs scroll at their own width — none is shrunk, ellipsised or dropped — and the AI tab does not
+   move.
+7. **Given** the user has scrolled the marked tab out of view, **When** they look at the strip,
+   **Then** the edge it lies beyond says so; **and when** they then select any tab, **Then** the
+   newly marked tab is scrolled back into view.
 
 ---
 
@@ -118,7 +140,7 @@ lifecycle, and the strip's only action is behind a press that does nothing on a 
 P1: the strip is correct about *what is displayed* without it, which is Story 1's claim.
 
 **Independent Test**: Cause a background terminal instance and the AI CLI process to exit, and
-confirm each tab reflects a not-running state, distinguishably from the active indicator, without
+confirm each tab wears the stopped mark, distinguishably from the active indicator, without
 either affecting the other.
 
 **Acceptance Scenarios**:
@@ -129,10 +151,13 @@ either affecting the other.
    user looks at that instance's tab, **Then** it indicates the process is not running, by the same
    cue the AI tab uses.
 3. **Given** a tab that is both the active one and not running, **When** the user looks at the
-   strip, **Then** the active indicator and the not-running cue are both legible and are not
+   strip, **Then** the active indicator and the stopped mark are both legible and are not
    mistaken for each other.
 4. **Given** an AI CLI process that is starting or restarting, **When** the user looks at the AI
-   tab, **Then** its state is distinguishable from running.
+   tab, **Then** its state is distinguishable from running, **and** it does not wear the stopped
+   mark — the mark says the tab can be acted on, and a starting process cannot.
+5. **Given** a stopped instance the user restarts from its tab's menu, **When** the process comes
+   up, **Then** the stopped mark clears from that tab and no other tab changes.
 
 ---
 
@@ -152,6 +177,11 @@ either affecting the other.
   outside the scrolling region (FR-002b), and the bar's other controls are untouched (FR-002c). The
   wall is nearer than it looks: at a 136dp tab on a 144dp pitch, roughly five tabs exhaust a bar
   that also carries a title, a status, the "+" and the mode toggle.
+- **Tabs beyond an edge, marked tab still visible.** The edge fades, saying there is more that way,
+  without claiming the marked tab is out there (FR-002e).
+- **The marked tab scrolled out of view.** It keeps the indicator, and the scrolling region's edge
+  says which way it lies (FR-002e). Pressing the AI tab, or selecting any instance, scrolls the new
+  marked tab back into view (FR-002d).
 - **A secondary press on a running AI tab.** Nothing happens, by FR-006b — the menu would be empty.
   The same press on a *stopped* AI tab opens a menu with restart in it, so the affordance appears
   exactly when it can be acted on.
@@ -176,6 +206,20 @@ either affecting the other.
   drawn narrower, or not at all, with nothing reported. That is the failure mode feature 012's
   BUG-005 was filed for, one level out, and making the strip always visible (FR-003) brings the bar
   to it sooner.
+- **FR-002d**: Whenever the marked tab (FR-005) changes, the strip MUST scroll it into view. A user
+  MAY then scroll away from it by hand.
+- **FR-002e**: Whenever tabs lie beyond either edge of the scrolling region, that edge MUST carry a
+  persistent fade saying so, and when the tab beyond it is the **marked** one the edge MUST say that
+  specifically. Without this the strip can show
+  **nothing marked** — which is the exact defect this feature exists to remove (User Story 1),
+  arriving by scrolling instead of by the AI pane, and it would hollow out SC-003's claim rather
+  than narrow it. The AI tab is unaffected: FR-002b keeps it outside the scrolling region, so it is
+  never the tab that goes missing.
+- **FR-002f**: The strip MUST scroll to the mouse wheel while the pointer is over it. It MUST NOT
+  add scroll-arrow controls: they would spend an interactive target's width at each end of the bar
+  FR-002c exists to keep uncrowded, and the wheel over a scrollable region is how this application
+  already scrolls its sidebar and its terminal scrollback. The edge fade of FR-002e is what tells
+  the user there is anything to scroll to.
 - **FR-003**: The tab strip MUST be visible whenever a session is displayed, including when the
   session has zero or one Regular Terminal instances. This **supersedes** feature 012's FR-005,
   which hid the control below two instances.
@@ -183,7 +227,8 @@ either affecting the other.
   (feature 012 FR-016) and terminating it is not an action offered from this control.
 - **FR-005**: Exactly one tab MUST carry the active indicator at all times — the AI tab when the
   session's pane is showing the AI CLI, otherwise the tab of the Regular Terminal instance being
-  shown. Never zero tabs, never two.
+  shown. Never zero tabs, never two. Under overflow the marked tab may be scrolled out of view; it
+  still carries the indicator, and FR-002d/FR-002e are what keep that fact reachable.
 - **FR-006**: A **primary** press on the AI tab MUST show the session's AI CLI process in the pane,
   and MUST NOT start, stop, restart or otherwise disturb any process — neither the AI CLI nor any
   terminal instance. Selecting is all a primary press does; acting on the process is FR-006a's
@@ -219,16 +264,31 @@ either affecting the other.
   put this tab outside the guarantee FR-004c's derivation exists to give.
 - **FR-011**: Every session MUST have its own strip and its own marked tab; actions on one session's
   strip MUST have no observable effect on any other session's.
-- **FR-012**: A tab whose process is **not running** MUST be visually distinct from one whose
-  process is running, and the distinction MUST be the same for the AI tab and for a terminal tab.
-  This applies whether or not the tab is the active one: a background instance that has died is the
-  case feature 012's FR-010a exists for.
-- **FR-012a**: The not-running cue MUST be carried in addition to, and distinguishably from, the
+- **FR-012**: A tab whose process is **stopped** — not started, or exited — MUST be visually
+  distinct from one whose process is running, and the distinction MUST be the same for the AI tab
+  and for a terminal tab. This applies whether or not the tab is the active one: a background
+  instance that has died is the case feature 012's FR-010a exists for.
+- **FR-012a**: The stopped mark MUST be carried in addition to, and distinguishably from, the
   active indicator (FR-005) — a tab can be active *and* not running, and the strip must not read
   those two states as one.
 - **FR-012b**: This cue is what makes FR-006a's menu findable. Without it a user must open menus at
   random to learn which instance is stopped, and by FR-006b every running tab answers that press
   with silence — so the strip would be hiding the one action it offers.
+- **FR-012c**: The mark MUST be a **small state mark beside the label**, in the palette's error or
+  warning role, drawn in the **leading spacer** every tab already reserves — not a third tone on
+  the label. A tone-only cue has to be legible against both the accent an active tab wears and the
+  muted tint an inactive one wears, in both schemes, which is the distinction FR-012a asks for and
+  the one a third grey is worst at. Placing it in the leading spacer also costs no width: that
+  space exists only to balance the trailing close control (feature 012 FR-004a) and is empty today,
+  so no tab grows and the derived width (FR-010a) is untouched. The mark MUST sit in the same place
+  on the AI tab as on a terminal tab, and MUST NOT displace the label from the tab's midline.
+- **FR-012d**: The mark MUST appear for exactly the lifecycle states the tab's menu can act on —
+  `NotStarted` and `Exited` — and MUST NOT appear for `Starting`. Its meaning is "there is something
+  you can do here", which is what FR-012b makes it for; a mark on a state nobody can act on sends a
+  user to a press that does nothing (FR-006b), which is the dead end the mark exists to prevent.
+- **FR-012e**: A `Starting` process MUST still be distinguishable from a running one, by the
+  application's existing in-progress treatment rather than by FR-012c's mark. Feature 012's BUG-003
+  was this state being unobservable; nothing here may return it to that.
 
 ### Key Entities
 
@@ -237,7 +297,11 @@ either affecting the other.
   with exactly one marked as displayed.
 - **AI tab** *(new)*: the strip's representation of the session's single AI CLI process.
   Unclosable, icon-labelled, right-anchored, the same width as a terminal tab, and carrying that
-  process's lifecycle state.
+  process's lifecycle state as a leading state mark.
+- **Stopped mark** *(new)*: a small state mark in the palette's error or warning role, occupying the
+  leading spacer of any tab — AI or terminal — whose process is `NotStarted` or `Exited`. Independent
+  of the active indicator, so a tab can carry both, and absent for `Starting`, which wears the
+  in-progress treatment instead.
 
 ## Success Criteria *(mandatory)*
 
@@ -249,7 +313,8 @@ either affecting the other.
   strip, without using the mode toggle.
 - **SC-003**: Users can tell which pane is displayed from the strip alone, without pressing
   anything, in 100% of observed states — including the states where feature 012 previously showed no
-  strip at all.
+  strip at all, and including states where the marked tab has been scrolled out of view, where the
+  edge indicator (FR-002e) says where it went.
 - **SC-004**: No press on the AI tab ever restarts, interrupts or reorders output in the AI
   conversation or in any terminal instance, in 100% of observed cases.
 - **SC-005**: The AI tab is never offered a close affordance in any state, so the single-AI-process
@@ -261,6 +326,8 @@ either affecting the other.
   instance whose shell has exited, which no control showed before this feature.
 - **SC-008**: At any number of open terminal instances, the AI tab, the "+", the mode toggle and
   the session status are all present at their full size, and the AI tab is reachable in one press.
+- **SC-009**: Whenever any tab is off-screen, the strip says so at the edge it lies beyond, so a
+  user never has to scroll to discover whether there is anything to scroll to.
 
 ## Assumptions
 
@@ -275,9 +342,8 @@ either affecting the other.
   shows a single marked AI tab. This is a deliberate reversal of feature 012's FR-005 and its
   "pixel-identical to the single-instance experience" intent.
 - Sessions that are not displayed are unaffected; this is a property of the displayed session's bar.
-- Scroll position within the strip is presentation, not state to persist: it is expected to follow
-  the marked tab (a newly opened or newly selected instance is scrolled into view) rather than to be
-  remembered across sessions or restarts.
+- Scroll position within the strip is presentation, not state to persist: FR-002d scrolls the marked
+  tab into view on selection, and the position is not remembered across sessions or restarts.
 - Renaming an instance so a tab shows a name rather than an ordinal is **out of scope** and expected
   as a later feature. Feature 012's label sizing already accommodates it, so nothing here needs to
   anticipate it beyond not reintroducing a fixed-width label.
@@ -299,6 +365,12 @@ either affecting the other.
 ## Out of scope
 
 - Renaming instances, and any menu item that would rename one.
+- **Keyboard access to the strip** — cycling between tabs, selecting one by ordinal, or moving focus
+  into the strip. Decided, not overlooked: this feature is a view over state the application already
+  holds and adds no selection of its own, while a keymap is a separate interaction surface with a
+  mode-gating problem of its own (feature 012's FR-019 had to gate its chord because the terminal
+  pane swallows keystrokes). Nothing becomes unreachable — the mode toggle is the keyboard-
+  independent route to the AI pane and FR-008 keeps it working.
 - Any change to *how* lifecycle is tracked or reported. FR-012 presents state the application
   already holds (feature 012 FR-008, and the daemon liveness its BUG-003 settled); it introduces no
   new state and no new source for it.
