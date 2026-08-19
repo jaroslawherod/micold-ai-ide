@@ -3,6 +3,7 @@
 
 use crate::app::{Message, State};
 use crate::features::sidebar::TagFilter;
+use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
 use crate::ui::material::{
     self, Accordion, ActivityBadge, Button, ButtonVariant, Divider, FilterTrigger, HoverReveal,
@@ -43,7 +44,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         IconButton::new(Icon::AddWorktree, r)
             .compact()
             .tint(r.primary)
-            .on_press(Message::AddWorktreeOpened),
+            .on_press(Message::WorktreeForm(FormMsg::Opened)),
         "Add a worktree (new git branch)",
         r,
     );

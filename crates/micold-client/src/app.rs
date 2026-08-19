@@ -17,15 +17,13 @@ use crate::features::settings::SettingsDraft;
 use crate::features::sidebar::TagFilter;
 use crate::features::window::FieldId;
 use crate::features::worktree::WorktreeRenameDraft;
-use crate::features::worktree_form::{BranchSource, WorktreeForm};
-use micold_core::naming::ConventionalType;
+use crate::features::worktree_form::WorktreeForm;
 use micold_core::notify;
 use micold_core::project::{Availability, FolderEntry};
 use micold_core::selector::Selector;
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
 use micold_core::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
-use micold_core::typeahead::Direction;
-use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
+use micold_core::worktree::Worktree;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -221,65 +219,13 @@ pub enum Message {
     /// Copy arbitrary displayed text (e.g. a worktree name) to the system clipboard. The binary
     /// performs the actual clipboard write; the reducer has no state to update.
     TextCopyRequested(String),
-    /// Open the add-worktree form (FR-005).
-    AddWorktreeOpened,
-    /// The form's type selection changed.
-    AddWorktreeTypeSelected(ConventionalType),
-    /// The form's ticket field changed.
-    AddWorktreeTicketChanged(String),
-    /// The form's name field changed.
-    AddWorktreeNameChanged(String),
-    /// Submit the form (FR-006). Validation happens here; the binary performs the git create.
-    AddWorktreeSubmitted,
-    /// Dismiss the form without creating (Cancel or Esc).
-    AddWorktreeCancelled,
-    /// Switch between the new-branch and existing-branch halves of the form (feature 016,
-    /// FR-010). Switching back to `New` clears any selection (FR-015).
-    AddWorktreeSourceChanged(BranchSource),
-    /// The binary listed the repository's branches for the picker (feature 016, FR-011).
-    AddWorktreeBranchesListed(Vec<BranchCandidate>),
-    /// An existing branch was picked from the list (feature 016, FR-014).
+    /// Everything the add-worktree wizard says about itself (feature 021, T064 — FR-003).
     ///
-    /// A blocked candidate is **ignored entirely** (feature 021, FR-012a): it does not become the
-    /// selection and does not close the list. Feature 016 let it be selected and refused at the
-    /// point of creating, because the list widget of the day could not disable a row; the
-    /// type-ahead can, so the refusal moved to the point of choosing.
-    AddWorktreeBranchSelected(BranchCandidate),
-    /// The branch search field took focus, so the list opens on what is already on offer (feature
-    /// 021, FR-001b). Not a query change: focusing is not typing.
-    AddWorktreeBranchFocused,
-    /// The branch search text changed (feature 021, FR-001, FR-005).
-    AddWorktreeBranchQueryChanged(String),
-    /// The keyboard moved through the results (feature 021, FR-017). The saturating rule lives in
-    /// `micold_core::typeahead`, not here — this arm applies its answer.
-    AddWorktreeBranchHighlightMoved(Direction),
-    /// The result list closed without a pick — Escape, a press outside it, or Tab taking focus out
-    /// of the field (feature 021, FR-001b). Three triggers, one effect.
-    AddWorktreeBranchDismissed,
-    /// Pre-flight found something the user must decide about; raise the prompt (feature 016,
-    /// FR-001). Never dispatched for [`BranchSituation::Free`].
-    AddWorktreeConflictDetected(BranchSituation),
-    /// The user answered the prompt (feature 016, FR-002). The binary performs the create with
-    /// the chosen mode. `Overwrite` can only arrive via [`Message::AddWorktreeOverwriteConfirmed`].
-    AddWorktreeResolutionChosen(CreateMode),
-    /// The user chose Overwrite; show the destructive confirmation first (feature 016, FR-005).
-    AddWorktreeOverwriteRequested,
-    /// The destructive confirmation was accepted (feature 016, FR-005).
-    AddWorktreeOverwriteConfirmed,
-    /// Back out of the prompt (or its confirmation) without acting (feature 016, FR-007).
-    AddWorktreeResolutionCancelled,
-    /// The binary is about to send the `WorktreeCreate` RPC (feature 010; T055); marks the form
-    /// `Creating` so it shows an in-progress state until the daemon's reply closes or reopens it.
-    /// Carries the mode so the stage display can be worded for it (feature 016, FR-024).
-    WorktreeCreateStarted(CreateMode),
-    /// The daemon reported progress on the in-flight create: a new stage (feature 016, FR-024), or
-    /// — with the stage unchanged — its latest live output line, rate-limited daemon-side so a long
-    /// stage reads as moving rather than frozen (BUG-009, T123). Ignored once the form has closed.
-    WorktreeCreateStageChanged(CreateStage, Option<String>),
-    /// The daemon created a worktree successfully (FR-007); add it and close the form.
-    WorktreeCreated(Worktree),
-    /// The daemon reported a worktree create failure (FR-017); show it, keep the form open.
-    WorktreeCreateFailed(String),
+    /// **The only nested unit in the application**, and research.md §5 tested every feature against
+    /// FR-003's bar to say so: the form is opened, edited across several steps and then submitted
+    /// or dismissed as a unit, and no other feature reads its intermediate state. Twenty-two
+    /// variants — 17% of this enum — collapse to this one.
+    WorktreeForm(crate::features::worktree_form::Msg),
     /// Start a new session at the given location — a worktree or, as of feature 010, the
     /// project root ("Default", FR-001) — (FR-010). The binary spawns `claude`.
     SessionStartRequested { location: SessionLocation },
@@ -990,43 +936,7 @@ impl State {
             }
             Message::WorktreeHovered(dir) => crate::features::worktree::hovered(self, dir),
             Message::WorktreeUnhovered(dir) => crate::features::worktree::unhovered(self, dir),
-            Message::AddWorktreeOpened => crate::features::worktree_form::opened(self),
-            Message::AddWorktreeTypeSelected(type_) => crate::features::worktree_form::type_selected(self, type_),
-            Message::AddWorktreeTicketChanged(text) => crate::features::worktree_form::ticket_changed(self, text),
-            Message::AddWorktreeNameChanged(text) => crate::features::worktree_form::name_changed(self, text),
-            Message::AddWorktreeSubmitted => crate::features::worktree_form::submitted(self),
-            Message::AddWorktreeCancelled => crate::features::worktree_form::cancelled(self),
-            // ----- feature 016: existing-branch source + conflict resolution -----
-            Message::AddWorktreeSourceChanged(source) => crate::features::worktree_form::source_changed(self, source),
-            Message::AddWorktreeBranchesListed(candidates) => {
-                crate::features::worktree_form::branches_listed(self, candidates)
-            }
-            Message::AddWorktreeBranchSelected(candidate) => {
-                crate::features::worktree_form::branch_selected(self, candidate)
-            }
-            Message::AddWorktreeBranchFocused => crate::features::worktree_form::branch_focused(self),
-            Message::AddWorktreeBranchQueryChanged(text) => {
-                crate::features::worktree_form::branch_query_changed(self, text)
-            }
-            Message::AddWorktreeBranchHighlightMoved(direction) => {
-                crate::features::worktree_form::branch_highlight_moved(self, direction)
-            }
-            Message::AddWorktreeBranchDismissed => crate::features::worktree_form::branch_dismissed(self),
-            Message::AddWorktreeConflictDetected(situation) => {
-                crate::features::worktree_form::conflict_detected(self, situation)
-            }
-            Message::AddWorktreeOverwriteRequested => crate::features::worktree_form::overwrite_requested(self),
-            Message::AddWorktreeOverwriteConfirmed => crate::features::worktree_form::overwrite_confirmed(self),
-            Message::AddWorktreeResolutionChosen(mode) => {
-                crate::features::worktree_form::resolution_chosen(self, mode)
-            }
-            Message::AddWorktreeResolutionCancelled => crate::features::worktree_form::resolution_cancelled(self),
-            Message::WorktreeCreateStarted(mode) => crate::features::worktree_form::create_started(self, mode),
-            Message::WorktreeCreateStageChanged(stage, detail) => {
-                crate::features::worktree_form::create_stage_changed(self, stage, detail)
-            }
-            Message::WorktreeCreated(worktree) => crate::features::worktree_form::created(self, worktree),
-            Message::WorktreeCreateFailed(message) => crate::features::worktree_form::create_failed(self, message),
+            Message::WorktreeForm(msg) => crate::features::worktree_form::update(self, msg),
             Message::SessionStarted(session) => crate::features::session::started(self, session),
             Message::SessionSelected(id) => crate::features::session::selected(self, id),
             Message::SessionRunning(id) => crate::features::session::running(self, id),

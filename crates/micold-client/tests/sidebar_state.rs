@@ -278,7 +278,12 @@ fn escape_prefers_an_open_overlay_over_the_filter_panel() {
         worktree_form: Some(Default::default()),
         ..Default::default()
     };
-    assert_eq!(on_escape(&state), Some(Message::AddWorktreeCancelled));
+    assert_eq!(
+        on_escape(&state),
+        Some(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::Cancelled
+        ))
+    );
 }
 
 #[test]
@@ -291,7 +296,9 @@ fn opening_an_overlay_closes_the_filter_panel() {
     state.update(Message::SidebarFilterMenuToggled);
     assert!(state.sidebar_filter_open);
 
-    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
     assert!(
         !state.sidebar_filter_open,
         "opening an overlay must close the filter panel"

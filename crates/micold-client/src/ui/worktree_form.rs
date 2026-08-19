@@ -9,6 +9,7 @@
 
 use crate::app::{Message, State};
 use crate::features::window::FieldId;
+use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::{
     BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
@@ -49,7 +50,7 @@ pub fn modal<'a>(
             let type_select = Select::new(
                 ConventionalType::ALL,
                 form.type_,
-                Message::AddWorktreeTypeSelected,
+                |a0| Message::WorktreeForm(FormMsg::TypeSelected(a0)),
                 r,
             )
             .placeholder("Select a type…")
@@ -65,14 +66,14 @@ pub fn modal<'a>(
                 .label("Ticket")
                 .supporting("Optional — e.g. ABC-123")
                 .track_focus(FieldId::AddWorktreeTicket, focused)
-                .on_input(Message::AddWorktreeTicketChanged);
+                .on_input(|a0| Message::WorktreeForm(FormMsg::TicketChanged(a0)));
 
             let name = TextField::new("", &form.name, r)
                 .label("Name")
                 .supporting("e.g. login page")
                 .track_focus(FieldId::AddWorktreeName, focused)
-                .on_input(Message::AddWorktreeNameChanged)
-                .on_submit(Message::AddWorktreeSubmitted);
+                .on_input(|a0| Message::WorktreeForm(FormMsg::NameChanged(a0)))
+                .on_submit(Message::WorktreeForm(FormMsg::Submitted));
 
             fields = fields.push(type_select).push(ticket).push(name);
         }
@@ -145,13 +146,13 @@ fn source_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
     row![
         ToggleChip::new(
             "New branch",
-            Message::AddWorktreeSourceChanged(BranchSource::New),
+            Message::WorktreeForm(FormMsg::SourceChanged(BranchSource::New)),
             r
         )
         .active(form.source == BranchSource::New),
         ToggleChip::new(
             "Existing branch",
-            Message::AddWorktreeSourceChanged(BranchSource::Existing),
+            Message::WorktreeForm(FormMsg::SourceChanged(BranchSource::Existing)),
             r
         )
         .active(form.source == BranchSource::Existing),
@@ -223,7 +224,7 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
         material::Typeahead::new(
             &form.branch_query,
             rows,
-            Message::AddWorktreeBranchQueryChanged,
+            |a0| Message::WorktreeForm(FormMsg::BranchQueryChanged(a0)),
             r,
         )
         .placeholder("Search branches…")
@@ -232,16 +233,16 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
         .highlighted(form.branch_highlight)
         .selected(selected)
         .empty_message("No branches match that search.")
-        .on_focus(Message::AddWorktreeBranchFocused)
-        .on_move(Message::AddWorktreeBranchHighlightMoved)
-        .on_dismiss(Message::AddWorktreeBranchDismissed)
+        .on_focus(Message::WorktreeForm(FormMsg::BranchFocused))
+        .on_move(|a0| Message::WorktreeForm(FormMsg::BranchHighlightMoved(a0)))
+        .on_dismiss(Message::WorktreeForm(FormMsg::BranchDismissed))
         .on_pick(|index| {
             // The index is into the rows the component was handed, which are exactly
             // `branch_matches` — so it resolves back to a candidate here, where both are in hand.
             form.branch_matches
                 .get(index)
                 .and_then(|(candidate, _)| form.candidates.get(*candidate))
-                .map(|c| Message::AddWorktreeBranchSelected(c.clone()))
+                .map(|c| Message::WorktreeForm(FormMsg::BranchSelected(c.clone())))
                 .unwrap_or(Message::NoOp)
         }),
     );
@@ -271,9 +272,11 @@ fn default_actions<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
     row![
         // No press message when the form cannot be submitted — the button renders disabled from
         // having nowhere to send, rather than from a flag that could disagree with one.
-        Button::filled("Create", r)
-            .on_press_maybe(form.can_submit().then_some(Message::AddWorktreeSubmitted)),
-        Button::outlined("Cancel", r).on_press(Message::AddWorktreeCancelled),
+        Button::filled("Create", r).on_press_maybe(
+            form.can_submit()
+                .then_some(Message::WorktreeForm(FormMsg::Submitted))
+        ),
+        Button::outlined("Cancel", r).on_press(Message::WorktreeForm(FormMsg::Cancelled)),
     ]
     .spacing(spacing::SM)
     .into()
@@ -282,7 +285,8 @@ fn default_actions<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
 /// The conflict prompt and its confirmation (feature 016, contract `branch-conflict.md` §3).
 fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Message> {
     let cancel = |label: &str| {
-        Button::outlined(label.to_string(), r).on_press(Message::AddWorktreeResolutionCancelled)
+        Button::outlined(label.to_string(), r)
+            .on_press(Message::WorktreeForm(FormMsg::ResolutionCancelled))
     };
 
     match state {
@@ -303,7 +307,7 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
                 .muted(),
                 row![
                     Button::filled("Delete and recreate", r)
-                        .on_press(Message::AddWorktreeOverwriteConfirmed),
+                        .on_press(Message::WorktreeForm(FormMsg::OverwriteConfirmed)),
                     // Back, not Cancel: returns to the choice (invariant 3, US2 AS3).
                     cancel("Back"),
                 ]
@@ -329,10 +333,11 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
                 )
                 .muted(),
                 row![
-                    Button::filled("Reuse branch", r)
-                        .on_press(Message::AddWorktreeResolutionChosen(CreateMode::ReuseLocal)),
+                    Button::filled("Reuse branch", r).on_press(Message::WorktreeForm(
+                        FormMsg::ResolutionChosen(CreateMode::ReuseLocal)
+                    )),
                     Button::outlined("Overwrite…", r)
-                        .on_press(Message::AddWorktreeOverwriteRequested),
+                        .on_press(Message::WorktreeForm(FormMsg::OverwriteRequested)),
                     cancel("Cancel"),
                 ]
                 .spacing(spacing::SM),
@@ -352,16 +357,19 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
                 for remote in remotes {
                     choices = choices.push(
                         Button::filled(format!("Continue from {remote}"), r).on_press(
-                            Message::AddWorktreeResolutionChosen(CreateMode::TrackRemote {
-                                remote: remote.clone(),
-                            }),
+                            Message::WorktreeForm(FormMsg::ResolutionChosen(
+                                CreateMode::TrackRemote {
+                                    remote: remote.clone(),
+                                },
+                            )),
                         ),
                     );
                 }
                 choices = choices
                     .push(
-                        Button::outlined("Start fresh", r)
-                            .on_press(Message::AddWorktreeResolutionChosen(CreateMode::NewBranch)),
+                        Button::outlined("Start fresh", r).on_press(Message::WorktreeForm(
+                            FormMsg::ResolutionChosen(CreateMode::NewBranch),
+                        )),
                     )
                     .push(cancel("Cancel"));
 

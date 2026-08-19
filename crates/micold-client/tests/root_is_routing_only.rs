@@ -318,14 +318,18 @@ fn the_root_reducer_decides_no_more_than_it_did() {
 /// The `!routing.is_empty()` half was the load-bearing one while 93 of 110 arms decided. Now that
 /// none do, the exact count above can no longer catch a classifier that calls *everything* routing
 /// — 0 is the answer such a classifier and a correct one both give. That is what the arm total
-/// below is for: a scan that has stopped parsing reports 0 arms, not 110, and fails there.
+/// below is for: a scan that has stopped parsing reports 0 arms, not 89, and fails there.
 #[test]
 fn the_arm_scan_finds_the_reducer_it_is_meant_to_read() {
     let (routing, deciding) = classified();
     let total = routing.len() + deciding.len();
+    // 110 when written; 89 after T064 folded the add-worktree wizard's 22 variants into one
+    // `Message::WorktreeForm`. 110 - 22 + 1 = 89 exactly, which is the arithmetic that says the
+    // collapse lost nothing — a scan that had merely stopped seeing some arms would not land on
+    // the number the change predicts.
     assert!(
-        total >= 100,
-        "the scan found only {total} arms in the root reducer — it found 110 when written, and a \
+        total >= 85,
+        "the scan found only {total} arms in the root reducer — it found 89 after T064, and a \
          scan that has gone quiet reports the root as routing only"
     );
     assert!(

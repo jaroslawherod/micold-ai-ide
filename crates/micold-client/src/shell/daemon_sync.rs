@@ -40,7 +40,7 @@ use iced::Task;
 
 use micold_client::app::Message;
 use micold_client::features::worktree_form::{
-    BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
+    BranchSource, Msg as FormMsg, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
 use micold_core::protocol::messages::{
     CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, SessionProcess, WireLifecycle,
@@ -511,15 +511,16 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             Some(PendingOp::WorktreeCreate(dir_name)) => {
                 if let Some(repo) = app.core.workspace.active.clone() {
                     let path = repo.join(".claude/worktrees").join(&dir_name);
-                    app.core
-                        .update(Message::WorktreeCreated(micold_core::worktree::Worktree {
+                    app.core.update(Message::WorktreeForm(FormMsg::Created(
+                        micold_core::worktree::Worktree {
                             dir_name,
                             path,
                             branch: None,
                             status: micold_core::worktree::WorktreeStatus::Valid,
                             // The app made this one, so it is not an inclusion (016 BUG-002).
                             included: false,
-                        }));
+                        },
+                    )));
                 }
             }
             // Feature 016: the pre-flight answer decides what happens next. A free name
@@ -563,14 +564,16 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                                     preferred_remote.as_deref(),
                                 ) {
                                     Some(mode) => send_worktree_create(app, project, names, mode),
-                                    None => app
-                                        .core
-                                        .update(Message::AddWorktreeConflictDetected(situation)),
+                                    None => app.core.update(Message::WorktreeForm(
+                                        FormMsg::ConflictDetected(situation),
+                                    )),
                                 }
                             }
                             _ => app
                                 .core
-                                .update(Message::AddWorktreeConflictDetected(situation)),
+                                .update(Message::WorktreeForm(FormMsg::ConflictDetected(
+                                    situation,
+                                ))),
                         }
                     }
                 }
@@ -601,7 +604,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 if let OperationResult::BranchList { candidates } = result {
                     if app.core.workspace.active.as_deref() == Some(asked_for.as_path()) {
                         app.core
-                            .update(Message::AddWorktreeBranchesListed(candidates));
+                            .update(Message::WorktreeForm(FormMsg::BranchesListed(candidates)));
                     }
                 }
             }
@@ -647,7 +650,9 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 Some(PendingOp::WorktreeCreate(_))
             ) {
                 app.core
-                    .update(Message::WorktreeCreateStageChanged(stage, detail));
+                    .update(Message::WorktreeForm(FormMsg::CreateStageChanged(
+                        stage, detail,
+                    )));
             }
         }
         DaemonMsg::OperationError {
@@ -664,10 +669,9 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 // and why (auth/network/unreachable commit) — `message` alone is the generic
                 // "git failed to create the worktree".
                 Some(PendingOp::WorktreeCreate(_)) => {
-                    app.core
-                        .update(Message::WorktreeCreateFailed(worktree_create_error_text(
-                            message, detail,
-                        )));
+                    app.core.update(Message::WorktreeForm(FormMsg::CreateFailed(
+                        worktree_create_error_text(message, detail),
+                    )));
                 }
                 // Feature 016: both branch queries back the open form, so their failures
                 // belong on its own error line. A notification would be raised into the
@@ -918,7 +922,7 @@ pub fn on_worktree_rename_confirmed(app: &mut App) -> Task<Message> {
 /// creates immediately, exactly as before; anything else becomes a decision for the user
 /// rather than the dead-end "a branch with that name already exists" error.
 pub fn on_add_worktree_submitted(app: &mut App) -> Task<Message> {
-    app.core.update(Message::AddWorktreeSubmitted);
+    app.core.update(Message::WorktreeForm(FormMsg::Submitted));
     let Some(form) = app.core.worktree_form.clone() else {
         return Task::none();
     };
@@ -985,7 +989,9 @@ pub fn on_add_worktree_resolution_chosen(app: &mut App, mode: CreateMode) -> Tas
             && !matches!(mode, CreateMode::Overwrite)
     });
     app.core
-        .update(Message::AddWorktreeResolutionChosen(mode.clone()));
+        .update(Message::WorktreeForm(FormMsg::ResolutionChosen(
+            mode.clone(),
+        )));
     if !answering {
         return Task::none();
     }
@@ -998,7 +1004,8 @@ pub fn on_add_worktree_overwrite_confirmed(app: &mut App) -> Task<Message> {
         .worktree_form
         .as_ref()
         .is_some_and(|f| matches!(f.resolution, ResolutionState::ConfirmingOverwrite { .. }));
-    app.core.update(Message::AddWorktreeOverwriteConfirmed);
+    app.core
+        .update(Message::WorktreeForm(FormMsg::OverwriteConfirmed));
     if !confirmed {
         return Task::none();
     }
@@ -1008,7 +1015,8 @@ pub fn on_add_worktree_overwrite_confirmed(app: &mut App) -> Task<Message> {
 /// Switching to the existing-branch picker lists what the repository already has
 /// (feature 016, FR-011). The daemon reads local ref storage only — nothing is fetched.
 pub fn on_add_worktree_source_changed(app: &mut App, source: BranchSource) -> Task<Message> {
-    app.core.update(Message::AddWorktreeSourceChanged(source));
+    app.core
+        .update(Message::WorktreeForm(FormMsg::SourceChanged(source)));
     if source != BranchSource::Existing {
         return Task::none();
     }
@@ -1501,7 +1509,7 @@ pub fn send_worktree_create(
     mode: CreateMode,
 ) {
     app.core
-        .update(Message::WorktreeCreateStarted(mode.clone()));
+        .update(Message::WorktreeForm(FormMsg::CreateStarted(mode.clone())));
     let (branch, dir_name) = (names.branch, names.dir_name);
     // The mode is not duplicated here: `WorktreeCreateStarted` above already put it on the form,
     // which is where the stage label reads it from (FR-024).

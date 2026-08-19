@@ -279,7 +279,7 @@ impl FloatingSurface for AddWorktreeDialog {
     }
 
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::AddWorktreeCancelled)
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::WorktreeForm(Msg::Cancelled))
     }
 }
 
@@ -562,4 +562,119 @@ pub fn create_failed(state: &mut State, message: String) {
     with_form(state, |form| {
         form.status = WorktreeFormStatus::Editing;
     });
+}
+
+/// Everything the add-worktree wizard says about itself (feature 021, T064 — FR-003).
+///
+/// # Why this feature nests and no other does
+///
+/// FR-003 permits a nested message type **only** where a feature "is opened, edited and dismissed
+/// as a unit whose intermediate state no other feature reads". research.md §5 tested all ten
+/// features against that bar and exactly one cleared it *and* was large enough for nesting to pay:
+/// this one. Its 22 variants were 17% of the root enum, and nothing outside `ui/worktree_form.rs`
+/// and the generic overlay snapshot ever read `state.worktree_form`.
+///
+/// Settings clears the same bar on the same evidence and is deliberately **not** nested: 7
+/// variants over a flat four-field draft, where a wrapper and a routing arm cost about what they
+/// save. FR-004b permits concluding a reducer module suffices, and §5 records that conclusion with
+/// its evidence rather than leaving it implicit.
+///
+/// # The variants kept their meaning and lost their prefix
+///
+/// `AddWorktreeTicketChanged` is `Msg::TicketChanged` here: the type says which form, so the
+/// variant does not have to. The four `WorktreeCreate*` variants joined them — the create is the
+/// last step of this wizard, not a separate concern, which is why §5 counted 22 and not 18.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// Open the add-worktree form (FR-005).
+    Opened,
+    /// The form's type selection changed.
+    TypeSelected(ConventionalType),
+    /// The form's ticket field changed.
+    TicketChanged(String),
+    /// The form's name field changed.
+    NameChanged(String),
+    /// Submit the form (FR-006). Validation happens here; the binary performs the git create.
+    Submitted,
+    /// Dismiss the form without creating (Cancel or Esc).
+    Cancelled,
+    /// Switch between the new-branch and existing-branch halves of the form (feature 016,
+    /// FR-010). Switching back to `New` clears any selection (FR-015).
+    SourceChanged(BranchSource),
+    /// The binary listed the repository's branches for the picker (feature 016, FR-011).
+    BranchesListed(Vec<BranchCandidate>),
+    /// An existing branch was picked from the list (feature 016, FR-014).
+    ///
+    /// A blocked candidate is **ignored entirely** (feature 021, FR-012a): it does not become the
+    /// selection and does not close the list. Feature 016 let it be selected and refused at the
+    /// point of creating, because the list widget of the day could not disable a row; the
+    /// type-ahead can, so the refusal moved to the point of choosing.
+    BranchSelected(BranchCandidate),
+    /// The branch search field took focus, so the list opens on what is already on offer (feature
+    /// 021, FR-001b). Not a query change: focusing is not typing.
+    BranchFocused,
+    /// The branch search text changed (feature 021, FR-001, FR-005).
+    BranchQueryChanged(String),
+    /// The keyboard moved through the results (feature 021, FR-017). The saturating rule lives in
+    /// `micold_core::typeahead`, not here — this arm applies its answer.
+    BranchHighlightMoved(Direction),
+    /// The result list closed without a pick — Escape, a press outside it, or Tab taking focus out
+    /// of the field (feature 021, FR-001b). Three triggers, one effect.
+    BranchDismissed,
+    /// Pre-flight found something the user must decide about; raise the prompt (feature 016,
+    /// FR-001). Never dispatched for [`BranchSituation::Free`].
+    ConflictDetected(BranchSituation),
+    /// The user answered the prompt (feature 016, FR-002). The binary performs the create with
+    /// the chosen mode. `Overwrite` can only arrive via [`Message::OverwriteConfirmed`].
+    ResolutionChosen(CreateMode),
+    /// The user chose Overwrite; show the destructive confirmation first (feature 016, FR-005).
+    OverwriteRequested,
+    /// The destructive confirmation was accepted (feature 016, FR-005).
+    OverwriteConfirmed,
+    /// Back out of the prompt (or its confirmation) without acting (feature 016, FR-007).
+    ResolutionCancelled,
+    /// The binary is about to send the `WorktreeCreate` RPC (feature 010; T055); marks the form
+    /// `Creating` so it shows an in-progress state until the daemon's reply closes or reopens it.
+    /// Carries the mode so the stage display can be worded for it (feature 016, FR-024).
+    CreateStarted(CreateMode),
+    /// The daemon reported progress on the in-flight create: a new stage (feature 016, FR-024), or
+    /// — with the stage unchanged — its latest live output line, rate-limited daemon-side so a long
+    /// stage reads as moving rather than frozen (BUG-009, T123). Ignored once the form has closed.
+    CreateStageChanged(CreateStage, Option<String>),
+    /// The daemon created a worktree successfully (FR-007); add it and close the form.
+    Created(Worktree),
+    /// The daemon reported a worktree create failure (FR-017); show it, keep the form open.
+    CreateFailed(String),
+}
+
+/// The form's own reducer: one entry point, twenty-two answers (FR-004a).
+///
+/// The root sees a single arm. Everything the wizard knows about its own steps — which are inert
+/// while a create is in flight, which are inert behind a conflict prompt, which reset the branch
+/// search — lives on this side of the boundary and never had to be said out there.
+pub fn update(state: &mut State, msg: Msg) {
+    match msg {
+        Msg::Opened => opened(state),
+        Msg::TypeSelected(type_) => type_selected(state, type_),
+        Msg::TicketChanged(text) => ticket_changed(state, text),
+        Msg::NameChanged(text) => name_changed(state, text),
+        Msg::Submitted => submitted(state),
+        Msg::Cancelled => cancelled(state),
+        Msg::SourceChanged(source) => source_changed(state, source),
+        Msg::BranchesListed(candidates) => branches_listed(state, candidates),
+        Msg::BranchSelected(candidate) => branch_selected(state, candidate),
+        Msg::BranchFocused => branch_focused(state),
+        Msg::BranchQueryChanged(text) => branch_query_changed(state, text),
+        Msg::BranchHighlightMoved(direction) => branch_highlight_moved(state, direction),
+        Msg::BranchDismissed => branch_dismissed(state),
+        Msg::ConflictDetected(situation) => conflict_detected(state, situation),
+        Msg::ResolutionChosen(mode) => resolution_chosen(state, mode),
+        Msg::OverwriteRequested => overwrite_requested(state),
+        Msg::OverwriteConfirmed => overwrite_confirmed(state),
+        Msg::ResolutionCancelled => resolution_cancelled(state),
+        Msg::CreateStarted(mode) => create_started(state, mode),
+        Msg::CreateStageChanged(stage, detail) => create_stage_changed(state, stage, detail),
+        Msg::Created(worktree) => created(state, worktree),
+        Msg::CreateFailed(message) => create_failed(state, message),
+    }
 }

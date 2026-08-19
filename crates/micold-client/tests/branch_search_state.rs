@@ -57,11 +57,21 @@ fn branches() -> Vec<BranchCandidate> {
 /// An open form on the existing-branch source, with the candidates listed.
 fn picker() -> State {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
-    state.update(Message::AddWorktreeNameChanged("login".to_string()));
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
-    state.update(Message::AddWorktreeBranchesListed(branches()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("login".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchesListed(branches()),
+    ));
     state
 }
 
@@ -79,7 +89,9 @@ fn results(state: &State) -> Vec<&str> {
 }
 
 fn type_(state: &mut State, text: &str) {
-    state.update(Message::AddWorktreeBranchQueryChanged(text.to_string()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchQueryChanged(text.to_string()),
+    ));
 }
 
 // --- T014: query, results, highlight, selection ----------------------------------------------
@@ -125,10 +137,12 @@ fn a_new_listing_is_matched_against_the_current_query() {
     let mut state = picker();
     type_(&mut state, "log");
 
-    state.update(Message::AddWorktreeBranchesListed(vec![
-        candidate("feat/logging"),
-        candidate("chore/deps"),
-    ]));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchesListed(vec![
+            candidate("feat/logging"),
+            candidate("chore/deps"),
+        ]),
+    ));
 
     assert_eq!(results(&state), vec!["feat/logging"]);
 }
@@ -141,7 +155,9 @@ fn the_highlight_never_dangles_when_the_results_shrink() {
     // The first press enters the list at row 0, so four presses reach the last of four rows —
     // `main`, which the query below filters away.
     for _ in 0..4 {
-        state.update(Message::AddWorktreeBranchHighlightMoved(Direction::Next));
+        state.update(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::BranchHighlightMoved(Direction::Next),
+        ));
     }
     assert_eq!(form(&state).branch_highlight, Some(3), "on the last row");
 
@@ -163,7 +179,9 @@ fn the_highlight_never_dangles_when_the_results_shrink() {
 fn moving_the_highlight_stops_at_both_ends() {
     let mut state = picker();
     for _ in 0..10 {
-        state.update(Message::AddWorktreeBranchHighlightMoved(Direction::Next));
+        state.update(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::BranchHighlightMoved(Direction::Next),
+        ));
     }
     assert_eq!(
         form(&state).branch_highlight,
@@ -172,7 +190,9 @@ fn moving_the_highlight_stops_at_both_ends() {
     );
 
     for _ in 0..10 {
-        state.update(Message::AddWorktreeBranchHighlightMoved(Direction::Prev));
+        state.update(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::BranchHighlightMoved(Direction::Prev),
+        ));
     }
     assert_eq!(form(&state).branch_highlight, Some(0));
 }
@@ -182,7 +202,9 @@ fn moving_the_highlight_stops_at_both_ends() {
 fn the_selection_survives_the_query_changing_and_being_cleared() {
     let mut state = picker();
     type_(&mut state, "log");
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/login")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/login")),
+    ));
     assert_eq!(
         form(&state).selected_branch.as_ref().unwrap().name,
         "feat/login"
@@ -212,7 +234,9 @@ fn the_selection_survives_the_query_changing_and_being_cleared() {
 fn picking_a_branch_leaves_the_search_text_alone() {
     let mut state = picker();
     type_(&mut state, "log");
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/login")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/login")),
+    ));
 
     assert_eq!(form(&state).branch_query, "log");
 }
@@ -223,9 +247,13 @@ fn picking_a_branch_leaves_the_search_text_alone() {
 fn switching_away_from_the_picker_resets_the_search() {
     let mut state = picker();
     type_(&mut state, "log");
-    state.update(Message::AddWorktreeBranchHighlightMoved(Direction::Next));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchHighlightMoved(Direction::Next),
+    ));
 
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::New));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::New),
+    ));
 
     let f = form(&state);
     assert!(f.branch_query.is_empty());
@@ -244,10 +272,14 @@ fn switching_away_from_the_picker_resets_the_search() {
 #[test]
 fn returning_to_the_field_reopens_the_list_without_filtering_anything() {
     let mut state = picker();
-    state.update(Message::AddWorktreeBranchDismissed);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchDismissed,
+    ));
     assert!(!form(&state).branch_list_open, "put away by the developer");
 
-    state.update(Message::AddWorktreeBranchFocused);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchFocused,
+    ));
 
     let f = form(&state);
     assert!(f.branch_list_open);
@@ -271,9 +303,13 @@ fn typing_opens_the_list() {
 fn dismissing_closes_the_list_and_touches_nothing_else() {
     let mut state = picker();
     type_(&mut state, "log");
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/login")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/login")),
+    ));
 
-    state.update(Message::AddWorktreeBranchDismissed);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchDismissed,
+    ));
 
     let f = form(&state);
     assert!(!f.branch_list_open);
@@ -286,8 +322,12 @@ fn dismissing_closes_the_list_and_touches_nothing_else() {
 #[test]
 fn picking_closes_the_list() {
     let mut state = picker();
-    state.update(Message::AddWorktreeBranchFocused);
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/login")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchFocused,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/login")),
+    ));
 
     assert!(!form(&state).branch_list_open);
 }
@@ -328,9 +368,13 @@ fn a_blocked_branch_is_still_listed_when_it_matches() {
 #[test]
 fn picking_a_blocked_branch_does_nothing_at_all() {
     let mut state = picker();
-    state.update(Message::AddWorktreeBranchFocused);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchFocused,
+    ));
 
-    state.update(Message::AddWorktreeBranchSelected(blocked("main")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(blocked("main")),
+    ));
 
     let f = form(&state);
     assert!(
@@ -347,9 +391,13 @@ fn picking_a_blocked_branch_does_nothing_at_all() {
 #[test]
 fn a_blocked_press_does_not_disturb_an_existing_selection() {
     let mut state = picker();
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/login")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/login")),
+    ));
 
-    state.update(Message::AddWorktreeBranchSelected(blocked("main")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(blocked("main")),
+    ));
 
     assert_eq!(
         form(&state).selected_branch.as_ref().unwrap().name,
@@ -386,7 +434,9 @@ fn picking_an_available_branch_from_the_results_behaves_as_it_always_did() {
     let mut state = picker();
     type_(&mut state, "log");
 
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/login")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/login")),
+    ));
 
     let f = form(&state);
     assert_eq!(f.selected_branch.as_ref().unwrap().name, "feat/login");
@@ -402,9 +452,9 @@ fn picking_an_available_branch_from_the_results_behaves_as_it_always_did() {
 #[test]
 fn the_preview_follows_the_selection_not_the_search_text() {
     let mut state = picker();
-    state.update(Message::AddWorktreeBranchSelected(candidate(
-        "release/v1.2",
-    )));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("release/v1.2")),
+    ));
     type_(&mut state, "log");
 
     let derived = form(&state).preview().unwrap();
@@ -433,7 +483,9 @@ fn shortening_a_query_that_matched_nothing_brings_the_results_back() {
 #[test]
 fn a_no_match_query_leaves_an_existing_selection_alone() {
     let mut state = picker();
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/login")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/login")),
+    ));
     type_(&mut state, "zzqxwv");
 
     let f = form(&state);
@@ -455,9 +507,15 @@ fn a_no_match_query_leaves_an_existing_selection_alone() {
 #[test]
 fn choosing_the_existing_branch_source_opens_the_list_straight_away() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeBranchesListed(branches()));
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchesListed(branches()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
 
     let f = form(&state);
     assert!(
@@ -477,9 +535,15 @@ fn choosing_the_existing_branch_source_opens_the_list_straight_away() {
 #[test]
 fn branches_arriving_after_the_picker_is_shown_open_the_list_too() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
-    state.update(Message::AddWorktreeBranchesListed(branches()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchesListed(branches()),
+    ));
 
     assert!(form(&state).branch_list_open);
 }
@@ -489,10 +553,14 @@ fn branches_arriving_after_the_picker_is_shown_open_the_list_too() {
 #[test]
 fn a_dismissal_is_not_undone_by_candidates_arriving() {
     let mut state = picker();
-    state.update(Message::AddWorktreeBranchDismissed);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchDismissed,
+    ));
     assert!(!form(&state).branch_list_open);
 
-    state.update(Message::AddWorktreeBranchesListed(branches()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchesListed(branches()),
+    ));
     assert!(
         !form(&state).branch_list_open,
         "a refreshed candidate list must not reopen a list the developer dismissed"
