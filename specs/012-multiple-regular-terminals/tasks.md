@@ -842,7 +842,14 @@ had nothing to act on. Making a state observable is what exposed it.
   now only from the per-tab affordance
 
 **Checkpoint**: with one Regular Terminal instance, `exit` shows `exited` + `restart`, and pressing
-`restart` restarts *that instance*.
+`restart` restarts *that instance*. **Confirmed on screen** 2026-08-19 (Xvfb + lavapipe, stub
+`claude`, single instance so no tab strip was on screen): the bar read `exited` with `restart`,
+pressing it flipped the bar to `running`, and the new shell answered `echo` —
+[evidence](./evidence/BUG-004-restart-works.png). Scope was confirmed from the daemon's process
+table rather than from the pixels, which cannot show it: the shell was respawned at the moment of
+the press (its pid matching the one the restarted shell printed) while the session's AI CLI primary
+kept its original start time, i.e. FR-010's "restarting only that instance". What a screenshot pass
+still cannot answer is unchanged from BUG-003 — nothing here depended on a mid-flight frame.
 
 **Bugfix**: 2026-08-18 — BUG-004. **No requirement added**: FR-010 already said "restarting only that
 instance"; the control simply did not. No task reopened — `ShellInstanceRestartRequested` and its
