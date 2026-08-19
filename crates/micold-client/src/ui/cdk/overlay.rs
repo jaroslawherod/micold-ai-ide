@@ -38,6 +38,15 @@ pub enum Anchor {
     /// Bottom rather than centred so a notification raised while a dialog is open does not sit over
     /// the dialog's action row — it is above the scrim by band, and out of the way by position.
     BottomCenter { bottom: f32 },
+    /// The panel's **bottom**-left corner sits `bottom` above the window's bottom edge and `start`
+    /// from its left. A menu opened from a control in a bottom bar.
+    ///
+    /// `Point` cannot serve there. It places a panel's *top* at the cursor and leaves clamping to
+    /// the caller — fine in a tall pane, impossible in a bar pinned to the window's bottom edge,
+    /// where every press point has a bar's height of room beneath it and the panel is taller than
+    /// that. Measuring from the same edge the bar is pinned to is what makes the placement
+    /// well-defined without the panel's own height, which no anchor knows.
+    BottomStart { bottom: f32, start: f32 },
 }
 
 /// One floating surface: a panel, where it goes, and how it closes.
@@ -184,6 +193,15 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
                     right: end,
                     left: 0.0,
                     bottom: 0.0,
+                }),
+            Anchor::BottomStart { bottom, start } => placed
+                .align_x(iced::alignment::Horizontal::Left)
+                .align_y(iced::alignment::Vertical::Bottom)
+                .padding(Padding {
+                    bottom,
+                    left: start,
+                    top: 0.0,
+                    right: 0.0,
                 }),
         }
         .into()

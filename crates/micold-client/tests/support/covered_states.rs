@@ -74,9 +74,14 @@ const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 1];
 const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 2];
 /// Inside a tab: the button's content column, whose first child is the active indicator (or, on an
 /// inactive tab, the transparent rule reserving its height) and whose second is the tab's content
-/// row — leading spacer, label, close, and a restart affordance on an instance that is not running.
+/// row — leading spacer, label and close.
+///
+/// It held a fourth child until BUG-004: a restart affordance on an instance that was not running,
+/// which the tab was too narrow to hold and which is offered from the tab's context menu now
+/// (FR-010b). Its anchor is deleted with it rather than left pointing at nothing —
+/// `an_anchor_whose_path_does_not_resolve_fails_naming_it` would fail on a stale one, which is the
+/// behaviour that makes an anchor worth writing.
 const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 1, 0, 0, 0];
-const TERMINAL_TAB_EXITED_RESTART: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 2, 0, 0, 1, 3];
 
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
@@ -515,7 +520,9 @@ pub fn covered_states() -> &'static [CoveredState] {
         // per-entry restart affordance its siblings do not: the tab whose contents differ most from
         // the rest is the one that shows whether the width follows them.
         //
-        // **It found one on the first regeneration, and the fixture pins it rather than hiding it.**
+        // **It found one on the first regeneration** — and BUG-004 then fixed it, so what follows is
+        // the history rather than the current reading.
+        //
         // A restartable tab does not fit inside `TAB_WIDTH`: the content row is given 112dp and its
         // children want 48 (leading spacer) + 4 + 6.8 (label) + 4 + 48 (close) + 4 + 51.5 (restart)
         // = 166.3, so iced shrinks the last two — the restart button collapses to **0.0 wide** and
@@ -525,11 +532,12 @@ pub fn covered_states() -> &'static [CoveredState] {
         // opposite in a comment — "It widens its own tab, which SC-008 permits" — which is what a
         // fixed width makes impossible.
         //
-        // Recorded here and pinned as the baseline, on 019 spec.md's own precedent: a snapshot
-        // records what it is shown, so a defect older than the fixture becomes its expected value,
-        // and the gate's contribution is to prove the fix when one lands. Every other gate in the
-        // suite is green over a zero-width button, which is the measure of how far outside their
-        // reach this control was.
+        // It was pinned as the baseline first, on 019 spec.md's own precedent — a snapshot records
+        // what it is shown — and the fix then moved it: BUG-004 took the affordance out of the tab
+        // for a context menu on it (FR-010b), since sizing every tab to hold a child only a stopped
+        // instance draws comes to 204dp against 136. Every other gate in the suite had been green
+        // over that zero-width button, which is the measure of how far outside their reach this
+        // control was, and `tests/gates/tab_children_fit.rs` is the gate that closes the gap.
         CoveredState {
             name: "session-terminal-instance-tabs",
             build: || {
@@ -591,10 +599,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "terminal.tabs.exited",
                     path: TERMINAL_TAB_EXITED,
-                },
-                Anchor {
-                    name: "terminal.tabs.exited.restart",
-                    path: TERMINAL_TAB_EXITED_RESTART,
                 },
             ],
         },

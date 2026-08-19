@@ -1,0 +1,277 @@
+//! No child of a tab is laid out narrower than the width it asked for (BUG-004, SC-010).
+//!
+//! The sixth gate, and the first to read a laid-out child against **what it requested** rather than
+//! against a constant, against its parent's bounds, or against a sibling.
+//!
+//! That distinction is the whole reason it exists. A control that has been squeezed to nothing
+//! satisfies every check this repository already has:
+//!
+//! - `tokens_anatomy` compares the *constants*. `anatomy::button::MIN_TOUCH_TARGET` is still 48 in
+//!   the source, and `IconButton` still wraps itself in a box of that width — the figure is present
+//!   and correct everywhere it is written down.
+//! - `anatomy_size` reads a component's laid-out box against its own declared extent. A tab's
+//!   children declare none; they are assembled at the call site, which is the same blind spot
+//!   feature 018's BUG-007 found for the project-switcher trigger.
+//! - `containment` asks whether a child escapes its parent. A 0.0-wide button contains its 0.0-wide
+//!   child perfectly and escapes nothing.
+//! - `panel_placement` and `sibling_parity` read *between* components. Both squeezed controls are in
+//!   the right place relative to everything else; they are simply not there.
+//! - `layout_snapshot` records it, and recorded it from the first regeneration — which is how it was
+//!   found — but a snapshot compares against what it was shown, so once written down the zero is the
+//!   expected value.
+//!
+//! So `mise run test` was **1914 passed, 0 failed** over a restart button laid out at 0.0dp wide and
+//! a close control at 45.2, below the 48dp target. Nothing misbehaved. The missing question is the
+//! one iced answers silently: a `Length::Fixed` on a composite is a budget for its children, and
+//! when they ask for more than the budget iced settles the difference by shrinking the trailing
+//! ones. There is no overflow and no error — the control disappears.
+//!
+//! # What is checked
+//!
+//! **Every interactive control inside a tab measures at least `MIN_TOUCH_TARGET` wide.** That is the
+//! face a user meets: a button too small to hit, or gone. Feature 018 FR-027 sets the figure; 018's
+//! own BUG-002 was that figure being *overwritten*, and this is the same figure being *competed
+//! away*. A gate reading the constant catches neither, because the constant is intact both times.
+//!
+//! # What is deliberately not checked here
+//!
+//! "The children fit inside the tab" is the *cause*, and it cannot be asked of a layout record.
+//! A first draft of this gate summed the tab's laid-out children and compared the span to the tab —
+//! and that test could never fail, because the children have **already been shrunk to fit** by the
+//! time they are recorded. The span equals the tab's width whether or not anyone was squeezed. It
+//! passed on the very defect this file was written for, which is the "a pass that records nothing
+//! looks like a pass that found nothing" shape feature 019 keeps meeting (its T041), so it was
+//! removed rather than kept as reassurance.
+//!
+//! Answering it properly needs the widths the children *asked for*, which no record holds. That
+//! question belongs to the derivation instead: `TAB_WIDTH` is built from the constants its widest
+//! arrangement requires (FR-004c), and `ui/terminal.rs`'s own unit test asserts the sum. Between
+//! them the two cover both faces — the derivation says the budget is big enough, and this says no
+//! control ended up under its target.
+//!
+//! Read structurally rather than by fixed paths — a tab's children change with its instance's
+//! lifecycle, and naming them by index would pin the arrangement this gate exists to let move.
+//!
+//! **Compiled into the `layout_snapshot` binary** for the reason `containment` gives: cargo makes
+//! one process per file directly under `tests/`, and a separate process cannot reach the record
+//! cache that has already resolved every covered state.
+
+use crate::support::covered_states::covered_states;
+use crate::support::layout::{self as lay, LayoutRecord};
+use micold_core::theme::ColorScheme;
+use micold_core::tokens::anatomy;
+
+/// Geometry is a structural property; one scheme establishes it. The dark pass exists for colour.
+const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
+
+/// Half a pixel, matching `containment`, `panel_placement` and `sibling_parity`.
+const TOLERANCE: f32 = 0.5;
+
+/// The anchor naming the tab strip in the covered state that draws one.
+const STRIP_ANCHOR: &str = "terminal.tabs";
+
+/// The tab strip's own path in a state that has one, or `None` for a state without.
+///
+/// Taken from the anchor rather than from a constant path, so this gate covers any state that
+/// registers a strip — including one added later — and covers none that does not, silently and
+/// correctly. A state with no strip is not a failure; it is a screen without tabs.
+fn strip_path(covered: &'static lay::CoveredState) -> Option<&'static [usize]> {
+    covered
+        .anchors
+        .iter()
+        .find(|a| a.name == STRIP_ANCHOR)
+        .map(|a| a.path)
+}
+
+/// The tabs: the strip's immediate children.
+fn tabs<'r>(records: &'r [LayoutRecord], strip: &[usize]) -> Vec<&'r LayoutRecord> {
+    records
+        .iter()
+        .filter(|r| {
+            r.layer == lay::Layer::Base
+                && r.path.len() == strip.len() + 1
+                && r.path.starts_with(strip)
+        })
+        .collect()
+}
+
+/// Everything laid out inside `tab`, excluding the tab itself.
+fn descendants<'r>(records: &'r [LayoutRecord], tab: &LayoutRecord) -> Vec<&'r LayoutRecord> {
+    records
+        .iter()
+        .filter(|r| {
+            r.layer == tab.layer && r.path.len() > tab.path.len() && r.path.starts_with(&tab.path)
+        })
+        .collect()
+}
+
+/// The interactive controls inside a tab.
+///
+/// A tab is a button wrapping a column — the active indicator, then a row of children. That row's
+/// direct children are the leading spacer, the label, the close control, and (before BUG-004 moved
+/// it out) a restart button. A **control is a direct child of that row as tall as the row itself**:
+/// a button fills its row's cross axis, and a text label does not. In the recorded tabs the row is
+/// 21.0 tall, the close and restart controls are 21.0, the label is 16.0 and the leading spacer is
+/// 0.0 — so the rule separates them cleanly without naming any of them.
+///
+/// Structural on purpose, and it took two attempts. The first recognised a control by an absolute
+/// height floor and by "no child shares my width", which let through the 20dp pill *inside* the
+/// close button (its parent is the 48dp touch box, so their widths differ) and the 0dp indicator
+/// spacer (a stray `|| width == 0.0` swallowed every zero-width node). Both are noise: the pill is
+/// supposed to be smaller than its target, and the indicator is a rule, not a control. Asserting on
+/// them would have made the gate fail for reasons that are not defects, which is how a gate gets
+/// weakened rather than fixed.
+///
+/// Direct children only. `IconButton` nests container → ripple → button → glyph, each a different
+/// box, and the one that claims the touch target is the outermost.
+fn nested_controls<'r>(records: &'r [LayoutRecord], tab: &LayoutRecord) -> Vec<&'r LayoutRecord> {
+    let inner = descendants(records, tab);
+    let Some(row) = content_row(records, tab) else {
+        return Vec::new();
+    };
+    inner
+        .iter()
+        .filter(|c| c.path.len() == row.path.len() + 1 && c.path.starts_with(&row.path))
+        .filter(|c| (c.height - row.height).abs() < TOLERANCE)
+        .copied()
+        .collect()
+}
+
+/// A tab's content row: the deepest node inside it holding more than one child of its own.
+///
+/// Found structurally for the same reason the controls are — the arrangement inside a tab is the
+/// thing under test and must be free to change.
+fn content_row<'r>(records: &'r [LayoutRecord], tab: &LayoutRecord) -> Option<&'r LayoutRecord> {
+    let inner = descendants(records, tab);
+    inner
+        .iter()
+        .filter(|r| {
+            inner
+                .iter()
+                .filter(|c| c.path.len() == r.path.len() + 1 && c.path.starts_with(&r.path))
+                .count()
+                > 1
+        })
+        .max_by_key(|r| r.path.len())
+        .copied()
+}
+
+/// SC-010, the face a user meets: a control too narrow to hit, or gone.
+#[test]
+fn every_control_inside_a_tab_holds_its_touch_target() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+    let mut failures = Vec::new();
+    let mut checked = 0usize;
+
+    for (covered, records) in covered_states().iter().zip(all.iter()) {
+        let Some(strip) = strip_path(covered) else {
+            continue;
+        };
+        for tab in tabs(records, strip) {
+            for control in nested_controls(records, tab) {
+                checked += 1;
+                if control.width + TOLERANCE < anatomy::button::MIN_TOUCH_TARGET {
+                    let name = lay::anchor_for(covered.anchors, &control.path)
+                        .map(|a| a.name.to_string())
+                        .unwrap_or_else(|| lay::path_token(&control.path));
+                    failures.push(format!(
+                        "  {} — {name} is {:.1}dp wide, under the {:.1}dp minimum interactive \
+                         target; its tab is {:.1}dp",
+                        covered.name,
+                        control.width,
+                        anatomy::button::MIN_TOUCH_TARGET,
+                        tab.width,
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "a control inside a tab was laid out under the minimum interactive target (feature 012 \
+         SC-010, feature 018 FR-027):\n{}\n\niced settles a shortfall inside a `Length::Fixed` \
+         parent by shrinking its trailing children, so this is what a tab too narrow for its \
+         contents looks like from the outside: no overflow, no error, a control that is simply not \
+         there. The figure is intact in the source both when it is overwritten (018 BUG-002) and \
+         when it is competed away (012 BUG-004), which is why this reads the laid-out box.",
+        failures.join("\n")
+    );
+    assert!(
+        checked > 0,
+        "no control inside any tab was checked, so this gate proved nothing. Either no covered \
+         state registers a `{STRIP_ANCHOR}` anchor, or the way a nested control is recognised has \
+         drifted from what the tabs actually draw. A pass that inspects nothing is \
+         indistinguishable from a pass that found nothing — the same defect feature 019's overlay \
+         pass had (its T041)."
+    );
+}
+
+/// FR-004a and SC-008: a tab's content sits on the tab's own midline, whether or not it is active.
+///
+/// The centring clause and the no-reflow clause are the same measurement taken twice. A tab's column
+/// holds the indicator above the content row; the active tab's indicator fills the tab, an inactive
+/// tab's placeholder has no width. If the column shrinks to its widest child, the active tab measures
+/// the whole content box and centres its row inside it while every inactive tab measures only the row
+/// and pins it to the leading edge. The label is then off-centre on every tab but one, and it *slides*
+/// across as the active tab changes — under the pointer, between a press and its release, which is
+/// exactly what SC-008 forbids.
+///
+/// The 2026-08-19 visual pass measured that slide at 4.6dp in both schemes. It was 0.6dp before this
+/// bugfix and invisible: the slack is half the difference between the tab's content box and its row,
+/// so widening `TAB_WIDTH` 128 → 136 for FR-004c's derivation multiplied an existing defect by eight
+/// without touching the code that caused it. Two visual passes had read the strip and called it
+/// stable, both correctly at the magnification they used.
+///
+/// Asked per tab rather than by comparing tabs to each other: "every tab is wrong in the same way"
+/// would pass a difference test, and it is still a defect.
+#[test]
+fn a_tabs_content_sits_on_its_tabs_midline() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+    let mut failures = Vec::new();
+    let mut checked = 0usize;
+
+    for (covered, records) in covered_states().iter().zip(all.iter()) {
+        let Some(strip) = strip_path(covered) else {
+            continue;
+        };
+        for tab in tabs(records, strip) {
+            let Some(row) = content_row(records, tab) else {
+                continue;
+            };
+            checked += 1;
+            let offset = (row.x + row.width / 2.0) - (tab.x + tab.width / 2.0);
+            if offset.abs() > TOLERANCE {
+                let name = lay::anchor_for(covered.anchors, &tab.path)
+                    .map(|a| a.name.to_string())
+                    .unwrap_or_else(|| lay::path_token(&tab.path));
+                failures.push(format!(
+                    "  {} — {name}: its content row is {offset:+.1}dp off the tab's midline (row \
+                     {:.1}..{:.1} in a tab {:.1}..{:.1})",
+                    covered.name,
+                    row.x,
+                    row.x + row.width,
+                    tab.x,
+                    tab.x + tab.width,
+                ));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "a tab's content is not centred on the tab (feature 012 FR-004a, SC-008):\n{}\n\nAn \
+         off-centre row is also a moving one: the offset is half the tab's leftover width, and an \
+         inactive tab has leftover width only because its indicator placeholder has none. The \
+         label therefore shifts by that much the moment its tab becomes active, under the pointer.",
+        failures.join("\n")
+    );
+    assert!(
+        checked > 0,
+        "no tab's content row was located, so this gate proved nothing — the same shape as the \
+         other assertion here: a pass that inspects nothing looks exactly like a pass that found \
+         nothing."
+    );
+}

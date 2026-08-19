@@ -565,10 +565,15 @@ an unavailable row",
     Entry {
         module: "material/menu.rs",
         component: "ContextMenu",
-        // `Anchor::Point` — a context menu's corner sits at the cursor.
-        variants: &["Point"],
+        // `Anchor::Point` — a context menu's corner sits at the cursor. `Anchor::BottomStart` —
+        // the same panel opened from a control in a bar pinned to the window's bottom edge, which
+        // has no room to hang a panel downward.
+        variants: &["Point", "BottomStart"],
         density: &[],
-        posed: &["open at a fixed window point (a real one opens at the cursor)"],
+        posed: &[
+            "open at a fixed window point (a real one opens at the cursor)",
+            "rising from the window's bottom edge, for a menu opened out of a bottom bar",
+        ],
         live: &["hover and press its items", "Escape dismisses it"],
         interactive: true,
         section: Section::Components,
@@ -739,5 +744,15 @@ pub const EXEMPTIONS: &[Exemption] = &[
                  Its field and its list arrive already drawn — what they look like is \
                  `material/picker.rs`, which the controls section poses through both of the \
                  controls built on it.",
+    },
+    Exemption {
+        module: "cdk/context_area.rs",
+        component: "ContextArea",
+        reason: "a behaviour-layer wrapper, for the same reason as the three above: it delegates \
+                 layout, draw, operate and overlay to its single child and intercepts one event — a \
+                 secondary press over its own bounds — publishing the point so a caller can open a \
+                 menu there (`012` BUG-004, FR-010b). It names no colour, size or spacing and adds \
+                 no pixel to what it wraps. What a secondary press *produces* is the `ContextMenu` \
+                 the floating section poses, on both of its anchors.",
     },
 ];

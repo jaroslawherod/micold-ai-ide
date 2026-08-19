@@ -54,11 +54,20 @@ branch under test had deleted, while the source contained no reference to it and
 
 ```bash
 scripts/build-lock.sh bash -c \
-  'cargo build -p micold-client --bin micold-ai-ide -p micold-daemon &&
+  'cargo build -p micold-client --bin micold-ai-ide &&
+   cargo build -p micold-daemon --bin micold-daemon &&
    cp "$CARGO_TARGET_DIR/debug/micold-ai-ide" "$CARGO_TARGET_DIR/debug/micold-daemon" ~/vp/bin/'
 ```
 
-One invocation, both binaries, copy inside the lock — then run the copies. Three details:
+**Two `cargo build` invocations, not one.** `--bin` is a target filter applied across *every*
+selected package, so `cargo build -p micold-client --bin micold-ai-ide -p micold-daemon` silently
+builds no daemon at all — `-p micold-daemon` contributes no target matching the filter. The `cp` then
+pins whatever `target-shared/debug/micold-daemon` another worktree left there, which is the hazard
+below with the roles reversed. It has happened: a pre-v6 daemon was pinned and the app opened with
+the red "the session service is a different version" banner. That is the *lucky* case — the handshake
+caught it. A stale daemon that still agreed on the wire would have been pinned in silence.
+
+One lock, both binaries, copy inside the lock — then run the copies. Three details:
 
 - **The client and the daemon must come from the same build.** The client refuses a daemon whose
   protocol *schema hash* differs (`handshake::evaluate`), and the daemon logs that as `refusing
@@ -68,7 +77,10 @@ One invocation, both binaries, copy inside the lock — then run the copies. Thr
 - **`cp` fails with "Text file busy" if your previous run is still using the destination.** Stop it
   first, or the `&&` chain aborts after the first copy and you launch a mismatched pair.
 - **Verify what you pinned**, cheaply: `strings <binary> | grep -c "<a string your change adds or
-  removes>"`. One grep is much shorter than the detour it saves.
+  removes>"`. One grep is much shorter than the detour it saves. Check the **daemon** as well as the
+  client, against a string the current wire carries (a `serde` field name from `messages.rs` works:
+  `strings ~/vp/bin/micold-daemon | grep -c live_shells`). `--version` is not a substitute — running
+  the daemon binary to ask it starts a daemon.
 
 ### 3. A private X server
 

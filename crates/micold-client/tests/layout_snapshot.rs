@@ -69,6 +69,15 @@ mod panel_placement;
 #[path = "gates/sibling_parity.rs"]
 mod sibling_parity;
 
+// --- The tab-children-fit gate (BUG-004) --------------------------------------------------------
+
+// The same arrangement once more. It reads a laid-out child against **what it asked for**, which is
+// the one question none of the five above puts: a control squeezed to nothing by a parent's fixed
+// width still contains its children, escapes nothing, overflows nothing, and answers to a constant
+// that is still correct in the source. The whole suite was green over a 0.0dp button.
+#[path = "gates/tab_children_fit.rs"]
+mod tab_children_fit;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).

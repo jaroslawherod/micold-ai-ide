@@ -215,7 +215,13 @@ cost falls on every tab, for a child only a stopped instance ever draws. The mea
 were recorded before choosing: balancing the leading spacer against the whole trailing group (FR-004a
 read strictly) gives 264dp and 808dp at three instances, which is unusable; dropping the spacer and
 centring the label in what is left of the tab gives 152dp but amends FR-004a's centring clause to
-mean something weaker than it says. Moving the affordance out keeps every tab at 128dp, returns the
-close control to its full 48dp target, and puts restart beside the rename that is already headed for
-the same menu. What it spends is discoverability, which is stated in FR-010b rather than left to be
+mean something weaker than it says. Moving the affordance out keeps every tab at **136dp** — the sum of a
+tab's own padding, two 48dp touch targets (the close control and the leading spacer balancing it),
+the gaps, and a 16dp floor for the label — returns the close control to its full 48dp target, and
+puts restart beside the rename that is already headed for the same menu. It was expected to land
+back on the written 128 and did not, by 8dp: the literal had reserved about 8dp for the label, which
+is narrower than the two digits an ordinal already reaches, and nobody noticed because a label
+smaller than its reserve just leaves the tab looking roomy. Landing on 128 would mean declaring that
+a tab reserves less room for its name than `99` needs. The sum stands; choosing the reserve to
+reproduce the old number is the move FR-004c was rewritten to forbid. What it spends is discoverability, which is stated in FR-010b rather than left to be
 noticed later.

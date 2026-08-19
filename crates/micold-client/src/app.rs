@@ -381,6 +381,11 @@ pub enum Message {
     /// body: mirrors `TerminalRestartRequested`, which only triggers binary-side spawn logic.
     /// Carries the owning session explicitly for the same reason as `ShellInstanceSelected`.
     ShellInstanceRestartRequested(SessionId, ShellInstanceId),
+    /// Open the context menu for one terminal tab, at a window-pixel point (feature 012, BUG-004,
+    /// FR-010b). Dispatched by a secondary (right) press on the tab.
+    ShellInstanceMenuRequested(ShellInstanceId, u16, u16),
+    /// Dismiss the terminal-tab context menu.
+    ShellInstanceMenuClosed,
     /// A Regular Terminal instance reported it is running (feature 011; replaces feature 010's
     /// `ShellSessionRunning(SessionId)`, now id-addressed since a session may have more than one
     /// instance).
@@ -643,6 +648,16 @@ pub struct State {
     /// The open terminal right-click context menu's anchor in pane-local pixels, or `None` when
     /// no menu is showing (feature 006, FR-013).
     pub terminal_context_menu: Option<(u16, u16)>,
+    /// The open terminal-tab context menu — which instance it belongs to, and where it was opened
+    /// in window pixels — or `None` when no menu is showing (feature 012, BUG-004, FR-010b).
+    ///
+    /// Carries the instance because the menu acts on the tab it was opened on, **not** on the
+    /// active one: restarting a background instance without selecting it first is the whole of
+    /// FR-010a, and it is what addressing the restart message by instance id was built for.
+    /// Window pixels rather than the pane-local point [`State::terminal_context_menu`] holds — that
+    /// one is drawn on the pane's own overlay because a pane's origin is not known at render time,
+    /// and this one is drawn on the window's, where the anchor is already in the right space.
+    pub shell_instance_menu: Option<(ShellInstanceId, u16, u16)>,
     /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
     /// Why entering a project landed on the session it did, from the most recent switch.
@@ -1675,6 +1690,16 @@ impl State {
             }
             Message::TerminalContextMenuClosed => {
                 self.terminal_context_menu = None;
+            }
+
+            // ---- Feature 012 (BUG-004) ----
+            Message::ShellInstanceMenuRequested(instance, x, y) => {
+                // Replaces rather than stacks: a second right-click, on this tab or another, moves
+                // the one menu. Two menus open at once would each claim the next click.
+                self.shell_instance_menu = Some((instance, x, y));
+            }
+            Message::ShellInstanceMenuClosed => {
+                self.shell_instance_menu = None;
             }
             Message::SettingsOpened => {
                 self.clear_for_dialog();

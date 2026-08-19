@@ -42,9 +42,9 @@ use crate::app::{Message, State};
 use crate::icons::{icon_role, Icon, IconSurface};
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length, Subscription};
-use micold_core::session::SessionId;
+use micold_core::session::{SessionId, ShellInstanceId, ShellLifecycle};
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing, Roles};
+use micold_core::tokens::{self, anatomy, spacing, Roles};
 
 /// How a dialog builds its body from the state that opened it.
 ///
@@ -342,6 +342,47 @@ pub fn view<'a>(
                 .into()
         });
 
+    // A terminal tab's right-click context menu (feature 012, BUG-004, FR-010b). Only present while
+    // a tab's menu is open.
+    //
+    // Anchored at the point the tab was clicked, in **window** space — unlike the sidebar's two
+    // menus above, which anchor at a fixed edge because a tree row's own position is not what the
+    // menu should follow. A tab strip is a row of small targets close together, so a menu that did
+    // not follow the cursor would leave the user guessing which tab it belonged to.
+    //
+    // Mounted here rather than on the terminal pane, where the pane's *own* right-click menu lives:
+    // that one is anchored pane-local because a pane's origin is not known at render time, and this
+    // point is already in window space, which is what this overlay takes.
+    let shell_instance_menu: Option<cdk::overlay::Surface<'a, Message>> =
+        state.shell_instance_menu.and_then(|(instance, x, y)| {
+            let session = state.active_session?;
+            let lifecycle = state
+                .active_sessions()
+                .iter()
+                .find(|s| s.id == session)?
+                .shells
+                .iter()
+                .find(|shell| shell.id == instance)?
+                .lifecycle;
+            Some(
+                material::ContextMenu::new(
+                    shell_instance_menu_items(session, instance, lifecycle),
+                    (x, y),
+                    Message::ShellInstanceMenuClosed,
+                    roles,
+                )
+                // Upward, from the bar's top edge rather than down from the press point: the tab
+                // strip lives in the terminal's bottom bar, so a panel hung below the cursor has
+                // the bar's remaining height to open into and is cut off by the window. The
+                // press y is still what the primitive reports and still says which control was
+                // pressed; it is the x that places the panel here. `app_bar::HEIGHT` is that bar's
+                // height — §7.1's figure, read rather than restated (BUG-003's lesson, one bar
+                // over).
+                .rising_above(anatomy::app_bar::HEIGHT)
+                .into(),
+            )
+        });
+
     // The dialog body for whatever is open — or, if one has just closed, the snapshot it left
     // behind (captured before the core cleared its live state) so the exit has something to draw
     // (FR-002). Each of these builds only the dialog; the transition around it belongs to `Modal`,
@@ -416,6 +457,7 @@ pub fn view<'a>(
         .push_maybe(project_menu)
         .push_maybe(worktree_menu)
         .push_maybe(session_menu)
+        .push_maybe(shell_instance_menu)
         .push_maybe(modal)
         .push_maybe(snackbar)
         .into()
@@ -454,6 +496,44 @@ fn worktree_menu_items(
         Icon::Unavailable,
         "Delete",
         Message::WorktreeDeleteRequested(dir.to_string()),
+    ));
+    items
+}
+
+/// The items in a terminal tab's right-click context menu (feature 012, BUG-004, FR-010b).
+///
+/// "Restart" is offered exactly when *that* instance's own lifecycle offers it — the same
+/// per-instance predicate the tab used to draw a button from, and independent of every sibling and
+/// of which instance is active. That independence is the requirement: FR-010a is about restarting a
+/// background instance without selecting it first, which is what addressing the message by instance
+/// id was built for and what a tab too narrow to hold the button had made impossible.
+///
+/// Not "Rename". An instance has no title to set, and giving it one reaches persistence and the
+/// daemon's session state — it is the separate feature BUG-002's "Deferred" note describes, and
+/// this menu is where it will land.
+fn shell_instance_menu_items(
+    session: SessionId,
+    instance: ShellInstanceId,
+    lifecycle: ShellLifecycle,
+) -> Vec<material::MenuItem<Message>> {
+    // Labels without icons, like the terminal pane's own copy/paste menu and unlike the sidebar's
+    // two. There is no restart glyph in `Icon`, and adding one to this menu would either leave
+    // "Restart" unlabelled beside an iconed "Close" — which `reserve_icon` exists to prevent and
+    // which reads as a missing icon rather than a deliberate one — or pull a new codepoint, its
+    // registration and its documentation into a bugfix that is about layout. Two words are legible.
+    let mut items = Vec::new();
+    if matches!(
+        lifecycle,
+        ShellLifecycle::NotStarted | ShellLifecycle::Exited
+    ) {
+        items.push(material::MenuItem::labeled(
+            "Restart",
+            Message::ShellInstanceRestartRequested(session, instance),
+        ));
+    }
+    items.push(material::MenuItem::labeled(
+        "Close",
+        Message::ShellInstanceCloseRequested(session, instance),
     ));
     items
 }

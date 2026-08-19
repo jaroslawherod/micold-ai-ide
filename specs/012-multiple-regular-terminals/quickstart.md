@@ -72,17 +72,23 @@ Open the project, select a session already in Regular Terminal mode (one instanc
 
 ### 4. Independent lifecycle and restart — SC-005 (US4)
 
-- Open two instances. In one, type `exit`. **Expect**: only that instance shows a not-running
-  state with its own restart affordance; the other instance and the AI CLI process are
-  unaffected.
-- Press that instance's restart affordance. **Expect**: only that instance starts a fresh shell;
-  the sibling instance is not restarted, the AI CLI process is not restarted.
-- **Do this on the instance that is *not* the active one** (bugfix BUG-004, FR-010a). Restarting a
-  background instance without selecting it first is the whole point of addressing the restart by
-  instance id, and it is the case that was broken: the affordance was laid out at zero width inside a
-  tab too narrow to hold it, so it was present in the tree, correctly conditioned, dispatching the
-  right message, and impossible to press. **Expect**: the affordance is a full-size control on the
-  tab, and the close control beside it is a full 48dp target.
+- Open two instances. In one, type `exit`. **Expect**: only that instance stops; the other
+  instance and the AI CLI process are unaffected.
+- Right-click that instance's tab. **Expect**: a context menu at the pointer offering **Restart**
+  and **Close**. Restart is offered because that instance's own lifecycle is `Exited` — right-click
+  a *running* tab and the menu offers **Close** only (FR-010b).
+- Press **Restart**. **Expect**: only that instance starts a fresh shell; the sibling instance is
+  not restarted, the AI CLI process is not restarted.
+- **Do all of this on the instance that is *not* the active one** (bugfix BUG-004, FR-010a).
+  Restarting a background instance without selecting it first is the whole point of addressing the
+  restart by instance id, and it is the case that was broken: the affordance used to live *in* the
+  tab, where it was laid out at zero width inside a tab too narrow to hold it — present in the tree,
+  correctly conditioned, dispatching the right message, and impossible to press. **Expect**: the
+  right-click lands on the tab under the pointer, not the active one, and the menu restarts that
+  instance without selecting it. **Also expect**: the tab itself now carries only its label and its
+  close control, and that close control is a full 48dp target.
+- The tab's own primary click must still select the instance — the secondary-click wrapper must not
+  swallow it.
 
 ### 5. The keyboard shortcut and its mode gating — FR-019
 
