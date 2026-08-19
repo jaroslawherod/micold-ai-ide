@@ -124,7 +124,25 @@ schemes:
 - **The edge fade**: visible when content is beyond, absent when it is not, and distinct when the
   marked tab is the thing beyond it. Drawn, not laid out — no geometry gate can see any of this.
 - **The strip at zero instances**: one tab, marked, reading as a deliberate strip.
+- **The highlight is a tab's, not a button's** (FR-015). Rest the pointer on a tab: the state layer
+  is **rectangular and fills the tab**, never a rounded pill. Move along the strip — it should read
+  as one strip with a moving highlight, not as separate pills lighting up. Then move the pointer off:
+  the tab draws nothing at all.
 - **Squint test**: which tab is marked, and which tabs are stopped, both legible without reading.
+
+### 9. The gallery — FR-013, FR-014, SC-011
+
+```bash
+./scripts/build-lock.sh --no-lock cargo run -p micold-client --bin micold-showcase
+```
+
+- **Expect** an entry for the tab strip, posing it with the indicator on the **top** edge and on the
+  **bottom** edge, side by side. The pairing is the point: this application inverts Material's
+  default placement deliberately, and the gallery is where that inversion is visible next to the
+  thing it inverts rather than taken on trust.
+- **Expect** the highlight to behave there exactly as it does in the application — the same
+  component, so a difference between the two is a bug in one of them.
+- Run this with the `visual-pass` skill; the showcase is what that skill was built for.
 
 Also re-run **feature 012's `quickstart.md` §8**. This feature changes 012's terminal tabs — every
 one of them gains a slot — and §8 is that strip's appearance section.

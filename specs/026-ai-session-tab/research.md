@@ -1,6 +1,6 @@
 # Phase 0 research: The AI Session as a Tab
 
-Nine questions the spec leaves to implementation. Each is recorded as Decision / Rationale /
+Eleven questions the spec leaves to implementation. Each is recorded as Decision / Rationale /
 Alternatives so the tasks can be written against a settled answer rather than re-deciding.
 
 ---
@@ -187,3 +187,59 @@ where FR-003's whole visible change lands.
 **Alternatives considered.** Registering only the multi-instance state: rejected — it would leave
 FR-003, the requirement that changes what a single-instance user sees, with no geometry coverage at
 all, which is the gap feature 019 found for this very strip.
+
+
+---
+
+## R10 — The tab becomes a component, because a call-site assembly cannot be posed
+
+**Decision.** Promote the tab and the strip into the component library as
+`material::Tab` and `material::TabStrip`, with the chainable builder API terminating in `.into()`,
+and rewire `instance_switcher_row` onto them **before** any of this feature's own rendering work.
+The promotion is a pure move: `layout_snapshot.txt` must come out byte-identical, and that is how it
+is verified.
+
+**Rationale.** FR-014 asks for the strip to be posed in the gallery in both indicator orientations,
+and it simply cannot be: `tests/inventory` discovers a component as a `pub struct` under
+`src/ui/material/` or `src/ui/cdk/`, and gate C1 in `tests/showcase_completeness.rs` requires each of
+those to have a gallery instance. A tab assembled inline in `ui/terminal.rs` is not one of those and
+has no way to become one. Principle VIII wanted this anyway — "when a needed UI element does not yet
+exist as a shared primitive, the reusable primitive MUST be created in (or promoted to) the shared
+library" — and this feature is what turns that from tidiness into necessity: one tab shape now serves
+two different kinds of member (FR-001) and is about to carry a scrolling viewport (FR-002a), a state
+mark (FR-012c) and a state layer (FR-015).
+
+Ordering matters more than it looks. Every later task in this feature writes into the tab; done
+after them, the promotion is a rewrite of work already landed at the call site, and the "pure move"
+check — a byte-identical fixture — is no longer available, because the geometry would have changed
+for other reasons in between.
+
+**Alternatives considered.** Posing a hand-built replica of a tab in the gallery: rejected, and it is
+worth naming why — the gallery's value is that it shows *the component the application uses*, and a
+replica is the one thing guaranteed to drift. Exempting the tab from C1 with a recorded reason:
+available, but the reason would have to be "it is not a component", which is the thing this decision
+fixes rather than an argument for leaving it.
+
+---
+
+## R11 — The highlight is a tab's state layer, not a button's
+
+**Decision.** A tab's hover/press state layer is **rectangular and fills the tab** — `shape::NONE`,
+not the `shape::FULL` pill. An unhighlighted tab draws nothing at all, unchanged.
+
+**Rationale.** A tab is currently `Button::with_content(.., ButtonVariant::Text, ..)`, and
+`material/button.rs` wraps every button's state layer in `Ripple::new(widget, colour, shape::FULL)`.
+`shape::FULL` is 9999dp — a fully rounded pill. That is correct for a button and wrong for a tab:
+Material's tab state layer is the tab's own rectangle, which is what makes a row of them read as a
+strip when the pointer moves along it rather than as a row of separate pills lighting up. The 2026-08-19
+visual pass caught it incidentally — the hover pill is visible in that run's frames — and it is the
+kind of finding no gate can produce, because a state layer is drawn, not laid out.
+
+Both this and R10 leave `layout_snapshot.txt` byte-identical. That is a useful property rather than a
+coincidence: it means each can be verified without regenerating a fixture, and a fixture that *does*
+move during either is itself the failure signal.
+
+**Alternatives considered.** A new `ButtonVariant::Tab`: rejected — the shape belongs to the tab, not
+to a button variant, and adding a variant would put a tab-shaped concern in the button's vocabulary
+where every other consumer would have to ignore it. Leaving the pill: rejected by FR-015, and it is
+the visible half of the reason the strip did not read as a strip before BUG-001.
