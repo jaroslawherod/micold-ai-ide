@@ -153,25 +153,12 @@ const OWNERS: &[(&str, &str)] = &[
 /// into `cross-feature-writes.md` with a proposed outcome for each, and T067a converts them one
 /// commit at a time.
 const ALLOWED: &[(&str, &str, &str)] = &[
-    // The reveal: displaying a session expands the row that holds it. Three sidebar fields written
-    // from one session operation, and the likeliest single `Outcome` in the list — the session
-    // feature's consequence is "this session became current", and expanding to show it is the
-    // sidebar's response to that.
-    (
-        "session",
-        "default_expanded",
-        "features/session.rs::set_current_session",
-    ),
-    (
-        "session",
-        "expanded",
-        "features/session.rs::set_current_session",
-    ),
-    (
-        "session",
-        "pending_reveal_scroll",
-        "features/session.rs::set_current_session",
-    ),
+    // (The reveal's eight rows lived here until T067a-6 converted them. They were never the
+    // reveal: the revealed row is *derived* by `location_open` and never written, and what these
+    // wrote was the moment a reveal ends — the outgoing row folded into the user's own set.
+    // `LocationOpened`, `RevealScrollArmed`, `ProjectEntered` and `RevealSuppressed` now carry it,
+    // and `restore_after_activation`'s `show_agent_worktrees` row — once its own task — turned out
+    // to be the same fact as `ProjectEntered` and went with them.)
     // (T059 recorded a row here — `restore_after_activation` writing `focused_field` via
     // `State::focus_terminal` — and asked whether it was a violation at all, or whether
     // `focus_terminal` was a session operation sitting in the wrong file. **T067a-7 answered: the
@@ -180,41 +167,12 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // Via `State::push_notification`. The contract already names the outcome for this one:
     // `NotificationRaised`, listed under "emitted by: any feature".
     ("session", "notify", "features/session.rs::arm_notice"),
-    // Feature 014 (FR-010e): arriving in a project must not carry the previous one's reveal of
-    // agent worktrees. A sidebar fact, reset from the session's activation path.
-    (
-        "session",
-        "show_agent_worktrees",
-        "features/session.rs::restore_after_activation",
-    ),
     // Via `Workspace::activate`. Switching the active project *is* a project operation; the
     // session feature calls it because the switch is what its own step 1 and step 3 bracket.
     (
         "session",
         "workspace.active",
         "features/session.rs::switch_active",
-    ),
-    // Three rows the guard could not see until T067a-6 fixed the `inherited_from_a_feature`
-    // suppression: each of these writes the field on its own line AND calls a sibling that writes
-    // it too, so the direct write was attributed away. They belong to the same conversation as the
-    // three `set_current_session` rows above and convert with them (T067a-6).
-    (
-        "session",
-        "default_expanded",
-        "features/session.rs::restore_after_activation",
-    ),
-    (
-        "session",
-        "default_expanded",
-        "features/session.rs::started",
-    ),
-    ("session", "expanded", "features/session.rs::started"),
-    // The mirror of the reveal above, in the other direction: collapsing a row cancels the
-    // suppression that a session close armed. `SessionsClosed`'s neighbourhood.
-    (
-        "sidebar",
-        "reveal_suppressed_for",
-        "features/sidebar.rs::toggle_location",
     ),
     // =============================================================================================
     // T062 — the reducer arms, which the guard could not see until they became feature code.

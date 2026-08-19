@@ -6,6 +6,27 @@ use micold_client::features::window::FieldId;
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 /// Asked of the registry, which reads each dialog's own state, so this is the same question about
 /// the same fact rather than a weaker one.
+/// Switch project the way the root does: apply the outcomes, don't just produce them (T067a-6).
+///
+/// `switch_active` reports arriving in a project rather than performing its view resets, so a test
+/// that dropped the outcomes would asserts against a half-applied switch.
+fn switch(state: &mut State, path: &std::path::Path) -> bool {
+    match state.switch_active(path) {
+        Some(outcomes) => {
+            micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
+            true
+        }
+        None => false,
+    }
+}
+
+/// Change the current session the way the root does (T067a-6): the commit of the outgoing row and
+/// the armed scroll are outcomes now, so a test that dropped them would assert against half a move.
+fn set_current(state: &mut State, next: Option<SessionId>) {
+    let outcomes = state.set_current_session(next);
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
+}
+
 fn open_dialog(state: &State) -> Option<&'static str> {
     micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
 }
@@ -664,7 +685,7 @@ fn switching_projects_resets_the_reveal_control() {
     state.update(Message::ShowAgentWorktreesToggled);
     assert!(state.show_agent_worktrees);
 
-    assert!(state.switch_active(&other));
+    assert!(switch(&mut state, &other));
     assert!(
         !state.show_agent_worktrees,
         "the incoming project must be entered with agent worktrees hidden"
@@ -672,7 +693,7 @@ fn switching_projects_resets_the_reveal_control() {
 
     // Switching back does not restore it either — nothing is remembered per project.
     let first = PathBuf::from("/repo");
-    assert!(state.switch_active(&first));
+    assert!(switch(&mut state, &first));
     assert!(!state.show_agent_worktrees);
 }
 
@@ -1691,7 +1712,7 @@ fn a_location_that_stops_holding_the_current_session_stays_open() {
     let mut state = state_with_current_session_in("feat-a");
     let location = SessionLocation::Worktree("feat-a".to_string());
 
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     assert!(
         state.location_open(&location),
@@ -1712,7 +1733,7 @@ fn a_row_the_user_closed_is_not_re_opened_by_the_commit() {
     let location = SessionLocation::Worktree("feat-a".to_string());
     state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
 
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     assert!(
         !state.location_open(&location),
@@ -1726,7 +1747,7 @@ fn clearing_the_current_session_arms_no_scroll() {
     let mut state = state_with_current_session_in("feat-a");
     state.pending_reveal_scroll = false;
 
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     assert!(
         !state.pending_reveal_scroll,
@@ -1746,7 +1767,7 @@ fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
     let next_id = next.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(next);
-    state.set_current_session(Some(next_id));
+    set_current(&mut state, Some(next_id));
 
     assert!(
         state.reveal_suppressed_for.is_none(),
@@ -1993,7 +2014,7 @@ fn applying_the_memory_makes_that_session_current_and_reveals_it() {
     let path = state.workspace.active.clone().unwrap();
 
     let choice = state.explain_foreground(&path);
-    state.set_current_session(choice.session());
+    set_current(&mut state, choice.session());
 
     assert_eq!(
         state.active_session,
@@ -2017,7 +2038,8 @@ fn applying_the_memory_starts_only_the_session_it_displays() {
         .map(|s| (s.id, s.lifecycle))
         .collect();
 
-    state.set_current_session(state.explain_foreground(&path).session());
+    let choice = state.explain_foreground(&path).session();
+    set_current(&mut state, choice);
 
     let after: Vec<_> = state
         .active_sessions()
@@ -2057,7 +2079,8 @@ fn applying_one_projects_memory_leaves_every_other_project_alone() {
         .insert(elsewhere.clone(), other_session);
     let untouched = state.workspace.sessions.get(&elsewhere).cloned().unwrap();
 
-    state.set_current_session(state.explain_foreground(&opened).session());
+    let choice = state.explain_foreground(&opened).session();
+    set_current(&mut state, choice);
 
     assert_eq!(
         state.workspace.sessions.get(&elsewhere),
@@ -2083,7 +2106,8 @@ fn a_memory_whose_worktree_is_gone_is_still_restored() {
     });
     state.expanded.insert("kept-open".to_string());
 
-    state.set_current_session(state.explain_foreground(&path).session());
+    let choice = state.explain_foreground(&path).session();
+    set_current(&mut state, choice);
 
     assert_eq!(
         state.active_session,
@@ -2107,7 +2131,8 @@ fn a_memory_naming_a_closed_session_restores_nothing_and_disturbs_nothing() {
     }
     state.expanded.insert("kept-open".to_string());
 
-    state.set_current_session(state.explain_foreground(&path).session());
+    let choice = state.explain_foreground(&path).session();
+    set_current(&mut state, choice);
 
     assert!(
         state.active_session.is_none(),

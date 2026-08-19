@@ -352,7 +352,8 @@ pub fn forget_requested(state: &mut State, path: PathBuf) {
 /// **Clearing the session pointer is the subtle half.** `Workspace::forget` clears
 /// `workspace.active`, and `active_session` only ever referenced the active project — so without
 /// this it would point into a project that no longer exists (FR-008).
-pub fn forget_confirmed(state: &mut State) {
+pub fn forget_confirmed(state: &mut State) -> Vec<crate::features::Outcome> {
+    let mut outcomes = Vec::new();
     if let Some(path) = state.forget_target.clone() {
         let was_active =
             state.workspace.active.as_deref() == Some(canonicalize_best_effort(&path).as_path());
@@ -361,10 +362,11 @@ pub fn forget_confirmed(state: &mut State) {
             // Feature 024: an app-initiated clear like any other, so it goes through the same
             // function (contract §3's table). It arms nothing — there is no session and, after a
             // forget, no project either.
-            state.set_current_session(None);
+            outcomes = state.set_current_session(None);
         }
     }
     state.forget_target = None;
+    outcomes
 }
 
 /// A forget was dismissed.

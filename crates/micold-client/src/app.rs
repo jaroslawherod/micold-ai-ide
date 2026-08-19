@@ -836,7 +836,10 @@ impl State {
             Message::ProjectForgetRequested(path) => {
                 crate::features::project::forget_requested(self, path)
             }
-            Message::ProjectForgetConfirmed => crate::features::project::forget_confirmed(self),
+            Message::ProjectForgetConfirmed => {
+                let outcomes = crate::features::project::forget_confirmed(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::ProjectForgetCancelled => crate::features::project::forget_cancelled(self),
             Message::ThemeModeCycled => crate::features::settings::theme_mode_cycled(self),
             Message::ThemePreferenceChanged(pref) => {
@@ -856,10 +859,12 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::WorktreeExpansionToggled(dir) => {
-                self.toggle_location(SessionLocation::Worktree(dir));
+                let outcomes = self.toggle_location(SessionLocation::Worktree(dir));
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::DefaultExpansionToggled => {
-                self.toggle_location(SessionLocation::Default);
+                let outcomes = self.toggle_location(SessionLocation::Default);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::WorktreeMenuToggled(dir) => crate::features::worktree::menu_toggled(self, dir),
             Message::WorktreeMenuDismissed => crate::features::worktree::menu_dismissed(self),
@@ -918,7 +923,10 @@ impl State {
                 let outcomes = crate::features::worktree_form::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::SessionStarted(session) => crate::features::session::started(self, session),
+            Message::SessionStarted(session) => {
+                let outcomes = crate::features::session::started(self, session);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::SessionSelected(id) => crate::features::session::selected(self, id),
             Message::SessionRunning(id) => crate::features::session::running(self, id),
             Message::SessionTitleUpdated { id, title } => {
@@ -962,11 +970,17 @@ impl State {
             Message::ShellInstanceExited(session_id, shell_id) => {
                 crate::features::session::shell_instance_exited(self, session_id, shell_id)
             }
-            Message::SessionCloseRequested(id) => crate::features::session::close_requested(self, id),
+            Message::SessionCloseRequested(id) => {
+                let outcomes = crate::features::session::close_requested(self, id);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::SessionMenuToggled(id) => crate::features::session::menu_toggled(self, id),
             Message::SessionMenuDismissed => crate::features::session::menu_dismissed(self),
             Message::SessionRemoveRequested(id) => crate::features::session::remove_requested(self, id),
-            Message::SessionRemoveConfirmed => crate::features::session::remove_confirmed(self),
+            Message::SessionRemoveConfirmed => {
+                let outcomes = crate::features::session::remove_confirmed(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::SessionRemoveCancelled => crate::features::session::remove_cancelled(self),
             Message::TerminalTick => {}
             Message::SidebarToggled => crate::features::sidebar::toggled(self),
@@ -1142,7 +1156,7 @@ pub fn interpret(
 ) -> Vec<crate::features::Outcome> {
     use crate::features::Outcome;
     match outcome {
-        Outcome::SessionsClosed(ids) => crate::features::session::closed(state, &ids),
+        Outcome::SessionsClosed(ids) => return crate::features::session::closed(state, &ids),
         Outcome::OverlayDismissed(id) => crate::overlay::registry::dismiss(state, id),
         Outcome::NotificationRaised(notification) => state.notify.push(notification),
         Outcome::WorktreesReplaced(names) => {
@@ -1152,6 +1166,10 @@ pub fn interpret(
         Outcome::WorktreeCreated(worktree) => {
             return crate::features::worktree::created(state, worktree)
         }
+        Outcome::LocationOpened(location) => state.location_opened(&location),
+        Outcome::RevealScrollArmed => state.reveal_scroll_armed(),
+        Outcome::ProjectEntered => state.project_entered(),
+        Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
         Outcome::ClipboardWrite(_) => {}
     }
     Vec::new()

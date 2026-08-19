@@ -114,7 +114,8 @@ pub(crate) fn on_folder_chosen(app: &mut App, path: PathBuf) -> Task<Message> {
     app.core
         .workspace
         .open_or_activate(path.clone(), app.caps.scanner());
-    app.core.restore_after_activation(&path);
+    let arrival = app.core.restore_after_activation(&path);
+    micold_client::app::drain(arrival, |o| micold_client::app::interpret(&mut app.core, o));
     let outcomes = app
         .core
         .set_worktrees(discover_worktrees(app.caps.git(), &path));
@@ -143,7 +144,8 @@ pub(crate) fn on_known_project_reopened(app: &mut App, path: PathBuf) -> Task<Me
     // Non-destructive switch: keep the outgoing project's sessions running in the
     // background and restore the target project's foreground (feature 008, BS-1/BS-3).
     let previous = app.core.workspace.active.clone();
-    if app.core.switch_active(&path) {
+    if let Some(arrival) = app.core.switch_active(&path) {
+        micold_client::app::drain(arrival, |o| micold_client::app::interpret(&mut app.core, o));
         let outcomes = app
             .core
             .set_worktrees(discover_worktrees(app.caps.git(), &path));

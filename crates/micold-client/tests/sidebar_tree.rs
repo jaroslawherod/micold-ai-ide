@@ -42,6 +42,13 @@ fn state_with_active_project() -> State {
     state
 }
 
+/// Change the current session the way the root does (T067a-6): the commit of the outgoing row is
+/// an outcome now, so dropping it would assert against half a move.
+fn set_current(state: &mut State, next: Option<micold_core::session::SessionId>) {
+    let outcomes = state.set_current_session(next);
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
+}
+
 #[test]
 fn tree_has_a_node_per_worktree_collapsed_by_default() {
     let state = state_with_active_project();
@@ -938,7 +945,7 @@ fn the_exemption_ends_when_the_location_stops_holding_the_current_session() {
     let moved_id = moved.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(moved);
-    state.set_current_session(Some(moved_id));
+    set_current(&mut state, Some(moved_id));
 
     assert!(
         !listed(&state).contains(&"fix-b".to_string()),
@@ -1003,7 +1010,7 @@ fn exactly_one_session_row_carries_the_mark_when_a_location_holds_several() {
 #[test]
 fn nothing_is_marked_when_no_session_is_current() {
     let mut state = state_with_active_project();
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     let node = state
         .worktree_tree()

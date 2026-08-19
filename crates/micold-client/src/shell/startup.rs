@@ -147,7 +147,8 @@ fn boot() -> (App, Task<Message>) {
         //
         // Ordering: after `prune_empty_sessions` above, so a memory naming a session with no
         // conversation on disk resolves to nothing rather than to a session about to be dropped.
-        core.restore_after_activation(&repo);
+        let outcomes = core.restore_after_activation(&repo);
+        micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut core, o));
     }
     (
         App {

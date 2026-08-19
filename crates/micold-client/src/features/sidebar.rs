@@ -280,6 +280,29 @@ impl State {
         self.active_session.is_some() && self.reveal_suppressed_for == self.active_session
     }
 
+    /// Fold a location into the user's own open set (T067a-6).
+    ///
+    /// Reached from `Outcome::LocationOpened`. Idempotent: a location already open stays open.
+    pub fn location_opened(&mut self, location: &SessionLocation) {
+        match location {
+            SessionLocation::Worktree(dir) => {
+                self.expanded.insert(dir.clone());
+            }
+            SessionLocation::Default => self.default_expanded = true,
+        }
+    }
+
+    /// Arm the scroll that reaches the current session's row on the first frame one exists.
+    pub fn reveal_scroll_armed(&mut self) {
+        self.pending_reveal_scroll = true;
+    }
+
+    /// Drop view state that must not follow the user into a different project (T067a-6).
+    pub fn project_entered(&mut self) {
+        self.default_expanded = false;
+        self.show_agent_worktrees = false;
+    }
+
     /// Whether a location's row is shown open (feature 024, contract §1.1).
     ///
     /// The single answer to "is this row open", derived on every call. `expanded` and
@@ -333,7 +356,7 @@ impl State {
     /// Closing the revealed row is remembered against the session it was closed for; opening it
     /// again withdraws that, rather than leaving behind a suppression only a change of session
     /// could clear.
-    pub fn toggle_location(&mut self, location: SessionLocation) {
+    pub fn toggle_location(&mut self, location: SessionLocation) -> Vec<crate::features::Outcome> {
         let open = self.location_open(&location);
         let holds_current = self.current_session_location().as_ref() == Some(&location);
         match &location {
@@ -347,7 +370,10 @@ impl State {
             SessionLocation::Default => self.default_expanded = !open,
         }
         if holds_current {
-            self.reveal_suppressed_for = if open { self.active_session } else { None };
+            // Whether the reveal is suppressed is a fact about the session, not the row (T067a-6).
+            vec![crate::features::Outcome::RevealSuppressed(open)]
+        } else {
+            Vec::new()
         }
     }
 

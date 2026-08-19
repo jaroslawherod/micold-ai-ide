@@ -40,7 +40,11 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::OverlayDismissed(_)
         | Outcome::NotificationRaised(_)
         | Outcome::WorktreesReplaced(_)
-        | Outcome::WorktreeCreated(_) => Task::none(),
+        | Outcome::WorktreeCreated(_)
+        | Outcome::LocationOpened(_)
+        | Outcome::RevealScrollArmed
+        | Outcome::ProjectEntered
+        | Outcome::RevealSuppressed(_) => Task::none(),
     }
 }
 

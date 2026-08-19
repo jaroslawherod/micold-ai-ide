@@ -72,6 +72,27 @@ pub enum Outcome {
     /// worktree feature performs the insert, keeping its own two identities distinct — a create
     /// names the directory, a daemon include answers with a path.
     WorktreeCreated(micold_core::worktree::Worktree),
+    /// This location belongs in the user's own open set (feature 024; T067a-6).
+    ///
+    /// **Not "reveal this row".** The revealed row is *derived* by `State::location_open` as the
+    /// union of the user's set with the one current session's location, and is never written. What
+    /// is written is the moment a reveal stops being one: when the current session changes, the row
+    /// it opened would silently close, so the outgoing location is folded into the user's set
+    /// first. `session::started` emits the same fact a moment earlier for the session it creates.
+    LocationOpened(micold_core::session::SessionLocation),
+    /// The sidebar should scroll to the current session's row once one exists (research R7, I4).
+    RevealScrollArmed,
+    /// The user arrived in a project, so view state switched on for the previous one resets.
+    ///
+    /// `default_expanded` is not keyed per project (unlike `expanded`, pruned by `dir_name`), and
+    /// feature 014's reveal of agent worktrees is remembered nowhere — both would otherwise render
+    /// in a project that never asked for them.
+    ProjectEntered,
+    /// The user closed (or reopened) the row holding the current session (feature 024, I2).
+    ///
+    /// The sidebar owns the row and knows the twisty was clicked; whether that suppresses the
+    /// reveal is a fact about the *session*, which is why it travels rather than being written.
+    RevealSuppressed(bool),
 }
 
 pub mod connection;

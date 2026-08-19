@@ -25,11 +25,27 @@ fn two_projects_active_a() -> State {
     st
 }
 
+/// Switch the way the root does: apply the outcomes, don't just produce them (T067a-6).
+///
+/// `switch_active` reports arriving in a project — the outgoing row's commit, the armed scroll,
+/// the per-project view resets — rather than performing them, so a test that dropped the outcomes
+/// would be asserting against a half-applied switch. Several assertions below are exactly about
+/// those consequences.
+fn switch(st: &mut State, path: &str) -> bool {
+    match st.switch_active(Path::new(path)) {
+        Some(outcomes) => {
+            micold_client::app::drain(outcomes, |o| micold_client::app::interpret(st, o));
+            true
+        }
+        None => false,
+    }
+}
+
 #[test]
 fn switch_keeps_outgoing_sessions_running() {
     let mut st = two_projects_active_a();
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(switch(&mut st, "/b"));
 
     // BS-1: /a's sessions are untouched (still Running, none dropped).
     let a = &st.workspace.sessions[Path::new("/a")];
@@ -43,7 +59,7 @@ fn records_outgoing_foreground_before_activating() {
     let mut st = two_projects_active_a();
     let fg_a = st.active_session.unwrap();
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(switch(&mut st, "/b"));
 
     // I1: the OUTGOING project (/a) is recorded, not the incoming (/b).
     assert_eq!(
@@ -58,14 +74,14 @@ fn foreground_restored_on_return() {
     let mut st = two_projects_active_a();
     let fg_a = st.active_session.unwrap();
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(switch(&mut st, "/b"));
     // On /b, foreground falls to its first running session.
     assert_eq!(
         st.active_session,
         Some(st.workspace.sessions[Path::new("/b")][0].id)
     );
 
-    assert!(st.switch_active(Path::new("/a")));
+    assert!(switch(&mut st, "/a"));
     // BS-3: the exact prior foreground of /a is restored.
     assert_eq!(st.active_session, Some(fg_a));
 }
@@ -80,7 +96,7 @@ fn switch_to_unavailable_is_rejected_and_leaves_state_unchanged() {
         }
     }
 
-    assert!(!st.switch_active(Path::new("/b")));
+    assert!(!switch(&mut st, "/b"));
 
     // BS-10: nothing changed.
     assert_eq!(st.workspace.active, Some(PathBuf::from("/a")));
@@ -124,7 +140,7 @@ fn b_worktrees() -> Vec<Worktree> {
 fn switching_opens_the_row_holding_the_session_you_land_on() {
     let mut st = two_projects_with_worktrees();
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(switch(&mut st, "/b"));
     micold_client::app::drain(st.set_worktrees(b_worktrees()), |o| {
         micold_client::app::interpret(&mut st, o)
     });
@@ -142,7 +158,7 @@ fn the_reveal_survives_a_worktree_list_that_arrives_after_the_switch() {
 
     // The switch happens first and the incoming project's worktrees arrive afterwards — the
     // ordinary case, since discovery is asynchronous (FR-001b).
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(switch(&mut st, "/b"));
     assert!(
         !st.location_open(&SessionLocation::Worktree("wb".to_string())),
         "before the list arrives the location is not yet known, and nothing is opened on a guess"
@@ -165,7 +181,7 @@ fn view_state_does_not_carry_from_the_project_you_left() {
     // Open a row by hand in /a, on top of the one its current session reveals.
     st.expanded.insert("wa1".to_string());
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(switch(&mut st, "/b"));
     micold_client::app::drain(st.set_worktrees(b_worktrees()), |o| {
         micold_client::app::interpret(&mut st, o)
     });
@@ -187,7 +203,7 @@ fn switching_arms_a_scroll_and_clears_a_stale_suppression() {
     st.reveal_suppressed_for = st.active_session;
     st.pending_reveal_scroll = false;
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(switch(&mut st, "/b"));
 
     assert!(
         st.pending_reveal_scroll,
@@ -210,7 +226,7 @@ fn switching_to_a_project_with_no_session_reveals_nothing() {
     st.workspace.active = Some(PathBuf::from("/a"));
     st.active_session = Some(st.workspace.sessions[Path::new("/a")][0].id);
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(switch(&mut st, "/b"));
     micold_client::app::drain(st.set_worktrees(b_worktrees()), |o| {
         micold_client::app::interpret(&mut st, o)
     });
@@ -243,7 +259,7 @@ fn switching_to_a_project_not_yet_visited_uses_its_stored_memory() {
         .foreground_by_project
         .insert(PathBuf::from("/b"), b_second);
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(switch(&mut st, "/b"));
 
     assert_eq!(
         st.active_session,
@@ -259,9 +275,9 @@ fn each_project_keeps_the_session_it_was_last_on_not_the_last_one_overall() {
     let mut st = two_projects_active_a();
     let fg_a = st.active_session.unwrap();
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(switch(&mut st, "/b"));
     let fg_b = st.active_session.unwrap();
-    assert!(st.switch_active(Path::new("/a")));
+    assert!(switch(&mut st, "/a"));
 
     assert_eq!(
         st.workspace.foreground_by_project.get(Path::new("/a")),

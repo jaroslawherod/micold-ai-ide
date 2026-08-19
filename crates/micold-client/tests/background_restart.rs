@@ -47,7 +47,7 @@ fn returning_to_project_notifies_the_user_and_clears_markers() {
     st.note_background_restart(a_id);
 
     assert!(st.notify.visible().is_none());
-    assert!(st.switch_active(Path::new("/a")));
+    assert!(st.switch_active(Path::new("/a")).is_some());
 
     let visible = st
         .notify

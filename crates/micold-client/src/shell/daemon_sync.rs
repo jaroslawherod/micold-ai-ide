@@ -338,7 +338,8 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
     // (FR-001c). Nothing is armed: there is no session to scroll to.
     if let Some(id) = core.active_session {
         if core.workspace.find_session(id).is_none() {
-            core.set_current_session(None);
+            let outcomes = core.set_current_session(None);
+            micold_client::app::drain(outcomes, |o| micold_client::app::interpret(core, o));
         }
     }
 }
@@ -2098,7 +2099,7 @@ pub(crate) mod tests {
 
         // Returning to /a fires the return notice (mirrors `background_restart.rs`).
         core.record_foreground();
-        assert!(core.switch_active(Path::new("/a")));
+        assert!(core.switch_active(Path::new("/a")).is_some());
         let visible = core
             .notify
             .visible()

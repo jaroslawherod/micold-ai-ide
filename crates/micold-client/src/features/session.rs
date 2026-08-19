@@ -18,7 +18,7 @@ use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
-use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
+use micold_core::session::{Session, SessionId, ShellInstanceId};
 use std::path::Path;
 
 /// Why entering a project landed on the session it did — or on none (feature 008 FR-003).
@@ -138,24 +138,40 @@ impl State {
     /// reveal inherits it rather than needing one of its own; special-casing the reveal would give
     /// the application two different expansion behaviours depending on who triggered it, which is
     /// the opposite of what that requirement asks for.
-    pub fn set_current_session(&mut self, next: Option<SessionId>) {
+    #[must_use = "the outgoing row is committed by draining this, not by `set_current_session`"]
+    pub fn set_current_session(
+        &mut self,
+        next: Option<SessionId>,
+    ) -> Vec<crate::features::Outcome> {
         if self.active_session == next {
-            return;
+            return Vec::new();
         }
+        let mut outcomes = Vec::new();
+        // Resolved BEFORE the assignment, so this is the *outgoing* session's location — see
+        // `closed` below, which orders itself around exactly that.
         if !self.reveal_suppressed() {
-            match self.current_session_location() {
-                Some(SessionLocation::Worktree(dir)) => {
-                    self.expanded.insert(dir);
-                }
-                Some(SessionLocation::Default) => self.default_expanded = true,
-                None => {}
+            if let Some(location) = self.current_session_location() {
+                outcomes.push(crate::features::Outcome::LocationOpened(location));
             }
         }
         self.reveal_suppressed_for = None;
         self.active_session = next;
         if next.is_some() {
-            self.pending_reveal_scroll = true;
+            outcomes.push(crate::features::Outcome::RevealScrollArmed);
         }
+        outcomes
+    }
+
+    /// The user closed or reopened the row holding the current session (feature 024, I2).
+    ///
+    /// Reached from `Outcome::RevealSuppressed`; the sidebar owns the row, this feature owns what
+    /// closing it means.
+    pub fn reveal_suppression_set(&mut self, suppressed: bool) {
+        self.reveal_suppressed_for = if suppressed {
+            self.active_session
+        } else {
+            None
+        };
     }
 
     /// Switch the active project **without stopping any session** (feature 008, FR-001/FR-002).
@@ -166,15 +182,16 @@ impl State {
     /// the project is unknown/unavailable (FR-008); (3) restore the incoming project's
     /// foreground (stored → first running → `None`) (FR-003); (4) surface a notice if any of
     /// its sessions were restarted while it was inactive (FR-011 / SC-007). No session
-    /// lifecycle is mutated. Returns whether the switch happened.
-    pub fn switch_active(&mut self, path: &Path) -> bool {
+    /// lifecycle is mutated.
+    /// `None` when the switch was refused; otherwise the outcomes arriving in the project raises.
+    #[must_use = "a refused switch is `None`, and the outcomes of one that happened must be drained"]
+    pub fn switch_active(&mut self, path: &Path) -> Option<Vec<crate::features::Outcome>> {
         self.record_foreground(); // STEP 1 — before activation
         if !self.workspace.activate(path) {
             // STEP 2 — rejected: leave active project, sessions, and foreground untouched.
-            return false;
+            return None;
         }
-        self.restore_after_activation(path); // STEPS 3 + 4
-        true
+        Some(self.restore_after_activation(path)) // STEPS 3 + 4
     }
 
     /// Record the current active project's foreground session for later restore (FR-003).
@@ -193,7 +210,8 @@ impl State {
     /// Finish a switch once `path` is already the active project (steps 3 + 4 of
     /// [`switch_active`](Self::switch_active)): restore its foreground session and surface any
     /// background-restart notice. Pair with a preceding [`record_foreground`](Self::record_foreground).
-    pub fn restore_after_activation(&mut self, path: &Path) {
+    #[must_use = "arriving in a project resets view state by draining this (T067a-6)"]
+    pub fn restore_after_activation(&mut self, path: &Path) -> Vec<crate::features::Outcome> {
         let key = canonicalize_best_effort(path);
         // Recorded before it is acted on, so the binary can say *why* the app landed where it did
         // — including when it landed nowhere, which is the case a user reports as "it forgot my
@@ -203,24 +221,22 @@ impl State {
         // Feature 024: through `set_current_session`, so arriving in a project reveals the session
         // it drops you into (FR-001) — the reported bug was that the panel showed every row
         // collapsed while the main area showed a session.
-        self.set_current_session(choice.session()); // STEP 3
-                                                    // Feature 023 (FR-011): arriving in a project puts that session's terminal in front of the
-                                                    // user, so it holds the keyboard. This used to clear focus on the reasoning that arriving is
-                                                    // not the same as asking to type — true of arriving somewhere by accident, but a project
-                                                    // switch is deliberate, and the terminal you are looking at is the one you meant. The two
-                                                    // features agree here: 024 reveals the row, 023 gives its terminal the keyboard.
+        let mut outcomes = self.set_current_session(choice.session()); // STEP 3
+                                                                       // Feature 023 (FR-011): arriving in a project puts that session's terminal in front of the
+                                                                       // user, so it holds the keyboard. This used to clear focus on the reasoning that arriving is
+                                                                       // not the same as asking to type — true of arriving somewhere by accident, but a project
+                                                                       // switch is deliberate, and the terminal you are looking at is the one you meant. The two
+                                                                       // features agree here: 024 reveals the row, 023 gives its terminal the keyboard.
         self.focus_terminal();
         // `default_expanded` is not keyed per project (unlike `expanded`, which is pruned by
-        // worktree `dir_name` in `set_worktrees`) — reset it explicitly so a Default entry
-        // expanded in one project doesn't render pre-expanded in another (feature 010).
-        self.default_expanded = false;
-        // Feature 014 (FR-010e): same reasoning as `default_expanded` directly above — view state
-        // switched on for one project must not render in another. Deliberately unlike
-        // `sidebar_filters`, which survives a switch: the filter accordion is collapsed by
-        // default, so a sticky reveal would show unexplained agent rows with its cause out of
-        // sight. Nothing is remembered per project, so switching back does not restore it.
-        self.show_agent_worktrees = false;
+        // worktree `dir_name` in `set_worktrees`), and feature 014's reveal of agent worktrees
+        // (FR-010e) is remembered nowhere — both would otherwise render in a project that never
+        // asked for them. Pushed *after* the commit above, because the order is load-bearing: the
+        // outgoing session's Default row is folded into the user's set and then reset, and a drain
+        // that applied these in the other order would leave it open in the new project.
+        outcomes.push(crate::features::Outcome::ProjectEntered);
         self.arm_notice(&key); // STEP 4
+        outcomes
     }
 
     /// The session to display when entering `key`, and why: the session this project was left on
@@ -408,7 +424,7 @@ impl Registered for ConfirmSessionRemoveDialog {
 ///
 /// Making a session the displayed session puts the user in front of a terminal, so it holds the
 /// keyboard (FR-011).
-pub fn started(state: &mut State, session: Session) {
+pub fn started(state: &mut State, session: Session) -> Vec<crate::features::Outcome> {
     let id = session.id;
     let location = session.location.clone();
     if let Some(path) = state.workspace.active.clone() {
@@ -419,16 +435,10 @@ pub fn started(state: &mut State, session: Session) {
             .or_default()
             .push(session);
     }
-    match location {
-        SessionLocation::Worktree(dir) => {
-            state.expanded.insert(dir);
-        }
-        SessionLocation::Default => {
-            state.default_expanded = true;
-        }
-    }
-    state.set_current_session(Some(id));
+    let mut outcomes = vec![crate::features::Outcome::LocationOpened(location)];
+    outcomes.extend(state.set_current_session(Some(id)));
     state.focus_terminal();
+    outcomes
 }
 
 /// A session row was clicked (feature 024, contract §3.0).
@@ -517,7 +527,7 @@ pub fn shell_instance_exited(state: &mut State, session_id: SessionId, shell_id:
 /// (FR-001c). Nothing is armed — no session is current to scroll to, and FR-001a forbids moving
 /// the panel when the user closes the session they were on. Nothing needs clearing alongside it:
 /// with no displayed session `terminal_focused()` is already false (FR-012/FR-016).
-pub fn close_requested(state: &mut State, id: SessionId) {
+pub fn close_requested(state: &mut State, id: SessionId) -> Vec<crate::features::Outcome> {
     if let Some(path) = state.workspace.active.clone() {
         if let Some(list) = state.workspace.sessions.get_mut(&path) {
             if let Some(session) = list.iter_mut().find(|s| s.id == id) {
@@ -526,8 +536,9 @@ pub fn close_requested(state: &mut State, id: SessionId) {
         }
     }
     if state.active_session == Some(id) {
-        state.set_current_session(None);
+        return state.set_current_session(None);
     }
+    Vec::new()
 }
 
 /// A session's right-click menu was toggled (bugfix BUG-003).
@@ -563,18 +574,21 @@ pub fn remove_requested(state: &mut State, id: SessionId) {
 /// location to find — so clearing the pointer *after* dropping the record collapses the row and
 /// takes its siblings out of view. The close path is not exposed to this, archiving leaving the
 /// record in place.
-pub fn remove_confirmed(state: &mut State) {
+pub fn remove_confirmed(state: &mut State) -> Vec<crate::features::Outcome> {
     let Some(id) = state.session_remove_target.take() else {
-        return;
+        return Vec::new();
     };
-    if state.active_session == Some(id) {
-        state.set_current_session(None);
-    }
+    let outcomes = if state.active_session == Some(id) {
+        state.set_current_session(None)
+    } else {
+        Vec::new()
+    };
     if let Some(path) = state.workspace.active.clone() {
         if let Some(list) = state.workspace.sessions.get_mut(&path) {
             list.retain(|s| s.id != id);
         }
     }
+    outcomes
 }
 
 /// The removal confirmation was dismissed.
@@ -601,13 +615,16 @@ pub fn context_menu_closed(state: &mut State) {
 /// The pointer is cleared before the records are dropped, for the reason `remove_confirmed`
 /// records at length: feature 024 resolves the outgoing session's location by looking it up, and a
 /// record already removed has no location to find.
-pub fn closed(state: &mut State, ids: &[SessionId]) {
-    if state.active_session.is_some_and(|id| ids.contains(&id)) {
-        state.set_current_session(None);
-    }
+pub fn closed(state: &mut State, ids: &[SessionId]) -> Vec<crate::features::Outcome> {
+    let outcomes = if state.active_session.is_some_and(|id| ids.contains(&id)) {
+        state.set_current_session(None)
+    } else {
+        Vec::new()
+    };
     for list in state.workspace.sessions.values_mut() {
         list.retain(|s| !ids.contains(&s.id));
     }
+    outcomes
 }
 
 impl State {
