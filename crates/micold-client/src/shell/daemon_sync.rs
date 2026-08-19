@@ -298,7 +298,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
     if sync_worktrees {
         if let Some(active) = core.workspace.active.clone() {
             if let Some(project) = snapshot.projects.iter().find(|p| p.path == active) {
-                core.set_worktrees(
+                let outcomes = core.set_worktrees(
                     project
                         .worktrees
                         .iter()
@@ -316,6 +316,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                         .collect(),
                 );
                 // Mirror display-name overrides from the catalog (a second window sees a rename).
+                micold_client::app::drain(outcomes, |o| micold_client::app::interpret(core, o));
                 let names: std::collections::BTreeMap<String, String> = project
                     .worktrees
                     .iter()

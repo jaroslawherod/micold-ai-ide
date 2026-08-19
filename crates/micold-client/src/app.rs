@@ -880,7 +880,12 @@ impl State {
             Message::ProjectOpenRefused(message) => {
                 crate::features::project::open_refused(self, message)
             }
-            Message::WorktreesLoaded(worktrees) => crate::features::worktree::loaded(self, worktrees),
+            Message::WorktreesLoaded(worktrees) => {
+                // The root is the only interpreter (FR-022, contract O3), and this is where the
+                // draining loop finally has something to drain.
+                let outcomes = crate::features::worktree::loaded(self, worktrees);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::WorktreeExpansionToggled(dir) => {
                 self.toggle_location(SessionLocation::Worktree(dir));
             }
@@ -1086,11 +1091,11 @@ impl State {
     /// 008). The single path used by both the `WorktreesLoaded` reducer and the binary's direct
     /// re-discovery, so a worktree removed in-app OR externally cannot leave stale expansion,
     /// hover, context-menu, delete-confirmation, or rename-override state behind.
-    pub fn set_worktrees(&mut self, worktrees: Vec<Worktree>) {
+    #[must_use = "the sidebar's expansion is pruned by draining this, not by `set_worktrees` (T066)"]
+    pub fn set_worktrees(&mut self, worktrees: Vec<Worktree>) -> Vec<crate::features::Outcome> {
         self.worktrees = worktrees;
         let names: BTreeSet<String> = self.worktrees.iter().map(|w| w.dir_name.clone()).collect();
 
-        self.expanded.retain(|d| names.contains(d));
         if self
             .worktree_menu_open
             .as_deref()
@@ -1120,6 +1125,9 @@ impl State {
                 map.retain(|dir, _| names.contains(dir));
             }
         }
+        // Everything above is worktree-owned. `expanded` is the sidebar's, so it is reported
+        // rather than pruned here (FR-020/FR-021, contract O2) — this is the write T066 converted.
+        vec![crate::features::Outcome::WorktreesReplaced(names)]
     }
 }
 
@@ -1161,6 +1169,9 @@ pub fn interpret(
         Outcome::SessionsClosed(ids) => crate::features::session::closed(state, &ids),
         Outcome::OverlayDismissed(id) => crate::overlay::registry::dismiss(state, id),
         Outcome::NotificationRaised(notification) => state.notify.push(notification),
+        Outcome::WorktreesReplaced(names) => {
+            crate::features::sidebar::worktrees_replaced(state, &names)
+        }
         Outcome::ClipboardWrite(_) => {}
     }
     Vec::new()

@@ -376,11 +376,10 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // The contract already names this one: `NotificationRaised`, listed under "emitted by: any
     // feature". Same as `session::arm_notice` above, reached from the project side.
     ("project", "notify", "features/project.rs::open_refused"),
-    // --- via `State::set_worktrees`, a root helper (T067) ----------------------------------------
-    // Discovery answering with a new worktree list prunes the sidebar's expansion of rows that no
-    // longer exist (feature 008). A genuine consequence rather than a helper accident: the sidebar
-    // has to respond to worktrees disappearing, and `WorktreesReplaced` is the outcome shape.
-    ("worktree", "expanded", "features/worktree.rs::loaded"),
+    // (T066 converted `worktree::loaded` -> `expanded`, the entry that used to sit here. It is the
+    // first conversion of this feature and the proof the mechanism works end to end: `set_worktrees`
+    // now returns `Outcome::WorktreesReplaced` and the sidebar prunes its own expansion. The
+    // remaining entries are what T067 catalogues and T067a burns down.)
     // --- the form creates; the worktree feature owns the list (T067) ------------------------------
     // `worktree_form` is a separate feature precisely because its lifecycle is independent
     // (FR-003), but the thing it creates lands in `worktree`'s list and its failures land in

@@ -125,7 +125,9 @@ fn switching_opens_the_row_holding_the_session_you_land_on() {
     let mut st = two_projects_with_worktrees();
 
     assert!(st.switch_active(Path::new("/b")));
-    st.set_worktrees(b_worktrees());
+    micold_client::app::drain(st.set_worktrees(b_worktrees()), |o| {
+        micold_client::app::interpret(&mut st, o)
+    });
 
     assert!(
         st.location_open(&SessionLocation::Worktree("wb".to_string())),
@@ -146,7 +148,9 @@ fn the_reveal_survives_a_worktree_list_that_arrives_after_the_switch() {
         "before the list arrives the location is not yet known, and nothing is opened on a guess"
     );
 
-    st.set_worktrees(b_worktrees());
+    micold_client::app::drain(st.set_worktrees(b_worktrees()), |o| {
+        micold_client::app::interpret(&mut st, o)
+    });
 
     assert!(
         st.location_open(&SessionLocation::Worktree("wb".to_string())),
@@ -162,7 +166,9 @@ fn view_state_does_not_carry_from_the_project_you_left() {
     st.expanded.insert("wa1".to_string());
 
     assert!(st.switch_active(Path::new("/b")));
-    st.set_worktrees(b_worktrees());
+    micold_client::app::drain(st.set_worktrees(b_worktrees()), |o| {
+        micold_client::app::interpret(&mut st, o)
+    });
 
     assert!(
         !st.expanded.contains("wa1"),
@@ -205,7 +211,9 @@ fn switching_to_a_project_with_no_session_reveals_nothing() {
     st.active_session = Some(st.workspace.sessions[Path::new("/a")][0].id);
 
     assert!(st.switch_active(Path::new("/b")));
-    st.set_worktrees(b_worktrees());
+    micold_client::app::drain(st.set_worktrees(b_worktrees()), |o| {
+        micold_client::app::interpret(&mut st, o)
+    });
 
     assert!(st.active_session.is_none());
     assert!(

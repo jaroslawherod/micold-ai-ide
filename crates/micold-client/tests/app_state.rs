@@ -262,13 +262,16 @@ fn session_started_selected_and_closed() {
     // session is started *from* its row. Feature 024 made this matter: a row is opened for the
     // current session only when the panel knows the location (FR-013), where the old expansion
     // write happened whether the location existed or not.
-    state.set_worktrees(vec![Worktree {
-        dir_name: "feat-x".to_string(),
-        path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
-        branch: Some("feat/x".to_string()),
-        status: WorktreeStatus::Valid,
-        included: false,
-    }]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![Worktree {
+            dir_name: "feat-x".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
+            branch: Some("feat/x".to_string()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
 
     let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     let id = session.id;
@@ -1569,13 +1572,16 @@ fn collapsing_the_revealed_row_closes_it_and_it_stays_closed() {
          a different session is not swallowed by it (invariant I2)"
     );
 
-    state.set_worktrees(vec![Worktree {
-        dir_name: "feat-a".to_string(),
-        path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
-        branch: Some("feat/feat-a".to_string()),
-        status: WorktreeStatus::Valid,
-        included: false,
-    }]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![Worktree {
+            dir_name: "feat-a".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+            branch: Some("feat/feat-a".to_string()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
     assert!(
         !state.location_open(&location),
         "and a worktree re-discovery does not undo it — the case a one-shot implementation gets \
@@ -1792,7 +1798,9 @@ fn a_reveal_waits_for_the_worktree_list_rather_than_scrolling_to_a_stale_row() {
     let mut state = state_with_many_worktrees(30);
     state.sidebar_viewport_height = 400;
     // The switch has happened but discovery has not reported yet: the panel knows of no locations.
-    state.set_worktrees(Vec::new());
+    micold_client::app::drain(state.set_worktrees(Vec::new()), |o| {
+        micold_client::app::interpret(&mut state, o)
+    });
 
     assert!(
         !state.current_session_is_listed(),
@@ -1811,22 +1819,25 @@ fn a_reveal_waits_for_the_worktree_list_rather_than_scrolling_to_a_stale_row() {
 #[test]
 fn starting_a_session_reveals_it() {
     let mut state = state_with_current_session_in("feat-a");
-    state.set_worktrees(vec![
-        Worktree {
-            dir_name: "feat-a".to_string(),
-            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
-            branch: Some("feat/feat-a".to_string()),
-            status: WorktreeStatus::Valid,
-            included: false,
-        },
-        Worktree {
-            dir_name: "feat-b".to_string(),
-            path: PathBuf::from("/repo/.claude/worktrees/feat-b"),
-            branch: Some("feat/feat-b".to_string()),
-            status: WorktreeStatus::Valid,
-            included: false,
-        },
-    ]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![
+            Worktree {
+                dir_name: "feat-a".to_string(),
+                path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+                branch: Some("feat/feat-a".to_string()),
+                status: WorktreeStatus::Valid,
+                included: false,
+            },
+            Worktree {
+                dir_name: "feat-b".to_string(),
+                path: PathBuf::from("/repo/.claude/worktrees/feat-b"),
+                branch: Some("feat/feat-b".to_string()),
+                status: WorktreeStatus::Valid,
+                included: false,
+            },
+        ]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
     state.pending_reveal_scroll = false;
 
     let started = Session::start_new(SessionLocation::Worktree("feat-b".to_string()));
@@ -2020,7 +2031,9 @@ fn a_memory_whose_worktree_is_gone_is_still_restored() {
     let path = state.workspace.active.clone().unwrap();
     // Deleted outside the application: the worktree is gone from discovery, but the session's
     // record survives in the project's state file.
-    state.set_worktrees(Vec::new());
+    micold_client::app::drain(state.set_worktrees(Vec::new()), |o| {
+        micold_client::app::interpret(&mut state, o)
+    });
     state.expanded.insert("kept-open".to_string());
 
     state.set_current_session(state.explain_foreground(&path).session());

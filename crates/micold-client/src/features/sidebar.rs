@@ -597,3 +597,12 @@ pub fn toggled(state: &mut State) {
 pub fn drag_moved(state: &mut State, x: u16) {
     state.sidebar_width = x.clamp(crate::app::SIDEBAR_MIN_WIDTH, crate::app::SIDEBAR_MAX_WIDTH);
 }
+
+/// The worktree list was replaced; drop expansion for rows that no longer exist (T066).
+///
+/// The sidebar's answer to `Outcome::WorktreesReplaced`. Pruning this used to happen inside
+/// `State::set_worktrees`, which is how the worktree feature came to write sidebar data — the
+/// first entry converted out of `tests/feature_write_isolation.rs`'s allowlist.
+pub fn worktrees_replaced(state: &mut State, names: &std::collections::BTreeSet<String>) {
+    state.expanded.retain(|dir| names.contains(dir));
+}

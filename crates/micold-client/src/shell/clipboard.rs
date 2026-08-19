@@ -38,7 +38,8 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         // variant is a compile error in this file, which is where it would need an arm.
         Outcome::SessionsClosed(_)
         | Outcome::OverlayDismissed(_)
-        | Outcome::NotificationRaised(_) => Task::none(),
+        | Outcome::NotificationRaised(_)
+        | Outcome::WorktreesReplaced(_) => Task::none(),
     }
 }
 

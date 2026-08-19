@@ -182,9 +182,9 @@ impl Registered for RenameWorktreeDialog {
 }
 
 /// Discovery answered with the current worktree list (feature 005, FR-018).
-pub fn loaded(state: &mut State, worktrees: Vec<Worktree>) {
+pub fn loaded(state: &mut State, worktrees: Vec<Worktree>) -> Vec<crate::features::Outcome> {
     state.worktree_error = None;
-    state.set_worktrees(worktrees);
+    state.set_worktrees(worktrees)
 }
 
 /// A worktree's right-click menu was toggled (feature 008).

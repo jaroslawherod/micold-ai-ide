@@ -319,7 +319,9 @@ fn filter_recomputes_after_delete(/* FR-028 / C1 */) {
         .filter(|w| w.dir_name != "fix-crash")
         .cloned()
         .collect();
-    state.set_worktrees(surviving);
+    micold_client::app::drain(state.set_worktrees(surviving), |o| {
+        micold_client::app::interpret(&mut state, o)
+    });
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
         vec!["fix-def-9-thing"]
@@ -698,10 +700,13 @@ fn no_other_location_is_opened_on_the_users_behalf() {
 fn replacing_the_worktree_list_does_not_close_the_current_sessions_row() {
     let mut state = state_with_current_session();
 
-    state.set_worktrees(vec![
-        worktree("feat-a", WorktreeStatus::Valid),
-        worktree("feat-c", WorktreeStatus::Valid),
-    ]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![
+            worktree("feat-a", WorktreeStatus::Valid),
+            worktree("feat-c", WorktreeStatus::Valid),
+        ]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
 
     let feat_a = state
         .worktree_tree()
@@ -719,7 +724,10 @@ fn replacing_the_worktree_list_does_not_close_the_current_sessions_row() {
 fn a_current_session_whose_worktree_is_gone_opens_nothing() {
     let mut state = state_with_current_session();
 
-    state.set_worktrees(vec![worktree("feat-b", WorktreeStatus::Valid)]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![worktree("feat-b", WorktreeStatus::Valid)]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
 
     assert!(
         state.worktree_tree().into_iter().all(|n| !n.expanded),

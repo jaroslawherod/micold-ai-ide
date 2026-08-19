@@ -352,13 +352,16 @@ fn default_entry_stays_visible_with_an_active_tag_filter() {
 fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
     let mut state = state_with_active();
     let path = state.workspace.active.clone().unwrap();
-    state.set_worktrees(vec![Worktree {
-        dir_name: "feat-a".to_string(),
-        path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
-        branch: Some("feat/feat-a".to_string()),
-        status: WorktreeStatus::Valid,
-        included: false,
-    }]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![Worktree {
+            dir_name: "feat-a".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+            branch: Some("feat/feat-a".to_string()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
     let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
@@ -370,22 +373,25 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
     );
 
     // A worktree created elsewhere, reported by a fresh discovery: the whole list is replaced.
-    state.set_worktrees(vec![
-        Worktree {
-            dir_name: "feat-a".to_string(),
-            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
-            branch: Some("feat/feat-a".to_string()),
-            status: WorktreeStatus::Valid,
-            included: false,
-        },
-        Worktree {
-            dir_name: "feat-new".to_string(),
-            path: PathBuf::from("/repo/.claude/worktrees/feat-new"),
-            branch: Some("feat/feat-new".to_string()),
-            status: WorktreeStatus::Valid,
-            included: false,
-        },
-    ]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![
+            Worktree {
+                dir_name: "feat-a".to_string(),
+                path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+                branch: Some("feat/feat-a".to_string()),
+                status: WorktreeStatus::Valid,
+                included: false,
+            },
+            Worktree {
+                dir_name: "feat-new".to_string(),
+                path: PathBuf::from("/repo/.claude/worktrees/feat-new"),
+                branch: Some("feat/feat-new".to_string()),
+                status: WorktreeStatus::Valid,
+                included: false,
+            },
+        ]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
 
     assert!(
         state.location_open(&location),

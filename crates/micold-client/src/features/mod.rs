@@ -58,6 +58,13 @@ pub enum Outcome {
     /// to none of them. Carries the queue's own `Notification` rather than the banner's
     /// `NoticeLevel`, so the translation stays where `State::push_notification` already put it.
     NotificationRaised(micold_core::notify::Notification),
+    /// Discovery replaced the worktree list; these `dir_name`s are what survived (T066).
+    ///
+    /// **The first outcome anything actually emits**, and the one that gave `app::drain` its first
+    /// caller. The worktree feature owns the list and prunes its own state when it changes; the
+    /// sidebar's expansion set is not its to prune, so it reports what survived and the root routes
+    /// that to `sidebar::worktrees_replaced`.
+    WorktreesReplaced(std::collections::BTreeSet<String>),
 }
 
 pub mod connection;
