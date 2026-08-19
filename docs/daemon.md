@@ -273,8 +273,13 @@ login session ends, the daemon included. Making sessions survive a logout is:
 
 - **Supported on Linux**, via one explicit, user-enabled setting (below). It is **never turned on for
   you** — not by installation, not silently.
-- **Not supported on macOS or Windows.** There is no unprivileged equivalent, so the app does not
-  pretend to offer one. On those platforms sessions survive closing the window but not logging out.
+- **Not supported on macOS or Windows** *for a service running directly on your computer*. There is
+  no unprivileged equivalent, so the app does not pretend to offer one. On those platforms sessions
+  survive closing the window but not logging out.
+- **Supported everywhere when the service runs in a container** — see
+  [Where the service runs](#where-the-service-runs-feature-027) below. Not a second mechanism
+  bolted on: it is the container runtime's own restart policy, and the runtime is a service the
+  platform already keeps running across logout and reboot.
 
 ### Enabling it (Linux)
 
@@ -304,6 +309,60 @@ enable them** — installation touches no per-user manager. The service is the s
 whether the user manager socket-activates it or a window spawns it directly, so nothing behaves
 differently based on how it started.
 
+## Where the service runs (feature 027)
+
+The daemon has a **placement**: where it runs. Until this feature there was only one, and it was
+assumed rather than described.
+
+| Placement | What it is | Reached over |
+|---|---|---|
+| **On this computer** (default) | A detached host process, spawned by the app on a cold start | A Unix socket or named pipe in a `0700` directory |
+| **In a container** | A container on this machine, seeing only your registered projects | Loopback TCP, authenticated by a shared secret |
+| *Remote* | Reserved. Not selectable in this release | — |
+
+The third row is why the model exists as a model. Adding the variant now costs one `match` arm per
+site and forces every placement-dependent decision to be *stated*; adding it later would mean finding
+every place the host process was assumed by omission.
+
+### Why the container is not reached over a socket
+
+A bind-mounted Unix socket does not survive Docker Desktop's file sharing on macOS or Windows — that
+layer passes file *contents*, not socket semantics. Socket-only would therefore mean Linux-only. So
+the sandbox listens on loopback TCP, which every platform forwards the same way.
+
+That transport carries none of the protection a `0700` directory gives: any local process can connect
+to a loopback port. What replaces it is a shared secret, generated per sandbox start, written `0600`
+and bind-mounted read-only into the container. The guarantee moves from "you cannot reach it" to "you
+cannot answer for it", and the filesystem permission is still what enforces it. This is why the wire
+protocol moved to version 6.
+
+### The lifecycle
+
+Enabling the sandbox does not start it on the spot; the next launch does. From then on each start
+runs: **probe** the runtime → **acquire** the image → **adopt or create** the container → **start**
+it → connect.
+
+The adopt step matters more than it looks. A sandbox outlives the app by design, so on almost every
+start there is already a container with our name. It is reused if it is ours, started if it is ours
+and stopped, and **replaced** if it was built from a different image or a different source tree —
+replaced rather than accumulated beside, because a second container would leave the first holding the
+control port and the state directory.
+
+### What it does not do
+
+It never falls back. A sandbox that will not start is an error with a cause and a remedy, and running
+without it is a choice the user makes for that occurrence — never a substitution the app performs
+because the alternative was easier. If the app ever silently connected to a host process after a
+sandbox failed, the feature would be gone and nothing would report it.
+
+### State
+
+The service's data directory — `projects.json`, per-project state, logs — is mounted from your own
+data directory rather than kept inside a runtime-managed volume. Two reasons: the app has to read the
+registered project list *before* the sandbox exists in order to know what to mount, and your data
+stays somewhere you can see and back up.
+
 ---
 
-*This document covers the daemon feature end to end (User Stories 1–7).*
+*This document covers the daemon feature end to end (User Stories 1–7), plus feature 027's placement
+model.*

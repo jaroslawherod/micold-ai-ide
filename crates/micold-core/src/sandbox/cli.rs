@@ -253,6 +253,19 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
         parse::container(&out.stdout)
     }
 
+    fn find(&self, name: &str) -> Result<Option<ContainerFacts>, RuntimeError> {
+        match self.run(&["inspect", name, "--format", "{{json .}}"]) {
+            Ok(out) => parse::container(&out.stdout).map(Some),
+            // "No such container" is the answer, not a failure.
+            Err(RuntimeError::Unknown { stderr })
+                if stderr.to_ascii_lowercase().contains("no such") =>
+            {
+                Ok(None)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     fn logs(&self, id: &ContainerId, lines: usize) -> Result<Vec<String>, RuntimeError> {
         let n = lines.to_string();
         let out = self.run(&["logs", "--tail", &n, &id.0])?;

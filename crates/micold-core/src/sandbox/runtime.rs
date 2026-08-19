@@ -218,6 +218,12 @@ pub trait ContainerRuntime {
     /// What the container is doing now.
     fn inspect(&self, id: &ContainerId) -> Result<ContainerFacts, RuntimeError>;
 
+    /// The container carrying `name`, if there is one.
+    ///
+    /// Distinct from [`Self::inspect`] because "is one already there?" has a negative answer, and
+    /// a sandbox outliving the application means that question is asked on almost every start.
+    fn find(&self, name: &str) -> Result<Option<ContainerFacts>, RuntimeError>;
+
     /// The daemon's own diagnostics from inside the sandbox (US6 scenario 6).
     fn logs(&self, id: &ContainerId, lines: usize) -> Result<Vec<String>, RuntimeError>;
 }

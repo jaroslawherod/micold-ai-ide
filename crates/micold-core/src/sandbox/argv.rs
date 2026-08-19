@@ -93,6 +93,11 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
         args.push(format!("127.0.0.1:{port}:{port}").into());
     }
 
+    // `HOME`, so a shared `~/.gitconfig` is found where git looks for it. Without this the
+    // container's uid has no passwd entry, `HOME` is unset, and the opt-in silently does nothing.
+    args.push("-e".into());
+    args.push(format!("HOME={}", spec.home.display()).into());
+
     args.extend(budget_args(spec, caps));
     args.extend(mount_args(&spec.mounts));
 
@@ -218,6 +223,7 @@ mod tests {
             control_port: 7727,
             published_ports: Vec::new(),
             network_name: "micold-net".into(),
+            home: PathBuf::from("/home/u"),
         }
     }
 

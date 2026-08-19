@@ -1,4 +1,5 @@
-//! Linux logout survival via systemd user linger (US7, FR-038).
+//! Logout survival: systemd user linger on Linux, the runtime's restart policy in a sandbox
+//! (US7, FR-038; feature 027 FR-014a/b).
 //!
 //! Surviving a full logout — not just closing the window — is **Linux-only** and MUST NEVER be
 //! enabled silently (FR-038). This is the in-session enable path the GUI offers on request. It needs
@@ -12,8 +13,22 @@
 //! session-scoped daemon → enable+start the socket unit, which re-activates a fresh daemon inside the
 //! now-lingering user manager. Failure is *detected*, never assumed — hardened deployments can refuse
 //! self-linger via polkit (research R3.5).
+//!
+//! # The sandbox raises the bar (feature 027, FR-014b)
+//!
+//! "Linux-only" is a property of the *host-process* mechanism, not of the promise. A container
+//! runtime's restart policy is implemented by a service the platform already keeps running across
+//! logout and reboot — on all three platforms — so the sandboxed placement can offer on macOS and
+//! Windows what a detached host process cannot. The setting keeps one name and one meaning; only
+//! the mechanism behind it differs by placement, which is the shape this module already had.
+//!
+//! Nothing is *done* here for a sandbox: the policy is applied when the container is created
+//! (`--restart unless-stopped`, see `sandbox::argv`). What [`enable_for`] does is report the truth
+//! about a sandbox that already exists — which, when the user has only just enabled the setting,
+//! is that it takes effect on the sandbox's next start.
 
 use crate::endpoint::Endpoint;
+use crate::sandbox::placement::Placement;
 
 /// The result of an [`enable`] attempt, with a user-facing explanation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +40,12 @@ pub enum SurvivalOutcome {
     Unsupported,
     /// A required step failed (linger refused by policy, no `systemd --user`, …). Carries the detail.
     Failed(String),
+    /// The sandbox will honour it, from its next start (feature 027, FR-014a/b).
+    ///
+    /// Its own variant rather than a [`Self::Failed`] with an explanatory string: nothing failed,
+    /// and telling the user something failed when the answer is "restart the sandbox" sends them
+    /// looking for a problem that is not there.
+    PendingSandboxRestart,
 }
 
 impl SurvivalOutcome {
@@ -34,8 +55,12 @@ impl SurvivalOutcome {
             SurvivalOutcome::Enabled => "Sessions will now survive logout on this machine — the \
                  session service runs under your lingering user manager."
                 .to_string(),
-            SurvivalOutcome::Unsupported => "Surviving logout isn't supported on this platform — \
-                 it's a Linux-only feature. Sessions still survive closing the window."
+            SurvivalOutcome::Unsupported => "Surviving logout isn't supported for a service \
+                 running directly on this platform — that's Linux-only. Sessions still survive \
+                 closing the window, and running the service in a container supports it here."
+                .to_string(),
+            SurvivalOutcome::PendingSandboxRestart => "Sessions will survive logout once the \
+                 sandbox restarts — its restart policy is set when the container is created."
                 .to_string(),
             SurvivalOutcome::Failed(detail) => {
                 format!("Couldn't enable logout survival: {detail}")
@@ -80,6 +105,29 @@ pub fn enable(_endpoint: &Endpoint) -> SurvivalOutcome {
     SurvivalOutcome::Unsupported
 }
 
+/// Enable logout survival for a resolved placement (feature 027, FR-014a/b).
+///
+/// Pure for the sandbox, and blocking for the host process — which is the asymmetry the two
+/// mechanisms actually have. A sandbox's survival is a property of the container that already
+/// exists; there is nothing to run, only something to report.
+pub fn enable_for(placement: &Placement, endpoint: &Endpoint) -> SurvivalOutcome {
+    match placement {
+        Placement::HostProcess => enable(endpoint),
+        Placement::LocalSandbox(profile) => {
+            if profile.survive_logout {
+                // The container was created with `--restart unless-stopped`, by a runtime service
+                // the platform keeps running across logout and reboot. On all three platforms.
+                SurvivalOutcome::Enabled
+            } else {
+                SurvivalOutcome::PendingSandboxRestart
+            }
+        }
+        // A remote daemon's survival is the remote host's business, and this release cannot build
+        // that placement anyway (FR-003a).
+        Placement::Remote(_) => SurvivalOutcome::Unsupported,
+    }
+}
+
 /// Run `program args...`, mapping a non-zero exit or a spawn error to `Err(detail)` with the
 /// program's own stderr preserved where there is one.
 #[cfg(target_os = "linux")]
@@ -121,6 +169,55 @@ mod tests {
         assert!(SurvivalOutcome::Failed("polkit denied".into())
             .user_message()
             .contains("polkit denied"));
+    }
+
+    fn endpoint() -> Endpoint {
+        Endpoint {
+            socket_path: std::path::PathBuf::from("/tmp/x.sock"),
+            lock_path: std::path::PathBuf::from("/tmp/x.lock"),
+        }
+    }
+
+    /// FR-014b, the bar the spec raises deliberately: the sandboxed placement offers survival on
+    /// **every** platform, where the host-process mechanism manages it only on Linux.
+    #[test]
+    fn a_sandbox_with_survival_on_is_enabled_on_every_platform() {
+        use crate::sandbox::placement::PlacementKind;
+        use crate::sandbox::SandboxProfile;
+
+        let profile = SandboxProfile {
+            survive_logout: true,
+            ..SandboxProfile::default()
+        };
+        let placement = Placement::resolve(PlacementKind::LocalSandbox, &profile);
+        // No `cfg` on this assertion, on purpose: it must hold on Linux, macOS and Windows alike,
+        // and a platform-gated version of it would let the promise quietly become Linux-only again.
+        assert_eq!(
+            enable_for(&placement, &endpoint()),
+            SurvivalOutcome::Enabled
+        );
+    }
+
+    #[test]
+    fn a_sandbox_with_survival_off_reports_a_pending_restart_not_a_failure() {
+        use crate::sandbox::placement::PlacementKind;
+        use crate::sandbox::SandboxProfile;
+
+        let placement = Placement::resolve(PlacementKind::LocalSandbox, &SandboxProfile::default());
+        let outcome = enable_for(&placement, &endpoint());
+        assert_eq!(outcome, SurvivalOutcome::PendingSandboxRestart);
+        // Nothing failed. Saying it did sends the user looking for a problem that is not there.
+        assert!(!matches!(outcome, SurvivalOutcome::Failed(_)));
+        assert!(outcome.user_message().contains("restarts"));
+    }
+
+    #[test]
+    fn the_unsupported_message_points_at_the_placement_that_does_support_it() {
+        // The old message said "it's a Linux-only feature", which stopped being true when the
+        // sandbox arrived. It is the *host-process mechanism* that is Linux-only.
+        let message = SurvivalOutcome::Unsupported.user_message();
+        assert!(message.contains("directly on this platform"));
+        assert!(message.contains("container"));
     }
 
     #[cfg(not(target_os = "linux"))]

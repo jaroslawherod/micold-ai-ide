@@ -14,6 +14,7 @@
 //! can produce, and `lifecycle_never_falls_back_on_its_own` asserts it as a property of the graph.
 
 use super::image::ImageSource;
+use super::parse::ContainerFacts;
 use super::placement::ConsentedFallback;
 use super::runtime::{
     ContainerId, ContainerRuntime, Progress, RuntimeCapabilities, RuntimeError, UnsatisfiableLimit,
@@ -127,6 +128,108 @@ pub struct Started {
     pub unsatisfiable: Vec<UnsatisfiableLimit>,
 }
 
+/// What to do about a container that already carries our name (US6 scenario 5, FR-024d).
+///
+/// A sandbox outlives the application by design, so on almost every start there is one already
+/// there. The question is whether it is *ours* — the same image, from the same build — because a
+/// container left over from a previous or mismatched version looks identical from the outside and
+/// misbehaves from the inside.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Adoption {
+    /// Nothing there; create one.
+    Create,
+    /// Ours and running. Use it: this is the ordinary case, and re-creating it would end every
+    /// session the user left running.
+    Attach(ContainerId),
+    /// Ours but stopped. Start it — the state is intact, only the process is gone.
+    Start(ContainerId),
+    /// Not ours. Replace it, naming why.
+    ///
+    /// Replace rather than *accumulate beside*: a second container under a different name would
+    /// leave the first holding the control port and the state directory, and the user with two
+    /// sandboxes and no way to tell which is which.
+    Replace {
+        id: ContainerId,
+        reason: StaleReason,
+    },
+}
+
+/// Why an existing container is not ours.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StaleReason {
+    /// Built from a different image than the profile now names — the user changed the image
+    /// setting, or upgraded the application.
+    DifferentImage { found: String, expected: String },
+    /// Same image reference, different build. Only meaningful for a locally built image, where the
+    /// container and the client came from one working tree and have no business disagreeing
+    /// (research R8).
+    StaleBuild {
+        found: Option<String>,
+        expected: String,
+    },
+}
+
+impl StaleReason {
+    /// One sentence, for the log and for the diagnostics the user can ask for.
+    pub fn describe(&self) -> String {
+        match self {
+            StaleReason::DifferentImage { found, expected } => format!(
+                "the existing sandbox was built from `{found}`, not `{expected}`"
+            ),
+            StaleReason::StaleBuild { found, expected } => format!(
+                "the existing sandbox was built from a different source tree ({} rather than {expected})",
+                found.as_deref().unwrap_or("an unlabelled build")
+            ),
+        }
+    }
+}
+
+/// Decide what to do about whatever is already using our container name.
+///
+/// Pure: it takes the facts and returns the decision, so every branch is testable without a
+/// runtime — including the ones that are awkward to arrange with one (an image that changed under
+/// a running container, a build with no fingerprint at all).
+pub fn adopt(
+    existing: Option<&ContainerFacts>,
+    expected_image: &str,
+    expected_fingerprint: &str,
+    strict_fingerprint: bool,
+) -> Adoption {
+    let Some(facts) = existing else {
+        return Adoption::Create;
+    };
+    let id = ContainerId(facts.id.clone());
+
+    if facts.image != expected_image {
+        return Adoption::Replace {
+            id,
+            reason: StaleReason::DifferentImage {
+                found: facts.image.clone(),
+                expected: expected_image.to_string(),
+            },
+        };
+    }
+
+    // The fingerprint is only decisive for a locally built image. A released client and a released
+    // daemon are built separately and legitimately differ, so comparing them here would replace a
+    // perfectly good sandbox on every normal start.
+    if strict_fingerprint && facts.fingerprint.as_deref() != Some(expected_fingerprint) {
+        return Adoption::Replace {
+            id,
+            reason: StaleReason::StaleBuild {
+                found: facts.fingerprint.clone(),
+                expected: expected_fingerprint.to_string(),
+            },
+        };
+    }
+
+    if facts.running {
+        Adoption::Attach(id)
+    } else {
+        Adoption::Start(id)
+    }
+}
+
 /// Bring the sandbox up, reporting each state as it is entered.
 ///
 /// `spec_for` builds the spec once the capabilities are known, because reconciliation needs them:
@@ -135,6 +238,7 @@ pub fn bring_up<R, F>(
     runtime: &R,
     profile: &SandboxProfile,
     mounts: &MountSet,
+    expected_fingerprint: &str,
     spec_for: F,
     observe: &mut dyn FnMut(SandboxState),
 ) -> Result<Started, Failure>
@@ -158,14 +262,42 @@ where
         spec.mounts, *mounts,
         "the spec must carry the mount set it was built for"
     );
-    let id = runtime.create(&spec).map_err(|error| Failure {
+
+    // A sandbox outlives the application by design, so on almost every start there is already one
+    // carrying our name. Whether it is *ours* is what `adopt` decides — and getting this wrong in
+    // the direction of "always create" would end every session the user left running, on every
+    // launch (US6 scenario 5).
+    let existing = runtime.find(&spec.name).map_err(|error| Failure {
         stage: Stage::Creating,
         error,
     })?;
-    runtime.start(&id).map_err(|error| Failure {
-        stage: Stage::Starting,
-        error,
-    })?;
+    let decision = adopt(
+        existing.as_ref(),
+        &profile.image.reference,
+        expected_fingerprint,
+        profile.image.refuses_fingerprint_mismatch(),
+    );
+
+    let id = match decision {
+        Adoption::Attach(id) => id,
+        Adoption::Start(id) => {
+            runtime.start(&id).map_err(|error| Failure {
+                stage: Stage::Starting,
+                error,
+            })?;
+            id
+        }
+        Adoption::Create => create_and_start(runtime, &spec)?,
+        Adoption::Replace { id, .. } => {
+            // Replace, never accumulate beside: a second container under another name would leave
+            // the first holding the control port and the state directory.
+            runtime.remove(&id).map_err(|error| Failure {
+                stage: Stage::Creating,
+                error,
+            })?;
+            create_and_start(runtime, &spec)?
+        }
+    };
 
     observe(SandboxState::Running(id.clone()));
     Ok(Started {
@@ -173,6 +305,21 @@ where
         capabilities,
         unsatisfiable,
     })
+}
+
+fn create_and_start<R: ContainerRuntime>(
+    runtime: &R,
+    spec: &SandboxSpec,
+) -> Result<ContainerId, Failure> {
+    let id = runtime.create(spec).map_err(|error| Failure {
+        stage: Stage::Creating,
+        error,
+    })?;
+    runtime.start(&id).map_err(|error| Failure {
+        stage: Stage::Starting,
+        error,
+    })?;
+    Ok(id)
 }
 
 fn acquire<R: ContainerRuntime>(
@@ -305,5 +452,96 @@ mod tests {
         // background settings change into an outage, which is the opposite of what the daemon is
         // for.
         assert!(SandboxState::Stale(ContainerId("x".into())).accepts_sessions());
+    }
+}
+
+#[cfg(test)]
+mod adoption_tests {
+    use super::*;
+    use crate::sandbox::parse::ContainerFacts;
+
+    fn facts(image: &str, fingerprint: Option<&str>, running: bool) -> ContainerFacts {
+        ContainerFacts {
+            id: "9f2b".to_string(),
+            running,
+            image: image.to_string(),
+            fingerprint: fingerprint.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn nothing_there_means_create_one() {
+        assert_eq!(
+            adopt(None, "micold-daemon:0.27.0", "abc", false),
+            Adoption::Create
+        );
+    }
+
+    #[test]
+    fn our_running_sandbox_is_attached_to_not_recreated() {
+        // The ordinary case, and the important one: re-creating here would end every session the
+        // user left running, on every launch.
+        let f = facts("micold-daemon:0.27.0", Some("abc"), true);
+        assert_eq!(
+            adopt(Some(&f), "micold-daemon:0.27.0", "abc", false),
+            Adoption::Attach(ContainerId("9f2b".into()))
+        );
+    }
+
+    #[test]
+    fn our_stopped_sandbox_is_started_not_replaced() {
+        // The state is intact; only the process is gone. Replacing it would be a data loss dressed
+        // up as a recovery.
+        let f = facts("micold-daemon:0.27.0", Some("abc"), false);
+        assert_eq!(
+            adopt(Some(&f), "micold-daemon:0.27.0", "abc", false),
+            Adoption::Start(ContainerId("9f2b".into()))
+        );
+    }
+
+    #[test]
+    fn a_different_image_is_replaced_with_the_reason_named() {
+        let f = facts("micold-daemon:0.26.0", Some("abc"), true);
+        match adopt(Some(&f), "micold-daemon:0.27.0", "abc", false) {
+            Adoption::Replace { reason, .. } => {
+                let text = reason.describe();
+                assert!(text.contains("0.26.0"), "{text}");
+                assert!(text.contains("0.27.0"), "{text}");
+            }
+            other => panic!("expected Replace, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_stale_build_is_replaced_only_under_the_strict_policy() {
+        // Research R8's asymmetry, at the container level this time. A released client and daemon
+        // legitimately differ, so a non-strict comparison must leave a working sandbox alone.
+        let f = facts("micold-daemon:dev", Some("old"), true);
+
+        assert_eq!(
+            adopt(Some(&f), "micold-daemon:dev", "new", false),
+            Adoption::Attach(ContainerId("9f2b".into())),
+            "a released image must not be replaced over a fingerprint difference"
+        );
+
+        match adopt(Some(&f), "micold-daemon:dev", "new", true) {
+            Adoption::Replace { reason, .. } => {
+                assert!(reason.describe().contains("source tree"));
+            }
+            other => panic!("expected Replace, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_container_with_no_fingerprint_at_all_is_stale_under_the_strict_policy() {
+        // An image built before the label existed. Under the strict policy that is exactly as
+        // untrustworthy as a wrong one, and saying so is what makes `mise run image` reliable.
+        let f = facts("micold-daemon:dev", None, true);
+        match adopt(Some(&f), "micold-daemon:dev", "new", true) {
+            Adoption::Replace { reason, .. } => {
+                assert!(reason.describe().contains("unlabelled"));
+            }
+            other => panic!("expected Replace, got {other:?}"),
+        }
     }
 }

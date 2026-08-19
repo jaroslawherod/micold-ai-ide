@@ -39,6 +39,48 @@ pub fn daemon_build() -> String {
     format!("micold-daemon {}", env!("CARGO_PKG_VERSION"))
 }
 
+/// The environment variable naming the address a containerised daemon listens on (feature 027).
+///
+/// Set by the image, not by the client: the *container* is what knows it is a container. A daemon
+/// started on the host never sees it and takes the socket path it always did.
+pub const LISTEN_ADDR_ENV: &str = "MICOLD_LISTEN_ADDR";
+
+/// The address to listen on, when this daemon is containerised.
+fn tcp_listen_addr() -> Option<String> {
+    std::env::var(LISTEN_ADDR_ENV)
+        .ok()
+        .filter(|v| !v.is_empty())
+}
+
+/// Serve over loopback TCP (feature 027).
+///
+/// Binds `0.0.0.0` **inside the container**, which sounds alarming and is not: the container's
+/// network is a user-defined bridge, and the only way in from outside is the port the runtime
+/// publishes to `127.0.0.1` on the host. Binding the container's loopback instead would make the
+/// published port unreachable, because the runtime forwards to the container's bridge address.
+///
+/// What actually guards this listener is the shared secret — see `protocol::auth`. That is not a
+/// second line of defence; on this transport it is the only one.
+async fn serve_tcp(state: Arc<DaemonState>, addr: &str) -> io::Result<()> {
+    let listener = tokio::net::TcpListener::bind(addr).await.inspect_err(|e| {
+        tracing::error!(addr = %addr, error = %e, "failed to bind the sandbox listener");
+    })?;
+    tracing::info!(addr = %addr, "listening (sandboxed)");
+
+    loop {
+        let (conn, _peer) = listener.accept().await?;
+        // Terminal traffic is small and latency-sensitive; Nagle would coalesce a keystroke with
+        // whatever came next and show up to the user as input lag.
+        let _ = conn.set_nodelay(true);
+        let state = Arc::clone(&state);
+        tokio::spawn(async move {
+            if let Err(e) = serve_connection(state, conn).await {
+                tracing::warn!(error = %e, "connection ended with an error");
+            }
+        });
+    }
+}
+
 /// Adopt the authentication token, if this daemon was started with one (feature 027, research R1).
 ///
 /// The path comes from the environment because the container is what supplies it: the runtime
@@ -126,6 +168,15 @@ pub async fn run() -> io::Result<()> {
         Err(e) => {
             tracing::warn!(error = %e, "could not bind the activity-hook receiver; activity will be Unknown");
         }
+    }
+
+    // Feature 027: inside a container there is no socket to bind and no host to share one with —
+    // the client reaches us over loopback TCP, published from the container (research R1). Checked
+    // before socket activation and before the endpoint, because in this placement neither exists:
+    // `endpoint::resolve()` would try to create a directory under a home the container has no
+    // business having, and fail with a permission error that says nothing about the real cause.
+    if let Some(addr) = tcp_listen_addr() {
+        return serve_tcp(state, &addr).await;
     }
 
     // systemd socket activation (Linux, opportunistic — MUST NOT be required; protocol.md §2).

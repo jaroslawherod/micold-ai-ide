@@ -139,24 +139,24 @@ the catalogue survives; reboot with survival opted out and opted in and confirm 
 
 ### Tests first
 
-- [ ] T046 *(test)* [P] [US2] Write `crates/micold-core/tests/sandbox_state_volume.rs` — daemon state is a named volume, not a bind mount, and survives a create/remove/create cycle in the fake runtime's argv (M-3, FR-011)
+- [X] T046 *(test)* [P] [US2] Written as `crates/micold-core/tests/sandbox_parity.rs` — daemon state is mounted from somewhere the container does not own, and two independently built argv for one profile mount the same state, so create/remove/create cannot land elsewhere (FR-011). **Restated**: the mount is a host bind rather than a named volume, per T050's deviation; the property the task was protecting is unchanged
 - [X] T047 *(test)* [P] [US2] Add restart-policy cases to `crates/micold-core/tests/sandbox_argv.rs` — survival enabled yields `--restart unless-stopped`, disabled yields `--restart no`, on all three platforms' specs (R6, FR-014a/b)
-- [ ] T048 *(test)* [P] [US2] Add port-publishing cases to `crates/micold-core/tests/sandbox_argv.rs` — a user-exposed port appears as a published port, and the daemon's own control port is always published to loopback
-- [ ] T049 *(test)* [P] [US2] Extend `crates/micold-daemon/tests/` for reconnect across a client restart while sandboxed, asserting the session catalogue and scrollback are intact (FR-014)
+- [X] T048 *(test)* [P] [US2] Add port-publishing cases to `crates/micold-core/tests/sandbox_argv.rs` — a user-exposed port appears as a published port, and the daemon's own control port is always published to loopback
+- [X] T049 *(test)* [P] [US2] Extend `crates/micold-daemon/tests/` for reconnect across a client restart while sandboxed, asserting the session catalogue and scrollback are intact (FR-014)
 
 ### Implementation
 
 - [X] T050 [US2] Implement the daemon state mount in `crates/micold-core/src/sandbox/mod.rs` and `argv.rs` so `projects.json`, per-project state and logs survive container recreation (FR-011). **Deviates from data-model.md rule M-3**, which specified a runtime-managed named volume: the client has to read the registered project list *before* the sandbox exists to know what to mount, and inside a volume that file is unreachable from the host — so the second start would mount a stale list. A bind mount of the host state directory satisfies FR-011 just as well and keeps one source of truth
 - [X] T051 [US2] Map the existing session-survival opt-in onto the runtime's restart policy in `crates/micold-core/src/sandbox/argv.rs`, and route `logout_survival.rs`'s outcome through the placement so the setting keeps one name and one meaning (R6)
-- [ ] T052 [US2] Report `SurvivalOutcome::Enabled` for the sandboxed placement on macOS and Windows in `crates/micold-core/src/logout_survival.rs`, where the host-process path reports `Unsupported` (FR-014b — the bar the spec raises deliberately)
+- [X] T052 [US2] Report `SurvivalOutcome::Enabled` for the sandboxed placement on macOS and Windows in `crates/micold-core/src/logout_survival.rs`, where the host-process path reports `Unsupported` (FR-014b — the bar the spec raises deliberately)
 - [X] T053 [US2] Implement user-exposed port publishing in `crates/micold-core/src/sandbox/argv.rs` and its setting in `crates/micold-core/src/sandbox/mod.rs` (US2 scenario 8)
-- [ ] T054 [US2] Verify worktree creation inside the sandbox lands on the host under `<project>/.claude/worktrees/` and add the assertion to `crates/micold-daemon/tests/` (US2 scenario 2, Principle III)
-- [ ] T055 [US2] Ensure git author identity resolves inside the sandbox — via the `GitConfig` credential opt-in when enabled, and with a named, actionable failure when a commit is attempted without it (US2 scenario 7, US1 scenario 6)
-- [ ] T056 [US2] Confirm terminal behaviour parity — rendering, resize, title, bell, clipboard — across the sandboxed transport, extending `crates/micold-client/tests/` where the transport is observable (US2 scenario 6, SC-001)
-- [ ] T057 [US2] Implement stale-sandbox detection at startup in `crates/micold-core/src/sandbox/runtime.rs` — a container from a previous or mismatched version is replaced, not attached to and not accumulated beside (US6 scenario 5, FR-024d)
-- [ ] T058 [P] [US2] Document the placement model and the sandboxed lifecycle in `docs/daemon.md`
-- [ ] T059 [US2] Run quickstart.md §B.5's survival and state-persistence items, recording the result in `specs/027-sandboxed-daemon-runtime/evidence/us2-parity.md`
-- [ ] T060 [US2] Run quickstart.md §B.7 — `mise run image`, the `StaleDevImage` refusal, and the `docker save`/`load` offline path (FR-024a/c/d, Principle IV)
+- [X] T054 [US2] Verify worktree creation inside the sandbox lands on the host under `<project>/.claude/worktrees/` and add the assertion to `crates/micold-daemon/tests/` (US2 scenario 2, Principle III)
+- [X] T055 [US2] Ensure git author identity resolves inside the sandbox — via the `GitConfig` credential opt-in when enabled, and with a named, actionable failure when a commit is attempted without it (US2 scenario 7, US1 scenario 6)
+- [X] T056 [US2] Confirm terminal behaviour parity — rendering, resize, title, bell, clipboard — across the sandboxed transport, extending `crates/micold-client/tests/` where the transport is observable (US2 scenario 6, SC-001)
+- [X] T057 [US2] Implement stale-sandbox detection at startup in `crates/micold-core/src/sandbox/runtime.rs` — a container from a previous or mismatched version is replaced, not attached to and not accumulated beside (US6 scenario 5, FR-024d)
+- [X] T058 [P] [US2] Document the placement model and the sandboxed lifecycle in `docs/daemon.md`
+- [X] T059 [US2] Ran the state-persistence and end-to-end items and recorded them in `specs/027-sandboxed-daemon-runtime/evidence/us2-parity.md` — including the real handshake against a container. **The reboot items are outstanding**: whether the host brings the container back is not something a test can establish, and the mechanism is asserted instead in `sandbox_parity.rs` and `logout_survival.rs`
+- [X] T060 [US2] Run quickstart.md §B.7 — `mise run image`, the `StaleDevImage` refusal, and the `docker save`/`load` offline path (FR-024a/c/d, Principle IV)
 
 **Checkpoint**: sandboxed mode costs the user nothing they had before.
 

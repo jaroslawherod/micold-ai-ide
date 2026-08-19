@@ -35,6 +35,8 @@ pub struct HostFacts {
     pub uid: u32,
     pub gid: u32,
     pub state_dir: PathBuf,
+    /// The host user's home, passed into the container as `HOME` — see `SandboxSpec::home`.
+    pub home: PathBuf,
     pub layout: CredentialLayout,
 }
 
@@ -55,6 +57,7 @@ impl HostFacts {
             gid,
             state_dir,
             layout: CredentialLayout::conventional(&home, ssh_auth_sock.as_deref()),
+            home,
         }
     }
 }
@@ -118,9 +121,20 @@ pub fn start(
         control_port: port,
         published_ports: Vec::new(),
         network_name: NETWORK_NAME.to_string(),
+        home: facts.home.clone(),
     };
 
-    let started = bring_up(&runtime, profile, &mounts, build_spec, observe)?;
+    // The fingerprint this client was built with. A sandbox whose container carries a different
+    // one came from another source tree, which only matters — and only refuses — for a locally
+    // built image (research R8).
+    let started = bring_up(
+        &runtime,
+        profile,
+        &mounts,
+        micold_core::protocol::version::BUILD_FINGERPRINT,
+        build_spec,
+        observe,
+    )?;
     Ok(Ready { started })
 }
 

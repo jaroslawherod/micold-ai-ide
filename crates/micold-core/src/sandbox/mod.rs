@@ -329,9 +329,15 @@ impl ProjectMount {
     }
 }
 
-/// Where the daemon's state directory lives inside the container. Matches the `Containerfile`'s
-/// `MICOLD_STATE_DIR`.
-pub const STATE_CONTAINER_DIR: &str = "/var/lib/micold";
+/// Where the daemon's state directory appears inside the container.
+///
+/// Not an arbitrary path. The daemon resolves its own state directory through the platform's data
+/// directory convention — `$XDG_DATA_HOME/micold-ai-ide` on Linux — and the image sets
+/// `XDG_DATA_HOME=/var/lib`, so this is the path the daemon will look in *without being told*.
+/// That matters because the host client looks in its own data directory for the same
+/// `projects.json`: if the two resolved to different files, the client would mount a project list
+/// the daemon never updates.
+pub const STATE_CONTAINER_DIR: &str = "/var/lib/micold-ai-ide";
 
 /// The daemon's state directory, bind-mounted from the host.
 ///
@@ -549,6 +555,55 @@ pub struct SandboxSpec {
     /// The user-defined network the sandbox joins. With [`NetworkPosture::NoOutbound`] this network
     /// is created with IP masquerade disabled (research R4).
     pub network_name: String,
+    /// The host user's home directory, passed in as `HOME`.
+    ///
+    /// Required, not optional. The container runs as a uid with no `/etc/passwd` entry, so without
+    /// it `HOME` is unset and every tool that reads a dotfile looks in `/` — including git, which
+    /// would then ignore a `~/.gitconfig` the user explicitly shared. Identical-path mounting is
+    /// what makes passing the *host's* home correct rather than a fiction: the shared credential is
+    /// mounted at exactly that path (research R2).
+    pub home: PathBuf,
+}
+
+/// Why an operation inside the sandbox needs something the user has not shared (FR-004a).
+///
+/// The failure this exists to prevent is not the failure itself — a push without credentials is
+/// *supposed* to fail — but the failure being **unattributable**. Without this, a user who enabled
+/// the sandbox and then tried to push sees git's own authentication error and concludes their
+/// credentials are broken, when in fact they are simply not in the room (US1 scenario 6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MissingCredential {
+    /// What the operation needed.
+    pub share: CredentialShare,
+    /// What the user was trying to do, in their words, e.g. "commit".
+    pub operation: &'static str,
+}
+
+impl MissingCredential {
+    /// What the sandbox is missing for `operation`, given what the profile shares.
+    ///
+    /// `None` when the share is already on: then a failure is a real failure and belongs to git.
+    pub fn for_operation(
+        profile: &SandboxProfile,
+        operation: &'static str,
+        share: CredentialShare,
+    ) -> Option<Self> {
+        if profile.credentials.contains(&share) {
+            None
+        } else {
+            Some(Self { share, operation })
+        }
+    }
+
+    /// The message the app shows, naming the cause **and** the setting that fixes it (FR-034).
+    pub fn message(&self) -> String {
+        format!(
+            "The sandbox has no {} of yours, so {} could not complete. Share it under \
+             Settings → Session service if you want the sandbox to use it.",
+            self.share.label().to_lowercase(),
+            self.operation
+        )
+    }
 }
 
 #[cfg(test)]
@@ -622,6 +677,56 @@ mod tests {
             let json = serde_json::to_string(&share).unwrap();
             let back: CredentialShare = serde_json::from_str(&json).unwrap();
             assert_eq!(share, back);
+        }
+    }
+}
+
+#[cfg(test)]
+mod credential_attribution_tests {
+    use super::*;
+
+    #[test]
+    fn a_commit_without_a_shared_identity_is_attributed_to_the_sandbox() {
+        // US1 scenario 6 / US2 scenario 7. The failure is expected; being unable to explain it is
+        // not. A user who sees git's own authentication error concludes their credentials are
+        // broken, and goes looking in the wrong place.
+        let missing = MissingCredential::for_operation(
+            &SandboxProfile::default(),
+            "the commit",
+            CredentialShare::GitConfig,
+        )
+        .expect("nothing is shared by default");
+
+        let message = missing.message();
+        assert!(message.contains("sandbox"), "{message}");
+        assert!(message.contains("git configuration"), "{message}");
+        // FR-034: names the setting that fixes it, not just the problem.
+        assert!(message.contains("Settings"), "{message}");
+    }
+
+    #[test]
+    fn a_shared_credential_produces_no_attribution() {
+        // With the opt-in on, a failure is a real failure and belongs to git. Claiming the sandbox
+        // caused it would send the user to the wrong place just as surely.
+        let profile = SandboxProfile {
+            credentials: BTreeSet::from([CredentialShare::GitConfig]),
+            ..SandboxProfile::default()
+        };
+        assert_eq!(
+            MissingCredential::for_operation(&profile, "the commit", CredentialShare::GitConfig),
+            None
+        );
+    }
+
+    #[test]
+    fn every_share_produces_a_distinct_message() {
+        // A catalogue where two of them read the same is a catalogue that does not help.
+        let mut seen = std::collections::BTreeSet::new();
+        for share in CredentialShare::ALL {
+            let m = MissingCredential::for_operation(&SandboxProfile::default(), "the push", share)
+                .unwrap()
+                .message();
+            assert!(seen.insert(m.clone()), "duplicate message: {m}");
         }
     }
 }
