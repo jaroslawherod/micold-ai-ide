@@ -13,9 +13,9 @@
 //! eroded.
 
 use micold_client::features::sidebar::{
-    current_session_row, effective_open, matches_filters, row_heights, scroll_target,
-    worktree_location_label, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
-    DEFAULT_LOCATION_LABEL,
+    current_session_row, effective_open, filters_from_env_value, matches_filters, row_heights,
+    scroll_target, worktree_location_label, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
+    DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
 };
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::session::{Session, SessionLocation};
@@ -363,4 +363,72 @@ fn the_current_sessions_row_is_found_by_walking_the_rows_as_drawn() {
         None,
         "and with no current session there is no row to scroll to (FR-013)"
     );
+}
+
+
+// --- the §B5 test hook (MICOLD_SIDEBAR_FILTER) ------------------------------------------------
+//
+// Parsing only. What the value is *applied to* is `Message::SidebarFilterToggled`, which the rest
+// of this file and `sidebar_state.rs` already cover — the hook deliberately owns no state of its
+// own, so that what a visual pass then photographs is the real filter.
+
+/// Absent, empty, or whitespace: the ordinary launch. This is the case every developer who has
+/// never heard of the hook is in, so it must not be a failure.
+#[test]
+fn no_value_means_no_filters() {
+    assert_eq!(filters_from_env_value(None), Ok(Vec::new()));
+    assert_eq!(filters_from_env_value(Some("")), Ok(Vec::new()));
+    assert_eq!(filters_from_env_value(Some("   ")), Ok(Vec::new()));
+}
+
+#[test]
+fn a_conventional_type_parses_to_its_filter() {
+    assert_eq!(
+        filters_from_env_value(Some("fix")),
+        Ok(vec![TagFilter::Type(ConventionalType::Fix)])
+    );
+}
+
+/// The two filters that are not types. `untyped` is the one §B5 step 4 leans on.
+#[test]
+fn issue_and_untyped_are_spelled_out() {
+    assert_eq!(
+        filters_from_env_value(Some("issue")),
+        Ok(vec![TagFilter::HasIssue])
+    );
+    assert_eq!(
+        filters_from_env_value(Some("untyped")),
+        Ok(vec![TagFilter::Untyped])
+    );
+}
+
+/// Several filters, in the order given, with whitespace tolerated — a command line is typed by
+/// hand, and `fix, docs` should not be a different value from `fix,docs`.
+#[test]
+fn a_list_parses_in_order() {
+    assert_eq!(
+        filters_from_env_value(Some(" fix , docs ,, issue ")),
+        Ok(vec![
+            TagFilter::Type(ConventionalType::Fix),
+            TagFilter::Type(ConventionalType::Docs),
+            TagFilter::HasIssue,
+        ])
+    );
+}
+
+/// A typo is refused, not ignored. An unfiltered panel that was *asked* to be filtered is the one
+/// outcome that would be recorded as evidence and be wrong.
+#[test]
+fn an_unknown_token_is_an_error_naming_itself_and_the_variable() {
+    let err = filters_from_env_value(Some("feature")).expect_err("expected a refusal");
+    assert!(err.contains(FILTER_ENV_VAR), "{err:?} does not name the variable");
+    assert!(err.contains("feature"), "{err:?} does not name the bad token");
+    assert!(err.contains("untyped"), "{err:?} does not state the grammar");
+}
+
+/// One bad token spoils the list: a half-applied filter is a state nobody asked for, and it would
+/// photograph as a successful pass of a filter that is not the one requested.
+#[test]
+fn a_bad_token_among_good_ones_refuses_the_whole_value() {
+    assert!(filters_from_env_value(Some("fix,nonsense,docs")).is_err());
 }

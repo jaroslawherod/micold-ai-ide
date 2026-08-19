@@ -88,6 +88,69 @@ pub enum TagFilter {
     Untyped,
 }
 
+/// The environment variable that pre-applies sidebar tag filters at launch.
+///
+/// A **test hook**, for the manual visual pass (quickstart §B5). The filter itself is a popover:
+/// it opens on a click and dismisses on any interaction elsewhere, including the pointer moving
+/// onto a row — which a screenshot harness cannot avoid, because it drives the pointer to reach
+/// anything at all. So §B5, the step that checks the current session's location survives a filter
+/// that excludes it, could not be run at all without this.
+///
+/// It sets the *same* state the popover sets, through the same message, so what the pass then
+/// observes is the real filter and not a second implementation of one.
+pub const FILTER_ENV_VAR: &str = "MICOLD_SIDEBAR_FILTER";
+
+impl TagFilter {
+    /// Parse one filter token: a conventional type (`feat`, `fix`, …), `issue`, or `untyped`.
+    pub fn from_token(token: &str) -> Option<Self> {
+        match token {
+            "issue" => Some(Self::HasIssue),
+            "untyped" => Some(Self::Untyped),
+            other => ConventionalType::from_token(other).map(Self::Type),
+        }
+    }
+}
+
+/// The filters named by [`FILTER_ENV_VAR`]'s value: a comma-separated list of tokens.
+///
+/// - `None`, empty, or all-whitespace → no filters, and the application starts normally.
+/// - `"fix"`, `"fix,docs"`, `"issue"`, `"untyped"` → those filters, in the order given.
+/// - anything else → `Err` naming the variable, the bad token, and the grammar.
+///
+/// A malformed value is an error rather than a silent "no filter", for the reason the frame probe
+/// gives for the same choice: someone who types `MICOLD_SIDEBAR_FILTER=feature` and gets an
+/// unfiltered list would conclude the hook is broken, and a typo mid-pass would record an
+/// unfiltered panel as evidence that filtering works.
+pub fn filters_from_env_value(raw: Option<&str>) -> Result<Vec<TagFilter>, String> {
+    let Some(raw) = raw else {
+        return Ok(Vec::new());
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut filters = Vec::new();
+    for token in trimmed.split(',') {
+        let token = token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let filter = TagFilter::from_token(token).ok_or_else(|| {
+            format!(
+                "{FILTER_ENV_VAR}: {token:?} is not a filter. Expected a comma-separated list of \
+                 conventional types ({}), `issue`, or `untyped`.",
+                ConventionalType::ALL
+                    .iter()
+                    .map(|t| t.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })?;
+        filters.push(filter);
+    }
+    Ok(filters)
+}
+
 /// Whether a worktree with `tags` passes the active `filters` (feature 008, FR-025). An empty
 /// filter set shows everything; otherwise a worktree matches if it satisfies ANY active filter
 /// (logical OR).
