@@ -24,8 +24,8 @@ use crate::icons::Icon;
 use crate::ui::material::style;
 use crate::ui::material::text::TypeRole;
 use iced::widget::text_input;
-use iced::{Element, Pixels};
-use micold_core::tokens::{spacing, Roles};
+use iced::Element;
+use micold_core::tokens::Roles;
 
 /// A single-line text field. Builder form (Principle VIII):
 /// `TextField::new("Project name", &draft.text, roles).on_input(Message::Changed).into()`.
@@ -67,7 +67,14 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
     }
 
     /// An icon inside the field's leading edge, saying what the field is for — Material's leading
-    /// icon slot. Decorative: it is drawn in the input's own icon slot and cannot be pressed.
+    /// icon slot. Decorative: it cannot be pressed.
+    ///
+    /// It goes into [`FormField`](super::FormField)'s own leading slot rather than into the input's
+    /// icon slot (BUG-003 item 1). An icon the input draws is one the *field* cannot see, and the
+    /// field is what positions the label — so the label stayed at the container's padding while the
+    /// value moved past the icon, and the two collided in every empty, unfocused search box. The
+    /// module docs of `filled_field` state the rule this restores: the input is the editing engine
+    /// and decides where nothing sits.
     pub fn leading_icon(mut self, icon: Icon) -> Self {
         self.leading_icon = Some(icon);
         self
@@ -158,15 +165,6 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
             .padding(0)
             .style(style::field_input(f.roles));
 
-        if let Some(icon) = f.leading_icon {
-            widget = widget.icon(text_input::Icon {
-                font: super::glyph::MATERIAL_SYMBOLS,
-                code_point: icon.glyph(),
-                size: Some(Pixels(TypeRole::Action.size())),
-                spacing: spacing::XS,
-                side: text_input::Side::Left,
-            });
-        }
         if let Some(on_input) = f.on_input {
             widget = widget.on_input(on_input);
         }
@@ -194,6 +192,13 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
             .populated(!f.value.is_empty());
         if let Some(on_focus_change) = f.on_focus_change {
             field = field.on_focus_change(on_focus_change);
+        }
+        // Tinted to match what the input's own icon slot used to draw it as (`style::field_input`),
+        // so moving it out of that slot changed where it sits and nothing else.
+        if let Some(icon) = f.leading_icon {
+            field = field.leading(
+                super::Glyph::new(icon, TypeRole::Action, f.roles).tint(f.roles.on_surface_variant),
+            );
         }
         if let Some((icon, message)) = f.trailing_action {
             field = field.trailing(super::IconButton::new(icon, f.roles).on_press(message));

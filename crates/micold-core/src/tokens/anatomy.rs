@@ -162,6 +162,15 @@ pub mod text_field {
     pub const INDICATOR_ACTIVE: f32 = 2.0;
     /// The select's trailing chevron.
     pub const TRAILING_ICON: f32 = 24.0;
+    /// The leading icon's slot — **fixed**, not the glyph's own advance (BUG-003 item 1).
+    ///
+    /// The same rule §7.2 states for a list row's leading icon, and for the same reason: a glyph's
+    /// advance is the face's business, and a column that followed it would put the label somewhere
+    /// different for every icon. `Icon::Search` measures 14dp where the role says 24.
+    pub const LEADING_ICON: f32 = 24.0;
+    /// Between that slot and everything after it — the value **and** the label, which start on the
+    /// same x for the same reason they do without an icon.
+    pub const LEADING_GAP: f32 = 16.0;
 }
 
 /// §7.8 — the snackbar. Fixed height: it is sized by its message, not by the density axis.
@@ -215,7 +224,7 @@ pub mod progress {
 /// it, which is the same shape as a figure nothing applies, one level further out.
 /// `tokens_anatomy::the_listed_table_holds_every_constant` now holds this against the module's own
 /// source, which is the only thing that can notice.
-pub const ALL: [(&str, f32); 45] = [
+pub const ALL: [(&str, f32); 47] = [
     ("app_bar::HEIGHT", app_bar::HEIGHT),
     ("app_bar::PADDING", app_bar::PADDING),
     (
@@ -257,6 +266,8 @@ pub const ALL: [(&str, f32); 45] = [
     ("text_field::INDICATOR", text_field::INDICATOR),
     ("text_field::INDICATOR_ACTIVE", text_field::INDICATOR_ACTIVE),
     ("text_field::TRAILING_ICON", text_field::TRAILING_ICON),
+    ("text_field::LEADING_ICON", text_field::LEADING_ICON),
+    ("text_field::LEADING_GAP", text_field::LEADING_GAP),
     ("tab::INDICATOR", tab::INDICATOR),
     ("snackbar::MIN_HEIGHT", snackbar::MIN_HEIGHT),
     ("snackbar::PADDING_H", snackbar::PADDING_H),
