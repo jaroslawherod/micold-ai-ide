@@ -609,3 +609,30 @@ pub fn closed(state: &mut State, ids: &[SessionId]) {
         list.retain(|s| !ids.contains(&s.id));
     }
 }
+
+impl State {
+    /// The user is being put in front of a terminal (FR-011, FR-021a, FR-008b).
+    ///
+    /// Clears the explicit release *and* any text-field focus. The second one matters: a press on
+    /// the pane, or a navigation that displays a terminal, is a request for that terminal, and it
+    /// must not be defeated by a field that still believes it holds the keyboard. Without it, a
+    /// press into the pane made while a rename field had focus would depend on iced's blur
+    /// arriving first. FR-018 permits taking the keyboard from a field for exactly this reason —
+    /// it is a user press.
+    ///
+    /// **Moved here from `app.rs` by T067a-7.** T059 recorded the open question — is this a session
+    /// operation sitting in the wrong file? — and left it for the burn-down to settle. It is: the
+    /// terminal is the session's pane, `terminal_released` is session-owned, and every caller is a
+    /// session operation. Leaving it in the root made five session reducers each look like they
+    /// wrote window state, when one function does.
+    pub(crate) fn focus_terminal(&mut self) {
+        self.terminal_released = false;
+        self.focused_field = None;
+    }
+
+    /// The user handed the keyboard back to the application (FR-021) — the reserved chord or the
+    /// release affordance. It holds until they give it back or navigate to a terminal.
+    pub(crate) fn release_terminal(&mut self) {
+        self.terminal_released = true;
+    }
+}

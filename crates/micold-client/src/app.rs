@@ -797,25 +797,6 @@ impl State {
                 .any(|open| open.id() != SurfaceId::new(Self::TERMINAL_CONTEXT_MENU))
     }
 
-    /// The user is being put in front of a terminal (FR-011, FR-021a, FR-008b).
-    ///
-    /// Clears the explicit release *and* any text-field focus. The second one matters: a press on
-    /// the pane, or a navigation that displays a terminal, is a request for that terminal, and it
-    /// must not be defeated by a field that still believes it holds the keyboard. Without it, a
-    /// press into the pane made while a rename field had focus would depend on iced's blur
-    /// arriving first. FR-018 permits taking the keyboard from a field for exactly this reason —
-    /// it is a user press.
-    pub(crate) fn focus_terminal(&mut self) {
-        self.terminal_released = false;
-        self.focused_field = None;
-    }
-
-    /// The user handed the keyboard back to the application (FR-021) — the reserved chord or the
-    /// release affordance. It holds until they give it back or navigate to a terminal.
-    pub(crate) fn release_terminal(&mut self) {
-        self.terminal_released = true;
-    }
-
     /// Apply a [`Message`], transitioning the state. Pure and side-effect free.
     pub fn update(&mut self, message: Message) {
         match message {

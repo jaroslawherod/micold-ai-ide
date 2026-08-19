@@ -167,16 +167,11 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "pending_reveal_scroll",
         "features/session.rs::set_current_session",
     ),
-    // Via `State::focus_terminal`, which is root code: it clears the focused field and marks the
-    // terminal held. **Whether this is a violation at all is a genuine question for T067** — the
-    // path is `root`-owned rather than another feature's, and the alternative reading is that
-    // `focus_terminal` is a session operation sitting in the wrong file. Recorded as found rather
-    // than resolved by the guard that found it.
-    (
-        "session",
-        "focused_field",
-        "features/session.rs::restore_after_activation",
-    ),
+    // (T059 recorded a row here — `restore_after_activation` writing `focused_field` via
+    // `State::focus_terminal` — and asked whether it was a violation at all, or whether
+    // `focus_terminal` was a session operation sitting in the wrong file. **T067a-7 answered: the
+    // wrong file.** The function moved into `features/session.rs` and this row, with five others,
+    // collapsed into the single `focus_terminal` entry below.)
     // Via `State::push_notification`. The contract already names the outcome for this one:
     // `NotificationRaised`, listed under "emitted by: any feature".
     ("session", "notify", "features/session.rs::arm_notice"),
@@ -257,29 +252,17 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "focused_field",
         "features/worktree_form.rs::opened",
     ),
-    // --- via `State::focus_terminal`, a root helper (T067) ---------------------------------------
+    // --- `session::focus_terminal` (T067a-7) -----------------------------------------------------
     // Putting a terminal in front of the user gives it the keyboard, which clears whatever field
-    // held it (FR-011). Same `window`-owned slot as the group above; the trigger differs, which is
-    // why they are listed apart rather than merged. T059 framed this one as "either root state is
-    // writable by anyone or `focus_terminal` is a session operation in the wrong file" — with
-    // `window` now owning the slot, only the second half is still open, and it is T067's.
+    // held it (FR-011). **This was five rows, plus the one above, until T067a-7 moved the function
+    // out of `app.rs`.** Converting first would have given six reducers an outcome apiece for a
+    // write none of them performs — the guard reported callers because the writer was root code it
+    // could not attribute. One function writes it; one row names it.
     (
         "session",
         "focused_field",
-        "features/session.rs::mode_toggled",
+        "features/session.rs::focus_terminal",
     ),
-    ("session", "focused_field", "features/session.rs::selected"),
-    (
-        "session",
-        "focused_field",
-        "features/session.rs::shell_instance_close_requested",
-    ),
-    (
-        "session",
-        "focused_field",
-        "features/session.rs::shell_instance_selected",
-    ),
-    ("session", "focused_field", "features/session.rs::started"),
     // --- the popover mutual-exclusion rule (features 009 and 015; T067) --------------------------
     // At most one lightweight popover is open, and the project context menu is exclusive with all
     // of them. It is **one rule about the toolbar** that no single feature owns, so each toggle
