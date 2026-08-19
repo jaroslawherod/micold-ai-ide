@@ -15,6 +15,7 @@ use crate::features::project::{ProjectMenu, RenameDraft, SwitcherEntry};
 use crate::features::session::SelectKind;
 use crate::features::settings::SettingsDraft;
 use crate::features::sidebar::TagFilter;
+use crate::features::window::FieldId;
 use crate::features::worktree::WorktreeRenameDraft;
 use crate::features::worktree_form::{BranchSource, WorktreeForm};
 use micold_core::naming::ConventionalType;
@@ -35,40 +36,6 @@ pub const SIDEBAR_MIN_WIDTH: u16 = 180;
 pub const SIDEBAR_MAX_WIDTH: u16 = 600;
 /// Default sidebar width in pixels, used until the user resizes it.
 pub const SIDEBAR_DEFAULT_WIDTH: u16 = 300;
-
-/// Which text field holds the keyboard, when one does (BUG-003).
-///
-/// A filled field's whole focus affordance — the label floating clear of the value, the active
-/// indicator thickening to the accent, the focus state layer (§7.7, FR-031, FR-035) — is decided
-/// when the field is *built*, from a flag its caller supplies. Nothing supplied it. The component
-/// honoured the flag, every anatomy gate proved it honoured the flag, and in the running
-/// application every field was drawn permanently at rest.
-///
-/// One enum for the whole application rather than a focus flag on each of the four drafts: at most
-/// one field can hold the keyboard, and this is the shape that says so. `Option<FieldId>` also makes "two fields focused at once" unrepresentable
-/// (Principle V), where four booleans would have needed a rule keeping them apart.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FieldId {
-    /// The rename-project dialog's name field.
-    RenameProjectName,
-    /// The rename-worktree dialog's name field.
-    RenameWorktreeName,
-    /// The add-worktree form's optional ticket field.
-    AddWorktreeTicket,
-    /// The add-worktree form's branch-name field.
-    AddWorktreeName,
-    /// Settings: the terminal scrollback limit.
-    SettingsScrollback,
-    /// The confirm-worktree-delete dialog's "also delete the branch" checkbox.
-    ConfirmDeleteAlsoBranch,
-    /// Settings: the environment-include on/off checkbox. Not a text field — the checkbox now
-    /// takes the keyboard too, and this is the same fact about the same dialog (BUG-003).
-    SettingsEnvIncludeEnabled,
-    /// Settings: the environment-include script path.
-    SettingsEnvIncludePath,
-    /// Settings: the environment-include timeout.
-    SettingsEnvIncludeTimeout,
-}
 
 /// Every user interaction that can change application state.
 ///
@@ -938,28 +905,17 @@ impl State {
             }
             Message::ProjectSelectorClosed => crate::features::project::selector_closed(self),
             Message::RenameStarted(path) => crate::features::project::rename_started(self, path),
-            // A blur is only believed from the field that currently holds focus. Gaining and losing
-            // are reported by two different widgets and arrive in whichever order the frame
-            // produced them, so an unguarded `None` on the way out of one field would erase the
-            // focus the next one had already claimed — and clicking straight from one field to
-            // another would leave both at rest.
             Message::FieldFocusChanged(field, focused) => {
-                if focused {
-                    self.focused_field = Some(field);
-                } else if self.focused_field == Some(field) {
-                    self.focused_field = None;
-                }
+                crate::features::window::field_focus_changed(self, field, focused)
             }
             Message::RenameTextChanged(text) => {
                 crate::features::project::rename_text_changed(self, text)
             }
             Message::RenameConfirmed => crate::features::project::rename_confirmed(self),
             Message::RenameCancelled => crate::features::project::rename_cancelled(self),
-            Message::CursorMoved { x, y } => {
-                self.cursor = (x, y);
-            }
+            Message::CursorMoved { x, y } => crate::features::window::cursor_moved(self, x, y),
             Message::WindowResized { width, height } => {
-                self.window_size = (width, height);
+                crate::features::window::resized(self, width, height)
             }
             Message::ProjectMenuToggled(path) => crate::features::project::menu_toggled(self, path),
             Message::ProjectMenuDismissed => crate::features::project::menu_dismissed(self),

@@ -2,8 +2,9 @@
 //! (FR-017, FR-020). Editing changes only the stored display name — never the folder on
 //! disk (FR-018).
 
-use crate::app::{FieldId, Message, State};
+use crate::app::{Message, State};
 use crate::features::project::RenameDraft;
+use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};

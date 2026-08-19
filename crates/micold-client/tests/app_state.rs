@@ -1,6 +1,7 @@
 //! T011 — extended app base state: defaults + new message wiring (feature 005).
 
-use micold_client::app::{on_escape, FieldId, Message, State};
+use micold_client::app::{on_escape, Message, State};
+use micold_client::features::window::FieldId;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 /// Asked of the registry, which reads each dialog's own state, so this is the same question about

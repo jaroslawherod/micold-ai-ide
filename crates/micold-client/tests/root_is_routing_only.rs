@@ -25,18 +25,17 @@
 //! feature adding one more decision to the root fails this test the day it lands, not at some
 //! review months later.
 //!
-//! # Why the floor is 3 and not 0
+//! # The floor is 0, and T063 is why
 //!
-//! `FieldFocusChanged`, `CursorMoved` and `WindowResized` write `focused_field`, `cursor` and
-//! `window_size` — the three fields `tests/feature_write_isolation.rs` attributes to `root`
-//! because no feature owns them. They are the window's own state: which text field holds the
-//! keyboard, where the pointer is, how big the window is. Every feature reads them; none is their
-//! home.
+//! T062 left this at 3: `FieldFocusChanged`, `CursorMoved` and `WindowResized` wrote `focused_field`,
+//! `cursor` and `window_size`, which no feature owned. That was recorded as an honest floor rather
+//! than a target, because moving them was not a matter of finding the right feature — it was a
+//! matter of deciding whether a *window* feature should exist.
 //!
-//! So moving them out is not a matter of finding the right feature — it is a matter of deciding
-//! whether a "window" or "shell" feature should exist, which is T063's call and not T062's. Until
-//! it is made, 3 is the honest floor, and this counter holds the root at exactly those three: a
-//! fourth decision fails the test whatever its excuse.
+//! T063 decided it should. `features/window.rs` owns those three fields and the `FieldId` type,
+//! and the count reaches 0. The reasoning is in that module's header; the short version is that a
+//! field the root still decides about is a feature nobody has named, and FR-001's own precedent —
+//! T031 creating `features/help.rs` for the homeless overflow menu — says to name it.
 //!
 //! # What this cannot see
 //!
@@ -53,10 +52,10 @@ use std::path::{Path, PathBuf};
 
 /// How many arms of the root reducer still decide something.
 ///
-/// **3: the root-owned window state named in this file's header.** Raising it means a feature put
-/// a rule back into the root, which is what FR-002 forbids. Lowering it means T063 gave those
-/// three a home, and the number should follow them down.
-const ROOT_DECISION_ARMS: usize = 3;
+/// **0. The root routes and decides nothing.** Any increase means a feature put a rule back into
+/// the root, which is exactly what FR-002 forbids and what this test exists to catch on the day it
+/// lands rather than at a review months later.
+const ROOT_DECISION_ARMS: usize = 0;
 
 fn app_rs() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app.rs")
@@ -302,9 +301,8 @@ fn the_root_reducer_decides_no_more_than_it_did() {
         ROOT_DECISION_ARMS,
         "the root reducer has {} arms that decide something; the recorded count is \
          {ROOT_DECISION_ARMS} (FR-002).\n\n\
-         Fewer: an arm moved into its feature — lower ROOT_DECISION_ARMS to match.\n\
-         More: a rule was added to the root instead of to a feature. That is what this test \
-         exists to catch.\n\n\
+         Fewer than 0 is impossible; more means a rule was added to the root instead of to a \
+         feature, which is what this test exists to catch.\n\n\
          Currently deciding:\n  {}",
         deciding.len(),
         deciding.join("\n  ")
@@ -317,9 +315,10 @@ fn the_root_reducer_decides_no_more_than_it_did() {
 /// Both halves matter. A scan that finds no arms reports the root as perfectly routed; a
 /// classifier nothing can satisfy makes the burn-down above unreachable.
 ///
-/// The `!routing.is_empty()` half was the load-bearing one while 93 of 110 arms decided; now that
-/// 3 do, it is the cheap half and the exact count above carries the other direction — a classifier
-/// that called everything routing would report 0 deciding arms and fail there.
+/// The `!routing.is_empty()` half was the load-bearing one while 93 of 110 arms decided. Now that
+/// none do, the exact count above can no longer catch a classifier that calls *everything* routing
+/// — 0 is the answer such a classifier and a correct one both give. That is what the arm total
+/// below is for: a scan that has stopped parsing reports 0 arms, not 110, and fails there.
 #[test]
 fn the_arm_scan_finds_the_reducer_it_is_meant_to_read() {
     let (routing, deciding) = classified();

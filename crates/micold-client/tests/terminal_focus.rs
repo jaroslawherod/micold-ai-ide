@@ -298,7 +298,8 @@ fn a_stopped_or_failed_session_that_is_current_is_still_marked() {
 // them, so what is tested is the answer rather than seven assignments agreeing.
 // See `specs/023-terminal-focus-flow/contracts/focus-model.md` (v2).
 
-use micold_client::app::{FieldId, Message};
+use micold_client::app::Message;
+use micold_client::features::window::FieldId;
 use micold_core::session::Session;
 
 /// A state showing one session's terminal, with nothing else claiming the keyboard.

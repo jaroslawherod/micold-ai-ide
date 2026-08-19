@@ -63,9 +63,9 @@ use std::path::{Path, PathBuf};
 
 /// Which feature owns each writable path of the shared state.
 ///
-/// `root` means no feature owns it: the pointer, the window and the single focus slot are facts
-/// about the application, and the root reducer is entitled to write them. Every other entry names
-/// a module under `src/features/`.
+/// Every entry names a module under `src/features/`. There is no `root` owner any more: the
+/// pointer, the window size and the focus slot were the last three, and T063 gave them
+/// `features/window.rs` rather than leaving the root entitled to decide about them (FR-002).
 const OWNERS: &[(&str, &str)] = &[
     // --- help ---------------------------------------------------------------------------------
     ("about_open", "help"),
@@ -125,12 +125,15 @@ const OWNERS: &[(&str, &str)] = &[
     ("settings_draft", "settings"),
     // --- notifications ------------------------------------------------------------------------
     ("notify", "notifications"),
-    // --- root ---------------------------------------------------------------------------------
-    // "one fact about the application, not four" — its own doc comment, explaining why the focused
-    // field is not held per dialog. No feature owns it.
-    ("focused_field", "root"),
-    ("cursor", "root"),
-    ("window_size", "root"),
+    // --- window -------------------------------------------------------------------------------
+    // T063 named these. They were `root` until T062 left three arms in the root reducer writing
+    // them and nothing else, at which point "no feature owns it" stopped being an answer: FR-002
+    // asks the root for routing only, so a field the root still decides about is a feature nobody
+    // has named. `focused_field`'s own doc — "one fact about the application, not four" — argues
+    // for a single owner; it does not argue that the owner must be the root.
+    ("focused_field", "window"),
+    ("cursor", "window"),
+    ("window_size", "window"),
 ];
 
 /// Cross-feature writes that exist today, each with the feature that performs it and the path it
@@ -215,10 +218,13 @@ const ALLOWED: &[(&str, &str, &str)] = &[
 
     // --- via `State::clear_for_dialog`, a root helper (T067) -------------------------------------
     // Opening a dialog clears the focus slot, because the widget tree that reported focus is being
-    // torn down and will never report losing it (feature 006 BUG-003). `focused_field` is
-    // `root`-owned, so **whether these are violations at all is the open question**, the same one
-    // `restore_after_activation` above raises: either the root grows an outcome for "a dialog
-    // opened", or `focused_field` stops being root-owned. Recorded as found, not resolved here.
+    // torn down and will never report losing it (feature 006 BUG-003).
+    //
+    // **T063 settled what these are.** While `focused_field` was `root`-owned the question was
+    // unanswerable — "is writing state nobody owns a violation?" — and T059 recorded it as open.
+    // Now `window` owns it, so these are ordinary cross-feature writes with a named owner, and
+    // T067 can propose the outcome it could not propose before: something like `DialogOpened`,
+    // applied by the root to the window feature.
     ("help", "focused_field", "features/help.rs::about_opened"),
     (
         "project",
@@ -253,8 +259,10 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     ),
     // --- via `State::focus_terminal`, a root helper (T067) ---------------------------------------
     // Putting a terminal in front of the user gives it the keyboard, which clears whatever field
-    // held it (FR-011). Same `root`-owned slot as the group above and the same open question; the
-    // trigger differs, which is why they are listed apart rather than merged.
+    // held it (FR-011). Same `window`-owned slot as the group above; the trigger differs, which is
+    // why they are listed apart rather than merged. T059 framed this one as "either root state is
+    // writable by anyone or `focus_terminal` is a session operation in the wrong file" — with
+    // `window` now owning the slot, only the second half is still open, and it is T067's.
     (
         "session",
         "focused_field",

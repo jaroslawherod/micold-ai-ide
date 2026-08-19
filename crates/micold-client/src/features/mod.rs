@@ -46,5 +46,6 @@ pub mod project;
 pub mod session;
 pub mod settings;
 pub mod sidebar;
+pub mod window;
 pub mod worktree;
 pub mod worktree_form;
