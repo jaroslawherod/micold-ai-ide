@@ -1354,6 +1354,13 @@ pub fn worktree_create_error_text(message: String, detail: Option<String>) -> St
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    // The wire/domain types the fixtures below build. They were in scope via the module's own
+    // imports until the fold moved to `micold_client::catalog_sync`; the production code here no
+    // longer names them, so the tests import them for themselves rather than the module carrying
+    // imports only its tests use.
+    use micold_client::app::State;
+    use micold_core::protocol::messages::WireLifecycle;
+    use micold_core::session::{SessionLabel, SessionLifecycle};
 
     // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
     // own stderr, e.g. naming which submodule failed and why) was destructured with `..` and

@@ -239,7 +239,6 @@ fn a_session_the_daemon_starts_reaches_the_clients_state_as_running() {
             .find(|s| s.id == sid)
             .expect("session")
             .lifecycle
-            .clone()
     };
 
     let mut core = State::default();
