@@ -69,7 +69,10 @@ out="$({{config_root}}/scripts/build-lock.sh --print-target-dir)/$target/release
 cp "$out" {{config_root}}/packaging/sandbox/micold-daemon
 trap 'rm -f {{config_root}}/packaging/sandbox/micold-daemon' EXIT
 
-"$runtime" build -t "${MICOLD_IMAGE_TAG:-micold-daemon:dev}" {{config_root}}/packaging/sandbox
+# `-f` is required: the file is a Containerfile, which podman finds by name and docker
+# does not -- docker looks for `Dockerfile` and fails with "no such file or directory".
+"$runtime" build -f {{config_root}}/packaging/sandbox/Containerfile \
+  -t "${MICOLD_IMAGE_TAG:-micold-daemon:dev}" {{config_root}}/packaging/sandbox
 echo "Built ${MICOLD_IMAGE_TAG:-micold-daemon:dev} -- select it in Settings > Daemon > Image."
 """
 

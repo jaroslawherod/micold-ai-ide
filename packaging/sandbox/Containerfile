@@ -29,6 +29,10 @@ ENV MICOLD_STATE_DIR=/var/lib/micold
 
 # Where the client's authentication token is mounted, read-only (research R1). The daemon reads it
 # at startup. It is a mount point, never a file baked into the image.
+#
+# `docker build` warns SecretsUsedInArgOrEnv here. It is a false positive: this is the *path* the
+# secret will be mounted at, and the secret itself never enters the image — that is the whole point
+# of delivering it through a bind mount rather than through the build or the command line.
 ENV MICOLD_TOKEN_PATH=/run/micold/token
 
 COPY micold-daemon /usr/local/bin/micold-daemon
