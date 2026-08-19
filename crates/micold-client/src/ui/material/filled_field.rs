@@ -258,19 +258,44 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
         let pad = anatomy::text_field::PADDING;
         let inner = (width - pad * 2.0).max(0.0);
 
-        // The adornments take their natural width at either end; what is left is the control's.
+        // The leading adornment takes a **fixed** slot, the trailing one its natural width at the
+        // far end; what is left is the control's.
         let mut nodes = Vec::with_capacity(4);
         let leading = self.children[0].as_widget_mut().layout(
             &mut tree.children[0],
             renderer,
-            &layout::Limits::new(Size::ZERO, Size::new(inner, VALUE_LINE)),
+            &layout::Limits::new(
+                Size::ZERO,
+                Size::new(anatomy::text_field::LEADING_ICON.min(inner), VALUE_LINE),
+            ),
         );
         let trailing = self.children[2].as_widget_mut().layout(
             &mut tree.children[2],
             renderer,
             &layout::Limits::new(Size::ZERO, Size::new(inner, VALUE_LINE)),
         );
-        let taken = leading.size().width + trailing.size().width;
+        // Everything after the leading slot starts on **one** x — the control and the label alike.
+        //
+        // This is BUG-003 item 1. The control was inset past the adornment and the label was pinned
+        // at `pad`, so a field with both a leading icon and a resting label drew the label
+        // underneath the icon — which is the state every search picker opens in. Two rules for one
+        // column is the defect; the fix is that there is now one.
+        //
+        // The slot is a fixed width rather than the glyph's advance (§7.2's rule, BUG-006's
+        // lesson): a column that followed the advance would land somewhere different for every
+        // icon, and no arithmetic after it could be right for all of them.
+        let leading_slot = if leading.size().width > 0.0 {
+            anatomy::text_field::LEADING_ICON
+        } else {
+            0.0
+        };
+        let indent = if leading_slot > 0.0 {
+            leading_slot + anatomy::text_field::LEADING_GAP
+        } else {
+            0.0
+        };
+        let content_x = pad + indent;
+        let taken = indent + trailing.size().width;
         let control_width = (inner - taken).max(0.0);
 
         let control = self.children[1]
@@ -284,7 +309,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
                 ),
             )
             .move_to((
-                pad + leading.size().width,
+                content_x,
                 if self.state.floating {
                     PAD_Y + LABEL_LINE
                 } else {
@@ -316,12 +341,22 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
             &layout::Limits::new(Size::ZERO, Size::new(inner, label_line)),
         );
         let label_y = band_center - label.size().height / 2.0;
-        let label = label.move_to((pad, label_y));
+        let label = label.move_to((content_x, label_y));
 
-        let trailing_w = trailing.size().width;
-        nodes.push(leading.move_to((pad, PAD_Y + LABEL_LINE)));
+        // The adornments are centred in the container, not pinned to the floating value's line.
+        // Material centres them, and the two positions differ by 8dp — which is the whole gap
+        // between a resting label and an icon that is supposed to sit on the same line as it.
+        let leading_size = leading.size();
+        let trailing_size = trailing.size();
+        nodes.push(leading.move_to((
+            pad + (leading_slot - leading_size.width).max(0.0) / 2.0,
+            (height - leading_size.height) / 2.0,
+        )));
         nodes.push(control);
-        nodes.push(trailing.move_to((width - pad - trailing_w, PAD_Y + LABEL_LINE)));
+        nodes.push(trailing.move_to((
+            width - pad - trailing_size.width,
+            (height - trailing_size.height) / 2.0,
+        )));
         nodes.push(label);
 
         layout::Node::with_children(Size::new(width, height), nodes)

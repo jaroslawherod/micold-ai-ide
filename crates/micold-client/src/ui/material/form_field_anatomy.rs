@@ -473,6 +473,97 @@ fn a_resting_label_and_the_control_share_one_line() {
     );
 }
 
+/// A leading adornment moves the **label** as well as the value (BUG-003 item 1).
+///
+/// Both start on one x, in either of the label's two positions. They did not: the control was inset
+/// past the adornment and the label was pinned at the container's padding, so a field with a
+/// leading icon and a resting label drew the label underneath the icon — the state a search picker
+/// opens in, and the state T063 photographed at 600% zoom.
+///
+/// Asserted as an equality and not merely as "clear of the icon", because the defect is that there
+/// were two rules for one column. A label that cleared the icon by its own separate arithmetic
+/// would satisfy the weaker check and drift again at the next glyph.
+#[test]
+fn a_leading_adornment_moves_the_label_and_the_value_together() {
+    let r = roles();
+    let glyph =
+        |r| super::Glyph::<Message>::new(crate::icons::Icon::Search, super::TypeRole::Action, r);
+
+    for (state, field) in [
+        (
+            "resting",
+            FormField::new(input(), r).label("Branch").leading(glyph(r)),
+        ),
+        (
+            "floating",
+            FormField::new(input(), r)
+                .label("Branch")
+                .populated(true)
+                .leading(glyph(r)),
+        ),
+    ] {
+        let s = slots(field.into(), 400.0);
+        let (leading, control, label) = (s[0], s[1], s[3]);
+        assert_eq!(
+            label.x, control.x,
+            "{state}: the label starts at {:.1}dp and the value at {:.1}dp — one column, two \
+             rules, which is the whole of the defect",
+            label.x, control.x
+        );
+        assert!(
+            label.x >= leading.x + leading.width,
+            "{state}: the label starts at {:.1}dp and the leading icon ends at {:.1}dp — they \
+             overlap",
+            label.x,
+            leading.x + leading.width
+        );
+        assert_eq!(
+            label.x,
+            anatomy::text_field::PADDING
+                + anatomy::text_field::LEADING_ICON
+                + anatomy::text_field::LEADING_GAP,
+            "{state}: the column is not padding + the fixed icon slot + the gap, so it follows the \
+             glyph's own advance and moves with whichever icon the field carries (§7.2, BUG-006)"
+        );
+    }
+}
+
+/// …and without one, nothing is indented (the other half — a slot that costs nothing when empty).
+#[test]
+fn no_leading_adornment_means_no_indent() {
+    let r = roles();
+    let s = slots(FormField::new(input(), r).label("Branch").into(), 400.0);
+    assert_eq!(s[3].x, anatomy::text_field::PADDING);
+    assert_eq!(s[1].x, anatomy::text_field::PADDING);
+}
+
+/// An adornment sits on the container's centre line, not on the floating value's (BUG-003 item 1).
+///
+/// Material centres both icons in the 56dp box. Pinned instead to the top of the value line, a
+/// leading icon sat 5dp below the resting label it is supposed to share a line with — so fixing the
+/// horizontal collision alone would have replaced it with a vertical one.
+#[test]
+fn an_adornment_sits_on_the_fields_centre_line() {
+    let r = roles();
+    let glyph =
+        |r| super::Glyph::<Message>::new(crate::icons::Icon::Search, super::TypeRole::Action, r);
+    let middle =
+        tokens::density::height(tokens::density::TEXT_FIELD_BASE, tokens::density::STANDARD) / 2.0;
+
+    for (which, field) in [
+        ("leading", FormField::new(input(), r).leading(glyph(r))),
+        ("trailing", FormField::new(input(), r).trailing(glyph(r))),
+    ] {
+        let s = slots(field.into(), 400.0);
+        let slot = if which == "leading" { s[0] } else { s[2] };
+        assert!(
+            (slot.center_y() - middle).abs() < 0.5,
+            "the {which} adornment is centred at {:.1}dp in a box whose middle is {middle}dp",
+            slot.center_y()
+        );
+    }
+}
+
 /// Focus tints the label as well as the indicator, and an error outranks focus (§7.7).
 ///
 /// A focused field recolours *both*; the version that moved only the indicator left the label in
