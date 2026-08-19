@@ -24,7 +24,7 @@ retires a group.
 |---|---|---|---|
 | A | `State::clear_for_dialog` — a dialog opening clears the focus slot and closes every popover | 8 | `DialogOpened` |
 | B | `State::focus_terminal` — a terminal taking the keyboard clears the focused field | 5 | `TerminalFocused` |
-| C | The popover mutual-exclusion rule (features 009, 015) | 12 | `PopoverOpened(SurfaceId)` |
+| C | The popover mutual-exclusion rule (features 009, 015) | 12 | **not uniform — see below** |
 | D | `Workspace::forget` — forgetting a project drops what three features hold against its path | 4 | `ProjectForgotten(PathBuf)` |
 | E | `State::push_notification` | 2 | `NotificationRaised` — **exists** (T065) |
 | F | The reveal: displaying a session opens the row holding it | 4 | `SessionRevealed(SessionId)` |
@@ -64,13 +64,32 @@ converting B, because the answer changes what the conversion looks like.
 `help::menu_toggled`, `project::menu_toggled`, `project::switcher_toggled`,
 `sidebar::filter_menu_toggled`, `worktree::menu_toggled`.
 
-At most one lightweight popover is open, and the project context menu is exclusive with all of
-them. **This is one fact about the toolbar that no single feature owns**, which is why each toggle
-writes its neighbours' openness by hand. The largest group and the cleanest win: one
-`PopoverOpened(SurfaceId)` applied by the root to every *other* registered popover retires all 12.
+**Correction (T067a-2 attempted this and stopped).** This section first claimed the rule was
+uniform — "one `PopoverOpened(SurfaceId)` applied by the root to every *other* registered popover
+retires all 12". **It is not uniform, and a frozen test proves it.** Reading the five toggles:
 
-`overlay::registry::close_popovers` already exists and does exactly this for the dialog path —
-these arms predate it. The conversion is closer to "use the thing that exists" than to new design.
+| Toggle | Closes |
+|---|---|
+| `help::menu_toggled` | switcher, sidebar filter, project menu |
+| `project::switcher_toggled` | help, sidebar filter, project menu |
+| `sidebar::filter_menu_toggled` | help, switcher, project menu |
+| `project::menu_toggled` | help, sidebar filter, **worktree menu** — *not* the switcher |
+| `worktree::menu_toggled` | **project menu only** |
+
+The project context menu is drawn from a row *inside* the open switcher panel, so the switcher
+stays open behind it — stated in `State::project_menu_open`'s own doc and pinned by
+`tests/switcher_forget_menu.rs::right_click_opens_the_menu_and_the_switcher_stays_open_behind_it`.
+A uniform "close every other popover" would fail that test, which is FR-027's freeze doing its job.
+
+So this is **two rules, not one**: the three *toolbar* popovers are mutually exclusive with each
+other; a *context menu* displaces the toolbar popovers and other context menus, with the
+switcher-behind-its-own-menu exception.
+
+**The shape is therefore a design decision, not a mechanical conversion.** The cleanest option is
+to put the exclusion in the registry beside `DismissalRules`, where a surface declares what it
+displaces — then `PopoverOpened(id)` asks the registry and the exception is data on a surface
+rather than a special case in the root. That changes the registry's vocabulary, which is more than
+a burn-down step should decide on its own. Left for an explicit call.
 
 ### D — `Workspace::forget` (4 writes)
 
@@ -125,7 +144,7 @@ land in `worktree`'s error slot. `WorktreeCreated(Worktree)` / `WorktreeCreateFa
 ## What T067a should do with this
 
 1. **E first** — the outcome exists, so it is a call-site change and proves the pipeline.
-2. **C next** — largest group, existing mechanism, no open questions.
+2. ~~**C next** — largest group, existing mechanism, no open questions.~~ **Wrong: C has an open question of its own**; see the correction in its section.
 3. **D, G** — clean causes, new variants, no ambiguity.
 4. **A** — needs `DialogOpened` designed, but T063 removed the blocker.
 5. **B and the `switch_active` singleton — decide the "wrong file?" question first.** Converting a
