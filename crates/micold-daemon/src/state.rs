@@ -47,6 +47,14 @@ pub struct DaemonState {
     /// signal. When present, `start_session` writes each AI-CLI session a `--settings` file pointing
     /// `claude`'s lifecycle hooks at it.
     hooks: std::sync::OnceLock<crate::hooks::HookReceiver>,
+    /// The shared secret this daemon requires of a client, if it was started with one (feature
+    /// 027, research R1).
+    ///
+    /// Set once at startup from the file named by `MICOLD_TOKEN_PATH`, which the container runtime
+    /// bind-mounts read-only. **Absent for the host-process placement**, whose `0700`-guarded
+    /// socket already proves the caller is the user — requiring a token there would break every
+    /// existing installation and protect nothing that is not already protected.
+    auth_token: std::sync::OnceLock<micold_core::protocol::auth::Token>,
 }
 
 struct Inner {
@@ -192,6 +200,7 @@ impl DaemonState {
             lifecycle: Lifecycle::new(),
             diagnostics: std::sync::OnceLock::new(),
             hooks: std::sync::OnceLock::new(),
+            auth_token: std::sync::OnceLock::new(),
         }
     }
 
@@ -291,6 +300,26 @@ impl DaemonState {
     /// directory's snapshot was resolved under the now-stale configuration.
     pub fn invalidate_env_include_all(&self) {
         self.lock().env_include_cache.clear();
+    }
+
+    /// Adopt the token this daemon will require, read from `path`.
+    ///
+    /// Called once at startup. A daemon that was given a token path and cannot read it must fail
+    /// loudly rather than fall back to accepting everyone: a sandbox whose authentication silently
+    /// turned itself off is worse than one that refuses to start.
+    pub fn set_auth_token(&self, path: &Path) -> std::io::Result<()> {
+        let token = micold_core::protocol::auth::Token::read_from(path)?;
+        let _ = self.auth_token.set(token);
+        Ok(())
+    }
+
+    /// What this daemon compares a client's introduction against (feature 027).
+    pub fn expectation(&self) -> micold_core::protocol::handshake::Expectation {
+        micold_core::protocol::handshake::Expectation {
+            token: self.auth_token.get().cloned(),
+            build: format!("micold-daemon {}", env!("CARGO_PKG_VERSION")),
+            image: std::env::var("MICOLD_IMAGE_REFERENCE").unwrap_or_default(),
+        }
     }
 
     /// The `Welcome` payload for a freshly-handshaked client.

@@ -60,19 +60,19 @@ story depends on all of it.
 
 - [X] T007 *(test)* Write `crates/micold-core/tests/placement.rs` — resolution is pure (P-1), never substitutes a placement (P-2), and a fallback is not representable as a resolution outcome (P-3), per data-model.md §1
 - [X] T008 Implement `Placement`, `RemotePlacement` and resolution in `crates/micold-core/src/sandbox/placement.rs`, including the non-constructible `Remote` variant FR-003a requires
-- [ ] T009 *(test)* Extend `crates/micold-core/tests/connect.rs` for `connect_or_start(placement)` — the host-process path is byte-for-byte unchanged, and a sandbox placement takes the new path
-- [ ] T010 Rename and generalise `connect_or_spawn` to `connect_or_start(placement)` in `crates/micold-core/src/connect.rs`, updating every call site
-- [ ] T011 Add the loopback-TCP endpoint alongside socket and named pipe in `crates/micold-core/src/endpoint.rs`, keeping the existing `0700`-directory contract intact for the host placement (R1)
+- [X] T009 *(test)* Extend `crates/micold-core/tests/connect.rs` for `connect_or_start(placement)` — the host-process path is byte-for-byte unchanged, and a sandbox placement takes the new path
+- [X] T010 Rename and generalise `connect_or_spawn` to `connect_or_start(placement)` in `crates/micold-core/src/connect.rs`, updating every call site
+- [X] T011 Add the loopback-TCP endpoint alongside socket and named pipe in `crates/micold-core/src/endpoint.rs`, keeping the existing `0700`-directory contract intact for the host placement (R1)
 
 ### Protocol v5 → v6
 
-- [ ] T012 *(test)* Write `crates/micold-core/tests/protocol_auth.rs` — P-1 (right/wrong/absent token), P-3 (token in no log, argv or inspect output), P-6 (`PROTOCOL_VERSION` is 6, a v5 handshake is rejected before authenticating), per contracts/protocol-delta.md
-- [ ] T013 Implement the shared-secret token — generate, write `0600`, mount read-only, present, constant-time verify — in `crates/micold-core/src/protocol/auth.rs`
-- [ ] T014 Bump `PROTOCOL_VERSION` to 6 and emit `BUILD_FINGERPRINT` from `crates/micold-core/build.rs` into the generated file beside `SCHEMA_HASH`, declared in `crates/micold-core/src/protocol/version.rs`
-- [ ] T015 *(test)* Add P-4 to `crates/micold-core/tests/protocol_auth.rs` — a fingerprint mismatch refuses a `LocalBuild` image as `StaleDevImage` and accepts a `Registry` one (the asymmetry R8 requires)
-- [ ] T016 Implement the closed refusal enumeration and its remedies in `crates/micold-core/src/protocol/` — `ProtocolMismatch`, `SchemaMismatch`, `VersionMismatch`, `StaleDevImage`, `AuthRejected` (P-5)
-- [ ] T017 Teach `crates/micold-daemon/src/server.rs` to accept the loopback listener and verify the token, and `crates/micold-daemon/src/main.rs` to bind per placement and read its mounted secret when containerised
-- [ ] T018 Update `crates/micold-core/tests/schema_hash.rs` for the one deliberate hash move, with a comment naming this feature as the reason
+- [X] T012 *(test)* Write `crates/micold-core/tests/protocol_auth.rs` — P-1 (right/wrong/absent token), P-3 (token in no log, argv or inspect output), P-6 (`PROTOCOL_VERSION` is 6, a v5 handshake is rejected before authenticating), per contracts/protocol-delta.md
+- [X] T013 Implement the shared-secret token — generate, write `0600`, mount read-only, present, constant-time verify — in `crates/micold-core/src/protocol/auth.rs`
+- [X] T014 Bump `PROTOCOL_VERSION` to 6 and emit `BUILD_FINGERPRINT` from `crates/micold-core/build.rs` into the generated file beside `SCHEMA_HASH`, declared in `crates/micold-core/src/protocol/version.rs`
+- [X] T015 *(test)* Add P-4 to `crates/micold-core/tests/protocol_auth.rs` — a fingerprint mismatch refuses a `LocalBuild` image as `StaleDevImage` and accepts a `Registry` one (the asymmetry R8 requires)
+- [X] T016 Implement the closed refusal enumeration and its remedies in `crates/micold-core/src/protocol/` — `ProtocolMismatch`, `SchemaMismatch`, `VersionMismatch`, `StaleDevImage`, `AuthRejected` (P-5)
+- [X] T017 Teach `crates/micold-daemon/src/server.rs` to accept the loopback listener and verify the token, and `crates/micold-daemon/src/main.rs` to bind per placement and read its mounted secret when containerised
+- [X] T018 Update `crates/micold-core/tests/schema_hash.rs` for the one deliberate hash move, with a comment naming this feature as the reason
 
 ### Settings v3 → v4
 

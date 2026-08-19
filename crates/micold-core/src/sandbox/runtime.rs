@@ -155,7 +155,6 @@ pub fn reconcile(profile: &SandboxProfile, caps: &RuntimeCapabilities) -> Vec<Un
     out
 }
 
-
 /// A step in acquiring an image, reported often enough for a progress indicator to move.
 ///
 /// SC-004 gives first-time enable five minutes; five silent minutes reads as a hang, which is why
@@ -332,7 +331,9 @@ impl RuntimeError {
             RuntimeError::LimitRejected { field, .. } => {
                 format!("Clear the {field} limit in Settings → Daemon, then retry.")
             }
-            RuntimeError::Timeout { .. } => "Retry; if it persists, restart the runtime.".to_string(),
+            RuntimeError::Timeout { .. } => {
+                "Retry; if it persists, restart the runtime.".to_string()
+            }
             RuntimeError::Unknown { .. } => {
                 "Retry. The runtime's own output is in the diagnostics.".to_string()
             }
@@ -480,17 +481,41 @@ mod tests {
         // FR-034: no failure in this feature may be a dead end. Enumerated explicitly so a variant
         // added later without a remedy fails here rather than in front of a user.
         let all = [
-            RuntimeError::NotInstalled { kind: RuntimeKind::Docker },
-            RuntimeError::NotRunning { kind: RuntimeKind::Docker },
-            RuntimeError::PermissionDenied { kind: RuntimeKind::Podman },
-            RuntimeError::VersionTooOld { found: "1.0".into(), needed: "20.10".into() },
-            RuntimeError::ImageNotFound { reference: "x".into() },
-            RuntimeError::ImagePullFailed { reference: "x".into(), detail: "d".into() },
+            RuntimeError::NotInstalled {
+                kind: RuntimeKind::Docker,
+            },
+            RuntimeError::NotRunning {
+                kind: RuntimeKind::Docker,
+            },
+            RuntimeError::PermissionDenied {
+                kind: RuntimeKind::Podman,
+            },
+            RuntimeError::VersionTooOld {
+                found: "1.0".into(),
+                needed: "20.10".into(),
+            },
+            RuntimeError::ImageNotFound {
+                reference: "x".into(),
+            },
+            RuntimeError::ImagePullFailed {
+                reference: "x".into(),
+                detail: "d".into(),
+            },
             RuntimeError::PortUnavailable { port: 7727 },
-            RuntimeError::MountRejected { path: "/x".into(), detail: "d".into() },
-            RuntimeError::LimitRejected { field: "storage".into(), detail: "d".into() },
-            RuntimeError::Timeout { operation: "start".into() },
-            RuntimeError::Unknown { stderr: "boom".into() },
+            RuntimeError::MountRejected {
+                path: "/x".into(),
+                detail: "d".into(),
+            },
+            RuntimeError::LimitRejected {
+                field: "storage".into(),
+                detail: "d".into(),
+            },
+            RuntimeError::Timeout {
+                operation: "start".into(),
+            },
+            RuntimeError::Unknown {
+                stderr: "boom".into(),
+            },
         ];
         for e in all {
             assert!(!e.reason().trim().is_empty(), "{e:?} has no reason");
@@ -502,8 +527,14 @@ mod tests {
     fn the_permission_remedy_differs_by_runtime() {
         // "Add yourself to the docker group" is useless advice to a podman user. A remedy that is
         // generic enough to be always-correct is not a remedy.
-        let docker = RuntimeError::PermissionDenied { kind: RuntimeKind::Docker }.remedy();
-        let podman = RuntimeError::PermissionDenied { kind: RuntimeKind::Podman }.remedy();
+        let docker = RuntimeError::PermissionDenied {
+            kind: RuntimeKind::Docker,
+        }
+        .remedy();
+        let podman = RuntimeError::PermissionDenied {
+            kind: RuntimeKind::Podman,
+        }
+        .remedy();
         assert_ne!(docker, podman);
     }
 
@@ -512,13 +543,27 @@ mod tests {
         // Conformance check K-8, against output the runtimes actually produce.
         type Matcher = fn(&RuntimeError) -> bool;
         let cases: [(&str, Matcher); 7] = [
-            ("err_not_installed.txt", |e| matches!(e, RuntimeError::NotInstalled { .. })),
-            ("err_daemon_down.txt", |e| matches!(e, RuntimeError::NotRunning { .. })),
-            ("err_permission_denied.txt", |e| matches!(e, RuntimeError::PermissionDenied { .. })),
-            ("err_image_not_found.txt", |e| matches!(e, RuntimeError::ImageNotFound { .. })),
-            ("err_pull_failed.txt", |e| matches!(e, RuntimeError::ImagePullFailed { .. })),
-            ("err_port_unavailable.txt", |e| matches!(e, RuntimeError::PortUnavailable { .. })),
-            ("err_mount_rejected.txt", |e| matches!(e, RuntimeError::MountRejected { .. })),
+            ("err_not_installed.txt", |e| {
+                matches!(e, RuntimeError::NotInstalled { .. })
+            }),
+            ("err_daemon_down.txt", |e| {
+                matches!(e, RuntimeError::NotRunning { .. })
+            }),
+            ("err_permission_denied.txt", |e| {
+                matches!(e, RuntimeError::PermissionDenied { .. })
+            }),
+            ("err_image_not_found.txt", |e| {
+                matches!(e, RuntimeError::ImageNotFound { .. })
+            }),
+            ("err_pull_failed.txt", |e| {
+                matches!(e, RuntimeError::ImagePullFailed { .. })
+            }),
+            ("err_port_unavailable.txt", |e| {
+                matches!(e, RuntimeError::PortUnavailable { .. })
+            }),
+            ("err_mount_rejected.txt", |e| {
+                matches!(e, RuntimeError::MountRejected { .. })
+            }),
         ];
         for (fixture_name, matches_variant) in cases {
             let out = CommandOutput::err(125, fixture(fixture_name));

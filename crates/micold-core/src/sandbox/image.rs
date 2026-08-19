@@ -11,10 +11,7 @@ use serde::{Deserialize, Serialize};
 /// The registry reference the app ships with. An immutable version tag, never a moving one — a
 /// moving tag can change under a running sandbox, which is the case [`ImageRef::is_moving`] exists
 /// to detect.
-pub const DEFAULT_IMAGE: &str = concat!(
-    "ghcr.io/micold/micold-daemon:",
-    env!("CARGO_PKG_VERSION")
-);
+pub const DEFAULT_IMAGE: &str = concat!("ghcr.io/micold/micold-daemon:", env!("CARGO_PKG_VERSION"));
 
 /// The tag `mise run image` produces, and the one a stale-image refusal names (FR-024c).
 pub const DEV_IMAGE_TAG: &str = "micold-daemon:dev";
@@ -335,7 +332,10 @@ mod tests {
     #[test]
     fn unparseable_references_are_classified_not_panicked() {
         assert_eq!(ImageRef::parse("   "), Err(ImageRefError::Empty));
-        assert_eq!(ImageRef::parse(":dev"), Err(ImageRefError::MissingRepository));
+        assert_eq!(
+            ImageRef::parse(":dev"),
+            Err(ImageRefError::MissingRepository)
+        );
         assert!(matches!(
             ImageRef::parse("micold daemon:dev"),
             Err(ImageRefError::InvalidCharacter(_))
@@ -346,7 +346,10 @@ mod tests {
     fn the_shipped_default_is_a_parseable_immutable_reference() {
         // If this ever fails, the app ships pointing at something that can change underneath it.
         let r = ImageSource::default().parsed().expect("default parses");
-        assert!(!r.is_moving(), "the shipped default must not be a moving tag");
+        assert!(
+            !r.is_moving(),
+            "the shipped default must not be a moving tag"
+        );
     }
 
     #[test]
@@ -383,6 +386,9 @@ mod tests {
         };
         let problems = src.validate();
         assert_eq!(problems.len(), 1);
-        assert!(!problems[0].is_fatal(), "a moving tag warns, it does not block");
+        assert!(
+            !problems[0].is_fatal(),
+            "a moving tag warns, it does not block"
+        );
     }
 }

@@ -65,7 +65,12 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     let mut args: Vec<OsString> = vec!["create".into(), "--name".into(), (&spec.name).into()];
 
     // Identity first, so a reader of the argv sees immediately that this is not running as root.
-    args.extend(dialect.identity_args(spec.uid, spec.gid).into_iter().map(Into::into));
+    args.extend(
+        dialect
+            .identity_args(spec.uid, spec.gid)
+            .into_iter()
+            .map(Into::into),
+    );
 
     // Restart policy carries the existing session-survival opt-in (research R6). `unless-stopped`
     // rather than `always`, so a user who explicitly stops the sandbox stays stopped over a reboot.
@@ -126,14 +131,7 @@ fn mount_args(mounts: &MountSet) -> Vec<OsString> {
     for m in &mounts.projects {
         let mode = if m.writable { "rw" } else { "ro" };
         args.push("-v".into());
-        args.push(
-            format!(
-                "{}:{}:{mode}",
-                m.host.display(),
-                m.container.display()
-            )
-            .into(),
-        );
+        args.push(format!("{}:{}:{mode}", m.host.display(), m.container.display()).into());
     }
     args.push("-v".into());
     args.push(format!("{}:{}", mounts.state.name, mounts.state.container.display()).into());
@@ -217,7 +215,9 @@ mod tests {
     }
 
     fn strings(args: &[OsString]) -> Vec<String> {
-        args.iter().map(|a| a.to_string_lossy().into_owned()).collect()
+        args.iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
     }
 
     #[test]
@@ -239,7 +239,10 @@ mod tests {
             pids: Some(512),
             storage_bytes: Some(Bytes::from_mib(8192)),
         };
-        let args = strings(&create(&s, &caps(RuntimeKind::Docker, LimitSupport::Supported)));
+        let args = strings(&create(
+            &s,
+            &caps(RuntimeKind::Docker, LimitSupport::Supported),
+        ));
 
         let value_after = |flag: &str| {
             args.iter()
@@ -281,9 +284,15 @@ mod tests {
             pids: None,
             storage_bytes: None,
         };
-        let args = strings(&create(&s, &caps(RuntimeKind::Docker, LimitSupport::Supported)));
+        let args = strings(&create(
+            &s,
+            &caps(RuntimeKind::Docker, LimitSupport::Supported),
+        ));
         for flag in ["--cpus", "--memory", "--pids-limit", "--storage-opt"] {
-            assert!(!args.iter().any(|a| a == flag), "{flag} was passed for an unset limit");
+            assert!(
+                !args.iter().any(|a| a == flag),
+                "{flag} was passed for an unset limit"
+            );
         }
     }
 
@@ -297,7 +306,10 @@ mod tests {
             host: PathBuf::from("/home/u/.gitconfig"),
             container: PathBuf::from("/home/u/.gitconfig"),
         }];
-        let args = strings(&create(&s, &caps(RuntimeKind::Docker, LimitSupport::Supported)));
+        let args = strings(&create(
+            &s,
+            &caps(RuntimeKind::Docker, LimitSupport::Supported),
+        ));
 
         let mounted: Vec<String> = args
             .iter()
@@ -307,10 +319,14 @@ mod tests {
             .collect();
         // projects + state volume + secret + one credential
         assert_eq!(mounted.len(), 4, "mounted: {mounted:?}");
-        assert!(mounted.iter().any(|m| m.starts_with("/home/u/p:/home/u/p:rw")));
+        assert!(mounted
+            .iter()
+            .any(|m| m.starts_with("/home/u/p:/home/u/p:rw")));
         assert!(mounted.iter().any(|m| m.starts_with("micold-state:")));
         assert!(mounted.iter().any(|m| m.ends_with("/run/micold/token:ro")));
-        assert!(mounted.iter().any(|m| m.contains(".gitconfig") && m.ends_with(":ro")));
+        assert!(mounted
+            .iter()
+            .any(|m| m.contains(".gitconfig") && m.ends_with(":ro")));
     }
 
     #[test]
@@ -318,7 +334,10 @@ mod tests {
         // The default posture, checked where it is spent rather than only where it is declared.
         let s = spec();
         assert!(s.profile.credentials.is_empty());
-        let args = strings(&create(&s, &caps(RuntimeKind::Docker, LimitSupport::Supported)));
+        let args = strings(&create(
+            &s,
+            &caps(RuntimeKind::Docker, LimitSupport::Supported),
+        ));
         assert!(!args.iter().any(|a| a.contains(".gitconfig")));
         assert!(!args.iter().any(|a| a.contains("ssh")));
     }
@@ -330,7 +349,10 @@ mod tests {
         for m in &s.mounts.projects {
             assert_eq!(m.host, m.container);
         }
-        let args = strings(&create(&s, &caps(RuntimeKind::Docker, LimitSupport::Supported)));
+        let args = strings(&create(
+            &s,
+            &caps(RuntimeKind::Docker, LimitSupport::Supported),
+        ));
         assert!(args.iter().any(|a| a == "/home/u/p:/home/u/p:rw"));
     }
 
@@ -338,7 +360,10 @@ mod tests {
     fn the_control_port_is_published_to_loopback_not_to_every_interface() {
         // `-p 7727:7727` would publish to 0.0.0.0 and put the daemon on the network. The loopback
         // bind is not cosmetic: it is half of why the shared secret is the *other* half.
-        let args = strings(&create(&spec(), &caps(RuntimeKind::Docker, LimitSupport::Supported)));
+        let args = strings(&create(
+            &spec(),
+            &caps(RuntimeKind::Docker, LimitSupport::Supported),
+        ));
         assert!(args.iter().any(|a| a == "127.0.0.1:7727:7727"), "{args:?}");
         assert!(!args.iter().any(|a| a == "7727:7727"));
     }
@@ -351,7 +376,10 @@ mod tests {
         let dialect = Dialect::for_kind(RuntimeKind::Docker);
 
         let net = strings(&network_create(&s, &dialect));
-        assert!(net.iter().any(|a| a.contains("enable_ip_masquerade=false")), "{net:?}");
+        assert!(
+            net.iter().any(|a| a.contains("enable_ip_masquerade=false")),
+            "{net:?}"
+        );
 
         // The configuration that was measured to break the control channel must never appear.
         assert!(
@@ -359,7 +387,10 @@ mod tests {
             "an --internal network makes the published port inert (research R4): {net:?}"
         );
 
-        let args = strings(&create(&s, &caps(RuntimeKind::Docker, LimitSupport::Supported)));
+        let args = strings(&create(
+            &s,
+            &caps(RuntimeKind::Docker, LimitSupport::Supported),
+        ));
         assert!(args.iter().any(|a| a == "127.0.0.1:7727:7727"));
     }
 
@@ -377,12 +408,18 @@ mod tests {
         // placement. `unless-stopped`, not `always`, so an explicit stop survives a reboot.
         let mut s = spec();
         s.profile.survive_logout = true;
-        let on = strings(&create(&s, &caps(RuntimeKind::Docker, LimitSupport::Supported)));
+        let on = strings(&create(
+            &s,
+            &caps(RuntimeKind::Docker, LimitSupport::Supported),
+        ));
         let idx = on.iter().position(|a| a == "--restart").unwrap();
         assert_eq!(on[idx + 1], "unless-stopped");
 
         s.profile.survive_logout = false;
-        let off = strings(&create(&s, &caps(RuntimeKind::Docker, LimitSupport::Supported)));
+        let off = strings(&create(
+            &s,
+            &caps(RuntimeKind::Docker, LimitSupport::Supported),
+        ));
         let idx = off.iter().position(|a| a == "--restart").unwrap();
         assert_eq!(off[idx + 1], "no");
     }
@@ -391,7 +428,10 @@ mod tests {
     fn a_user_exposed_port_is_published_alongside_the_control_port() {
         let mut s = spec();
         s.published_ports = vec![3000];
-        let args = strings(&create(&s, &caps(RuntimeKind::Docker, LimitSupport::Supported)));
+        let args = strings(&create(
+            &s,
+            &caps(RuntimeKind::Docker, LimitSupport::Supported),
+        ));
         assert!(args.iter().any(|a| a == "127.0.0.1:3000:3000"));
         assert!(args.iter().any(|a| a == "127.0.0.1:7727:7727"));
     }
@@ -430,7 +470,10 @@ mod tests {
         for kind in RuntimeKind::ALL {
             let args = strings(&create(&spec(), &caps(kind, LimitSupport::Supported)));
             assert_eq!(args.first().map(String::as_str), Some("create"));
-            assert_eq!(args.last().map(String::as_str), Some("micold-daemon:0.27.0"));
+            assert_eq!(
+                args.last().map(String::as_str),
+                Some("micold-daemon:0.27.0")
+            );
             assert!(args.iter().any(|a| a == "--name"));
         }
     }

@@ -13,10 +13,24 @@
 /// Bumped 2 → 3 for `SessionSummary::input_serial` (FR-028a, BUG-006).
 /// Bumped 3 → 4 for `OperationResult::WorktreeDeleted::leftovers` (FR-023).
 /// Bumped 4 → 5 for `DaemonMsg::OperationProgress::detail` (FR-004a, BUG-009).
-pub const PROTOCOL_VERSION: u32 = 5;
+/// Bumped 5 → 6 for the sandbox handshake: `ClientMsg::Hello` gains the authentication token and
+/// the build fingerprint (feature 027, research R1/R8). Both arrive together because the sandbox
+/// transport is loopback TCP, which — unlike the `0700`-guarded socket — authenticates nobody.
+pub const PROTOCOL_VERSION: u32 = 6;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
+
+// `build.rs` emits `BUILD_FINGERPRINT` — a value that changes on every build of this crate's
+// sources, not every release — into this file, carrying its own doc comment (the one above cannot
+// live here, because rustdoc does not document a macro invocation).
+//
+// The three constants above cannot detect a stale development image: within one released version, a
+// daemon rebuilt yesterday and a client built today present identical values for all of them, so the
+// handshake accepts a `:dev` image that is behind the tree and the daemon then misbehaves in ways
+// that look like bugs in the new code (feature 027, FR-024d, research R8). The comparison is
+// deliberately asymmetric — see `sandbox::image::ImageSource::refuses_fingerprint_mismatch`.
+include!(concat!(env!("OUT_DIR"), "/build_fingerprint.rs"));
 
 /// This build's package version (`CARGO_PKG_VERSION` of *this* crate). Every workspace member
 /// shares one version (`version.workspace = true`), so this is also the daemon's and the client's

@@ -39,6 +39,35 @@ pub fn daemon_build() -> String {
     format!("micold-daemon {}", env!("CARGO_PKG_VERSION"))
 }
 
+/// Adopt the authentication token, if this daemon was started with one (feature 027, research R1).
+///
+/// The path comes from the environment because the container is what supplies it: the runtime
+/// bind-mounts the host's `0600` token file at `MICOLD_TOKEN_PATH`, and the image sets that
+/// variable. A daemon started without it is the host-process placement, which authenticates by the
+/// `0700` directory guarding its socket and needs no token.
+///
+/// A token path that is set but unreadable is **fatal**. Falling back to accepting everyone would
+/// turn a misconfigured mount into an open port, silently, inside the feature whose purpose is
+/// containment.
+fn adopt_auth_token(state: &DaemonState) -> io::Result<()> {
+    let Some(path) = std::env::var_os(micold_core::protocol::auth::TOKEN_PATH_ENV) else {
+        return Ok(());
+    };
+    let path = std::path::PathBuf::from(path);
+    state.set_auth_token(&path).map_err(|e| {
+        io::Error::new(
+            e.kind(),
+            format!(
+                "{} names {} but it could not be read: {e}",
+                micold_core::protocol::auth::TOKEN_PATH_ENV,
+                path.display()
+            ),
+        )
+    })?;
+    tracing::info!("handshake authentication is enabled");
+    Ok(())
+}
+
 /// Run the daemon: adopt a systemd socket if present, else acquire the endpoint, then accept.
 pub async fn run() -> io::Result<()> {
     // Diagnostics first, so even a failed bind is recorded (FR-045).
@@ -57,6 +86,10 @@ pub async fn run() -> io::Result<()> {
     // Hand the diagnostics handle to the shared state so the `LogLocation`/`RecentErrors`/
     // `SetLogLevel` RPCs can serve it (FR-043–046).
     state.set_diagnostics(logging);
+
+    // Feature 027: a sandboxed daemon requires the token its runtime mounted. Fatal if named and
+    // unreadable — see `adopt_auth_token`.
+    adopt_auth_token(&state)?;
 
     // FR-006a/b: sessions that were running when the service last stopped come back as
     // `InterruptedResumable` — never auto-relaunched, resumable by one explicit user action. This is
@@ -221,36 +254,38 @@ where
     let mut framed = Framed::new(stream, DaemonCodec::new());
 
     // --- Handshake: the first frame must be a Hello, and it must match exactly. ---
-    let (client_version, client_hash, client_build, client_package_version) =
-        match framed.next().await {
-            Some(Ok(Frame::Control(ClientMsg::Hello {
-                protocol_version,
-                schema_hash,
-                client_build,
-                client_package_version,
-            }))) => (
-                protocol_version,
-                schema_hash,
-                client_build,
-                client_package_version,
-            ),
-            Some(Ok(_)) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "expected Hello as the first frame",
-                ))
-            }
-            Some(Err(e)) => return Err(io::Error::other(e)),
-            None => return Ok(()), // hung up before saying hello
-        };
+    let intro = match framed.next().await {
+        Some(Ok(Frame::Control(ClientMsg::Hello {
+            protocol_version,
+            schema_hash,
+            client_build,
+            client_package_version,
+            auth_token,
+            client_fingerprint,
+            require_fingerprint_match,
+        }))) => handshake::Introduction {
+            protocol_version,
+            schema_hash,
+            package_version: client_package_version,
+            build: client_build,
+            auth_token,
+            fingerprint: client_fingerprint,
+            require_fingerprint_match,
+        },
+        Some(Ok(_)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "expected Hello as the first frame",
+            ))
+        }
+        Some(Err(e)) => return Err(io::Error::other(e)),
+        None => return Ok(()), // hung up before saying hello
+    };
+    let client_build = intro.build.clone();
+    let client_version = intro.protocol_version;
+    let client_package_version = intro.package_version.clone();
 
-    if let Err(reason) = handshake::evaluate(
-        client_version,
-        client_hash,
-        &client_package_version,
-        client_build.clone(),
-        daemon_build(),
-    ) {
+    if let Err(reason) = handshake::evaluate_introduction(&intro, &state.expectation()) {
         // Identity + versions only — never any session content (FR-047).
         tracing::warn!(
             client_build = %client_build,

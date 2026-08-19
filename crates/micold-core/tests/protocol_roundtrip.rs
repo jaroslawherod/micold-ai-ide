@@ -49,6 +49,11 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             schema_hash: [7u8; 32],
             client_build: "client-abc".into(),
             client_package_version: "0.4.0".into(),
+            // Feature 027. `Some` here on purpose: an `Option` that is only ever encoded as `None`
+            // in the round-trip sample would not prove the token survives the wire.
+            auth_token: Some("a".repeat(64)),
+            client_fingerprint: "b7f3a1c9".into(),
+            require_fingerprint_match: true,
         },
         ClientMsg::Attach {
             project: PathBuf::from("/repo"),
@@ -287,6 +292,18 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 project: PathBuf::from("/a"),
                 holder: "other".into(),
                 since_secs: 120,
+            },
+        },
+        // Feature 027's two refusals. `AuthRejected` is fieldless on purpose — a refusal that
+        // described *how* wrong the token was would be an oracle for recovering it.
+        DaemonMsg::Refused {
+            reason: RefusalReason::AuthRejected,
+        },
+        DaemonMsg::Refused {
+            reason: RefusalReason::StaleDevImage {
+                client_fingerprint: "b7f3a1c9".into(),
+                daemon_fingerprint: "0011223344556677".into(),
+                image: "micold-daemon:dev".into(),
             },
         },
         DaemonMsg::Attached {

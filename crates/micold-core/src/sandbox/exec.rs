@@ -123,7 +123,9 @@ impl Invocation {
     /// The value following `flag`, if the vector contains `flag` and something after it.
     pub fn value_of(&self, flag: &str) -> Option<String> {
         let idx = self.args.iter().position(|a| a == flag)?;
-        self.args.get(idx + 1).map(|v| v.to_string_lossy().into_owned())
+        self.args
+            .get(idx + 1)
+            .map(|v| v.to_string_lossy().into_owned())
     }
 }
 
@@ -220,7 +222,10 @@ mod tests {
     #[test]
     fn a_canned_failure_carries_its_code_and_stderr() {
         let runner = RecordingRunner::new();
-        runner.push(Ok(CommandOutput::err(125, "Cannot connect to the Docker daemon")));
+        runner.push(Ok(CommandOutput::err(
+            125,
+            "Cannot connect to the Docker daemon",
+        )));
         let out = runner.run(OsStr::new("docker"), &[]).unwrap();
         assert!(!out.success());
         assert_eq!(out.code, Some(125));

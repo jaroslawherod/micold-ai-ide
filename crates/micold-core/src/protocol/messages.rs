@@ -54,6 +54,20 @@ pub enum ClientMsg {
         /// release, wire-visible or not, so a same-contract `.deb` upgrade over an already-running
         /// daemon is still detected (FR-022a, BUG-002).
         client_package_version: String,
+        /// The shared secret, when the daemon is expected to require one (feature 027, R1).
+        ///
+        /// `None` for the host-process placement, whose `0700`-guarded socket authenticates by
+        /// filesystem permission already. `Some` for the sandbox, whose loopback TCP transport
+        /// authenticates nobody — which is why this field and the version bump arrive together.
+        auth_token: Option<String>,
+        /// The client's compiled [`crate::protocol::version::BUILD_FINGERPRINT`] (feature 027, R8).
+        client_fingerprint: String,
+        /// Whether a fingerprint mismatch is a refusal.
+        ///
+        /// Set by the **client**, because the client is what knows where the daemon's image came
+        /// from: a locally built one shares this client's working tree and has no business
+        /// disagreeing, while a released one was built separately and legitimately differs.
+        require_fingerprint_match: bool,
     },
     /// Attach to a project. `force = true` is a confirmed takeover, only sent after explicit user
     /// confirmation (FR-023).
@@ -547,6 +561,25 @@ pub enum RefusalReason {
     NotPermitted {
         /// The detail.
         detail: String,
+    },
+    /// The handshake presented no token, or the wrong one (feature 027, R1).
+    ///
+    /// Carries nothing about *how* wrong the token was — no length, no prefix, no distinction
+    /// between absent and incorrect. A refusal that described the difference would be an oracle for
+    /// recovering the token one guess at a time.
+    AuthRejected,
+    /// The daemon was built from a different working tree than the client, and the client said that
+    /// was a refusal because the image is a local build (feature 027, FR-024d, research R8).
+    ///
+    /// Names the image so the remedy can point at something the user can act on: the three
+    /// constants the handshake already compares all match here, which is exactly why this exists.
+    StaleDevImage {
+        /// The client's fingerprint.
+        client_fingerprint: String,
+        /// The daemon's fingerprint.
+        daemon_fingerprint: String,
+        /// The image reference the daemon is running from, when the client knows it.
+        image: String,
     },
 }
 

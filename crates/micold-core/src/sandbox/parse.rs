@@ -194,8 +194,7 @@ pub fn image(stdout: &str) -> Result<ImageFacts, RuntimeError> {
 fn one_of<T: for<'de> Deserialize<'de>>(stdout: &str, what: &str) -> Result<T, RuntimeError> {
     let trimmed = stdout.trim();
     if trimmed.starts_with('[') {
-        let mut v: Vec<T> =
-            serde_json::from_str(trimmed).map_err(|e| unparseable(what, &e))?;
+        let mut v: Vec<T> = serde_json::from_str(trimmed).map_err(|e| unparseable(what, &e))?;
         if v.is_empty() {
             return Err(RuntimeError::Unknown {
                 stderr: format!("the runtime returned no {what}"),
@@ -243,7 +242,10 @@ mod tests {
     fn the_storage_driver_is_read_from_either_runtimes_shape() {
         // The fact wanted is the same fact; only the spelling differs. This is what a single
         // parser buys over a per-runtime one.
-        assert_eq!(info(&fixture("docker_info.json")).unwrap().storage_driver, "overlayfs");
+        assert_eq!(
+            info(&fixture("docker_info.json")).unwrap().storage_driver,
+            "overlayfs"
+        );
         let podman = info(&fixture("podman_info.json")).unwrap();
         assert_eq!(podman.storage_driver, "overlay");
         assert!(podman.rootless, "podman reports itself rootless");
@@ -286,7 +288,10 @@ mod tests {
         ] {
             match result {
                 Some(RuntimeError::Unknown { stderr }) => {
-                    assert!(!stderr.is_empty(), "an unclassified error must keep its detail")
+                    assert!(
+                        !stderr.is_empty(),
+                        "an unclassified error must keep its detail"
+                    )
                 }
                 other => panic!("expected a classified error, got {other:?}"),
             }

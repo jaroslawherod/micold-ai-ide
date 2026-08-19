@@ -46,7 +46,9 @@ pub fn map_for(host: &Path, windows_host: bool) -> PathBuf {
     // container is Linux regardless of the host.
     let raw = host.to_string_lossy().replace('\\', "/");
     let (drive, rest) = match raw.split_once(':') {
-        Some((d, r)) if d.len() == 1 && d.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) => {
+        Some((d, r))
+            if d.len() == 1 && d.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) =>
+        {
             (d.to_ascii_lowercase(), r)
         }
         // A UNC path or something else unusual: keep it whole under a `share` segment rather than
