@@ -110,6 +110,12 @@ hover — it is what the ink scan measures, and the scan was run on both.
 - **Perceived smoothness.** lavapipe is a software rasteriser; frame pacing here says nothing about
   frame pacing on a real GPU.
 - **The client's own branch picker.** Checked in the showcase, which poses the same `Typeahead`
-  the dialog builds. The layout snapshot's `add-worktree-dialog-existing-branch` state renders the
-  dialog *before* any branch list exists, so it never contained the search field at all — which is a
-  second reason no gate saw this, and is recorded here rather than fixed.
+  the dialog builds.
+
+  The layout snapshot's `add-worktree-dialog-existing-branch` state renders the dialog *before* any
+  branch list exists, so `candidates` is empty, the picker draws a caption instead of a field, and
+  the fixture had never contained the search field at all — a second reason no gate saw this. **Now
+  fixed**: a sibling state, `add-worktree-dialog-branch-picker`, poses the picker with branches
+  loaded, and the fixture pins the field's own geometry — the leading icon 14dp wide at x=425
+  centred on the container's middle, and the control and the label both starting at x=460, which is
+  `padding + icon slot + gap` exactly. The column this bug was about is now a recorded number.
