@@ -27,7 +27,7 @@ retires a group.
 | C | The popover mutual-exclusion rule (features 009, 015) | 12 | **not uniform — see below** |
 | D | `Workspace::forget` — forgetting a project drops what three features hold against its path | 4 | **maybe none — see below** |
 | E | `State::push_notification` | 2 | `NotificationRaised` — **exists** (T065) |
-| F | Not the reveal — the *commit* of the outgoing one | 4 | **two outcomes; see below** |
+| F | Not the reveal — the *commit* of the outgoing one | 8 | **done (T067a-6)** — four outcomes |
 | G | worktree_form creates; worktree owns the list | 4 | **done (T067a-4)** — 3 were a mis-owned field |
 | — | `session::switch_active` → `workspace.active` | 1 | see note below |
 | — | `sidebar::toggle_location` → `reveal_suppressed_for` | 1 | see note below |
@@ -144,7 +144,11 @@ set, so the row does not silently close underneath them.
 vocabulary wants to be about the location being left. `pending_reveal_scroll = true` *is* about the
 incoming session, which makes F two outcomes with different subjects rather than one.
 
-Displaying a session commits the outgoing row, drops a stale suppression and arms a scroll. The fourth is
+Displaying a session commits the outgoing row, drops a stale suppression and arms a scroll.
+
+**Done (T067a-6), and it was eight rows rather than four** — the guard had been hiding three of
+them (see T067a-6a) and `show_agent_worktrees` joined from the singletons. Four outcomes:
+`LocationOpened`, `RevealScrollArmed`, `ProjectEntered`, `RevealSuppressed`. **ALLOWED 27 → 19.** The fourth is
 the mirror in the other direction — collapsing a row cancels a suppression a session close armed —
 and may want its own variant; grouped here because the two are one conversation.
 

@@ -231,9 +231,15 @@ impl State {
         // `default_expanded` is not keyed per project (unlike `expanded`, which is pruned by
         // worktree `dir_name` in `set_worktrees`), and feature 014's reveal of agent worktrees
         // (FR-010e) is remembered nowhere — both would otherwise render in a project that never
-        // asked for them. Pushed *after* the commit above, because the order is load-bearing: the
-        // outgoing session's Default row is folded into the user's set and then reset, and a drain
-        // that applied these in the other order would leave it open in the new project.
+        // asked for them.
+        //
+        // Pushed after the commit above, though the order turns out not to be observable here and
+        // an earlier version of this comment wrongly claimed it was load-bearing. Probe F4 swapped
+        // them and nothing failed, which the code explains: this runs *after*
+        // `Workspace::activate`, so `current_session_location` resolves the outgoing session's id
+        // against the **incoming** project's `active_sessions()`, does not find it, and answers
+        // `None`. The commit cannot fire on this path at all. Kept in this order because it is the
+        // one that stays correct if that ever changes.
         outcomes.push(crate::features::Outcome::ProjectEntered);
         self.arm_notice(&key); // STEP 4
         outcomes
