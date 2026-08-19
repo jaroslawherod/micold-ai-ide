@@ -741,19 +741,6 @@ impl State {
     /// by sending the cancellation the dialog itself declared, so this is still not a list of
     /// dialogs anybody has to maintain.
     ///
-    /// Callers must invoke it **before** setting up the dialog they are opening — otherwise it
-    /// closes the one they just prepared. The eight call sites that did it the other way round
-    /// were reordered at T037.
-    pub fn clear_for_dialog(&mut self) {
-        crate::overlay::registry::close_dialogs(self);
-        crate::overlay::registry::close_popovers(self);
-        // A dialog opens with nothing focused. The fields that reported focus belong to a widget
-        // tree that is being torn down and will never report losing it, so a remembered focus would
-        // outlive them — and reopening the same dialog would draw its field focused over an input
-        // that has not been clicked (BUG-003).
-        self.focused_field = None;
-    }
-
     /// The one surface that does not take the keyboard — see [`State::any_surface_takes_keyboard`].
     /// Matched by id because the registry is the list; a typo here would silently make the
     /// terminal yield to its own right-click menu, so `the_terminals_own_context_menu_is_furniture`

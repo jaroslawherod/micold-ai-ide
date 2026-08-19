@@ -93,3 +93,23 @@ pub fn cursor_moved(state: &mut State, x: u16, y: u16) {
 pub fn resized(state: &mut State, width: u16, height: u16) {
     state.window_size = (width, height);
 }
+
+impl State {
+    /// Callers must invoke it **before** setting up the dialog they are opening — otherwise it
+    /// closes the one they just prepared. The eight call sites that did it the other way round
+    /// were reordered at T037.
+    /// **Moved here from `app.rs` by T067a-5.** The slot it clears is `focused_field`, which
+    /// `features/window.rs` owns since T063 — so this is the window's operation, and leaving it in
+    /// the root made eight feature reducers each look like they wrote window state when one
+    /// function does. Same shape T067a-7 found under `focus_terminal`; the guard reports *callers*
+    /// when the writer is root code it cannot attribute.
+    pub fn clear_for_dialog(&mut self) {
+        crate::overlay::registry::close_dialogs(self);
+        crate::overlay::registry::close_popovers(self);
+        // A dialog opens with nothing focused. The fields that reported focus belong to a widget
+        // tree that is being torn down and will never report losing it, so a remembered focus would
+        // outlive them — and reopening the same dialog would draw its field focused over an input
+        // that has not been clicked (BUG-003).
+        self.focused_field = None;
+    }
+}

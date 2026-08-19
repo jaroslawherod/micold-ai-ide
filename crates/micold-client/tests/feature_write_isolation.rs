@@ -211,47 +211,15 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // resolve — an outcome per group, not one per line.
     // =============================================================================================
 
-    // --- via `State::clear_for_dialog`, a root helper (T067) -------------------------------------
-    // Opening a dialog clears the focus slot, because the widget tree that reported focus is being
-    // torn down and will never report losing it (feature 006 BUG-003).
+    // --- group A is gone: `clear_for_dialog` moved (T067a-5) --------------------------------------
+    // Eight rows sat here, one per feature that opens a dialog, all writing `focused_field`. **None
+    // of them wrote it.** `State::clear_for_dialog` did, and it was root code the guard could not
+    // attribute, so it reported the callers instead. T067a-5 moved it into `features/window.rs`,
+    // which has owned `focused_field` since T063 — and a feature writing its *own* field is not a
+    // cross-feature write at all. Eight rows retired, no outcome written, no `DialogOpened` needed.
     //
-    // **T063 settled what these are.** While `focused_field` was `root`-owned the question was
-    // unanswerable — "is writing state nobody owns a violation?" — and T059 recorded it as open.
-    // Now `window` owns it, so these are ordinary cross-feature writes with a named owner, and
-    // T067 can propose the outcome it could not propose before: something like `DialogOpened`,
-    // applied by the root to the window feature.
-    ("help", "focused_field", "features/help.rs::about_opened"),
-    (
-        "project",
-        "focused_field",
-        "features/project.rs::forget_requested",
-    ),
-    (
-        "project",
-        "focused_field",
-        "features/project.rs::rename_started",
-    ),
-    (
-        "session",
-        "focused_field",
-        "features/session.rs::remove_requested",
-    ),
-    ("settings", "focused_field", "features/settings.rs::opened"),
-    (
-        "worktree",
-        "focused_field",
-        "features/worktree.rs::delete_requested",
-    ),
-    (
-        "worktree",
-        "focused_field",
-        "features/worktree.rs::rename_started",
-    ),
-    (
-        "worktree_form",
-        "focused_field",
-        "features/worktree_form.rs::opened",
-    ),
+    // Second time this shape appeared; T067a-7 found the first under `focus_terminal`. The lesson
+    // both times: a row count is not a violation count when the writer is root code.
     // --- `session::focus_terminal` (T067a-7) -----------------------------------------------------
     // Putting a terminal in front of the user gives it the keyboard, which clears whatever field
     // held it (FR-011). **This was five rows, plus the one above, until T067a-7 moved the function
