@@ -159,13 +159,7 @@ itself with nothing supplying it; confirm all four placements.
   >   own attribution test rather than joining `SCROLL_CONTENT`.
 - [X] T023 [US1] Move the `form_field` gallery fixture's active-state pose off `Select` and onto `TextField`, which can report focus, in `crates/micold-client/src/ui/material/form_field_anatomy.rs` and `crates/micold-client/src/showcase/sections/controls.rs` — the one call site `active(bool)` had (contract §3)
 - [X] T024 [US1] Confirm `selecting_a_type_sets_the_form_value` and `type_selection_is_ignored_while_creating` in `crates/micold-client/tests/app_state.rs` pass **unmodified**, and that `crates/micold-client/src/ui/worktree_form.rs`'s call is unchanged — the regression check on FR-030 (SC-009)
-- [ ] T025 [US1] Run [quickstart.md](./quickstart.md) §B1, §B3–§B6 in both schemes and record the pass
-
-  > **Partially run 2026-08-19**, on Xvfb + lavapipe per the repo's `visual-pass` skill —
-  > [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md). §B1, §B3, §B4's four keys and two of
-  > §B5's four placements are settled there, in both schemes and as sampled colours rather than as
-  > impressions. It stays open on the half the **gallery cannot pose**: §B5's dialog placement and
-  > the whole of §B6, which need the client and the daemon.
+- [X] T025 [US1] Run [quickstart.md](./quickstart.md) §B1, §B3–§B6 in both schemes and record the pass — **done 2026-08-19** across two runs, Xvfb + lavapipe per the repo's `visual-pass` skill: the gallery in [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md) (§B1's eight properties, §B3, §B4, §B5's bottom-edge and full-page placements) and the client and daemon in [evidence/B-client-pass.md](./evidence/B-client-pass.md) (§B5's dialog placement, §B6). Written as sampled colours and distances rather than as impressions. **Two clauses are not covered and are not claimed**: §B5's right-edge placement is *unposable* — neither surface has a trigger there — and §B4's "reach it by Tab / Tab out of it" was not exercised. §B2 is T011's and T028's, and stays open on the interruption clause.
 
   > **Blocked on eyes at a display**, like T011. The machine-checkable half is done and is in
   > `src/ui/material/select_anatomy.rs` (the trigger, the chevron, the label's two positions, and
@@ -279,11 +273,12 @@ the durability half of the request.
   > the arbiter, not this.
 - [ ] T040 Run [quickstart.md](./quickstart.md) end to end and record the full pass — the date, the platform, and **which half was machine-checked**. §B1 and §B2 are this feature's two headline claims and neither can be automated; a green suite is not this feature working
 
-  > **Partially run 2026-08-19**, on Xvfb + lavapipe per the repo's `visual-pass` skill —
-  > [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md). §B1, §B3, §B4's four keys and two of
-  > §B5's four placements are settled there, in both schemes and as sampled colours rather than as
-  > impressions. It stays open on the half the **gallery cannot pose**: §B5's dialog placement and
-  > the whole of §B6, which need the client and the daemon.
+  > **Substantially run 2026-08-19**, on Xvfb + lavapipe per the repo's `visual-pass` skill:
+  > [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md) and
+  > [evidence/B-client-pass.md](./evidence/B-client-pass.md) together cover §B1 and §B3–§B6 in both
+  > schemes (T025). This task is the *whole* quickstart, so it stays open on the one part neither
+  > run could reach — §B2's interruption and press-during-exit clauses, which are T011's and T028's
+  > blocker too.
 
   > **Blocked on eyes at a display** — the fourth and last of these, with T011, T025 and T028, and
   > the one that subsumes them. The task's own wording is the finding: a green suite is not this

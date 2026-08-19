@@ -10,8 +10,8 @@ the build lock and launched from that private copy.
 confirmed to hold no other window before the first capture, and everything started here was stopped
 by PID afterwards.
 
-**Scope**: the gallery. §B5's dialog placement and the whole of §B6 need the client and the daemon
-and are **not** covered — see *What is still unrun*. T039's platform question is answered
+**Scope**: the gallery. §B5's dialog placement and the whole of §B6 need the client and the daemon;
+they were run separately the same day and are in [B-client-pass.md](./B-client-pass.md). T039's platform question is answered
 separately in [T039-three-os-matrix.md](./T039-three-os-matrix.md).
 
 ## Why most of this is numbers rather than descriptions
@@ -107,15 +107,15 @@ client half.
 
 | # | Placement | |
 |---|---|---|
-| 1 | inside the add-worktree dialog | **not run** — needs the client |
+| 1 | inside the add-worktree dialog | **PASS**, both schemes — needs the client, so it is in [B-client-pass.md](./B-client-pass.md) |
 | 2 | at the bottom edge of the window | **PASS** — `b5-flips-above-at-the-bottom-edge.png`: the field sits at y≈1362 of a 1400-tall window and its list is drawn *above* it, complete and unclipped |
 | 3 | at the right edge | **not posed** — every gallery control is full width, so there is no right-edge trigger to open |
 | 4 | on a full-height page | **PASS** — this is the gallery, and both lists opened correctly at every scroll position used above |
 
-## §B6 — the application still works (SC-009) — **not run**
+## §B6 — the application still works (SC-009) — **run separately**
 
-Needs the client and the daemon: open the add-worktree dialog, pick a type, create a worktree, then
-repeat choosing nothing and confirm the form still validates. Nothing in the gallery can answer it.
+Needs the client and the daemon; nothing in the gallery can answer it. Run the same day against a
+throwaway project — [B-client-pass.md](./B-client-pass.md).
 
 ## §B7 — both schemes — **PASS for what was covered**
 
@@ -128,7 +128,7 @@ a plain `xdotool click` left it on hover without activating.
 | Task | State |
 |---|---|
 | T011 — §B2 against the type-ahead, *including whether an interrupted transition resumes* | **open** — the interruption is beyond a screenshot pipeline |
-| T025 — §B1, §B3–§B6 in both schemes | **open** — B1, B3, B4 and half of B5 are done here; B5's dialog and B6 need the client |
+| T025 — §B1, §B3–§B6 in both schemes | **closed** — B1, B3, B4 and two placements here; B5's dialog and B6 in [B-client-pass.md](./B-client-pass.md) |
 | T028 — §B2 against both pickers, *including interruption and press-during-exit* | **open** — same limit as T011 |
 | T039 — the three-platform matrix | **done**, recorded separately |
 | T040 — the whole quickstart end to end | **open** — B6 is the missing piece |
