@@ -182,6 +182,29 @@ jobs:
   # this job no longer has to be advisory to avoid blocking concurrent features -- what it still
   # cannot do is fail a *false* positive within 021, which is what `continue-on-error` is now
   # buying, and what T074 weighs before removing it.
+  # Feature 027. The sandbox adapter layer is tested on all three platforms by the `test` job
+  # above, against an injected fake runner with nothing installed -- that is what keeps Principle
+  # VI's coverage of it honest. This job covers the part a fake cannot: that the argv we construct
+  # is accepted by a real container runtime, and that the isolation it produces is real.
+  #
+  # Linux-only on purpose. Docker Desktop is not available on GitHub's macOS and Windows runners,
+  # so the alternative to a Linux-only job is no real-runtime job at all. The asymmetry is in test
+  # *depth*, not in behaviour: nothing in the sandbox layer branches on the host platform except
+  # `pathmap`, which the cross-platform job covers directly.
+  sandbox-runtime:
+    name: sandbox against a real runtime (linux)
+    needs: classify
+    if: needs.classify.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Runtime version
+        run: docker version --format '{{.Server.Version}}' && docker info --format '{{.Driver}}'
+      - name: Test (real runtime)
+        run: cargo test -p micold-core --features sandbox-real-runtime sandbox_real_ -- --test-threads=1
+
   assertions:
     name: assertion freeze (advisory)
     needs: classify
@@ -239,7 +262,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, test, assertions, docs]
+    needs: [classify, lint, test, sandbox-runtime, assertions, docs]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -252,6 +275,7 @@ jobs:
           CLASSIFY: ${{ needs.classify.result }}
           LINT: ${{ needs.lint.result }}
           TEST: ${{ needs.test.result }}
+          SANDBOX: ${{ needs.sandbox-runtime.result }}
           DOCS: ${{ needs.docs.result }}
           ASSERTIONS: ${{ needs.assertions.result }}
         run: |
@@ -267,6 +291,7 @@ jobs:
           check classify "$CLASSIFY"
           check lint "$LINT"
           check test "$TEST"
+          check sandbox "$SANDBOX"
           check docs "$DOCS"
           # `assertions` is advisory by design (continue-on-error, see its comment above), so it is
           # reported but never gates. Promoting it means moving it into check() above.
@@ -279,6 +304,7 @@ jobs:
             echo "| classify | \`$CLASSIFY\` | yes |"
             echo "| lint | \`$LINT\` | yes |"
             echo "| test | \`$TEST\` | yes |"
+            echo "| sandbox-runtime | \`$SANDBOX\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
             echo "| assertions | \`$ASSERTIONS\` | no (advisory) |"
           } >> "$GITHUB_STEP_SUMMARY"

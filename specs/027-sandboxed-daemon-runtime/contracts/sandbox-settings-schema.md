@@ -18,7 +18,7 @@ One field on the root document:
 
 ```jsonc
 {
-  "version": 4,
+  "settings_version": 4,
   "theme": "System",
   "scrollback_lines": 10000,
   "env_include_enabled": true,
@@ -26,13 +26,13 @@ One field on the root document:
   "env_include_timeout_secs": 10,
 
   "daemon": {
-    "placement": "HostProcess",          // "HostProcess" | "LocalSandbox"
+    "placement": "host_process",         // "host_process" | "local_sandbox"
     "sandbox": {
-      "runtime": "Docker",               // "Docker" | "Podman"
+      "runtime": "docker",               // "docker" | "podman"
       "image": {
-        "kind": "Registry",              // "Registry" | "ImportedFile" | "LocalBuild"
+        "kind": "registry",              // "registry" | "imported_file" | "local_build"
         "reference": "ghcr.io/<org>/micold-daemon:<version>",
-        "path": null                     // set only when kind = "ImportedFile"
+        "path": null                     // set only when kind = "imported_file"
       },
       "budget": {
         "cpus_milli": 2000,              // null = runtime default
@@ -40,8 +40,8 @@ One field on the root document:
         "pids": 512,
         "storage_bytes": null
       },
-      "network": "NoOutbound",           // "NoOutbound" | "Outbound"
-      "credentials": [],                 // subset of GitConfig|SshAgent|GitCredentials|AiCliAuth
+      "network": "no_outbound",          // "no_outbound" | "outbound"
+      "credentials": [],                 // subset of git_config|ssh_agent|git_credentials|ai_cli_auth
       "survive_logout": false
     }
   }
@@ -55,7 +55,7 @@ the grouping user-visible, and matching it on disk keeps the two readable togeth
 ## Rules
 
 **S-1 — Every added field has a serde default.** A v3 document read by v4 code yields
-`placement: HostProcess` and a default `sandbox` block. No migration step, no rewrite on read; the
+`placement: host_process` and a default `sandbox` block. No migration step, no rewrite on read; the
 file is rewritten only when the user next saves. This is the existing contract's rule and the reason
 v2 and v3 needed no migration code either.
 
@@ -67,7 +67,7 @@ corrupt.
 never opened the sandbox section shares nothing, and an unrecognised entry in the array is dropped
 with a log line rather than failing the load.
 
-**S-4 — `placement` defaults to `HostProcess`.** Upgrading the app never moves a user into the
+**S-4 — `placement` defaults to `host_process`.** Upgrading the app never moves a user into the
 sandbox. Enabling it is an explicit act (FR-001).
 
 **S-5 — Unknown fields are preserved on read and rewritten on save.** A settings file written by a
@@ -102,7 +102,7 @@ Probed `RuntimeCapabilities` are also not stored here — they are a cache keyed
 
 | # | Check | Rule |
 |---|---|---|
-| T-1 | a verbatim v3 document loads, yields `HostProcess` + default sandbox, `version` reads as 4 after save | S-1 |
+| T-1 | a verbatim v3 document loads, yields `host_process` + default sandbox, `settings_version` reads as 4 after save | S-1 |
 | T-2 | `daemon` absent / `daemon.sandbox` absent / each leaf absent each resolve to the documented default | S-2 |
 | T-3 | `credentials` absent yields the empty set; an unknown entry is dropped, the rest survive | S-3 |
 | T-4 | an unknown root key survives a load/save round-trip | S-5 |
@@ -110,3 +110,10 @@ Probed `RuntimeCapabilities` are also not stored here — they are a cache keyed
 | T-6 | out-of-range budget values clamp and report | S-7 |
 | T-7 | the full v4 document round-trips byte-stably | — |
 | T-8 | no serialised form of the token appears anywhere in the written file | Not stored |
+
+## Casing, corrected during implementation
+
+The examples above originally showed PascalCase variants (`"HostProcess"`, `"Registry"`). The
+durable settings document is snake_case — `theme` established that in feature 003's contract — and
+one file with two casings is a trap for whoever hand-edits it next. The new enums carry
+`#[serde(rename_all = "snake_case")]` to match, and the examples above are the corrected form.

@@ -113,11 +113,23 @@ job, plus `quickstart.md` Part B).
 
 ## The fake runtime
 
-A small executable placed first on `PATH` for the test. It appends its argv to a file and prints
-canned stdout selected by an environment variable, so a test can assert *what was asked for* and
-control *what came back* — including failures that are hard to arrange with a real runtime
-(daemon down, disk full, image vanishing between inspect and create). It is the reason CI needs no
-Docker on any platform, which is what keeps Principle VI's coverage honest for the adapter layer.
+**Amended during implementation (T004).** This was specified as a small executable placed first on
+`PATH`. That shape does not survive contact with `cargo test`: `PATH` is process-global, cargo runs
+tests as parallel **threads** of one process, and a test that rewrites `PATH` rewrites it for every
+other test running at that moment. (Edition 2024 makes the same point by marking `set_var`
+`unsafe`.) A harness that races is worse than no harness, because it fails intermittently and gets
+blamed on the code under test.
+
+So the seam is one level in, at `sandbox/exec.rs`: `CommandRunner` is injected, `SystemRunner`
+spawns for real, and `RecordingRunner` records argv and replays canned output in-process. A test
+asserts on the recorded invocations to check *what was asked for*, and seeds the response queue to
+control *what came back* — including failures that are hard to arrange with a real runtime (daemon
+down, disk full, an image vanishing between inspect and create).
+
+Everything the conformance suite asserts — argv construction, output parsing, error classification
+— sits **above** this seam and is exercised identically on all three platforms with nothing
+installed, which was the property the fake binary existed to provide. What remains below it is the
+spawn itself, covered by one real-spawn test against a command every platform ships.
 
 ## Adding a runtime
 

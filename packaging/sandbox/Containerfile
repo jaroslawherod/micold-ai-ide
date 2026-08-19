@@ -1,0 +1,39 @@
+# The sandbox image: the session daemon plus what a session needs to be useful (feature 027).
+#
+# Built for `podman build` as readily as `docker build` — nothing here is Docker-specific, which is
+# the same reason the runtime abstraction exists at all (FR-020).
+#
+# What is deliberately NOT here: any credential, any host path, and any means of reaching the
+# runtime that started this container. The image is the same for every user; identity is applied at
+# run time (`--user <uid>:<gid>`, or podman's `--userns=keep-id`), so nothing about the host is
+# baked in. See specs/027-sandboxed-daemon-runtime/contracts/container-runtime.md, obligation C-4.
+
+FROM docker.io/library/debian:bookworm-slim AS runtime-base
+
+# Session tooling. `git` is not optional: the daemon runs it for worktree management, and feature
+# 027's whole path-identity decision (research R2) exists because it does.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      git \
+      openssh-client \
+      procps \
+      less \
+      bash \
+ && rm -rf /var/lib/apt/lists/*
+
+# The daemon's state directory. Mounted as a named volume at run time so it survives container
+# recreation (FR-011); created here so the path exists even before the volume is attached.
+RUN mkdir -p /var/lib/micold && chmod 0777 /var/lib/micold
+ENV MICOLD_STATE_DIR=/var/lib/micold
+
+# Where the client's authentication token is mounted, read-only (research R1). The daemon reads it
+# at startup. It is a mount point, never a file baked into the image.
+ENV MICOLD_TOKEN_PATH=/run/micold/token
+
+COPY micold-daemon /usr/local/bin/micold-daemon
+
+# No USER directive: the uid is supplied at run time so the image works for every user. A uid baked
+# in here would be correct only for whoever happened to match it.
+EXPOSE 7727
+ENTRYPOINT ["/usr/local/bin/micold-daemon"]

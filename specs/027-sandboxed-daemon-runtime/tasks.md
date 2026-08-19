@@ -38,12 +38,12 @@ tests in each crate's `tests/` directory.
 **Purpose**: the scaffolding every later phase compiles against, plus the test harness that makes
 Principle I affordable for a feature whose subject is a subprocess.
 
-- [ ] T001 Create the module skeleton in `crates/micold-core/src/sandbox/` — `mod.rs`, `placement.rs`, `runtime.rs`, `argv.rs`, `parse.rs`, `exec.rs`, `image.rs`, `pathmap.rs`, `dialect/mod.rs` — each with its doc comment and `todo!()` bodies, wired into `crates/micold-core/src/lib.rs`
-- [ ] T002 [P] Create `packaging/sandbox/Containerfile` building the daemon plus shell, git and the AI CLI, and `packaging/sandbox/README.md` documenting build, publish, and `docker save`/`load` export
-- [ ] T003 [P] Add `[tasks.image]` to `mise.toml` building a `:dev` image from the working tree (FR-024c), routed through `scripts/build-lock.sh` like the other build tasks
-- [ ] T004 Build the fake runtime harness in `crates/micold-core/tests/support/fake_runtime.rs` — a binary placed first on `PATH` that appends its argv to a file and replays canned stdout selected by an environment variable, per contracts/container-runtime.md §"The fake runtime"
-- [ ] T005 [P] Add canned runtime fixtures in `crates/micold-core/tests/fixtures/runtime/` — `docker_version.json`, `docker_inspect_container.json`, `docker_inspect_image.json`, `podman_version.json`, plus failure fixtures for daemon-down, image-not-found, permission-denied and truncated JSON
-- [ ] T006 [P] Add the Linux-only real-runtime CI job to the workflow under `.github/workflows/`, running the `sandbox_real_*` tests behind a feature flag so the default matrix stays runtime-free
+- [X] T001 Create the module skeleton in `crates/micold-core/src/sandbox/` — `mod.rs`, `placement.rs`, `runtime.rs`, `argv.rs`, `parse.rs`, `exec.rs`, `image.rs`, `pathmap.rs`, `dialect/mod.rs` — each with its doc comment and `todo!()` bodies, wired into `crates/micold-core/src/lib.rs`
+- [X] T002 [P] Create `packaging/sandbox/Containerfile` building the daemon plus shell, git and the AI CLI, and `packaging/sandbox/README.md` documenting build, publish, and `docker save`/`load` export
+- [X] T003 [P] Add `[tasks.image]` to `mise.toml` building a `:dev` image from the working tree (FR-024c), routed through `scripts/build-lock.sh` like the other build tasks
+- [X] T004 Build the fake runtime harness in `crates/micold-core/src/sandbox/exec.rs` — `CommandRunner` injected, `RecordingRunner` recording argv and replaying canned output in-process. **Deviates from contracts/container-runtime.md §"The fake runtime"**, which specified a binary first on `PATH`: `PATH` is process-global and cargo runs tests as parallel threads, so that harness races by construction (and edition 2024 marks `set_var` `unsafe`). Everything the conformance suite asserts sits above the seam and is unchanged; `SystemRunner` keeps one real-spawn test
+- [X] T005 [P] Add canned runtime fixtures in `crates/micold-core/tests/fixtures/runtime/` — `docker_version.json`, `docker_inspect_container.json`, `docker_inspect_image.json`, `podman_version.json`, plus failure fixtures for daemon-down, image-not-found, permission-denied and truncated JSON
+- [X] T006 [P] Add the Linux-only real-runtime CI job to the workflow under `.github/workflows/`, running the `sandbox_real_*` tests behind a feature flag so the default matrix stays runtime-free
 
 **Checkpoint**: the workspace compiles, and a test can assert on argv without Docker installed.
 
@@ -58,8 +58,8 @@ story depends on all of it.
 
 ### Placement and connection
 
-- [ ] T007 *(test)* Write `crates/micold-core/tests/placement.rs` — resolution is pure (P-1), never substitutes a placement (P-2), and a fallback is not representable as a resolution outcome (P-3), per data-model.md §1
-- [ ] T008 Implement `Placement`, `RemotePlacement` and resolution in `crates/micold-core/src/sandbox/placement.rs`, including the non-constructible `Remote` variant FR-003a requires
+- [X] T007 *(test)* Write `crates/micold-core/tests/placement.rs` — resolution is pure (P-1), never substitutes a placement (P-2), and a fallback is not representable as a resolution outcome (P-3), per data-model.md §1
+- [X] T008 Implement `Placement`, `RemotePlacement` and resolution in `crates/micold-core/src/sandbox/placement.rs`, including the non-constructible `Remote` variant FR-003a requires
 - [ ] T009 *(test)* Extend `crates/micold-core/tests/connect.rs` for `connect_or_start(placement)` — the host-process path is byte-for-byte unchanged, and a sandbox placement takes the new path
 - [ ] T010 Rename and generalise `connect_or_spawn` to `connect_or_start(placement)` in `crates/micold-core/src/connect.rs`, updating every call site
 - [ ] T011 Add the loopback-TCP endpoint alongside socket and named pipe in `crates/micold-core/src/endpoint.rs`, keeping the existing `0700`-directory contract intact for the host placement (R1)
@@ -76,17 +76,17 @@ story depends on all of it.
 
 ### Settings v3 → v4
 
-- [ ] T019 *(test)* Write the v4 cases in `crates/micold-core/tests/settings_roundtrip.rs` — T-1 … T-8 from contracts/sandbox-settings-schema.md, with T-3 (credentials absent → **empty**) called out as a security property
-- [ ] T020 Add the nested `daemon` block to `Settings` in `crates/micold-core/src/settings.rs`, bump `SETTINGS_VERSION` to 4, and give every added field a serde default (S-1, S-2, S-4)
-- [ ] T021 Implement unknown-field preservation across load/save in `crates/micold-core/src/settings.rs` (S-5) — new in v4, since the flat schema never needed it
-- [ ] T022 Implement budget clamping in `crates/micold-core/src/sandbox/mod.rs` following the existing `clamp_scrollback` / `clamp_env_include_timeout` idiom (S-7, RB-1)
+- [X] T019 *(test)* Write the v4 cases in `crates/micold-core/tests/settings_roundtrip.rs` — T-1 … T-8 from contracts/sandbox-settings-schema.md, with T-3 (credentials absent → **empty**) called out as a security property
+- [X] T020 Add the nested `daemon` block to `Settings` in `crates/micold-core/src/settings.rs`, bump `SETTINGS_VERSION` to 4, and give every added field a serde default (S-1, S-2, S-4)
+- [X] T021 Implement unknown-field preservation across load/save in `crates/micold-core/src/settings.rs` (S-5) — new in v4, since the flat schema never needed it
+- [X] T022 Implement budget clamping in `crates/micold-core/src/sandbox/mod.rs` following the existing `clamp_scrollback` / `clamp_env_include_timeout` idiom (S-7, RB-1)
 
 ### The runtime seam
 
 - [ ] T023 *(test)* Write `crates/micold-core/tests/sandbox_runtime.rs` against the fake runtime — K-8 (each canned failure maps to its `RuntimeError` variant), K-9 (stop/remove/start idempotent), K-12 (malformed JSON classifies, never panics)
 - [ ] T024 Define the `ContainerRuntime` trait, `RuntimeKind`, `RuntimeVersion`, `RuntimeCapabilities`, `LimitSupport`, `IdentityMapping` and the closed `RuntimeError` in `crates/micold-core/src/sandbox/runtime.rs` (contracts/container-runtime.md §"The trait", C-6)
-- [ ] T025 Implement the single process-spawn shim in `crates/micold-core/src/sandbox/exec.rs` — the only impure code in the layer
-- [ ] T026 Implement `--format '{{json .}}'` parsing into typed facts in `crates/micold-core/src/sandbox/parse.rs`, with truncated and unexpected input classified rather than unwrapped
+- [X] T025 Implement the single process-spawn shim in `crates/micold-core/src/sandbox/exec.rs` — the only impure code in the layer
+- [X] T026 Implement `--format '{{json .}}'` parsing into typed facts in `crates/micold-core/src/sandbox/parse.rs`, with truncated and unexpected input classified rather than unwrapped
 
 **Checkpoint**: placement resolves, the handshake authenticates, settings persist, and the trait exists with a testable fake behind it. User stories can now proceed.
 
@@ -102,10 +102,10 @@ table — all three fail while the same commands against the project succeed.
 
 ### Tests first
 
-- [ ] T027 *(test)* [P] [US1] Write `crates/micold-core/tests/sandbox_argv.rs` — K-1 (argv is a pure function of the spec, identical across repeated builds) and K-4 (argv mounts equal the `MountSet` as sets)
-- [ ] T028 *(test)* [P] [US1] Add K-5 to `crates/micold-core/tests/sandbox_argv.rs` — on Linux/macOS specs every `ProjectMount` has `container == host` (M-2, the claim git's worktree metadata depends on)
-- [ ] T029 *(test)* [P] [US1] Add K-11 to `crates/micold-core/tests/sandbox_argv.rs` — the escalation denylist: no `--privileged`, `--cap-add`, `--pid=host`, `--network=host`, `seccomp=unconfined`, and no host path outside the `MountSet` (C-9)
-- [ ] T030 *(test)* [P] [US1] Add K-6 to `crates/micold-core/tests/sandbox_argv.rs` — the identity flag matches the dialect's `IdentityMapping` (C-4, R3)
+- [X] T027 *(test)* [P] [US1] Write `crates/micold-core/tests/sandbox_argv.rs` — K-1 (argv is a pure function of the spec, identical across repeated builds) and K-4 (argv mounts equal the `MountSet` as sets)
+- [X] T028 *(test)* [P] [US1] Add K-5 to `crates/micold-core/tests/sandbox_argv.rs` — on Linux/macOS specs every `ProjectMount` has `container == host` (M-2, the claim git's worktree metadata depends on)
+- [X] T029 *(test)* [P] [US1] Add K-11 to `crates/micold-core/tests/sandbox_argv.rs` — the escalation denylist: no `--privileged`, `--cap-add`, `--pid=host`, `--network=host`, `seccomp=unconfined`, and no host path outside the `MountSet` (C-9)
+- [X] T030 *(test)* [P] [US1] Add K-6 to `crates/micold-core/tests/sandbox_argv.rs` — the identity flag matches the dialect's `IdentityMapping` (C-4, R3)
 - [ ] T031 *(test)* [P] [US1] Write `crates/micold-core/tests/sandbox_credentials.rs` — the empty default shares nothing, each opt-in adds exactly its own mount and no other, and no free-text path can enter through the credentials field (N-1)
 - [ ] T032 *(test)* [P] [US1] Add K-10 to `crates/micold-core/tests/sandbox_runtime.rs` — `acquire_image` emits more than one progress callback for multi-layer canned output (C-8)
 
@@ -113,10 +113,10 @@ table — all three fail while the same commands against the project succeed.
 
 - [ ] T033 [US1] Implement `SandboxProfile`, `CredentialShare` and the empty-by-default credential set in `crates/micold-core/src/sandbox/mod.rs` (SP-1, FR-004a/b)
 - [ ] T034 [US1] Implement `MountSet`, `ProjectMount`, `NamedVolume` and `SecretMount` in `crates/micold-core/src/sandbox/mod.rs` — only registered projects, no implicit home, no runtime socket (M-1, C-3)
-- [ ] T035 [US1] Implement host↔sandbox path identity in `crates/micold-core/src/sandbox/pathmap.rs` — identity on Linux/macOS, with the Windows boundary declared but unused until T099 (R2)
-- [ ] T036 [US1] Implement the mount and identity portions of argv construction in `crates/micold-core/src/sandbox/argv.rs`, pure and argument-driven (C-1)
-- [ ] T037 [US1] Implement Docker's dialect — flag names, defaults, `--user <uid>:<gid>` — in `crates/micold-core/src/sandbox/dialect/docker.rs` (FR-021, C-4)
-- [ ] T038 [US1] Implement `ImageRef` parsing, moving-tag detection and the pull/import/build decision in `crates/micold-core/src/sandbox/image.rs` (FR-024, FR-024a–c)
+- [X] T035 [US1] Implement host↔sandbox path identity in `crates/micold-core/src/sandbox/pathmap.rs` — identity on Linux/macOS, with the Windows boundary declared but unused until T099 (R2)
+- [X] T036 [US1] Implement the mount and identity portions of argv construction in `crates/micold-core/src/sandbox/argv.rs`, pure and argument-driven (C-1)
+- [X] T037 [US1] Implement Docker's dialect — flag names, defaults, `--user <uid>:<gid>` — in `crates/micold-core/src/sandbox/dialect/docker.rs` (FR-021, C-4)
+- [X] T038 [US1] Implement `ImageRef` parsing, moving-tag detection and the pull/import/build decision in `crates/micold-core/src/sandbox/image.rs` (FR-024, FR-024a–c)
 - [ ] T039 [US1] Implement `acquire_image` with progress reporting, and `create`/`start`/`stop`/`remove`/`inspect` over the exec shim in `crates/micold-core/src/sandbox/runtime.rs` (C-7, C-8)
 - [ ] T040 [US1] Implement the sandbox lifecycle side of `connect_or_start` in `crates/micold-core/src/connect.rs` — probe, acquire, start, handshake — returning classified failures rather than falling back (P-2)
 - [ ] T041 [US1] Add the client-side sandbox lifecycle state in `crates/micold-client/src/features/sandbox.rs` and the off-thread runtime calls, progress and failure-to-`Message` glue in `crates/micold-client/src/shell/sandbox.rs`
@@ -140,16 +140,16 @@ the catalogue survives; reboot with survival opted out and opted in and confirm 
 ### Tests first
 
 - [ ] T046 *(test)* [P] [US2] Write `crates/micold-core/tests/sandbox_state_volume.rs` — daemon state is a named volume, not a bind mount, and survives a create/remove/create cycle in the fake runtime's argv (M-3, FR-011)
-- [ ] T047 *(test)* [P] [US2] Add restart-policy cases to `crates/micold-core/tests/sandbox_argv.rs` — survival enabled yields `--restart unless-stopped`, disabled yields `--restart no`, on all three platforms' specs (R6, FR-014a/b)
+- [X] T047 *(test)* [P] [US2] Add restart-policy cases to `crates/micold-core/tests/sandbox_argv.rs` — survival enabled yields `--restart unless-stopped`, disabled yields `--restart no`, on all three platforms' specs (R6, FR-014a/b)
 - [ ] T048 *(test)* [P] [US2] Add port-publishing cases to `crates/micold-core/tests/sandbox_argv.rs` — a user-exposed port appears as a published port, and the daemon's own control port is always published to loopback
 - [ ] T049 *(test)* [P] [US2] Extend `crates/micold-daemon/tests/` for reconnect across a client restart while sandboxed, asserting the session catalogue and scrollback are intact (FR-014)
 
 ### Implementation
 
 - [ ] T050 [US2] Implement the state named volume and its mount in `crates/micold-core/src/sandbox/mod.rs` and `argv.rs`, so `projects.json`, per-project state and logs survive container recreation (FR-011)
-- [ ] T051 [US2] Map the existing session-survival opt-in onto the runtime's restart policy in `crates/micold-core/src/sandbox/argv.rs`, and route `logout_survival.rs`'s outcome through the placement so the setting keeps one name and one meaning (R6)
+- [X] T051 [US2] Map the existing session-survival opt-in onto the runtime's restart policy in `crates/micold-core/src/sandbox/argv.rs`, and route `logout_survival.rs`'s outcome through the placement so the setting keeps one name and one meaning (R6)
 - [ ] T052 [US2] Report `SurvivalOutcome::Enabled` for the sandboxed placement on macOS and Windows in `crates/micold-core/src/logout_survival.rs`, where the host-process path reports `Unsupported` (FR-014b — the bar the spec raises deliberately)
-- [ ] T053 [US2] Implement user-exposed port publishing in `crates/micold-core/src/sandbox/argv.rs` and its setting in `crates/micold-core/src/sandbox/mod.rs` (US2 scenario 8)
+- [X] T053 [US2] Implement user-exposed port publishing in `crates/micold-core/src/sandbox/argv.rs` and its setting in `crates/micold-core/src/sandbox/mod.rs` (US2 scenario 8)
 - [ ] T054 [US2] Verify worktree creation inside the sandbox lands on the host under `<project>/.claude/worktrees/` and add the assertion to `crates/micold-daemon/tests/` (US2 scenario 2, Principle III)
 - [ ] T055 [US2] Ensure git author identity resolves inside the sandbox — via the `GitConfig` credential opt-in when enabled, and with a named, actionable failure when a commit is attempted without it (US2 scenario 7, US1 scenario 6)
 - [ ] T056 [US2] Confirm terminal behaviour parity — rendering, resize, title, bell, clipboard — across the sandboxed transport, extending `crates/micold-client/tests/` where the transport is observable (US2 scenario 6, SC-001)
@@ -207,19 +207,19 @@ happened rather than showing an unexplained dead session.
 
 ### Tests first
 
-- [ ] T076 *(test)* [P] [US4] Add K-2 to `crates/micold-core/tests/sandbox_argv.rs` — each supported limit produces exactly its flag with the expected unit conversion
-- [ ] T077 *(test)* [P] [US4] Add K-3 to `crates/micold-core/tests/sandbox_argv.rs` — an unsupported limit produces **no** flag and reconciliation reports it with a reason (C-2, R5 — checked as behaviour, not documented as a caveat)
-- [ ] T078 *(test)* [P] [US4] Add K-7 to `crates/micold-core/tests/sandbox_argv.rs` — `NoOutbound` emits the masquerade-disabled network **and** the published port, and asserts the measured failure mode (an `--internal` network making the port inert) is never generated (C-5, R4)
+- [X] T076 *(test)* [P] [US4] Add K-2 to `crates/micold-core/tests/sandbox_argv.rs` — each supported limit produces exactly its flag with the expected unit conversion
+- [X] T077 *(test)* [P] [US4] Add K-3 to `crates/micold-core/tests/sandbox_argv.rs` — an unsupported limit produces **no** flag and reconciliation reports it with a reason (C-2, R5 — checked as behaviour, not documented as a caveat)
+- [X] T078 *(test)* [P] [US4] Add K-7 to `crates/micold-core/tests/sandbox_argv.rs` — `NoOutbound` emits the masquerade-disabled network **and** the published port, and asserts the measured failure mode (an `--internal` network making the port inert) is never generated (C-5, R4)
 - [ ] T079 *(test)* [P] [US4] Write `crates/micold-core/tests/sandbox_capabilities.rs` — the probe is cached against the runtime version and re-runs when it changes, and `reconcile` is pure, total, and never mutates the profile (RC-1, RC-2, RC-3)
 - [ ] T080 *(test)* [P] [US4] Add range cases to `crates/micold-core/tests/settings_roundtrip.rs` — a value below a documented workable minimum is refused on save with a message naming the accepted range (US4 scenario 5, FR-016)
 
 ### Implementation
 
-- [ ] T081 [US4] Implement `ResourceBudget`, `MilliCpus` and `Bytes` as newtypes with `Option` semantics distinguishing unset from maximum, in `crates/micold-core/src/sandbox/mod.rs` (RB-1, RB-2)
+- [X] T081 [US4] Implement `ResourceBudget`, `MilliCpus` and `Bytes` as newtypes with `Option` semantics distinguishing unset from maximum, in `crates/micold-core/src/sandbox/mod.rs` (RB-1, RB-2)
 - [ ] T082 [US4] Implement `probe` and `RuntimeCapabilities` with per-limit `LimitSupport` carrying its reason, in `crates/micold-core/src/sandbox/runtime.rs` and `dialect/docker.rs` (R10, RC-1)
-- [ ] T083 [US4] Implement `reconcile(profile, caps) -> Vec<UnsatisfiableLimit>` in `crates/micold-core/src/sandbox/runtime.rs` — one fact consumed by both the view and the argv builder, so they cannot drift (RC-2)
+- [X] T083 [US4] Implement `reconcile(profile, caps) -> Vec<UnsatisfiableLimit>` in `crates/micold-core/src/sandbox/runtime.rs` — one fact consumed by both the view and the argv builder, so they cannot drift (RC-2)
 - [ ] T084 [US4] Emit the budget flags in `crates/micold-core/src/sandbox/argv.rs`, omitting any limit reconciliation reports as unsupported (C-2)
-- [ ] T085 [US4] Implement `NetworkPosture` and the masquerade-disabled user-defined network in `crates/micold-core/src/sandbox/mod.rs` and `dialect/docker.rs` (R4, C-5)
+- [X] T085 [US4] Implement `NetworkPosture` and the masquerade-disabled user-defined network in `crates/micold-core/src/sandbox/mod.rs` and `dialect/docker.rs` (R4, C-5)
 - [ ] T086 [US4] Render limits in `crates/micold-client/src/ui/settings/daemon.rs` — supported ones editable, unsupported ones **disabled with the reason**, never hidden and never silently accepted (FR-015, SC-009)
 - [ ] T087 [US4] Warn at the point of setting change that turning the network off stops the AI agent reaching its provider, in `crates/micold-client/src/ui/settings/daemon.rs` (US4 scenario 4)
 - [ ] T088 [US4] Report which limit was reached and which setting governs it when a session is stopped by one, in `crates/micold-client/src/features/sandbox.rs` (US4 scenario 3 — not an anonymous failure)
@@ -245,7 +245,7 @@ worktree or settings behaviour.
 
 ### Implementation
 
-- [ ] T093 [US5] Implement podman's dialect in `crates/micold-core/src/sandbox/dialect/podman.rs` — rootless defaults and `--userns=keep-id` (R3, C-4)
+- [X] T093 [US5] Implement podman's dialect in `crates/micold-core/src/sandbox/dialect/podman.rs` — rootless defaults and `--userns=keep-id` (R3, C-4)
 - [ ] T094 [US5] Implement `detect` for both dialects in `crates/micold-core/src/sandbox/runtime.rs`, distinguishing not-installed, not-running and not-permitted (US5 scenario 2)
 - [ ] T095 [US5] Add runtime selection to `crates/micold-client/src/ui/settings/daemon.rs` using the existing `Select` component, defaulting to Docker (SP-2, FR-021)
 - [ ] T096 [US5] Ensure a detect failure reports which of the three it is with a next step, and leaves the app with a working service path, in `crates/micold-client/src/features/sandbox.rs` (US5 scenario 2)

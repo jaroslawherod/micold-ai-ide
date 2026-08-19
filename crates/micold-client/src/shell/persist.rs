@@ -190,6 +190,8 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
             env_include_enabled: app.env_include_enabled,
             env_include_script_path: app.env_include_script_path.clone(),
             env_include_timeout_secs,
+            // The daemon section is not edited by this form; it is edited by its own (feature 027).
+            daemon: store.load().settings.daemon,
         }) {
             app.core
                 .notify_error(format!("Couldn't save your settings: {err}"));
@@ -318,6 +320,7 @@ mod tests {
             env_include_enabled: false,
             env_include_script_path: "/custom/env.sh".to_string(),
             env_include_timeout_secs: 42,
+            daemon: Default::default(),
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {
