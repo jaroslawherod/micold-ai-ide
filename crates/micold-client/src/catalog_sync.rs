@@ -1,0 +1,223 @@
+//! Folding the daemon's catalog snapshot back into the client's state.
+//!
+//! The daemon owns sessions, projects and worktrees; this module is where what it publishes becomes
+//! what the client renders. [`reconcile_catalog`] is that fold, and `wire_to_lifecycle` /
+//! `wire_to_worktree_status` are the two wire-enum translations it needs.
+//!
+//! # Why this is in the library rather than in `shell/daemon_sync.rs`
+//!
+//! It used to live in the binary, beside the arms that call it. That placement cost the project
+//! three bugs of one shape, because a function in the binary crate cannot be reached from `tests/`:
+//!
+//! - `010` BUG-011 — `Session::start`/`mark_running` were correct and had no production caller.
+//! - `012` BUG-003 — the daemon knew which shell instances were alive and never put it on the wire.
+//!   The **first** fix was still incomplete and shipped, because the daemon-side test closed a shell
+//!   explicitly (which removes the process) instead of letting one die on its own.
+//! - `012` BUG-004 — the bar's restart control decided correctly and the button never asked.
+//!
+//! Each time both halves had tests and the join had none. The daemon's tests called the transitions
+//! themselves; the client's fed hand-built snapshots in. Neither drove *daemon → wire → client*,
+//! which is the only place those bugs live.
+//!
+//! `micold-daemon` already dev-depends on `micold-client` (see its manifest — not a cycle, the
+//! client never depends on the daemon), so with the fold out here a test can build a real
+//! `DaemonState`, take the snapshot it would actually publish, and assert on the client state that
+//! results. `crates/micold-daemon/tests/catalog_join.rs` is that test.
+//!
+//! Nothing here changed in the move: the bodies are the ones the binary shipped, so a behavioural
+//! difference between this and what was reviewed would be a defect and not a decision.
+
+use std::collections::HashSet;
+
+use micold_core::protocol::messages::{CatalogSnapshot, WireLifecycle};
+use micold_core::session::{
+    Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellLifecycle,
+    TerminalMode,
+};
+
+use crate::app::State;
+
+/// Map a wire lifecycle back to the domain one (inverse of the daemon's `wire_lifecycle`).
+/// `InterruptedResumable` — a session the daemon found durably-running after a restart, never
+/// auto-relaunched — is carried through as its own state so the sidebar/status can present it
+/// distinctly and its select action resumes it (FR-006a).
+pub fn wire_to_lifecycle(w: &WireLifecycle) -> SessionLifecycle {
+    match w {
+        WireLifecycle::Idle => SessionLifecycle::Idle,
+        WireLifecycle::InterruptedResumable => SessionLifecycle::InterruptedResumable,
+        WireLifecycle::Starting => SessionLifecycle::Starting,
+        WireLifecycle::Running => SessionLifecycle::Running,
+        WireLifecycle::Restarting { attempts } => SessionLifecycle::Restarting {
+            attempts: *attempts,
+        },
+        WireLifecycle::Failed { .. } => SessionLifecycle::Failed,
+    }
+}
+
+/// Reconcile the client's core session state from the daemon's authoritative catalog snapshot
+/// (FR-011). The daemon owns sessions now, so each project's session list is made to mirror the
+/// snapshot: existing sessions have their lifecycle + label updated; sessions the daemon reports
+/// but the client lacks are added; sessions the daemon no longer reports (archived/removed) are
+/// dropped. A dangling `active_session` pointer is cleared.
+pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktrees: bool) {
+    // Mirror the daemon's project list into the client (T055). Add projects the daemon reports that
+    // the client lacks (e.g. opened in another window), and adopt the daemon's display name for known
+    // ones. Deliberately NOT a full mirror: projects are not *removed* here — a `CatalogChanged` that
+    // predates this client's own in-flight `ProjectAdd` must not drop the project it just opened, and
+    // an ephemeral (non-persisting) daemon reporting an empty catalog must not wipe the list. Forget
+    // drops the record locally (optimistically) and durably on the daemon.
+    for snap in &snapshot.projects {
+        if let Some(existing) = core
+            .workspace
+            .projects
+            .iter_mut()
+            .find(|p| p.path == snap.path)
+        {
+            existing.display_name = snap.display_name.clone();
+        } else {
+            let availability = if snap.available {
+                micold_core::project::Availability::Available
+            } else {
+                micold_core::project::Availability::Unavailable
+            };
+            let mut project = micold_core::project::Project::new(
+                snap.path.clone(),
+                snap.is_git_repo,
+                availability,
+            );
+            project.display_name = snap.display_name.clone();
+            core.workspace.projects.push(project);
+        }
+    }
+    // Sessions observed transitioning into `Restarting` this reconciliation (feature 008,
+    // FR-011/SC-007) — collected here and applied after the loop below, since
+    // `note_background_restart` needs `&mut core` while `list` still holds `core.workspace`
+    // borrowed. `note_background_restart` itself no-ops for the active project's session, so
+    // background-ness isn't checked here.
+    let mut newly_restarting: Vec<SessionId> = Vec::new();
+    for project in &snapshot.projects {
+        let list = core
+            .workspace
+            .sessions
+            .entry(project.path.clone())
+            .or_default();
+        let snap_ids: HashSet<SessionId> = project.sessions.iter().map(|s| s.id).collect();
+        for summary in &project.sessions {
+            let lifecycle = wire_to_lifecycle(&summary.lifecycle);
+            if let Some(existing) = list.iter_mut().find(|s| s.id == summary.id) {
+                if !matches!(existing.lifecycle, SessionLifecycle::Restarting { .. })
+                    && matches!(lifecycle, SessionLifecycle::Restarting { .. })
+                {
+                    newly_restarting.push(existing.id);
+                }
+                existing.lifecycle = lifecycle;
+                existing.activity = summary.activity.clone();
+                // Adopt the daemon's title only when it has a real one. The daemon now overlays the
+                // live OSC-0 title onto the summary (T047), but a summary can still be `Pending`
+                // before the first title arrives; don't let that clobber a title already learned.
+                if let SessionLabel::Named(_) = summary.title {
+                    existing.label = summary.title.clone();
+                }
+                // Shell-instance liveness (`012` FR-008, BUG-003). The client allocates the ids and
+                // owns the set; the daemon owns which of them have a process. Adopted here with
+                // every other value it publishes, rather than from a `ShellInstanceRunning` message
+                // — that variant exists and nothing has ever emitted it.
+                //
+                // Absence is read as death only for an instance already seen `Running`: a spawn is
+                // in flight for a tick or two after `SessionOpenShell`, and treating that as an exit
+                // would flap the bar and offer `restart` for a shell on its way up.
+                for instance in existing.shells.iter_mut() {
+                    if summary.live_shells.contains(&instance.id) {
+                        instance.lifecycle.mark_running();
+                    } else if matches!(instance.lifecycle, ShellLifecycle::Running) {
+                        instance.lifecycle.mark_exited();
+                    }
+                }
+            } else {
+                let location = summary
+                    .worktree_dir
+                    .clone()
+                    .map(SessionLocation::Worktree)
+                    .unwrap_or(SessionLocation::Default);
+                let mut s = Session::restored(
+                    summary.id,
+                    location,
+                    summary.title.clone(),
+                    TerminalMode::AiCli,
+                );
+                s.lifecycle = lifecycle;
+                s.activity = summary.activity.clone();
+                list.push(s);
+            }
+        }
+        // Drop sessions the daemon no longer reports (archived/removed on its side).
+        list.retain(|s| snap_ids.contains(&s.id));
+    }
+    for id in newly_restarting {
+        core.note_background_restart(id);
+    }
+    // Mirror the active project's worktrees from the daemon's git discovery into the render state
+    // (the sidebar reads `core.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
+    // the initial welcome: the welcome's worktree cache is empty until the post-attach refresh, so
+    // syncing it would briefly blank the list boot-time local discovery had populated (T055).
+    if sync_worktrees {
+        if let Some(active) = core.workspace.active.clone() {
+            if let Some(project) = snapshot.projects.iter().find(|p| p.path == active) {
+                core.set_worktrees(
+                    project
+                        .worktrees
+                        .iter()
+                        .map(|w| micold_core::worktree::Worktree {
+                            dir_name: w.dir_name.clone(),
+                            // The daemon's path, not one rebuilt from the app's own worktree root:
+                            // an included worktree is not under that root, and reconstructing the
+                            // location would put every one of them somewhere they are not
+                            // (016 BUG-002, FR-029).
+                            path: w.path.clone(),
+                            branch: w.branch.clone(),
+                            status: wire_to_worktree_status(w.status),
+                            included: w.included,
+                        })
+                        .collect(),
+                );
+                // Mirror display-name overrides from the catalog (a second window sees a rename).
+                let names: std::collections::BTreeMap<String, String> = project
+                    .worktrees
+                    .iter()
+                    .filter(|w| w.display_name != w.dir_name)
+                    .map(|w| (w.dir_name.clone(), w.display_name.clone()))
+                    .collect();
+                if names.is_empty() {
+                    core.workspace.worktree_names.remove(&active);
+                } else {
+                    core.workspace.worktree_names.insert(active, names);
+                }
+            }
+        }
+    }
+    // Clear a dangling active-session pointer if its session is gone.
+    //
+    // Feature 024: through `set_current_session`, like every other app-initiated clear, so the row
+    // the vanished session was in is committed open rather than snapping shut under the user
+    // (FR-001c). Nothing is armed: there is no session to scroll to.
+    if let Some(id) = core.active_session {
+        if core.workspace.find_session(id).is_none() {
+            core.set_current_session(None);
+        }
+    }
+}
+
+/// Project the wire [`WorktreeStatus`] back onto the client's core status enum (T055). The inverse of
+/// the daemon's mapping; `Locked`/`Prunable` both collapse to `Invalid` (the client renders both as
+/// an unusable/removable worktree).
+pub fn wire_to_worktree_status(
+    status: micold_core::protocol::messages::WorktreeStatus,
+) -> micold_core::worktree::WorktreeStatus {
+    use micold_core::protocol::messages::WorktreeStatus as Wire;
+    use micold_core::worktree::WorktreeStatus as Core;
+    match status {
+        Wire::Clean => Core::Valid,
+        Wire::Missing => Core::Missing,
+        Wire::Locked | Wire::Prunable => Core::Invalid,
+    }
+}
