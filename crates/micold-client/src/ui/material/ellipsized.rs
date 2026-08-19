@@ -19,7 +19,7 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
 use iced::advanced::widget::{tree, Tree};
 use iced::advanced::{mouse, renderer, Widget};
-use iced::{alignment, Element, Length, Pixels, Rectangle, Size};
+use iced::{alignment, Element, Font, Length, Pixels, Rectangle, Size};
 use micold_core::tokens::Rgb;
 
 /// The character standing in for what did not fit. One glyph rather than three dots: it is what
@@ -31,6 +31,9 @@ const ELLIPSIS: char = '…';
 pub struct Ellipsized<M> {
     content: String,
     size: f32,
+    /// `None` means "whatever the application draws text in" — the renderer's own default. A face
+    /// is named only when a call site asked for a role that carries one.
+    font: Option<Font>,
     color: Rgb,
     marker: PhantomData<M>,
 }
@@ -45,6 +48,7 @@ impl<M> Ellipsized<M> {
         Self {
             content: content.into(),
             size,
+            font: None,
             color,
             marker: PhantomData,
         }
@@ -61,8 +65,16 @@ impl<M> Ellipsized<M> {
     ///
     /// Additive: no existing call site changes and no appearance moves, because a role's size is the
     /// same number the scale was already handing out.
+    ///
+    /// The role's *face* comes too (BUG-001). It did not at first, and the omission was invisible
+    /// everywhere except the one place it mattered: the sidebar's two session roles are the same
+    /// size and differ only in weight, so a label that kept the number and dropped the font drew the
+    /// current session exactly like its siblings.
     pub fn at_role(content: impl Into<String>, role: TypeRole, color: Rgb) -> Self {
-        Self::new(content, role.size(), color)
+        Self {
+            font: Some(role.font()),
+            ..Self::new(content, role.size(), color)
+        }
     }
 }
 
@@ -76,6 +88,7 @@ struct State<P> {
     source: String,
     for_width: f32,
     for_size: f32,
+    for_font: Font,
 }
 
 impl<P: Default> Default for State<P> {
@@ -87,13 +100,31 @@ impl<P: Default> Default for State<P> {
             // measures rather than trusting an uninitialised width.
             for_width: f32::NAN,
             for_size: f32::NAN,
+            for_font: Font::DEFAULT,
         }
     }
 }
 
+/// What a cached paragraph was shaped for — the inputs that decide its outcome.
+struct Shaped<'a> {
+    source: &'a str,
+    width: f32,
+    size: f32,
+    font: Font,
+}
+
+/// Whether the cached paragraph still answers the question being asked of it.
+///
+/// The font is part of the key and not an afterthought: the sidebar's ordinary and current session
+/// roles are the same size, so a row that becomes current changes *only* its face. Key on size alone
+/// and that row keeps the paragraph it was shaped with, and the mark never appears (BUG-001).
+fn needs_reshape(was: &Shaped<'_>, content: &str, width: f32, size: f32, font: Font) -> bool {
+    was.source != content || was.width != width || was.size != size || was.font != font
+}
+
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Ellipsized<Message>
 where
-    Renderer: text::Renderer,
+    Renderer: text::Renderer<Font = Font>,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State<Renderer::Paragraph>>()
@@ -117,6 +148,7 @@ where
     ) -> layout::Node {
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
         let available = limits.max().width;
+        let font = self.font.unwrap_or_else(|| renderer.default_font());
 
         // Shaping is unbounded here on purpose: the question is how wide the text *wants* to be,
         // which is exactly what a constrained measurement would hide.
@@ -125,16 +157,25 @@ where
             bounds: Size::INFINITE,
             size: Pixels(self.size),
             line_height: text::LineHeight::default(),
-            font: renderer.default_font(),
+            font,
             align_x: text::Alignment::Left,
             align_y: alignment::Vertical::Top,
             shaping: text::Shaping::Advanced,
             wrapping: text::Wrapping::None,
         };
 
-        let stale = state.source != self.content
-            || state.for_width != available
-            || state.for_size != self.size;
+        let stale = needs_reshape(
+            &Shaped {
+                source: &state.source,
+                width: state.for_width,
+                size: state.for_size,
+                font: state.for_font,
+            },
+            &self.content,
+            available,
+            self.size,
+            font,
+        );
         if stale {
             let measure = |candidate: &str| {
                 Renderer::Paragraph::with_text(template.with_content(candidate))
@@ -146,6 +187,7 @@ where
             state.source = self.content.clone();
             state.for_width = available;
             state.for_size = self.size;
+            state.for_font = font;
         }
 
         layout::Node::new(limits.resolve(
@@ -223,7 +265,7 @@ impl<'a, Message, Theme, Renderer> From<Ellipsized<Message>>
 where
     Message: 'a,
     Theme: 'a,
-    Renderer: text::Renderer + 'a,
+    Renderer: text::Renderer<Font = Font> + 'a,
 {
     fn from(label: Ellipsized<Message>) -> Self {
         Element::new(label)
@@ -361,5 +403,80 @@ mod tests {
     #[test]
     fn real_shaping_leaves_a_short_name_untouched() {
         assert_eq!(fit("main", 180.0, shaped), "main");
+    }
+
+    const INK: Rgb = Rgb::hex(0xFFFFFF);
+
+    /// BUG-001. A role is a size *and a face*, and this widget used to take only the number.
+    ///
+    /// The sidebar's two session roles are deliberately the same size — marking a session must not
+    /// reflow the list — so the weight is the entire difference between them. A label that keeps the
+    /// size and drops the font can therefore express no difference at all, which is how the current
+    /// session came to be marked by its container fill alone (FR-003a, FR-003a-i).
+    #[test]
+    fn a_role_brings_its_font_and_not_only_its_size() {
+        let current =
+            Ellipsized::<()>::at_role("Claude Code", TypeRole::SidebarSessionCurrent, INK);
+        let ordinary = Ellipsized::<()>::at_role("Claude Code", TypeRole::SidebarSession, INK);
+
+        assert_eq!(
+            current.size, ordinary.size,
+            "the premise: these two roles differ only in weight"
+        );
+        assert_eq!(current.font, Some(TypeRole::SidebarSessionCurrent.font()));
+        assert_ne!(
+            current.font, ordinary.font,
+            "so with the same size, the font is the only thing left to tell them apart"
+        );
+    }
+
+    /// The size-only constructor must not move. The application's default font is Roboto
+    /// (`shell/startup.rs`), which `Font::DEFAULT` is not — so "no role given" has to mean *defer to
+    /// the renderer*, not *pick a font*.
+    #[test]
+    fn the_size_only_constructor_defers_to_the_renderer() {
+        assert_eq!(Ellipsized::<()>::new("main", 12.0, INK).font, None);
+    }
+
+    /// Shaping is cached, and the cache is what would have swallowed the fix.
+    ///
+    /// The key is content, width and size — and the two sidebar roles share a size. So a row that
+    /// becomes current, changing nothing but its font, would keep the paragraph shaped at weight 400
+    /// and draw exactly as before.
+    #[test]
+    fn a_change_of_font_alone_re_shapes_the_label() {
+        let regular = TypeRole::SidebarSession.font();
+        let medium = TypeRole::SidebarSessionCurrent.font();
+
+        assert!(
+            needs_reshape(
+                &Shaped {
+                    source: "Claude Code",
+                    width: 180.0,
+                    size: 12.0,
+                    font: regular,
+                },
+                "Claude Code",
+                180.0,
+                12.0,
+                medium,
+            ),
+            "becoming current changes only the font, and must still re-shape"
+        );
+        assert!(
+            !needs_reshape(
+                &Shaped {
+                    source: "Claude Code",
+                    width: 180.0,
+                    size: 12.0,
+                    font: medium,
+                },
+                "Claude Code",
+                180.0,
+                12.0,
+                medium,
+            ),
+            "nothing changed, so nothing should be re-shaped"
+        );
     }
 }

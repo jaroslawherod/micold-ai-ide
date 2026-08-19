@@ -6,6 +6,10 @@
 
 **Status**: Draft
 
+**Bugfix**: 2026-08-19 — [BUG-001](./bugs/BUG-001.md) clarified **FR-003a** (the non-colour cue has
+to reach the pixels, not merely the chosen type role) and added **SC-005a**, which measures the cue
+where §A cannot: on the drawn label rather than on the role it was asked for.
+
 **Input**: User description: "when I switch between project I would like to know at which session I'm currently. So the session to which I'm switched should be expanded in side panel and highlighted"
 
 ## Clarifications
@@ -235,6 +239,10 @@ and the row saying why it is shown, while every other excluded location stays hi
   one non-colour cue, so the current row remains identifiable when colour differences cannot be
   perceived. It MUST NOT weaken or displace the signals a session row already carries — its
   lifecycle-tinted name and its activity indicator.
+- **FR-003a-i** (clarification, BUG-001): The cue MUST be observable on the drawn row. Naming a
+  heavier type role for the current session's label is not sufficient on its own — if the widget
+  that draws the label cannot carry the weight the role asks for, FR-003a is unmet however
+  correctly the role was chosen.
 - **FR-004**: Opening a location on the user's behalf MUST NOT change whether any other location is
   open or closed.
 - **FR-005**: A location the user has closed MUST stay closed until the app next makes a session
@@ -303,6 +311,9 @@ and the row saying why it is shown, while every other excluded location stays hi
   a path added later that did not reveal would fail this criterion.
 - **SC-005**: Turning on a filter that excludes the current session's location does not make the
   panel stop showing where the user is, and does not reveal any other excluded location.
+- **SC-005a** (BUG-001): The current session's name is measurably heavier on screen than a sibling
+  session's name in the same panel — measured on the rendered label, in both schemes, not on the
+  type role the call site names.
 - **SC-006**: A location the user closes stays closed for the whole time they remain on the same
   session — it never re-opens by itself.
 - **SC-007**: Panel scroll position is never moved while the current session is unchanged.
