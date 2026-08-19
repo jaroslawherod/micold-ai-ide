@@ -297,31 +297,39 @@ the app opened with the red "the session service is a different version" banner 
 *good* case, because the handshake caught it. A stale daemon that happened to agree on the wire would
 have been pinned silently, which is the same hazard the skill already documents for the client.
 
-Two `cargo build` invocations inside one lock:
+Name both bins in the one invocation — `-p micold-client --bin micold-ai-ide -p micold-daemon --bin
+micold-daemon` — and verify with a string only the current wire carries: `strings
+~/vp/bin/micold-daemon | grep -c live_shells` was `0` before and `2` after. `--version` is not a
+substitute: running the daemon binary to ask starts a daemon. (A parallel worktree hit the same trap
+on the same day and its fix to the skill is the one that landed; this pass's own edit was dropped in
+favour of it.)
 
-```
-scripts/build-lock.sh bash -c 'cargo build -p micold-client --bin micold-ai-ide &&
-                               cargo build -p micold-daemon --bin micold-daemon && cp … ~/vp/bin/'
-```
+### §4's restart step — blocked, then run, on the merged branch
 
-Verified by a string only the current wire carries — `strings ~/vp/bin/micold-daemon | grep -c
-live_shells` was `0` before and `2` after. `--version` is not a substitute: running the daemon binary
-to ask starts a daemon.
+The first attempt could not reach it. Typing `exit` killed the shell and the client went on calling
+the instance **running** indefinitely: the bar said `running` 30+ seconds later and after a forced
+catalogue push, and the tab's menu offered **Close** alone. `ShellLifecycle::Exited` was unreachable,
+so the item FR-010b creates was never offered to press. That was diagnosed to the daemon never
+reaping a shell instance whose process exited on its own, and was about to be filed as a bug.
 
-### Not passed — §4's restart step could not be run at all
+It was already fixed on `main`, by BUG-003's second commit: `overlay_live_summaries` now filters
+`live_shells` by `pty.is_alive()` rather than by presence in the map, with the comment saying exactly
+why — "reporting it live would make `exited` unreachable". This branch was two commits behind it, and
+the pass was reading a daemon that predated the fix. **A pass on a branch is a pass on that branch's
+dependencies too**, and "the state I need never arrives" is a claim to check against `main` before
+filing.
 
-Typing `exit` in an instance kills its shell, and the client goes on calling it **running**
-indefinitely: the bar says `running` 30+ seconds later and after a forced catalogue push, and the
-tab's menu offers **Close** only. `ShellLifecycle::Exited` is unreachable in the running application,
-so the restart item FR-010b creates is never offered to press.
+Re-run after merging, on a freshly pinned pair:
 
-The daemon never reaps a shell instance whose process exited on its own — `live.procs` loses a
-`SessionProcess::Shell(_)` entry only through the explicit `close_shell`, and the supervision tick
-looks up `SessionProcess::Primary` by key. `live_shells` therefore reports a dead instance as live
-forever. Filed as **BUG-005**; not this branch's doing and not fixed here.
+- Three instances, instance 1 exited while instance 3 stayed active.
+- Right-click instance 1's tab: **Restart** and **Close**, both items fully inside the window, opening
+  upward from the bar.
+- Press **Restart**: instance 1's pane comes back with a fresh prompt, instance 3 keeps the indicator
+  and is never selected, and re-opening instance 1's menu now offers **Close** alone — its lifecycle
+  is `Running` again. That is FR-010a end to end: a background instance restarted, by id, without
+  being selected first.
 
-So §4 is **partly run**: independence, the menu, its targeting and the surviving primary press are
-confirmed; the restart itself is blocked on BUG-005 and this task is not marked passed for it.
+§4 **passes**.
 
 ### Not run — and why
 
@@ -333,7 +341,8 @@ confirmed; the restart itself is blocked on BUG-005 and this task is not marked 
 
 In the run's scratchpad, not committed: `07strip.png`, `20strip.png` (the strip at 4× in each
 scheme), `reflow.png` (dark, before/after activation at identical geometry — defect 1),
-`squint.png` (both schemes, blurred), `15menu.png` (the clipped menu — defect 2).
+`squint.png` (both schemes, blurred), `15menu.png` (the clipped menu — defect 2), `36menu.png` (the
+same menu rising from the bar, after), `43menu.png` (Restart + Close on an exited background tab).
 
 ### What this says about the previous two entries
 

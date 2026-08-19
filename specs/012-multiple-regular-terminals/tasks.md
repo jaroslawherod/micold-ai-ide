@@ -1000,7 +1000,11 @@ that were each looking straight at it.
 **Checkpoint**: an instance that exits in the background can be restarted from its own tab's menu
 without being selected first, every tab is 136dp with a full 48dp close target, a tab's content sits
 on its midline in every state, the menu opens where it can be read, and a gate fails if any tab's
-child is ever squeezed or pushed off-centre again.
+child is ever squeezed or pushed off-centre again. **Confirmed on screen** 2026-08-19 (Xvfb +
+lavapipe, three instances, both schemes): instance 1 exited while instance 3 stayed active, its tab's
+menu offered **Restart** and **Close** fully inside the window, and pressing Restart brought its shell
+back with a fresh prompt while instance 3 kept the indicator and was never selected. See
+`visual-pass.md`.
 
 **Bugfix**: 2026-08-18 — BUG-005 Updated from bugfix patch. Phase 13 added (T067–T078), extended to T080 by the T076 visual pass. **No task
 reopened**: T029 built the affordance correctly and its condition is still right, and T056 chose a
@@ -1014,8 +1018,10 @@ leading spacer) are replaced by T071–T073, and `TAB_WIDTH` does not move. **On
 10's T057 becomes T063, because Phase 11's T057–T062 were written in a parallel worktree against the
 same highest id; the note on T063 records what its commits and PR call it. See `bugs/BUG-005.md`.
 
-**Visual pass, 2026-08-19 (T076)**: two defects fixed here (T079, T080) and one filed elsewhere.
-`bugs/BUG-005.md` records that the daemon never reaps a shell instance whose process exited on its
-own, so `ShellLifecycle::Exited` is unreachable in the running application and the menu item this
-phase created is never *offered* — a separate gap from BUG-005's "cannot be pressed", and not this
-branch's to fix. §4's restart step is therefore blocked and is not claimed as passed.
+**Visual pass, 2026-08-19 (T076)**: two defects found and fixed here — T079 (a tab's content 4.6dp
+off its midline, sliding that far on activation) and T080 (the menu opening downward into 27px of
+window). A third was diagnosed and nearly filed: the exited lifecycle never arriving, so **Restart**
+was never offered. It was already fixed on `main` by BUG-003's second commit, which this branch was
+two commits behind — a pass on a branch is a pass on its dependencies too. After merging, §4 runs end
+to end: a background instance exited, restarted from its own tab's menu without being selected, and
+its sibling and the active tab untouched.
