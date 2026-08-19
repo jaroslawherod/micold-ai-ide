@@ -184,11 +184,14 @@ collapsing them would have quietly changed what counts as the same worktree.
 
 ### The three singletons
 
-* **`session::switch_active` → `workspace.active`** (via `Workspace::activate`). Switching the
-  active project *is* a project operation; the session feature calls it because the switch is what
-  its own step 1 and step 3 bracket. Possibly not a violation so much as a function in the wrong
-  module — decide before converting, as with B.
-* **`sidebar::toggle_location` → `reveal_suppressed_for`** — see F.
+* **`session::switch_active` → `workspace.active`** (via `Workspace::activate`). **Resolved as
+  *not a single at all*** (T067a-9): it goes through a `Workspace` method, which makes it the same
+  question as group D — whether the guard should count a core type's atomic operation on its own
+  members as a cross-feature write — rather than an independent row. It waits on that decision.
+* **`sidebar::toggle_location` → `reveal_suppressed_for`** — converted with F as
+  `RevealSuppressed(bool)` (T067a-6).
+* **`session::arm_notice` → `notify`** — converted as `NotificationRaised` (T067a-9).
+* **`session::focus_terminal` → `focused_field`** — converted as `FieldFocusCleared` (T067a-9).
 * **`session::restore_after_activation` → `show_agent_worktrees`** (feature 014, FR-010e): arriving
   in a project must not carry the previous one's reveal of agent worktrees. A sidebar fact reset
   from the session's activation path; folds naturally into whatever `ProjectActivated` shape D and
