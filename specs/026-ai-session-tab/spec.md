@@ -34,6 +34,19 @@ always marks one of them.
   the user already has.
 - Q: Where does the AI tab sit? → A: At the **right side** of the strip, after the terminal tabs.
 
+### Session 2026-08-19
+
+- Q: How wide is the AI tab, given it carries no close control? → A: The same fixed width as every
+  terminal tab; the icon sits on the tab's midline and the close control's slot stays empty.
+- Q: Does a secondary (right) press on the AI tab open a menu? → A: Yes — whatever a terminal tab's
+  menu offers, minus Close, including items added to that menu later.
+- Q: What happens on a secondary press when that menu would be empty? → A: No menu opens; the press
+  does nothing.
+- Q: What does "reflects lifecycle" mean, given a terminal tab now shows none? → A: Both kinds of
+  tab gain a visible not-running cue, and the AI tab follows the same rule.
+- Q: What happens when the tabs outgrow the bar? → A: The terminal tabs scroll horizontally; the AI
+  tab is pinned outside the scrolling region.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The strip says what the pane is showing, always (Priority: P1)
@@ -82,26 +95,43 @@ CLI. Press a terminal tab; the pane shows that terminal.
    **Then** the pane and the indicator move together, exactly as if a tab had been pressed.
 4. **Given** any session, **When** the user looks at the AI tab, **Then** it has **no close
    control** — a session has exactly one AI CLI process and closing it is not an available action.
+5. **Given** a session whose AI CLI process has exited, **When** the user presses the AI tab with
+   the secondary (right) button, **Then** a menu opens offering restart and **not** offering close.
+6. **Given** a session whose AI CLI process is running, **When** the user presses the AI tab with
+   the secondary button, **Then** no menu opens and nothing changes.
+7. **Given** a session displaying a terminal instance, **When** the user restarts the AI CLI from
+   the AI tab's menu, **Then** the pane keeps showing that terminal instance — acting on a tab from
+   its menu does not select it.
 
 ---
 
-### User Story 3 - The AI tab reports the AI process's state (Priority: P3)
+### User Story 3 - The strip reports which processes are not running (Priority: P2)
 
-A developer whose AI CLI has exited or failed can see that from the strip, the same way a terminal
-tab shows its instance is not running.
+A developer whose AI CLI or whose backgrounded shell has exited can see that from the strip, without
+selecting anything — and therefore knows which tab to open a menu on to restart it.
 
-**Why this priority**: Consistency once the AI is a tab — a row where one tab silently omits the
-state every other tab shows is a new inconsistency in place of the one this feature removes. Not
-required for the strip to be correct, which is why it is P3.
+**Why this priority**: Raised from P3 by the 2026-08-19 clarifications. It was scoped as "the AI tab
+should not silently omit what the terminal tabs show", which read as pure consistency polish. Since
+feature 012's BUG-005 moved the restart affordance off the tab and into a menu, **no** tab shows
+lifecycle, and the strip's only action is behind a press that does nothing on a running tab
+(FR-006b). The cue is now what makes that action findable at all, not a finishing touch. Still not
+P1: the strip is correct about *what is displayed* without it, which is Story 1's claim.
 
-**Independent Test**: Cause the AI CLI process to exit, and confirm the AI tab reflects a
-not-running state without affecting any terminal tab.
+**Independent Test**: Cause a background terminal instance and the AI CLI process to exit, and
+confirm each tab reflects a not-running state, distinguishably from the active indicator, without
+either affecting the other.
 
 **Acceptance Scenarios**:
 
 1. **Given** a session whose AI CLI process has exited, **When** the user looks at the AI tab,
    **Then** it indicates the process is not running.
-2. **Given** an AI CLI process that is starting or restarting, **When** the user looks at the AI
+2. **Given** a session with a backgrounded terminal instance whose shell has exited, **When** the
+   user looks at that instance's tab, **Then** it indicates the process is not running, by the same
+   cue the AI tab uses.
+3. **Given** a tab that is both the active one and not running, **When** the user looks at the
+   strip, **Then** the active indicator and the not-running cue are both legible and are not
+   mistaken for each other.
+4. **Given** an AI CLI process that is starting or restarting, **When** the user looks at the AI
    tab, **Then** its state is distinguishable from running.
 
 ---
@@ -118,8 +148,13 @@ not-running state without affecting any terminal tab.
   the AI tab keeps its position at the right edge.
 - **A session that is not displayed.** Background sessions have their own tabs and their own
   selection; nothing about one session's strip may reflect another's.
-- **Many instances open.** The strip must remain readable as it grows, and the AI tab must remain
-  reachable at its right-hand position rather than being pushed out of view.
+- **Many instances open.** The terminal tabs scroll (FR-002a) while the AI tab holds its position
+  outside the scrolling region (FR-002b), and the bar's other controls are untouched (FR-002c). The
+  wall is nearer than it looks: at a 136dp tab on a 144dp pitch, roughly five tabs exhaust a bar
+  that also carries a title, a status, the "+" and the mode toggle.
+- **A secondary press on a running AI tab.** Nothing happens, by FR-006b — the menu would be empty.
+  The same press on a *stopped* AI tab opens a menu with restart in it, so the affordance appears
+  exactly when it can be acted on.
 
 ## Requirements *(mandatory)*
 
@@ -129,6 +164,18 @@ not-running state without affecting any terminal tab.
   tab per open Regular Terminal instance.
 - **FR-002**: The AI tab MUST be positioned at the **right-hand end** of the strip, after every
   terminal tab, and MUST keep that position as instances are opened and closed.
+- **FR-002a**: When the terminal tabs together need more width than the bar can give them, they
+  MUST **scroll horizontally** within the strip, at their fixed width (FR-010a, feature 012
+  FR-004c). Tabs MUST NOT be shrunk, ellipsised or dropped to make them fit.
+- **FR-002b**: The AI tab MUST sit **outside** that scrolling region, so it keeps its right-hand
+  position and stays reachable in one press no matter how many terminal instances are open. FR-002
+  is only a meaningful requirement under overflow; this is what it means there.
+- **FR-002c**: No control in the bar — the "+", the mode toggle, the session title or the status —
+  MUST be shrunk or displaced by the strip's growth. Today the bar lays its controls out in one row
+  with no bound on the strip, so the controls at its trailing end absorb any shortfall silently —
+  drawn narrower, or not at all, with nothing reported. That is the failure mode feature 012's
+  BUG-005 was filed for, one level out, and making the strip always visible (FR-003) brings the bar
+  to it sooner.
 - **FR-003**: The tab strip MUST be visible whenever a session is displayed, including when the
   session has zero or one Regular Terminal instances. This **supersedes** feature 012's FR-005,
   which hid the control below two instances.
@@ -137,9 +184,23 @@ not-running state without affecting any terminal tab.
 - **FR-005**: Exactly one tab MUST carry the active indicator at all times — the AI tab when the
   session's pane is showing the AI CLI, otherwise the tab of the Regular Terminal instance being
   shown. Never zero tabs, never two.
-- **FR-006**: Pressing the AI tab MUST show the session's AI CLI process in the pane, and MUST NOT
-  start, stop, restart or otherwise disturb any process — neither the AI CLI nor any terminal
-  instance.
+- **FR-006**: A **primary** press on the AI tab MUST show the session's AI CLI process in the pane,
+  and MUST NOT start, stop, restart or otherwise disturb any process — neither the AI CLI nor any
+  terminal instance. Selecting is all a primary press does; acting on the process is FR-006a's
+  menu, reached by a different press.
+- **FR-006a**: A **secondary** (right) press on the AI tab MUST open a context menu carrying the
+  same items a terminal tab's menu offers, **except Close** — restart for a process whose lifecycle
+  offers it today, and whatever is added to that menu in future without this requirement being
+  revisited. Stated as "the terminal tab's menu minus Close" rather than as a list, so the two tabs
+  cannot drift into offering different actions for the same reason FR-010 asks them to look alike.
+  Close is excluded by FR-004: a session has exactly one AI CLI process and terminating it is not
+  an action offered from this control, by any press.
+- **FR-006b**: When that menu would carry **no items**, no menu MUST open and the secondary press
+  MUST do nothing. With restart the only item and Close excluded, this is the state whenever the AI
+  CLI is running, which is most of the time. An empty panel is a defect everywhere else in the
+  application, and a panel whose entire content is inert is one too — so the offer is absent rather
+  than present-and-useless. This also keeps the strip agreeing with the bar beside it, which already
+  shows a restart control only for a process that is not running.
 - **FR-007**: Pressing the AI tab when the AI CLI is already displayed MUST be a no-op with no
   visible change and no effect on the running process.
 - **FR-008**: The existing AI-CLI/Regular mode toggle MUST continue to work (feature 012 FR-006),
@@ -148,12 +209,26 @@ not-running state without affecting any terminal tab.
 - **FR-009**: The AI tab MUST be labelled with the application's existing AI CLI icon — the same
   glyph the mode toggle shows for that mode — rather than with text.
 - **FR-010**: The AI tab MUST be visually consistent with the terminal tabs it sits beside: the same
-  tab form, the same indicator treatment, and the same behaviour on hover and press (feature 012
-  FR-004a/FR-004b).
+  tab form, the same indicator treatment, and the same behaviour on hover, on primary press and on
+  secondary press (feature 012 FR-004a/FR-004b/FR-010b).
+- **FR-010a**: The AI tab MUST measure the **same fixed width** as a terminal tab (feature 012
+  FR-004c), and its icon MUST sit on the tab's own midline. Having no close control (FR-004) MUST
+  NOT make it narrower than its neighbours: the trailing slot is left empty rather than reclaimed.
+  A strip whose tabs are not all one size reads as a control among controls rather than as a strip,
+  which is the defect feature 012's BUG-001 was filed for, and a differently-derived width would
+  put this tab outside the guarantee FR-004c's derivation exists to give.
 - **FR-011**: Every session MUST have its own strip and its own marked tab; actions on one session's
   strip MUST have no observable effect on any other session's.
-- **FR-012**: The AI tab MUST reflect the AI CLI process's lifecycle state, consistent with how a
-  terminal tab reflects its instance's (feature 012 FR-008).
+- **FR-012**: A tab whose process is **not running** MUST be visually distinct from one whose
+  process is running, and the distinction MUST be the same for the AI tab and for a terminal tab.
+  This applies whether or not the tab is the active one: a background instance that has died is the
+  case feature 012's FR-010a exists for.
+- **FR-012a**: The not-running cue MUST be carried in addition to, and distinguishably from, the
+  active indicator (FR-005) — a tab can be active *and* not running, and the strip must not read
+  those two states as one.
+- **FR-012b**: This cue is what makes FR-006a's menu findable. Without it a user must open menus at
+  random to learn which instance is stopped, and by FR-006b every running tab answers that press
+  with silence — so the strip would be hiding the one action it offers.
 
 ### Key Entities
 
@@ -161,7 +236,8 @@ not-running state without affecting any terminal tab.
   session's complete set of displayable panes — its AI CLI process plus its terminal instances —
   with exactly one marked as displayed.
 - **AI tab** *(new)*: the strip's representation of the session's single AI CLI process.
-  Unclosable, icon-labelled, right-anchored, and carrying that process's lifecycle state.
+  Unclosable, icon-labelled, right-anchored, the same width as a terminal tab, and carrying that
+  process's lifecycle state.
 
 ## Success Criteria *(mandatory)*
 
@@ -180,6 +256,11 @@ not-running state without affecting any terminal tab.
   guarantee cannot be violated through this control.
 - **SC-006**: Opening or closing terminal instances leaves the AI tab at the strip's right-hand end
   in every observed case.
+- **SC-007**: A user can tell which tabs' processes are not running from the strip alone, without
+  selecting or pressing anything, in 100% of observed states — including a background terminal
+  instance whose shell has exited, which no control showed before this feature.
+- **SC-008**: At any number of open terminal instances, the AI tab, the "+", the mode toggle and
+  the session status are all present at their full size, and the AI tab is reachable in one press.
 
 ## Assumptions
 
@@ -194,6 +275,9 @@ not-running state without affecting any terminal tab.
   shows a single marked AI tab. This is a deliberate reversal of feature 012's FR-005 and its
   "pixel-identical to the single-instance experience" intent.
 - Sessions that are not displayed are unaffected; this is a property of the displayed session's bar.
+- Scroll position within the strip is presentation, not state to persist: it is expected to follow
+  the marked tab (a newly opened or newly selected instance is scrolled into view) rather than to be
+  remembered across sessions or restarts.
 - Renaming an instance so a tab shows a name rather than an ordinal is **out of scope** and expected
   as a later feature. Feature 012's label sizing already accommodates it, so nothing here needs to
   anticipate it beyond not reintroducing a fixed-width label.
@@ -204,6 +288,9 @@ not-running state without affecting any terminal tab.
   the active-instance selection this extends. Its FR-005 is superseded by FR-003 here.
 - **Feature 012 BUG-002** — provides the indicator tab form (bare label, top-edge accent bar, no
   container) that FR-010 requires the AI tab to match. This feature should land after it.
+- **Feature 012 BUG-005** — provides the terminal tab's own context menu, which FR-006a extends to
+  this tab, and the derived fixed tab width that FR-010a adopts. Both landed 2026-08-19, after this
+  spec was written.
 - **The existing session state** already distinguishes "showing the AI CLI" from "showing instance
   N" — a session's mode plus its active instance. This feature is a *view* over that state and adds
   no selection of its own, which is what makes FR-008's no-disagreement guarantee structural rather
@@ -211,8 +298,15 @@ not-running state without affecting any terminal tab.
 
 ## Out of scope
 
-- Renaming instances, and any right-click menu on a tab.
+- Renaming instances, and any menu item that would rename one.
+- Any change to *how* lifecycle is tracked or reported. FR-012 presents state the application
+  already holds (feature 012 FR-008, and the daemon liveness its BUG-003 settled); it introduces no
+  new state and no new source for it.
 - Any change to the number of AI CLI processes per session, which stays exactly one.
-- Any change to how the AI CLI process is started, restarted or terminated. This feature displays
-  and selects; it does not manage lifecycle.
-- Closing the session from the strip.
+- Any change to **how** the AI CLI process is started, restarted or terminated. FR-006a adds a
+  *route* to the restart the application already performs; it introduces no new lifecycle action
+  and changes none of the existing ones. *(This line previously read "this feature displays and
+  selects; it does not manage lifecycle", and also excluded "any right-click menu on a tab". Both
+  were written on 2026-08-16, before feature 012's BUG-005 gave terminal tabs a menu — the
+  exclusion had since changed meaning from "like its neighbours" to "unlike them".)*
+- Closing the session from the strip, and closing the AI CLI process by any route (FR-004).
