@@ -365,7 +365,6 @@ fn the_current_sessions_row_is_found_by_walking_the_rows_as_drawn() {
     );
 }
 
-
 // --- the §B5 test hook (MICOLD_SIDEBAR_FILTER) ------------------------------------------------
 //
 // Parsing only. What the value is *applied to* is `Message::SidebarFilterToggled`, which the rest
@@ -421,9 +420,18 @@ fn a_list_parses_in_order() {
 #[test]
 fn an_unknown_token_is_an_error_naming_itself_and_the_variable() {
     let err = filters_from_env_value(Some("feature")).expect_err("expected a refusal");
-    assert!(err.contains(FILTER_ENV_VAR), "{err:?} does not name the variable");
-    assert!(err.contains("feature"), "{err:?} does not name the bad token");
-    assert!(err.contains("untyped"), "{err:?} does not state the grammar");
+    assert!(
+        err.contains(FILTER_ENV_VAR),
+        "{err:?} does not name the variable"
+    );
+    assert!(
+        err.contains("feature"),
+        "{err:?} does not name the bad token"
+    );
+    assert!(
+        err.contains("untyped"),
+        "{err:?} does not state the grammar"
+    );
 }
 
 /// One bad token spoils the list: a half-applied filter is a state nobody asked for, and it would
