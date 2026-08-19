@@ -20,7 +20,8 @@ use micold_client::features::settings::SettingsDraft;
 use micold_client::features::worktree_form::{BranchSource, WorktreeForm};
 use micold_core::project::Availability;
 use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
-use micold_core::worktree::{Worktree, WorktreeStatus};
+use micold_core::typeahead::{rank, Query};
+use micold_core::worktree::{BranchCandidate, BranchOrigin, Worktree, WorktreeStatus};
 
 use super::layout::{Anchor, CoveredState, RevealingState, StateUnderTest};
 
@@ -243,6 +244,61 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // Two fewer fields than the new-branch form: one picker in place of the select,
                 // the ticket and the name. It was three until §7.7 moved the select's
                 // free-standing `Type` label inside the control's own container.
+                Anchor {
+                    name: "dialog.actions",
+                    path: &[6, 0, 0, 1],
+                },
+            ],
+        },
+        // 016 BUG-003 item 1's own finding, closed. The state above renders the dialog *before* any
+        // branch listing has arrived, so `candidates` is empty and the picker draws a caption
+        // instead of a field — which meant the fixture had never contained the search field at all.
+        // That is a second reason no gate saw the icon drawn over the label: not only is a layout
+        // tree blind to overlap, this one was not looking at the control.
+        CoveredState {
+            name: "add-worktree-dialog-branch-picker",
+            build: || {
+                let mut state = with_project();
+                let candidates = vec![
+                    BranchCandidate {
+                        name: "feat/login-page".to_string(),
+                        origin: BranchOrigin::Local,
+                        blocked_by: None,
+                    },
+                    BranchCandidate {
+                        name: "fix/crash-on-open".to_string(),
+                        origin: BranchOrigin::Local,
+                        blocked_by: None,
+                    },
+                    BranchCandidate {
+                        name: "chore/bump-deps".to_string(),
+                        origin: BranchOrigin::Remote {
+                            remote: "origin".to_string(),
+                        },
+                        blocked_by: None,
+                    },
+                ];
+                // Derived the way the application derives it, rather than written out: an invented
+                // `branch_matches` could disagree with `candidates` in a way no reducer can
+                // produce, and the fixture would then pin a state that cannot happen.
+                let branch_matches = rank(&candidates, |c| c.name.as_str(), &Query::new(""));
+                state.worktree_form = Some(WorktreeForm {
+                    source: BranchSource::Existing,
+                    candidates,
+                    branch_matches,
+                    // Closed: the list is an overlay, and this state exists for the **field** —
+                    // the node that was missing. `worktree-menu-open` is where an open overlay is
+                    // covered.
+                    branch_list_open: false,
+                    ..WorktreeForm::default()
+                });
+                StateUnderTest::new(state)
+            },
+            anchors: &[
+                Anchor {
+                    name: "dialog.root",
+                    path: &[],
+                },
                 Anchor {
                     name: "dialog.actions",
                     path: &[6, 0, 0, 1],
