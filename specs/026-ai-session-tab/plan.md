@@ -14,6 +14,15 @@ beyond it (FR-002a–FR-002f). And every tab gains a **stopped mark**, shown for
 own menu can act on (FR-012–FR-012e), which is what makes the tab menu feature 012 shipped this
 morning findable at all.
 
+Two requirements added on 2026-08-19 change the shape of the work rather than its substance. FR-013
+and FR-014 put the tab and the strip into the component library and pose both indicator orientations
+in the gallery — which is not decoration: the gallery discovers components as `pub struct`s under
+`src/ui/material/`, so a tab assembled inline in `ui/terminal.rs` cannot be posed at all, and
+Principle VIII already asked for the promotion. FR-015 makes a tab's highlight a *tab's* state layer,
+rectangular and filling the tab, instead of the fully rounded pill it inherits today from
+`ButtonVariant::Text`. Both land before any of this feature's own rendering, and both are
+geometry-neutral by construction (research R10, R11).
+
 The technical approach has one organising idea: **derive both the mark and the menu from one
 predicate**, generalised from the `attached_process_restartable` that already exists in
 `ui/terminal.rs`. That function already encodes the AI-CLI-versus-shell split and already means "the
@@ -85,11 +94,16 @@ tabs — which is why FR-002a exists rather than being deferred.
   the AI tab, the stopped mark and the scrolling strip in the same change; it already documents the
   tab strip and its right-click menu.
 - [x] **VIII. Reusable UI Component Foundation**: PASS, and it is the principle doing the most work
-  here. Three shared primitives are **extended, not forked**: `material::Scrollable` gains a
-  horizontal direction (it is vertical-only today), `material::ActivityBadge` gains a constructor
-  that takes an emphasis directly so the stopped mark reuses the dot that already reserves its own
-  slot, and the tab itself becomes one builder used for both kinds of tab rather than a second
-  bespoke copy for the AI. Each keeps its chainable builder terminating in `.into()`.
+  here. Two shared primitives are **extended, not forked** — `material::Scrollable` gains a
+  horizontal direction (it is vertical-only today) and `material::ActivityBadge` gains a constructor
+  taking an emphasis directly, so the stopped mark reuses the dot that already reserves its own slot.
+  A third is **promoted**: the tab is assembled inline in `ui/terminal.rs` today, which makes it not
+  a component at all, and this principle's own words cover that case — "when a needed UI element does
+  not yet exist as a shared primitive, the reusable primitive MUST be created in (or promoted to) the
+  shared library and consumed from there". `material::Tab` and `material::TabStrip` are that
+  promotion (research R10). It is also the only way to satisfy FR-014: the gallery discovers
+  components as `pub struct`s under `src/ui/material/`, so an inline assembly cannot be posed. Each
+  keeps its chainable builder terminating in `.into()`.
 
 ### Post-design re-check (after Phase 1)
 
@@ -152,7 +166,10 @@ crates/micold-client/src/
 │       └── context_area.rs        # the secondary-press wrapper (012 BUG-005) — reused as-is
 ├── app.rs                         # the menu's target widened to name the AI process
 ├── features/session.rs            # the menu's floating-surface registration
-└── icons.rs                       # Icon::AiCli already exists (FR-009 needs no new glyph)
+├── icons.rs                       # Icon::AiCli already exists (FR-009 needs no new glyph)
+└── showcase/
+    ├── catalogue.rs               # the Tab/TabStrip entry; both indicator edges posed (FR-014)
+    └── sections/                  # the two strips, side by side
 
 crates/micold-client/tests/
 ├── terminal_tabs.rs               # the strip's call site
@@ -179,6 +196,11 @@ terminal tabs**, not only the new AI tab. That is deliberate and forced by FR-01
 the same on both kinds of tab or it is not a strip — but it means this feature edits a control
 another feature owns, and its regression cover (`tests/terminal_tabs.rs`, the tab gates, 012's
 `quickstart.md` §8) belongs to 012. The tasks must run 012's §8 as well as this feature's own pass.
+
+A third, and the reason the task list has a phase the plan's first draft did not: **the promotion in
+R10 is geometry-neutral and must stay that way**. It is sequenced before every rendering task
+precisely so that "the fixture is byte-identical" remains available as its proof. Run afterwards, it
+would be a rewrite of work already landed, with no way left to show it changed nothing.
 
 A second, recorded in `research.md` R7: **FR-002c documents a defect that is live on `main` today**.
 Past about five instances the bar's trailing controls are silently squeezed — the same failure mode

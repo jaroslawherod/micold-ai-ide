@@ -60,6 +60,13 @@ always marks one of them.
 - Q: Is keyboard access to the strip in scope? → A: No — explicitly out of scope; the strip is
   pointer-driven and the existing mode toggle stays the non-tab route to the AI pane.
 
+### Session 2026-08-19 (third pass)
+
+- Q: Should the gallery cover the tab strip? → A: Yes, and in **both** indicator orientations — the
+  accent bar on the tab's top edge and on its bottom edge, posed beside each other.
+- Q: What shape is a tab's highlight? → A: A Material **tab** state layer — rectangular, filling the
+  tab — not the rounded pill a text button draws. An unhighlighted tab still draws nothing.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The strip says what the pane is showing, always (Priority: P1)
@@ -93,6 +100,9 @@ terminal and switch to it (that tab is marked, the AI tab is not), switch back.
 7. **Given** the user has scrolled the marked tab out of view, **When** they look at the strip,
    **Then** the edge it lies beyond says so; **and when** they then select any tab, **Then** the
    newly marked tab is scrolled back into view.
+8. **Given** any tab, **When** the pointer rests on it, **Then** it draws a rectangular state layer
+   filling the tab — not a rounded pill — and **when** the pointer leaves, **Then** it draws no
+   shape at all.
 
 ---
 
@@ -290,10 +300,34 @@ either affecting the other.
   application's existing in-progress treatment rather than by FR-012c's mark. Feature 012's BUG-003
   was this state being unobservable; nothing here may return it to that.
 
+- **FR-013**: A tab and the strip that holds them MUST be **shared components** in the client's
+  component library, exposed through the chainable builder API terminating in `.into()`
+  (Constitution Principle VIII), rather than assembled at the call site as they are today. This
+  feature is what makes that necessary rather than tidy: one tab shape now serves two different
+  kinds of member (FR-001), and it is about to carry a scrolling viewport (FR-002a), a state mark
+  (FR-012c) and a state layer (FR-015). A call-site assembly cannot be posed in the gallery either,
+  which is what FR-014 requires.
+- **FR-014**: The gallery MUST pose the tab strip in **both** indicator orientations — the accent
+  bar on the tab's **top** edge and on its **bottom** edge — as separate instances beside each
+  other. This application puts the indicator at the top because its strip is anchored to the
+  window's bottom and the pane a tab selects is above it (feature 012 FR-004b), which is the
+  opposite of Material's default placement. A deliberate inversion that is never shown next to the
+  thing it inverts reads as a mistake to the next person, and the two are exactly the kind of
+  difference the gallery exists to make visible by comparison rather than by memory.
+- **FR-015**: A tab's **highlight** — its hover and press state layer — MUST be a Material *tab*
+  state layer: **rectangular, spanning the tab's full width and height**. It MUST NOT be the fully
+  rounded pill a text button draws, which is what a tab built on `ButtonVariant::Text` inherits
+  today. An **unhighlighted** tab MUST continue to draw nothing at all — no background, no outline,
+  no pill (feature 012 FR-004b). The highlight is the one state in which a tab has a shape, and that
+  shape is a tab's.
+
 ### Key Entities
 
-- **Tab strip** *(existing, extended)*: was a list of Regular Terminal instances; becomes the
-  session's complete set of displayable panes — its AI CLI process plus its terminal instances —
+- **Tab** *(promoted)*: was an inline assembly at the call site; becomes a shared component — a
+  label or icon, a reserved leading slot, a reserved trailing slot, an indicator edge and a
+  rectangular state layer. One component, two kinds of member.
+- **Tab strip** *(existing, extended, promoted)*: was a list of Regular Terminal instances; becomes
+  the session's complete set of displayable panes — its AI CLI process plus its terminal instances —
   with exactly one marked as displayed.
 - **AI tab** *(new)*: the strip's representation of the session's single AI CLI process.
   Unclosable, icon-labelled, right-anchored, the same width as a terminal tab, and carrying that
@@ -328,6 +362,12 @@ either affecting the other.
   the session status are all present at their full size, and the AI tab is reachable in one press.
 - **SC-009**: Whenever any tab is off-screen, the strip says so at the edge it lies beyond, so a
   user never has to scroll to discover whether there is anything to scroll to.
+- **SC-010**: A tab draws a shape in exactly one state — highlighted — and that shape is
+  rectangular and fills the tab. In no other state does any tab draw a background, an outline or a
+  pill.
+- **SC-011**: Both indicator orientations are visible side by side in the gallery, so the
+  application's top-edge choice can be compared with Material's bottom-edge default rather than
+  taken on trust.
 
 ## Assumptions
 
@@ -371,6 +411,9 @@ either affecting the other.
   mode-gating problem of its own (feature 012's FR-019 had to gate its chord because the terminal
   pane swallows keystrokes). Nothing becomes unreachable — the mode toggle is the keyboard-
   independent route to the AI pane and FR-008 keeps it working.
+- Any change to a tab's **content** beyond what FR-009 and FR-012c add. Promoting the tab into the
+  component library (FR-013) is a move, not a redesign: the tab that comes out of it draws what
+  feature 012's tab drew, plus this feature's own additions.
 - Any change to *how* lifecycle is tracked or reported. FR-012 presents state the application
   already holds (feature 012 FR-008, and the daemon liveness its BUG-003 settled); it introduces no
   new state and no new source for it.

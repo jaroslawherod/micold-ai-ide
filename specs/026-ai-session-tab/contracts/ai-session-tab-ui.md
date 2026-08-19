@@ -73,6 +73,30 @@ anywhere in this feature is the defect 012 BUG-004 was.
   that edge says so specifically (FR-002e).
 - Changing the marked tab **scrolls it into view** (FR-002d). A user may then scroll away by hand.
 
+## The tab's own shape
+
+- A tab draws a shape in **exactly one state**: highlighted. Hover or press draws a **rectangular**
+  state layer spanning the tab's full width and height (FR-015, SC-010). Not the fully rounded pill
+  a text button's ripple draws — `material/button.rs` wraps every button in `shape::FULL`, which is
+  right for a button and wrong for a tab. A row of pills lighting up under a moving pointer does not
+  read as a strip; a row of tab rectangles does.
+- In **every other state** a tab draws nothing: no background, no outline, no pill (feature 012
+  FR-004b, inherited unchanged).
+- The tab and the strip are **shared components** — `material::Tab` and `material::TabStrip`, with
+  the chainable builder terminating in `.into()` (FR-013, Principle VIII), not an assembly at the
+  call site.
+
+## The gallery
+
+- The strip is posed in **both** indicator orientations, side by side: the accent bar on the tab's
+  **top** edge (what this application draws, because its strip is anchored to the window's bottom
+  and the pane a tab selects is above it) and on its **bottom** edge (Material's default placement)
+  — FR-014, SC-011.
+- The orientation is a variant of the strip, so gate C3 in `tests/showcase_completeness.rs` requires
+  both values to have an instance, and C1 requires the components themselves to. That gate is the
+  reason FR-013 is a requirement and not a preference: a component the gallery cannot discover is a
+  component the gallery cannot pose.
+
 ## Interaction with the primary mode toggle
 
 Unchanged and now doubled: the toggle keeps its position and its behaviour (FR-008, 012 FR-006).
