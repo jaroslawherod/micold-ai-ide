@@ -461,6 +461,7 @@ const READERS: &[&str] = &[
     "get",
     "is_empty",
     "is_none",
+    "is_some_and",
     "is_some",
     "iter",
     "keys",

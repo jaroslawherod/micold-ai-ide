@@ -14,6 +14,9 @@
 //!
 //! Modules are declared here as each is extracted from `crate::app`, one migration step at a time.
 
+use crate::overlay::SurfaceId;
+use micold_core::session::SessionId;
+
 /// A consequence a feature returns rather than applies (FR-021).
 ///
 /// **One variant so far, and it is here in Phase 5 rather than at T065 because FR-015a needs it.**
@@ -37,6 +40,24 @@ pub enum Outcome {
     /// (contract C3) — whether anything should be written at all was settled by the feature that
     /// emitted the request.
     ClipboardWrite(String),
+    /// These sessions are gone; the session feature should drop them (FR-021, contract O2).
+    ///
+    /// Emitted by the worktree delete path, which owns *worktrees* and must not reach into session
+    /// state to close what lived in one — the anti-pattern the contract names by name. T066 is the
+    /// conversion; this variant is the vocabulary it needs to exist first.
+    SessionsClosed(Vec<SessionId>),
+    /// This surface should close, whoever owns it.
+    ///
+    /// Also the worktree delete path: confirming a delete dismisses its own dialog, and the
+    /// registry — not the deleting feature — is what knows how a surface closes.
+    OverlayDismissed(SurfaceId),
+    /// Raise a notification, from any feature.
+    ///
+    /// The one outcome the contract lists as "emitted by: any feature", and the reason is that a
+    /// notification is nobody's feature: every path that can fail wants one, and `notify` belongs
+    /// to none of them. Carries the queue's own `Notification` rather than the banner's
+    /// `NoticeLevel`, so the translation stays where `State::push_notification` already put it.
+    NotificationRaised(micold_core::notify::Notification),
 }
 
 pub mod connection;

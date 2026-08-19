@@ -32,6 +32,13 @@ use crate::App;
 pub fn interpret(outcome: Outcome) -> Task<Message> {
     match outcome {
         Outcome::ClipboardWrite(text) => iced::clipboard::write(text),
+        // The root's, not the shell's: cross-feature consequences are interpreted by
+        // `app::interpret` (contract O3). The shell partitions the queue before draining, so these
+        // are unreachable here — listed rather than caught by a `_` so a new *effect request*
+        // variant is a compile error in this file, which is where it would need an arm.
+        Outcome::SessionsClosed(_)
+        | Outcome::OverlayDismissed(_)
+        | Outcome::NotificationRaised(_) => Task::none(),
     }
 }
 

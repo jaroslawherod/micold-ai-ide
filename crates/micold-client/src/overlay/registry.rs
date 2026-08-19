@@ -382,3 +382,20 @@ fn close_each(state: &mut State, open: fn(&State) -> Vec<Open>) {
         state.update(cancel);
     }
 }
+
+/// Close one surface by id, if it is open (feature 021, T065 — `Outcome::OverlayDismissed`).
+///
+/// The registry is what knows *how* a surface closes — its cancellation message — so a feature
+/// that has decided a surface should go names it and stops there (contract O2). Unknown or
+/// already-closed ids are silently fine: an outcome describes a consequence, and a consequence
+/// that has already happened is not an error.
+pub fn dismiss(state: &mut State, id: SurfaceId) {
+    let Some(cancel) = open_among(probes(), state)
+        .into_iter()
+        .find(|open| open.id() == id)
+        .and_then(|open| open.cancel().cloned())
+    else {
+        return;
+    };
+    state.update(cancel);
+}

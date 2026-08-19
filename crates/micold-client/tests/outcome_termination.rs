@@ -12,9 +12,12 @@
 //!
 //! # `ClipboardWrite` is a stand-in here, and carries no meaning
 //!
-//! It is the only variant the enum has today (T045 added it for FR-015a; T065 adds the other
-//! three). These tests never interpret it — the payload strings are labels for identifying which
-//! outcome came back in which order, and nothing reads them as clipboard requests.
+//! It was the only variant the enum had when this was written (T045 added it for FR-015a); T065
+//! added the other three, and this file deliberately did **not** switch to them. These tests never
+//! interpret anything — the payload strings are labels for identifying which outcome came back in
+//! which order, and nothing reads them as clipboard requests. A test of the *loop* wants the
+//! cheapest possible payload, not a realistic one: `SessionsClosed` would need session ids that
+//! mean nothing here, and would invite the reader to look for a meaning that is not there.
 
 use micold_client::app::{drain, Drained, OUTCOME_BUDGET};
 use micold_client::features::Outcome;
@@ -25,8 +28,12 @@ fn tagged(tag: &str) -> Outcome {
 }
 
 fn tag_of(outcome: &Outcome) -> String {
-    let Outcome::ClipboardWrite(tag) = outcome;
-    tag.clone()
+    // Irrefutable until T065 gave the enum three more variants. The `unreachable!` is honest
+    // rather than defensive: `tagged` above is the only constructor these tests use.
+    match outcome {
+        Outcome::ClipboardWrite(tag) => tag.clone(),
+        other => unreachable!("these tests construct only ClipboardWrite; got {other:?}"),
+    }
 }
 
 /// O4: a cycle stops at the bound instead of hanging.

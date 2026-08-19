@@ -591,3 +591,21 @@ pub fn context_menu_opened(state: &mut State, x: u16, y: u16) {
 pub fn context_menu_closed(state: &mut State) {
     state.terminal_context_menu = None;
 }
+
+/// Sessions that no longer exist were dropped (feature 021, T065 — `Outcome::SessionsClosed`).
+///
+/// The session feature's own answer to a consequence another feature reported. The worktree delete
+/// path knows *that* its sessions are gone and must not know *how* a session is dropped — that is
+/// the whole of contract O2 — so it names them and this applies it.
+///
+/// The pointer is cleared before the records are dropped, for the reason `remove_confirmed`
+/// records at length: feature 024 resolves the outgoing session's location by looking it up, and a
+/// record already removed has no location to find.
+pub fn closed(state: &mut State, ids: &[SessionId]) {
+    if state.active_session.is_some_and(|id| ids.contains(&id)) {
+        state.set_current_session(None);
+    }
+    for list in state.workspace.sessions.values_mut() {
+        list.retain(|s| !ids.contains(&s.id));
+    }
+}

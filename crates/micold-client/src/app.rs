@@ -1131,6 +1131,41 @@ impl State {
 /// no error and no frame. Sixty-four is far above any real cascade (the longest known is two: a
 /// worktree delete closing sessions, whose closure raises a notification) and far below anything a
 /// person would wait through.
+/// Apply one outcome, and return anything applying it produced (FR-022, contract O3).
+///
+/// **The root is the only interpreter of cross-feature consequences**, which is the whole of O3:
+/// the feature that emitted `SessionsClosed` does not know how a session is dropped, and the
+/// session feature does not know a worktree was deleted. Neither learns anything about the other;
+/// this function is the only place the two meet.
+///
+/// # `ClipboardWrite` is not the root's, and the arm says so
+///
+/// It is an *effect request* under FR-015a, interpreted by `shell::clipboard::interpret` — the one
+/// outcome whose destination is outside the pure core entirely. The shell partitions the queue
+/// before draining, so this arm is unreachable in practice; it returns nothing rather than
+/// panicking, because an outcome vocabulary that aborts on a variant it does not own would make
+/// every future effect request a crash waiting for its shell arm.
+///
+/// # Returning `Vec<Outcome>` when nothing yet returns any
+///
+/// Interpreting one outcome may emit another — the spec's Edge Cases name the case, and
+/// [`drain`]'s bound exists for it (O4). None of these three does so today. The signature is what
+/// makes that a fact about the current interpretations rather than a shape the vocabulary cannot
+/// express.
+pub fn interpret(
+    state: &mut State,
+    outcome: crate::features::Outcome,
+) -> Vec<crate::features::Outcome> {
+    use crate::features::Outcome;
+    match outcome {
+        Outcome::SessionsClosed(ids) => crate::features::session::closed(state, &ids),
+        Outcome::OverlayDismissed(id) => crate::overlay::registry::dismiss(state, id),
+        Outcome::NotificationRaised(notification) => state.notify.push(notification),
+        Outcome::ClipboardWrite(_) => {}
+    }
+    Vec::new()
+}
+
 pub const OUTCOME_BUDGET: usize = 64;
 
 /// What one drain did.
