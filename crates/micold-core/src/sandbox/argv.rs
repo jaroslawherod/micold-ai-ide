@@ -134,7 +134,14 @@ fn mount_args(mounts: &MountSet) -> Vec<OsString> {
         args.push(format!("{}:{}:{mode}", m.host.display(), m.container.display()).into());
     }
     args.push("-v".into());
-    args.push(format!("{}:{}", mounts.state.name, mounts.state.container.display()).into());
+    args.push(
+        format!(
+            "{}:{}:rw",
+            mounts.state.host.display(),
+            mounts.state.container.display()
+        )
+        .into(),
+    );
     args.push("-v".into());
     args.push(
         format!(
@@ -159,8 +166,8 @@ mod tests {
     use crate::sandbox::image::ImageSource;
     use crate::sandbox::runtime::{IdentityMapping, LimitSupport, RuntimeKind};
     use crate::sandbox::{
-        Bytes, CredentialMount, CredentialShare, MilliCpus, NamedVolume, NetworkPosture,
-        ProjectMount, ResourceBudget, SandboxProfile, SecretMount,
+        Bytes, CredentialMount, CredentialShare, MilliCpus, NetworkPosture, ProjectMount,
+        ResourceBudget, SandboxProfile, SecretMount, StateMount,
     };
     use std::collections::BTreeSet;
     use std::path::PathBuf;
@@ -196,8 +203,8 @@ mod tests {
                     container: PathBuf::from("/home/u/p"),
                     writable: true,
                 }],
-                state: NamedVolume {
-                    name: "micold-state".into(),
+                state: StateMount {
+                    host: PathBuf::from("/home/u/.local/share/micold-ai-ide"),
                     container: PathBuf::from("/var/lib/micold"),
                 },
                 secret: SecretMount {
@@ -322,7 +329,9 @@ mod tests {
         assert!(mounted
             .iter()
             .any(|m| m.starts_with("/home/u/p:/home/u/p:rw")));
-        assert!(mounted.iter().any(|m| m.starts_with("micold-state:")));
+        assert!(mounted
+            .iter()
+            .any(|m| m.contains("micold-ai-ide:/var/lib/micold")));
         assert!(mounted.iter().any(|m| m.ends_with("/run/micold/token:ro")));
         assert!(mounted
             .iter()

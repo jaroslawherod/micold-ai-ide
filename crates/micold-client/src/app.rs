@@ -68,6 +68,8 @@ pub enum FieldId {
     /// Settings: the environment-include on/off checkbox. Not a text field — the checkbox now
     /// takes the keyboard too, and this is the same fact about the same dialog (BUG-003).
     SettingsEnvIncludeEnabled,
+    /// The "run the service in a container" checkbox (feature 027).
+    SettingsSandboxed,
     /// Settings: the environment-include script path.
     SettingsEnvIncludePath,
     /// Settings: the environment-include timeout.
@@ -130,9 +132,15 @@ pub enum Message {
     // ---- Feature 015: forget from the switcher's right-click menu ----
     /// The pointer moved to this window-pixel position. Emitted by the binary only while the
     /// project switcher is open, so a right-click can anchor its menu at the cursor.
-    CursorMoved { x: u16, y: u16 },
+    CursorMoved {
+        x: u16,
+        y: u16,
+    },
     /// The window was resized (or reported its initial size). Feeds context-menu clamping.
-    WindowResized { width: u16, height: u16 },
+    WindowResized {
+        width: u16,
+        height: u16,
+    },
     /// Open (or close, if already open) a project's switcher right-click context menu, by path.
     /// Anchored at the last known [`State::cursor`]. The switcher panel stays open behind it;
     /// the other popovers are mutually exclusive.
@@ -319,7 +327,9 @@ pub enum Message {
     WorktreeCreateFailed(String),
     /// Start a new session at the given location — a worktree or, as of feature 010, the
     /// project root ("Default", FR-001) — (FR-010). The binary spawns `claude`.
-    SessionStartRequested { location: SessionLocation },
+    SessionStartRequested {
+        location: SessionLocation,
+    },
     /// A session was started/added for the active project (FR-011).
     SessionStarted(Session),
     /// Select a session to display its terminal (FR-015); other sessions keep running.
@@ -335,7 +345,10 @@ pub enum Message {
     /// is a separate change from the one that made the daemon report the transition at all.
     SessionRunning(SessionId),
     /// The session's `claude` title became available/changed (FR-011a).
-    SessionTitleUpdated { id: SessionId, title: String },
+    SessionTitleUpdated {
+        id: SessionId,
+        title: String,
+    },
 
     // ---- Bugfix BUG-003: session Remove (distinct from Close/archive) ----
     /// Open (or close, if already open) a session's right-click context menu.
@@ -416,7 +429,10 @@ pub enum Message {
         kind: SelectKind,
     },
     /// Extend the in-progress text selection to a viewport grid cell (FR-013).
-    TerminalSelectUpdate { col: u16, line: u16 },
+    TerminalSelectUpdate {
+        col: u16,
+        line: u16,
+    },
     /// Clear the current text selection.
     TerminalSelectCleared,
     /// Scroll the displayed terminal by N lines (+ up into scrollback) (FR-016).
@@ -426,13 +442,19 @@ pub enum Message {
     /// batched drag events set the target instead of accumulating relative deltas (drag flicker).
     TerminalScrolledTo(usize),
     /// The terminal pane's visible size changed; resize the PTY + grid (FR-014, FR-015).
-    TerminalResized { cols: u16, rows: u16 },
+    TerminalResized {
+        cols: u16,
+        rows: u16,
+    },
     /// Copy the current terminal selection to the clipboard (binary handles clipboard) (FR-013).
     TerminalCopyRequested,
     /// Paste clipboard text into the focused session's PTY (binary handles clipboard) (FR-013).
     TerminalPasteRequested,
     /// Open the terminal right-click context menu at a pane-local pixel point (FR-013).
-    TerminalContextMenuOpened { x: u16, y: u16 },
+    TerminalContextMenuOpened {
+        x: u16,
+        y: u16,
+    },
     /// Dismiss the terminal context menu (an outside click, or after an item is chosen) (FR-013).
     TerminalContextMenuClosed,
     /// Open the Settings form (from the toolbar menu) (FR-019). The binary seeds the draft with
@@ -441,6 +463,8 @@ pub enum Message {
     /// The Settings scrollback field changed.
     SettingsScrollbackChanged(String),
     /// The Settings environment-include enabled checkbox was toggled (feature 011, FR-001).
+    /// The "run the daemon in a container" checkbox was toggled (feature 027, FR-001).
+    SettingsSandboxedToggled(bool),
     SettingsEnvIncludeEnabledToggled(bool),
     /// The Settings environment-include script path field changed (FR-002).
     SettingsEnvIncludePathChanged(String),
@@ -491,6 +515,12 @@ pub enum Message {
     DaemonDisconnected,
     /// Connecting to (or spawning) the daemon failed, with a human-facing reason.
     DaemonConnectFailed(String),
+    /// The sandbox came up (feature 027). Boxed because `Started` carries the capability probe,
+    /// and `Message` is cloned on every dispatch.
+    SandboxStarted(Box<micold_core::sandbox::lifecycle::Started>),
+    /// The sandbox could not be brought up. Carries the stage and the classified cause, so the
+    /// banner can name both without the shell formatting a string on the way past (FR-034).
+    SandboxFailed(Box<micold_core::sandbox::lifecycle::Failure>),
     /// The user asked to take the active project back after being displaced (US5, FR-024): re-attach
     /// with `force`. Handled by the binary (attachment is runtime).
     ConnectionTakeoverRequested,
@@ -909,6 +939,10 @@ impl State {
             | Message::DaemonGridFrame(_)
             | Message::DaemonDisconnected
             | Message::DaemonConnectFailed(_)
+            // The sandbox's state lives on the binary's `App` beside the daemon connection, for the
+            // same reason: it is runtime, not pure state.
+            | Message::SandboxStarted(_)
+            | Message::SandboxFailed(_)
             | Message::ConnectionTakeoverRequested
             | Message::DaemonVersionMismatch { .. }
             | Message::DaemonBuildMismatch { .. }
@@ -1673,6 +1707,12 @@ impl State {
             Message::SettingsScrollbackChanged(text) => {
                 if let Some(draft) = &mut self.settings_draft {
                     draft.scrollback_lines = text;
+                    draft.error = None;
+                }
+            }
+            Message::SettingsSandboxedToggled(sandboxed) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.sandboxed = sandboxed;
                     draft.error = None;
                 }
             }

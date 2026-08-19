@@ -25,6 +25,7 @@ fn the_numeric_fields_are_held_as_text_so_a_half_typed_value_is_representable() 
     let draft = SettingsDraft {
         scrollback_lines: "1".into(),
         env_include_timeout: "".into(),
+        sandboxed: false,
         ..SettingsDraft::default()
     };
 

@@ -60,6 +60,14 @@ pub fn modal<'a>(
         .on_input(Message::SettingsEnvIncludeTimeoutChanged)
         .on_submit(Message::SettingsSaved);
 
+    // Feature 027. A temporary home: US3 moves every daemon setting into a section of its own, and
+    // this checkbox goes with it. It is here so sandboxing is usable before that view exists —
+    // otherwise the only way to turn it on would be hand-editing `settings.json`, which is not a
+    // shippable answer to "the daemon can run in a container now".
+    let sandboxed_checkbox = Checkbox::new("Run the service in a container", draft.sandboxed, r)
+        .track_focus(FieldId::SettingsSandboxed, focused)
+        .on_toggle(Message::SettingsSandboxedToggled);
+
     let mut fields = material::dialog::fields(column![
         Text::new("Settings", TypeRole::Headline, r),
         // No free-standing label above the field: it carries its own now (§7.7, FR-031a). Leaving
@@ -72,6 +80,17 @@ pub fn modal<'a>(
         env_include_enabled_checkbox,
         env_include_path_input,
         env_include_timeout_input,
+        // Its own heading, for the same reason the environment-include group has one: it names a
+        // group rather than a control, and the restart it implies deserves to be visible.
+        Text::new("Session service", TypeRole::Label, r).muted(),
+        sandboxed_checkbox,
+        Text::new(
+            "Takes effect the next time the application starts. The container sees only your \
+             registered projects.",
+            TypeRole::Caption,
+            r,
+        )
+        .muted(),
     ]);
 
     if let Some((label, diagnostic)) = failure_label_and_diagnostic(env_include_outcome) {

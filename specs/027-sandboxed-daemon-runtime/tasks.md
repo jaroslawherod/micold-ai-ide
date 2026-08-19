@@ -83,7 +83,7 @@ story depends on all of it.
 
 ### The runtime seam
 
-- [ ] T023 *(test)* Write `crates/micold-core/tests/sandbox_runtime.rs` against the fake runtime — K-8 (each canned failure maps to its `RuntimeError` variant), K-9 (stop/remove/start idempotent), K-12 (malformed JSON classifies, never panics)
+- [X] T023 *(test)* Write `crates/micold-core/tests/sandbox_runtime.rs` against the fake runtime — K-8 (each canned failure maps to its `RuntimeError` variant), K-9 (stop/remove/start idempotent), K-12 (malformed JSON classifies, never panics)
 - [X] T024 Define the `ContainerRuntime` trait, `RuntimeKind`, `RuntimeVersion`, `RuntimeCapabilities`, `LimitSupport`, `IdentityMapping` and the closed `RuntimeError` in `crates/micold-core/src/sandbox/runtime.rs` (contracts/container-runtime.md §"The trait", C-6)
 - [X] T025 Implement the single process-spawn shim in `crates/micold-core/src/sandbox/exec.rs` — the only impure code in the layer
 - [X] T026 Implement `--format '{{json .}}'` parsing into typed facts in `crates/micold-core/src/sandbox/parse.rs`, with truncated and unexpected input classified rather than unwrapped
@@ -106,23 +106,23 @@ table — all three fail while the same commands against the project succeed.
 - [X] T028 *(test)* [P] [US1] Add K-5 to `crates/micold-core/tests/sandbox_argv.rs` — on Linux/macOS specs every `ProjectMount` has `container == host` (M-2, the claim git's worktree metadata depends on)
 - [X] T029 *(test)* [P] [US1] Add K-11 to `crates/micold-core/tests/sandbox_argv.rs` — the escalation denylist: no `--privileged`, `--cap-add`, `--pid=host`, `--network=host`, `seccomp=unconfined`, and no host path outside the `MountSet` (C-9)
 - [X] T030 *(test)* [P] [US1] Add K-6 to `crates/micold-core/tests/sandbox_argv.rs` — the identity flag matches the dialect's `IdentityMapping` (C-4, R3)
-- [ ] T031 *(test)* [P] [US1] Write `crates/micold-core/tests/sandbox_credentials.rs` — the empty default shares nothing, each opt-in adds exactly its own mount and no other, and no free-text path can enter through the credentials field (N-1)
-- [ ] T032 *(test)* [P] [US1] Add K-10 to `crates/micold-core/tests/sandbox_runtime.rs` — `acquire_image` emits more than one progress callback for multi-layer canned output (C-8)
+- [X] T031 *(test)* [P] [US1] Write `crates/micold-core/tests/sandbox_credentials.rs` — the empty default shares nothing, each opt-in adds exactly its own mount and no other, and no free-text path can enter through the credentials field (N-1)
+- [X] T032 *(test)* [P] [US1] Add K-10 to `crates/micold-core/tests/sandbox_runtime.rs` — `acquire_image` emits more than one progress callback for multi-layer canned output (C-8)
 
 ### Implementation
 
-- [ ] T033 [US1] Implement `SandboxProfile`, `CredentialShare` and the empty-by-default credential set in `crates/micold-core/src/sandbox/mod.rs` (SP-1, FR-004a/b)
-- [ ] T034 [US1] Implement `MountSet`, `ProjectMount`, `NamedVolume` and `SecretMount` in `crates/micold-core/src/sandbox/mod.rs` — only registered projects, no implicit home, no runtime socket (M-1, C-3)
+- [X] T033 [US1] Implement `SandboxProfile`, `CredentialShare` and the empty-by-default credential set in `crates/micold-core/src/sandbox/mod.rs` (SP-1, FR-004a/b)
+- [X] T034 [US1] Implement `MountSet`, `ProjectMount`, `NamedVolume` and `SecretMount` in `crates/micold-core/src/sandbox/mod.rs` — only registered projects, no implicit home, no runtime socket (M-1, C-3)
 - [X] T035 [US1] Implement host↔sandbox path identity in `crates/micold-core/src/sandbox/pathmap.rs` — identity on Linux/macOS, with the Windows boundary declared but unused until T099 (R2)
 - [X] T036 [US1] Implement the mount and identity portions of argv construction in `crates/micold-core/src/sandbox/argv.rs`, pure and argument-driven (C-1)
 - [X] T037 [US1] Implement Docker's dialect — flag names, defaults, `--user <uid>:<gid>` — in `crates/micold-core/src/sandbox/dialect/docker.rs` (FR-021, C-4)
 - [X] T038 [US1] Implement `ImageRef` parsing, moving-tag detection and the pull/import/build decision in `crates/micold-core/src/sandbox/image.rs` (FR-024, FR-024a–c)
-- [ ] T039 [US1] Implement `acquire_image` with progress reporting, and `create`/`start`/`stop`/`remove`/`inspect` over the exec shim in `crates/micold-core/src/sandbox/runtime.rs` (C-7, C-8)
-- [ ] T040 [US1] Implement the sandbox lifecycle side of `connect_or_start` in `crates/micold-core/src/connect.rs` — probe, acquire, start, handshake — returning classified failures rather than falling back (P-2)
-- [ ] T041 [US1] Add the client-side sandbox lifecycle state in `crates/micold-client/src/features/sandbox.rs` and the off-thread runtime calls, progress and failure-to-`Message` glue in `crates/micold-client/src/shell/sandbox.rs`
-- [ ] T042 [US1] Add the enable/disable control and the restart confirmation to the existing settings surface in `crates/micold-client/src/ui/settings_form.rs`, as a temporary home until US3 replaces it
+- [X] T039 [US1] Implement `acquire_image` with progress reporting, and `create`/`start`/`stop`/`remove`/`inspect` over the exec shim in `crates/micold-core/src/sandbox/runtime.rs` (C-7, C-8)
+- [X] T040 [US1] Implement the sandbox lifecycle side of `connect_or_start` in `crates/micold-core/src/connect.rs` — probe, acquire, start, handshake — returning classified failures rather than falling back (P-2)
+- [X] T041 [US1] Add the client-side sandbox lifecycle state in `crates/micold-client/src/features/sandbox.rs` and the off-thread runtime calls, progress and failure-to-`Message` glue in `crates/micold-client/src/shell/sandbox.rs`
+- [X] T042 [US1] Add the enable/disable control and the restart confirmation to the existing settings surface in `crates/micold-client/src/ui/settings_form.rs`, as a temporary home until US3 replaces it
 - [ ] T043 [US1] Show `StageProgress` during image acquisition in `crates/micold-client/src/ui/`, driven by the T039 callbacks (SC-004)
-- [ ] T044 [P] [US1] Write `docs/user-guide/sandboxed-daemon.md` — enabling, what the sandbox can and cannot see, the credential opt-ins and their default-off posture, and offline image import (Principle VII, FR-024a)
+- [X] T044 [P] [US1] Write `docs/user-guide/sandboxed-daemon.md` — enabling, what the sandbox can and cannot see, the credential opt-ins and their default-off posture, and offline image import (Principle VII, FR-024a)
 - [ ] T045 [US1] Run quickstart.md §B.1 and §B.2 against a real Docker install and record the result in `specs/027-sandboxed-daemon-runtime/evidence/us1-isolation.md`
 
 **Checkpoint**: the feature's core claim is demonstrable. This is the MVP.
@@ -146,7 +146,7 @@ the catalogue survives; reboot with survival opted out and opted in and confirm 
 
 ### Implementation
 
-- [ ] T050 [US2] Implement the state named volume and its mount in `crates/micold-core/src/sandbox/mod.rs` and `argv.rs`, so `projects.json`, per-project state and logs survive container recreation (FR-011)
+- [X] T050 [US2] Implement the daemon state mount in `crates/micold-core/src/sandbox/mod.rs` and `argv.rs` so `projects.json`, per-project state and logs survive container recreation (FR-011). **Deviates from data-model.md rule M-3**, which specified a runtime-managed named volume: the client has to read the registered project list *before* the sandbox exists to know what to mount, and inside a volume that file is unreachable from the host — so the second start would mount a stale list. A bind mount of the host state directory satisfies FR-011 just as well and keeps one source of truth
 - [X] T051 [US2] Map the existing session-survival opt-in onto the runtime's restart policy in `crates/micold-core/src/sandbox/argv.rs`, and route `logout_survival.rs`'s outcome through the placement so the setting keeps one name and one meaning (R6)
 - [ ] T052 [US2] Report `SurvivalOutcome::Enabled` for the sandboxed placement on macOS and Windows in `crates/micold-core/src/logout_survival.rs`, where the host-process path reports `Unsupported` (FR-014b — the bar the spec raises deliberately)
 - [X] T053 [US2] Implement user-exposed port publishing in `crates/micold-core/src/sandbox/argv.rs` and its setting in `crates/micold-core/src/sandbox/mod.rs` (US2 scenario 8)
@@ -267,18 +267,18 @@ does a session start unsandboxed without an explicit choice.
 
 ### Tests first
 
-- [ ] T099 *(test)* [P] [US6] Write `crates/micold-core/tests/sandbox_state.rs` — S-2 as a **graph property**: no edge leaves `Failed` for a working unsandboxed daemon without an explicit action (FR-035)
-- [ ] T100 *(test)* [P] [US6] Add S-4 to `crates/micold-core/tests/sandbox_state.rs` — every terminal failure carries a reason **and** a remedy drawn from the closed enumeration (FR-034)
+- [X] T099 *(test)* [P] [US6] Write `crates/micold-core/tests/sandbox_state.rs` — S-2 as a **graph property**: no edge leaves `Failed` for a working unsandboxed daemon without an explicit action (FR-035)
+- [X] T100 *(test)* [P] [US6] Add S-4 to `crates/micold-core/tests/sandbox_state.rs` — every terminal failure carries a reason **and** a remedy drawn from the closed enumeration (FR-034)
 - [ ] T101 *(test)* [P] [US6] Add M-4 to `crates/micold-core/tests/sandbox_state.rs` — registering a project marks the sandbox `Stale` and nothing restarts on its own (R9)
 - [ ] T102 *(test)* [P] [US6] Extend `crates/micold-client/tests/banner_is_not_a_snackbar.rs` — the failed and unsandboxed states are persistently visible, not a toast that scrolls away (FR-035b, S-3)
 - [ ] T103 *(test)* [P] [US6] Write `crates/micold-core/tests/sandbox_unmountable.rs` — a project on a path the runtime cannot share fails with a message naming the path and the reason, not a generic mount error (Edge Cases)
 
 ### Implementation
 
-- [ ] T104 [US6] Implement the `SandboxState` machine in `crates/micold-core/src/sandbox/mod.rs` per data-model.md §7 — pure, with the client holding only the current value
+- [X] T104 [US6] Implement the `SandboxState` machine in `crates/micold-core/src/sandbox/mod.rs` per data-model.md §7 — pure, with the client holding only the current value
 - [ ] T105 [US6] Implement the stale-on-project-change transition and the explicit restart action in `crates/micold-core/src/sandbox/mod.rs` and `crates/micold-client/src/features/sandbox.rs` (R9, M-4)
 - [ ] T106 [US6] Detect a sandbox stopped or removed outside the app and recover to a defined state rather than hanging, in `crates/micold-client/src/shell/sandbox.rs` (US6 scenario 3)
-- [ ] T107 [US6] Implement the per-occurrence consented fallback in `crates/micold-client/src/features/sandbox.rs` — offered on failure, never taken automatically, and reset on next launch (FR-035a, US6 scenario 2)
+- [X] T107 [US6] Implement the per-occurrence consented fallback in `crates/micold-client/src/features/sandbox.rs` — offered on failure, never taken automatically, and reset on next launch (FR-035a, US6 scenario 2)
 - [ ] T108 [US6] Surface the failed and unsandboxed states through `ConnectionBanner` in `crates/micold-client/src/ui/`, persistently for as long as they last (FR-035b)
 - [ ] T109 [US6] Expose the daemon's in-sandbox diagnostics through the app via `logs` in `crates/micold-client/src/ui/` (US6 scenario 6)
 - [ ] T110 [US6] Implement explicit stop that leaves no orphaned container, and leave the sandbox running on app close by design, in `crates/micold-client/src/shell/sandbox.rs` (US6 scenario 4)

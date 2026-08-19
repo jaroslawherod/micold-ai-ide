@@ -21,9 +21,11 @@
 //! budget is the user's mistake, an unenforceable one is the environment's limitation.
 
 pub mod argv;
+pub mod cli;
 pub mod dialect;
 pub mod exec;
 pub mod image;
+pub mod lifecycle;
 pub mod parse;
 pub mod pathmap;
 pub mod placement;
@@ -327,14 +329,31 @@ impl ProjectMount {
     }
 }
 
-/// The daemon's state, in a runtime-managed named volume.
+/// Where the daemon's state directory lives inside the container. Matches the `Containerfile`'s
+/// `MICOLD_STATE_DIR`.
+pub const STATE_CONTAINER_DIR: &str = "/var/lib/micold";
+
+/// The daemon's state directory, bind-mounted from the host.
 ///
-/// A volume rather than a bind mount (rule M-3, FR-011) so recreating the container keeps
-/// `projects.json`, per-project state and logs — which is what makes "the sandbox was recreated"
-/// a non-event rather than a data loss.
+/// # Why not a runtime-managed named volume
+///
+/// The plan and `data-model.md` rule M-3 called for a named volume, and it satisfies FR-011 — state
+/// survives the container being recreated. Implementation found a requirement it does not satisfy:
+/// **the client has to know which projects to mount before the sandbox exists**, and the registered
+/// project list lives in the daemon's own `projects.json`. Inside a named volume that file is
+/// unreadable from the host, so the second sandboxed start would mount whatever the list said
+/// before sandboxing was ever enabled, and every project registered since would silently be
+/// missing from the sandbox.
+///
+/// A bind mount of the host state directory keeps one source of truth, satisfies FR-011 just as
+/// well (the directory outlives any container), and is the more local-first of the two — the user's
+/// data stays somewhere they can see, back up, and inspect, rather than inside a runtime's storage
+/// area. Mounted at its own absolute path, for the same reason projects are (research R2).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NamedVolume {
-    pub name: String,
+pub struct StateMount {
+    /// The host's per-user data directory, where `projects.json` already lives.
+    pub host: PathBuf,
+    /// Where the daemon reads it inside the container.
     pub container: PathBuf,
 }
 
@@ -360,8 +379,8 @@ pub struct SecretMount {
 pub struct MountSet {
     /// One per registered project.
     pub projects: Vec<ProjectMount>,
-    /// Daemon state; survives container recreation.
-    pub state: NamedVolume,
+    /// Daemon state; survives container recreation, and stays readable from the host.
+    pub state: StateMount,
     /// The authentication token.
     pub secret: SecretMount,
     /// Credential mounts, one per active opt-in. Empty unless the user opted in (rule N-1).
@@ -380,13 +399,125 @@ pub struct CredentialMount {
     pub container: PathBuf,
 }
 
+/// The invoking user's identity, for the container to run as (research R3).
+///
+/// Read at sandbox-start time rather than baked into the image, so one published image serves every
+/// user and files written into a project come back owned by whoever ran the app. Anything else
+/// leaves root-owned files the user cannot edit without elevation — a worse outcome than not
+/// sandboxing at all.
+///
+/// Windows has no uid/gid, and needs none: the Desktop file-sharing layer already re-owns written
+/// files to the host user, so the flag is a no-op there rather than a conflict. Emitting it
+/// uniformly avoids a per-platform branch in the argv builder.
+pub fn host_identity() -> (u32, u32) {
+    #[cfg(unix)]
+    {
+        // SAFETY: `getuid`/`getgid` take no arguments and cannot fail.
+        unsafe { (libc::getuid(), libc::getgid()) }
+    }
+    #[cfg(not(unix))]
+    {
+        (0, 0)
+    }
+}
+
+/// Where the host's credentials live, so the mount set can be built without reading the world.
+///
+/// Passed in rather than looked up, because building the mount set is a pure function and this is
+/// the only part of it that is not knowable from the profile. The impure lookup happens once, at
+/// the call site, exactly as `settings.rs` does for the home directory.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CredentialLayout {
+    /// `~/.gitconfig`.
+    pub git_config: Option<PathBuf>,
+    /// The authentication agent's socket, from `SSH_AUTH_SOCK`.
+    pub ssh_agent: Option<PathBuf>,
+    /// The git credential helper's store.
+    pub git_credentials: Option<PathBuf>,
+    /// The AI CLI's own authentication material.
+    pub ai_cli_auth: Option<PathBuf>,
+}
+
+impl CredentialLayout {
+    /// The conventional layout under `home`, with the agent socket taken from `ssh_auth_sock`.
+    ///
+    /// Pure and argument-driven: the caller does the two environment lookups. A path is included
+    /// whether or not it exists — whether it is *present* is a question for the moment the sandbox
+    /// starts, and answering it here would make this function's result depend on when it ran.
+    pub fn conventional(home: &Path, ssh_auth_sock: Option<&Path>) -> Self {
+        Self {
+            git_config: Some(home.join(".gitconfig")),
+            ssh_agent: ssh_auth_sock.map(Path::to_path_buf),
+            git_credentials: Some(home.join(".git-credentials")),
+            ai_cli_auth: Some(home.join(".claude")),
+        }
+    }
+
+    fn path_for(&self, share: CredentialShare) -> Option<&Path> {
+        match share {
+            CredentialShare::GitConfig => self.git_config.as_deref(),
+            CredentialShare::SshAgent => self.ssh_agent.as_deref(),
+            CredentialShare::GitCredentials => self.git_credentials.as_deref(),
+            CredentialShare::AiCliAuth => self.ai_cli_auth.as_deref(),
+        }
+    }
+}
+
 impl MountSet {
+    /// Build the mount set for a profile.
+    ///
+    /// **Rule M-1 lives here.** The result is exactly the registered projects, the state volume,
+    /// the token, and one mount per *active* credential opt-in — nothing else. A sandbox's
+    /// guarantee is what it cannot reach, so a convenience added to this function is not a
+    /// convenience: it is the feature failing quietly, everywhere, at once.
+    ///
+    /// A credential the user opted into but whose path the layout does not know is skipped rather
+    /// than mounted as something else. An opt-in that silently mounted a nearby path would be worse
+    /// than one that does nothing.
+    pub fn build(
+        projects: &[PathBuf],
+        profile: &SandboxProfile,
+        layout: &CredentialLayout,
+        state_dir: impl Into<PathBuf>,
+        secret: SecretMount,
+    ) -> Self {
+        let credentials = profile
+            .credentials
+            .iter()
+            .filter_map(|share| {
+                let host = layout.path_for(*share)?;
+                Some(CredentialMount {
+                    share: *share,
+                    // Credentials are mounted at their own absolute paths for the same reason
+                    // projects are: the tools inside look for them where they always are.
+                    container: pathmap::map(host),
+                    host: host.to_path_buf(),
+                })
+            })
+            .collect();
+
+        Self {
+            projects: projects
+                .iter()
+                .cloned()
+                .map(ProjectMount::project)
+                .collect(),
+            state: StateMount {
+                host: state_dir.into(),
+                container: PathBuf::from(STATE_CONTAINER_DIR),
+            },
+            secret,
+            credentials,
+        }
+    }
+
     /// Every host path this sandbox can reach. Used by the denylist assertion, which checks that
     /// generated argv mounts nothing outside this set (obligation C-3, conformance check K-4).
     pub fn host_paths(&self) -> Vec<&Path> {
         self.projects
             .iter()
             .map(|m| m.host.as_path())
+            .chain(std::iter::once(self.state.host.as_path()))
             .chain(std::iter::once(self.secret.host.as_path()))
             .chain(self.credentials.iter().map(|c| c.host.as_path()))
             .collect()

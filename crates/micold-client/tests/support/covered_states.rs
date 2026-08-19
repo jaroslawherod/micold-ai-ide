@@ -412,6 +412,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     env_include_enabled: true,
                     env_include_script_path: "~/.config/micold/session-env.sh".to_string(),
                     env_include_timeout: "5".to_string(),
+                    sandboxed: false,
                     error: Some("the scrollback limit must be between 100 and 100000".to_string()),
                 });
                 StateUnderTest::new(state)

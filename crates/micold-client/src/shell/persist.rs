@@ -40,6 +40,7 @@ use iced::Task;
 use micold_client::app::Message;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::provider::AiCliProvider;
+use micold_core::sandbox::placement::PlacementKind;
 use micold_core::settings::{Settings, SettingsStore};
 
 use crate::shell::daemon_sync::PendingOp;
@@ -127,6 +128,15 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
         draft.env_include_enabled = app.env_include_enabled;
         draft.env_include_script_path = app.env_include_script_path.clone();
         draft.env_include_timeout = app.env_include_timeout_secs.to_string();
+        // Feature 027: seeded from the store rather than from `App`, because the placement is not
+        // otherwise held in memory — the connection subscription read it once at boot and the
+        // sandbox's *state* is what `App` carries from then on.
+        draft.sandboxed = app
+            .caps
+            .settings()
+            .map(|store| store.load().settings.daemon.placement)
+            .unwrap_or_default()
+            == PlacementKind::LocalSandbox;
     }
     Task::none()
 }
@@ -190,8 +200,18 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
             env_include_enabled: app.env_include_enabled,
             env_include_script_path: app.env_include_script_path.clone(),
             env_include_timeout_secs,
-            // The daemon section is not edited by this form; it is edited by its own (feature 027).
-            daemon: store.load().settings.daemon,
+            // Everything else about the daemon is edited by its own section (feature 027, US3).
+            // The placement is here because this dialog is the only way to reach it until that
+            // section exists.
+            daemon: {
+                let mut daemon = store.load().settings.daemon;
+                daemon.placement = if draft.sandboxed {
+                    PlacementKind::LocalSandbox
+                } else {
+                    PlacementKind::HostProcess
+                };
+                daemon
+            },
         }) {
             app.core
                 .notify_error(format!("Couldn't save your settings: {err}"));

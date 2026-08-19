@@ -43,6 +43,7 @@ pub mod connection;
 pub mod help;
 pub mod notifications;
 pub mod project;
+pub mod sandbox;
 pub mod session;
 pub mod settings;
 pub mod sidebar;

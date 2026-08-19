@@ -68,6 +68,29 @@ impl CommandOutput {
 pub trait CommandRunner: Send + Sync {
     /// Run `program` with `args`, waiting for it and capturing both streams.
     fn run(&self, program: &OsStr, args: &[OsString]) -> io::Result<CommandOutput>;
+
+    /// Run `program`, invoking `on_line` for each line of output **as it arrives**.
+    ///
+    /// Image acquisition is the one operation that may take minutes, and obligation C-8 requires
+    /// progress to move while it does — SC-004 gives first-time enable five minutes, and five
+    /// silent minutes reads as a hang. Capturing the whole output first and replaying it
+    /// afterwards would satisfy the type and defeat the point.
+    ///
+    /// The default implementation does exactly that replay, which is correct for a fake (the
+    /// canned output is already complete) and wrong for a real process — so [`SystemRunner`]
+    /// overrides it.
+    fn run_streaming(
+        &self,
+        program: &OsStr,
+        args: &[OsString],
+        on_line: &mut dyn FnMut(&str),
+    ) -> io::Result<CommandOutput> {
+        let out = self.run(program, args)?;
+        for line in out.stdout.lines().chain(out.stderr.lines()) {
+            on_line(line);
+        }
+        Ok(out)
+    }
 }
 
 /// Spawns the runtime for real.
@@ -83,6 +106,62 @@ impl CommandRunner for SystemRunner {
             // becoming an error that hides the real one. `parse` classifies unusable text anyway.
             stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        })
+    }
+
+    fn run_streaming(
+        &self,
+        program: &OsStr,
+        args: &[OsString],
+        on_line: &mut dyn FnMut(&str),
+    ) -> io::Result<CommandOutput> {
+        use std::io::{BufRead, BufReader};
+        use std::process::Stdio;
+
+        let mut child = Command::new(program)
+            .args(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        // stdout is read on this thread and stderr on another, because a runtime that fills the
+        // stderr pipe while we are only draining stdout deadlocks — and `docker pull` writes
+        // progress to whichever it feels like.
+        let mut stderr = child.stderr.take().map(BufReader::new);
+        let stderr_thread = stderr.take().map(|mut r| {
+            std::thread::spawn(move || {
+                let mut collected = String::new();
+                let mut line = String::new();
+                while r.read_line(&mut line).unwrap_or(0) > 0 {
+                    collected.push_str(&line);
+                    line.clear();
+                }
+                collected
+            })
+        });
+
+        let mut stdout = String::new();
+        if let Some(out) = child.stdout.take() {
+            let mut reader = BufReader::new(out);
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap_or(0) > 0 {
+                on_line(line.trim_end());
+                stdout.push_str(&line);
+                line.clear();
+            }
+        }
+
+        let status = child.wait()?;
+        let stderr = stderr_thread
+            .and_then(|t| t.join().ok())
+            .unwrap_or_default();
+        for line in stderr.lines() {
+            on_line(line);
+        }
+        Ok(CommandOutput {
+            code: status.code(),
+            stdout,
+            stderr,
         })
     }
 }

@@ -239,6 +239,7 @@ jobs:
           test -f docs/user-guide/project-selection.md
           test -f docs/user-guide/appearance-theming.md
           test -f docs/user-guide/settings.md
+          test -f docs/user-guide/sandboxed-daemon.md
           test -f docs/user-guide/worktrees-and-sessions.md
           test -f docs/user-guide/icons.md
       # Principle VII for a developer-facing capability: feature 020's showcase is documented for

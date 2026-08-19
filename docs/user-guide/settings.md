@@ -72,3 +72,12 @@ Settings form (even without changing any value) also triggers a fresh re-source.
 
 Click **Save** to apply any changes above, or **Cancel** (or press Esc) to dismiss the dialog
 without changing anything.
+
+## Session service
+
+Whether the session service runs directly on this computer or inside a container, where it sees only
+your registered projects. Off by default; see [Running the session service in a
+container](sandboxed-daemon.md) for what changes, what it can and cannot reach, and how to work
+offline.
+
+Takes effect the next time the application starts.

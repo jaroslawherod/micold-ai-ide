@@ -13,7 +13,7 @@ use super::SandboxProfile;
 /// Separate from the rich [`Placement`] below: settings store the *choice*, and resolution builds
 /// the placement from it. That separation is what keeps resolution a pure function of settings
 /// (rule P-1) rather than something that reads the world on the way past.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PlacementKind {
     /// Today's behaviour: a detached host process. Unchanged, and still the default — upgrading

@@ -104,6 +104,17 @@ struct App {
     /// `DaemonConnected`). Drives the stale-content banner (FR-027). `daemon.is_none()` also implies
     /// this, but the flag is explicit for clarity at the render site.
     disconnected: bool,
+    /// Where the daemon runs, resolved once at boot from the settings the shell loaded.
+    ///
+    /// Held here rather than read by the connection subscription, because the shell is the single
+    /// place that chooses a real settings store (FR-017/FR-018) — a rule
+    /// `tests/no_concrete_implementations.rs` enforces, and which caught the first version of this.
+    placement: micold_client::daemon::Placement,
+    /// The sandbox's state, when the daemon is placed in one (feature 027).
+    ///
+    /// Always present, `Disabled` for the host placement — so the persistent-notice check is one
+    /// call rather than an `Option` every render site has to remember to unwrap.
+    sandbox: micold_client::features::sandbox::Sandbox,
     /// A pending contract-version mismatch (US6, FR-021/022): `(client_version, daemon_version,
     /// daemon_build)`. `Some` while the running daemon's contract differs from ours — drives the
     /// version-mismatch banner and its "restart service" action. Cleared on a successful connect.
@@ -459,6 +470,20 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::DaemonGridFrame(frame) => shell::daemon_sync::on_grid_frame(app, frame),
         Message::DaemonDisconnected => shell::daemon_sync::on_disconnected(app),
         Message::DaemonConnectFailed(reason) => shell::daemon_sync::on_connect_failed(app, reason),
+        // Feature 027. The sandbox's outcome is recorded, never acted on: a failure must not start
+        // a session somewhere else, and a success needs no prompting because the connection
+        // subscription is already retrying against the loopback port.
+        Message::SandboxStarted(started) => {
+            app.sandbox.started(*started);
+            Task::none()
+        }
+        Message::SandboxFailed(failure) => {
+            let notice = format!("{} {}", failure.reason(), failure.remedy());
+            app.sandbox.failed(*failure);
+            // Persistent, not a toast: a sandbox that fails quietly stays broken (FR-035b).
+            app.core.notify_error(notice);
+            Task::none()
+        }
         Message::ConnectionTakeoverRequested => shell::daemon_sync::on_takeover_requested(app),
         // The daemon refused us on a contract mismatch (US6, FR-021): record it so the banner can
         // name both versions and offer the restart action. The connection subscription keeps
@@ -958,6 +983,8 @@ pub(crate) mod tests {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            placement: micold_client::daemon::Placement::default(),
+            sandbox: micold_client::features::sandbox::Sandbox::default(),
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -1003,6 +1030,8 @@ pub(crate) mod tests {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            placement: micold_client::daemon::Placement::default(),
+            sandbox: micold_client::features::sandbox::Sandbox::default(),
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -1301,6 +1330,8 @@ pub(crate) mod tests {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            placement: micold_client::daemon::Placement::default(),
+            sandbox: micold_client::features::sandbox::Sandbox::default(),
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -1482,6 +1513,7 @@ pub(crate) mod tests {
             env_include_enabled: false,
             env_include_script_path: "/tmp/does-not-exist.sh".into(),
             env_include_timeout: "15".into(),
+            sandboxed: false,
             error: None,
         });
 
@@ -1522,6 +1554,7 @@ pub(crate) mod tests {
             env_include_enabled: true,
             env_include_script_path: String::new(),
             env_include_timeout: "15".into(),
+            sandboxed: false,
             error: None,
         });
 
@@ -1621,6 +1654,8 @@ pub(crate) mod tests {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            placement: micold_client::daemon::Placement::default(),
+            sandbox: micold_client::features::sandbox::Sandbox::default(),
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,

@@ -27,6 +27,12 @@ pub struct SettingsDraft {
     /// The editable environment-include timeout, in seconds as text (parsed/validated on save,
     /// FR-003).
     pub env_include_timeout: String,
+    /// Whether the daemon runs in a container (feature 027, FR-001).
+    ///
+    /// A boolean here rather than the `PlacementKind` it maps to, because this dialog offers the
+    /// two placements as an on/off choice. When Settings becomes a sectioned view (US3) the daemon
+    /// section renders the placement properly, and this field goes with the dialog.
+    pub sandboxed: bool,
     /// The last validation error shown after a rejected save.
     pub error: Option<String>,
 }
