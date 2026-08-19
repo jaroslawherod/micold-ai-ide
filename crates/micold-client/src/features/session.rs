@@ -18,7 +18,7 @@ use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
-use micold_core::session::{Session, SessionId, SessionLocation};
+use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
 use std::path::Path;
 
 /// Why entering a project landed on the session it did — or on none (feature 008 FR-003).
@@ -395,4 +395,199 @@ impl Registered for ConfirmSessionRemoveDialog {
             .session_remove_target
             .map(|_| ConfirmSessionRemoveDialog)
     }
+}
+
+/// A session was started (feature 005, FR-020).
+///
+/// The started session's location joins the user's own open set, as it always has. Feature 024
+/// makes that redundant for *display* — `set_current_session` opens the row by derivation anyway —
+/// but it is kept, and not only because the assertion freeze forbids rewriting the expectation: it
+/// is what the reveal would do a moment later, since the commit in `set_current_session` turns a
+/// revealed row into ordinary user-open state on the next change of current session. Writing it
+/// here reaches the same place by the same rule, sooner.
+///
+/// Making a session the displayed session puts the user in front of a terminal, so it holds the
+/// keyboard (FR-011).
+pub fn started(state: &mut State, session: Session) {
+    let id = session.id;
+    let location = session.location.clone();
+    if let Some(path) = state.workspace.active.clone() {
+        state
+            .workspace
+            .sessions
+            .entry(path)
+            .or_default()
+            .push(session);
+    }
+    match location {
+        SessionLocation::Worktree(dir) => {
+            state.expanded.insert(dir);
+        }
+        SessionLocation::Default => {
+            state.default_expanded = true;
+        }
+    }
+    state.set_current_session(Some(id));
+    state.focus_terminal();
+}
+
+/// A session row was clicked (feature 024, contract §3.0).
+///
+/// **The one writer that does not go through `set_current_session`.** The user clicked a row they
+/// could already see, so revealing it would open nothing they had not opened and would scroll a
+/// list they were reading (FR-006). `tests/current_session_writers.rs` knows this exemption by
+/// name; any other direct write to `active_session` fails that gate.
+pub fn selected(state: &mut State, id: SessionId) {
+    state.active_session = Some(id);
+    // Selecting a session displays its terminal, so it holds the keyboard, clearing any earlier
+    // release (FR-011, FR-021a).
+    state.focus_terminal();
+}
+
+/// The daemon reported a session's process running.
+pub fn running(state: &mut State, id: SessionId) {
+    if let Some(session) = state.session_mut(id) {
+        session.mark_running();
+    }
+}
+
+/// A session's title changed.
+pub fn title_updated(state: &mut State, id: SessionId, title: String) {
+    if let Some(session) = state.session_mut(id) {
+        session.set_title(title);
+    }
+}
+
+/// The displayed session switched between its AI-CLI and Regular modes.
+///
+/// Switching mode puts a different terminal in front of the user, so it holds the keyboard
+/// (FR-011). That is the navigation the reported bug was about: it used to take two presses to
+/// reach and then left you looking at a terminal that ignored the keyboard.
+pub fn mode_toggled(state: &mut State) {
+    if let Some(id) = state.active_session {
+        if let Some(session) = state.session_mut(id) {
+            let next = session.mode.other();
+            session.set_mode(next);
+        }
+    }
+    state.focus_terminal();
+}
+
+/// A shell instance was selected (feature 012).
+pub fn shell_instance_selected(state: &mut State, id: SessionId, shell_id: ShellInstanceId) {
+    if let Some(session) = state.session_mut(id) {
+        session.select_shell(shell_id);
+    }
+    state.focus_terminal(); // FR-011
+}
+
+/// A shell instance was closed (feature 012).
+///
+/// Whichever instance takes its place is what the user is now looking at (FR-011).
+pub fn shell_instance_close_requested(state: &mut State, id: SessionId, shell_id: ShellInstanceId) {
+    if let Some(session) = state.session_mut(id) {
+        session.close_shell(shell_id);
+    }
+    state.focus_terminal();
+}
+
+/// The daemon reported a shell instance live (feature 012, FR-008).
+pub fn shell_instance_running(state: &mut State, session_id: SessionId, shell_id: ShellInstanceId) {
+    if let Some(session) = state.session_mut(session_id) {
+        session.mark_shell_running(shell_id);
+    }
+}
+
+/// A shell instance's process ended (feature 012).
+pub fn shell_instance_exited(state: &mut State, session_id: SessionId, shell_id: ShellInstanceId) {
+    if let Some(session) = state.session_mut(session_id) {
+        session.mark_shell_exited(shell_id);
+    }
+}
+
+/// A session was closed (bugfix BUG-003, FR-015a).
+///
+/// Close **archives** the session — kept, hidden from the sidebar via `active_sessions()` — rather
+/// than deleting its record outright, so a still-existing `claude` transcript is not reconstructed
+/// by reconciliation (FR-020b) on the next project open. The durable provider-side suppression
+/// marker (FR-020c) is written by the shell, alongside killing the process.
+///
+/// Feature 024: the pointer is cleared through `set_current_session` so the row the closed session
+/// was in is committed open rather than snapping shut and taking its siblings out of view
+/// (FR-001c). Nothing is armed — no session is current to scroll to, and FR-001a forbids moving
+/// the panel when the user closes the session they were on. Nothing needs clearing alongside it:
+/// with no displayed session `terminal_focused()` is already false (FR-012/FR-016).
+pub fn close_requested(state: &mut State, id: SessionId) {
+    if let Some(path) = state.workspace.active.clone() {
+        if let Some(list) = state.workspace.sessions.get_mut(&path) {
+            if let Some(session) = list.iter_mut().find(|s| s.id == id) {
+                session.archive();
+            }
+        }
+    }
+    if state.active_session == Some(id) {
+        state.set_current_session(None);
+    }
+}
+
+/// A session's right-click menu was toggled (bugfix BUG-003).
+///
+/// Same session closes; a different one replaces it (only ever one open) — mirrors
+/// `worktree::menu_toggled`.
+pub fn menu_toggled(state: &mut State, id: SessionId) {
+    state.session_menu_open = if state.session_menu_open == Some(id) {
+        None
+    } else {
+        Some(id)
+    };
+}
+
+/// The session context menu was dismissed.
+pub fn menu_dismissed(state: &mut State) {
+    state.session_menu_open = None;
+}
+
+/// Permanent removal was requested; the confirmation opens (bugfix BUG-003, FR-015c).
+pub fn remove_requested(state: &mut State, id: SessionId) {
+    state.clear_for_dialog();
+    state.session_remove_target = Some(id);
+}
+
+/// Permanent removal was confirmed (FR-015c, FR-020c).
+///
+/// Unlike close, which archives, remove drops the record outright — the pre-BUG-003 close
+/// behaviour. The shell has already killed the process and recorded the durable suppression marker.
+///
+/// **The ordering is load-bearing.** Feature 024's commit that keeps the row open (FR-001c)
+/// resolves the outgoing session's location by looking it up, and a record already removed has no
+/// location to find — so clearing the pointer *after* dropping the record collapses the row and
+/// takes its siblings out of view. The close path is not exposed to this, archiving leaving the
+/// record in place.
+pub fn remove_confirmed(state: &mut State) {
+    let Some(id) = state.session_remove_target.take() else {
+        return;
+    };
+    if state.active_session == Some(id) {
+        state.set_current_session(None);
+    }
+    if let Some(path) = state.workspace.active.clone() {
+        if let Some(list) = state.workspace.sessions.get_mut(&path) {
+            list.retain(|s| s.id != id);
+        }
+    }
+}
+
+/// The removal confirmation was dismissed.
+pub fn remove_cancelled(state: &mut State) {
+    state.session_remove_target = None;
+}
+
+/// The terminal's right-click menu opened at a pane-local anchor (feature 006, FR-013).
+pub fn context_menu_opened(state: &mut State, x: u16, y: u16) {
+    state.terminal_context_menu = Some((x, y));
+}
+
+/// The terminal's right-click menu was dismissed.
+pub fn context_menu_closed(state: &mut State) {
+    state.terminal_context_menu = None;
 }

@@ -180,3 +180,146 @@ impl Registered for RenameWorktreeDialog {
             .map(|_| RenameWorktreeDialog)
     }
 }
+
+/// Discovery answered with the current worktree list (feature 005, FR-018).
+pub fn loaded(state: &mut State, worktrees: Vec<Worktree>) {
+    state.worktree_error = None;
+    state.set_worktrees(worktrees);
+}
+
+/// A worktree's right-click menu was toggled (feature 008).
+///
+/// Same worktree closes; a different one replaces it (only ever one open). Mutually exclusive with
+/// the project context menu (feature 015).
+pub fn menu_toggled(state: &mut State, dir: String) {
+    state.worktree_menu_open = if state.worktree_menu_open.as_deref() == Some(dir.as_str()) {
+        None
+    } else {
+        Some(dir)
+    };
+    state.project_menu_open = None;
+}
+
+/// The worktree context menu was dismissed.
+pub fn menu_dismissed(state: &mut State) {
+    state.worktree_menu_open = None;
+}
+
+/// The daemon answered an include request with the worktree as its own discovery sees it
+/// (016 BUG-002, FR-027/FR-030).
+///
+/// Idempotent by path, and sorted by directory name so an included worktree lands where the list
+/// would have put it rather than at the end.
+pub fn included(state: &mut State, worktree: Worktree) {
+    if !state.worktrees.iter().any(|w| w.path == worktree.path) {
+        state.worktrees.push(worktree);
+        state.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
+    }
+    state.worktree_error = None;
+}
+
+/// An exclude was requested; the menu it was chosen from closes (016 BUG-002).
+pub fn exclude_requested(state: &mut State) {
+    state.worktree_menu_open = None;
+}
+
+/// The daemon confirmed a worktree is no longer included (016 BUG-002).
+pub fn excluded(state: &mut State, path: std::path::PathBuf) {
+    state.worktrees.retain(|w| w.path != path);
+}
+
+/// A delete was requested; the confirmation opens (feature 008, FR-018/FR-019).
+///
+/// The keep-branch choice never carries over from a previously cancelled or confirmed dialog
+/// (feature 013).
+pub fn delete_requested(state: &mut State, dir: String) {
+    state.clear_for_dialog();
+    state.worktree_delete_target = Some(dir);
+    state.worktree_delete_keep_branch = false;
+}
+
+/// A delete was confirmed — which *requests* it rather than performing it.
+///
+/// The daemon owns the git removal and the session records, and answers with `OperationOk`
+/// (followed by a `CatalogChanged` carrying git's refreshed truth) or `OperationError`. So this
+/// only dismisses the dialog.
+///
+/// **Dropping the row here instead — the previous behaviour — made every delete *look* like it
+/// succeeded**: a delete git refused showed the worktree vanishing, then silently reappearing when
+/// the next catalog push restored it, which reads as the app resurrecting something the user
+/// deleted rather than as the failure it is. Leaving the row alone means a refusal simply leaves it
+/// in place, beside the error notification explaining why.
+pub fn delete_confirmed(state: &mut State) {
+    state.worktree_delete_target = None;
+}
+
+/// The delete confirmation was dismissed.
+pub fn delete_cancelled(state: &mut State) {
+    state.worktree_delete_target = None;
+}
+
+/// The "also delete the branch" choice was toggled (feature 013).
+pub fn delete_keep_branch_toggled(state: &mut State, keep: bool) {
+    state.worktree_delete_keep_branch = keep;
+}
+
+/// A worktree rename was started, seeded with its current display name (feature 008, FR-013).
+pub fn rename_started(state: &mut State, dir: String) {
+    let text = state.worktree_display_name(&dir);
+    state.clear_for_dialog();
+    state.worktree_rename_draft = Some(WorktreeRenameDraft {
+        dir_name: dir,
+        text,
+        error: None,
+    });
+}
+
+/// The rename field was edited; any pending error is cleared with it.
+pub fn rename_text_changed(state: &mut State, text: String) {
+    if let Some(draft) = &mut state.worktree_rename_draft {
+        draft.text = text;
+        draft.error = None;
+    }
+}
+
+/// The rename was confirmed (feature 008, FR-014).
+///
+/// Changes only the stored display name — never the folder or the branch on disk. A rejected name
+/// leaves the dialog open carrying its reason.
+pub fn rename_confirmed(state: &mut State) {
+    let Some((dir, text)) = state
+        .worktree_rename_draft
+        .as_ref()
+        .map(|d| (d.dir_name.clone(), d.text.clone()))
+    else {
+        return;
+    };
+    match state.workspace.set_worktree_name(&dir, &text) {
+        Ok(()) => state.worktree_rename_draft = None,
+        Err(error) => {
+            if let Some(draft) = &mut state.worktree_rename_draft {
+                draft.error = Some(error);
+            }
+        }
+    }
+}
+
+/// The rename was dismissed without saving.
+pub fn rename_cancelled(state: &mut State) {
+    state.worktree_rename_draft = None;
+}
+
+/// The pointer entered a worktree row (feature 008).
+pub fn hovered(state: &mut State, dir: String) {
+    state.hovered_worktree = Some(dir);
+}
+
+/// The pointer left a worktree row (feature 008).
+///
+/// Only clears when leaving the row that was thought to be hovered, so a stale exit from a
+/// previous row cannot clobber a fresh enter.
+pub fn unhovered(state: &mut State, dir: String) {
+    if state.hovered_worktree.as_deref() == Some(dir.as_str()) {
+        state.hovered_worktree = None;
+    }
+}

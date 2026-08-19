@@ -16,18 +16,14 @@ use crate::features::session::SelectKind;
 use crate::features::settings::SettingsDraft;
 use crate::features::sidebar::TagFilter;
 use crate::features::worktree::WorktreeRenameDraft;
-use crate::features::worktree_form::{
-    BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
-};
+use crate::features::worktree_form::{BranchSource, WorktreeForm};
 use micold_core::naming::ConventionalType;
 use micold_core::notify;
-use micold_core::project::{canonicalize_best_effort, Availability, FolderEntry};
+use micold_core::project::{Availability, FolderEntry};
 use micold_core::selector::Selector;
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
-use micold_core::theme::{
-    observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference,
-};
-use micold_core::typeahead::{move_highlight, Direction};
+use micold_core::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
+use micold_core::typeahead::Direction;
 use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -772,7 +768,7 @@ impl State {
     /// ground moving under it means the user has moved on, while a dialog is anchored to nothing
     /// and must survive it. Shared by the two messages that can report a scroll so the rule has one
     /// caller-visible answer rather than two that can drift.
-    fn dismiss_on_scroll_beneath(&mut self) {
+    pub(crate) fn dismiss_on_scroll_beneath(&mut self) {
         // Which surfaces the trigger reaches is the registry's answer now, not a list here. It
         // used to name six of the seven popovers; the seventh, the terminal's context menu, is
         // included from T031 — it is a non-modal surface and the core rule has always said so.
@@ -926,72 +922,22 @@ impl State {
             | Message::DiagnosticsRequested
             | Message::LogoutSurvivalRequested
             | Message::LogoutSurvivalOutcome(_) => {}
-            Message::HelpMenuToggled => {
-                self.help_menu_open = !self.help_menu_open;
-                // The overflow menu, the project switcher, and the sidebar filter panel are
-                // mutually exclusive (feature 009).
-                self.project_switcher_open = false;
-                self.sidebar_filter_open = false;
-                // Mutually exclusive with the project context menu (feature 015).
-                self.project_menu_open = None;
-            }
-            Message::ProjectSwitcherToggled => {
-                self.project_switcher_open = !self.project_switcher_open;
-                self.help_menu_open = false;
-                self.sidebar_filter_open = false;
-                // Mutually exclusive with the project context menu (feature 015).
-                self.project_menu_open = None;
-            }
-            Message::AboutOpened => {
-                // Idempotent: opening while already open keeps a single instance (FR-015).
-                self.clear_for_dialog();
-                self.about_open = true;
-            }
-            Message::AboutClosed => {
-                // No-op when nothing is open (edge case); otherwise return to the
-                // main window unchanged (FR-012).
-                self.about_open = false;
-            }
+            Message::HelpMenuToggled => crate::features::help::menu_toggled(self),
+            Message::ProjectSwitcherToggled => crate::features::project::switcher_toggled(self),
+            Message::AboutOpened => crate::features::help::about_opened(self),
+            Message::AboutClosed => crate::features::help::about_closed(self),
             Message::SelectorNavigatedInto(path) => {
-                if let Some(selector) = &mut self.selector {
-                    selector.enter(path);
-                }
+                crate::features::project::selector_navigated_into(self, path)
             }
-            Message::SelectorNavigatedUp => {
-                if let Some(selector) = &mut self.selector {
-                    selector.up();
-                }
-            }
+            Message::SelectorNavigatedUp => crate::features::project::selector_navigated_up(self),
             Message::SelectorListingReady(entries) => {
-                if let Some(selector) = &mut self.selector {
-                    selector.listing_ready(entries);
-                }
+                crate::features::project::selector_listing_ready(self, entries)
             }
             Message::SelectorListingFailed(message) => {
-                if let Some(selector) = &mut self.selector {
-                    selector.listing_failed(message);
-                }
+                crate::features::project::selector_listing_failed(self, message)
             }
-            Message::ProjectSelectorClosed => {
-                self.selector = None;
-            }
-            Message::RenameStarted(path) => {
-                let current = self
-                    .workspace
-                    .projects
-                    .iter()
-                    .find(|p| p.path == path)
-                    .map(|p| p.display_name.clone());
-                if let Some(name) = current {
-                    self.clear_for_dialog();
-                    self.rename_draft = Some(RenameDraft {
-                        path,
-                        text: name,
-                        error: None,
-                    });
-
-                }
-            }
+            Message::ProjectSelectorClosed => crate::features::project::selector_closed(self),
+            Message::RenameStarted(path) => crate::features::project::rename_started(self, path),
             // A blur is only believed from the field that currently holds focus. Gaining and losing
             // are reported by two different widgets and arrive in whichever order the frame
             // produced them, so an unguarded `None` on the way out of one field would erase the
@@ -1005,152 +951,50 @@ impl State {
                 }
             }
             Message::RenameTextChanged(text) => {
-                if let Some(draft) = &mut self.rename_draft {
-                    draft.text = text;
-                    draft.error = None;
-                }
+                crate::features::project::rename_text_changed(self, text)
             }
-            Message::RenameConfirmed => {
-                if let Some((path, text)) = self
-                    .rename_draft
-                    .as_ref()
-                    .map(|draft| (draft.path.clone(), draft.text.clone()))
-                {
-                    match self.workspace.rename(&path, &text) {
-                        // Renaming never touches disk — only the stored name (FR-018).
-                        Ok(()) => {
-                            self.rename_draft = None;
-                        }
-                        Err(error) => {
-                            if let Some(draft) = &mut self.rename_draft {
-                                draft.error = Some(error);
-                            }
-                        }
-                    }
-                }
-            }
-            Message::RenameCancelled => {
-                self.rename_draft = None;
-            }
+            Message::RenameConfirmed => crate::features::project::rename_confirmed(self),
+            Message::RenameCancelled => crate::features::project::rename_cancelled(self),
             Message::CursorMoved { x, y } => {
                 self.cursor = (x, y);
             }
             Message::WindowResized { width, height } => {
                 self.window_size = (width, height);
             }
-            Message::ProjectMenuToggled(path) => {
-                // Toggle: the same project closes; a different one replaces (only one open),
-                // re-anchored at wherever the pointer now is. The switcher panel stays open
-                // behind the menu (so the right-clicked row remains visible), but the other
-                // popovers are mutually exclusive with it.
-                self.project_menu_open = match &self.project_menu_open {
-                    Some(open) if open.path == path => None,
-                    _ => Some(ProjectMenu {
-                        path,
-                        anchor: self.cursor,
-                    }),
-                };
-                self.help_menu_open = false;
-                self.sidebar_filter_open = false;
-                self.worktree_menu_open = None;
-            }
-            Message::ProjectMenuDismissed => {
-                self.project_menu_open = None;
-            }
+            Message::ProjectMenuToggled(path) => crate::features::project::menu_toggled(self, path),
+            Message::ProjectMenuDismissed => crate::features::project::menu_dismissed(self),
             Message::ProjectForgetRequested(path) => {
-                // Open the confirmation; nothing is removed until confirmed (FR-002).
-                self.clear_for_dialog();
-                self.forget_target = Some(path);
+                crate::features::project::forget_requested(self, path)
             }
-            Message::ProjectForgetConfirmed => {
-                // Drop the record + all per-path metadata (FR-003/FR-005). The binary has already
-                // stopped the project's live processes and will persist + delete the per-project
-                // state file after this pure transition.
-                if let Some(path) = self.forget_target.clone() {
-                    // If the forgotten project was the active working space, its active session
-                    // pointer must be cleared too — `forget` clears `workspace.active`, so the
-                    // dangling `active_session` (which only ever referenced the active project)
-                    // would otherwise point at a project that no longer exists (FR-008).
-                    let was_active = self.workspace.active.as_deref()
-                        == Some(canonicalize_best_effort(&path).as_path());
-                    self.workspace.forget(&path);
-                    if was_active {
-                        // Feature 024: an app-initiated clear like any other, so it goes through
-                        // the same function (contract §3's table). It arms nothing — there is no
-                        // session and, after a forget, no project either.
-                        self.set_current_session(None);
-                    }
-                }
-                self.forget_target = None;
-            }
-            Message::ProjectForgetCancelled => {
-                self.forget_target = None;
-            }
-            Message::ThemeModeCycled => {
-                // Advance to the next mode; the menu stays open so repeated clicks cycle.
-                self.theme_pref = self.theme_pref.next();
-            }
+            Message::ProjectForgetConfirmed => crate::features::project::forget_confirmed(self),
+            Message::ProjectForgetCancelled => crate::features::project::forget_cancelled(self),
+            Message::ThemeModeCycled => crate::features::settings::theme_mode_cycled(self),
             Message::ThemePreferenceChanged(pref) => {
-                // Pure state change; the binary persists it at the I/O boundary (FR-009).
-                self.theme_pref = pref;
+                crate::features::settings::theme_preference_changed(self, pref)
             }
             Message::SystemThemeChanged(detected) => {
-                self.system_scheme = observe_system_scheme(detected, self.system_scheme);
+                crate::features::settings::system_theme_changed(self, detected)
             }
             Message::ProjectOpenRefused(message) => {
-                // Non-git directory refused (FR-001a); the active project is unchanged.
-                // Reported through the global surface, not `worktree_error`: the refusal
-                // arrives with the selector already closed, so the Add Worktree modal that
-                // owns `worktree_error` is not open and the message was never drawn.
-                self.notify_error(message);
+                crate::features::project::open_refused(self, message)
             }
-            Message::WorktreesLoaded(worktrees) => {
-                self.worktree_error = None;
-                self.set_worktrees(worktrees);
-            }
+            Message::WorktreesLoaded(worktrees) => crate::features::worktree::loaded(self, worktrees),
             Message::WorktreeExpansionToggled(dir) => {
                 self.toggle_location(SessionLocation::Worktree(dir));
             }
             Message::DefaultExpansionToggled => {
                 self.toggle_location(SessionLocation::Default);
             }
-            Message::WorktreeMenuToggled(dir) => {
-                // Toggle: same worktree closes; a different one replaces (only one open).
-                self.worktree_menu_open = if self.worktree_menu_open.as_deref() == Some(dir.as_str())
-                {
-                    None
-                } else {
-                    Some(dir)
-                };
-                // Mutually exclusive with the project context menu (feature 015).
-                self.project_menu_open = None;
-            }
-            Message::WorktreeMenuDismissed => {
-                self.worktree_menu_open = None;
-            }
+            Message::WorktreeMenuToggled(dir) => crate::features::worktree::menu_toggled(self, dir),
+            Message::WorktreeMenuDismissed => crate::features::worktree::menu_dismissed(self),
             // 016 BUG-002. The request itself changes nothing here: the daemon owns the included
             // set, as it owns every other piece of durable state, and answers with the worktree as
             // its own discovery sees it.
             Message::WorktreeIncludeRequested(_) => {}
-            Message::WorktreeIncluded(worktree) => {
-                if !self.worktrees.iter().any(|w| w.path == worktree.path) {
-                    self.worktrees.push(worktree);
-                    self.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
-                }
-                self.worktree_error = None;
-            }
-            Message::WorktreeExcludeRequested(_) => {
-                self.worktree_menu_open = None;
-            }
-            Message::WorktreeExcluded(path) => {
-                self.worktrees.retain(|w| w.path != path);
-            }
-            Message::WorktreeDeleteRequested(dir) => {
-                self.clear_for_dialog();
-                self.worktree_delete_target = Some(dir);
-                // Never carries a choice over from a previously cancelled/confirmed dialog.
-                self.worktree_delete_keep_branch = false;
-            }
+            Message::WorktreeIncluded(worktree) => crate::features::worktree::included(self, worktree),
+            Message::WorktreeExcludeRequested(_) => crate::features::worktree::exclude_requested(self),
+            Message::WorktreeExcluded(path) => crate::features::worktree::excluded(self, path),
+            Message::WorktreeDeleteRequested(dir) => crate::features::worktree::delete_requested(self, dir),
             // Confirming *requests* the delete; it does not perform it. The daemon owns the git
             // removal and the session records, and answers with `OperationOk` (which is followed by
             // a `CatalogChanged` carrying git's refreshed truth) or `OperationError`.
@@ -1161,383 +1005,79 @@ impl State {
             // it, which reads as the app resurrecting something the user deleted rather than as the
             // failure it is. Leaving the row alone means a refusal simply leaves it in place, next
             // to the error notification explaining why.
-            Message::WorktreeDeleteConfirmed => {
-                self.worktree_delete_target = None;
-            }
-            Message::WorktreeDeleteCancelled => {
-                self.worktree_delete_target = None;
-            }
+            Message::WorktreeDeleteConfirmed => crate::features::worktree::delete_confirmed(self),
+            Message::WorktreeDeleteCancelled => crate::features::worktree::delete_cancelled(self),
             Message::WorktreeDeleteKeepBranchToggled(keep) => {
-                self.worktree_delete_keep_branch = keep;
+                crate::features::worktree::delete_keep_branch_toggled(self, keep)
             }
-            Message::WorktreeRenameStarted(dir) => {
-                let text = self.worktree_display_name(&dir);
-                self.clear_for_dialog();
-                self.worktree_rename_draft = Some(WorktreeRenameDraft {
-                    dir_name: dir,
-                    text,
-                    error: None,
-                });
-
-            }
+            Message::WorktreeRenameStarted(dir) => crate::features::worktree::rename_started(self, dir),
             Message::WorktreeRenameTextChanged(text) => {
-                if let Some(draft) = &mut self.worktree_rename_draft {
-                    draft.text = text;
-                    draft.error = None;
-                }
+                crate::features::worktree::rename_text_changed(self, text)
             }
-            Message::WorktreeRenameConfirmed => {
-                if let Some((dir, text)) = self
-                    .worktree_rename_draft
-                    .as_ref()
-                    .map(|d| (d.dir_name.clone(), d.text.clone()))
-                {
-                    // Changes only the stored display name — never the folder or branch (FR-014).
-                    match self.workspace.set_worktree_name(&dir, &text) {
-                        Ok(()) => {
-                            self.worktree_rename_draft = None;
-                        }
-                        Err(error) => {
-                            if let Some(draft) = &mut self.worktree_rename_draft {
-                                draft.error = Some(error);
-                            }
-                        }
-                    }
-                }
-            }
-            Message::WorktreeRenameCancelled => {
-                self.worktree_rename_draft = None;
-            }
+            Message::WorktreeRenameConfirmed => crate::features::worktree::rename_confirmed(self),
+            Message::WorktreeRenameCancelled => crate::features::worktree::rename_cancelled(self),
             Message::SidebarFilterToggled(filter) => {
-                if !self.sidebar_filters.remove(&filter) {
-                    self.sidebar_filters.insert(filter);
-                }
+                crate::features::sidebar::filter_toggled(self, filter)
             }
-            Message::SidebarFiltersCleared => {
-                self.sidebar_filters.clear();
-            }
+            Message::SidebarFiltersCleared => crate::features::sidebar::filters_cleared(self),
             Message::SidebarViewportResized(height) => {
-                self.sidebar_viewport_height = height;
+                crate::features::sidebar::viewport_resized(self, height)
             }
-            Message::SidebarScrolled(offset) => {
-                self.sidebar_scroll_offset = offset;
-                // The sidebar's scroll is *also* the dismissal trigger, and the rendering stack
-                // gives a scrollable one message per event — so this arm does both rather than the
-                // view trying to emit two. Same rule, one call, no second copy of it.
-                self.dismiss_on_scroll_beneath();
-            }
+            Message::SidebarScrolled(offset) => crate::features::sidebar::scrolled(self, offset),
             Message::ScrolledBeneathOverlay => self.dismiss_on_scroll_beneath(),
             Message::EscapePressed => self.dismiss_topmost(),
             Message::SidebarFilterMenuToggled => {
-                self.sidebar_filter_open = !self.sidebar_filter_open;
-                // Mutually exclusive with the other two lightweight popovers (feature 009).
-                self.help_menu_open = false;
-                self.project_switcher_open = false;
-                // Mutually exclusive with the project context menu (feature 015).
-                self.project_menu_open = None;
+                crate::features::sidebar::filter_menu_toggled(self)
             }
             Message::ShowAgentWorktreesToggled => {
-                // Sole mutation (FR-010d): the tag filters, expansion state, and overlays are all
-                // left exactly as they were. Nothing is re-discovered either — this is a pure view
-                // recomputation, so no git call and no `Task` (FR-008).
-                self.show_agent_worktrees = !self.show_agent_worktrees;
+                crate::features::sidebar::show_agent_worktrees_toggled(self)
             }
-            Message::WorktreeHovered(dir) => {
-                self.hovered_worktree = Some(dir);
-            }
-            Message::WorktreeUnhovered(dir) => {
-                // Only clear if we're leaving the row we thought was hovered (avoids a stale
-                // exit from a previous row clobbering a fresh enter).
-                if self.hovered_worktree.as_deref() == Some(dir.as_str()) {
-                    self.hovered_worktree = None;
-                }
-            }
-            Message::AddWorktreeOpened => {
-                self.clear_for_dialog();
-                self.worktree_form = Some(WorktreeForm::default());
-                self.worktree_error = None;
-            }
-            Message::AddWorktreeTypeSelected(type_) => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Ignored while a create is in flight (feature 010 follow-up) — the form
-                    // is inactive until it resolves, not just the submit button.
-                    if form.status == WorktreeFormStatus::Editing {
-                        form.type_ = Some(type_);
-                        form.error = None;
-                    }
-                }
-            }
-            Message::AddWorktreeTicketChanged(text) => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing {
-                        form.ticket = text;
-                        form.error = None;
-                    }
-                }
-            }
-            Message::AddWorktreeNameChanged(text) => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing {
-                        form.name = text;
-                        form.error = None;
-                    }
-                }
-            }
-            Message::AddWorktreeSubmitted => {
-                // Validate only (FR-008); the binary performs the git create on a valid form
-                // and dispatches WorktreeCreated / WorktreeCreateFailed. A create already in
-                // flight (feature 010) makes this a no-op — no double-submit.
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing {
-                        if let Err(error) = form.preview() {
-                            form.error = Some(error);
-                        }
-                    }
-                }
-            }
-            Message::AddWorktreeCancelled => {
-                self.worktree_form = None;
-            }
+            Message::WorktreeHovered(dir) => crate::features::worktree::hovered(self, dir),
+            Message::WorktreeUnhovered(dir) => crate::features::worktree::unhovered(self, dir),
+            Message::AddWorktreeOpened => crate::features::worktree_form::opened(self),
+            Message::AddWorktreeTypeSelected(type_) => crate::features::worktree_form::type_selected(self, type_),
+            Message::AddWorktreeTicketChanged(text) => crate::features::worktree_form::ticket_changed(self, text),
+            Message::AddWorktreeNameChanged(text) => crate::features::worktree_form::name_changed(self, text),
+            Message::AddWorktreeSubmitted => crate::features::worktree_form::submitted(self),
+            Message::AddWorktreeCancelled => crate::features::worktree_form::cancelled(self),
             // ----- feature 016: existing-branch source + conflict resolution -----
-            Message::AddWorktreeSourceChanged(source) => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
-                    {
-                        form.source = source;
-                        form.error = None;
-                        // Leaving the picker drops its selection so no stale branch can be
-                        // submitted from the new-branch inputs (FR-015).
-                        if source == BranchSource::New {
-                            form.selected_branch = None;
-                        }
-                        // …and takes the search with it, so returning never resumes someone
-                        // else's half-finished query (feature 021).
-                        form.reset_branch_search();
-                    }
-                }
-            }
+            Message::AddWorktreeSourceChanged(source) => crate::features::worktree_form::source_changed(self, source),
             Message::AddWorktreeBranchesListed(candidates) => {
-                if let Some(form) = &mut self.worktree_form {
-                    form.candidates = candidates;
-                    // The results describe the current query, whenever the candidates arrive.
-                    form.rematch_branches();
-                }
+                crate::features::worktree_form::branches_listed(self, candidates)
             }
             Message::AddWorktreeBranchSelected(candidate) => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
-                    {
-                        // FR-012a: a branch held elsewhere cannot be chosen. Silently, and without
-                        // closing the list — a press that does nothing must not look like a press
-                        // that did something.
-                        if !candidate.is_available() {
-                            return;
-                        }
-                        form.selected_branch = Some(candidate);
-                        form.error = None;
-                        form.branch_list_open = false;
-                        // The query is deliberately left alone (FR-014a).
-                    }
-                }
+                crate::features::worktree_form::branch_selected(self, candidate)
             }
-            Message::AddWorktreeBranchFocused => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
-                    {
-                        form.branch_list_open = true;
-                    }
-                }
-            }
+            Message::AddWorktreeBranchFocused => crate::features::worktree_form::branch_focused(self),
             Message::AddWorktreeBranchQueryChanged(text) => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
-                    {
-                        form.branch_query = text;
-                        form.branch_list_open = true;
-                        form.rematch_branches();
-                    }
-                }
+                crate::features::worktree_form::branch_query_changed(self, text)
             }
             Message::AddWorktreeBranchHighlightMoved(direction) => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Saturating, not wrapping — and the rule itself is `micold_core`'s, not this
-                    // arm's (FR-017a, FR-021). An empty list has nowhere to land, so the highlight
-                    // is left exactly as it was.
-                    let rows = form.branch_matches.len();
-                    if let Some(next) = move_highlight(form.branch_highlight, direction, rows) {
-                        form.branch_highlight = Some(next);
-                    }
-                }
+                crate::features::worktree_form::branch_highlight_moved(self, direction)
             }
-            Message::AddWorktreeBranchDismissed => {
-                if let Some(form) = &mut self.worktree_form {
-                    form.branch_list_open = false;
-                }
-            }
+            Message::AddWorktreeBranchDismissed => crate::features::worktree_form::branch_dismissed(self),
             Message::AddWorktreeConflictDetected(situation) => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Invariant 4: a prompt and an in-flight create cannot coexist.
-                    if form.status == WorktreeFormStatus::Editing {
-                        form.resolution = ResolutionState::Choosing { situation };
-                    }
-                }
+                crate::features::worktree_form::conflict_detected(self, situation)
             }
-            Message::AddWorktreeOverwriteRequested => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Only ever from `Choosing`, and only for a situation that HAS a local branch
-                    // to overwrite — invariant 1 (FR-005).
-                    if let ResolutionState::Choosing { situation } = &form.resolution {
-                        if matches!(situation, BranchSituation::LocalAvailable { .. }) {
-                            form.resolution = ResolutionState::ConfirmingOverwrite {
-                                situation: situation.clone(),
-                            };
-                        }
-                    }
-                }
-            }
-            Message::AddWorktreeOverwriteConfirmed => {
-                // The ONLY route to `CreateMode::Overwrite`. The binary picks the resolution up
-                // and runs the create; here we just clear the prompt and record the mode.
-                if let Some(form) = &mut self.worktree_form {
-                    if matches!(form.resolution, ResolutionState::ConfirmingOverwrite { .. }) {
-                        form.resolution = ResolutionState::Idle;
-                    }
-                }
-            }
+            Message::AddWorktreeOverwriteRequested => crate::features::worktree_form::overwrite_requested(self),
+            Message::AddWorktreeOverwriteConfirmed => crate::features::worktree_form::overwrite_confirmed(self),
             Message::AddWorktreeResolutionChosen(mode) => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Overwrite must go through the confirmation, never straight from the choice
-                    // (invariant 1) — reject it here rather than trusting call sites.
-                    let allowed = !matches!(mode, CreateMode::Overwrite)
-                        && matches!(form.resolution, ResolutionState::Choosing { .. });
-                    if allowed {
-                        form.resolution = ResolutionState::Idle;
-                    }
-                }
+                crate::features::worktree_form::resolution_chosen(self, mode)
             }
-            Message::AddWorktreeResolutionCancelled => {
-                if let Some(form) = &mut self.worktree_form {
-                    form.resolution = match &form.resolution {
-                        // Backing out of the confirmation returns to the choice, not to the form
-                        // (invariant 3, US2 AS3).
-                        ResolutionState::ConfirmingOverwrite { situation } => {
-                            ResolutionState::Choosing {
-                                situation: situation.clone(),
-                            }
-                        }
-                        // Cancelling the choice leaves every input exactly as it was (FR-007).
-                        _ => ResolutionState::Idle,
-                    };
-                }
-            }
-            Message::WorktreeCreateStarted(mode) => {
-                if let Some(form) = &mut self.worktree_form {
-                    form.status = WorktreeFormStatus::Creating;
-                    form.mode = mode;
-                    // A new attempt never inherits the previous one's stage.
-                    form.stage = None;
-                    form.stage_detail = None;
-                }
-            }
+            Message::AddWorktreeResolutionCancelled => crate::features::worktree_form::resolution_cancelled(self),
+            Message::WorktreeCreateStarted(mode) => crate::features::worktree_form::create_started(self, mode),
             Message::WorktreeCreateStageChanged(stage, detail) => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Entering a stage clears the previous stage's trailing line — it described
-                    // work that is over. A detail-only push keeps the stage and replaces the line.
-                    if form.stage != Some(stage) {
-                        form.stage = Some(stage);
-                        form.stage_detail = None;
-                    }
-                    if detail.is_some() {
-                        form.stage_detail = detail;
-                    }
-                }
+                crate::features::worktree_form::create_stage_changed(self, stage, detail)
             }
-            Message::WorktreeCreated(worktree) => {
-                if !self
-                    .worktrees
-                    .iter()
-                    .any(|w| w.dir_name == worktree.dir_name)
-                {
-                    self.worktrees.push(worktree);
-                    self.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
-                }
-                self.worktree_form = None;
-                self.worktree_error = None;
-            }
-            Message::WorktreeCreateFailed(message) => {
-                // Keep the form open so the user can adjust; show the error (FR-017). Reset to
-                // Editing (feature 010) so the user can retry instead of staying stuck Creating.
-                self.worktree_error = Some(message);
-                if let Some(form) = &mut self.worktree_form {
-                    form.status = WorktreeFormStatus::Editing;
-                }
-            }
-            Message::SessionStarted(session) => {
-                let id = session.id;
-                let location = session.location.clone();
-                if let Some(path) = self.workspace.active.clone() {
-                    self.workspace
-                        .sessions
-                        .entry(path)
-                        .or_default()
-                        .push(session);
-                }
-                // The started session's location joins the user's own open set, as it always has.
-                //
-                // Feature 024 makes this redundant for *display* — `set_current_session` below
-                // opens the row by derivation anyway — but it is kept, and not only because
-                // feature 021's assertion freeze forbids rewriting the expectation. It is also
-                // what the reveal would do a moment later: the commit in `set_current_session`
-                // turns a revealed row into ordinary user-open state on the next change of current
-                // session, so writing it here reaches the same place by the same rule, sooner.
-                match location {
-                    SessionLocation::Worktree(dir) => {
-                        self.expanded.insert(dir);
-                    }
-                    SessionLocation::Default => {
-                        self.default_expanded = true;
-                    }
-                }
-                self.set_current_session(Some(id));
-                // Making a session the displayed session puts the user in front of a terminal,
-                // so it holds the keyboard (FR-011). No re-assertion from the gui path any more:
-                // nothing releases focus on the same click, so there is no race to win.
-                self.focus_terminal();
-            }
-            Message::SessionSelected(id) => {
-                // Feature 024: the ONE writer that does not go through `set_current_session`
-                // (contract §3.0). The user clicked a row they could already see, so revealing it
-                // would open nothing they had not opened and scroll a list they were reading
-                // (FR-006). `tests/current_session_writers.rs` knows about this exemption by name;
-                // any other direct write to `active_session` fails that gate.
-                self.active_session = Some(id);
-                // Selecting a session displays its terminal, so it holds the keyboard, clearing
-                // any earlier release (FR-011, FR-021a).
-                self.focus_terminal();
-            }
-            Message::SessionRunning(id) => {
-                if let Some(session) = self.session_mut(id) {
-                    session.mark_running();
-                }
-            }
+            Message::WorktreeCreated(worktree) => crate::features::worktree_form::created(self, worktree),
+            Message::WorktreeCreateFailed(message) => crate::features::worktree_form::create_failed(self, message),
+            Message::SessionStarted(session) => crate::features::session::started(self, session),
+            Message::SessionSelected(id) => crate::features::session::selected(self, id),
+            Message::SessionRunning(id) => crate::features::session::running(self, id),
             Message::SessionTitleUpdated { id, title } => {
-                if let Some(session) = self.session_mut(id) {
-                    session.set_title(title);
-                }
+                crate::features::session::title_updated(self, id, title)
             }
-            Message::TerminalModeToggled => {
-                if let Some(id) = self.active_session {
-                    if let Some(session) = self.session_mut(id) {
-                        let next = session.mode.other();
-                        session.set_mode(next);
-                    }
-                }
-                // Switching mode puts a different terminal in front of the user, so it holds the
-                // keyboard (FR-011). This is the navigation the reported bug was about: it used to
-                // take two presses to reach and then left you looking at a terminal that ignored
-                // the keyboard.
-                self.focus_terminal();
-            }
+            Message::TerminalModeToggled => crate::features::session::mode_toggled(self),
             Message::TerminalRestartRequested => {
                 // No pure state to update here — the binary decides which process to spawn based on
                 // the current mode. For an AI-CLI session the daemon owns the lifecycle and
@@ -1559,17 +1099,10 @@ impl State {
                 self.focus_terminal();
             }
             Message::ShellInstanceSelected(id, shell_id) => {
-                if let Some(session) = self.session_mut(id) {
-                    session.select_shell(shell_id);
-                }
-                self.focus_terminal(); // FR-011
+                crate::features::session::shell_instance_selected(self, id, shell_id)
             }
             Message::ShellInstanceCloseRequested(id, shell_id) => {
-                if let Some(session) = self.session_mut(id) {
-                    session.close_shell(shell_id);
-                }
-                // Whichever instance takes its place is what the user is now looking at (FR-011).
-                self.focus_terminal();
+                crate::features::session::shell_instance_close_requested(self, id, shell_id)
             }
             Message::ShellInstanceRestartRequested(..) => {
                 // No pure state to update here — the binary spawns the process, and the daemon's
@@ -1577,91 +1110,23 @@ impl State {
                 // `TerminalRestartRequested`, including that neither emits a follow-up message.
             }
             Message::ShellInstanceRunning(session_id, shell_id) => {
-                if let Some(session) = self.session_mut(session_id) {
-                    session.mark_shell_running(shell_id);
-                }
+                crate::features::session::shell_instance_running(self, session_id, shell_id)
             }
             Message::ShellInstanceExited(session_id, shell_id) => {
-                if let Some(session) = self.session_mut(session_id) {
-                    session.mark_shell_exited(shell_id);
-                }
+                crate::features::session::shell_instance_exited(self, session_id, shell_id)
             }
-            Message::SessionCloseRequested(id) => {
-                // Bugfix BUG-003 (FR-015a): close ARCHIVES the session (kept, hidden from the
-                // sidebar via `active_sessions()`) rather than deleting its record outright, so a
-                // still-existing `claude` transcript doesn't get reconstructed by reconciliation
-                // (FR-020b) on the next project open. The durable, provider-side suppression
-                // marker (FR-020c) is written by the caller at the I/O boundary (`src/main.rs`),
-                // alongside killing the process.
-                if let Some(path) = self.workspace.active.clone() {
-                    if let Some(list) = self.workspace.sessions.get_mut(&path) {
-                        if let Some(session) = list.iter_mut().find(|s| s.id == id) {
-                            session.archive();
-                        }
-                    }
-                }
-                if self.active_session == Some(id) {
-                    // Feature 024: through `set_current_session` so the row the closed session was
-                    // in is committed open rather than snapping shut and taking its siblings out of
-                    // view (FR-001c). Nothing is armed — no session is current to scroll to, and
-                    // FR-001a forbids moving the panel when the user closes the session they were
-                    // on.
-                    //
-                    // Nothing to clear alongside it: with no displayed session `terminal_focused()`
-                    // is already false (feature 023, FR-012/FR-016).
-                    self.set_current_session(None);
-                }
-            }
-            Message::SessionMenuToggled(id) => {
-                // Toggle: same session closes; a different one replaces (only one open) —
-                // mirrors `WorktreeMenuToggled` (bugfix BUG-003).
-                self.session_menu_open = if self.session_menu_open == Some(id) {
-                    None
-                } else {
-                    Some(id)
-                };
-            }
-            Message::SessionMenuDismissed => {
-                self.session_menu_open = None;
-            }
-            Message::SessionRemoveRequested(id) => {
-                self.clear_for_dialog();
-                self.session_remove_target = Some(id);
-            }
-            Message::SessionRemoveConfirmed => {
-                // Unlike close (archive), remove drops the record outright — the pre-BUG-003
-                // close behavior. The binary has already killed the process and recorded the
-                // durable suppression marker (FR-015c, FR-020c).
-                if let Some(id) = self.session_remove_target.take() {
-                    // Feature 024: clear the pointer BEFORE dropping the record. The commit that
-                    // keeps the row open (FR-001c) resolves the outgoing session's location by
-                    // looking it up — and a record already removed has no location to find, so
-                    // ordering it the other way collapses the row and takes its siblings out of
-                    // view. The close arm above is not exposed to this: archiving leaves the
-                    // record in place.
-                    if self.active_session == Some(id) {
-                        self.set_current_session(None);
-                    }
-                    if let Some(path) = self.workspace.active.clone() {
-                        if let Some(list) = self.workspace.sessions.get_mut(&path) {
-                            list.retain(|s| s.id != id);
-                        }
-                    }
-                }
-            }
-            Message::SessionRemoveCancelled => {
-                self.session_remove_target = None;
-            }
+            Message::SessionCloseRequested(id) => crate::features::session::close_requested(self, id),
+            Message::SessionMenuToggled(id) => crate::features::session::menu_toggled(self, id),
+            Message::SessionMenuDismissed => crate::features::session::menu_dismissed(self),
+            Message::SessionRemoveRequested(id) => crate::features::session::remove_requested(self, id),
+            Message::SessionRemoveConfirmed => crate::features::session::remove_confirmed(self),
+            Message::SessionRemoveCancelled => crate::features::session::remove_cancelled(self),
             Message::TerminalTick => {}
-            Message::SidebarToggled => {
-                self.sidebar_hidden = !self.sidebar_hidden;
-            }
+            Message::SidebarToggled => crate::features::sidebar::toggled(self),
             // The handle only speaks while it is being dragged, so there is no flag to consult:
             // an arriving width *is* the drag. Clamped here — how wide the sidebar may be is the
             // application's decision, not the edge's.
-            Message::SidebarDragMoved(x) => {
-                self.sidebar_width = x.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
-            }
+            Message::SidebarDragMoved(x) => crate::features::sidebar::drag_moved(self, x),
 
             // ---- Feature 006 ----
             Message::TerminalFocused => {
@@ -1671,49 +1136,24 @@ impl State {
                 self.release_terminal();
             }
             Message::TerminalContextMenuOpened { x, y } => {
-                self.terminal_context_menu = Some((x, y));
+                crate::features::session::context_menu_opened(self, x, y)
             }
-            Message::TerminalContextMenuClosed => {
-                self.terminal_context_menu = None;
-            }
-            Message::SettingsOpened => {
-                self.clear_for_dialog();
-                // The binary seeds the current value; ensure a draft exists for the reducer path.
-                if self.settings_draft.is_none() {
-                    self.settings_draft = Some(SettingsDraft::default());
-                }
-            }
+            Message::TerminalContextMenuClosed => crate::features::session::context_menu_closed(self),
+            Message::SettingsOpened => crate::features::settings::opened(self),
             Message::SettingsScrollbackChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.scrollback_lines = text;
-                    draft.error = None;
-                }
+                crate::features::settings::scrollback_changed(self, text)
             }
             Message::SettingsEnvIncludeEnabledToggled(enabled) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.env_include_enabled = enabled;
-                    draft.error = None;
-                }
+                crate::features::settings::env_include_enabled_toggled(self, enabled)
             }
             Message::SettingsEnvIncludePathChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.env_include_script_path = text;
-                    draft.error = None;
-                }
+                crate::features::settings::env_include_path_changed(self, text)
             }
             Message::SettingsEnvIncludeTimeoutChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.env_include_timeout = text;
-                    draft.error = None;
-                }
+                crate::features::settings::env_include_timeout_changed(self, text)
             }
-            Message::SettingsSaved => {
-                // Validation + persistence happen in the binary; the reducer closes the form.
-                self.settings_draft = None;
-            }
-            Message::SettingsCancelled => {
-                self.settings_draft = None;
-            }
+            Message::SettingsSaved => crate::features::settings::saved(self),
+            Message::SettingsCancelled => crate::features::settings::cancelled(self),
             Message::NotificationDismissed => self.notify.dismiss(),
             Message::NotificationsAdvanced(elapsed_ms) => {
                 self.notify.advance(Duration::from_millis(u64::from(elapsed_ms)));

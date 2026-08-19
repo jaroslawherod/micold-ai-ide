@@ -16,14 +16,27 @@
 //!
 //! # This is a burn-down counter, not a line in the sand
 //!
-//! 93 of 110 arms decide something today. Landing this test red is not an option — SC-009 requires
-//! every commit to build and pass — and asserting "no more than today" would let the number sit
-//! where it is forever. So [`ROOT_DECISION_ARMS`] is an exact count: T062 and T063 lower it as
-//! each feature's arms move out, and it reaches 0 when the root is routing only.
+//! 93 of 110 arms decided something when this was written. Landing this test red is not an option
+//! — SC-009 requires every commit to build and pass — and asserting "no more than today" would let
+//! the number sit where it is forever. So [`ROOT_DECISION_ARMS`] is an exact count: T062 lowered it
+//! to 3 as each feature's arms moved out.
 //!
 //! An exact count also catches the other direction, which is the one FR-002 is really about: a new
 //! feature adding one more decision to the root fails this test the day it lands, not at some
 //! review months later.
+//!
+//! # Why the floor is 3 and not 0
+//!
+//! `FieldFocusChanged`, `CursorMoved` and `WindowResized` write `focused_field`, `cursor` and
+//! `window_size` — the three fields `tests/feature_write_isolation.rs` attributes to `root`
+//! because no feature owns them. They are the window's own state: which text field holds the
+//! keyboard, where the pointer is, how big the window is. Every feature reads them; none is their
+//! home.
+//!
+//! So moving them out is not a matter of finding the right feature — it is a matter of deciding
+//! whether a "window" or "shell" feature should exist, which is T063's call and not T062's. Until
+//! it is made, 3 is the honest floor, and this counter holds the root at exactly those three: a
+//! fourth decision fails the test whatever its excuse.
 //!
 //! # What this cannot see
 //!
@@ -40,9 +53,10 @@ use std::path::{Path, PathBuf};
 
 /// How many arms of the root reducer still decide something.
 ///
-/// **Lower this as arms move out; it must reach 0 at T063.** Raising it means a feature put a rule
-/// back into the root, which is what FR-002 forbids.
-const ROOT_DECISION_ARMS: usize = 93;
+/// **3: the root-owned window state named in this file's header.** Raising it means a feature put
+/// a rule back into the root, which is what FR-002 forbids. Lowering it means T063 gave those
+/// three a home, and the number should follow them down.
+const ROOT_DECISION_ARMS: usize = 3;
 
 fn app_rs() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app.rs")
@@ -288,8 +302,7 @@ fn the_root_reducer_decides_no_more_than_it_did() {
         ROOT_DECISION_ARMS,
         "the root reducer has {} arms that decide something; the recorded count is \
          {ROOT_DECISION_ARMS} (FR-002).\n\n\
-         Fewer: an arm moved into its feature — lower ROOT_DECISION_ARMS to match, and it must \
-         reach 0 at T063.\n\
+         Fewer: an arm moved into its feature — lower ROOT_DECISION_ARMS to match.\n\
          More: a rule was added to the root instead of to a feature. That is what this test \
          exists to catch.\n\n\
          Currently deciding:\n  {}",
@@ -302,8 +315,11 @@ fn the_root_reducer_decides_no_more_than_it_did() {
 /// actually be in.
 ///
 /// Both halves matter. A scan that finds no arms reports the root as perfectly routed; a
-/// classifier nothing can satisfy makes the burn-down above unreachable and would be discovered
-/// only at T063, with every arm rewritten and the count still wrong.
+/// classifier nothing can satisfy makes the burn-down above unreachable.
+///
+/// The `!routing.is_empty()` half was the load-bearing one while 93 of 110 arms decided; now that
+/// 3 do, it is the cheap half and the exact count above carries the other direction — a classifier
+/// that called everything routing would report 0 deciding arms and fail there.
 #[test]
 fn the_arm_scan_finds_the_reducer_it_is_meant_to_read() {
     let (routing, deciding) = classified();

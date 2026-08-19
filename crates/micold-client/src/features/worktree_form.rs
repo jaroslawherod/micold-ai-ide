@@ -15,8 +15,8 @@ use micold_core::naming::{
     derive, dir_name_from_branch, ConventionalType, DerivedNames, NamingError, WorktreeNaming,
 };
 use micold_core::overlay::Layer;
-use micold_core::typeahead::{rank, Match, Query};
-use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
+use micold_core::typeahead::{move_highlight, rank, Direction, Match, Query};
+use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
 
 /// Transient creation status for the add-worktree form (feature 010, research R4). Not
 /// persisted — reset to `Editing` whenever the form is (re)opened.
@@ -287,4 +287,279 @@ impl Registered for AddWorktreeDialog {
     fn open_in(state: &State) -> Option<Self> {
         state.worktree_form.as_ref().map(|_| AddWorktreeDialog)
     }
+}
+
+/// The Add Worktree form was opened (feature 005, FR-005).
+pub fn opened(state: &mut State) {
+    state.clear_for_dialog();
+    state.worktree_form = Some(WorktreeForm::default());
+    state.worktree_error = None;
+}
+
+/// The form was dismissed.
+pub fn cancelled(state: &mut State) {
+    state.worktree_form = None;
+}
+
+/// Apply a change to the open form, whatever it is doing.
+fn with_form(state: &mut State, change: impl FnOnce(&mut WorktreeForm)) {
+    if let Some(form) = &mut state.worktree_form {
+        change(form);
+    }
+}
+
+/// Apply a change only while the form is accepting edits.
+///
+/// A create in flight makes the whole form inactive, not just its submit button (feature 010
+/// follow-up), so every input arm is guarded — which is why the guard is written once here rather
+/// than nine times.
+fn while_editing(state: &mut State, change: impl FnOnce(&mut WorktreeForm)) {
+    with_form(state, |form| {
+        if form.status == WorktreeFormStatus::Editing {
+            change(form);
+        }
+    });
+}
+
+/// Apply a change only while the form is accepting edits **and** no conflict prompt is up.
+///
+/// Invariant 4 (feature 016): a resolution prompt and ordinary editing cannot both be live, so the
+/// inputs behind the prompt are inert while it is showing.
+fn while_editing_unprompted(state: &mut State, change: impl FnOnce(&mut WorktreeForm)) {
+    while_editing(state, |form| {
+        if !form.resolution.is_prompting() {
+            change(form);
+        }
+    });
+}
+
+/// A conventional type was chosen.
+pub fn type_selected(state: &mut State, type_: ConventionalType) {
+    while_editing(state, |form| {
+        form.type_ = Some(type_);
+        form.error = None;
+    });
+}
+
+/// The ticket field was edited.
+pub fn ticket_changed(state: &mut State, text: String) {
+    while_editing(state, |form| {
+        form.ticket = text;
+        form.error = None;
+    });
+}
+
+/// The name field was edited.
+pub fn name_changed(state: &mut State, text: String) {
+    while_editing(state, |form| {
+        form.name = text;
+        form.error = None;
+    });
+}
+
+/// The form was submitted — **validated only** (FR-008).
+///
+/// The shell performs the git create on a valid form and dispatches `WorktreeCreated` /
+/// `WorktreeCreateFailed`. A create already in flight makes this a no-op, so there is no
+/// double-submit.
+pub fn submitted(state: &mut State) {
+    while_editing(state, |form| {
+        if let Err(error) = form.preview() {
+            form.error = Some(error);
+        }
+    });
+}
+
+/// The branch source switched between a new and an existing branch (feature 016, FR-015).
+///
+/// Leaving the picker drops its selection, so no stale branch can be submitted from the new-branch
+/// inputs — and takes the search with it, so returning never resumes someone else's half-finished
+/// query.
+pub fn source_changed(state: &mut State, source: BranchSource) {
+    while_editing_unprompted(state, |form| {
+        form.source = source;
+        form.error = None;
+        if source == BranchSource::New {
+            form.selected_branch = None;
+        }
+        form.reset_branch_search();
+    });
+}
+
+/// Branch candidates arrived (feature 016).
+///
+/// Re-matched immediately, so the results describe the current query whenever they land.
+pub fn branches_listed(state: &mut State, candidates: Vec<BranchCandidate>) {
+    with_form(state, |form| {
+        form.candidates = candidates;
+        form.rematch_branches();
+    });
+}
+
+/// A branch was chosen from the picker (feature 016, FR-012a/FR-014a).
+///
+/// A branch held elsewhere cannot be chosen — silently, and without closing the list, because a
+/// press that does nothing must not look like a press that did something. The query is deliberately
+/// left alone.
+pub fn branch_selected(state: &mut State, candidate: BranchCandidate) {
+    while_editing_unprompted(state, |form| {
+        if !candidate.is_available() {
+            return;
+        }
+        form.selected_branch = Some(candidate);
+        form.error = None;
+        form.branch_list_open = false;
+    });
+}
+
+/// The branch field took focus, revealing the picker.
+pub fn branch_focused(state: &mut State) {
+    while_editing_unprompted(state, |form| form.branch_list_open = true);
+}
+
+/// The branch search query was edited (feature 021).
+pub fn branch_query_changed(state: &mut State, text: String) {
+    while_editing_unprompted(state, |form| {
+        form.branch_query = text;
+        form.branch_list_open = true;
+        form.rematch_branches();
+    });
+}
+
+/// The picker's highlight moved (feature 021, FR-017a/FR-021).
+///
+/// Saturating, not wrapping, and the rule itself is `micold_core`'s rather than this module's. An
+/// empty list has nowhere to land, so the highlight is left exactly as it was.
+pub fn branch_highlight_moved(state: &mut State, direction: Direction) {
+    with_form(state, |form| {
+        let rows = form.branch_matches.len();
+        if let Some(next) = move_highlight(form.branch_highlight, direction, rows) {
+            form.branch_highlight = Some(next);
+        }
+    });
+}
+
+/// The branch picker was dismissed.
+pub fn branch_dismissed(state: &mut State) {
+    with_form(state, |form| form.branch_list_open = false);
+}
+
+/// A branch conflict was detected (feature 016).
+///
+/// Invariant 4: a prompt and an in-flight create cannot coexist.
+pub fn conflict_detected(state: &mut State, situation: BranchSituation) {
+    while_editing(state, |form| {
+        form.resolution = ResolutionState::Choosing { situation };
+    });
+}
+
+/// Overwrite was requested from the choice (feature 016, FR-005).
+///
+/// Only ever from `Choosing`, and only for a situation that *has* a local branch to overwrite —
+/// invariant 1.
+pub fn overwrite_requested(state: &mut State) {
+    with_form(state, |form| {
+        if let ResolutionState::Choosing { situation } = &form.resolution {
+            if matches!(situation, BranchSituation::LocalAvailable { .. }) {
+                form.resolution = ResolutionState::ConfirmingOverwrite {
+                    situation: situation.clone(),
+                };
+            }
+        }
+    });
+}
+
+/// Overwrite was confirmed — the **only** route to `CreateMode::Overwrite`.
+///
+/// The shell picks the resolution up and runs the create; this clears the prompt.
+pub fn overwrite_confirmed(state: &mut State) {
+    with_form(state, |form| {
+        if matches!(form.resolution, ResolutionState::ConfirmingOverwrite { .. }) {
+            form.resolution = ResolutionState::Idle;
+        }
+    });
+}
+
+/// A resolution was chosen (feature 016, invariant 1).
+///
+/// Overwrite must go through the confirmation and never straight from the choice — rejected here
+/// rather than trusting call sites.
+pub fn resolution_chosen(state: &mut State, mode: CreateMode) {
+    with_form(state, |form| {
+        let allowed = !matches!(mode, CreateMode::Overwrite)
+            && matches!(form.resolution, ResolutionState::Choosing { .. });
+        if allowed {
+            form.resolution = ResolutionState::Idle;
+        }
+    });
+}
+
+/// A resolution prompt was backed out of (feature 016, invariant 3, US2 AS3).
+///
+/// Backing out of the confirmation returns to the choice, not to the form. Cancelling the choice
+/// leaves every input exactly as it was (FR-007).
+pub fn resolution_cancelled(state: &mut State) {
+    with_form(state, |form| {
+        form.resolution = match &form.resolution {
+            ResolutionState::ConfirmingOverwrite { situation } => ResolutionState::Choosing {
+                situation: situation.clone(),
+            },
+            _ => ResolutionState::Idle,
+        };
+    });
+}
+
+/// A create started (feature 010).
+///
+/// A new attempt never inherits the previous one's stage.
+pub fn create_started(state: &mut State, mode: CreateMode) {
+    with_form(state, |form| {
+        form.status = WorktreeFormStatus::Creating;
+        form.mode = mode;
+        form.stage = None;
+        form.stage_detail = None;
+    });
+}
+
+/// A create reported progress (feature 010).
+///
+/// Entering a stage clears the previous stage's trailing line — it described work that is over. A
+/// detail-only push keeps the stage and replaces the line.
+pub fn create_stage_changed(state: &mut State, stage: CreateStage, detail: Option<String>) {
+    with_form(state, |form| {
+        if form.stage != Some(stage) {
+            form.stage = Some(stage);
+            form.stage_detail = None;
+        }
+        if detail.is_some() {
+            form.stage_detail = detail;
+        }
+    });
+}
+
+/// A worktree was created (feature 005, FR-017).
+///
+/// Idempotent by directory name, and sorted so it lands where the list would have put it.
+pub fn created(state: &mut State, worktree: Worktree) {
+    if !state
+        .worktrees
+        .iter()
+        .any(|w| w.dir_name == worktree.dir_name)
+    {
+        state.worktrees.push(worktree);
+        state.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
+    }
+    state.worktree_form = None;
+    state.worktree_error = None;
+}
+
+/// A create failed (feature 005 FR-017, feature 010).
+///
+/// The form stays open so the user can adjust, showing the error, and returns to `Editing` so a
+/// retry is possible instead of being stuck in `Creating`.
+pub fn create_failed(state: &mut State, message: String) {
+    state.worktree_error = Some(message);
+    with_form(state, |form| {
+        form.status = WorktreeFormStatus::Editing;
+    });
 }

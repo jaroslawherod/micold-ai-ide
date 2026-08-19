@@ -53,9 +53,9 @@
 //! - **Interior mutability.** Nothing in `State` uses it today; if that changes, this scan goes
 //!   quiet rather than loud.
 //! - **Method calls it has never seen.** That one is not silent: an unclassified method on a state
-//!   path fails [`no_feature_writes_another_features_data`] asking to be sorted into [`MUTATORS`]
-//!   or [`READERS`], because guessing would make the guard leak in whichever direction the guess
-//!   was wrong.
+//!   path fails [`every_method_called_on_state_is_classified`] asking to be sorted into
+//!   [`MUTATORS`] or [`READERS`], because guessing would make the guard leak in whichever
+//!   direction the guess was wrong.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -138,8 +138,10 @@ const OWNERS: &[(&str, &str)] = &[
 ///
 /// **Adding an entry requires a task reference in the note.** Removing one is what T067a does.
 ///
-/// These eight are what the guard found on the tree it was written against. Every one is
-/// pre-existing Tier 1 code, and none is converted here: T059 is the guard, T067 catalogues these
+/// The first eight are what the guard found on the tree T059 was written against — Tier 1 code,
+/// already inside `src/features/`. T062 added the rest by moving the reducer arms in, which is the
+/// only reason the guard can see them; see the banner in the middle of the list. Every entry is
+/// pre-existing behaviour and none is converted here: T059 is the guard, T067 catalogues these
 /// into `cross-feature-writes.md` with a proposed outcome for each, and T067a converts them one
 /// commit at a time.
 const ALLOWED: &[(&str, &str, &str)] = &[
@@ -195,6 +197,207 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "sidebar",
         "reveal_suppressed_for",
         "features/sidebar.rs::toggle_location",
+    ),
+    // =============================================================================================
+    // T062 — the reducer arms, which the guard could not see until they became feature code.
+    //
+    // None of these is new behaviour. Every one was an arm of `State::update` in `app.rs`, which
+    // this scan has never read: it only ever looked under `src/features/`. Tier 3 moved the arms
+    // into the modules that own them, and the same writes are now inside the boundary the guard
+    // watches. So the count went from 8 to 35 without a line of behaviour changing — the earlier
+    // 8 were the violations in the code that had *already* moved, not the violations that exist.
+    //
+    // They are grouped below by what actually performs the write, because most of them are not a
+    // feature reaching into a neighbour at all: they are a **root helper** that writes across
+    // features, attributed to whichever feature called it. That distinction is what T067 has to
+    // resolve — an outcome per group, not one per line.
+    // =============================================================================================
+
+    // --- via `State::clear_for_dialog`, a root helper (T067) -------------------------------------
+    // Opening a dialog clears the focus slot, because the widget tree that reported focus is being
+    // torn down and will never report losing it (feature 006 BUG-003). `focused_field` is
+    // `root`-owned, so **whether these are violations at all is the open question**, the same one
+    // `restore_after_activation` above raises: either the root grows an outcome for "a dialog
+    // opened", or `focused_field` stops being root-owned. Recorded as found, not resolved here.
+    ("help", "focused_field", "features/help.rs::about_opened"),
+    (
+        "project",
+        "focused_field",
+        "features/project.rs::forget_requested",
+    ),
+    (
+        "project",
+        "focused_field",
+        "features/project.rs::rename_started",
+    ),
+    (
+        "session",
+        "focused_field",
+        "features/session.rs::remove_requested",
+    ),
+    ("settings", "focused_field", "features/settings.rs::opened"),
+    (
+        "worktree",
+        "focused_field",
+        "features/worktree.rs::delete_requested",
+    ),
+    (
+        "worktree",
+        "focused_field",
+        "features/worktree.rs::rename_started",
+    ),
+    (
+        "worktree_form",
+        "focused_field",
+        "features/worktree_form.rs::opened",
+    ),
+    // --- via `State::focus_terminal`, a root helper (T067) ---------------------------------------
+    // Putting a terminal in front of the user gives it the keyboard, which clears whatever field
+    // held it (FR-011). Same `root`-owned slot as the group above and the same open question; the
+    // trigger differs, which is why they are listed apart rather than merged.
+    (
+        "session",
+        "focused_field",
+        "features/session.rs::mode_toggled",
+    ),
+    ("session", "focused_field", "features/session.rs::selected"),
+    (
+        "session",
+        "focused_field",
+        "features/session.rs::shell_instance_close_requested",
+    ),
+    (
+        "session",
+        "focused_field",
+        "features/session.rs::shell_instance_selected",
+    ),
+    ("session", "focused_field", "features/session.rs::started"),
+    // --- the popover mutual-exclusion rule (features 009 and 015; T067) --------------------------
+    // At most one lightweight popover is open, and the project context menu is exclusive with all
+    // of them. It is **one rule about the toolbar** that no single feature owns, so each toggle
+    // writes its neighbours' openness. The likeliest shape for T067 is one outcome — "a popover
+    // opened" — applied by the root to every other registered popover, which would delete this
+    // whole block at once. `overlay::registry::close_popovers` already exists for the dialog path;
+    // these arms predate it and still assign by hand.
+    (
+        "help",
+        "project_menu_open",
+        "features/help.rs::menu_toggled",
+    ),
+    (
+        "help",
+        "project_switcher_open",
+        "features/help.rs::menu_toggled",
+    ),
+    (
+        "help",
+        "sidebar_filter_open",
+        "features/help.rs::menu_toggled",
+    ),
+    (
+        "project",
+        "help_menu_open",
+        "features/project.rs::menu_toggled",
+    ),
+    (
+        "project",
+        "sidebar_filter_open",
+        "features/project.rs::menu_toggled",
+    ),
+    (
+        "project",
+        "worktree_menu_open",
+        "features/project.rs::menu_toggled",
+    ),
+    (
+        "project",
+        "help_menu_open",
+        "features/project.rs::switcher_toggled",
+    ),
+    (
+        "project",
+        "sidebar_filter_open",
+        "features/project.rs::switcher_toggled",
+    ),
+    (
+        "sidebar",
+        "help_menu_open",
+        "features/sidebar.rs::filter_menu_toggled",
+    ),
+    (
+        "sidebar",
+        "project_menu_open",
+        "features/sidebar.rs::filter_menu_toggled",
+    ),
+    (
+        "sidebar",
+        "project_switcher_open",
+        "features/sidebar.rs::filter_menu_toggled",
+    ),
+    (
+        "worktree",
+        "project_menu_open",
+        "features/worktree.rs::menu_toggled",
+    ),
+    // --- via `Workspace::forget`, which is `micold-core` code (T067) -----------------------------
+    // Forgetting a project drops everything held against its path, and three features hold
+    // something: its sessions and foreground choice, its worktree names and inclusions. The write
+    // is one call in core; the four members it reaches are what make it four entries here.
+    // `ProjectForgotten` is the obvious outcome, and it is the clearest case in the whole list.
+    (
+        "project",
+        "workspace.foreground_by_project",
+        "features/project.rs::forget_confirmed",
+    ),
+    (
+        "project",
+        "workspace.included_worktrees",
+        "features/project.rs::forget_confirmed",
+    ),
+    (
+        "project",
+        "workspace.sessions",
+        "features/project.rs::forget_confirmed",
+    ),
+    (
+        "project",
+        "workspace.worktree_names",
+        "features/project.rs::forget_confirmed",
+    ),
+    // --- via `State::push_notification`, a root helper (T067) ------------------------------------
+    // The contract already names this one: `NotificationRaised`, listed under "emitted by: any
+    // feature". Same as `session::arm_notice` above, reached from the project side.
+    ("project", "notify", "features/project.rs::open_refused"),
+    // --- via `State::set_worktrees`, a root helper (T067) ----------------------------------------
+    // Discovery answering with a new worktree list prunes the sidebar's expansion of rows that no
+    // longer exist (feature 008). A genuine consequence rather than a helper accident: the sidebar
+    // has to respond to worktrees disappearing, and `WorktreesReplaced` is the outcome shape.
+    ("worktree", "expanded", "features/worktree.rs::loaded"),
+    // --- the form creates; the worktree feature owns the list (T067) ------------------------------
+    // `worktree_form` is a separate feature precisely because its lifecycle is independent
+    // (FR-003), but the thing it creates lands in `worktree`'s list and its failures land in
+    // `worktree`'s error slot. `WorktreeCreated` / `WorktreeCreateFailed` are the outcomes, and
+    // T064 — which promotes the form to a nested unit with its own message type — is where the
+    // seam is most visible.
+    (
+        "worktree_form",
+        "worktree_error",
+        "features/worktree_form.rs::create_failed",
+    ),
+    (
+        "worktree_form",
+        "worktree_error",
+        "features/worktree_form.rs::created",
+    ),
+    (
+        "worktree_form",
+        "worktree_error",
+        "features/worktree_form.rs::opened",
+    ),
+    (
+        "worktree_form",
+        "worktrees",
+        "features/worktree_form.rs::created",
     ),
 ];
 
@@ -421,6 +624,16 @@ struct Operation {
     body: String,
 }
 
+impl Operation {
+    /// `features/session.rs::restore_after_activation` — the identity of one operation.
+    ///
+    /// The file has to be part of it: T062 gives five feature modules a `menu_toggled` each, and a
+    /// bare name merges them. See [`transitive_writes`].
+    fn key(&self) -> String {
+        format!("{}::{}", self.file, self.name)
+    }
+}
+
 /// Byte ranges of each `impl … <name> { … }` block body, inherent or trait.
 ///
 /// **The type is matched by its last path segment, and a probe is why.** An earlier version looked
@@ -504,13 +717,31 @@ fn operations_in(file: &str, src: &str, struct_name: &str) -> Vec<Operation> {
 }
 
 /// The name of the first parameter declared `&mut <struct_name>`.
+///
+/// The reference has to be *peeled*, not merely detected. Whitespace is stripped first, so the
+/// type reads `&mutState` — and asking whether that ends in `State` after splitting on `::` is
+/// asking whether `&mutState` equals `State`, which it never does. That was the shape of this
+/// function until T062, and it is why the guard reported every feature clean the moment Tier 3
+/// turned `impl State` methods into free functions: it could not see a single one of them, while
+/// this file's own header promised it could. An optional lifetime is peeled too, since `&'a mut
+/// State` is the same parameter written differently.
 fn mut_param(args: &str, struct_name: &str) -> Option<String> {
     for arg in args.split(',') {
         let Some((name, ty)) = arg.split_once(':') else {
             continue;
         };
         let ty = ty.replace([' ', '\n'], "");
-        if ty.starts_with("&mut") && ty.split("::").last() == Some(struct_name) {
+        let Some(rest) = ty.strip_prefix('&') else {
+            continue;
+        };
+        let rest = match rest.strip_prefix('\'') {
+            Some(after) => after.trim_start_matches(|c: char| c.is_alphanumeric() || c == '_'),
+            None => rest,
+        };
+        let Some(ty) = rest.strip_prefix("mut") else {
+            continue;
+        };
+        if ty.split("::").last() == Some(struct_name) {
             return Some(name.trim().to_string());
         }
     }
@@ -639,6 +870,26 @@ fn read_ident(src: &str, from: usize) -> (String, usize) {
 }
 
 /// Resolve every operation to the full set of paths it writes, following calls to a fixed point.
+///
+/// # Keyed by `file::name`, because names stopped being unique at T062
+///
+/// Under Tier 1 every operation was an `impl State` method, so a bare name identified one function
+/// and this map was keyed by it. Tier 3 gives each feature module a free function per reducer arm,
+/// and five of them are called `menu_toggled` — one each in `help`, `project`, `session`,
+/// `worktree` and `worktree_form` — with `opened`, `cancelled`, `rename_started` and others
+/// repeating too.
+///
+/// Keyed by bare name those five became **one** entry holding the union of all five bodies'
+/// writes, and the guard then reported each of them writing the other four's fields. It is a
+/// failure in the direction that looks like diligence — a wall of violations, every one of them
+/// false — and the symmetry gave it away: `settings::opened` was accused of writing
+/// `worktree_form`, and `worktree_form::opened` of writing `settings_draft`.
+///
+/// Calls are still *written* by bare name (`state.set_current_session(…)` says nothing about which
+/// file), so a callee resolves to every operation sharing that name. No colliding name is ever
+/// called that way — the reducer free functions are called only from the root, which is not a
+/// feature operation — but unioning is the conservative direction if one ever is: it over-reports
+/// rather than going quiet.
 fn transitive_writes(
     ops: &[Operation],
     fields: &BTreeSet<String>,
@@ -647,10 +898,12 @@ fn transitive_writes(
     unclassified: &mut BTreeSet<String>,
 ) -> (BTreeMap<String, BTreeSet<String>>, BTreeMap<String, Reach>) {
     let siblings: BTreeSet<String> = ops.iter().map(|o| o.name.clone()).collect();
+    let mut by_name: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut direct: BTreeMap<String, Reach> = BTreeMap::new();
     for op in ops {
         let r = reach(op, fields, nested, nested_api, &siblings, unclassified);
-        let entry = direct.entry(op.name.clone()).or_default();
+        by_name.entry(op.name.clone()).or_default().insert(op.key());
+        let entry = direct.entry(op.key()).or_default();
         entry.writes.extend(r.writes);
         entry.calls.extend(r.calls);
     }
@@ -662,14 +915,16 @@ fn transitive_writes(
     loop {
         let mut changed = false;
         let snapshot = writes.clone();
-        for (name, r) in &direct {
+        for (key, r) in &direct {
             for callee in &r.calls {
-                let Some(inherited) = snapshot.get(callee) else {
-                    continue;
-                };
-                let target = writes.entry(name.clone()).or_default();
-                for path in inherited {
-                    changed |= target.insert(path.clone());
+                for callee_key in by_name.get(callee).into_iter().flatten() {
+                    let Some(inherited) = snapshot.get(callee_key) else {
+                        continue;
+                    };
+                    let target = writes.entry(key.clone()).or_default();
+                    for path in inherited {
+                        changed |= target.insert(path.clone());
+                    }
                 }
             }
         }
@@ -733,9 +988,15 @@ fn scan() -> Scan {
         &BTreeMap::new(),
         &mut unclassified,
     );
+    // Back to bare method names: `nested_api` is consulted at a call site, which says
+    // `state.workspace.forget(…)` and knows nothing about the file the method was found in.
+    // `Workspace`'s methods are all in one file, so the qualification carries no information here.
     let ws_writes: BTreeMap<String, BTreeSet<String>> = ws_writes
         .into_iter()
-        .map(|(k, v)| (k, v.iter().map(|p| format!("workspace.{p}")).collect()))
+        .map(|(k, v)| {
+            let name = k.rsplit("::").next().unwrap_or(&k).to_string();
+            (name, v.iter().map(|p| format!("workspace.{p}")).collect())
+        })
         .collect();
     let mut nested_api: BTreeMap<String, Call<'_>> = BTreeMap::new();
     for op in &ws_ops {
@@ -772,11 +1033,19 @@ fn scan() -> Scan {
     // single `self.expanded.insert(..)` is reported three times over — at the write, and again at
     // each feature-module caller that inherits it — and the allowlist would then name callers that
     // converting the write would silently fix, which is the opposite of what T067a needs.
-    let in_features: BTreeSet<&str> = ops
-        .iter()
-        .filter(|o| feature_of(&o.file).is_some())
-        .map(|o| o.name.as_str())
-        .collect();
+    // Every key an operation of that bare name resolves to, and whether any of them is a feature
+    // operation. A call site names only the bare method, so both are needed.
+    let mut keys_named: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    let mut in_features: BTreeSet<&str> = BTreeSet::new();
+    for op in &ops {
+        keys_named
+            .entry(op.name.as_str())
+            .or_default()
+            .push(op.key());
+        if feature_of(&op.file).is_some() {
+            in_features.insert(op.name.as_str());
+        }
+    }
 
     let owners = owners();
     let mut violations = Vec::new();
@@ -784,7 +1053,7 @@ fn scan() -> Scan {
         let Some(feature) = feature_of(&op.file) else {
             continue;
         };
-        let Some(paths) = writes.get(&op.name) else {
+        let Some(paths) = writes.get(&op.key()) else {
             continue;
         };
         for path in paths {
@@ -795,22 +1064,22 @@ fn scan() -> Scan {
                 continue;
             }
             let inherited_from_a_feature = direct
-                .get(&op.name)
+                .get(&op.key())
                 .map(|r| {
                     r.calls.iter().any(|callee| {
                         in_features.contains(callee.as_str())
-                            && writes.get(callee).is_some_and(|w| w.contains(path))
+                            && keys_named
+                                .get(callee.as_str())
+                                .into_iter()
+                                .flatten()
+                                .any(|k| writes.get(k).is_some_and(|w| w.contains(path)))
                     })
                 })
                 .unwrap_or(false);
             if inherited_from_a_feature {
                 continue;
             }
-            violations.push((
-                feature.clone(),
-                path.clone(),
-                format!("{}::{}", op.file, op.name),
-            ));
+            violations.push((feature.clone(), path.clone(), op.key()));
         }
     }
     violations.sort();
@@ -941,10 +1210,15 @@ fn the_allowlist_names_only_live_violations() {
 #[test]
 fn the_scan_finds_the_operations_it_is_meant_to_read() {
     let scan = scan();
+    // 8 when T059 wrote this, and it stayed 8 through T062 — which was the whole problem. The
+    // ninety-odd reducer functions Tier 3 created were invisible, because `mut_param` compared
+    // `&mutState` against `State` and never matched a free function, so the guard reported every
+    // feature clean while this floor sat happily above a number that had not moved. A floor that
+    // cannot notice ninety operations arriving cannot notice ninety leaving either.
     assert!(
-        scan.feature_ops >= 8,
-        "the scan found only {} mutating operations under src/features/ — it found 8 when \
-         written, and a scan that has gone quiet reports every feature as clean",
+        scan.feature_ops >= 100,
+        "the scan found only {} mutating operations under src/features/ — it found 116 after \
+         T062, and a scan that has gone quiet reports every feature as clean",
         scan.feature_ops
     );
     assert!(

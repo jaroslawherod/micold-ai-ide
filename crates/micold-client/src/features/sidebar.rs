@@ -536,3 +536,64 @@ impl Registered for SidebarFilterPanel {
         state.sidebar_filter_open.then_some(SidebarFilterPanel)
     }
 }
+
+/// A tag filter was toggled on or off (feature 008, FR-024).
+///
+/// Filters combine with OR (FR-025); an empty set shows everything.
+pub fn filter_toggled(state: &mut State, filter: TagFilter) {
+    if !state.sidebar_filters.remove(&filter) {
+        state.sidebar_filters.insert(filter);
+    }
+}
+
+/// Every tag filter was cleared (feature 008, FR-024).
+pub fn filters_cleared(state: &mut State) {
+    state.sidebar_filters.clear();
+}
+
+/// The scroll viewport reported its laid-out height (feature 024).
+pub fn viewport_resized(state: &mut State, height: u32) {
+    state.sidebar_viewport_height = height;
+}
+
+/// The sidebar was scrolled (feature 024, FR-025a).
+///
+/// The scroll is *also* the dismissal trigger, and the rendering stack gives a scrollable one
+/// message per event — so this does both rather than the view emitting two. Same rule, one call,
+/// no second copy of it.
+pub fn scrolled(state: &mut State, offset: u32) {
+    state.sidebar_scroll_offset = offset;
+    state.dismiss_on_scroll_beneath();
+}
+
+/// The tag-filter panel was toggled (feature 009, FR-002/FR-003).
+///
+/// Mutually exclusive with the other two lightweight popovers and with the project context menu,
+/// which is why this writes three fields it does not own — catalogued in
+/// `tests/feature_write_isolation.rs`, and the same shared toolbar rule `help::menu_toggled`
+/// carries from the other side.
+pub fn filter_menu_toggled(state: &mut State) {
+    state.sidebar_filter_open = !state.sidebar_filter_open;
+    state.help_menu_open = false;
+    state.project_switcher_open = false;
+    state.project_menu_open = None;
+}
+
+/// Agent-owned worktrees were shown or hidden (feature 014, FR-010).
+///
+/// Sole mutation (FR-010d): tag filters, expansion state and overlays are left exactly as they
+/// were, and nothing is re-discovered — this is a pure view recomputation, so no git call and no
+/// `Task` (FR-008).
+pub fn show_agent_worktrees_toggled(state: &mut State) {
+    state.show_agent_worktrees = !state.show_agent_worktrees;
+}
+
+/// The sidebar was collapsed or revealed.
+pub fn toggled(state: &mut State) {
+    state.sidebar_hidden = !state.sidebar_hidden;
+}
+
+/// The sidebar's drag handle moved (feature 007).
+pub fn drag_moved(state: &mut State, x: u16) {
+    state.sidebar_width = x.clamp(crate::app::SIDEBAR_MIN_WIDTH, crate::app::SIDEBAR_MAX_WIDTH);
+}

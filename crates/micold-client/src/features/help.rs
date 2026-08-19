@@ -73,3 +73,32 @@ impl Registered for AboutDialog {
         state.about_open.then_some(AboutDialog)
     }
 }
+
+/// The overflow menu was toggled (feature 021, T062 — FR-004a).
+///
+/// The three lightweight popovers are mutually exclusive (feature 009) and the project context
+/// menu is exclusive with all of them (feature 015), so opening this one closes those. **Those are
+/// writes into other features' data**, catalogued in `tests/feature_write_isolation.rs` rather than
+/// hidden: the rule they encode is one fact about the toolbar that no single feature owns, and
+/// T067 is where it gets an outcome.
+pub fn menu_toggled(state: &mut State) {
+    state.help_menu_open = !state.help_menu_open;
+    state.project_switcher_open = false;
+    state.sidebar_filter_open = false;
+    state.project_menu_open = None;
+}
+
+/// The About dialog was opened (feature 001, FR-011).
+///
+/// Idempotent: opening while already open keeps a single instance (FR-015).
+pub fn about_opened(state: &mut State) {
+    state.clear_for_dialog();
+    state.about_open = true;
+}
+
+/// The About dialog was dismissed (feature 001, FR-012).
+///
+/// A no-op when nothing is open (edge case); otherwise the main window is unchanged.
+pub fn about_closed(state: &mut State) {
+    state.about_open = false;
+}
