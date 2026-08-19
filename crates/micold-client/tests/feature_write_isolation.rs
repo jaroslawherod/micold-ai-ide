@@ -194,6 +194,21 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "workspace.active",
         "features/session.rs::switch_active",
     ),
+    // Three rows the guard could not see until T067a-6 fixed the `inherited_from_a_feature`
+    // suppression: each of these writes the field on its own line AND calls a sibling that writes
+    // it too, so the direct write was attributed away. They belong to the same conversation as the
+    // three `set_current_session` rows above and convert with them (T067a-6).
+    (
+        "session",
+        "default_expanded",
+        "features/session.rs::restore_after_activation",
+    ),
+    (
+        "session",
+        "default_expanded",
+        "features/session.rs::started",
+    ),
+    ("session", "expanded", "features/session.rs::started"),
     // The mirror of the reveal above, in the other direction: collapsing a row cancels the
     // suppression that a session close armed. `SessionsClosed`'s neighbourhood.
     (
@@ -1021,7 +1036,17 @@ fn scan() -> Scan {
                     })
                 })
                 .unwrap_or(false);
-            if inherited_from_a_feature {
+            // ...but only when the call is the *whole* story. An operation that writes the path on
+            // its own line and *also* calls a sibling that writes it had its direct write
+            // attributed away by this suppression — silently, since a suppressed row looks
+            // identical to no row at all. `session::started` is the case that exposed it: it
+            // writes `expanded` and `default_expanded` itself and then calls
+            // `set_current_session`, which writes them too, so both of its own writes went
+            // unreported and unlisted while the guard stayed green (T067a-6).
+            let written_directly = direct
+                .get(&op.key())
+                .is_some_and(|r| r.writes.contains(path));
+            if inherited_from_a_feature && !written_directly {
                 continue;
             }
             violations.push((feature.clone(), path.clone(), op.key()));
