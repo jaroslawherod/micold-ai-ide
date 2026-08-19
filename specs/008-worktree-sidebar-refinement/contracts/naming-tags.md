@@ -48,13 +48,15 @@ was silently discarded and its digits leaked into the name.
 
 No sharper pattern exists; the shapes are identical. So the name carries the answer instead.
 
-### What a branch cannot say
+### What a branch says
 
-`dir_name_from_branch` never emits `TICKET_SEP` (it routes each segment through `slugify`), so a
-worktree created from a *selected* branch has no ticket — even when that branch was originally
-derived from one. Deliberate: recovering it would mean guessing where it ends, against a branch
-that may never have come from this app. A ticketless reading loses a chip; a guessed one loses
-the name.
+Branches carry `TICKET_SEP` too, so `dir_name_from_branch` recovers a ticket exactly rather than
+guessing at it: a branch this app derived comes back through the existing-branch picker with its
+ticket intact. The inverse never *invents* a boundary — a branch written without one yields a
+directory without one.
+
+The cost is that a `snake_case` branch from outside this app reads as ticketed (`fix/some_bug` →
+chip `SOME`, name "Bug"). `_` means one thing everywhere and nothing can tell the two apart.
 
 ## Examples (become `tests/naming.rs` cases)
 

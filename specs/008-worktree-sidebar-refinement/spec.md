@@ -12,7 +12,7 @@
 
 ### Session 2026-07-17
 
-- Q: When a worktree has no custom rename, what friendly name shows on line 1? → A: The descriptive remainder only — type prefix and Jira key removed, dashes turned into spaces, sentence case (e.g. `feat/abc-123-login-page` → "Login page"); the type and ticket appear only as tags.
+- Q: When a worktree has no custom rename, what friendly name shows on line 1? → A: The descriptive remainder only — type prefix and Jira key removed, dashes turned into spaces, sentence case (e.g. `feat/abc-123-login-page` → "Login page"); the type and ticket appear only as tags. *(Superseded in part by FR-017a: "Jira key removed" was a shape rule, and no shape rule can separate a ticket from a name that ends in a number. The ticket is now marked by an explicit `_` boundary, so the example reads `feat/abc-123_login-page`.)*
 - Q: How should a worktree whose name does not match the convention be tagged/filtered? → A: Show no tag on the row, but offer an "untyped" bucket in the filter so these worktrees are still findable.
 - Q: When multiple tag filters are active at once, what shows? → A: Match ANY — a worktree is shown if it matches any active filter (OR).
 - Q: When Delete targets a worktree that has a running session (live terminal process), what happens? → A: After confirmation, terminate the running session processes, then remove the directory, sessions, and branch.
@@ -41,7 +41,7 @@ any branch or directory name on disk.
 
 **Acceptance Scenarios**:
 
-1. **Given** a worktree whose branch is `feat/abc-123-login-page` and whose directory is
+1. **Given** a worktree whose branch is `feat/abc-123_login-page` and whose directory is
    `feat-abc-123_login-page`, **When** it is shown in the sidebar, **Then** the row displays
    the friendly name "Login page" plus a `feat` type tag and an `ABC-123` issue tag, each
    color-coded, while the branch and directory on disk are unchanged.
@@ -269,8 +269,12 @@ smaller (80%), while remaining legible in light and dark themes.
   ticket, replacing separators with spaces, and applying sentence case (e.g.
   `feat-abc-123_login-page` → "Login page"). The removed type and ticket appear only as tags.
 - **FR-017a** (bugfix BUG-003): The descriptive portion and the ticket MUST be separated by an
-  explicit boundary in the directory name (`_`), and a directory name without one MUST be read
-  as having no ticket. Nothing may infer a ticket from the *shape* of a name segment: a bare
+  explicit boundary (`_`) in the branch and the directory alike, and a name without one MUST be
+  read as having no ticket. Carrying it on the branch is what makes the branch→directory inverse
+  (feature 016, FR-014) exact, so a worktree re-created by *picking* an app-derived branch keeps
+  its ticket instead of silently losing it. The cost is that a `snake_case` branch from outside
+  this app reads as ticketed; `_` means one thing everywhere and nothing can tell the two
+  apart. Nothing may infer a ticket from the *shape* of a name segment: a bare
   ticket (`feat-abc-123`) and a descriptive name with a disambiguator (`feat-reporting-2`) are
   the same pattern, so any shape rule reads one of them wrong — and the rule that existed read
   `feat-reporting-2` as issue `REPORTING-2`, which emptied the descriptive portion and made the

@@ -46,9 +46,9 @@ fn form_edits_build_a_derived_preview() {
 
     let form = state.worktree_form.as_ref().unwrap();
     let derived = form.preview().unwrap();
-    // The directory carries the ticket boundary and the branch does not (BUG-003).
+    // Both carry the ticket boundary, so the branch maps back to this directory exactly (BUG-003).
     assert_eq!(derived.dir_name, "feat-abc-1_login");
-    assert_eq!(derived.branch, "feat/abc-1-login");
+    assert_eq!(derived.branch, "feat/abc-1_login");
 }
 
 #[test]
