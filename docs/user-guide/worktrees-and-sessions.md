@@ -41,15 +41,16 @@ shows as **Login page** with `feat` and `ABC-123` tags. The tags are display-onl
 branch and directory names are unchanged, and a worktree that does not follow the naming convention
 simply shows no type tag.
 
-The `_` in the folder name is what separates the ticket from the description, so the app never has
-to guess where one ends. A folder without one has no ticket, which is exactly right for a name like
+The `_` is what separates the ticket from the description, so the app never has to guess where one
+ends. A name without one has no ticket, which is exactly right for something like
 `feat-reporting-2` — the trailing `2` is part of the name, not an issue number. Two consequences
 worth knowing:
 
 - Worktrees created before this rule existed have no `_`, so their issue tag is gone. Their names
   read correctly, and you can always [rename](#managing-a-worktree-right-click) one.
-- A worktree created by **picking an existing branch** has no ticket tag either. Branches do not
-  carry the separator, and guessing where the ticket ends is what the separator exists to avoid.
+- A branch from elsewhere that uses `snake_case` is read as having a ticket: `fix/some_bug` shows
+  as **Bug** with a `SOME` tag. The separator means one thing everywhere, and nothing can tell a
+  stray underscore from a deliberate one. Rename the worktree if it bothers you.
 
 The sidebar is intentionally compact — tight left/right padding and a slightly smaller font — so
 long names and their tags get as much width as possible. It stays legible in both light and dark
@@ -169,16 +170,17 @@ With **New branch** selected:
 The form shows the derived names before you create:
 
 - **Directory**: `.claude/worktrees/${type}-${ticket}_${name}`
-- **Branch**: `${type}/${ticket}-${name}`
+- **Branch**: `${type}/${ticket}_${name}`
 
-For example, `feat` + `ABC-123` + `Login page` creates the branch `feat/abc-123-login-page` and a
+For example, `feat` + `ABC-123` + `Login page` creates the branch `feat/abc-123_login-page` and a
 worktree at `.claude/worktrees/feat-abc-123_login-page`. With no ticket, `chore` + `cleanup` gives
-`chore/cleanup` and a folder with no `_` at all. Illegal characters in the ticket or name are
-automatically simplified (slugified), so `#123` is a perfectly good ticket — it shows up as a `#123`
-tag in the sidebar.
+`chore/cleanup` — no `_` anywhere. Illegal characters in the ticket or name are automatically
+simplified (slugified), so `#123` is a perfectly good ticket; it shows up as a `#123` tag in the
+sidebar.
 
-The `_` appears in the folder name only. The branch keeps the plain shape everyone expects, since
-it is what you push and what your CI matches on.
+The `_` separates the ticket from the description, and it is on the branch as well as the folder.
+That is what lets the app read the ticket back later: delete a worktree and re-create it from the
+branch and the tag comes back, instead of the app having to guess where the ticket ended.
 
 Creating a worktree makes the new git branch and worktree for you — no manual git commands. If the
 derived name collides with a branch that already exists, the app asks what you want to do rather
@@ -262,10 +264,10 @@ rather than hidden so you can read *where* it is in use instead of wondering why
 If nothing matches what you typed, the list says so. Clear the field or shorten your search to see
 everything again.
 
-The worktree folder is derived from the branch name — `feat/abc-123-login` becomes
-`.claude/worktrees/feat-abc-123-login` — and the form shows it before you create. There is no `_`
-in it, so the worktree gets no issue tag: a branch does not record where its ticket ends, and the
-app does not guess.
+The worktree folder is derived from the branch name — `feat/abc-123_login` becomes
+`.claude/worktrees/feat-abc-123_login` — and the form shows it before you create. A branch this app
+created keeps its ticket through the trip, so the worktree comes back with the same `ABC-123` tag it
+had before. A branch without a `_` gets no ticket tag; the app does not guess one.
 
 > **Remote branches reflect your last fetch.** The app never contacts a remote here; it reads
 > only what's already in your repository. Run `git fetch` yourself first if you want the list to

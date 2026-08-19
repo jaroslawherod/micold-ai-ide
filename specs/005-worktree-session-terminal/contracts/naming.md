@@ -34,27 +34,32 @@ type_str = lowercase Conventional type (e.g. "feat")
 t = slugify(ticket)   // when ticket provided and non-empty after slug
 n = slugify(name)
 
-with ticket:     dir_name = "{type_str}-{t}_{n}"   branch = "{type_str}/{t}-{n}"
+with ticket:     dir_name = "{type_str}-{t}_{n}"   branch = "{type_str}/{t}_{n}"
 without ticket:  dir_name = "{type_str}-{n}"        branch = "{type_str}/{n}"
 ```
 
-The directory carries the `_` boundary and the branch does not. The directory is this app's own
-name for the worktree and is what the sidebar re-reads to recover the ticket
-(`008-worktree-sidebar-refinement/contracts/naming-tags.md`), so it is worth making unambiguous.
-The branch is pushed, reviewed and matched by CI branch filters, so it keeps the shape everyone
-already expects.
+Both carry the `_` boundary, so `dir_name_from_branch` (feature 016, FR-014) recovers the ticket
+exactly instead of guessing where it ended. The branch is the durable artifact — it outlives the
+directory, gets pushed, and comes back through the existing-branch picker — so the boundary has to
+be on it for a re-picked branch to keep its ticket.
 
-The consequence is an asymmetry: `dir_name_from_branch` (feature 016, FR-014) cannot recover a
-ticket, because the branch never carried the boundary. A worktree created from a selected branch
-is therefore ticketless. See the naming-tags contract for why guessing is the worse option.
+`dir_name_from_branch` therefore slugifies *around* the boundary rather than through it: each `/`
+segment is split on `_`, each part slugified, and the parts rejoined with `_`. A part that
+slugifies to nothing is dropped along with its boundary, so a directory never begins or ends on
+one.
+
+The cost is that a `snake_case` branch from outside this app reads as ticketed — `fix/some_bug`
+becomes `fix-some_bug`, chip `SOME`, name "Bug". `_` means one thing everywhere and nothing can
+tell the two apart. One wrong chip on a foreign branch, against every app-made branch losing its
+ticket the moment it is re-picked.
 
 ### Examples
 
 | type | ticket | name | dir_name | branch |
 |------|--------|------|----------|--------|
-| feat | ABC-123 | Login page | `feat-abc-123_login-page` | `feat/abc-123-login-page` |
+| feat | ABC-123 | Login page | `feat-abc-123_login-page` | `feat/abc-123_login-page` |
 | chore | (none) | cleanup | `chore-cleanup` | `chore/cleanup` |
-| fix | #42! | Race/cond | `fix-42_race-cond` | `fix/42-race-cond` |
+| fix | #42! | Race/cond | `fix-42_race-cond` | `fix/42_race-cond` |
 
 ## Validation (`Result<DerivedNames, NamingError>`)
 
@@ -70,6 +75,8 @@ derives + validates shape.
 ## Guarantees (test targets — SC-003b)
 
 - Deterministic: same inputs → same `DerivedNames`.
-- Ticket omitted ⟺ no empty separator in either output, and no `_` in `dir_name`.
-- Ticket present ⟺ exactly one `_` in `dir_name`, and none in `branch`.
+- Ticket omitted ⟺ no empty separator in either output, and no `_` in either.
+- Ticket present ⟺ exactly one `_` in each of `dir_name` and `branch`.
+- `dir_name_from_branch(derive(x).branch) == derive(x).dir_name` for every `x` — exact, ticket
+  included.
 - Derived `dir_name` never contains `/`; derived `branch` contains exactly one `/` (after type).

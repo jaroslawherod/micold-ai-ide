@@ -181,15 +181,14 @@ fn is_valid_branch(branch: &str) -> bool {
 
 /// Derive and validate the directory + branch names from form inputs (FR-006, FR-008).
 ///
-/// - With a ticket: `dir = "{type}-{ticket}_{name}"`, `branch = "{type}/{ticket}-{name}"`.
+/// - With a ticket: `dir = "{type}-{ticket}_{name}"`, `branch = "{type}/{ticket}_{name}"`.
 /// - Without a ticket (or blank after slug): the ticket segment is dropped entirely — no
 ///   empty separators (FR-005b).
 ///
-/// The directory carries [`TICKET_SEP`] and the branch does not (BUG-003). The directory is this
-/// app's own name for the worktree and is the thing the sidebar re-reads, so it is worth making
-/// unambiguous; the branch is pushed, reviewed and matched by CI filters, so it keeps the shape
-/// everyone already expects. The cost is that [`dir_name_from_branch`] cannot recover a ticket —
-/// see its documentation for why guessing is worse.
+/// Both carry [`TICKET_SEP`] (BUG-003), so [`dir_name_from_branch`] recovers the ticket exactly
+/// rather than guessing at it. The branch is the durable artifact — it outlives this directory,
+/// gets pushed, and comes back through the existing-branch picker — so the boundary has to be on
+/// it for a re-picked branch to keep its ticket.
 pub fn derive(input: &WorktreeNaming) -> Result<DerivedNames, NamingError> {
     let type_ = input.type_.ok_or(NamingError::NoType)?;
     let type_str = type_.as_str();
@@ -208,7 +207,7 @@ pub fn derive(input: &WorktreeNaming) -> Result<DerivedNames, NamingError> {
     let (dir_name, branch) = match ticket {
         Some(t) => (
             format!("{type_str}-{t}{TICKET_SEP}{name}"),
-            format!("{type_str}/{t}-{name}"),
+            format!("{type_str}/{t}{TICKET_SEP}{name}"),
         ),
         None => (format!("{type_str}-{name}"), format!("{type_str}/{name}")),
     };
@@ -222,14 +221,19 @@ pub fn derive(input: &WorktreeNaming) -> Result<DerivedNames, NamingError> {
 
 /// Derive the worktree directory name for an EXISTING branch (feature 016, FR-014).
 ///
-/// The inverse of [`derive`]'s branch→directory mapping: `feat/abc-123-login` →
-/// `feat-abc-123-login`.
+/// The inverse of [`derive`]'s branch→directory mapping: `feat/abc-123_login` →
+/// `feat-abc-123_login`.
 ///
-/// It never emits [`TICKET_SEP`] — `slugify` cannot produce one — so a directory derived this way
-/// reads as having no ticket, even when the branch was originally derived *from* one (BUG-003).
-/// That is deliberate. Recovering the ticket would mean guessing where it ends, which is the guess
-/// that produced BUG-003, and here it would be made against a branch that may never have come from
-/// this app. A ticketless reading loses a chip; a guessed one loses the name.
+/// [`TICKET_SEP`] is carried across, so a branch this app derived from a ticket comes back through
+/// the existing-branch picker with that ticket intact — an exact round trip rather than a guess at
+/// where the ticket ended (BUG-003). It is never *invented*: a branch written without one yields a
+/// directory without one, and a boundary with nothing usable on either side is dropped rather than
+/// left dangling at an edge.
+///
+/// The cost is that a `snake_case` branch from outside this app reads as ticketed — `fix/some_bug`
+/// becomes `fix-some_bug`, chip `SOME`, name "Bug". `_` means one thing everywhere and nothing can
+/// tell the two apart. That is one wrong chip on a foreign branch, against every app-made branch
+/// silently losing its ticket the moment it is re-picked.
 ///
 /// Routing each segment through [`slugify`] inherits its guarantees: `[a-z0-9-]` only, collapsed
 /// separators, and the Windows reserved-device-name guard (Constitution Principle VI).
@@ -239,7 +243,16 @@ pub fn derive(input: &WorktreeNaming) -> Result<DerivedNames, NamingError> {
 pub fn dir_name_from_branch(branch: &str) -> String {
     branch
         .split('/')
-        .map(slugify)
+        .map(|segment| {
+            // Slugify around the boundary rather than through it: `slugify` maps `_` to `-`, which
+            // is exactly what must not happen to the one character that carries meaning here.
+            segment
+                .split(TICKET_SEP)
+                .map(slugify)
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(&TICKET_SEP.to_string())
+        })
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("-")

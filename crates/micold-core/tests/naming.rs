@@ -25,7 +25,7 @@ fn derives_dir_and_branch_with_ticket() {
         got,
         DerivedNames {
             dir_name: "feat-abc-123_login-page".to_string(),
-            branch: "feat/abc-123-login-page".to_string(),
+            branch: "feat/abc-123_login-page".to_string(),
         }
     );
 }
@@ -54,7 +54,7 @@ fn slugifies_illegal_and_separator_characters() {
     ))
     .unwrap();
     assert_eq!(got.dir_name, "fix-42_race-cond");
-    assert_eq!(got.branch, "fix/42-race-cond");
+    assert_eq!(got.branch, "fix/42_race-cond");
 }
 
 #[test]
@@ -230,11 +230,19 @@ fn display_name_never_empty() {
 use micold_core::naming::dir_name_from_branch;
 
 #[test]
-fn dir_name_from_branch_inverts_the_derive_mapping_when_there_is_no_ticket() {
-    for (type_, name) in [("fix", "crash on start"), ("chore", "bump deps")] {
+fn dir_name_from_branch_inverts_the_derive_mapping() {
+    // The round trip that matters: a branch `derive()` would have produced maps back to the
+    // directory `derive()` would have produced alongside it — ticket and all, because the branch
+    // carries the boundary too.
+    for (type_, ticket, name) in [
+        ("feat", Some("abc-123"), "login page"),
+        ("fix", None, "crash on start"),
+        ("chore", Some("x1"), "bump deps"),
+        ("feat", Some("#123"), "login page"),
+    ] {
         let derived = derive(&WorktreeNaming {
             type_: ConventionalType::from_token(type_),
-            ticket: None,
+            ticket: ticket.map(str::to_string),
             name: name.to_string(),
         })
         .unwrap();
@@ -244,39 +252,53 @@ fn dir_name_from_branch_inverts_the_derive_mapping_when_there_is_no_ticket() {
             "branch {} should map back to its own directory",
             derived.branch
         );
+        // …and the recovered directory carries the same tags the original does, which is the
+        // point of the round trip being exact rather than merely close.
+        assert_eq!(
+            parse_tags(&dir_name_from_branch(&derived.branch)),
+            parse_tags(&derived.dir_name)
+        );
     }
 }
 
-/// A branch does not carry the ticket boundary — only the directory does — so a worktree created
-/// from a *selected* branch lands in a ticketless directory even when the branch was originally
-/// derived from a ticket (BUG-003).
-///
-/// This asymmetry is deliberate. The alternative is to guess where the boundary goes, which is
-/// exactly the guess that produced BUG-003, and it would be made against a branch that may not
-/// have come from this app at all. A ticketless reading is wrong about the chip; a guessed one is
-/// wrong about the name.
+/// The inverse carries a boundary across but never invents one: a branch written without `_` has
+/// no ticket, however much a segment of it looks like one (BUG-003).
 #[test]
-fn dir_name_from_branch_cannot_recover_a_ticket_the_branch_never_carried() {
-    let derived = derive(&WorktreeNaming {
-        type_: ConventionalType::from_token("feat"),
-        ticket: Some("abc-123".to_string()),
-        name: "login page".to_string(),
-    })
-    .unwrap();
-    assert_eq!(derived.dir_name, "feat-abc-123_login-page");
-    assert_eq!(derived.branch, "feat/abc-123-login-page");
-
-    let from_branch = dir_name_from_branch(&derived.branch);
-    assert_eq!(from_branch, "feat-abc-123-login-page");
-    assert!(
-        !from_branch.contains('_'),
-        "the inverse must never invent a boundary"
-    );
+fn dir_name_from_branch_never_invents_a_boundary() {
+    let from_branch = dir_name_from_branch("feat/abc-123-login");
+    assert_eq!(from_branch, "feat-abc-123-login");
+    assert!(!from_branch.contains('_'));
     assert_eq!(
         parse_tags(&from_branch),
         vec![Tag::Type(ConventionalType::Feat)],
-        "no boundary, no ticket — not a guessed one"
+        "no boundary in the branch, no ticket in the directory"
     );
+}
+
+/// The cost of putting the boundary in the branch: a `snake_case` branch from outside this app is
+/// read as ticketed, because `_` now means one thing everywhere and nothing can tell the two
+/// apart. One wrong chip, and the name after the boundary still reads correctly — the alternative
+/// was that a worktree created by *picking* an app-made branch silently lost its ticket.
+#[test]
+fn a_foreign_branch_written_with_underscores_is_read_as_ticketed() {
+    assert_eq!(dir_name_from_branch("fix/some_bug"), "fix-some_bug");
+    assert_eq!(
+        parse_tags("fix-some_bug"),
+        vec![
+            Tag::Type(ConventionalType::Fix),
+            Tag::Issue("SOME".to_string())
+        ]
+    );
+    assert_eq!(display_name("fix-some_bug"), "Bug");
+}
+
+/// A boundary with nothing usable on one side of it is dropped rather than carried, so the
+/// directory never starts or ends on one.
+#[test]
+fn dir_name_from_branch_drops_a_one_sided_boundary() {
+    assert_eq!(dir_name_from_branch("feat/_x"), "feat-x");
+    assert_eq!(dir_name_from_branch("feat/a_"), "feat-a");
+    assert_eq!(dir_name_from_branch("feat/_"), "feat");
 }
 
 #[test]
@@ -295,7 +317,9 @@ fn dir_name_from_branch_flattens_every_segment() {
 #[test]
 fn dir_name_from_branch_slugifies_each_segment() {
     // Uppercase folded, punctuation collapsed to single dashes, no leading/trailing dash.
-    assert_eq!(dir_name_from_branch("Feat/Login_Page!"), "feat-login-page");
+    // `_` survives — it is the ticket boundary now (BUG-003), even in a branch that never meant
+    // it as one. See `a_foreign_branch_written_with_underscores_is_read_as_ticketed`.
+    assert_eq!(dir_name_from_branch("Feat/Login_Page!"), "feat-login_page");
     assert_eq!(dir_name_from_branch("a//b"), "a-b");
     assert_eq!(
         dir_name_from_branch("/leading/trailing/"),
@@ -331,8 +355,12 @@ fn dir_name_from_branch_output_is_always_a_valid_directory_segment() {
         assert!(!dir.starts_with('-') && !dir.ends_with('-'), "{dir}");
         assert!(
             dir.chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
-            "{dir} must be [a-z0-9-] only"
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
+            "{dir} must be [a-z0-9-_] only"
+        );
+        assert!(
+            !dir.starts_with('_') && !dir.ends_with('_'),
+            "{dir} must not begin or end on a boundary"
         );
     }
 }
@@ -368,7 +396,7 @@ fn a_numeric_ticket_is_kept_and_rendered_as_an_issue_number() {
     ))
     .unwrap();
     assert_eq!(got.dir_name, "feat-123_login-page");
-    assert_eq!(got.branch, "feat/123-login-page");
+    assert_eq!(got.branch, "feat/123_login-page");
     assert_eq!(
         parse_tags(&got.dir_name),
         vec![
