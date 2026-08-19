@@ -4,8 +4,12 @@ description: Surgically update spec, plan, and tasks to address the reported bug
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
   author: github-spec-kit
-  source: bugfix:commands/speckit.bugfix.patch.md
+  source: extension:bugfix
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Bugfix Patch Skill
 
 # Patch Spec Artifacts
 

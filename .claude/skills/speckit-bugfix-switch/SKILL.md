@@ -4,8 +4,12 @@ description: Switch to a different bugfix context
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
   author: github-spec-kit
-  source: bugfix:commands/speckit.bugfix.switch.md
+  source: extension:bugfix
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Bugfix Switch Skill
 
 # Switch bugfix context
 
