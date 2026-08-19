@@ -489,11 +489,14 @@ instances as you need, side by side.
   automatically brings up the next instance in the list (or the previous one, if you closed the
   last one in the list) — the pane is never left showing a closed instance. Closing your very
   last remaining instance falls back to AI CLI mode, same as today's single-terminal behavior.
+- **Right-click a tab** for what you can do to that instance: **Restart** (offered only while that
+  instance's own shell is stopped) and **Close**. The menu acts on the tab you clicked, not on
+  whichever instance you happen to be looking at.
 - Each instance tracks its own running/exited state independently, including instances you're
   not currently looking at. If a background instance exits (or crashes) while you're viewing a
-  different one, its switcher entry gains its own **restart** button — press it to start a fresh
-  shell for just that instance, without switching to it first and without touching any sibling
-  instance or your `claude` conversation.
+  different one, right-click its tab and choose **Restart** to start a fresh shell for just that
+  instance — without switching to it first, and without touching any sibling instance or your
+  `claude` conversation.
 
 ## Sessions in the background
 

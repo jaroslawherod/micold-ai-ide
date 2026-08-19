@@ -371,6 +371,37 @@ impl Registered for TerminalContextMenu {
     }
 }
 
+/// A terminal tab's right-click menu, as a floating surface (feature 012, BUG-005, FR-010b).
+///
+/// Separate from [`TerminalContextMenu`] because they are different menus on different things — one
+/// acts on the terminal's *content* (copy, paste) and one on an *instance* (restart, close) — and
+/// because they are hosted differently: the pane's menu is drawn on the pane's own overlay, since
+/// its anchor is pane-local, and this one on the window's, since a tab's press point is already in
+/// window space. Registering here means it closes by the same rule as every other menu, without
+/// anyone maintaining a list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShellInstanceMenu;
+
+impl FloatingSurface for ShellInstanceMenu {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("shell_instance_menu")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::ContextMenu
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::ContextMenu).cancelled_by(Message::ShellInstanceMenuClosed)
+    }
+}
+
+impl Registered for ShellInstanceMenu {
+    fn open_in(state: &State) -> Option<Self> {
+        state.shell_instance_menu.map(|_| ShellInstanceMenu)
+    }
+}
+
 /// The confirm-remove-session dialog, as a floating surface (feature 021, T032).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmSessionRemoveDialog;

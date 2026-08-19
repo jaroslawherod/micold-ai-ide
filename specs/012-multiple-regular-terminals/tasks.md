@@ -665,7 +665,12 @@ deleting it and leaving the new rule unpinned, so each is replaced by its indica
   Fixed with a uniform `TAB_WIDTH`, and the pass then confirmed both themes, no reflow at identical
   crop geometry, and the squint test.
 
-- [X] T057 [P] **Follow-up, not required by BUG-002**: register a covered state with two or more
+- [X] T063 [P] *(filed and completed as **T057**; renumbered by BUG-004's patch — Phase 11's
+  T057–T062 were written in a parallel worktree against the same highest id and merged two days
+  earlier, so two different tasks carried T057 in one file. The contiguous BUG-003 block keeps
+  its numbers because its bug report, its commits and its checkpoint all name them; this one
+  moves. Commit `fcc2f2a`, PR #194 and the comments in `tests/support/covered_states.rs` say
+  T057 and mean this task.)* **Follow-up, not required by BUG-002**: register a covered state with two or more
   Regular Terminal instances in `019-layout-snapshot-parity`'s set, so the tab strip's geometry is
   under the snapshot gate at all. Discovered by this bugfix: the strip was rebuilt — containers to
   indicator, fixed tab width, an extra row per tab — and `layout_snapshot.txt` did not change one
@@ -856,3 +861,167 @@ instance"; the control simply did not. No task reopened — `ShellInstanceRestar
 handler were built correctly by Phase 6 and were merely unreachable from the bar. See
 `bugs/BUG-004.md`. Note for next time: `ui::terminal`'s unit tests live in the **lib** target, so
 they run under `cargo test -p micold-client --lib`, not `--bin`.
+
+---
+
+## Phase 13: Bugfix BUG-005 — the tab that offers a restart cannot fit one
+
+**Goal**: Make FR-010 reachable from the tab strip, and make the class of defect that hid it
+reportable.
+
+Written as "Phase 12 / BUG-004" and renumbered on merge: a parallel worktree filed and merged its
+own BUG-004 against the same feature — the bar's `restart` restarting the session rather than the
+instance the bar describes — while this one was in flight. The two are independent and both real;
+that one is why the *bar's* control did nothing, this one is why the *tab's* could not be pressed.
+Its phase is above.
+
+Phase 11's checkpoint reads "FR-010's per-instance restart control **appears** for the instance that
+needs it", and it does — at 0.0dp wide. `TAB_WIDTH` gives a tab's content row 112dp and a restartable
+tab's children ask for 166.3, so iced settles the 54.3dp shortfall by shrinking the trailing two: the
+restart button vanishes and the close control beside it drops to 45.2, under the 48dp target feature
+018 FR-027 sets. Nothing overflows, nothing escapes, and `mise run test` is green over all of it.
+
+The width is the fix. The gate is the point: a squeezed child satisfies every invariant this
+repository currently checks, which is why a control could be reduced to nothing between two bugfixes
+that were each looking straight at it.
+
+### Tests for BUG-005 (MANDATORY — Constitution Principle I) ⚠️
+
+- [x] T067 [BUG-005] Failing test in `crates/micold-client/tests/` (new `tab_children_fit.rs`, or a
+  gate compiled into the `layout_snapshot` binary beside `sibling_parity` if it needs the shared
+  record cache): in the `session-terminal-instance-tabs` covered state, **no child of a tab is laid
+  out narrower than the width it asks for** (SC-010). Ask it the way the defect presents: every
+  interactive control in a tab must measure at least `anatomy::button::MIN_TOUCH_TARGET` wide, and
+  the sum of a tab's children plus its gaps and padding must not exceed the tab. Must **fail on
+  today's `main`**, naming the exited tab's restart control at 0.0 and its close at 45.2. This is the
+  gate the whole phase exists for, and it outlives the particular fix: it is the first check here
+  that reads a laid-out child against *what it requested* rather than against a constant or against
+  its parent's bounds, so it holds whether the affordance is inside the tab or not — feature 018's
+  BUG-002 (a 48dp figure written and then overwritten) and this bug (the same figure competed away)
+  would both have failed it
+- [x] T068 [P] [BUG-005] Failing value test beside `tab_indicator_colour` in `src/ui/terminal.rs`'s
+  `mod tests`: `TAB_WIDTH` equals the sum its derivation requires (FR-004c), computed from
+  `anatomy::button::MIN_TOUCH_TARGET`, `spacing::SM`, `spacing::XS` and a minimum label rather than
+  written as a literal. A test that re-states a magic number proves nothing; this one fails if any
+  constant it is built from moves, which is the property FR-004c requires and a chosen figure cannot
+  have. The figure was expected to come out at today's 128 once FR-010b takes the restart affordance
+  out and **did not** — it is **136**, because the literal reserved about 8dp for the label, under
+  the two digits an ordinal already reaches. Record that rather than tuning the label floor to
+  reproduce 128, which is the move FR-004c forbids. So this task is regression cover *and* an 8dp
+  correction: it is the test that would have failed the day T056 chose the number
+- [x] T069 [BUG-005] Failing test for the secondary-click primitive, in a `mod tests` beside it: a
+  right (secondary) press inside the wrapped content publishes the message with the press point, a
+  press outside publishes nothing, and a **primary** press publishes nothing and is left for the
+  child — the tab's own `on_press` selects the instance and must keep working through the wrapper
+- [x] T070 [P] [BUG-005] Failing test in `crates/micold-client/tests/app_state.rs` (or beside the
+  reducer): opening the tab menu for one instance records that instance; opening it for another
+  replaces rather than stacks; the "close every menu" path clears it; and restart dispatched from the
+  menu targets the instance the menu was opened on, **not** the active one (FR-010a, FR-010b)
+
+### Implementation for BUG-005
+
+- [x] T071 [BUG-005] Add the secondary-click primitive to `crates/micold-client/src/ui/cdk/` (new
+  `context_area.rs`, declared in `cdk/mod.rs`) — a single-child wrapper that delegates layout, draw,
+  operate and overlay to its content and intercepts only `mouse::Event::ButtonPressed(Right)` while
+  the cursor is over it, publishing a message built from the press point (depends on T069). It
+  belongs in the **cdk** and not in `material/`: it holds no appearance, which is the boundary
+  `tests/material_boundary.rs` enforces. `ui/material/checkbox.rs::TakesTheKeyboard` is the
+  delegation template; `ui/material/terminal_pane.rs` is the existing right-click handler and the
+  reason this is a *new* primitive rather than a reused one — that one is fused into a bespoke widget
+  and cannot wrap anything
+- [x] T072 [BUG-005] Wire the menu's state and messages:
+  `Message::ShellInstanceMenuRequested(SessionId, ShellInstanceId, u16, u16)` and
+  `ShellInstanceMenuClosed` in `src/app.rs`, with `shell_instance_menu: Option<(ShellInstanceId,
+  u16, u16)>` on `State` (depends on T070). Clear it wherever the other menus are cleared — the list
+  at `app.rs`'s "close every menu" path names `worktree_menu_open`, `session_menu_open` and
+  `terminal_context_menu`, and a fourth that is not in it is a menu that survives a navigation.
+  Register the surface beside `terminal_context_menu` in `src/features/session.rs` and
+  `src/overlay/registry.rs`
+- [x] T073 [BUG-005] Remove the restart affordance from `instance_switcher_row`
+  (`src/ui/terminal.rs`) and offer it from a `ContextMenu` on the tab instead (depends on
+  T071–T072; FR-010b): wrap each tab in the T071 primitive, and mount the menu on the bar the way
+  `pane()` already mounts the terminal's own context menu — `cdk::overlay::Overlay` around the
+  content, anchored at the press point. Items: **Restart** when that instance's own lifecycle is
+  `NotStarted | Exited`, **Close** always. Not Rename: an instance has no title to set, and giving it
+  one touches persistence and the daemon's session state, which is the separate feature the
+  "Deferred" note below already describes. With the affordance gone the tab's children are the
+  leading spacer, the label and the close control again, which is exactly what `TAB_WIDTH` was
+  derived for, and T067 goes green without the figure moving
+- [x] T074 [BUG-005] Correct the comment in `src/ui/terminal.rs` on the restart affordance — "It
+  widens its own tab, which SC-008 permits: that is a lifecycle change, not a change of which tab is
+  active." That was true before T056 introduced a fixed width and false from that commit on, in the
+  same file, and no test reads comments. It should now say why the affordance is not in the tab at
+  all
+- [x] T075 [BUG-005] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` with
+  `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` (depends on T073).
+  The diff is the artefact: `terminal.tabs.exited.restart` disappears, the exited tab's close returns
+  to 48.0, and every tab moves 128.0 → **136.0** with the strip widening 400.0 → 424.0 — the 8dp the
+  derivation corrected (T068), not a reflow. Every other covered state must be
+  untouched; the strip is in one state only. The `terminal.tabs.exited.restart` anchor in
+  `tests/support/covered_states.rs` must go with it, or it fails by name, which is the behaviour that
+  makes an anchor worth having
+- [x] T076 [P] [BUG-005] Re-run `quickstart.md` **§4 and §8** with the `visual-pass` skill and record
+  both in `visual-pass.md` (depends on T073). §4 "Independent lifecycle and restart" is the section
+  that would have caught this and it has not been run since `TAB_WIDTH` existed — BUG-002's pass ran
+  §8, the appearance section, which was right about its own subject. §8 is here because the tab's
+  children change: with the restart gone the label's centring is back on the tab's midline, and that
+  is §8's subject and beyond the fixture's reach — a 12dp centring error is precisely what it missed
+  last time. In §4, exercise a **background** exit specifically, through the new menu: the whole of
+  FR-010a is about the instance that is not the active one
+- [x] T077 [P] [BUG-005] Update `contracts/terminal-instance-switcher-ui.md` — its "Tab form" section
+  lists what sets the fixed width, and the per-entry restart bullet places the affordance inside the
+  tab. Move it to the menu, record that the width is derived rather than chosen, and state what the
+  tab's children now are
+- [x] T078 [P] [BUG-005] Document the tab context menu in `docs/user-guide/worktrees-and-sessions.md`
+  (Principle VII): right-click a terminal tab to restart a stopped instance or close it. The
+  affordance is no longer visible on the tab, so the user guide is now the only place it is written
+  down for a user — which is the cost FR-010b accepts, and the mitigation
+
+- [x] T079 [BUG-005] Centre a tab's content on the tab whether or not it draws an indicator
+  (`src/ui/terminal.rs`): the column carrying the indicator and the content row takes
+  `Length::Fill`, so an inactive tab measures its content box like an active one instead of
+  shrinking to the row and pinning it to the leading edge. With a failing gate first —
+  `a_tabs_content_sits_on_its_tabs_midline` in `tests/gates/tab_children_fit.rs`, asked per tab
+  against its own midline. Found by T076, which measured every inactive tab's label **4.6dp** left
+  of centre and sliding that far on activation, in both schemes. Older than this bugfix and
+  amplified by it: the offset was 0.6dp at `TAB_WIDTH = 128` and became 4.6 when T068's derivation
+  corrected the width to 136 — a change with nothing to do with centring, multiplying an invisible
+  defect by eight (FR-004a, SC-008)
+- [x] T080 [BUG-005] Open the tab menu **upward** (`src/ui/cdk/overlay.rs`,
+  `src/ui/material/menu.rs`, `src/ui/mod.rs`): a new `Anchor::BottomStart { bottom, start }` places
+  a panel's bottom-left corner against the window's bottom edge, and
+  `ContextMenu::rising_above(bottom)` selects it; the tab menu passes `anatomy::app_bar::HEIGHT`,
+  read rather than restated. Found by T076: anchored at the press point, the menu opened into the
+  27px of window below the bottom bar and its single item was cut through — with the instance
+  exited, the second item would be entirely off-screen. `Anchor::Point` documents that clamping is
+  the caller's job, and a caller inside a bar pinned to that edge cannot do it. Pose the new anchor
+  in the showcase beside the cursor-anchored default (C3 requires it, and comparison is the point)
+
+**Checkpoint**: an instance that exits in the background can be restarted from its own tab's menu
+without being selected first, every tab is 136dp with a full 48dp close target, a tab's content sits
+on its midline in every state, the menu opens where it can be read, and a gate fails if any tab's
+child is ever squeezed or pushed off-centre again. **Confirmed on screen** 2026-08-19 (Xvfb +
+lavapipe, three instances, both schemes): instance 1 exited while instance 3 stayed active, its tab's
+menu offered **Restart** and **Close** fully inside the window, and pressing Restart brought its shell
+back with a fresh prompt while instance 3 kept the indicator and was never selected. See
+`visual-pass.md`.
+
+**Bugfix**: 2026-08-18 — BUG-005 Updated from bugfix patch. Phase 13 added (T067–T078), extended to T080 by the T076 visual pass. **No task
+reopened**: T029 built the affordance correctly and its condition is still right, and T056 chose a
+width that solved the defect its visual pass could see, against three tab states none of which was
+exited. The conflict is between two requirements written for two different bugfixes — FR-004c
+(BUG-002) and FR-011a (BUG-001) — and is invisible from either one alone. **Re-patched during
+implementation** once the derivation was computed: FR-004c's own rule gives a 204dp tab and 628dp of
+a 1014dp bar at three instances, so FR-010b moves the affordance out of the tab rather than widening
+every tab for a child most never draw; the earlier T069/T070 (derive a wider width, re-balance the
+leading spacer) are replaced by T071–T073, and `TAB_WIDTH` does not move. **One renumbering**: Phase
+10's T057 becomes T063, because Phase 11's T057–T062 were written in a parallel worktree against the
+same highest id; the note on T063 records what its commits and PR call it. See `bugs/BUG-005.md`.
+
+**Visual pass, 2026-08-19 (T076)**: two defects found and fixed here — T079 (a tab's content 4.6dp
+off its midline, sliding that far on activation) and T080 (the menu opening downward into 27px of
+window). A third was diagnosed and nearly filed: the exited lifecycle never arriving, so **Restart**
+was never offered. It was already fixed on `main` by BUG-003's second commit, which this branch was
+two commits behind — a pass on a branch is a pass on its dependencies too. After merging, §4 runs end
+to end: a background instance exited, restarted from its own tab's menu without being selected, and
+its sibling and the active tab untouched.

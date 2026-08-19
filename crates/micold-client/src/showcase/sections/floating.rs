@@ -10,7 +10,7 @@
 //! and draws nothing itself, so it is exercised by this section rather than posed in it.
 
 use iced::{Element, Length};
-use micold_core::tokens::{spacing, Roles};
+use micold_core::tokens::{anatomy, spacing, Roles};
 
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::showcase::catalogue::Layout;
@@ -96,6 +96,16 @@ pub fn surfaces<'a>(
     if open == Some(Floating::ContextMenu) {
         out.push(
             material::ContextMenu::new(menu_items(), (120, 220), Message::Dismissed, roles).into(),
+        );
+        // The same panel on the other anchor: `rising_above` puts its **bottom** edge above the
+        // window's bottom edge instead of its top edge at the cursor. Posed beside the default so
+        // the difference is visible by comparison — a menu opened from a control in a bottom bar
+        // has no room to hang downward, which is how the terminal's tab menu came to be drawn
+        // half outside the window (012 BUG-005, the 2026-08-19 visual pass).
+        out.push(
+            material::ContextMenu::new(menu_items(), (420, 220), Message::Dismissed, roles)
+                .rising_above(anatomy::app_bar::HEIGHT)
+                .into(),
         );
     }
 

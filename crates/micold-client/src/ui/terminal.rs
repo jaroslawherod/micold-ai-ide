@@ -11,6 +11,7 @@ use crate::app::{Message, State};
 use crate::grid::GridCache;
 use crate::icons::Icon;
 use crate::icons::{mode_glyph, mode_tooltip};
+use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::{
     self, Button, ButtonVariant, ContextMenu, Divider, GridSizeReporter, IconButton, MenuItem,
     SurfaceKind, TerminalPane, Text, Tooltip, TooltipPosition, TypeRole,
@@ -625,7 +626,33 @@ pub(crate) fn tab_indicator_colour(is_active: bool, r: tokens::Roles) -> Option<
 /// this, every tab measures the same whatever it contains, and SC-008 holds by construction instead
 /// of by arithmetic. It also survives the rename feature — a name ellipsises inside the tab rather
 /// than resizing the strip, which is how a browser tab bar behaves.
-const TAB_WIDTH: f32 = 128.0;
+///
+/// **Derived, not chosen** (BUG-005, FR-004c). It was written as a literal `128.0` — a number that
+/// made the three tab states the BUG-002 visual pass drew look right, and that no test could
+/// disagree with. There is a fourth state, and 128 is not enough for it: a tab whose instance has
+/// stopped carried a restart button too, and the row settled the 54.3dp shortfall by shrinking its
+/// trailing children until the button was 0.0 wide and the close control was 45.2, under §7.3's
+/// target. Nothing overflowed, so nothing failed.
+///
+/// BUG-005 answered that by moving the restart affordance out to a context menu (FR-010b) rather
+/// than by widening every tab to 204dp for a child only a stopped instance draws. What changed here
+/// is that the width is *computed from the things it has to hold*, so it moves when any of them
+/// does and a fifth child cannot be added without this sum being confronted.
+///
+/// It comes to **136**, not the 128 that was written — and the 8dp is worth reading rather than
+/// tuning away. The literal reserved about 8dp for the label, which is narrower than the two digits
+/// an instance ordinal already reaches and far narrower than any name. It was never noticed because
+/// a label smaller than its reserve simply leaves the tab looking roomy, and `1` is 6.8dp wide. The
+/// honest way to land back on 128 is to declare that a tab reserves less room for its own name than
+/// a two-digit number needs, and that is not true — so the sum stands and the strip grows 8dp a tab.
+/// Choosing the reserve to reproduce the old figure is exactly the move FR-004c was rewritten to
+/// forbid.
+const TAB_WIDTH: f32 = 2.0 * spacing::SM      // the tab button's own padding, both edges
+    + TAB_CLOSE_WIDTH                          // leading spacer, balancing the close control
+    + spacing::XS
+    + TAB_LABEL_MIN_WIDTH
+    + spacing::XS
+    + TAB_CLOSE_WIDTH; // the close control itself
 
 /// The widest a switcher tab's label may grow before it ellipsises (BUG-002, T054).
 ///
@@ -634,6 +661,16 @@ const TAB_WIDTH: f32 = 128.0;
 /// chosen for `99` would have to be undone that day. Content-sized under a ceiling serves both, and
 /// costs nothing now.
 const TAB_LABEL_MAX_WIDTH: f32 = 120.0;
+
+/// The label's share of the derived [`TAB_WIDTH`] — what a tab reserves for its own name before the
+/// two touch targets and the gaps are counted (BUG-005, FR-004c).
+///
+/// A floor, where [`TAB_LABEL_MAX_WIDTH`] is the ceiling at which a label ellipsises. It is not
+/// measured text: a shaped width is not available in a `const`, and reserving one would make the
+/// tab's width depend on its content, which is the thing FR-004c forbids. Sized instead by what has
+/// to remain legible — comfortably more than the two digits an ordinal needs, and enough of a name
+/// to tell two tabs apart once instances can be renamed.
+const TAB_LABEL_MIN_WIDTH: f32 = 16.0;
 
 /// The trailing close control's layout footprint. A leading spacer of the same width balances it,
 /// putting the label on the tab's midline rather than off-centre toward the leading edge
@@ -728,31 +765,27 @@ fn instance_switcher_row<'a>(
         // ends are then equal and the label's box sits exactly between them. A `Fill` spacer
         // would do nothing here — the tab sizes to its content, so there is no slack to push
         // against, and it would only add a gap on one side of the label.
-        let mut content = row![
+        let content = row![
             Space::new().width(Length::Fixed(TAB_CLOSE_WIDTH)),
             label,
             close,
         ]
         .spacing(spacing::XS)
         .align_y(Alignment::Center);
-        // Per-instance restart affordance (feature 011 FR-010): shown exactly when this
-        // instance's own lifecycle is not-running, independent of every sibling — a background
-        // instance can be restarted without switching to it first. It widens its own tab, which
-        // SC-008 permits: that is a lifecycle change, not a change of which tab is active.
-        if matches!(
-            instance.lifecycle,
-            ShellLifecycle::NotStarted | ShellLifecycle::Exited
-        ) {
-            content = content.push(
-                Button::with_content(
-                    Text::new("restart", TypeRole::Label, r).tint(tint),
-                    ButtonVariant::Text,
-                    r,
-                )
-                .padding(spacing::SM)
-                .on_press(Message::ShellInstanceRestartRequested(id, instance.id)),
-            );
-        }
+        // The per-instance restart affordance used to be pushed here as a fourth child, and the
+        // comment above it read "It widens its own tab, which SC-008 permits: that is a lifecycle
+        // change, not a change of which tab is active." That was true until BUG-002 gave every tab
+        // one fixed width, and false in the same file from that commit on — a fixed width is a
+        // budget, and iced settles a shortfall by shrinking the trailing children rather than by
+        // overflowing. The button laid out at 0.0dp wide and the close control beside it at 45.2,
+        // under §7.3's target. Nothing overflowed, so nothing failed: `mise run test` was green
+        // over a control a user could not press, and the instance FR-010 exists for — one that
+        // exited in the background — could not be restarted from its own tab at all.
+        //
+        // It is offered from a context menu on the tab now (BUG-005, FR-010b). Widening the tab
+        // instead was measured first and rejected: the derivation comes to 204dp against 136, so
+        // three instances would take 628dp of a 1014dp bar that also carries a title, a status, the
+        // "+" and the mode toggle — every tab paying for a child only a stopped instance draws.
         // The indicator sits at the tab's **top** edge, not Material's bottom: this bar is anchored
         // to the window's bottom, so the pane a tab selects is *above* it and a bottom indicator
         // would point away from what it marks (FR-004b).
@@ -761,6 +794,15 @@ fn instance_switcher_row<'a>(
         // transparent rule of the same thickness. An indicator that appeared only on activation
         // would grow its tab by 3dp and push the row, which is exactly the reflow SC-008 forbids,
         // and it would do it under the pointer between a press and its release.
+        //
+        // `Fill` on the column, not `Shrink`, and that is the *width* half of the same rule. The
+        // active tab's `Divider` fills, so its column measures the tab's whole content box and the
+        // row below centres in it; an inactive tab's transparent spacer has no width, so a shrinking
+        // column would measure only the row and pin it to the leading edge. The label would then sit
+        // off the tab's midline on every inactive tab and slide across on activation — under the
+        // pointer, which is what SC-008 forbids — by half the slack. That was 0.6dp while the tab was
+        // 128 wide and became 4.6dp when FR-004c's derivation corrected it to 136: the same defect,
+        // amplified past visibility by a change that had nothing to do with it.
         let marked = column![
             match indicator {
                 Some(accent) => Divider::horizontal(r)
@@ -771,15 +813,23 @@ fn instance_switcher_row<'a>(
             },
             content,
         ]
+        .width(Length::Fill)
         .align_x(Alignment::Center);
         entries = entries.push(
-            Button::with_content(marked, ButtonVariant::Text, r)
-                // `Text` on every tab: no background, no outline (FR-004b). One fixed width for all
-                // of them, so the indicator's `Fill` resolves to the tab rather than to whatever
-                // space the bar happens to offer, and every tab measures the same (SC-008).
-                .width(Length::Fixed(TAB_WIDTH))
-                .padding(spacing::SM)
-                .on_press(Message::ShellInstanceSelected(id, instance.id)),
+            ContextArea::new(
+                Button::with_content(marked, ButtonVariant::Text, r)
+                    // `Text` on every tab: no background, no outline (FR-004b). One fixed width for all
+                    // of them, so the indicator's `Fill` resolves to the tab rather than to whatever
+                    // space the bar happens to offer, and every tab measures the same (SC-008).
+                    .width(Length::Fixed(TAB_WIDTH))
+                    .padding(spacing::SM)
+                    .on_press(Message::ShellInstanceSelected(id, instance.id)),
+            )
+            // A secondary press opens this tab's menu; a primary press still selects the instance,
+            // because the wrapper lets the child answer first and intercepts only the right button.
+            .on_secondary_press(move |(x, y)| {
+                Message::ShellInstanceMenuRequested(instance.id, x, y)
+            }),
         );
     }
     Some(entries.into())
@@ -968,6 +1018,51 @@ mod tests {
                  the active one, so a second bar would say two tabs are selected"
             );
         }
+    }
+
+    /// BUG-005, FR-004c: the tab's width is the sum of what it has to hold, not a number.
+    ///
+    /// The test that would have failed the day `TAB_WIDTH` was written as `128.0`. It cannot catch
+    /// a *missing* child on its own — a sum is only as complete as its terms, and the term this bug
+    /// was about (the restart affordance) is no longer one of them — so it is the pair to
+    /// `tests/gates/tab_children_fit.rs`, which reads what the children were actually given. This
+    /// end says the budget is the sum of its parts; that end says nobody was squeezed.
+    ///
+    /// Restated rather than referenced, deliberately. Writing `assert_eq!(TAB_WIDTH, TAB_WIDTH)`
+    /// through the same expression would pass on any value; spelling the arithmetic out means a
+    /// term silently dropped from the definition fails here.
+    #[test]
+    fn the_tab_width_is_the_sum_of_what_a_tab_holds() {
+        let padding = 2.0 * spacing::SM;
+        let targets = 2.0 * anatomy::button::MIN_TOUCH_TARGET; // leading spacer + close control
+        let gaps = 2.0 * spacing::XS;
+        assert_eq!(
+            TAB_WIDTH,
+            padding + targets + gaps + TAB_LABEL_MIN_WIDTH,
+            "TAB_WIDTH must be derived from the constants a tab's widest arrangement requires \
+             (FR-004c), not chosen against an observed one. A chosen figure is silently wrong the \
+             first time a tab gains a child, and wrong in the one way layout does not report: iced \
+             settles a shortfall by shrinking the trailing children, so the control disappears \
+             instead of the row overflowing."
+        );
+    }
+
+    /// The leading spacer balances the whole trailing edge, which is what puts the label on the
+    /// tab's midline (FR-004a).
+    ///
+    /// One control on that edge today. It was briefly two — the close and a restart button — and
+    /// the label was then off centre by 30dp with nothing to say so, because the spacer balanced
+    /// only the close. FR-010b took the restart out; this fails if anything is put back.
+    #[test]
+    fn the_leading_spacer_balances_the_trailing_edge() {
+        assert_eq!(
+            TAB_CLOSE_WIDTH,
+            anatomy::button::MIN_TOUCH_TARGET,
+            "the spacer must balance the control it faces at that control's laid-out footprint, \
+             not at its visible pill — a pressable non-compact `IconButton` wraps itself in a \
+             MIN_TOUCH_TARGET box, and measuring the pill put the label (48 - 24) / 2 = 12dp left \
+             of centre (BUG-002's visual pass)"
+        );
     }
 
     /// The indicator is the *only* difference between the two states, and it must be an accent —

@@ -149,6 +149,28 @@ Principle VIII bullet above cites as one of the sibling controls the switcher's 
 follows. That citation is now historical; the restart control and the mode toggle remain as the
 live examples.
 
+**Bugfix**: 2026-08-18 — BUG-005 Updated from bugfix patch. A third consequence of composing
+primitives, and the one the two above did not anticipate: **a `Length::Fixed` on the composite is a
+promise about the parent, not about the children**. BUG-002 gave every tab a fixed `TAB_WIDTH` to
+stop the active tab stretching — correct, and FR-004c records why — and that fixed width is also a
+budget the children must fit inside. When they do not, iced does not report it: it satisfies the
+shortfall by shrinking the trailing children, so a restart button that asks for 51.5dp is laid out
+at 0.0 and the close control beside it drops below the 48dp target. Nothing overflows, nothing
+escapes, no assertion fails.
+
+Two things follow for how this feature is built, both narrower than "be careful":
+
+- **A fixed size on a composite has to be derived from its widest arrangement, not from an observed
+  one.** The figure was chosen against the three tab states a visual pass drew (inactive, active,
+  activation) and the feature can produce a fourth — a restartable tab, with one more child than
+  any of them. FR-004c now requires the derivation rather than the number.
+- **A minimum interactive target is not a floor once the control is in a constrained row.**
+  Feature 018 FR-027 sets 48dp inside `IconButton`, and the close control still laid out at 45.2,
+  because a `Fixed` minimum is a request like any other when the row is short. 018's own BUG-002 was
+  the same figure being lost by a different mechanism — written and then overwritten. A gate that
+  reads a control against *what it asked for* catches both; one that reads it against a constant
+  catches neither, since the constant is still in the source both times.
+
 ## Project Structure
 
 ### Documentation (this feature)

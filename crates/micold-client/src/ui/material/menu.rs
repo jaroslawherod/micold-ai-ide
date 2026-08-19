@@ -371,6 +371,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
 pub struct ContextMenu<'a, M> {
     items: Vec<MenuItem<M>>,
     origin: (u16, u16),
+    rising_above: Option<f32>,
     on_dismiss: M,
     roles: Roles,
     lifetime: std::marker::PhantomData<&'a ()>,
@@ -383,10 +384,26 @@ impl<'a, M: Clone + 'a> ContextMenu<'a, M> {
         Self {
             items,
             origin,
+            rising_above: None,
             on_dismiss,
             roles,
             lifetime: std::marker::PhantomData,
         }
+    }
+
+    /// Open **upward**, with the panel's bottom edge `bottom` above the window's bottom edge, at the
+    /// press point's x. For a menu opened from a control in a bar pinned to that edge.
+    ///
+    /// The default hangs the panel *down* from the press point, which `Anchor::Point` says plainly
+    /// and leaves the caller to clamp. A bottom bar cannot clamp it: the room below any press in the
+    /// bar is at most the bar's own height, and a one-item panel is already taller than that. The
+    /// 2026-08-19 visual pass found the terminal tab menu opening into 27px of window with its
+    /// single item cut in half, and a second item would have been off-screen entirely — the same
+    /// shape as the defect that moved the item into this menu in the first place: present in the
+    /// tree, correctly conditioned, impossible to press.
+    pub fn rising_above(mut self, bottom: f32) -> Self {
+        self.rising_above = Some(bottom);
+        self
     }
 }
 
@@ -395,6 +412,7 @@ impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Surface<'a, M> {
         let ContextMenu {
             items,
             origin,
+            rising_above,
             on_dismiss,
             roles: r,
             ..
@@ -407,11 +425,13 @@ impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Surface<'a, M> {
             true,
             panel_padding(),
         );
-        Surface::new(
-            Layer::ContextMenu,
-            panel,
-            Anchor::Point(iced::Point::new(origin.0 as f32, origin.1 as f32)),
-        )
-        .on_dismiss(on_dismiss)
+        let anchor = match rising_above {
+            Some(bottom) => Anchor::BottomStart {
+                bottom,
+                start: origin.0 as f32,
+            },
+            None => Anchor::Point(iced::Point::new(origin.0 as f32, origin.1 as f32)),
+        };
+        Surface::new(Layer::ContextMenu, panel, anchor).on_dismiss(on_dismiss)
     }
 }
