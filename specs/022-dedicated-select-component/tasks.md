@@ -95,6 +95,11 @@ half is one call in Phase 4.
 - [X] T010 Wire the search picker to the animated menu and pass the exit duration to the base, in `crates/micold-client/src/ui/material/typeahead.rs` — **the task the whole phase exists to de-risk**
 - [ ] T011 Run [quickstart.md](./quickstart.md) §B2 against the type-ahead alone and record the pass, including whether an interrupted transition really resumes from where it is
 
+  > **Partially run 2026-08-19**, on Xvfb + lavapipe per the repo's `visual-pass` skill —
+  > [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md). What that pass settled and what it
+  > could not is tabulated there. It stays open on the clause below that a screenshot pipeline
+  > cannot answer.
+
   > **Blocked on eyes at a display**, like feature 021's §B8. The mechanism is verified by ten tests
   > in `tests/picker_visibility.rs` — five of which fail under a deliberate revert to the old
   > `if !self.open` behaviour, so they are not vacuous — but whether the grow-and-fade *looks* right
@@ -156,6 +161,12 @@ itself with nothing supplying it; confirm all four placements.
 - [X] T024 [US1] Confirm `selecting_a_type_sets_the_form_value` and `type_selection_is_ignored_while_creating` in `crates/micold-client/tests/app_state.rs` pass **unmodified**, and that `crates/micold-client/src/ui/worktree_form.rs`'s call is unchanged — the regression check on FR-030 (SC-009)
 - [ ] T025 [US1] Run [quickstart.md](./quickstart.md) §B1, §B3–§B6 in both schemes and record the pass
 
+  > **Partially run 2026-08-19**, on Xvfb + lavapipe per the repo's `visual-pass` skill —
+  > [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md). §B1, §B3, §B4's four keys and two of
+  > §B5's four placements are settled there, in both schemes and as sampled colours rather than as
+  > impressions. It stays open on the half the **gallery cannot pose**: §B5's dialog placement and
+  > the whole of §B6, which need the client and the daemon.
+
   > **Blocked on eyes at a display**, like T011. The machine-checkable half is done and is in
   > `src/ui/material/select_anatomy.rs` (the trigger, the chevron, the label's two positions, and
   > the indicator answering for itself — the last read off rasterised pixels) and in
@@ -188,6 +199,11 @@ both, the code here is one call — which is why this P2 story lands after the P
 
 - [X] T027 [US2] Wire the select's list through `picker::animated_menu` and pass the exit duration to the base, in `crates/micold-client/src/ui/material/select.rs`, making T026 pass (FR-018, FR-019)
 - [ ] T028 [US2] Run [quickstart.md](./quickstart.md) §B2 against **both** pickers in both schemes and record the pass, including the interrupted-transition and press-during-exit cases
+
+  > **Partially run 2026-08-19**, on Xvfb + lavapipe per the repo's `visual-pass` skill —
+  > [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md). What that pass settled and what it
+  > could not is tabulated there. It stays open on the clause below that a screenshot pipeline
+  > cannot answer.
 
   > **Blocked on eyes at a display**, like T011 and T025. The machine-checkable half is
   > `src/ui/material/picker_motion.rs`. It establishes the two halves that are observable without a
@@ -253,7 +269,7 @@ the durability half of the request.
 - [X] T036 [P] Document the select and the shared picker base — what each is for, and that a third picker consumes the base rather than rebuilding it — in `docs/development/component-library.md` (Principle VII, FR-033, FR-028)
 - [X] T037 [P] Add a superseding note to `specs/013-create-worktree-refinement/contracts/material-select.md` in that file's own established style, recording that `pick_list` was the only thing that could anchor a dropdown inside a content-sized dialog when it was written, and no longer is
 - [X] T038 Cross-cutting documentation review — links, navigation and index entries across `docs/`, including `docs/README.md` (Principle VII)
-- [ ] T039 Confirm `mise run test` passes on Linux, macOS and Windows via `.github/workflows/ci.yml` (Principle VI)
+- [X] T039 Confirm `mise run test` passes on Linux, macOS and Windows via `.github/workflows/ci.yml` (Principle VI) — all three green on [run 32291591383](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32291591383); recorded in [evidence/T039-three-os-matrix.md](./evidence/T039-three-os-matrix.md), **including that 022's own gates run on Linux only** — the other two platforms establish that it compiles
 
   > **Pending a pull request.** The three-platform matrix only runs on a PR, so this cannot be
   > answered from a branch. Locally on Linux: 164 test binaries, 0 failed, 1495 tests. Worth noting
@@ -262,6 +278,12 @@ the durability half of the request.
   > different worktrees, so they can overwrite each other's test binaries. CI on a clean checkout is
   > the arbiter, not this.
 - [ ] T040 Run [quickstart.md](./quickstart.md) end to end and record the full pass — the date, the platform, and **which half was machine-checked**. §B1 and §B2 are this feature's two headline claims and neither can be automated; a green suite is not this feature working
+
+  > **Partially run 2026-08-19**, on Xvfb + lavapipe per the repo's `visual-pass` skill —
+  > [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md). §B1, §B3, §B4's four keys and two of
+  > §B5's four placements are settled there, in both schemes and as sampled colours rather than as
+  > impressions. It stays open on the half the **gallery cannot pose**: §B5's dialog placement and
+  > the whole of §B6, which need the client and the daemon.
 
   > **Blocked on eyes at a display** — the fourth and last of these, with T011, T025 and T028, and
   > the one that subsumes them. The task's own wording is the finding: a green suite is not this
