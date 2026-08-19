@@ -260,19 +260,28 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
 
         // The leading adornment takes a **fixed** slot, the trailing one its natural width at the
         // far end; what is left is the control's.
+        //
+        // Both are offered the **container's** height and not the value line's 24dp (BUG-003 item
+        // 1, second finding). An adornment is not a second line of value: the trailing slot holds
+        // an `IconButton`, which wants §7.3's 40dp container inside a 48dp target, and 24dp of
+        // headroom did not refuse it — it squeezed it. The button padded 8dp top and bottom out of
+        // the 24 it was given, laid its glyph out in the 8dp that were left, and drew it out of
+        // that box and down the field, ~11dp below the centre line with a target compressed to
+        // half the size §7.3 requires. Nothing failed; the geometry gates saw a slot the right
+        // size with a child that fit inside it.
         let mut nodes = Vec::with_capacity(4);
         let leading = self.children[0].as_widget_mut().layout(
             &mut tree.children[0],
             renderer,
             &layout::Limits::new(
                 Size::ZERO,
-                Size::new(anatomy::text_field::LEADING_ICON.min(inner), VALUE_LINE),
+                Size::new(anatomy::text_field::LEADING_ICON.min(inner), height),
             ),
         );
         let trailing = self.children[2].as_widget_mut().layout(
             &mut tree.children[2],
             renderer,
-            &layout::Limits::new(Size::ZERO, Size::new(inner, VALUE_LINE)),
+            &layout::Limits::new(Size::ZERO, Size::new(inner, height)),
         );
         // Everything after the leading slot starts on **one** x — the control and the label alike.
         //
