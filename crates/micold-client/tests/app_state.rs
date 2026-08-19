@@ -177,6 +177,53 @@ fn create_failed_keeps_form_open_and_resets_status_to_editing() {
     );
 }
 
+/// A worktree list change clears a create failure shown against the old list (T067a-4).
+///
+/// Written because probe P3 fired nothing: removing the root's routing of `WorktreesReplaced` to
+/// the form left all 104 client suites green, so this behaviour was unguarded — and had been since
+/// before T067a-4, when the clear lived in `worktree::loaded` with no test either. The routing is
+/// what makes `worktree_error` the form's own field rather than a thing the worktree feature
+/// reaches into, so it is worth pinning rather than trusting.
+#[test]
+fn a_worktree_list_change_clears_a_stale_create_failure() {
+    let mut state = State::default();
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
+    assert_eq!(state.worktree_error.as_deref(), Some("boom"));
+
+    state.update(Message::WorktreesLoaded(vec![]));
+    assert!(
+        state.worktree_error.is_none(),
+        "discovery answering makes a failure against the previous list stale"
+    );
+}
+
+/// The same, for the other path that alters the list (016 BUG-002).
+#[test]
+fn an_include_clears_a_stale_create_failure_too() {
+    let mut state = State::default();
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
+
+    state.update(Message::WorktreeIncluded(Worktree {
+        dir_name: "feat-x".to_string(),
+        path: PathBuf::from("/p/.claude/worktrees/feat-x"),
+        branch: Some("feat/x".to_string()),
+        status: WorktreeStatus::Valid,
+        included: true,
+    }));
+    assert!(state.worktree_error.is_none());
+    assert_eq!(state.worktrees.len(), 1, "the include still lands");
+}
+
 #[test]
 fn resubmitting_while_creating_is_a_no_op() {
     let mut state = State::default();
