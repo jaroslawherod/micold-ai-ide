@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-17
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "the filtering by tags should be hidden and slide out when button with filter icon was pressed at sidebar toolbar"
 

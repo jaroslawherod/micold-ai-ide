@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-15
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "Introduce Material Design icons as a shared, cross-application capability in the Micold AI IDE, using the Material Symbols icon font. Bundle a single embedded Material Symbols (Outlined) font and expose a curated set of named icon constants that map to glyph codepoints, so any surface can render an icon consistently. Icons must integrate with the existing design system: tinted via the established color roles (e.g. on-surface, on-primary, on-surface-variant), sized off the typography scale, and correct in both light and dark themes. Apply icons across all existing surfaces without behavior loss — toolbar/app-bar actions (help, about), primary/secondary action buttons (open project), known-projects list items (open, rename), the git badge, and the active and unavailable markers. Keep the icon-name-to-codepoint mapping in the render-free core so it is unit-testable without iced, and keep font loading and glyph rendering in the GUI layer behind the `gui` feature. Preserve the license posture (Material Symbols is Apache-2.0, matching the repo). No new interactive behavior is added; existing actions must work identically, just with iconography."
 
