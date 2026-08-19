@@ -301,8 +301,8 @@ either affecting the other.
   was this state being unobservable; nothing here may return it to that.
 
 - **FR-013**: A tab and the strip that holds them MUST be **shared components** in the client's
-  component library, exposed through the chainable builder API terminating in `.into()`
-  (Constitution Principle VIII), rather than assembled at the call site as they are today. This
+  component library, exposed through the chainable builder API the constitution mandates (Principle
+  VIII), rather than assembled privately at the call site as they are today. This
   feature is what makes that necessary rather than tidy: one tab shape now serves two different
   kinds of member (FR-001), and it is about to carry a scrolling viewport (FR-002a), a state mark
   (FR-012c) and a state layer (FR-015). A call-site assembly cannot be posed in the gallery either,
@@ -316,8 +316,7 @@ either affecting the other.
   difference the gallery exists to make visible by comparison rather than by memory.
 - **FR-015**: A tab's **highlight** — its hover and press state layer — MUST be a Material *tab*
   state layer: **rectangular, spanning the tab's full width and height**. It MUST NOT be the fully
-  rounded pill a text button draws, which is what a tab built on `ButtonVariant::Text` inherits
-  today. An **unhighlighted** tab MUST continue to draw nothing at all — no background, no outline,
+  rounded pill a text button draws, which is what a tab inherits today by being built as one. An **unhighlighted** tab MUST continue to draw nothing at all — no background, no outline,
   no pill (feature 012 FR-004b). The highlight is the one state in which a tab has a shape, and that
   shape is a tab's.
 
