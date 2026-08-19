@@ -22,8 +22,8 @@ a `text_input::Icon`, drawn inside the input's own paint, so no layout node exis
 gate compared positions that were individually correct. That is the blindness the `visual-pass`
 skill's own opening example names, and it is this bug.
 
-The three new assertions in `form_field_anatomy.rs` close it for the future — the icon is a layout
-child now — but they were written after the fix. This pass is what says the fix is right on screen.
+The new assertions in `form_field_anatomy.rs` close it for the future — the icon is a layout child
+now — but they were written after the fix. This pass is what says the fix is right on screen.
 
 ## What was checked, and what was seen
 
@@ -57,7 +57,11 @@ Light in checks 2 and 3, dark in check 1, via the showcase's own scheme toggle. 
 colour-dependent, but the label is drawn by the wrapper and the value by the input, and those take
 their tint from different style functions — so seeing both in both schemes is worth the two clicks.
 
-## Found while looking, and **not** fixed
+## Found while looking — reported here, then fixed
+
+*Recorded as unfixed when this pass was written. The reporter authorized it the same day, so the
+diagnosis below stands as written and the fix is in BUG-003's own follow-up section. This section
+is what a fix would otherwise have had to rediscover.*
 
 **The trailing clear affordance is squeezed and draws low.** With a query present, the `×` sits
 about 11dp below the field's centre line, and its touch target is compressed to 24dp from the 48dp
@@ -72,10 +76,31 @@ relative `(8, 8)` with height 8.
 
 This pass **improved** it by 8dp without addressing it, because centring the slots moved it up; it
 was lower still before. It is a separate defect from the reported one — the reported one is the
-label column — and it is not patched here. The one-line shape of a fix is to limit the adornments by
-the container's height rather than by the value line, which would let the icon button lay out at its
-natural 40dp; that changes the trailing button in every text field in the application, which is more
-than this bug asked for.
+label column — and it was not patched when this was written. The one-line shape of a fix is to limit
+the adornments by the container's height rather than by the value line, which lets the icon button
+lay out at its natural size; that changes the trailing button in every text field in the
+application, which is more than the reported item asked for.
+
+### 5. Authorized and applied — re-photographed — **PASS**
+
+The reporter authorized it the same day, so the numbers above are the *before* and this is the
+after: a second run of the whole recipe on `:84`, same window size, same scroll position, same
+query. `bug003-item1-trailing-before-after.png` stacks them, before in red.
+
+Measured the same way, by scanning for ink on the same column: the container occupies rows 507–560
+(centre ≈ 533.5) and the glyph's ink runs 528–541 (centre ≈ 534.5). One dp, against eleven and a
+half.
+
+The assertion would have covered the rectangle on its own. What it could not have covered is the
+thing this change *introduces*: the button is no longer squeezed, so its hover state layer is no
+longer squeezed either, and a state layer growing from 40×24 to 40×47 inside a 56dp field is a new
+appearance rather than a corrected one. It reads as a rounded pill inset from both edges of the
+field, which is `IconButton`'s own container shape everywhere else in the application — not
+something this change invented. Worth the second run precisely because no test asks that question.
+
+**The two crops differ in one respect**: the after is hovered and the before is not, because the
+pointer had to be over the button to show the target at all. The `×` position is unaffected by
+hover — it is what the ink scan measures, and the scan was run on both.
 
 ## What this pass cannot answer
 

@@ -564,6 +564,72 @@ fn an_adornment_sits_on_the_fields_centre_line() {
     }
 }
 
+/// A trailing **action** gets the container's height, not the value line's (BUG-003 item 1).
+///
+/// The slot being centred is not enough on its own, and this is the assertion that says so: it
+/// looks *through* the slot at the glyph the user actually sees. An `IconButton` wants §7.3's 48dp
+/// target around a container it pads by 8dp; offered only the 24dp value line it did not refuse,
+/// it squeezed — laying its glyph out in the 8dp that were left and drawing it out of that box and
+/// down the field, ~11dp below the centre line with a target compressed to half of §7.3's figure.
+/// Every gate was green, because the slot was the right size and the child fitted inside it.
+///
+/// Found by the visual pass on the fix for the leading icon, and fixed in the same place: an
+/// adornment is not a second line of value, so it is limited by the box rather than by the line.
+#[test]
+fn a_trailing_action_is_centred_and_keeps_its_touch_target() {
+    let r = roles();
+    let field = FormField::new(input(), r)
+        .label("Branch")
+        .populated(true)
+        .trailing(super::IconButton::new(crate::icons::Icon::Close, r).on_press(Message::NoOp));
+    let node = laid_out(field.into(), 400.0);
+
+    let box_ = node.children()[0].bounds();
+    let slot = node.children()[0].children()[2].bounds();
+    assert_eq!(
+        (slot.width, slot.height),
+        (
+            anatomy::button::MIN_TOUCH_TARGET,
+            anatomy::button::MIN_TOUCH_TARGET
+        ),
+        "the trailing action's target is {:.1}×{:.1} against §7.3's {}dp — a slot capped at the \
+         value line squeezes it to half",
+        slot.width,
+        slot.height,
+        anatomy::button::MIN_TOUCH_TARGET
+    );
+
+    // The glyph itself, not the slot around it — the slot was already centred while the glyph was
+    // not, which is exactly the failure this catches.
+    let glyph = deepest_leaf(&node.children()[0].children()[2]);
+    assert!(
+        (glyph.center_y() - box_.center_y()).abs() < 1.0,
+        "the trailing glyph is centred at {:.1}dp in a box whose middle is {:.1}dp",
+        glyph.center_y(),
+        box_.center_y()
+    );
+}
+
+/// The bounds of the first leaf under `node`, in the layout's own coordinates.
+///
+/// A slot's child chain is an implementation detail of whatever was put in it — an icon button is a
+/// target container around a ripple around a button around the glyph — so the assertion above walks
+/// to the end rather than naming a depth it would have to be revised for.
+fn deepest_leaf(node: &iced::advanced::layout::Node) -> iced::Rectangle {
+    let mut bounds = node.bounds();
+    let mut current = node;
+    while let Some(child) = current.children().first() {
+        let b = child.bounds();
+        bounds = iced::Rectangle {
+            x: bounds.x + b.x,
+            y: bounds.y + b.y,
+            ..b
+        };
+        current = child;
+    }
+    bounds
+}
+
 /// Focus tints the label as well as the indicator, and an error outranks focus (§7.7).
 ///
 /// A focused field recolours *both*; the version that moved only the indicator left the label in
