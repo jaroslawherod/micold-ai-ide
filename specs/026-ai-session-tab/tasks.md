@@ -92,11 +92,11 @@ the promotion changed something it was not supposed to.
   tab it builds carries the strip's edge. The edge is a variant, so `tests/inventory` will require it
   to be posed and `showcase_completeness.rs` C3 will require both values to have instances (FR-014)
 - [ ] T008 [P] Add `crates/micold-client/src/ui/material/tab.rs` and declare it in
-  `crates/micold-client/src/ui/material/mod.rs` (depends on T006). Appearance only — it names
+  `crates/micold-client/src/ui/material/mod.rs` (depends on T006; FR-013). Appearance only — it names
   colour, shape and spacing, so it belongs in `material/` and not in `cdk/`, which
   `tests/cdk_no_appearance.rs` and `tests/material_boundary.rs` hold either side of
 - [ ] T009 [P] Add `crates/micold-client/src/ui/material/tab_strip.rs` and declare it (depends on
-  T007, T008)
+  T007, T008; FR-013)
 - [ ] T010 Rewire `crates/micold-client/src/ui/terminal.rs::instance_switcher_row` onto `Tab` and
   `TabStrip`, deleting the inline assembly (depends on T008, T009). **A pure move**: regenerate
   nothing and confirm `cargo test -p micold-client --test layout_snapshot` is green *without*
@@ -115,7 +115,7 @@ the promotion changed something it was not supposed to.
   point: this application inverts Material's default placement deliberately (feature 012 FR-004b),
   and an inversion never shown beside the thing it inverts reads as a mistake to the next person
 - [ ] T013 Run the gallery with the `visual-pass` skill and record it in a new
-  `specs/026-ai-session-tab/visual-pass.md` (depends on T011, T012). Two things, both invisible to
+  `specs/026-ai-session-tab/visual-pass.md` (depends on T011, T012; SC-010, SC-011). Two things, both invisible to
   every gate: the highlight is **rectangular and fills the tab** on hover and on press, in both
   schemes; and the two indicator orientations read as the same component with the bar on opposite
   edges, not as two different controls
@@ -237,7 +237,7 @@ delivery choice rather than a correctness one.
   VII): the strip is always there, the rightmost tab is the AI conversation, and it has no close
   control because a session has exactly one
 - [ ] T030 [US1] Run `quickstart.md` §1–§3 and §7 with the `visual-pass` skill and append it to
-  `specs/026-ai-session-tab/visual-pass.md` (depends on T024–T028). §1's zero-instance state is the
+  `specs/026-ai-session-tab/visual-pass.md` (depends on T024–T028; SC-001, SC-003, SC-005, SC-006). §1's zero-instance state is the
   one to judge rather than merely observe: it is the state feature 012 deliberately rendered nothing
   in, so a single tab there is the most likely thing to read as a stray control instead of a
   deliberate strip
@@ -262,7 +262,7 @@ delivery choice rather than a correctness one.
   **no scroll-arrow controls** (FR-002f) — they would spend an interactive target's width at each end
   of the bar T016 just finished protecting
 - [ ] T036 [US1] Run `quickstart.md` §6 with the `visual-pass` skill and append it to
-  `specs/026-ai-session-tab/visual-pass.md` (depends on T033–T035). The fade is drawn, not laid out, so this is the only check
+  `specs/026-ai-session-tab/visual-pass.md` (depends on T033–T035; SC-008, SC-009). The fade is drawn, not laid out, so this is the only check
   that can see it at all; §6's first expectation is also the regression check for T016
 
 **Checkpoint**: US1 complete. The strip is always present, always marked, and honest under overflow.
@@ -316,7 +316,7 @@ while running — nothing. Right-click it while stopped — Restart, and no Clos
   `docs/user-guide/worktrees-and-sessions.md` (Principle VII), beside the terminal tab's menu already
   described there
 - [ ] T045 [US2] Run `quickstart.md` §5 with the `visual-pass` skill and append it to
-  `specs/026-ai-session-tab/visual-pass.md` (depends on T041–T043). The check worth the setup is the **silence**: a secondary
+  `specs/026-ai-session-tab/visual-pass.md` (depends on T041–T043; SC-002, SC-004, SC-005). The check worth the setup is the **silence**: a secondary
   press on a running AI tab must produce nothing at all, not an empty panel
 
 **Checkpoint**: US1 and US2 both work independently. The strip is complete and pressable.
@@ -369,7 +369,7 @@ same mark in the same place. Restart either from its menu — the mark clears.
   VII): what it means, that it appears on a background tab you have not selected, and that it is how
   you know which tab's menu has a restart in it
 - [ ] T053 [US3] Run `quickstart.md` §4 with the `visual-pass` skill and append it to
-  `specs/026-ai-session-tab/visual-pass.md` (depends on T049–T051). This story's substance is appearance and this is where it
+  `specs/026-ai-session-tab/visual-pass.md` (depends on T049–T051; SC-007). This story's substance is appearance and this is where it
   is judged: the mark against the accent an active tab wears **and** the muted tint an inactive one
   wears, in **both** schemes, and not mistakable for the indicator. FR-012a is the requirement a
   tone-only cue would have failed, and it was the reason the mark is a mark
@@ -383,23 +383,30 @@ same mark in the same place. Restart either from its menu — the mark clears.
 > Per-story user-guide docs shipped inside their stories (Principle VII). This phase is
 > cross-cutting only.
 
-- [ ] T054 [P] Re-run **feature 012's `quickstart.md` §8** and record it in
+- [ ] T054 Run `specs/026-ai-session-tab/quickstart.md` **§8** whole, against the finished build, and
+  append it to `specs/026-ai-session-tab/visual-pass.md` (SC-010). The per-story passes each ran
+  against a partial strip; §8 is the consolidated appearance section and asks for **both schemes** —
+  the stopped mark against the accent an active tab wears and the muted tint an inactive one wears,
+  the mark and the indicator on one tab without reading as one cue, the AI tab beside a terminal tab,
+  the edge fade, the zero-instance strip, the rectangular highlight, and the squint test. Every item
+  in it is drawn rather than laid out, which is why it is a task and not a gate
+- [ ] T055 [P] Re-run **feature 012's `quickstart.md` §8** and record it in
   `specs/012-multiple-regular-terminals/visual-pass.md`. This feature changes 012's terminal tabs —
   every one of them gains a slot (T049) and the strip they live in now scrolls — and §8 is that
   strip's appearance section. Recorded there rather than here because the control is 012's
-- [ ] T055 [P] Note in `specs/012-multiple-regular-terminals/spec.md` that FR-005 is superseded by
+- [ ] T056 [P] Note in `specs/012-multiple-regular-terminals/spec.md` that FR-005 is superseded by
   026 FR-003 and that its tabs gained a stopped mark, so a reader of the older spec is not misled by
   a requirement this feature reversed
-- [ ] T056 [P] Confirm `specs/026-ai-session-tab/quickstart.md` §9 was run against the finished
+- [ ] T057 [P] Confirm `specs/026-ai-session-tab/quickstart.md` §9 was run against the finished
   build, not only against Phase 2's — the tab gained a stopped-mark slot and a scrolling parent
   after T013 posed it, and the gallery poses the same component the application uses or it poses
   nothing worth looking at
-- [ ] T057 Run the whole of `specs/026-ai-session-tab/quickstart.md`'s automated section and
+- [ ] T058 Run the whole of `specs/026-ai-session-tab/quickstart.md`'s automated section and
   `mise run test`; confirm `cargo fmt --check` and `cargo clippy --workspace --all-targets --
   -D warnings` are clean
-- [ ] T058 Verify the build and full suite on Linux, macOS and Windows (Principle VI) — the
+- [ ] T059 Verify the build and full suite on Linux, macOS and Windows (Principle VI) — the
   three-platform matrix in `.github/workflows/ci.yml`, run on the pull request, is the record
-- [ ] T059 [P] Cross-cutting documentation review in `docs/`: the user guide now describes a strip
+- [ ] T060 [P] Cross-cutting documentation review in `docs/`: the user guide now describes a strip
   that is always present, scrolls, carries a state mark and offers two menus. Read it as a whole
   rather than as four appended paragraphs
 
@@ -445,7 +452,8 @@ same mark in the same place. Restart either from its menu — the mark clears.
 - **Phase 4**: T021 ∥ T022 ∥ T023; T031 ∥ T032; T029 ∥ any implementation task
 - **Phase 5**: T037 ∥ T038 ∥ T039; T044 ∥ any
 - **Phase 6**: T046 ∥ T047 ∥ T048; T052 ∥ any
-- **Phase 7**: T054 ∥ T055 ∥ T059
+- **Phase 7**: T055 ∥ T056 ∥ T060. T054 is not parallel — it is the consolidated appearance pass
+  and must run against the finished build, after every story
 
 Two whole stories can run in parallel after Phase 3 and T024 — US2 and US3 touch different concerns
 (presses and menus versus the tab's leading slot) and meet only inside `Tab`.

@@ -42,8 +42,16 @@ of the *strip*. The alternative reading — that the strip as a whole should be 
 bar — is already true today, which is why the strip reading is the more likely intent. If it is
 wrong, FR-002 is the only line that changes.
 
+A **third** session on 2026-08-19 added FR-013–FR-015 on request: the tab and the strip become
+shared components, the gallery poses both indicator orientations, and a tab's highlight becomes a
+tab's state layer rather than a button's pill. FR-013 is not a preference — the gallery discovers
+components structurally, so a tab assembled at the call site cannot be posed at all, which makes the
+promotion the only route to FR-014. Two spec edits were needed to keep this checklist honest rather
+than to tick it: code identifiers were taken back out of FR-013 and FR-015, and User Story 1 gained
+an acceptance scenario for the highlight so FR-015 has criteria and not only a success measure.
+
 FR-012 (a tab whose process is not running is visually distinct) was stated at P3 and **raised to
-P2** by the 2026-08-19 clarification session. It was scoped as consistency polish — "the AI tab
+P2** by the second 2026-08-19 clarification session. It was scoped as consistency polish — "the AI tab
 should not silently omit what the terminal tabs show" — and feature 012's BUG-005 then moved the
 restart affordance off the tab into a menu, so no tab shows lifecycle and no cue points at the one
 action the strip offers. It is still severable from Story 1, which is why it is not P1.
