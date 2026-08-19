@@ -183,8 +183,32 @@ impl Registered for RenameWorktreeDialog {
 
 /// Discovery answered with the current worktree list (feature 005, FR-018).
 pub fn loaded(state: &mut State, worktrees: Vec<Worktree>) -> Vec<crate::features::Outcome> {
-    state.worktree_error = None;
     state.set_worktrees(worktrees)
+}
+
+/// The shell created a worktree and it joins the list (feature 005, FR-017; T067a-4).
+///
+/// Idempotent by **directory name**: a create names the directory it made, so that is the identity
+/// its caller can vouch for. [`included`] keys on path instead because the daemon answers an
+/// include with one. Reached only through `Outcome::WorktreeCreated` — the form that ran the
+/// create does not own this list.
+pub fn created(state: &mut State, worktree: Worktree) -> Vec<crate::features::Outcome> {
+    if !state
+        .worktrees
+        .iter()
+        .any(|w| w.dir_name == worktree.dir_name)
+    {
+        state.worktrees.push(worktree);
+        state.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
+    }
+    vec![list_changed(state)]
+}
+
+/// What every path that alters the list reports: the `dir_name`s now in it.
+fn list_changed(state: &State) -> crate::features::Outcome {
+    crate::features::Outcome::WorktreesReplaced(
+        state.worktrees.iter().map(|w| w.dir_name.clone()).collect(),
+    )
 }
 
 /// A worktree's right-click menu was toggled (feature 008).
@@ -210,12 +234,12 @@ pub fn menu_dismissed(state: &mut State) {
 ///
 /// Idempotent by path, and sorted by directory name so an included worktree lands where the list
 /// would have put it rather than at the end.
-pub fn included(state: &mut State, worktree: Worktree) {
+pub fn included(state: &mut State, worktree: Worktree) -> Vec<crate::features::Outcome> {
     if !state.worktrees.iter().any(|w| w.path == worktree.path) {
         state.worktrees.push(worktree);
         state.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
     }
-    state.worktree_error = None;
+    vec![list_changed(state)]
 }
 
 /// An exclude was requested; the menu it was chosen from closes (016 BUG-002).

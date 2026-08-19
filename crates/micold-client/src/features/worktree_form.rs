@@ -540,16 +540,18 @@ pub fn create_stage_changed(state: &mut State, stage: CreateStage, detail: Optio
 /// A worktree was created (feature 005, FR-017).
 ///
 /// Idempotent by directory name, and sorted so it lands where the list would have put it.
-pub fn created(state: &mut State, worktree: Worktree) {
-    if !state
-        .worktrees
-        .iter()
-        .any(|w| w.dir_name == worktree.dir_name)
-    {
-        state.worktrees.push(worktree);
-        state.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
-    }
+pub fn created(state: &mut State, worktree: Worktree) -> Vec<crate::features::Outcome> {
     state.worktree_form = None;
+    state.worktree_error = None;
+    vec![crate::features::Outcome::WorktreeCreated(worktree)]
+}
+
+/// The worktree list changed, so a create failure shown against the old one is stale (T067a-4).
+///
+/// `worktree_error` is the add-worktree modal's error line — `crate::ui::worktree_form` is its only
+/// render site — so clearing it is the form's own business even when a *worktree* operation is what
+/// makes it stale. Reached from the root's `WorktreesReplaced` arm.
+pub fn worktree_list_changed(state: &mut State) {
     state.worktree_error = None;
 }
 
@@ -652,7 +654,7 @@ pub enum Msg {
 /// The root sees a single arm. Everything the wizard knows about its own steps — which are inert
 /// while a create is in flight, which are inert behind a conflict prompt, which reset the branch
 /// search — lives on this side of the boundary and never had to be said out there.
-pub fn update(state: &mut State, msg: Msg) {
+pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::Opened => opened(state),
         Msg::TypeSelected(type_) => type_selected(state, type_),
@@ -674,7 +676,8 @@ pub fn update(state: &mut State, msg: Msg) {
         Msg::ResolutionCancelled => resolution_cancelled(state),
         Msg::CreateStarted(mode) => create_started(state, mode),
         Msg::CreateStageChanged(stage, detail) => create_stage_changed(state, stage, detail),
-        Msg::Created(worktree) => created(state, worktree),
+        Msg::Created(worktree) => return created(state, worktree),
         Msg::CreateFailed(message) => create_failed(state, message),
     }
+    Vec::new()
 }

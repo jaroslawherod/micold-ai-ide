@@ -39,7 +39,8 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         Outcome::SessionsClosed(_)
         | Outcome::OverlayDismissed(_)
         | Outcome::NotificationRaised(_)
-        | Outcome::WorktreesReplaced(_) => Task::none(),
+        | Outcome::WorktreesReplaced(_)
+        | Outcome::WorktreeCreated(_) => Task::none(),
     }
 }
 

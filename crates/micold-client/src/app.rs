@@ -867,7 +867,11 @@ impl State {
             // set, as it owns every other piece of durable state, and answers with the worktree as
             // its own discovery sees it.
             Message::WorktreeIncludeRequested(_) => {}
-            Message::WorktreeIncluded(worktree) => crate::features::worktree::included(self, worktree),
+            Message::WorktreeIncluded(worktree) => {
+                let outcomes = crate::features::worktree::included(self, worktree);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
+
             Message::WorktreeExcludeRequested(_) => crate::features::worktree::exclude_requested(self),
             Message::WorktreeExcluded(path) => crate::features::worktree::excluded(self, path),
             Message::WorktreeDeleteRequested(dir) => crate::features::worktree::delete_requested(self, dir),
@@ -910,7 +914,10 @@ impl State {
             }
             Message::WorktreeHovered(dir) => crate::features::worktree::hovered(self, dir),
             Message::WorktreeUnhovered(dir) => crate::features::worktree::unhovered(self, dir),
-            Message::WorktreeForm(msg) => crate::features::worktree_form::update(self, msg),
+            Message::WorktreeForm(msg) => {
+                let outcomes = crate::features::worktree_form::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::SessionStarted(session) => crate::features::session::started(self, session),
             Message::SessionSelected(id) => crate::features::session::selected(self, id),
             Message::SessionRunning(id) => crate::features::session::running(self, id),
@@ -1139,7 +1146,11 @@ pub fn interpret(
         Outcome::OverlayDismissed(id) => crate::overlay::registry::dismiss(state, id),
         Outcome::NotificationRaised(notification) => state.notify.push(notification),
         Outcome::WorktreesReplaced(names) => {
-            crate::features::sidebar::worktrees_replaced(state, &names)
+            crate::features::sidebar::worktrees_replaced(state, &names);
+            crate::features::worktree_form::worktree_list_changed(state);
+        }
+        Outcome::WorktreeCreated(worktree) => {
+            return crate::features::worktree::created(state, worktree)
         }
         Outcome::ClipboardWrite(_) => {}
     }

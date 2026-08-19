@@ -95,7 +95,6 @@ const OWNERS: &[(&str, &str)] = &[
     ("workspace.worktree_names", "worktree"),
     ("workspace.included_worktrees", "worktree"),
     ("worktrees", "worktree"),
-    ("worktree_error", "worktree"),
     ("worktree_menu_open", "worktree"),
     ("worktree_delete_target", "worktree"),
     ("worktree_delete_keep_branch", "worktree"),
@@ -106,6 +105,12 @@ const OWNERS: &[(&str, &str)] = &[
     ("hovered_worktree", "worktree"),
     // --- worktree_form ------------------------------------------------------------------------
     ("worktree_form", "worktree_form"),
+    // The add-worktree modal's error line. `crate::ui::worktree_form` is its ONLY render site —
+    // `tests/open_project_git_gate.rs` exists because an assertion on it passed green for as long
+    // as a refusal wrote here with the modal shut, invisible to users — so despite the name it is
+    // the form's field, not the worktree feature's, and T067a-4 moved it (see
+    // specs/021-mvu-slice-architecture/cross-feature-writes.md, group G).
+    ("worktree_error", "worktree_form"),
     // --- sidebar ------------------------------------------------------------------------------
     ("expanded", "sidebar"),
     ("default_expanded", "sidebar"),
@@ -338,26 +343,6 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // `worktree`'s error slot. `WorktreeCreated` / `WorktreeCreateFailed` are the outcomes, and
     // T064 — which promotes the form to a nested unit with its own message type — is where the
     // seam is most visible.
-    (
-        "worktree_form",
-        "worktree_error",
-        "features/worktree_form.rs::create_failed",
-    ),
-    (
-        "worktree_form",
-        "worktree_error",
-        "features/worktree_form.rs::created",
-    ),
-    (
-        "worktree_form",
-        "worktree_error",
-        "features/worktree_form.rs::opened",
-    ),
-    (
-        "worktree_form",
-        "worktrees",
-        "features/worktree_form.rs::created",
-    ),
 ];
 
 /// Methods that mutate the receiver, for state paths whose type this file does not decompose.

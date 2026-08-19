@@ -65,6 +65,13 @@ pub enum Outcome {
     /// sidebar's expansion set is not its to prune, so it reports what survived and the root routes
     /// that to `sidebar::worktrees_replaced`.
     WorktreesReplaced(std::collections::BTreeSet<String>),
+    /// The shell created this worktree; the list it joins is not the form's to write (T067a-4).
+    ///
+    /// `worktree_form` is a separate feature because its lifecycle is independent (FR-003), but
+    /// what it creates lands in `worktree`'s list. The form reports the creation and closes; the
+    /// worktree feature performs the insert, keeping its own two identities distinct — a create
+    /// names the directory, a daemon include answers with a path.
+    WorktreeCreated(micold_core::worktree::Worktree),
 }
 
 pub mod connection;
