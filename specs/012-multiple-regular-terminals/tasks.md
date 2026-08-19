@@ -798,3 +798,54 @@ screen** 2026-08-18 (Xvfb + lavapipe, stub `claude`): AI CLI session `running`, 
 no task is reopened — the client-side machinery T029/T030 built is correct and was simply never
 driven. `PROTOCOL_VERSION` 5 → 6 is the visible cost; a client and service across that boundary refuse
 each other and the service must be restarted once (`010` FR-021/FR-022). See `bugs/BUG-003.md`.
+
+---
+
+## Phase 12: Bugfix BUG-004 — the bar's `restart` restarts the session, not the instance it describes
+
+**Goal**: Make FR-010 reachable. The bottom bar's `restart` control pressed
+`Message::TerminalRestartRequested` unconditionally, which restarts the **session**; in Regular mode
+the session's AI CLI primary is still alive, so `DaemonState::start_session` took its already-live
+early return and the control did nothing. With a single instance there is no tab strip either, so
+FR-010's per-instance restart had no reachable route in the commonest case.
+
+The predicate that *shows* the control already knew better: `attached_process_restartable` splits on
+`session.mode` and asks about the **attached** process. One fact — "the thing you are looking at is
+not running" — was read correctly to decide whether to offer a restart, then ignored when deciding
+what the restart does. This phase makes both read it once.
+
+Reachable only after [BUG-003](./bugs/BUG-004.md): before it an instance never left `Starting`, which
+is not in the predicate's set, so the bar never offered `restart` in Regular mode and the mis-wiring
+had nothing to act on. Making a state observable is what exposed it.
+
+### Tests for BUG-004 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T064 [BUG-004] Pin the decision in `ui/terminal.rs`'s unit tests
+  (`the_bars_restart_targets_the_process_the_bar_is_describing`): asserted on the **message** the
+  control carries, not on the presence of a control — the defect was a live, correctly-drawn button
+  asking for the wrong thing. Four cases: `AiCli` mode keeps the session-level request, Regular mode
+  with an instance names that instance, Regular mode with none falls back (there is nothing
+  instance-shaped to name, and that path lazily opens the first one), and an unknown session must not
+  panic the render path
+- [X] T065 [BUG-004] Pin the **wiring** in `tests/terminal_bar_stability.rs`
+  (`the_bars_restart_control_asks_which_process_it_is_restarting`), read out of the source the way
+  `the_bar_does_not_branch_on_focus` beside it is: the button must take its message from
+  `restart_message`, and a bare `on_press(Message::TerminalRestartRequested)` in the bar is the bug
+  itself. T064 alone cannot catch this — `restart_message` can be perfectly correct and simply not
+  called, which is exactly the state the bug was in
+
+### Implementation for BUG-004
+
+- [X] T066 [BUG-004] Add `restart_message` (`crates/micold-client/src/ui/terminal.rs`) beside
+  `attached_process_restartable` and give the bar's button `.on_press(restart_message(state, active))`.
+  No new message variant: `ShellInstanceRestartRequested` already exists and works, reachable until
+  now only from the per-tab affordance
+
+**Checkpoint**: with one Regular Terminal instance, `exit` shows `exited` + `restart`, and pressing
+`restart` restarts *that instance*.
+
+**Bugfix**: 2026-08-18 — BUG-004. **No requirement added**: FR-010 already said "restarting only that
+instance"; the control simply did not. No task reopened — `ShellInstanceRestartRequested` and its
+handler were built correctly by Phase 6 and were merely unreachable from the bar. See
+`bugs/BUG-004.md`. Note for next time: `ui::terminal`'s unit tests live in the **lib** target, so
+they run under `cargo test -p micold-client --lib`, not `--bin`.
