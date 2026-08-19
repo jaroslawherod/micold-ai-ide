@@ -253,6 +253,12 @@ individually legible.
   it MUST be truncated with an ellipsis placed at whichever end — leading, trailing, or both — keeps
   the emphasised run visible. A matching branch MUST NOT be listed with its emphasis hidden behind
   the truncation.
+- **FR-011e** *(bugfix BUG-002)*: The label and the value MUST start on the same column, and that
+  column MUST account for the leading affordance — in both of the label's positions, resting and
+  floating. FR-011a asks for the label and the leading icon together and Material places them side
+  by side; nothing said the two were *one* column, and the implementation drew the magnifier through
+  the first letter of "Branch" for the life of the feature. The requirement was right and the
+  composition was not, which is why this is an addition rather than a correction.
 
 #### Preserving what the picker already does
 
