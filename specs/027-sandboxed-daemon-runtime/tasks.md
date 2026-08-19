@@ -84,7 +84,7 @@ story depends on all of it.
 ### The runtime seam
 
 - [ ] T023 *(test)* Write `crates/micold-core/tests/sandbox_runtime.rs` against the fake runtime — K-8 (each canned failure maps to its `RuntimeError` variant), K-9 (stop/remove/start idempotent), K-12 (malformed JSON classifies, never panics)
-- [ ] T024 Define the `ContainerRuntime` trait, `RuntimeKind`, `RuntimeVersion`, `RuntimeCapabilities`, `LimitSupport`, `IdentityMapping` and the closed `RuntimeError` in `crates/micold-core/src/sandbox/runtime.rs` (contracts/container-runtime.md §"The trait", C-6)
+- [X] T024 Define the `ContainerRuntime` trait, `RuntimeKind`, `RuntimeVersion`, `RuntimeCapabilities`, `LimitSupport`, `IdentityMapping` and the closed `RuntimeError` in `crates/micold-core/src/sandbox/runtime.rs` (contracts/container-runtime.md §"The trait", C-6)
 - [X] T025 Implement the single process-spawn shim in `crates/micold-core/src/sandbox/exec.rs` — the only impure code in the layer
 - [X] T026 Implement `--format '{{json .}}'` parsing into typed facts in `crates/micold-core/src/sandbox/parse.rs`, with truncated and unexpected input classified rather than unwrapped
 
