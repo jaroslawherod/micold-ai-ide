@@ -9,6 +9,9 @@
 //! lives in the daemon.
 
 pub mod app;
+/// Folding the daemon's catalog snapshot into client state. In the library, not the binary,
+/// so `tests/` can drive the daemon → wire → client join (see the module docs).
+pub mod catalog_sync;
 pub mod daemon;
 pub mod features;
 pub mod grid;

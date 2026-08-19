@@ -392,9 +392,15 @@ pub enum Message {
     ///
     /// **Emitted nowhere in production**, like [`Self::SessionRunning`]. The daemon owns this
     /// transition and publishes it as `SessionSummary::live_shells`, which `reconcile_catalog`
-    /// adopts (`012` FR-008, BUG-003). Kept as the reducer's own `→ Running` edge: it is the only
-    /// lever the integration tests in `tests/` have, since `reconcile_catalog` lives in the binary
-    /// crate and those tests can only reach the library.
+    /// adopts (`012` FR-008, BUG-003). Kept as the reducer's own `→ Running` edge, which feature
+    /// 023's FR-019 rule (a session reaching `Running` must not move the keyboard) is asserted
+    /// through.
+    ///
+    /// The older reason for keeping it — that it was the *only* lever `tests/` had, because
+    /// `reconcile_catalog` sat in the binary crate — no longer holds: the fold now lives in
+    /// [`crate::catalog_sync`] and `crates/micold-daemon/tests/catalog_join.rs` drives the real
+    /// daemon → wire → client path. That is the coverage this variant was standing in for, and
+    /// standing in badly: it let `012` BUG-003 ship an incomplete fix.
     ShellInstanceRunning(SessionId, ShellInstanceId),
     /// A Regular Terminal instance's shell process exited (intentional or crash) — never
     /// auto-restarted (FR-008; replaces feature 010's `ShellSessionExited(SessionId)`).
