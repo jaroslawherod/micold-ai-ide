@@ -239,3 +239,42 @@ fn the_ai_tab_is_unclosable_and_marked_from_one_source() {
          would let the mode toggle and the strip disagree, which FR-008 forbids."
     );
 }
+
+/// Research R4 / feature 023 FR-008a: the mark's slot is **reserved**, never pushed-or-not.
+///
+/// A tab is a pressable control whose press is the whole feature, and a child that comes and goes
+/// inside one shifts every sibling after it — iced's positional `Tree::diff_children` then hands
+/// the pressed control its neighbour's node and the press is dropped. A mark that appears when a
+/// process exits is exactly such a child.
+///
+/// Source-level, because the defect is a *shape* rather than a value: `.leading(..)` inside an `if`
+/// is the whole bug, and it is invisible to any test that renders one state at a time. What the
+/// slot does when it is empty is held by value tests either side of this — `material/tab.rs`'s
+/// `a_slot_is_the_slots_width_whatever_is_in_it` and `activity_badge.rs`'s
+/// `an_emphasis_less_badge_reserves_its_slot_and_draws_nothing`.
+#[test]
+fn the_marks_slot_is_reserved_rather_than_pushed_when_stopped() {
+    let src = terminal_source();
+    for (what, body) in [
+        ("a terminal tab", switcher_row_body(&src)),
+        ("the AI tab", ai_tab_body(&src)),
+    ] {
+        assert!(
+            body.contains(".leading("),
+            "{what} must always build its leading slot (FR-012c, research R4) — the mark goes in \
+             the spacer every tab already reserves, so no tab grows and the derived width is \
+             untouched"
+        );
+        for line in body.lines() {
+            let trimmed = line.trim_start();
+            assert!(
+                !(trimmed.starts_with("if ") && line.contains(".leading(")),
+                "{what} builds its leading slot conditionally: `{}`\n\nA child that comes and \
+                 goes shifts every sibling after it, and iced's positional tree diff then drops \
+                 the pressed sibling's press (feature 023 FR-008a). Pass the badge unconditionally \
+                 and let its *emphasis* be `None` when there is nothing to draw.",
+                trimmed
+            );
+        }
+    }
+}
