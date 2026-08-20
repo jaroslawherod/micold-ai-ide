@@ -262,6 +262,7 @@ fn compose_scene(app: &mut App) -> Task<Message> {
         if !creating && app.daemon.is_some() {
             steps.push(Task::done(Message::SessionStartRequested {
                 location: SessionLocation::Default,
+                provider: app.core.provider_for_start(None),
             }));
         }
     }
@@ -554,8 +555,17 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::WorktreeForm(FormMsg::SourceChanged(source)) => {
             shell::daemon_sync::on_add_worktree_source_changed(app, source)
         }
-        Message::SessionStartRequested { location } => {
-            shell::daemon_sync::on_session_start_requested(app, location)
+        Message::SessionStartRequested { location, provider } => {
+            shell::daemon_sync::on_session_start_requested(app, location, provider)
+        }
+        // The override list is opening: refresh the availability set first (feature 026, T014a).
+        // This and `SettingsOpened` are the two named events research R11 means by "when the choice
+        // is offered" — the set is never re-probed per frame, which would be a `PATH` lookup per
+        // render and exactly the scheduled work SC-006 forbids.
+        Message::SessionStartMenuOpened(location) => {
+            app.core.available_providers = app.caps.available_providers();
+            app.core.update(Message::SessionStartMenuOpened(location));
+            Task::none()
         }
         Message::SessionSelected(id) => shell::daemon_sync::on_session_selected(app, id),
         Message::SessionCloseRequested(id) => {
@@ -905,6 +915,7 @@ pub(crate) mod tests {
     // import them back rather than keep a second copy.
     use crate::shell::daemon_sync::tests::{snapshot_with, summary, summary_at};
     use micold_client::features::settings::SettingsDraft;
+    use micold_core::session::AiCli;
     // These tests drive whole messages through `update_inner`, which is this file's dispatcher, so
     // they stay here even though what they assert about is the daemon's: they are tests of the
     // routing reaching the right arm as much as of the arm itself.
@@ -1155,6 +1166,7 @@ pub(crate) mod tests {
             env_include_enabled: false,
             env_include_script_path: String::new(),
             env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
+            default_ai_cli: AiCli::ClaudeCode,
         }
     }
 
@@ -1520,6 +1532,7 @@ pub(crate) mod tests {
             env_include_enabled: false,
             env_include_script_path: "/tmp/does-not-exist.sh".into(),
             env_include_timeout: "15".into(),
+            default_ai_cli: AiCli::Copilot,
             error: None,
         });
 
@@ -1560,6 +1573,7 @@ pub(crate) mod tests {
             env_include_enabled: true,
             env_include_script_path: String::new(),
             env_include_timeout: "15".into(),
+            default_ai_cli: AiCli::ClaudeCode,
             error: None,
         });
 
@@ -1590,6 +1604,7 @@ pub(crate) mod tests {
                 outbox: micold_client::daemon::Outbox::new(tx),
                 catalog: snapshot_with("/repo/demo", Vec::new()),
                 settings: micold_core::protocol::messages::DaemonSettings {
+                    default_ai_cli: AiCli::ClaudeCode,
                     scrollback_lines: 12_345,
                     env_include_enabled: false,
                     env_include_script_path: "/authoritative/from-daemon.sh".into(),
@@ -1618,6 +1633,7 @@ pub(crate) mod tests {
             &mut app,
             Message::DaemonEvent(DaemonMsg::SettingsChanged {
                 settings: micold_core::protocol::messages::DaemonSettings {
+                    default_ai_cli: AiCli::ClaudeCode,
                     scrollback_lines: 5_000,
                     env_include_enabled: false,
                     env_include_script_path: "/tmp/after.sh".into(),

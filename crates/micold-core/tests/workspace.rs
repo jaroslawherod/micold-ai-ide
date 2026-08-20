@@ -3,7 +3,7 @@
 
 use micold_core::fs_scan::FakeFolderScanner;
 use micold_core::project::{canonicalize_best_effort, Availability};
-use micold_core::session::{Session, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::workspace::Workspace;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -134,9 +134,10 @@ fn with_session_and_override(ws: &mut Workspace, path: &str, dir: &str) {
     let key = canonicalize_best_effort(Path::new(path));
     ws.sessions.insert(
         key.clone(),
-        vec![Session::start_new(SessionLocation::Worktree(
-            dir.to_string(),
-        ))],
+        vec![Session::start_new(
+            SessionLocation::Worktree(dir.to_string()),
+            AiCli::ClaudeCode,
+        )],
     );
     let mut names = BTreeMap::new();
     names.insert(dir.to_string(), "Nice name".to_string());
@@ -269,7 +270,7 @@ fn the_foreground_memory_is_keyed_like_the_sessions_it_refers_to() {
     ws.open_or_activate(path.clone(), &FakeFolderScanner::default());
     let active = ws.active.clone().expect("a project is active");
 
-    let session = Session::start_new(SessionLocation::Default);
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = session.id;
     ws.sessions.insert(active.clone(), vec![session]);
     ws.foreground_by_project.insert(active.clone(), id);
@@ -300,7 +301,7 @@ fn forgetting_a_project_forgets_which_session_it_was_on() {
     ws.open_or_activate(path.clone(), &FakeFolderScanner::default());
     let key = ws.active.clone().unwrap();
 
-    let session = Session::start_new(SessionLocation::Default);
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = session.id;
     ws.sessions.insert(key.clone(), vec![session]);
     ws.foreground_by_project.insert(key.clone(), id);

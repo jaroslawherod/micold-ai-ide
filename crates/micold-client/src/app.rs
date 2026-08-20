@@ -21,7 +21,7 @@ use crate::features::worktree_form::WorktreeForm;
 use micold_core::notify;
 use micold_core::project::{Availability, FolderEntry};
 use micold_core::selector::Selector;
-use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
+use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
 use micold_core::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
 use micold_core::worktree::Worktree;
 use std::collections::BTreeSet;
@@ -251,9 +251,26 @@ pub enum Message {
     /// or dismissed as a unit, and no other feature reads its intermediate state. Twenty-two
     /// variants — 17% of this enum — collapse to this one.
     WorktreeForm(crate::features::worktree_form::Msg),
+    /// Open the "start a session on…" list for a location (feature 026, FR-004). The binary
+    /// refreshes the availability set first — this is one of the two named events research R11
+    /// means by "when the choice is offered".
+    SessionStartMenuOpened(SessionLocation),
+    /// Where the chevron that opened the list was pressed, in window pixels (018 BUG-008,
+    /// FR-029d). Arrives from the same press as [`Message::SessionStartMenuOpened`], immediately
+    /// after it: that one says the list was asked for, this one says where to hang it.
+    SessionStartMenuAnchored((u16, u16)),
+    /// Dismiss the "start a session on…" list without choosing.
+    SessionStartMenuDismissed,
     /// Start a new session at the given location — a worktree or, as of feature 010, the
-    /// project root ("Default", FR-001) — (FR-010). The binary spawns `claude`.
-    SessionStartRequested { location: SessionLocation },
+    /// project root ("Default", FR-001) — (FR-010). The binary spawns the named AI CLI.
+    SessionStartRequested {
+        /// Where the session runs.
+        location: SessionLocation,
+        /// Which AI CLI to run (feature 026, FR-004). Already resolved — `State::provider_for_start`
+        /// applied the override or the default before this message was built, so the binary's
+        /// handler copies the answer onto the wire and decides nothing.
+        provider: AiCli,
+    },
     /// A session was started/added for the active project (FR-011).
     SessionStarted(Session),
     /// Select a session to display its terminal (FR-015); other sessions keep running.
@@ -417,6 +434,8 @@ pub enum Message {
     SettingsEnvIncludePathChanged(String),
     /// The Settings environment-include timeout field changed (FR-003).
     SettingsEnvIncludeTimeoutChanged(String),
+    /// The Settings **Default AI CLI** select changed (feature 026, FR-003).
+    SettingsDefaultAiCliChanged(AiCli),
     /// Save the Settings form (validated + persisted by the binary) (FR-020, FR-021).
     SettingsSaved,
     /// Dismiss the Settings form without saving (Cancel or Esc).
@@ -540,6 +559,28 @@ pub struct State {
     /// Worktrees discovered for the active project (feature 005, FR-018). Re-derived from git
     /// on open and after each mutation — never persisted.
     pub worktrees: Vec<Worktree>,
+    /// Which AI CLIs are installed, in `AiCli::ALL`'s order (feature 026, FR-006, T014a).
+    ///
+    /// Filled at the I/O boundary from `Capabilities::available_providers()`, the way `worktrees`
+    /// above is filled from git — and refreshed on a **named event**, when the choice is offered
+    /// (the Settings overlay opening, the override menu opening), never per frame. A `PATH` probe
+    /// per render is exactly the scheduled work SC-006 forbids.
+    ///
+    /// It is here rather than reached for because there is no route to it otherwise, and the three
+    /// consumers each lack a different one: `features/` imports nothing from `shell::` and
+    /// `Capabilities` is a shell type; `ui/settings_form.rs`'s view is dispatched through the
+    /// shared `DialogView` fn-pointer and sees `&State` and nothing else; and the sidebar's
+    /// `row_actions_cluster` takes narrow arguments rather than the whole state.
+    ///
+    /// Holding it in memory is not a violation of research R11's rule, which is "never
+    /// *persisted*" — an in-memory snapshot refreshed when the choice is offered cannot go stale
+    /// in a file.
+    pub available_providers: Vec<AiCli>,
+    /// The default AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
+    ///
+    /// Service-owned: this mirrors what the daemon reported in `DaemonSettings`, and is written
+    /// only from a `SettingsChanged` or the boot-time settings load.
+    pub default_ai_cli: AiCli,
     /// Which worktree rows are expanded to reveal their sessions (FR-003). By `dir_name`.
     pub expanded: BTreeSet<String>,
     /// Whether the "Default" (project-root) sidebar row is expanded to reveal its sessions
@@ -707,6 +748,12 @@ pub struct State {
     /// BUG-003). At most one is open at a time; `None` means no menu is showing. Mirrors
     /// `worktree_menu_open`.
     pub session_menu_open: Option<SessionMenu>,
+    /// Which location's "start a session on…" list is open, if any, and where it hangs from
+    /// (feature 026, FR-004).
+    ///
+    /// The location rather than a boolean: the list's items have to name where the session will
+    /// start, and every sidebar row can open its own.
+    pub session_start_menu: Option<crate::features::session::StartMenu>,
     /// The session pending permanent removal, shown in the confirm dialog (bugfix BUG-003,
     /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
     /// `worktree_delete_target`.
@@ -1129,6 +1176,18 @@ impl State {
             }
             Message::SettingsEnvIncludeTimeoutChanged(text) => {
                 crate::features::settings::env_include_timeout_changed(self, text)
+            }
+            Message::SessionStartMenuOpened(location) => {
+                crate::features::session::start_menu_toggled(self, location)
+            }
+            Message::SessionStartMenuAnchored(point) => {
+                crate::features::session::start_menu_anchored(self, point)
+            }
+            Message::SessionStartMenuDismissed => {
+                crate::features::session::start_menu_dismissed(self)
+            }
+            Message::SettingsDefaultAiCliChanged(which) => {
+                crate::features::settings::default_ai_cli_changed(self, which)
             }
             Message::SettingsSaved => crate::features::settings::saved(self),
             Message::SettingsCancelled => crate::features::settings::cancelled(self),

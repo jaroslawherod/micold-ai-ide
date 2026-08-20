@@ -22,7 +22,9 @@ use std::time::{Duration, Instant};
 
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::{ActivitySignal, SessionSummary};
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -55,6 +57,7 @@ fn catalog_with_session(project_dir: &std::path::Path, store_dir: &std::path::Pa
         SessionLocation::Default,
         SessionLabel::Pending,
         TerminalMode::AiCli,
+        AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project_dir.to_path_buf(), vec![session]);

@@ -145,6 +145,14 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                     location,
                     summary.title.clone(),
                     TerminalMode::AiCli,
+                    // From the summary, not defaulted (feature 026, T065 — FR-012, FR-016).
+                    //
+                    // This is the **only** path a daemon-reported session takes into the client
+                    // model: every session discovered by the FR-014 pass, and every session at all
+                    // after a client restart. A default here would leave the row label, the
+                    // terminal bar and the split affordance all reading `claude` for a Copilot
+                    // session, with every other test still green.
+                    summary.provider,
                 );
                 s.lifecycle = lifecycle;
                 s.activity = summary.activity.clone();
@@ -292,6 +300,7 @@ mod tests {
                             activity: micold_core::protocol::messages::ActivitySignal::Unknown,
                             input_serial: 0,
                             live_shells: Vec::new(),
+                            provider: micold_core::session::AiCli::ClaudeCode,
                         })
                         .collect(),
                 })

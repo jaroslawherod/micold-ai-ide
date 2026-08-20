@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
-use crate::session::{SessionId, SessionLabel, ShellInstanceId};
+use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
 // ---------------------------------------------------------------------------------------------
@@ -278,6 +278,11 @@ pub enum ClientMsg {
         project: PathBuf,
         /// Worktree directory name.
         worktree_dir: String,
+        /// Which AI CLI to run (feature 026, FR-004). The **client** resolves default-or-override
+        /// and sends the answer, so no launch depends on the two processes agreeing about a file.
+        /// The daemon does read `settings.json` — `Catalog::new` loads it at boot — it is simply
+        /// not asked to make this choice.
+        provider: AiCli,
     },
     /// Delete a session record.
     SessionDelete {
@@ -300,6 +305,8 @@ pub enum ClientMsg {
         env_include_script_path: Option<String>,
         /// New environment-include timeout in seconds, or `None` to leave unchanged.
         env_include_timeout_secs: Option<u64>,
+        /// New default AI CLI, or `None` to leave unchanged (feature 026, FR-003).
+        default_ai_cli: Option<AiCli>,
     },
 
     // --- Diagnostics ---
@@ -566,6 +573,13 @@ pub struct SessionSummary {
     pub lifecycle: WireLifecycle,
     /// Derived activity signal.
     pub activity: ActivitySignal,
+    /// Which AI CLI this session runs (feature 026, FR-016), carried outward the way
+    /// `worktree_dir` and `title` already are so the client can label rows without a second
+    /// request.
+    ///
+    /// **Not** the way `mode` does — `mode` does not travel at all, and citing it as the precedent
+    /// sends a reader looking for a field that is not there.
+    pub provider: AiCli,
     /// The input serial the service expects next for this session — its
     /// [`InputReceiver`](crate::input::InputReceiver) high-water mark (FR-028a, BUG-006).
     ///
@@ -709,6 +723,14 @@ pub struct DaemonSettings {
     pub env_include_script_path: String,
     /// The environment-include sourcing timeout, in seconds.
     pub env_include_timeout_secs: u64,
+    /// Which AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
+    ///
+    /// Service-owned, alongside the scrollback limit rather than beside `theme`. `settings.json`
+    /// has two writers and the split is by field: the daemon's `set_scrollback` and
+    /// `set_env_include` each persist their whole `Settings` struct from the copy loaded at boot,
+    /// so a client-written field is reverted by the next unrelated settings change. That is
+    /// already true of `theme`; this preference must not inherit it.
+    pub default_ai_cli: AiCli,
 }
 
 /// The result payload of a successful mutating request.

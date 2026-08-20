@@ -21,7 +21,9 @@ use micold_client::features::settings::SettingsDraft;
 use micold_client::features::worktree::WorktreeMenu;
 use micold_client::features::worktree_form::{BranchSource, WorktreeForm};
 use micold_core::project::Availability;
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::typeahead::{rank, Query};
 use micold_core::worktree::{BranchCandidate, BranchOrigin, Worktree, WorktreeStatus};
 
@@ -391,6 +393,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     SessionLocation::Worktree("feat-short".to_string()),
                     SessionLabel::Named("feat/short".to_string()),
                     TerminalMode::Regular,
+                    AiCli::ClaudeCode,
                 );
                 let id = session.id;
                 let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
@@ -581,6 +584,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     env_include_enabled: true,
                     env_include_script_path: "~/.config/micold/session-env.sh".to_string(),
                     env_include_timeout: "5".to_string(),
+                    default_ai_cli: micold_core::session::AiCli::ClaudeCode,
                     error: Some("the scrollback limit must be between 100 and 100000".to_string()),
                 });
                 StateUnderTest::new(state)
@@ -621,6 +625,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     SessionLocation::Worktree("feat-short".to_string()),
                     SessionLabel::Named("feat/short".to_string()),
                     TerminalMode::Regular,
+                    AiCli::ClaudeCode,
                 );
                 let active = session.id;
                 let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
@@ -711,6 +716,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     SessionLocation::Worktree("feat-short".to_string()),
                     SessionLabel::Named("feat/short".to_string()),
                     TerminalMode::Regular,
+                    AiCli::ClaudeCode,
                 );
                 let leading = session.open_shell_instance();
                 let active_shell = session.open_shell_instance();
@@ -813,6 +819,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     SessionLocation::Worktree("feat-short".to_string()),
                     SessionLabel::Named("feat/short".to_string()),
                     TerminalMode::Regular,
+                    AiCli::ClaudeCode,
                 );
                 let mut opened = Vec::new();
                 for _ in 0..6 {
@@ -890,6 +897,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     SessionLocation::Worktree("feat-short".to_string()),
                     SessionLabel::Named("feat/short".to_string()),
                     TerminalMode::Regular,
+                    AiCli::ClaudeCode,
                 );
                 let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
                 workspace.active = workspace.projects.first().map(|p| p.path.clone());

@@ -35,15 +35,16 @@ use iced::advanced::widget::{tree, Operation, Tree, Widget};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
 
-/// What a secondary press is turned into: a message built from the press point, in window pixels.
-type OnSecondaryPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
+/// What a press is turned into: a message built from the press point, in window pixels.
+type OnPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
 
 /// Wraps `content` and reports a secondary click on it.
 ///
 /// Builder form (Principle VIII): `ContextArea::new(content).on_secondary_press(|(x, y)| msg)`.
 pub struct ContextArea<'a, M> {
     content: Element<'a, M>,
-    on_secondary_press: Option<OnSecondaryPress<'a, M>>,
+    on_secondary_press: Option<OnPress<'a, M>>,
+    on_primary_press: Option<OnPress<'a, M>>,
 }
 
 impl<'a, M: 'a> ContextArea<'a, M> {
@@ -52,6 +53,7 @@ impl<'a, M: 'a> ContextArea<'a, M> {
         Self {
             content: content.into(),
             on_secondary_press: None,
+            on_primary_press: None,
         }
     }
 
@@ -60,6 +62,23 @@ impl<'a, M: 'a> ContextArea<'a, M> {
     /// `point` is in window coordinates — what an overlay anchor takes.
     pub fn on_secondary_press(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
         self.on_secondary_press = Some(Box::new(f));
+        self
+    }
+
+    /// Publish `f(point)` when a **primary** (left) button is pressed over the content — *in
+    /// addition to* whatever the content does with that press, which is left untouched.
+    ///
+    /// This is the reporting half of a control that opens a surface: the child button says *what*
+    /// was pressed and this says *where*, so the panel can hang from the press point rather than
+    /// from a figure written into the view (018 BUG-008, FR-029d). It does not capture, because
+    /// the press belongs to the child; a wrapper that swallowed it would leave the button inert
+    /// and, being an ordinary enabled button, still drawn as though it were not.
+    ///
+    /// The two messages arrive from one press, child first, and iced applies every queued message
+    /// before it draws again — so the surface is never rendered at the point the opening message
+    /// left it.
+    pub fn on_primary_press(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
+        self.on_primary_press = Some(Box::new(f));
         self
     }
 }
@@ -135,10 +154,18 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
             viewport,
         );
 
+        let over = cursor.position_over(layout.bounds());
+        if let Some(build) = &self.on_primary_press {
+            if let Some(point) = reported_press(event, mouse::Button::Left, over) {
+                // Not captured: the child's own `on_press` is what this press is for, and it has
+                // already run. This only says where it landed.
+                shell.publish(build(point));
+            }
+        }
         let Some(build) = &self.on_secondary_press else {
             return;
         };
-        let Some(point) = reported_press(event, cursor.position_over(layout.bounds())) else {
+        let Some(point) = reported_press(event, mouse::Button::Right, over) else {
             return;
         };
         shell.publish(build(point));
@@ -212,14 +239,15 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
 /// the rule it applies is four lines that deserve tests of their own. `over` is the cursor's window
 /// position when it is inside this area's bounds, and `None` when it is not.
 ///
-/// Only a *press*, and only the right button. A release would fire after the menu is already open
-/// and after the surface beneath the cursor has changed; the press is the platform convention and
-/// the only moment the point still means the thing that was clicked.
-fn reported_press(event: &Event, over: Option<iced::Point>) -> Option<(u16, u16)> {
-    if !matches!(
-        event,
-        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
-    ) {
+/// Only a *press*, and only `button`. A release would fire after the menu is already open and
+/// after the surface beneath the cursor has changed; the press is the platform convention and the
+/// only moment the point still means the thing that was clicked.
+fn reported_press(
+    event: &Event,
+    button: mouse::Button,
+    over: Option<iced::Point>,
+) -> Option<(u16, u16)> {
+    if !matches!(event, Event::Mouse(mouse::Event::ButtonPressed(b)) if *b == button) {
         return None;
     }
     over.map(|p| (p.x as u16, p.y as u16))
@@ -247,7 +275,11 @@ mod tests {
     #[test]
     fn a_secondary_press_over_the_area_reports_where_it_landed() {
         assert_eq!(
-            reported_press(&right_press(), Some(Point::new(742.0, 761.5))),
+            reported_press(
+                &right_press(),
+                mouse::Button::Right,
+                Some(Point::new(742.0, 761.5))
+            ),
             Some((742, 761))
         );
     }
@@ -256,16 +288,49 @@ mod tests {
     /// side, so an area that reported presses it did not receive would open the wrong tab's menu.
     #[test]
     fn a_secondary_press_outside_reports_nothing() {
-        assert_eq!(reported_press(&right_press(), None), None);
+        assert_eq!(
+            reported_press(&right_press(), mouse::Button::Right, None),
+            None
+        );
     }
 
-    /// The property the tab depends on: a primary press is left entirely alone, so the button this
-    /// wraps still selects its instance. A wrapper that captured presses generally would trade
+    /// The property the tab depends on: a primary press is not a *secondary* report, so the button
+    /// this wraps still selects its instance. A wrapper that captured presses generally would trade
     /// selecting a tab for giving it a menu.
     #[test]
-    fn a_primary_press_is_not_this_areas_business() {
+    fn a_primary_press_is_not_a_secondary_report() {
         assert_eq!(
-            reported_press(&left_press(), Some(Point::new(1.0, 1.0))),
+            reported_press(
+                &left_press(),
+                mouse::Button::Right,
+                Some(Point::new(1.0, 1.0))
+            ),
+            None
+        );
+    }
+
+    /// The other half, for the control that opens a surface from a left press (feature 026's
+    /// split action): the same rule, asked about the other button, and still only over the area.
+    #[test]
+    fn a_primary_press_over_the_area_reports_where_it_landed() {
+        assert_eq!(
+            reported_press(
+                &left_press(),
+                mouse::Button::Left,
+                Some(Point::new(31.0, 208.9))
+            ),
+            Some((31, 208))
+        );
+        assert_eq!(
+            reported_press(&left_press(), mouse::Button::Left, None),
+            None
+        );
+        assert_eq!(
+            reported_press(
+                &right_press(),
+                mouse::Button::Left,
+                Some(Point::new(1.0, 1.0))
+            ),
             None
         );
     }
@@ -279,6 +344,7 @@ mod tests {
         assert_eq!(
             reported_press(
                 &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)),
+                mouse::Button::Right,
                 over
             ),
             None
@@ -288,6 +354,7 @@ mod tests {
                 &Event::Mouse(mouse::Event::CursorMoved {
                     position: Point::new(1.0, 1.0)
                 }),
+                mouse::Button::Right,
                 over
             ),
             None

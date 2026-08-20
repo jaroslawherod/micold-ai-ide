@@ -6,7 +6,7 @@
 
 use micold_client::app::{on_escape, Message, State};
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use std::path::{Path, PathBuf};
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
@@ -96,7 +96,10 @@ fn escape_cancels_the_forget_confirmation() {
 fn forget_confirmed_on_active_project_clears_active_and_active_session() {
     let mut state = state_with_projects(&["/a", "/b"]); // active = /b
                                                         // Give the active project a running foreground session.
-    let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state
         .workspace
@@ -135,7 +138,7 @@ fn forgetting_the_last_project_leaves_an_empty_list() {
 #[test]
 fn forgetting_a_background_project_leaves_active_untouched() {
     let mut state = state_with_projects(&["/bg", "/fg"]); // active = /fg
-    let session = Session::start_new(SessionLocation::Default);
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = session.id;
     state
         .workspace
@@ -186,7 +189,10 @@ fn forget_confirmed_removes_an_unavailable_project() {
 #[test]
 fn forgetting_the_active_project_clears_the_current_session_through_the_one_path() {
     let mut state = state_with_projects(&["/a", "/b"]);
-    let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state
         .workspace

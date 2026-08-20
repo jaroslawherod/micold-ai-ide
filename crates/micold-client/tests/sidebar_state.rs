@@ -6,7 +6,7 @@ use micold_client::app::{
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -387,7 +387,10 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
         }]),
         |o| micold_client::app::interpret(&mut state, o),
     );
-    let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.active_session = Some(id);

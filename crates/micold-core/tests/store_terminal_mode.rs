@@ -2,7 +2,9 @@
 //! contracts/persistence-schema.md).
 
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
 use std::collections::BTreeMap;
@@ -19,6 +21,7 @@ fn workspace_with(mode: TerminalMode) -> (Workspace, PathBuf, SessionId) {
             SessionLocation::Worktree("feat-x".to_string()),
             SessionLabel::Pending,
             mode,
+            AiCli::ClaudeCode,
         )],
     );
     (

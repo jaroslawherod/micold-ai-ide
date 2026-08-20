@@ -14,7 +14,11 @@
 /// Bumped 3 → 4 for `OperationResult::WorktreeDeleted::leftovers` (FR-023).
 /// Bumped 4 → 5 for `DaemonMsg::OperationProgress::detail` (FR-004a, BUG-009).
 /// Bumped 5 → 6 for `SessionSummary::live_shells` (`012` FR-008, BUG-003).
-pub const PROTOCOL_VERSION: u32 = 6;
+/// Bumped 6 → 7 for feature 026's five additions, made together in one edit so the hash moves
+/// **once** for the whole feature: `provider` on `ClientMsg::SessionCreate` (inbound) and on
+/// `SessionSummary` (outbound), and `default_ai_cli` on `DaemonSettings`, `SettingsSet` and
+/// `SettingsChanged`. A second bump later in the feature would fail `tests/schema_hash.rs`.
+pub const PROTOCOL_VERSION: u32 = 7;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

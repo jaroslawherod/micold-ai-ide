@@ -376,6 +376,22 @@ pub fn view<'a>(
             )
         });
 
+    // The "start a session on…" list (feature 026, FR-004). Anchored at the chevron that opened it
+    // and clamped like every other menu here; its items are the *available* CLIs, named the
+    // human-readable way, because a menu entry is a sentence and not a label in a width budget.
+    let session_start_menu: Option<cdk::overlay::Surface<'a, Message>> =
+        state.session_start_menu.as_ref().map(|menu| {
+            let items = session_start_menu_items(state, &menu.location);
+            let (x, y) = crate::features::project::clamp_menu_anchor(
+                menu.anchor,
+                material::menu_panel_size(items.len()),
+                state.window_size,
+            );
+            material::MenuOverlay::new(items, Message::SessionStartMenuDismissed, roles)
+                .anchor(iced::Point::new(x as f32, y as f32))
+                .into()
+        });
+
     // The dialog body for whatever is open — or, if one has just closed, the snapshot it left
     // behind (captured before the core cleared its live state) so the exit has something to draw
     // (FR-002). Each of these builds only the dialog; the transition around it belongs to `Modal`,
@@ -451,6 +467,7 @@ pub fn view<'a>(
         .push_maybe(worktree_menu)
         .push_maybe(session_menu)
         .push_maybe(shell_instance_menu)
+        .push_maybe(session_start_menu)
         .push_maybe(modal)
         .push_maybe(snackbar)
         .into()
@@ -573,6 +590,31 @@ pub(crate) fn strip_tab_menu_labels(
 /// The items in a session's right-click context menu (bugfix BUG-003): "Close" archives (kept,
 /// hidden, never resurrected by reconciliation — FR-015a/FR-020c); "Remove" permanently deletes,
 /// behind a confirm dialog (FR-015c).
+/// The AI CLIs a session can be started on, for one location (feature 026, T033).
+///
+/// Named by `display_name()` — through `Display`, which is a menu's register — and **only** the
+/// available ones: an uninstalled CLI is never offered (FR-006). The list is
+/// `State::offered_providers`, the same function the Settings select reads, so the two surfaces
+/// cannot disagree about what exists.
+fn session_start_menu_items(
+    state: &State,
+    location: &micold_core::session::SessionLocation,
+) -> Vec<material::MenuItem<Message>> {
+    state
+        .offered_providers()
+        .into_iter()
+        .map(|provider| {
+            material::MenuItem::labeled(
+                provider.to_string(),
+                Message::SessionStartRequested {
+                    location: location.clone(),
+                    provider,
+                },
+            )
+        })
+        .collect()
+}
+
 fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
     vec![
         material::MenuItem::new(Icon::Close, "Close", Message::SessionCloseRequested(id)),

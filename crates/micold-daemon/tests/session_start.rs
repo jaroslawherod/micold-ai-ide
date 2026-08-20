@@ -15,7 +15,9 @@ use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -62,6 +64,7 @@ fn catalog_with_shell_session(
         SessionLocation::Default,
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project_dir.to_path_buf(), vec![session]);
@@ -275,7 +278,7 @@ fn create_session_adds_a_daemon_owned_session_to_the_catalog() {
 
     // The daemon assigns the id and records the session at the project root (empty worktree_dir).
     let id = state
-        .create_session(&project, "")
+        .create_session(&project, "", AiCli::ClaudeCode)
         .expect("create must succeed");
 
     let snapshot = state.welcome_payload().0;
@@ -458,6 +461,7 @@ fn a_resumed_session_leaves_the_interrupted_resumable_state() {
         SessionLocation::Default,
         SessionLabel::Named("Agent".into()),
         TerminalMode::AiCli,
+        micold_core::session::AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project.path().to_path_buf(), vec![session]);
@@ -484,7 +488,7 @@ fn a_resumed_session_leaves_the_interrupted_resumable_state() {
     );
 
     // As the daemon does at startup for a session with a recorded conversation.
-    assert_eq!(catalog.present_interrupted_resumable(|_, _, _| true), 1);
+    assert_eq!(catalog.present_interrupted_resumable(|_, _, _, _| true), 1);
     let lifecycle_of = |catalog: &Catalog| {
         catalog
             .workspace()
@@ -515,4 +519,88 @@ fn a_resumed_session_leaves_the_interrupted_resumable_state() {
 
     // An unknown id is not a panic.
     assert_eq!(catalog.mark_session_running(SessionId::new()), None);
+}
+// Feature 026 (T024) — a created session runs the CLI the client asked for
+// ---------------------------------------------------------------------------------------
+
+/// What this can and cannot assert, stated plainly.
+///
+/// It cannot spawn either CLI. This file's own module doc says why it uses a Regular shell session:
+/// CI runners have no `claude`, and adding `copilot` to that list would make the whole suite
+/// dependent on two vendors' installers. The property "spawning uses `spec.provider`" is held
+/// structurally instead — `PtySession::spawn_ai_cli` builds its `CommandBuilder` from
+/// `spec.provider.provider().command()` and its arguments from `terminal::launch_args(spec)`, and
+/// `micold-core/tests/terminal_backend.rs` pins what those produce for each provider.
+///
+/// What it *can* assert is the half that only exists here: the provider the client sent survives
+/// the three hops from the wire to the durable record, and comes back out on the snapshot the
+/// sidebar reads. That is where a `SessionCreate` carrying `Copilot` would have quietly become a
+/// Claude session — the daemon's `create_session` used to name no provider at all.
+#[test]
+fn a_created_session_records_the_cli_the_client_chose() {
+    let store = tempfile::tempdir().unwrap();
+    let project = std::path::PathBuf::from("/repo/alpha");
+    let workspace = Workspace {
+        projects: vec![Project::new(project.clone(), true, Availability::Available)],
+        active: Some(project.clone()),
+        sessions: BTreeMap::new(),
+        worktree_names: BTreeMap::new(),
+        ..Default::default()
+    };
+    let projects_path = store.path().join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&workspace)
+        .unwrap();
+    let state = DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    ));
+
+    let claude = state
+        .create_session(&project, "", AiCli::ClaudeCode)
+        .expect("create must succeed");
+    let copilot = state
+        .create_session(&project, "feat-x", AiCli::Copilot)
+        .expect("create must succeed");
+
+    let summaries = state.sessions_for(&project);
+    let provider_of = |id: SessionId| {
+        summaries
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.provider)
+            .expect("session in the snapshot")
+    };
+    assert_eq!(provider_of(claude), AiCli::ClaudeCode);
+    assert_eq!(
+        provider_of(copilot),
+        AiCli::Copilot,
+        "the daemon recorded what the client resolved, and did not re-decide it"
+    );
+
+    // And the argv each record implies is that CLI's, through the same function the spawn uses.
+    let argv = |id: SessionId, provider: AiCli| {
+        micold_core::terminal::launch_args(&micold_core::terminal::LaunchSpec {
+            cwd: project.clone(),
+            session_id: id.0,
+            provider,
+            mode: micold_core::terminal::LaunchMode::Fresh,
+            env: Vec::new(),
+        })
+    };
+    assert_eq!(
+        argv(claude, provider_of(claude)),
+        vec!["--session-id".to_string(), claude.0.to_string()]
+    );
+    assert_eq!(
+        argv(copilot, provider_of(copilot)),
+        vec![
+            "--session-id".to_string(),
+            copilot.0.to_string(),
+            "--no-remote".to_string()
+        ],
+        "the Copilot session would be spawned with Copilot's argv, `--no-remote` included"
+    );
 }

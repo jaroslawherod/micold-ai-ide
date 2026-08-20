@@ -27,8 +27,14 @@ fn daemon_with_two_sessions() -> (TempDir, DaemonState, PathBuf, SessionId, Sess
     let projects_path = dir.path().join("projects.json");
     let project = PathBuf::from("/repo");
 
-    let first = Session::start_new(SessionLocation::Default);
-    let second = Session::start_new(SessionLocation::Default);
+    let first = Session::start_new(
+        SessionLocation::Default,
+        micold_core::session::AiCli::ClaudeCode,
+    );
+    let second = Session::start_new(
+        SessionLocation::Default,
+        micold_core::session::AiCli::ClaudeCode,
+    );
     let (first_id, second_id) = (first.id, second.id);
 
     let mut workspace = Workspace {

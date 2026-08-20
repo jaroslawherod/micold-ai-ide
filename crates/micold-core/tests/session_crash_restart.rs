@@ -1,12 +1,15 @@
 //! T037 — crash auto-restart with crash-loop guard (FR-022/022a).
 
 use micold_core::session::{
-    RestartDecision, Session, SessionLifecycle, SessionLocation, MAX_RESTART_ATTEMPTS,
+    AiCli, RestartDecision, Session, SessionLifecycle, SessionLocation, MAX_RESTART_ATTEMPTS,
 };
 
 #[test]
 fn unexpected_exit_schedules_resume_then_gives_up() {
-    let mut s = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+    let mut s = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    );
     s.mark_running();
 
     // First failures resume (Restarting), incrementing the attempt counter.
@@ -25,7 +28,10 @@ fn unexpected_exit_schedules_resume_then_gives_up() {
 
 #[test]
 fn running_again_resets_the_guard() {
-    let mut s = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+    let mut s = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    );
     s.mark_running();
     assert_eq!(s.on_unexpected_exit(), RestartDecision::Resume);
     assert_eq!(s.lifecycle, SessionLifecycle::Restarting { attempts: 1 });
@@ -38,7 +44,10 @@ fn running_again_resets_the_guard() {
 
 #[test]
 fn failed_session_can_be_manually_restarted() {
-    let mut s = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+    let mut s = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    );
     s.mark_running();
     for _ in 0..MAX_RESTART_ATTEMPTS {
         s.on_unexpected_exit();

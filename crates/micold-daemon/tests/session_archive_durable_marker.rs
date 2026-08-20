@@ -15,7 +15,9 @@ use std::path::PathBuf;
 
 use micold_core::project::{Availability, Project};
 use micold_core::provider::{AiCliProvider, ClaudeProvider};
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -36,6 +38,7 @@ fn catalog_with_session(
             location,
             SessionLabel::Named("Test session".into()),
             TerminalMode::AiCli,
+            AiCli::ClaudeCode,
         )],
     );
     let workspace = Workspace {

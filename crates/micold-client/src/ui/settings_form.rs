@@ -5,10 +5,11 @@ use crate::app::{Message, State};
 use crate::features::settings::SettingsDraft;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Text, TextField, TypeRole};
+use crate::ui::material::{self, Button, Checkbox, Select, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::session::AiCli;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self};
 
@@ -34,6 +35,7 @@ pub fn modal<'a>(
     scheme: ColorScheme,
     env_include_outcome: &'a EnvIncludeOutcome,
     focused: Option<FieldId>,
+    available_providers: &'a [AiCli],
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
@@ -61,12 +63,30 @@ pub fn modal<'a>(
         .on_input(Message::SettingsEnvIncludeTimeoutChanged)
         .on_submit(Message::SettingsSaved);
 
+    // The Default AI CLI (feature 026, FR-003/FR-006). The shared `Select` component, not a
+    // bespoke control (Principle VIII) — and the options are `available_providers`, which arrives
+    // as a slice because this view is dispatched through the shared `DialogView` fn-pointer and
+    // sees `&State` and nothing else (T014a).
+    //
+    // Named by `display_name()` through `Display`, which is a menu's register. `command()` — the
+    // `claude`/`copilot` a sidebar row carries — is not used here: a menu entry is not a label in a
+    // width budget (Clarifications 2026-08-18).
+    let default_ai_cli_select = Select::new(
+        available_providers,
+        Some(draft.default_ai_cli),
+        Message::SettingsDefaultAiCliChanged,
+        r,
+    )
+    .label("Default AI CLI")
+    .supporting("Used for new sessions unless you choose otherwise");
+
     let mut fields = material::dialog::fields(column![
         Text::new("Settings", TypeRole::Headline, r),
         // No free-standing label above the field: it carries its own now (§7.7, FR-031a). Leaving
         // this one would have shown the field's name twice — once above the container and once
         // inside it — which is the duplication the migration exists to remove.
         input,
+        default_ai_cli_select,
         // This one stays. It names the *group* below it — a checkbox and two fields — rather than
         // any single control, so it is a section heading and has no container to move into.
         Text::new("Environment include", TypeRole::Label, r).muted(),
@@ -113,8 +133,13 @@ pub fn dialog<'a>(
     scheme: ColorScheme,
     env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
-    state
-        .settings_draft
-        .as_ref()
-        .map(|draft| modal(draft, scheme, env_include_outcome, state.focused_field))
+    state.settings_draft.as_ref().map(|draft| {
+        modal(
+            draft,
+            scheme,
+            env_include_outcome,
+            state.focused_field,
+            &state.available_providers,
+        )
+    })
 }

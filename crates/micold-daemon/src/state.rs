@@ -5,6 +5,7 @@
 //! method locks, mutates, and (for pushes) hands `DaemonMsg`s to per-client unbounded channels whose
 //! writer tasks own the socket sink. That keeps a slow or stuck client from blocking the state lock.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -17,9 +18,11 @@ use micold_core::input::{InputOutcome, InputReceiver};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     CatalogSnapshot, DaemonMsg, DaemonSettings, RefusalReason, SessionProcess, SessionSummary,
-    WorktreeSnapshot, WorktreeStatus,
+    WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::session::{SessionId, SessionLabel, ShellInstanceId, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, ShellInstanceId, TerminalMode,
+};
 use micold_core::terminal::{LaunchMode, LaunchSpec};
 use micold_core::worktree::{self, Worktree};
 use tokio::sync::mpsc;
@@ -71,6 +74,18 @@ struct Inner {
     /// **without** running a git subprocess under the state lock. Absent for a project not yet
     /// attached/refreshed — the snapshot then shows no worktrees for it until the first refresh.
     worktrees: HashMap<PathBuf, Vec<Worktree>>,
+    /// Why a session's last start attempt failed, when the reason is worth telling the user
+    /// (feature 026, FR-010 — today, a CLI that is not installed).
+    ///
+    /// Runtime-only and per session, like `sessions` itself: it is a fact about this machine right
+    /// now, not about the session, and a `PATH` fixed between runs must not leave a stale
+    /// complaint behind. Cleared the moment the session starts.
+    ///
+    /// It lives here rather than on the domain `SessionLifecycle` because that enum's `Failed` is a
+    /// **unit variant** meaning "auto-restart gave up after repeated quick failures" — it has
+    /// nowhere to put a message. The wire's `Failed { reason, attempts }` does, and this is what
+    /// fills it.
+    start_failures: HashMap<SessionId, String>,
     /// Per-directory cache of the environment-include-resolved variables (feature 011), already
     /// merged with the hardcoded `TERM` pair — ready to hand straight to a spawn site's `env`
     /// (FR-012b, BUG-003). Keyed by the directory the sourcing subprocess ran in, mirroring
@@ -135,6 +150,14 @@ struct LiveSession {
     /// project a live session title and to debounce title-change pushes (T047). Not persisted;
     /// re-emitted by `claude` on resume.
     last_title: Option<String>,
+    /// The tail of this session's own event log, for a provider whose activity source is
+    /// `EventLog` (feature 026, T064). `None` for a `Hooks` provider — and `None` for every
+    /// session this application merely *discovered* rather than started, since a tail is only ever
+    /// opened here, for a session in the live registry (FR-018, SC-006).
+    ///
+    /// Dropping the `LiveSession` drops this, which unregisters the watch. That is the whole
+    /// teardown: there is no timer to cancel, because there is no timer.
+    event_log: Option<crate::event_log::EventLogTail>,
 }
 
 /// Build a fresh [`Proc`] around a spawned PTY, with a session-lived framer.
@@ -161,6 +184,9 @@ fn wire_worktree_status(status: worktree::WorktreeStatus) -> WorktreeStatus {
 struct SpawnPlan {
     cwd: std::path::PathBuf,
     mode: TerminalMode,
+    /// Which AI CLI this session runs (feature 026, FR-007) — read from the record, never chosen
+    /// here.
+    provider: AiCli,
     scrollback: usize,
 }
 
@@ -190,6 +216,7 @@ impl DaemonState {
                 sessions: HashMap::new(),
                 announced_dead_shells: std::collections::HashSet::new(),
                 worktrees: HashMap::new(),
+                start_failures: HashMap::new(),
                 env_include_cache: HashMap::new(),
                 worktree_gates: HashMap::new(),
                 starting: HashMap::new(),
@@ -233,6 +260,28 @@ impl DaemonState {
     /// `None` when hooks are unavailable (tests, or a bind failure) or when writing the file fails —
     /// the caller then spawns without hooks and activity stays `Unknown` (H1), never wrong. Blocking
     /// (a small file write); the AI-CLI spawn path is already off the async runtime.
+    ///
+    /// Only for a provider whose [`micold_core::provider::ActivitySource`] is `Hooks`
+    /// (feature 026, T016a): the file is `claude`'s mechanism — a port and a per-session bearer
+    /// token in a `--settings` JSON — and `copilot` has no flag to hand it to. Producing it
+    /// unconditionally for every `TerminalMode::AiCli` session, as this path did before, spawns a
+    /// Copilot session with an argument it does not understand.
+    fn hook_settings_file_for(&self, id: SessionId, spec: &LaunchSpec) -> Option<PathBuf> {
+        use micold_core::provider::ActivitySource;
+        let provider = spec.provider.provider();
+        // The source is derived from a config dir the provider may not be able to resolve. The
+        // question here is only *which mechanism*, and `Hooks` carries no payload, so an
+        // unresolvable directory is not a reason to skip the file — ask with what is available.
+        let config_dir = provider.config_dir().unwrap_or_default();
+        if !matches!(
+            provider.activity_source(&config_dir, &spec.cwd, spec.session_id),
+            ActivitySource::Hooks
+        ) {
+            return None;
+        }
+        self.hook_settings_file(id)
+    }
+
     fn hook_settings_file(&self, id: SessionId) -> Option<PathBuf> {
         let receiver = self.hooks.get()?;
         match receiver.prepare_settings(id) {
@@ -370,6 +419,16 @@ impl DaemonState {
                 if let Some(title) = &live.last_title {
                     summary.title = SessionLabel::Named(title.clone());
                 }
+            }
+            // A start that failed for a reason worth saying (feature 026, FR-010). `attempts: 0`
+            // deliberately: a missing binary is not a crash loop, and letting it climb toward
+            // `MAX_RESTART_ATTEMPTS` would be three retries of a `PATH` problem — noise, and it
+            // makes the reason arrive late.
+            if let Some(reason) = inner.start_failures.get(&summary.id) {
+                summary.lifecycle = WireLifecycle::Failed {
+                    reason: reason.clone(),
+                    attempts: 0,
+                };
             }
         }
     }
@@ -548,6 +607,17 @@ impl DaemonState {
         Ok(())
     }
 
+    /// Set the default AI CLI and push `SettingsChanged` to every client (feature 026, FR-003).
+    pub fn set_default_ai_cli(&self, which: AiCli) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_default_ai_cli(which)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
     /// Set any of the three environment-include settings and push `SettingsChanged` to every
     /// client (FR-012b, FR-011). Invalidates every cached per-directory resolution (T098/BUG-003):
     /// each cached directory's snapshot was resolved under the now-stale configuration.
@@ -593,8 +663,15 @@ impl DaemonState {
     /// Create a new durable session in `project` at `worktree_dir` (empty = project root), returning
     /// the daemon-assigned id. Persists the catalog under the lock; the caller then `start_session`s
     /// it and broadcasts the updated catalog.
-    pub fn create_session(&self, project: &Path, worktree_dir: &str) -> io::Result<SessionId> {
-        self.lock().catalog.create_session(project, worktree_dir)
+    pub fn create_session(
+        &self,
+        project: &Path,
+        worktree_dir: &str,
+        provider: AiCli,
+    ) -> io::Result<SessionId> {
+        self.lock()
+            .catalog
+            .create_session(project, worktree_dir, provider)
     }
 
     // --- US3: worktree management through the daemon (T053) ---
@@ -659,6 +736,89 @@ impl DaemonState {
             .worktrees
             .into_iter()
             .find(|w| w.path == path)
+    }
+
+    /// Discover sessions started outside this application, for every location of `project` and
+    /// every registered AI CLI (feature 026, FR-014/FR-015 — research R15).
+    ///
+    /// **Blocking**: it reads each provider's own conversation store, so the caller runs it off the
+    /// async runtime — in the same `spawn_blocking` hop that already refreshed the worktrees, whose
+    /// cache this reads for the location list.
+    ///
+    /// # Why it lives here
+    ///
+    /// The daemon is `projects.json`'s single writer, it already enumerates the project's
+    /// worktrees, and a catalog snapshot is about to be sent. So the pass is a fourth step in the
+    /// attach sequence rather than a new RPC, a protocol change or a client round trip (R15).
+    ///
+    /// # The cost rule, and how it is held
+    ///
+    /// FR-014's work is **per location** — one index read or one directory listing each — never per
+    /// conversation, so a worktree holding hundreds of recorded conversations costs what one
+    /// holding three costs. That is held by **ordering**: the catalog's own ids are subtracted
+    /// *before* any `is_archived` check, so the per-id filesystem probe only ever runs over ids the
+    /// application has genuinely never seen. Reverse those two steps and a project with a long
+    /// history stats every conversation on every open.
+    ///
+    /// Each provider's `config_dir()` is resolved independently: one returning `None` must not
+    /// suppress the other's contribution.
+    ///
+    /// Returns how many sessions were adopted (`0` ⇒ no write happened).
+    pub fn discover_external_sessions(&self, project: &Path) -> usize {
+        // Locations, and the ids we already know — both read under the lock, once.
+        let (locations, known) = {
+            let inner = self.lock();
+            let mut locations = vec![SessionLocation::Default];
+            if let Some(worktrees) = inner.worktrees.get(project) {
+                locations.extend(
+                    worktrees
+                        .iter()
+                        .filter(|wt| wt.can_start_session())
+                        .map(|wt| SessionLocation::Worktree(wt.dir_name.clone())),
+                );
+            }
+            (locations, inner.catalog.known_session_ids(project))
+        };
+
+        // Off the lock: everything below touches the providers' stores.
+        let mut found = Vec::new();
+        let mut seen = known;
+        for which in AiCli::ALL {
+            let provider = which.provider();
+            let Some(config_dir) = provider.config_dir() else {
+                continue;
+            };
+            for location in &locations {
+                let cwd = location.cwd(project);
+                for id in provider.recorded_session_ids(&config_dir, &cwd) {
+                    // Subtract first — see the cost rule above.
+                    if !seen.insert(id) {
+                        continue;
+                    }
+                    if provider.is_archived(&config_dir, &cwd, id) {
+                        continue;
+                    }
+                    let label = match provider.read_title(&config_dir, &cwd, id) {
+                        Some(title) => SessionLabel::Named(title),
+                        None => SessionLabel::Pending,
+                    };
+                    found.push(Session::restored(
+                        SessionId::from_uuid(id),
+                        location.clone(),
+                        label,
+                        TerminalMode::AiCli,
+                        which,
+                    ));
+                }
+            }
+        }
+
+        if found.is_empty() {
+            return 0;
+        }
+        self.lock()
+            .catalog
+            .adopt_discovered_sessions(project, found)
     }
 
     /// Set a worktree's display-name override for `project` (validated by the caller), persisting.
@@ -781,31 +941,41 @@ impl DaemonState {
     /// ids archived (empty ⇒ no write happened). The handler calls this only for an attached project,
     /// so pruning always has an observer.
     pub fn prune_empty_sessions(&self, project: &Path) -> io::Result<Vec<SessionId>> {
-        // 1. Candidates under the lock: non-archived and not currently live.
-        let candidates: Vec<(SessionId, PathBuf)> = {
+        // 1. Candidates under the lock: non-archived and not currently live. Each carries its own
+        //    provider (feature 026) — this loop *archives* what it judges empty, so judging a mixed
+        //    set with one hoisted provider would silently archive every session of the other CLI.
+        let candidates: Vec<(SessionId, PathBuf, AiCli)> = {
             let inner = self.lock();
             inner
                 .catalog
                 .prunable_session_cwds(project)
                 .into_iter()
-                .filter(|(id, _)| !inner.sessions.contains_key(id))
+                .filter(|(id, _, _)| !inner.sessions.contains_key(id))
                 .collect()
         };
         if candidates.is_empty() {
             return Ok(Vec::new());
         }
-        // 2. Off-lock: keep only those with NO recorded conversation. An undeterminable provider
-        //    config dir yields no pruning (never drop a session on uncertainty).
-        use micold_core::provider::{AiCliProvider, ClaudeProvider};
-        let provider = ClaudeProvider;
-        let empty: Vec<SessionId> = match provider.config_dir() {
-            Some(config) => candidates
-                .into_iter()
-                .filter(|(id, cwd)| !provider.has_recorded_conversation(&config, cwd, id.0))
-                .map(|(id, _)| id)
-                .collect(),
-            None => Vec::new(),
-        };
+        // 2. Off-lock: keep only those with NO recorded conversation, each asked of **its own**
+        //    provider. Config dirs are resolved once per provider and independently: one provider
+        //    being undeterminable must not condemn or spare the other's sessions, and an
+        //    undeterminable one still prunes nothing of its own (never drop a session on
+        //    uncertainty).
+        let mut config_dirs: HashMap<AiCli, Option<PathBuf>> = HashMap::new();
+        let empty: Vec<SessionId> = candidates
+            .into_iter()
+            .filter(|(id, cwd, which)| {
+                let provider = which.provider();
+                let config = config_dirs
+                    .entry(*which)
+                    .or_insert_with(|| provider.config_dir());
+                match config {
+                    Some(config) => !provider.has_recorded_conversation(config, cwd, id.0),
+                    None => false,
+                }
+            })
+            .map(|(id, _, _)| id)
+            .collect();
         if empty.is_empty() {
             return Ok(Vec::new());
         }
@@ -820,15 +990,22 @@ impl DaemonState {
     /// contend for the lock — the provider stat happening under the lock is safe here for that reason
     /// (unlike the steady-state paths, which must never block under the lock). Returns the count.
     pub fn present_interrupted_resumable_at_startup(&self) -> usize {
-        use micold_core::provider::{AiCliProvider, ClaudeProvider};
-        let provider = ClaudeProvider;
-        let Some(config) = provider.config_dir() else {
-            return 0;
-        };
+        // Per session, not per workspace (feature 026). Asking one provider about every session
+        // means none of the other CLI's is ever presented as resumable — it reports no recorded
+        // conversation for ids it has never seen, which reads as "created but never started".
+        // Config dirs are resolved lazily, once each, and independently: one provider's
+        // unresolvable directory suppresses only its own sessions.
+        let config_dirs: RefCell<HashMap<AiCli, Option<PathBuf>>> = RefCell::new(HashMap::new());
         self.lock()
             .catalog
-            .present_interrupted_resumable(|id, cwd, _mode| {
-                provider.has_recorded_conversation(&config, cwd, id.0)
+            .present_interrupted_resumable(|id, cwd, _mode, which| {
+                let provider = which.provider();
+                let mut dirs = config_dirs.borrow_mut();
+                let config = dirs.entry(which).or_insert_with(|| provider.config_dir());
+                match config {
+                    Some(config) => provider.has_recorded_conversation(config, cwd, id.0),
+                    None => false,
+                }
             })
     }
 
@@ -881,6 +1058,7 @@ impl DaemonState {
                         .map(|s| SpawnPlan {
                             cwd: s.location.cwd(project),
                             mode: s.mode,
+                            provider: s.provider,
                             scrollback,
                         })
                 })
@@ -892,6 +1070,27 @@ impl DaemonState {
             ));
         };
 
+        // FR-010 / T076: is the CLI actually there? Checked again *here*, at launch, and not only
+        // when the choice was offered — the offer-time check answers a different question at a
+        // different moment, and a CLI can be uninstalled between the two (research R11).
+        //
+        // Reported rather than attempted: spawning a binary that is not on `PATH` fails with an
+        // `ENOENT` the user cannot act on, and it would spend the crash-loop budget doing it.
+        if plan.mode == TerminalMode::AiCli {
+            let provider = plan.provider.provider();
+            if !provider.is_available() {
+                // `display_name()`, not `command()`: this is a sentence, and "copilot isn't
+                // installed" reads as a shell error rather than as something to go and fix.
+                let reason = format!(
+                    "{} isn't installed. Install it, or start this session on another AI CLI.",
+                    provider.display_name()
+                );
+                tracing::warn!(session = %id.0, cli = provider.command(), "AI CLI not on PATH; not starting");
+                self.lock().start_failures.insert(id, reason.clone());
+                return Err(io::Error::new(io::ErrorKind::NotFound, reason));
+            }
+        }
+
         let env = self.env_include_vars_for(&plan.cwd);
         let size = self.desired_size(id);
         let session = match plan.mode {
@@ -899,11 +1098,15 @@ impl DaemonState {
                 let spec = LaunchSpec {
                     cwd: plan.cwd,
                     session_id: id.0,
+                    provider: plan.provider,
                     mode: launch,
                     env,
                 };
-                let settings = self.hook_settings_file(id);
-                PtySession::spawn_claude(id, &spec, plan.scrollback, size, settings.as_deref())?
+                // The hook settings file follows the provider's `activity_source`, not the terminal
+                // mode: it is `claude`'s mechanism, and `copilot` has no `--settings` flag to hand
+                // it to (feature 026, T016a).
+                let settings = self.hook_settings_file_for(id, &spec);
+                PtySession::spawn_ai_cli(id, &spec, plan.scrollback, size, settings.as_deref())?
             }
             TerminalMode::Regular => {
                 PtySession::spawn_shell(id, &plan.cwd, &env, plan.scrollback, size)?
@@ -911,6 +1114,8 @@ impl DaemonState {
         };
         // Session-start event with the launch reason (FR-045). No terminal content — id + mode only.
         tracing::info!(session = %id.0, mode = ?plan.mode, ?launch, "session started");
+        // It started, so whatever was wrong before is no longer true.
+        self.lock().start_failures.remove(&id);
         self.register_session(session);
         // The durable record has to learn that the process exists (FR-006d, BUG-011). Nothing else
         // will tell it: the live registry above is a separate map, and `overlay_live_summaries`
@@ -948,9 +1153,78 @@ impl DaemonState {
                 input: InputReceiver::new(),
                 activity: Activity::new(),
                 last_title: None,
+                event_log: None,
             },
         );
         pty
+    }
+
+    /// Open the event-log tail for a session this daemon has just started (feature 026, T064 —
+    /// FR-018, FR-019).
+    ///
+    /// Called from the `SessionStart` path after [`Self::start_session`] succeeds, and by nothing
+    /// else. **That call site is the enforcement** of "only a supervised session is watched": a
+    /// session discovered under FR-014 never reaches this code, so a project holding hundreds of
+    /// them schedules no observation work at all (SC-006, SC-009).
+    ///
+    /// A no-op for a provider whose activity source is not `EventLog` — `claude` pushes to the
+    /// loopback hook receiver instead, and that mechanism is untouched by this feature.
+    ///
+    /// Everything it needs comes from the session's own durable record, so nothing here re-decides
+    /// which CLI a session runs. A failure to open the watch is logged and dropped: the session
+    /// runs, its badge stays `Unknown`, and nothing else is affected — the same posture as a hook
+    /// settings file that could not be written.
+    ///
+    /// **Blocking** (it resolves a config directory and registers a watch), so the caller runs it
+    /// off the async runtime, alongside the spawn it follows.
+    pub fn open_event_log_tail(self: &Arc<Self>, id: SessionId) {
+        use micold_core::provider::ActivitySource;
+
+        // The provider and cwd from the record, under the lock and nothing more.
+        let Some((provider, cwd)) = ({
+            let inner = self.lock();
+            inner
+                .catalog
+                .workspace()
+                .sessions
+                .iter()
+                .find_map(|(project, sessions)| {
+                    sessions
+                        .iter()
+                        .find(|s| s.id == id)
+                        .map(|s| (s.provider, s.location.cwd(project)))
+                })
+        }) else {
+            return;
+        };
+
+        let provider = provider.provider();
+        let Some(config_dir) = provider.config_dir() else {
+            return;
+        };
+        let ActivitySource::EventLog { path } = provider.activity_source(&config_dir, &cwd, id.0)
+        else {
+            return;
+        };
+
+        let state = Arc::clone(self);
+        match crate::event_log::EventLogTail::open(path, move |event| {
+            // A direct push, not a queued one: the badge moves as the line lands, and SC-005's
+            // one-second budget is spent on the platform's notification latency rather than on a
+            // cadence of ours.
+            state.note_activity(id, event);
+        }) {
+            Ok(tail) => {
+                if let Some(live) = self.lock().sessions.get_mut(&id) {
+                    live.event_log = Some(tail);
+                }
+            }
+            Err(err) => tracing::warn!(
+                session = %id.0,
+                %err,
+                "could not watch the session's event log; activity will be Unknown"
+            ),
+        }
     }
 
     /// Remove a session (all its processes) from the live registry, returning **every** removed
@@ -983,7 +1257,7 @@ impl DaemonState {
         let scrollback;
         let mut changed: Vec<PathBuf> = Vec::new();
         let mut to_drop: Vec<SessionId> = Vec::new();
-        let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode)> = Vec::new();
+        let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode, AiCli)> = Vec::new();
         {
             let mut inner = self.lock();
             scrollback = inner.catalog.settings_wire().scrollback_lines;
@@ -1007,18 +1281,18 @@ impl DaemonState {
             }
             for (id, outcome) in exited {
                 match inner.catalog.supervise_session_exit(id, outcome) {
-                    Some((project, SupervisionAction::Restart, cwd, mode)) => {
+                    Some((project, SupervisionAction::Restart, cwd, mode, provider)) => {
                         // Session exit + restart-attempt event, with the reason (FR-045).
                         tracing::warn!(session = %id.0, reason = "unexpected exit", "session crashed; restarting");
-                        changed.push(project.to_path_buf());
-                        to_respawn.push((id, cwd, mode));
+                        changed.push(project);
+                        to_respawn.push((id, cwd, mode, provider));
                     }
-                    Some((project, SupervisionAction::GiveUp, _, _)) => {
+                    Some((project, SupervisionAction::GiveUp, _, _, _)) => {
                         tracing::error!(session = %id.0, reason = "crash loop", "session gave up after repeated crashes (Failed)");
                         changed.push(project.to_path_buf());
                         to_drop.push(id);
                     }
-                    Some((project, SupervisionAction::Stop, _, _)) => {
+                    Some((project, SupervisionAction::Stop, _, _, _)) => {
                         tracing::info!(session = %id.0, reason = "clean exit", "session stopped");
                         changed.push(project.to_path_buf());
                         to_drop.push(id);
@@ -1067,8 +1341,8 @@ impl DaemonState {
             self.remove_session(id);
         }
         // Phase 3 — off the lock: respawn restart-eligible sessions.
-        for (id, cwd, mode) in to_respawn {
-            self.respawn_primary(id, cwd, mode, scrollback);
+        for (id, cwd, mode, provider) in to_respawn {
+            self.respawn_primary(id, cwd, mode, provider, scrollback);
         }
         changed.sort();
         changed.dedup();
@@ -1124,7 +1398,14 @@ impl DaemonState {
     /// the session `Running` (resets the crash-loop counter). On a spawn *failure* (rare — the binary
     /// is gone), count it as another crash so the retry budget still advances toward `Failed` instead
     /// of leaving a dead entry that looks alive.
-    fn respawn_primary(&self, id: SessionId, cwd: PathBuf, mode: TerminalMode, scrollback: usize) {
+    fn respawn_primary(
+        &self,
+        id: SessionId,
+        cwd: PathBuf,
+        mode: TerminalMode,
+        provider: AiCli,
+        scrollback: usize,
+    ) {
         let env = self.env_include_vars_for(&cwd);
         // The viewer's pane did not change size because the process died — come back at the size the
         // session was last given, not at the seed (FR-020a, `006` SC-011).
@@ -1134,11 +1415,12 @@ impl DaemonState {
                 let spec = LaunchSpec {
                     cwd,
                     session_id: id.0,
+                    provider,
                     mode: LaunchMode::Resume,
                     env,
                 };
-                let settings = self.hook_settings_file(id);
-                PtySession::spawn_claude(id, &spec, scrollback, size, settings.as_deref())
+                let settings = self.hook_settings_file_for(id, &spec);
+                PtySession::spawn_ai_cli(id, &spec, scrollback, size, settings.as_deref())
             }
             TerminalMode::Regular => PtySession::spawn_shell(id, &cwd, &env, scrollback, size),
         };
@@ -1333,6 +1615,8 @@ impl DaemonState {
                         input: InputReceiver::new(),
                         activity: Activity::new(),
                         last_title: None,
+                        // A shell-only session has no AI CLI, so there is nothing to tail.
+                        event_log: None,
                     },
                 );
             }

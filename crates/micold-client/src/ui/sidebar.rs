@@ -7,12 +7,13 @@ use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
 use crate::ui::material::{
     self, Accordion, ActivityBadge, Button, ButtonVariant, Divider, FilterTrigger, HoverReveal,
-    IconButton, Scrollable, SurfaceKind, Text, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
+    IconButton, Scrollable, SplitAction, SurfaceKind, Text, ToggleChip, Tooltip, TreeItem,
+    TreeView, TypeRole,
 };
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::naming::Tag;
-use micold_core::session::{SessionLifecycle, SessionLocation};
+use micold_core::session::{AiCli, SessionLifecycle, SessionLocation};
 use micold_core::tokens::{self, spacing, Rgb, Roles};
 use micold_core::worktree::WorktreeStatus;
 
@@ -364,6 +365,43 @@ fn action_icon(
     }
 }
 
+/// The start-a-session affordance for one location (feature 026, T033).
+///
+/// A [`SplitAction`], not two icons in a row: the primary half starts `provider` in one press
+/// exactly as the plain button did (SC-001), and the chevron opens the list of installed CLIs. The
+/// chevron is **absent** — not disabled — when `offers_a_choice` is false, which is what keeps the
+/// single-CLI user's sidebar exactly as it was.
+///
+/// It renders an intent and decides nothing: `provider` and `offers_a_choice` are
+/// `State::provider_for_start` and `State::start_affordance_offers_a_choice`, and pressing either
+/// half emits a message the reducer resolves.
+fn start_session_action(
+    location: SessionLocation,
+    tooltip: &'static str,
+    active: bool,
+    provider: AiCli,
+    offers_a_choice: bool,
+    r: Roles,
+) -> Element<'static, Message> {
+    let choose = location.clone();
+    SplitAction::new(Icon::AddSession, r)
+        // Inside the sidebar's dense rows — see `IconButton::compact` for the contract conflict
+        // this resolves at the call site rather than in the component.
+        .compact()
+        .size(TypeRole::SidebarName)
+        .tint(r.primary)
+        .primary_tooltip(tooltip)
+        .secondary_tooltip("Start a session on a different AI CLI")
+        .on_press_maybe(active.then(|| Message::SessionStartRequested { location, provider }))
+        .on_secondary_press_maybe(
+            (active && offers_a_choice).then(|| Message::SessionStartMenuOpened(choose)),
+        )
+        // Where the list hangs from: the chevron's own press point, since a sidebar row's position
+        // is not something the view holds (018 BUG-008, FR-029d).
+        .on_secondary_anchor(Message::SessionStartMenuAnchored)
+        .into()
+}
+
 /// The hover-revealed row-action cluster for a worktree (feature 008): an add-session "+" (only
 /// when a session can start) and a trash icon that requests deletion. The cluster is rendered on
 /// EVERY row so its width is always reserved (no reflow when it appears); `active` (the hovered
@@ -372,18 +410,18 @@ fn row_actions_cluster(
     dir: &str,
     can_start_session: bool,
     active: bool,
+    provider: AiCli,
+    offers_a_choice: bool,
     r: Roles,
 ) -> Element<'static, Message> {
     let mut cluster = row![].spacing(spacing::XS).align_y(Alignment::Center);
     if can_start_session {
-        cluster = cluster.push(action_icon(
-            Icon::AddSession,
-            r.primary,
-            Message::SessionStartRequested {
-                location: SessionLocation::Worktree(dir.to_string()),
-            },
+        cluster = cluster.push(start_session_action(
+            SessionLocation::Worktree(dir.to_string()),
             "Start a new session in this worktree",
             active,
+            provider,
+            offers_a_choice,
             r,
         ));
     }
@@ -475,7 +513,17 @@ fn build_items(
         // fades its icons in/out independently via its own animation track (feature 008). The
         // hovered row is the pressable one.
         let active = hovered == Some(dir.as_str());
-        item = item.trailing_element(row_actions_cluster(&dir, wt.can_start_session(), active, r));
+        item = item.trailing_element(row_actions_cluster(
+            &dir,
+            wt.can_start_session(),
+            active,
+            // Threaded in rather than reached for: this function takes narrow arguments and cannot
+            // see `State` (feature 026, T014a). Both answers come from the render-free layer —
+            // nothing here decides which CLI runs or whether there is a choice to offer.
+            state.provider_for_start(None),
+            state.start_affordance_offers_a_choice(),
+            r,
+        ));
         items.push(item);
 
         if node.expanded {
@@ -515,6 +563,19 @@ fn session_tree_item(
         // show a filled dot, Ended a hollow one, Unknown nothing (ambient — H2) in a slot that stays
         // the same width either way, so names stay aligned as signals change (FR-016f).
         .badge(ActivityBadge::<Message>::new(session.activity.clone(), r))
+        // Which AI CLI this session runs, as short text (feature 026, FR-016).
+        //
+        // `command()` — `claude`, `copilot` — and not `display_name()`. A row label lives in a
+        // width budget; "GitHub Copilot" is a menu entry, and the human-readable register stays
+        // where sentences are (Clarifications 2026-08-18).
+        //
+        // Text, not a colour or a glyph alone: those need a legend, and a legend is not something
+        // a sidebar has room for. Muted, because it identifies rather than states — the name is
+        // what the row is *about*, and this is what it is *running*.
+        //
+        // An annotation, not a tag chip: tags open a second line, and `row_heights` hardcodes that
+        // a session row is one line. The label changes the row's content, never its height.
+        .annotation(session.provider.provider().command(), r.on_surface_variant)
         .selected(selected)
         .on_press(Message::SessionSelected(session.id))
         .on_right_press({
@@ -546,14 +607,12 @@ fn build_default_item(
     // comment above), reusing the same construction as a worktree row's hover-revealed action icons
     // instead of hand-rebuilding it. It is deliberately not wrapped in `HoverReveal`: this row's
     // action is always shown, so it has nothing to reveal.
-    let start_session = action_icon(
-        Icon::AddSession,
-        r.primary,
-        Message::SessionStartRequested {
-            location: SessionLocation::Default,
-        },
+    let start_session = start_session_action(
+        SessionLocation::Default,
         "Start a new session in the project root",
         true,
+        state.provider_for_start(None),
+        state.start_affordance_offers_a_choice(),
         r,
     );
 
@@ -583,7 +642,10 @@ mod tests {
     use micold_core::theme::ColorScheme;
 
     fn session(activity: ActivitySignal, lifecycle: SessionLifecycle) -> Session {
-        let mut s = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+        let mut s = Session::start_new(
+            SessionLocation::Worktree("feat-a".to_string()),
+            AiCli::ClaudeCode,
+        );
         s.activity = activity;
         s.lifecycle = lifecycle;
         s

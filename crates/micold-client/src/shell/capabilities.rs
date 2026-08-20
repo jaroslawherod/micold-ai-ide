@@ -13,7 +13,26 @@
 //! One consumer runs inside `Task::perform`'s `async move` block — the folder listing behind the
 //! folder picker — which is `'static` and cannot borrow the application. Owned, shareable handles
 //! are what let that call site take a capability rather than construct one, and cloning a
-//! `Capabilities` clones seven pointers.
+//! `Capabilities` clones six pointers.
+//!
+//! # The AI CLI provider is no longer one of them at all
+//!
+//! It used to be an `Arc<dyn AiCliProvider>` field, chosen here — which was fine while there was
+//! one CLI and only the client needed it. Feature 026 made it neither: a session records *which*
+//! CLI it runs, and the daemon's catalog, state and supervisor, plus `micold-core`'s own
+//! `terminal.rs`, all have to resolve a provider from that name. None of them can see this file —
+//! `micold-daemon` depends on `micold-client` only as a dev-dependency, and `micold-core` not at
+//! all. So the registry is `AiCli::provider` in `micold-core`, an exhaustive match.
+//!
+//! T014 asked for a delegating `Capabilities::provider(which)` alongside it, and it was written
+//! and then deleted for the reason the `from_parts` note below gives: **nothing called it**. Every
+//! consumer in the client already holds a `Session`, and `session.provider.provider()` is the
+//! shorter and more honest spelling — it says the provider comes from the record. A forwarding
+//! method with no caller is not a seam; it is a second name for one.
+//!
+//! What *does* stay here is [`Capabilities::available_providers`], and the difference is
+//! instructive: it is not a lookup but an **I/O probe**, one `PATH` resolution per variant, and
+//! that is exactly the kind of thing this struct exists to own.
 //!
 //! # The one capability that is not here, and the reason is iced's
 //!
@@ -33,7 +52,7 @@
 //! anything is substitutable — the same argument T042 makes about a fake no test constructs. What
 //! the capabilities actually bought is demonstrated where it is real, in `shell/persist.rs`'s
 //! `boot_drops_a_session_the_provider_has_no_conversation_for`: that pruning rule could not be
-//! tested at all before, because it reached `ClaudeProvider` and the user's home directory
+//! tested at all before, because it reached a concrete provider and the user's home directory
 //! directly. Add the constructor when a caller needs it.
 //!
 //! # `StdFolderScanner` is constructed once and used twice
@@ -48,7 +67,7 @@ use std::sync::Arc;
 use micold_core::env_include::{EnvIncludeResolver, SubprocessResolver};
 use micold_core::fs_scan::{FolderBrowser, FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
-use micold_core::provider::{AiCliProvider, ClaudeProvider};
+use micold_core::session::AiCli;
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 
@@ -66,7 +85,6 @@ pub struct Capabilities {
     settings: Option<Arc<dyn SettingsStore + Send + Sync>>,
     scanner: Arc<dyn FolderScanner + Send + Sync>,
     browser: Arc<dyn FolderBrowser + Send + Sync>,
-    provider: Arc<dyn AiCliProvider + Send + Sync>,
     env_include: Arc<dyn EnvIncludeResolver + Send + Sync>,
 }
 
@@ -84,7 +102,6 @@ impl Capabilities {
                 .map(|store| Arc::new(store) as Arc<dyn SettingsStore + Send + Sync>),
             scanner: Arc::new(folders),
             browser: Arc::new(folders),
-            provider: Arc::new(ClaudeProvider),
             env_include: Arc::new(SubprocessResolver),
         }
     }
@@ -115,9 +132,17 @@ impl Capabilities {
         Arc::clone(&self.browser)
     }
 
-    /// The AI CLI behind a session.
-    pub fn provider(&self) -> &dyn AiCliProvider {
-        &*self.provider
+    /// Which CLIs are installed right now, in `AiCli::ALL`'s order (FR-006).
+    ///
+    /// Computed, never stored: availability changes when the user installs something, and a
+    /// persisted "installed" goes stale in a file (research R11). Called at the I/O boundary and
+    /// held as a snapshot on `State` (T014a) — a view cannot run a `PATH` probe per frame, which is
+    /// exactly the scheduled work SC-006 forbids.
+    pub fn available_providers(&self) -> Vec<AiCli> {
+        AiCli::ALL
+            .into_iter()
+            .filter(|which| which.provider().is_available())
+            .collect()
     }
 
     /// Sourcing the environment-include script.

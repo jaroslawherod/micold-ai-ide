@@ -1,7 +1,7 @@
 //! T003/T016/T022 — `TerminalMode`/`ShellLifecycle` transitions, `Session` defaults, the
 //! mode→icon/tooltip mapping, and lifecycle independence (feature 010, FR-001–FR-010, FR-013).
 
-use micold_core::session::{Session, SessionLocation, ShellLifecycle, TerminalMode};
+use micold_core::session::{AiCli, Session, SessionLocation, ShellLifecycle, TerminalMode};
 
 fn worktree(name: &str) -> SessionLocation {
     SessionLocation::Worktree(name.to_string())
@@ -59,7 +59,7 @@ fn shell_lifecycle_is_active() {
 
 #[test]
 fn session_start_new_defaults_mode_and_has_no_shell_instances() {
-    let s = Session::start_new(worktree("feature-x"));
+    let s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     assert_eq!(s.mode, TerminalMode::AiCli);
     assert!(s.shells.is_empty());
 }
@@ -72,6 +72,7 @@ fn session_restored_takes_the_persisted_mode() {
         worktree("feature-x"),
         SessionLabel::Pending,
         TerminalMode::Regular,
+        AiCli::ClaudeCode,
     );
     assert_eq!(s.mode, TerminalMode::Regular);
     assert!(s.shells.is_empty());
@@ -79,7 +80,7 @@ fn session_restored_takes_the_persisted_mode() {
 
 #[test]
 fn session_set_mode_always_succeeds_regardless_of_process_state() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     s.set_mode(TerminalMode::Regular);
     assert_eq!(s.mode, TerminalMode::Regular);
     s.set_mode(TerminalMode::AiCli);
@@ -107,7 +108,7 @@ fn session_set_mode_always_succeeds_regardless_of_process_state() {
 fn set_mode_never_mutates_ai_cli_lifecycle() {
     use micold_core::session::SessionLifecycle;
 
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     s.mark_running();
     let ai_cli_before = s.lifecycle;
     assert_eq!(ai_cli_before, SessionLifecycle::Running);

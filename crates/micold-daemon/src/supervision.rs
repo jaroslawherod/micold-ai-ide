@@ -69,10 +69,12 @@ pub fn supervise_exit(session: &mut Session, outcome: ExitOutcome) -> Supervisio
 #[cfg(test)]
 mod tests {
     use super::*;
-    use micold_core::session::{Session, SessionLifecycle, SessionLocation, MAX_RESTART_ATTEMPTS};
+    use micold_core::session::{
+        AiCli, Session, SessionLifecycle, SessionLocation, MAX_RESTART_ATTEMPTS,
+    };
 
     fn running_session() -> Session {
-        let mut s = Session::start_new(SessionLocation::Default);
+        let mut s = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
         s.mark_running();
         s
     }

@@ -21,9 +21,8 @@ use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::sync::FairMutex;
 use alacritty_terminal::term::{Config, Term};
 use alacritty_terminal::vte::ansi::Processor;
-use micold_core::provider::{AiCliProvider, ClaudeProvider};
 use micold_core::session::SessionId;
-use micold_core::terminal::{claude_args, default_shell_command, LaunchSpec};
+use micold_core::terminal::{default_shell_command, launch_args, LaunchSpec};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 
 use crate::supervision::ExitOutcome;
@@ -107,11 +106,15 @@ fn ensure_cwd_exists(cwd: &std::path::Path) -> io::Result<()> {
 }
 
 impl PtySession {
-    /// Spawn `claude` for `spec` as a daemon-owned session (FR-006). `scrollback_lines` sets the VT
+    /// Spawn `spec`'s AI CLI as a daemon-owned session (FR-006). `scrollback_lines` sets the VT
     /// history depth; `initial_size` seeds the grid (falls back to the standard seed).
     ///
     /// Refused if `spec.cwd` does not exist (FR-006c, BUG-012).
-    pub fn spawn_claude(
+    ///
+    /// Was `spawn_claude`, and the rename is the substance rather than tidying (feature 026,
+    /// T016a): the command and the argv now come from `spec.provider` through the seam, so this
+    /// function names no CLI and decides nothing about which one runs.
+    pub fn spawn_ai_cli(
         id: SessionId,
         spec: &LaunchSpec,
         scrollback_lines: usize,
@@ -119,16 +122,18 @@ impl PtySession {
         settings_file: Option<&std::path::Path>,
     ) -> io::Result<Self> {
         ensure_cwd_exists(&spec.cwd)?;
-        let mut cmd = CommandBuilder::new(ClaudeProvider.command());
+        let mut cmd = CommandBuilder::new(spec.provider.provider().command());
         cmd.cwd(&spec.cwd);
         for (k, v) in &spec.env {
             cmd.env(k, v);
         }
-        for arg in claude_args(spec) {
+        for arg in launch_args(spec) {
             cmd.arg(arg);
         }
         // A per-session `--settings` file wires the activity hooks without touching user config
-        // (contracts/hooks.md §Configuration, T046). Absent when the hook receiver did not start.
+        // (contracts/hooks.md §Configuration, T046). Absent when the hook receiver did not start —
+        // and absent for a provider whose activity source is not `Hooks`, which is the caller's
+        // decision (`DaemonState::hook_settings_file_for`), not this function's.
         if let Some(path) = settings_file {
             cmd.arg("--settings");
             cmd.arg(path);
@@ -137,7 +142,7 @@ impl PtySession {
     }
 
     /// Spawn the platform's plain interactive shell in `cwd` as a daemon-owned session
-    /// (contracts/shell-process.md). No `claude`-specific args apply.
+    /// (contracts/shell-process.md). No AI-CLI args apply.
     ///
     /// Refused if `cwd` does not exist (FR-006c, BUG-012).
     pub fn spawn_shell(
@@ -160,7 +165,7 @@ impl PtySession {
     }
 
     /// Open a PTY, spawn `cmd` as its child, start the reader thread, and build the VT emulator with
-    /// its daemon listener. Shared plumbing for [`Self::spawn_claude`] / [`Self::spawn_shell`].
+    /// its daemon listener. Shared plumbing for [`Self::spawn_ai_cli`] / [`Self::spawn_shell`].
     pub fn spawn(
         id: SessionId,
         cmd: CommandBuilder,

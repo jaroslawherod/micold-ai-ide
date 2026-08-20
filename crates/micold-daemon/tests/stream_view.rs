@@ -326,7 +326,7 @@ fn catalog_with_shell(
     id: SessionId,
 ) -> Catalog {
     use micold_core::project::{Availability, Project};
-    use micold_core::session::{Session, SessionLabel, SessionLocation, TerminalMode};
+    use micold_core::session::{AiCli, Session, SessionLabel, SessionLocation, TerminalMode};
     use micold_core::store::ProjectStore;
     use micold_core::workspace::Workspace;
     use std::collections::BTreeMap;
@@ -336,6 +336,7 @@ fn catalog_with_shell(
         SessionLocation::Default,
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project.to_path_buf(), vec![session]);
