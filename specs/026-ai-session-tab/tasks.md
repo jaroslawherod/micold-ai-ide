@@ -429,7 +429,7 @@ same mark in the same place. Restart either from its menu — the mark clears.
 - [X] T058 Run the whole of `specs/026-ai-session-tab/quickstart.md`'s automated section and
   `mise run test`; confirm `cargo fmt --check` and `cargo clippy --workspace --all-targets --
   -D warnings` are clean
-- [ ] T059 Verify the build and full suite on Linux, macOS and Windows (Principle VI) — the
+- [X] T059 Verify the build and full suite on Linux, macOS and Windows (Principle VI) — the
   three-platform matrix in `.github/workflows/ci.yml`, run on the pull request, is the record
 - [X] T060 [P] Cross-cutting documentation review in `docs/`: the user guide now describes a strip
   that is always present, scrolls, carries a state mark and offers two menus. Read it as a whole
