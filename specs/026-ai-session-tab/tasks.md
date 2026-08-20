@@ -131,7 +131,7 @@ the promotion changed something it was not supposed to.
   T009, T011; FR-014). C1 requires the entry, C3 requires both edge values, and the pairing is the
   point: this application inverts Material's default placement deliberately (feature 012 FR-004b),
   and an inversion never shown beside the thing it inverts reads as a mistake to the next person
-- [ ] T013 Run the gallery with the `visual-pass` skill and record it in a new
+- [X] T013 Run the gallery with the `visual-pass` skill and record it in a new
   `specs/026-ai-session-tab/visual-pass.md` (depends on T011, T012; SC-010, SC-011). Two things, both invisible to
   every gate: the highlight is **rectangular and fills the tab** on hover and on press, in both
   schemes; and the two indicator orientations read as the same component with the bar on opposite
