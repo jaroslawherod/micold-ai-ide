@@ -679,7 +679,7 @@ fn restart_message(state: &State, id: SessionId) -> Message {
 /// enum makes the marked tab a **total function** of `(TerminalMode, Option<ShellInstanceId>)`, so
 /// exactly one tab is marked because there is nowhere else for the answer to go.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum StripTab {
+pub enum StripTab {
     /// One open Regular Terminal instance.
     Instance(ShellInstanceId),
     /// The session's single AI CLI process.
@@ -696,7 +696,7 @@ pub(crate) enum StripTab {
 /// It reads `mode`, which the mode toggle also writes, so FR-008's "the toggle and the AI tab must
 /// not be able to disagree" is structural rather than a synchronisation effort — there is no second
 /// selection to keep in step.
-pub(crate) fn marked_tab(state: &State, id: SessionId) -> StripTab {
+pub fn marked_tab(state: &State, id: SessionId) -> StripTab {
     let Some(session) = state.active_sessions().iter().find(|s| s.id == id) else {
         return StripTab::Ai;
     };
@@ -729,7 +729,7 @@ pub(crate) fn marked_tab(state: &State, id: SessionId) -> StripTab {
 /// excluded in both rows by FR-012e — they are in progress, and a mark on a state nobody can act on
 /// sends a user to a press that does nothing (FR-006b), which is the dead end the mark exists to
 /// prevent.
-pub(crate) fn process_stopped(state: &State, id: SessionId, tab: StripTab) -> bool {
+pub fn process_stopped(state: &State, id: SessionId, tab: StripTab) -> bool {
     let Some(session) = state.active_sessions().iter().find(|s| s.id == id) else {
         return false;
     };
@@ -1109,8 +1109,8 @@ mod tests {
 
             let expected: Vec<&str> = for_instance
                 .iter()
-                .filter(|label| **label != *"Close")
                 .copied()
+                .filter(|label| *label != "Close")
                 .collect();
             assert_eq!(
                 for_ai, expected,
@@ -1237,11 +1237,13 @@ mod tests {
         use crate::ui::material::tab;
 
         assert_eq!(
-            2.0 * spacing::SM + 2.0 * tab::SLOT_WIDTH + 2.0 * spacing::XS + tab::LABEL_MIN_WIDTH,
+            2.0 * tab::SLOT_WIDTH + 2.0 * spacing::XS + tab::LABEL_MIN_WIDTH,
             tab::WIDTH,
             "a tab's width is the sum of what it holds (feature 012 FR-004c), and both slots are \
              a term in it — so a slot that measured its content rather than the slot would make \
-             the derivation false without changing the constant"
+             the derivation false without changing the constant. No padding term: a tab draws no \
+             inset, because the indicator and the state layer both span the whole tab and an inset \
+             makes them stop short of the thing they mark."
         );
     }
 

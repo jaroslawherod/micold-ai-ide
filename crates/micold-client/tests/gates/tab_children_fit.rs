@@ -187,6 +187,76 @@ fn content_row<'r>(records: &'r [LayoutRecord], tab: &LayoutRecord) -> Option<&'
         .copied()
 }
 
+/// FR-004b, the face a user meets: the selection mark spans the **whole** tab, edge to edge.
+///
+/// A tab is a region of the strip, and the indicator marks the region — so a rule that stops short
+/// of either edge reads as a mark *near* a tab rather than as the tab being selected. It stopped
+/// short for exactly as long as the tab had padding: `spacing::SM` on each side left the content
+/// column, which the rule fills, 16dp narrower than the tab it belonged to.
+///
+/// Geometry, not a value, because the value was never wrong — `Divider::horizontal` has always
+/// filled what it was given. What was wrong was what it was given, and only the laid-out boxes say
+/// that. It is the same shape as this gate's other assertion one axis over: a figure intact in the
+/// source, competed away by the box around it.
+#[test]
+fn the_active_indicator_spans_its_whole_tab() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+    let mut failures = Vec::new();
+    let mut checked = 0usize;
+
+    for (covered, records) in covered_states().iter().zip(all.iter()) {
+        for strip in strip_paths(covered) {
+            for tab in tabs(records, strip) {
+                // The rule is the content column's first or last child (the edge it is drawn on is
+                // `IndicatorEdge`'s business, and this gate must not pin it): recognised as the
+                // descendant of a tab whose **height is the indicator's thickness**. Structural, so
+                // the levels between a tab and its rule stay free to change.
+                let Some(rule) = descendants(records, tab).into_iter().find(|r| {
+                    (r.height - anatomy::tab::INDICATOR).abs() < TOLERANCE && r.width > TOLERANCE
+                }) else {
+                    // An inactive tab draws a transparent spacer of the same height and no width,
+                    // which the `width > TOLERANCE` above excludes. There is nothing to span.
+                    continue;
+                };
+                checked += 1;
+                if (rule.x - tab.x).abs() > TOLERANCE || (rule.width - tab.width).abs() > TOLERANCE
+                {
+                    let name = lay::anchor_for(covered.anchors, &tab.path)
+                        .map(|a| a.name.to_string())
+                        .unwrap_or_else(|| lay::path_token(&tab.path));
+                    failures.push(format!(
+                        "  {} — {name}: the rule spans {:.1}..{:.1} in a tab {:.1}..{:.1}, so it \
+                         stops {:.1}dp short of the tab it marks",
+                        covered.name,
+                        rule.x,
+                        rule.x + rule.width,
+                        tab.x,
+                        tab.x + tab.width,
+                        tab.width - rule.width,
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "a tab's active indicator does not span its tab (feature 012 FR-004b):\n{}\n\nThe \
+         indicator marks the **region** the strip is divided into, not something inside it. A rule \
+         inset from both edges reads as a mark near a tab rather than as the tab being selected, \
+         and the usual cause is padding on the tab: the rule fills the content column, and padding \
+         is what makes that column narrower than the tab.",
+        failures.join("\n")
+    );
+    assert!(
+        checked > 0,
+        "no active indicator was located, so this gate proved nothing — every covered state's \
+         tabs are inactive, or the rule stopped being recognisable by its thickness, and both look \
+         exactly like a pass that found nothing"
+    );
+}
+
 /// SC-010, the face a user meets: a control too narrow to hit, or gone.
 #[test]
 fn every_control_inside_a_tab_holds_its_touch_target() {

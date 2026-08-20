@@ -305,39 +305,39 @@ while running — nothing. Right-click it while stopped — Restart, and no Clos
 
 ### Tests for User Story 2 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T037 [P] [US2] Failing test in `crates/micold-client/tests/app_state.rs`: a primary press on
+- [X] T037 [P] [US2] Failing test in `crates/micold-client/tests/app_state.rs`: a primary press on
   the AI tab sets `mode = AiCli` and changes no lifecycle, no `active_shell` and no other session
   (FR-006, FR-011); pressing it while already displayed changes nothing at all (FR-007)
-- [ ] T038 [P] [US2] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`: the
+- [X] T038 [P] [US2] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`: the
   menu for a `StripTab::Ai` is the menu for an instance **minus Close**, in the same order, for every
   lifecycle — and is **empty** whenever the AI process is running, so no menu opens (FR-004, FR-006a,
   FR-006b). Derived from T020's predicate, so a restart item can never appear where the mark does not
-- [ ] T039 [P] [US2] Failing test in `crates/micold-client/tests/app_state.rs`: the menu records
+- [X] T039 [P] [US2] Failing test in `crates/micold-client/tests/app_state.rs`: the menu records
   **which tab** it was opened on; opening it for another replaces rather than stacks; the "close every
   menu" path clears it; and an action dispatched from it targets that tab, not the marked one
   (FR-006a, extending feature 012's BUG-005 test to the AI tab)
 
 ### Implementation for User Story 2
 
-- [ ] T040 [US2] Widen `State::shell_instance_menu` in `crates/micold-client/src/app.rs` from
+- [X] T040 [US2] Widen `State::shell_instance_menu` in `crates/micold-client/src/app.rs` from
   `Option<(ShellInstanceId, u16, u16)>` to `Option<(StripTab, u16, u16)>`, and the message that opens
   it likewise (depends on T018, T039; research R8). **One** surface, not a second one: FR-006a
   defines the AI tab's menu as the terminal tab's menu with an item filtered, and two surfaces is the
   shape that lets them drift — which is the thing FR-006a is worded to prevent
-- [ ] T041 [US2] In `crates/micold-client/src/ui/terminal.rs`, give the AI tab a primary `on_press`
+- [X] T041 [US2] In `crates/micold-client/src/ui/terminal.rs`, give the AI tab a primary `on_press`
   selecting the AI CLI and wrap it in the existing
   `crates/micold-client/src/ui/cdk/context_area.rs` primitive for the secondary press (depends on
   T024, T037). The
   wrapper already lets the child answer first, so the primary press keeps working through it — the
   property feature 012's T069 asserts and this reuses rather than re-establishes
-- [ ] T042 [US2] Build the menu's items from `StripTab` in
+- [X] T042 [US2] Build the menu's items from `StripTab` in
   `crates/micold-client/src/ui/mod.rs::shell_instance_menu_items`, filtering Close for the AI tab and
   taking restart from T020's predicate (depends on T020, T038, T040; FR-004, FR-006a, FR-006b)
-- [ ] T043 [US2] Update the surface registration in `crates/micold-client/src/features/session.rs`
+- [X] T043 [US2] Update the surface registration in `crates/micold-client/src/features/session.rs`
   and the entry in `crates/micold-client/tests/overlay_registration.rs`'s `POPOVERS` for the widened
   state (depends on T040). The popover count assertion in that file is what catches a
   popover-shaped field that nobody registered — it caught this exact omission during feature 012
-- [ ] T044 [P] [US2] Document pressing the AI tab and its menu in
+- [X] T044 [P] [US2] Document pressing the AI tab and its menu in
   `docs/user-guide/worktrees-and-sessions.md` (Principle VII), beside the terminal tab's menu already
   described there
 - [ ] T045 [US2] Run `quickstart.md` §5 with the `visual-pass` skill and append it to

@@ -42,7 +42,7 @@ use crate::app::{Message, State};
 use crate::icons::{icon_role, Icon, IconSurface};
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length, Subscription};
-use micold_core::session::{SessionId, ShellInstanceId, ShellLifecycle};
+use micold_core::session::SessionId;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, anatomy, spacing, Roles};
 
