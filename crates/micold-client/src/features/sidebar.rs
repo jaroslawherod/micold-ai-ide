@@ -601,10 +601,9 @@ pub fn scrolled(state: &mut State, offset: u32) {
 
 /// The tag-filter panel was toggled (feature 009, FR-002/FR-003).
 ///
-/// Mutually exclusive with the other two lightweight popovers and with the project context menu,
-/// which is why this writes three fields it does not own — catalogued in
-/// `tests/feature_write_isolation.rs`, and the same shared toolbar rule `help::menu_toggled`
-/// carries from the other side.
+/// Mutually exclusive with the other two panel popovers, and it closes the project row menu too.
+/// It used to assign those three fields; since T067a-2 it reports that the panel opened and the
+/// registry closes what this surface declares it displaces.
 #[must_use = "what an opening popover displaces is the registry's business, not the caller's"]
 pub fn filter_menu_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
     state.sidebar_filter_open = !state.sidebar_filter_open;

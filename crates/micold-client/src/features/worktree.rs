@@ -220,8 +220,9 @@ fn list_changed(state: &State) -> crate::features::Outcome {
 
 /// A worktree's right-click menu was toggled (feature 008).
 ///
-/// Same worktree closes; a different one replaces it (only ever one open). Mutually exclusive with
-/// the project context menu (feature 015).
+/// Same worktree closes; a different one replaces it (only ever one open). It displaces the
+/// project row menu and nothing else — the two context menus replace each other, while a panel
+/// popover open elsewhere in the window survives a right-click in the sidebar (T067a-2).
 #[must_use = "what an opening menu displaces is the registry's business, not the caller's"]
 pub fn menu_toggled(state: &mut State, dir: String) -> Vec<crate::features::Outcome> {
     state.worktree_menu_open = if state.worktree_menu_open.as_deref() == Some(dir.as_str()) {

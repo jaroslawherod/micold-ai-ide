@@ -83,11 +83,10 @@ impl Registered for AboutDialog {
 
 /// The overflow menu was toggled (feature 021, T062 — FR-004a).
 ///
-/// The three lightweight popovers are mutually exclusive (feature 009) and the project context
-/// menu is exclusive with all of them (feature 015), so opening this one closes those. **Those are
-/// writes into other features' data**, catalogued in `tests/feature_write_isolation.rs` rather than
-/// hidden: the rule they encode is one fact about the toolbar that no single feature owns, and
-/// T067 is where it gets an outcome.
+/// It writes its own field and reports that the menu opened. What that closes — the other two
+/// panel popovers and the project row menu (features 009 and 015) — is declared on this surface's
+/// registration line and applied by `overlay::registry::displace`, because a rule about which
+/// surfaces exclude each other is owned by neither of the two it relates (T067a-2).
 #[must_use = "what an opening popover displaces is the registry's business, not the caller's"]
 pub fn menu_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
     state.help_menu_open = !state.help_menu_open;

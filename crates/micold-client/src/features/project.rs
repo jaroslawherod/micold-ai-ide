@@ -223,9 +223,9 @@ impl Registered for ConfirmForgetProjectDialog {
 
 /// The top-bar switcher panel was toggled (feature 015).
 ///
-/// Mutually exclusive with the other two lightweight popovers and with the project context menu.
-/// The writes into `help` and `sidebar` data are the shared toolbar rule, catalogued in
-/// `tests/feature_write_isolation.rs`; `help::menu_toggled` carries the same rule from its side.
+/// Mutually exclusive with the other two panel popovers, and it closes the project row menu too —
+/// declared on its registration line rather than assigned here (T067a-2). Note the asymmetry: the
+/// row menu does *not* close the switcher, because it is opened by right-clicking a row inside it.
 #[must_use = "what an opening popover displaces is the registry's business, not the caller's"]
 pub fn switcher_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
     state.project_switcher_open = !state.project_switcher_open;
