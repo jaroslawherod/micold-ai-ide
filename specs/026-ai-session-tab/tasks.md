@@ -39,25 +39,25 @@ A three-crate Cargo workspace. Client code is `crates/micold-client/src/`, its g
 **Purpose**: Two components in the shared library need widening before anything can use them.
 Principle VIII: extend, never fork. Both are independent of each other and of every user story.
 
-- [ ] T001 [P] Failing test in `crates/micold-client/src/ui/material/scrollable.rs`'s `mod tests`:
+- [X] T001 [P] Failing test in `crates/micold-client/src/ui/material/scrollable.rs`'s `mod tests`:
   a `Scrollable` built with a horizontal direction reports that direction, and one built without it
   is still vertical. The default matters as much as the new value — two call sites (the sidebar list
   and the folder browser) depend on it and must not move
-- [ ] T002 [P] Failing test in `crates/micold-client/src/ui/material/activity_badge.rs`'s
+- [X] T002 [P] Failing test in `crates/micold-client/src/ui/material/activity_badge.rs`'s
   `mod tests`: a badge built from a `BadgeEmphasis` directly draws the same element as one built
   from the `ActivitySignal` that maps to it, and a badge built from `None` reserves the slot and
   draws nothing. The reserved-empty case is the one T032 depends on
-- [ ] T003 Add the direction to `crates/micold-client/src/ui/material/scrollable.rs` as a chainable
+- [X] T003 Add the direction to `crates/micold-client/src/ui/material/scrollable.rs` as a chainable
   builder step defaulting to `Direction::Vertical` (depends on T001; research R5). The wrapper is
   where the design system's 4px themed scrollbar lives, and where dismiss-on-scroll is reported from
   — a hand-rolled horizontal scroller would reintroduce exactly the divergence this component was
   created to end, and would silently drop the scroll-dismissal the tab menu needs
-- [ ] T004 Add `ActivityBadge::for_emphasis(Option<BadgeEmphasis>, roles)` to
+- [X] T004 Add `ActivityBadge::for_emphasis(Option<BadgeEmphasis>, roles)` to
   `crates/micold-client/src/ui/material/activity_badge.rs`, and make `new(signal, roles)` sugar over
   it (depends on T002; research R3). Do **not** reach the new use through a contrived
   `ActivitySignal`: that vocabulary means daemon activity, not process lifecycle, and
   `tests/showcase_completeness.rs` poses variants by name, so the lie would be on the gallery page
-- [ ] T005 [P] Pose the new variants in `crates/micold-client/src/showcase/catalogue.rs` and the
+- [X] T005 [P] Pose the new variants in `crates/micold-client/src/showcase/catalogue.rs` and the
   section that renders them under `crates/micold-client/src/showcase/sections/` — the horizontal
   scrollable beside the vertical one, and whichever `BadgeEmphasis` the stopped mark uses. Gate C3
   in `tests/showcase_completeness.rs` requires every library variant to have an instance, and C4

@@ -219,9 +219,9 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/activity_badge.rs",
         component: "ActivityBadge",
-        variants: &["Working", "Attention", "Ended"],
+        variants: &["Working", "Attention", "Ended", "Stopped"],
         density: &[],
-        posed: &["Unknown", "Working", "AwaitingInput", "Ended"],
+        posed: &["Unknown", "Working", "AwaitingInput", "Ended", "Stopped"],
         live: &[],
         interactive: false,
         section: Section::Components,
@@ -407,7 +407,7 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/scrollable.rs",
         component: "Scrollable",
-        variants: &[],
+        variants: &["Vertical", "Horizontal"],
         density: &[],
         posed: &[],
         live: &["hover over the scrollbar", "the scroll itself"],

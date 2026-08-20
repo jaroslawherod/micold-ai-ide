@@ -37,6 +37,15 @@ pub enum BadgeEmphasis {
     Attention,
     /// The session ended.
     Ended,
+    /// A process that is **not running** and can be started again — feature 026's stopped mark
+    /// (FR-012c). Its own variant rather than a reuse of [`Self::Attention`] or [`Self::Ended`],
+    /// for the reason `for_emphasis` exists at all: `Attention` means "blocked awaiting the user"
+    /// and already draws exactly this ring's opposite (a filled dot in the error role), so reusing
+    /// it would put two different meanings behind one appearance and leave the gallery posing them
+    /// as one. `Ended` is the right *shape* and the wrong role — muted, where FR-012c asks for
+    /// error or warning, because a stopped process is a thing to act on rather than a thing that
+    /// merely finished.
+    Stopped,
 }
 
 /// Map an [`ActivitySignal`] to its badge emphasis, or `None` when nothing should be shown.
@@ -52,21 +61,35 @@ pub fn emphasis(signal: &ActivitySignal) -> Option<BadgeEmphasis> {
     }
 }
 
-/// A session activity dot. Construct with the signal + theme roles; it renders a filled dot for
-/// `Working`/`AwaitingInput`, a hollow dot for `Ended`, and an empty (zero-width) placeholder for
-/// `Unknown` so callers can render it uniformly for every session (FR-016d).
+/// A small status dot. Construct with an emphasis (or with a signal, which maps to one) plus the
+/// theme roles; it renders a filled dot for `Working`/`Attention`, a hollow one for `Ended` and
+/// `Stopped`, and an empty placeholder for no emphasis at all — so callers can render it uniformly
+/// for every state (FR-016d). The slot is the same width in each case.
 pub struct ActivityBadge<'a, M> {
-    signal: ActivitySignal,
+    emphasis: Option<BadgeEmphasis>,
     roles: Roles,
     size: f32,
     _marker: PhantomData<&'a M>,
 }
 
 impl<'a, M: 'a> ActivityBadge<'a, M> {
-    /// A badge for `signal`, themed by `roles`.
+    /// A badge for `signal`, themed by `roles`. Sugar over [`Self::for_emphasis`] and the
+    /// [`emphasis`] mapping, which is the only decision either form makes.
     pub fn new(signal: ActivitySignal, roles: Roles) -> Self {
+        Self::for_emphasis(emphasis(&signal), roles)
+    }
+
+    /// A badge at a given emphasis, or — for `None` — a reserved slot with nothing in it.
+    ///
+    /// The constructor for a caller whose state is **not** daemon activity. Feature 026's stopped
+    /// mark is a process lifecycle, and reaching this dot through a contrived [`ActivitySignal`]
+    /// would put that lie somewhere it is read as truth: `tests/showcase_completeness.rs` poses
+    /// variants by name, so the gallery would carry a session-activity heading over a terminal
+    /// tab's mark. The emphasis is the thing both callers actually share; the signal is one way to
+    /// arrive at it.
+    pub fn for_emphasis(emphasis: Option<BadgeEmphasis>, roles: Roles) -> Self {
         Self {
-            signal,
+            emphasis,
             roles,
             size: dot_size(),
             _marker: PhantomData,
@@ -90,13 +113,18 @@ impl<'a, M: 'a> From<ActivityBadge<'a, M>> for Element<'a, M> {
         //
         // Filled centre for live states, empty ring for a spent one: the states stay distinct by
         // *shape*, not by tint alone, so the distinction survives for a colour-blind user.
-        let inner: Element<'a, M> = match emphasis(&badge.signal) {
+        let inner: Element<'a, M> = match badge.emphasis {
             Some(BadgeEmphasis::Working) => icon(Icon::ActivityWorking, badge.size, r.primary),
             Some(BadgeEmphasis::Attention) => icon(Icon::ActivityWorking, badge.size, r.error),
             Some(BadgeEmphasis::Ended) => {
                 icon(Icon::ActivityEnded, badge.size, r.on_surface_variant)
             }
-            // Unknown is ambient — nothing is drawn (H2). The slot is still reserved below.
+            // The spent ring in the error role: distinct from `Ended` by colour and from
+            // `Attention` by shape, so the three stay separable without relying on tint alone —
+            // the same colour-blind argument the two above are drawn apart by.
+            Some(BadgeEmphasis::Stopped) => icon(Icon::ActivityEnded, badge.size, r.error),
+            // No emphasis — `Unknown` from a signal, or a running process from feature 026's
+            // mark — draws nothing (H2). The slot is still reserved below.
             None => Space::new().into(),
         };
 
@@ -135,6 +163,49 @@ mod tests {
         );
         // H1/H2: Unknown must never render an attention cue.
         assert_eq!(emphasis(&ActivitySignal::Unknown), None);
+    }
+
+    /// The stopped mark (feature 026 FR-012c) needs this badge for a state that has no
+    /// [`ActivitySignal`] at all: a process lifecycle is not daemon activity, and reaching the dot
+    /// through a contrived signal would put that lie on the gallery page, where
+    /// `showcase_completeness.rs` poses variants by name. So the emphasis becomes the input and the
+    /// signal becomes sugar over it — the two must agree for every signal, or the sidebar has
+    /// quietly changed while a second caller was being added.
+    #[test]
+    fn a_badge_is_built_from_an_emphasis_and_the_signal_form_is_sugar_over_it() {
+        let r = micold_core::tokens::roles(micold_core::theme::ColorScheme::Dark);
+        for signal in [
+            ActivitySignal::Working,
+            ActivitySignal::AwaitingInput,
+            ActivitySignal::Ended {
+                reason: "exit 0".into(),
+            },
+            ActivitySignal::Unknown,
+        ] {
+            let from_signal: ActivityBadge<'_, ()> = ActivityBadge::new(signal.clone(), r);
+            let from_emphasis: ActivityBadge<'_, ()> =
+                ActivityBadge::for_emphasis(emphasis(&signal), r);
+            assert_eq!(
+                from_signal.emphasis, from_emphasis.emphasis,
+                "the signal form and the emphasis form disagree for {signal:?}"
+            );
+        }
+    }
+
+    /// The reserved-empty case, asked of the new constructor directly. The stopped mark is drawn in
+    /// a tab's leading spacer, which every tab reserves whether or not a mark goes in it (feature
+    /// 026 FR-012c, research R4): a slot that collapsed when empty would make a tab's children vary
+    /// with its process's lifecycle, which is the positional-`diff_children` trap feature 023
+    /// FR-008a exists for.
+    #[test]
+    fn an_emphasis_less_badge_reserves_its_slot_and_draws_nothing() {
+        let r = micold_core::tokens::roles(micold_core::theme::ColorScheme::Dark);
+        let element: Element<'_, ()> = ActivityBadge::for_emphasis(None, r).into();
+        assert_eq!(
+            element.as_widget().size().width,
+            Length::Fixed(dot_size()),
+            "an empty badge must still reserve the slot it would have drawn in"
+        );
     }
 
     /// FR-016f / SC-019: the slot is constant-width in **every** state, including `Unknown` where
