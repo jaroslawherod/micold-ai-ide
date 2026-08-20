@@ -164,12 +164,10 @@ fn arms(body: &str) -> Vec<(String, String)> {
         while i < n && b[i].is_whitespace() {
             i += 1;
         }
-        let body_start;
-        let body_end;
-        if i < n && b[i] == '{' {
+        let (body_start, body_end) = if i < n && b[i] == '{' {
             depth = 1;
             i += 1;
-            body_start = i;
+            let body_start = i;
             while i < n && depth > 0 {
                 match b[i] {
                     '{' => depth += 1,
@@ -178,9 +176,9 @@ fn arms(body: &str) -> Vec<(String, String)> {
                 }
                 i += 1;
             }
-            body_end = i - 1;
+            (body_start, i - 1)
         } else {
-            body_start = i;
+            let body_start = i;
             depth = 0;
             while i < n {
                 match b[i] {
@@ -191,8 +189,8 @@ fn arms(body: &str) -> Vec<(String, String)> {
                 }
                 i += 1;
             }
-            body_end = i;
-        }
+            (body_start, i)
+        };
         if i < n && b[i] == ',' {
             i += 1;
         }
