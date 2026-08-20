@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-16
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "The terminal's tab strip should include the session's AI CLI process as a tab, always visible while a session is displayed, always at the right side of the strip. That AI tab has no close control — a session has exactly one AI CLI process and closing it is not a user action. The tab strip's active indicator marks whatever the pane is currently showing: the AI tab when the session is in AI CLI mode, otherwise the tab of the active Regular Terminal instance. Selecting the AI tab switches the pane to the AI CLI, the same as the existing mode toggle, which continues to work. The AI tab is labelled with the existing AI CLI icon (the sparkle glyph the mode toggle already uses) rather than text. This supersedes feature 012's FR-005, which hides the switcher until a session has more than one Regular Terminal instance — with the AI tab always present, the strip is always visible. Builds on feature 012 BUG-002's indicator tabs (bare label plus a top-edge accent bar, no containers)."
 
