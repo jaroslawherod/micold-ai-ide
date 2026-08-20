@@ -178,16 +178,22 @@ jobs:
   #
   # The job runs on every branch, but the rule it enforces does not apply to every branch: FR-027
   # binds changes made *for feature 021*, and every other feature owns its own expectations. The
-  # script decides that for itself and reports without failing when out of scope (spec.md Q3), so
-  # this job no longer has to be advisory to avoid blocking concurrent features -- what it still
-  # cannot do is fail a *false* positive within 021, which is what `continue-on-error` is now
-  # buying, and what T074 weighs before removing it.
+  # script decides that for itself and reports without failing when out of scope (spec.md Q3).
+  #
+  # Blocking as of T074, and the thing that made that possible is not a lower false-positive rate
+  # -- it is that a false positive can now be answered. FR-027 forbids expectations being relaxed,
+  # rewritten or deleted; it cannot forbid an assertion's *spelling* changing when the thing it
+  # names changes shape, and spec.md Q3 refuses to let the check guess which is which. So a removal
+  # is either reinstated or adjudicated in specs/021-mvu-slice-architecture/assertion-adjudications.md,
+  # under a heading naming the task and with the reason, and the check re-verifies every entry
+  # against the current tree on every run: an adjudication whose assertion is no longer missing
+  # fails just as loudly. Scope still applies -- out of scope this reports in full and exits 0, so
+  # a concurrent feature is told what it did to the suite without being blocked.
   assertions:
-    name: assertion freeze (advisory)
+    name: assertion freeze
     needs: classify
     if: needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -268,9 +274,7 @@ jobs:
           check lint "$LINT"
           check test "$TEST"
           check docs "$DOCS"
-          # `assertions` is advisory by design (continue-on-error, see its comment above), so it is
-          # reported but never gates. Promoting it means moving it into check() above.
-          printf 'advisory %-12s %s (not gated)\n' assertions "$ASSERTIONS"
+          check assertions "$ASSERTIONS"
           {
             echo "### ci complete"
             echo
@@ -280,6 +284,6 @@ jobs:
             echo "| lint | \`$LINT\` | yes |"
             echo "| test | \`$TEST\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
-            echo "| assertions | \`$ASSERTIONS\` | no (advisory) |"
+            echo "| assertions | \`$ASSERTIONS\` | yes |"
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
