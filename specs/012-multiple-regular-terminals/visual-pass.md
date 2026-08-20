@@ -352,3 +352,30 @@ was weighed against. The 4.6dp is *inside* a tab, below the resolution of a stac
 — and at the time it was 0.6dp, below any resolution at all. Reading columns numerically is cheap and
 is now part of this recipe; "I looked and nothing moved" is a claim about magnification, not about
 the layout.
+
+---
+
+## 2026-08-20 — §8 re-run after feature 026 changed these tabs (026's T055)
+
+Feature 026 changes this control, so its appearance section was re-run rather than assumed. **The
+pass itself is recorded in `specs/026-ai-session-tab/visual-pass.md`** — one session covered both
+features' claims, and splitting the write-up would have meant describing one set of screenshots
+twice. What is recorded *here* is what changed about **these** tabs and that it was looked at:
+
+- **Every tab gained a leading slot** carrying a small ring when its process is not running
+  (026 FR-012c). It goes in the spacer FR-004a already reserved, so no tab grew — confirmed by the
+  label staying on its tab's midline with the ring beside it, which is the property that broke first
+  when the slot was allowed to measure its content instead of itself.
+- **The strip scrolls** rather than letting the bar shrink its own controls (026 FR-002a). That was
+  a live defect here: past about five instances the mode toggle was laid out at **0.0dp** wide and
+  nothing reported it. `gates/bar_controls_hold_their_size.rs` is the gate; it failed on this
+  branch's parent before the fix, naming the toggle and its width.
+- **The tabs lost their padding** and the active indicator now spans the whole tab, edge to edge
+  (FR-004b, reported by the user). It was 120dp inside a 136dp tab, and the tab is 120dp now — the
+  derivation dropped the padding term with the padding.
+- **FR-005 is superseded** by 026 FR-003; the strip is drawn at zero and one instance too. The spec
+  above records that where the requirement is stated.
+
+BUG-001's and BUG-002's own findings were re-checked in passing and all still hold: every tab is a
+tab, the tabs are one uniform size, the label is centred, the close control is legible on the marked
+tab, and activation moves colour rather than geometry.

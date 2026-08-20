@@ -253,7 +253,7 @@ delivery choice rather than a correctness one.
 - [X] T029 [P] [US1] Document the AI tab in `docs/user-guide/worktrees-and-sessions.md` (Principle
   VII): the strip is always there, the rightmost tab is the AI conversation, and it has no close
   control because a session has exactly one
-- [ ] T030 [US1] Run `quickstart.md` §1–§3 and §7 with the `visual-pass` skill and append it to
+- [X] T030 [US1] Run `quickstart.md` §1–§3 and §7 with the `visual-pass` skill and append it to
   `specs/026-ai-session-tab/visual-pass.md` (depends on T024–T028; SC-001, SC-003, SC-005, SC-006). §1's zero-instance state is the
   one to judge rather than merely observe: it is the state feature 012 deliberately rendered nothing
   in, so a single tab there is the most likely thing to read as a stray control instead of a
@@ -283,7 +283,7 @@ delivery choice rather than a correctness one.
   the very colour the user is scanning for; do not add a glyph, an arrow or a second width. Wheel scrolling comes from the scrollable;
   **no scroll-arrow controls** (FR-002f) — they would spend an interactive target's width at each end
   of the bar T016 just finished protecting
-- [ ] T036 [US1] Run `quickstart.md` §6 with the `visual-pass` skill and append it to
+- [X] T036 [US1] Run `quickstart.md` §6 with the `visual-pass` skill and append it to
   `specs/026-ai-session-tab/visual-pass.md` (depends on T033–T035; SC-008, SC-009). The fade is
   drawn, not laid out, so this is the only check that can see it at all. Capture the neutral and the
   accent edge **at the same crop** and put them side by side: a role difference is the entire cue,
@@ -340,7 +340,7 @@ while running — nothing. Right-click it while stopped — Restart, and no Clos
 - [X] T044 [P] [US2] Document pressing the AI tab and its menu in
   `docs/user-guide/worktrees-and-sessions.md` (Principle VII), beside the terminal tab's menu already
   described there
-- [ ] T045 [US2] Run `quickstart.md` §5 with the `visual-pass` skill and append it to
+- [X] T045 [US2] Run `quickstart.md` §5 with the `visual-pass` skill and append it to
   `specs/026-ai-session-tab/visual-pass.md` (depends on T041–T043; SC-002, SC-004, SC-005). The check worth the setup is the **silence**: a secondary
   press on a running AI tab must produce nothing at all, not an empty panel
 
@@ -393,7 +393,7 @@ same mark in the same place. Restart either from its menu — the mark clears.
 - [X] T052 [P] [US3] Document the mark in `docs/user-guide/worktrees-and-sessions.md` (Principle
   VII): what it means, that it appears on a background tab you have not selected, and that it is how
   you know which tab's menu has a restart in it
-- [ ] T053 [US3] Run `quickstart.md` §4 with the `visual-pass` skill and append it to
+- [X] T053 [US3] Run `quickstart.md` §4 with the `visual-pass` skill and append it to
   `specs/026-ai-session-tab/visual-pass.md` (depends on T049–T051; SC-007). This story's substance is appearance and this is where it
   is judged: the mark against the accent an active tab wears **and** the muted tint an inactive one
   wears, in **both** schemes, and not mistakable for the indicator. FR-012a is the requirement a
@@ -408,21 +408,21 @@ same mark in the same place. Restart either from its menu — the mark clears.
 > Per-story user-guide docs shipped inside their stories (Principle VII). This phase is
 > cross-cutting only.
 
-- [ ] T054 Run `specs/026-ai-session-tab/quickstart.md` **§8** whole, against the finished build, and
+- [X] T054 Run `specs/026-ai-session-tab/quickstart.md` **§8** whole, against the finished build, and
   append it to `specs/026-ai-session-tab/visual-pass.md` (SC-010). The per-story passes each ran
   against a partial strip; §8 is the consolidated appearance section and asks for **both schemes** —
   the stopped mark against the accent an active tab wears and the muted tint an inactive one wears,
   the mark and the indicator on one tab without reading as one cue, the AI tab beside a terminal tab,
   the edge fade, the zero-instance strip, the rectangular highlight, and the squint test. Every item
   in it is drawn rather than laid out, which is why it is a task and not a gate
-- [ ] T055 [P] Re-run **feature 012's `quickstart.md` §8** and record it in
+- [X] T055 [P] Re-run **feature 012's `quickstart.md` §8** and record it in
   `specs/012-multiple-regular-terminals/visual-pass.md`. This feature changes 012's terminal tabs —
   every one of them gains a slot (T049) and the strip they live in now scrolls — and §8 is that
   strip's appearance section. Recorded there rather than here because the control is 012's
 - [X] T056 [P] Note in `specs/012-multiple-regular-terminals/spec.md` that FR-005 is superseded by
   026 FR-003 and that its tabs gained a stopped mark, so a reader of the older spec is not misled by
   a requirement this feature reversed
-- [ ] T057 [P] Confirm `specs/026-ai-session-tab/quickstart.md` §9 was run against the finished
+- [X] T057 [P] Confirm `specs/026-ai-session-tab/quickstart.md` §9 was run against the finished
   build, not only against Phase 2's — the tab gained a stopped-mark slot and a scrolling parent
   after T013 posed it, and the gallery poses the same component the application uses or it poses
   nothing worth looking at
