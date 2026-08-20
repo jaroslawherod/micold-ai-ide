@@ -3,7 +3,8 @@
 //! exactly what is removed (the working directory and its sessions, always; the git branch,
 //! conditional on the branch-deletion checkbox below) before the user confirms.
 
-use crate::app::{FieldId, Message, State};
+use crate::app::{Message, State};
+use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};

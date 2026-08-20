@@ -18,6 +18,17 @@
 //! see, so revealing it would open nothing they had not opened and scroll a list they were reading
 //! (FR-006). It is named here rather than inferred, so adding a second exemption is a deliberate
 //! edit to this file.
+//!
+//! # Where the exemption lives after T062
+//!
+//! It used to be an arm of `State::update` in `app.rs`, and the second test below counted the
+//! writes in that file. T062 moved every feature's arms into its own module, so the arm is now
+//! `features/session::selected` and `app.rs` has no direct write at all.
+//!
+//! Rather than re-point the count at `features/session.rs` — where `set_current_session` also
+//! writes the field, so a count would be 2 and would say nothing about *which* two — the test now
+//! names the enclosing functions. That is the property the file was always after: `app.rs` writes
+//! it nowhere, and inside the session feature exactly two functions do, each for a stated reason.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -73,16 +84,15 @@ fn is_a_write(line: &str) -> bool {
 }
 
 /// Where the field is allowed to be written directly, and why.
-const EXEMPT: &[(&str, &str)] = &[
-    (
-        "features/session.rs",
-        "`set_current_session` itself — the one function every other writer goes through",
-    ),
-    (
-        "app.rs",
-        "`Message::SessionSelected`, which must not reveal (FR-006). Checked below by name",
-    ),
-];
+///
+/// `app.rs` was on this list until T062, for the `SessionSelected` arm. The arm moved into the
+/// session feature, so the root no longer needs an exemption — and dropping it puts the root back
+/// under this test rather than leaving a permission nothing uses.
+const EXEMPT: &[(&str, &str)] = &[(
+    "features/session.rs",
+    "`set_current_session`, the one function every other writer goes through, and `selected`, \
+     which must not reveal (FR-006). Both checked below by name",
+)];
 
 #[test]
 fn nothing_writes_the_current_session_pointer_outside_the_one_function() {
@@ -110,36 +120,59 @@ fn nothing_writes_the_current_session_pointer_outside_the_one_function() {
     );
 }
 
+/// The function a line sits inside: the nearest `fn <name>(` at or above it.
+fn enclosing_fn(lines: &[&str], at: usize) -> String {
+    for line in lines[..=at].iter().rev() {
+        let trimmed = line.trim_start();
+        let after_vis = trimmed
+            .strip_prefix("pub(crate) ")
+            .or_else(|| trimmed.strip_prefix("pub "))
+            .unwrap_or(trimmed);
+        if let Some(rest) = after_vis.strip_prefix("fn ") {
+            if let Some(name) = rest.split(['(', '<']).next() {
+                return name.trim().to_string();
+            }
+        }
+    }
+    "<no enclosing fn>".to_string()
+}
+
 #[test]
 fn the_reducers_only_direct_write_is_the_one_the_user_asked_for() {
-    let app = fs::read_to_string(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src")
-            .join("app.rs"),
-    )
-    .expect("app.rs is readable");
+    let src = |file: &str| {
+        fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("src")
+                .join(file),
+        )
+        .unwrap_or_else(|_| panic!("{file} is readable"))
+    };
 
-    let writes: Vec<&str> = app.lines().filter(|line| is_a_write(line)).collect();
-
-    assert_eq!(
-        writes.len(),
-        1,
-        "`app.rs` may write `active_session` exactly once — the `SessionSelected` arm. Found:\n  \
-         {}\n\nEverything else the reducer does to the current session goes through \
-         `set_current_session`; a second direct write here is the shape this whole check exists to \
-         catch, because it looks entirely ordinary in review.",
-        writes.join("\n  ")
+    let app = production_only(&src("app.rs"));
+    let in_app: Vec<&str> = app.lines().filter(|line| is_a_write(line)).collect();
+    assert!(
+        in_app.is_empty(),
+        "the root reducer routes and does not write `active_session` (feature 021, FR-002). \
+         Found:\n  {}",
+        in_app.join("\n  ")
     );
 
-    // And it is that arm, not merely *an* arm: the exemption is about the user having clicked, so
-    // a write that drifted into a neighbouring arm would still be a defect.
-    let arm = app
-        .split("Message::SessionSelected(id) => {")
-        .nth(1)
-        .expect("the SessionSelected arm exists");
-    assert!(
-        arm.lines().take(12).any(is_a_write),
-        "the one permitted direct write is supposed to be inside `Message::SessionSelected`, and \
-         it is not there any more"
+    let session = production_only(&src("features/session.rs"));
+    let lines: Vec<&str> = session.lines().collect();
+    let writers: Vec<String> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| is_a_write(line))
+        .map(|(n, _)| enclosing_fn(&lines, n))
+        .collect();
+
+    assert_eq!(
+        writers,
+        ["set_current_session", "selected"],
+        "exactly two functions in the session feature may write `active_session` directly: \
+         `set_current_session`, which is the funnel, and `selected`, which is the click the user \
+         made on a row already in front of them (FR-006). A third — or either of these losing its \
+         write — is the shape this whole check exists to catch, because it looks entirely \
+         ordinary in review."
     );
 }

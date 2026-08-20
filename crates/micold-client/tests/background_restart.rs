@@ -19,6 +19,18 @@ fn two_projects_active_b() -> State {
     st
 }
 
+/// Switch the way the root does (T067a-9): the return notice is an outcome now, so a test that
+/// dropped it would assert against a switch whose consequences never happened.
+fn switch(st: &mut State, path: &str) -> bool {
+    match st.switch_active(Path::new(path)) {
+        Some(outcomes) => {
+            micold_client::app::drain(outcomes, |o| micold_client::app::interpret(st, o));
+            true
+        }
+        None => false,
+    }
+}
+
 #[test]
 fn marks_restart_only_when_owning_project_is_inactive() {
     let mut st = two_projects_active_b();
@@ -47,7 +59,7 @@ fn returning_to_project_notifies_the_user_and_clears_markers() {
     st.note_background_restart(a_id);
 
     assert!(st.notify.visible().is_none());
-    assert!(st.switch_active(Path::new("/a")));
+    assert!(switch(&mut st, "/a"));
 
     let visible = st
         .notify

@@ -164,7 +164,11 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
     if sync_worktrees {
         if let Some(active) = core.workspace.active.clone() {
             if let Some(project) = snapshot.projects.iter().find(|p| p.path == active) {
-                core.set_worktrees(
+                // Drained the way the root does: the worktree feature reports what survived and
+                // the sidebar prunes its own expansion set (T066, and T067a-4 for the form's
+                // error line). Dropping the outcomes here would leave the sidebar expanded on
+                // worktrees this snapshot has just removed.
+                let outcomes = core.set_worktrees(
                     project
                         .worktrees
                         .iter()
@@ -181,6 +185,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                         })
                         .collect(),
                 );
+                crate::app::drain(outcomes, |o| crate::app::interpret(core, o));
                 // Mirror display-name overrides from the catalog (a second window sees a rename).
                 let names: std::collections::BTreeMap<String, String> = project
                     .worktrees
@@ -203,7 +208,11 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
     // (FR-001c). Nothing is armed: there is no session to scroll to.
     if let Some(id) = core.active_session {
         if core.workspace.find_session(id).is_none() {
-            core.set_current_session(None);
+            // T067a-6: committing the outgoing row is an outcome now, so it has to be applied —
+            // a dropped `Vec<Outcome>` here is the row snapping shut, which is the thing FR-001c
+            // is about.
+            let outcomes = core.set_current_session(None);
+            crate::app::drain(outcomes, |o| crate::app::interpret(core, o));
         }
     }
 }

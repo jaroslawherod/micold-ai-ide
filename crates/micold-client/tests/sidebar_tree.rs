@@ -42,6 +42,13 @@ fn state_with_active_project() -> State {
     state
 }
 
+/// Change the current session the way the root does (T067a-6): the commit of the outgoing row is
+/// an outcome now, so dropping it would assert against half a move.
+fn set_current(state: &mut State, next: Option<micold_core::session::SessionId>) {
+    let outcomes = state.set_current_session(next);
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
+}
+
 #[test]
 fn tree_has_a_node_per_worktree_collapsed_by_default() {
     let state = state_with_active_project();
@@ -319,7 +326,9 @@ fn filter_recomputes_after_delete(/* FR-028 / C1 */) {
         .filter(|w| w.dir_name != "fix-crash")
         .cloned()
         .collect();
-    state.set_worktrees(surviving);
+    micold_client::app::drain(state.set_worktrees(surviving), |o| {
+        micold_client::app::interpret(&mut state, o)
+    });
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
         vec!["fix-def-9_thing"]
@@ -698,10 +707,13 @@ fn no_other_location_is_opened_on_the_users_behalf() {
 fn replacing_the_worktree_list_does_not_close_the_current_sessions_row() {
     let mut state = state_with_current_session();
 
-    state.set_worktrees(vec![
-        worktree("feat-a", WorktreeStatus::Valid),
-        worktree("feat-c", WorktreeStatus::Valid),
-    ]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![
+            worktree("feat-a", WorktreeStatus::Valid),
+            worktree("feat-c", WorktreeStatus::Valid),
+        ]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
 
     let feat_a = state
         .worktree_tree()
@@ -719,7 +731,10 @@ fn replacing_the_worktree_list_does_not_close_the_current_sessions_row() {
 fn a_current_session_whose_worktree_is_gone_opens_nothing() {
     let mut state = state_with_current_session();
 
-    state.set_worktrees(vec![worktree("feat-b", WorktreeStatus::Valid)]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![worktree("feat-b", WorktreeStatus::Valid)]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
 
     assert!(
         state.worktree_tree().into_iter().all(|n| !n.expanded),
@@ -930,7 +945,7 @@ fn the_exemption_ends_when_the_location_stops_holding_the_current_session() {
     let moved_id = moved.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(moved);
-    state.set_current_session(Some(moved_id));
+    set_current(&mut state, Some(moved_id));
 
     assert!(
         !listed(&state).contains(&"fix-b".to_string()),
@@ -995,7 +1010,7 @@ fn exactly_one_session_row_carries_the_mark_when_a_location_holds_several() {
 #[test]
 fn nothing_is_marked_when_no_session_is_current() {
     let mut state = state_with_active_project();
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     let node = state
         .worktree_tree()

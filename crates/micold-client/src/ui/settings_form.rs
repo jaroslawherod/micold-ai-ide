@@ -1,8 +1,9 @@
 //! The Settings dialog, rendered as a Material modal overlay within the main window (feature
 //! 006, FR-019/FR-020). Currently exposes the embedded-terminal scrollback limit.
 
-use crate::app::{FieldId, Message, State};
+use crate::app::{Message, State};
 use crate::features::settings::SettingsDraft;
+use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};

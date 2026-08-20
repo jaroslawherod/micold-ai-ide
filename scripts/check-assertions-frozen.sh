@@ -14,6 +14,9 @@
 # all. An assertion that disappears from one file and reappears -- identical, modulo whitespace and
 # module paths -- anywhere else is a move, not a deletion.
 #
+# A removal that has been adjudicated -- read, judged not to be a relaxation, and written down with
+# its reason -- is subtracted first. See ADJUDICATIONS below.
+#
 # Usage:
 #   scripts/check-assertions-frozen.sh [base-ref]      # default: origin/main
 #
@@ -22,9 +25,40 @@
 #   FREEZE_BRANCH      branch name to judge scope by, when HEAD is detached (CI)
 #
 # Exit codes:
-#   0  no assertion lost, or losses reported out of scope
-#   1  one or more assertions removed without reappearing, in scope
+#   0  no assertion lost, or every loss adjudicated, or losses reported out of scope
+#   1  one or more assertions removed without reappearing and without an adjudication, in scope;
+#      or an adjudication that no longer names a missing assertion
 #   2  bad usage / not a git repository / nothing to compare against
+#
+# ---------------------------------------------------------------------------------------------
+# ADJUDICATIONS: THE THIRD OPTION THIS CHECK WAS MISSING  (task T074)
+#
+# FR-027 forbids expectations being relaxed, rewritten or deleted. It permits relocation, and it
+# cannot forbid the *spelling* of an assertion changing when the thing it names changes shape: a
+# function that answered `bool` and now answers `Option<T>` is asserted differently and asserts the
+# same thing.
+#
+# spec.md Q3 settled that this must not be automated away -- a `norm()` waiver for `x.field` ->
+# `x.field()` would auto-pass a faithful rename and a deliberate reversal alike. The reader is the
+# adjudicator, which is why the report prints the closest surviving assertion beside each loss.
+#
+# What was missing was anywhere to write the verdict down. The check had two whole-run settings and
+# no third option, so a branch that had adjudicated its report honestly still exited 1, and the only
+# route to a green blocking job was to relax the check for everyone. Feature 021's own branch is the
+# case: 34 losses, every one of them a return-type change, a message nesting or a strengthening, and
+# not one a relaxation (T073).
+#
+# So losses named in the adjudication file are subtracted before the verdict. It is the discipline
+# the guard tests in this repository already use -- `ALLOWED` in tests/feature_write_isolation.rs,
+# `CORE_MEDIATED` beside it -- and it carries the same two rules:
+#
+#   * nothing goes in without a reason, under a heading naming the task that removed it; and
+#   * nothing stays in after it stops being true. An adjudication whose assertion is no longer
+#     missing FAILS the check, as loudly as an unadjudicated removal, so the file cannot outlive
+#     what it permits.
+#
+# The second rule is the one that makes this safe. Without it the file is a place to bury anything;
+# with it, an entry is a claim about the current tree that the check re-verifies on every run.
 #
 # ---------------------------------------------------------------------------------------------
 # SCOPE: FR-027 BINDS FEATURE 021, NOT THE REPOSITORY  (spec.md Q3, task T074)
@@ -139,7 +173,8 @@ case "$MODE" in
     exit 2
     ;;
 esac
-export FREEZE_MODE="$MODE" FREEZE_REASON="$SCOPE_REASON"
+ADJUDICATIONS="${FREEZE_ADJUDICATIONS:-${FEATURE_DIR}assertion-adjudications.md}"
+export FREEZE_MODE="$MODE" FREEZE_REASON="$SCOPE_REASON" FREEZE_ADJUDICATIONS="$ADJUDICATIONS"
 
 # Path selection is done here rather than by pathspec, because `git ls-tree` does not accept
 # ':(glob)' magic -- it fails outright, and a check that dies on its own pathspec is a check that
@@ -178,6 +213,33 @@ from collections import Counter, defaultdict
 # for feature 021. 'report' prints the identical report and exits 0 -- see the SCOPE section.
 MODE = os.environ.get("FREEZE_MODE", "enforce")
 REASON = os.environ.get("FREEZE_REASON", "")
+ADJUDICATIONS = os.environ.get("FREEZE_ADJUDICATIONS", "")
+
+
+def adjudications(path):
+    """Assertions this feature has read, judged and written down, as {normalised: heading}.
+
+    Line-oriented on purpose: a `was:` line is the key, everything else is prose for the reader, and
+    the nearest `## ` heading above it is the task that removed it. An entry with no heading above
+    it is refused rather than accepted quietly -- an adjudication with nobody's name on it is the
+    thing this file exists to prevent.
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except FileNotFoundError:
+        return {}, []
+    found, heading, bad = {}, None, []
+    for line in lines:
+        if line.startswith("## "):
+            heading = line[3:].strip()
+        elif line.startswith("was: "):
+            key = line[5:].strip()
+            if not heading:
+                bad.append(key)
+            else:
+                found[key] = heading
+    return found, bad
 
 # A reader piping this through `head` closes the stream early. Without this, Python raises
 # BrokenPipeError, prints a traceback over the report it was in the middle of, and exits 120 --
@@ -285,18 +347,58 @@ if not before:
     )
     sys.exit(2)
 
-if before == after:
-    print(f"assertion freeze: OK — all {sum(before.values())} assertion(s) intact")
-    sys.exit(0)
+# No fast path for `before == after`: a stale adjudication has to be caught even on a change that
+# touched no assertion at all, or it would survive every run that happened not to move one.
 
 lost = before - after
 gained = after - before
 
-if not lost:
+# Adjudications are checked even when nothing is lost, because a stale one is exactly as wrong as
+# an unadjudicated removal and would otherwise sit here indefinitely once the burn-down finished.
+judged, unheaded = adjudications(ADJUDICATIONS)
+stale = [a for a in judged if a not in lost]
+adjudicated = Counter({a: lost[a] for a in judged if a in lost})
+lost = lost - adjudicated
+
+if unheaded:
     print(
-        f"assertion freeze: OK — {sum(before.values())} assertion(s) intact, "
-        f"{sum(gained.values())} added"
+        f"assertion freeze: FAILED — {len(unheaded)} adjudication(s) in {ADJUDICATIONS} sit under\n"
+        "no `## ` heading, so nothing names the task that removed them or why:",
+        file=sys.stderr,
     )
+    for a in sorted(unheaded):
+        print(f"  - {a[:160]}", file=sys.stderr)
+    sys.exit(1)
+
+if stale:
+    print(
+        f"assertion freeze: FAILED — {len(stale)} adjudication(s) in {ADJUDICATIONS} name\n"
+        "assertions that are not missing from the suite:",
+        file=sys.stderr,
+    )
+    for a in sorted(stale):
+        print(f"  - [{judged[a]}] {a[:160]}", file=sys.stderr)
+    print(file=sys.stderr)
+    print(
+        "Delete each line. An adjudication that outlives the removal it explained is a place to\n"
+        "bury the next one, which is the whole reason this file re-verifies itself every run.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if not lost:
+    total = sum(before.values())
+    added = sum(gained.values())
+    if adjudicated:
+        print(
+            f"assertion freeze: OK — {total} assertion(s) intact, {added} added, "
+            f"{sum(adjudicated.values())} removal(s) adjudicated in {ADJUDICATIONS}"
+        )
+        for a, count in sorted(adjudicated.items()):
+            suffix = f"  (x{count})" if count > 1 else ""
+            print(f"  - [{judged[a]}] {a[:160]}{suffix}")
+    else:
+        print(f"assertion freeze: OK — {total} assertion(s) intact, {added} added")
     sys.exit(0)
 
 n = sum(lost.values())
@@ -350,8 +452,11 @@ print("If a test turns out to assert a latent bug, the bug and its assertion bot
 print("file it separately and fix it in its own change (spec.md, Edge Cases).", file=sys.stderr)
 print(file=sys.stderr)
 print("A high-percentage 'closest surviving' line usually means the assertion was rewritten rather", file=sys.stderr)
-print("than removed -- which FR-027 also forbids. Reinstate it, or get the exception recorded.", file=sys.stderr)
-print("A mechanism rename is NOT admitted -- spec.md Q3 refuses that waiver and says why.", file=sys.stderr)
+print("than removed -- which FR-027 also forbids. Reinstate it, or adjudicate it: read it, judge", file=sys.stderr)
+print(f"whether it says less than it did, and if it does not, record it in {ADJUDICATIONS}", file=sys.stderr)
+print("under a heading naming the task, with the reason. A mechanism rename is NOT admitted on its", file=sys.stderr)
+print("own -- spec.md Q3 refuses that waiver and says why; an adjudication is a reader's verdict, not", file=sys.stderr)
+print("a pattern the check applies for you.", file=sys.stderr)
 sys.exit(1)
 PYCHECK
 )

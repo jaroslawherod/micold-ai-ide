@@ -171,7 +171,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         (
             "add_worktree",
             |s| s.worktree_form = Some(Default::default()),
-            Message::AddWorktreeCancelled,
+            Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
         ),
         (
             "settings",

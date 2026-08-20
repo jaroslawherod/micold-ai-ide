@@ -64,6 +64,7 @@ pub struct Open {
     id: SurfaceId,
     layer: Layer,
     dismissal: DismissalRules,
+    displaces: &'static [SurfaceId],
     view: Option<crate::ui::DialogView>,
 }
 
@@ -77,7 +78,10 @@ pub struct Open {
 /// makes it that surface anyway — `drawn_by` attaches it at registration.
 impl PartialEq for Open {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id && self.layer == other.layer && self.dismissal == other.dismissal
+        self.id == other.id
+            && self.layer == other.layer
+            && self.dismissal == other.dismissal
+            && self.displaces == other.displaces
     }
 }
 
@@ -95,6 +99,7 @@ impl<S: FloatingSurface> From<&S> for Open {
             id: surface.id(),
             layer: surface.layer(),
             dismissal: surface.dismissal(),
+            displaces: &[],
             view: None,
         }
     }
@@ -115,6 +120,20 @@ impl Open {
         self
     }
 
+    /// Declare what this surface closes by opening — the other optional step in the chain
+    /// (T067a-2).
+    ///
+    /// Set from the registration line for the same reason [`Self::drawn_by`] is, and a stronger
+    /// one. Displacement is a fact about the *relation between* surfaces, so it belongs to neither
+    /// of the two surfaces it relates; and `tests/surface_registration_cost.rs` holds that a
+    /// surface may be named only in its own module and here, which a feature module declaring what
+    /// it closes would break five times over. This file is already the one place every surface is
+    /// named, which is exactly what a relation over them needs.
+    pub fn displacing(mut self, displaces: &'static [SurfaceId]) -> Self {
+        self.displaces = displaces;
+        self
+    }
+
     /// The view registered for this surface, if any.
     pub fn view(&self) -> Option<crate::ui::DialogView> {
         self.view
@@ -128,6 +147,11 @@ impl Open {
     /// Which band of the z-order it sits in.
     pub fn layer(&self) -> Layer {
         self.layer
+    }
+
+    /// The surfaces this one closes by opening.
+    pub fn displaces(&self) -> &'static [SurfaceId] {
+        self.displaces
     }
 
     /// The message to send when `trigger` happens, or `None` when it does not close this surface.
@@ -208,31 +232,77 @@ pub type Probe = fn(&State) -> Option<Open>;
 /// that is never named here compiles, which is why `tests/overlay_registry.rs` checks the list
 /// against reality — contract R2 is a guard test precisely because the compiler cannot hold it
 /// once the enum is gone.
+///
+/// # The two optional clauses, and why displacement is one of them
+///
+/// `=> view` pairs a dialog with the function that draws it (T035); `{ displaces: … }` names what
+/// a surface closes by opening (T067a-2). Both are facts a surface cannot state about itself —
+/// the first because FR-006 forbids a feature module naming a rendering framework, the second
+/// because displacement is a fact about the *relation between* two surfaces and belongs to
+/// neither. `tests/surface_registration_cost.rs` makes that concrete: a surface may be named only
+/// in its own module and here, so a feature module declaring what it displaces would break the
+/// cost guarantee five times over.
+///
+/// Until T067a-2 the relation was not written down anywhere. Five toggle reducers each assigned
+/// their neighbours' fields — twelve cross-feature writes — and reading the rule meant opening
+/// five files and comparing them. It is not a uniform rule and never was, which is why it is
+/// declared per surface rather than derived from the band:
+/// `tests/popover_displacement.rs` states all forty-two ordered pairs independently.
 macro_rules! register {
-    ($($surface:ty $(=> $view:path)?),+ $(,)?) => {
+    ($($surface:ty $(=> $view:path)? $({ displaces: $($displaced:ty),+ $(,)? })?),+ $(,)?) => {
         static REGISTERED: &[Probe] = &[
             $(|state| <$surface as Registered>::open_in(state)
-                .map(|s| Open::from(&s)$(.drawn_by($view))?)),+
+                .map(|s| Open::from(&s)
+                    $(.drawn_by($view))?
+                    $(.displacing(&[$(<$displaced>::ID),+]))?)),+
         ];
     };
 }
 
 register! {
     crate::features::help::AboutDialog => crate::ui::about::dialog,
-    crate::features::help::HelpMenu,
+    crate::features::help::HelpMenu {
+        displaces:
+            crate::features::project::ProjectSwitcher,
+            crate::features::sidebar::SidebarFilterPanel,
+            crate::features::project::ProjectContextMenu,
+    },
     crate::features::project::ConfirmForgetProjectDialog => crate::ui::confirm_forget::dialog,
-    crate::features::project::ProjectContextMenu,
+    // The switcher is deliberately absent: this menu is opened by right-clicking a row *inside*
+    // the open switcher, and the row list has to stay visible behind it. The same fact
+    // `ProjectContextMenu::layer` states about the z-order, stated here about displacement, and
+    // pinned by `tests/switcher_forget_menu.rs`.
+    crate::features::project::ProjectContextMenu {
+        displaces:
+            crate::features::help::HelpMenu,
+            crate::features::sidebar::SidebarFilterPanel,
+            crate::features::worktree::WorktreeContextMenu,
+    },
     crate::features::project::ProjectSelectorDialog => crate::ui::project_selector::dialog,
-    crate::features::project::ProjectSwitcher,
+    crate::features::project::ProjectSwitcher {
+        displaces:
+            crate::features::help::HelpMenu,
+            crate::features::sidebar::SidebarFilterPanel,
+            crate::features::project::ProjectContextMenu,
+    },
     crate::features::project::RenameProjectDialog => crate::ui::rename::dialog,
     crate::features::session::ConfirmSessionRemoveDialog => crate::ui::confirm_session_remove::dialog,
     crate::features::session::SessionContextMenu,
     crate::features::session::TerminalContextMenu,
     crate::features::session::ShellInstanceMenu,
     crate::features::settings::SettingsDialog => crate::ui::settings_form::dialog,
-    crate::features::sidebar::SidebarFilterPanel,
+    crate::features::sidebar::SidebarFilterPanel {
+        displaces:
+            crate::features::help::HelpMenu,
+            crate::features::project::ProjectSwitcher,
+            crate::features::project::ProjectContextMenu,
+    },
     crate::features::worktree::ConfirmWorktreeDeleteDialog => crate::ui::confirm_delete::dialog,
-    crate::features::worktree::WorktreeContextMenu,
+    // The project row menu and nothing else: the two context menus replace each other, and a panel
+    // popover open elsewhere in the window is unaffected by a right-click in the sidebar.
+    crate::features::worktree::WorktreeContextMenu {
+        displaces: crate::features::project::ProjectContextMenu,
+    },
     crate::features::worktree::RenameWorktreeDialog => crate::ui::worktree_rename::dialog,
     crate::features::worktree_form::AddWorktreeDialog => crate::ui::worktree_form::dialog,
 }
@@ -364,10 +434,12 @@ pub fn close_on_scroll_beneath(state: &mut State) {
 
 /// Close surfaces one at a time, re-asking which are open after each.
 ///
-/// Re-asking is not caution, it is required. Several of these cancellations are *toggles*, and the
-/// reducer arms behind them close their neighbours too (the three panel popovers are mutually
-/// exclusive). Sending a batch collected up front would hand a toggle to a surface that an earlier
-/// message had already closed — and reopen it.
+/// Re-asking is not caution, it is required. Several of these cancellations are *toggles*, and
+/// sending one to a surface that an earlier message already closed would **open** it. That was
+/// reachable before T067a-2 because the toggle reducers assigned their neighbours' fields, and it
+/// still is: a toggle now reports `Outcome::SurfaceOpened` and [`displace`] closes what that
+/// surface displaces, so the batch a caller collected up front can still be stale by the time it
+/// is sent. The mechanism moved; the hazard did not.
 ///
 /// Bounded by the number of registrations, so a surface whose cancellation does not actually close
 /// it costs one wasted pass rather than a hang. `every_registered_popover_can_be_closed` in
@@ -382,4 +454,48 @@ fn close_each(state: &mut State, open: fn(&State) -> Vec<Open>) {
         };
         state.update(cancel);
     }
+}
+
+/// Close whatever the surface `id` displaces, now that it has opened (T067a-2).
+///
+/// The other half of `Outcome::SurfaceOpened`. A feature reports that its surface opened; which
+/// *other* surfaces that closes is the registry's business, because it is a fact about the
+/// relation between surfaces and no single feature owns a relation. Until T067a-2 the five toggle
+/// reducers each assigned their neighbours' fields directly — twelve cross-feature writes, and a
+/// rule that could only be read by opening five files and comparing them.
+///
+/// Each displaced surface is closed through the cancellation it declared, exactly as [`dismiss`]
+/// does, so a surface still closes only one way. Nothing cascades: a cancellation that reopens
+/// nothing has nothing to displace, and the surfaces here are closing rather than opening.
+///
+/// A surface that is not open is silently skipped, and an unopened `id` displaces nothing —
+/// the same tolerance [`dismiss`] has, and for the same reason.
+pub fn displace(state: &mut State, id: SurfaceId) {
+    let Some(displaced) = open_among(probes(), state)
+        .into_iter()
+        .find(|open| open.id() == id)
+        .map(|open| open.displaces())
+    else {
+        return;
+    };
+    for target in displaced {
+        dismiss(state, *target);
+    }
+}
+
+/// Close one surface by id, if it is open (feature 021, T065 — `Outcome::OverlayDismissed`).
+///
+/// The registry is what knows *how* a surface closes — its cancellation message — so a feature
+/// that has decided a surface should go names it and stops there (contract O2). Unknown or
+/// already-closed ids are silently fine: an outcome describes a consequence, and a consequence
+/// that has already happened is not an error.
+pub fn dismiss(state: &mut State, id: SurfaceId) {
+    let Some(cancel) = open_among(probes(), state)
+        .into_iter()
+        .find(|open| open.id() == id)
+        .and_then(|open| open.cancel().cloned())
+    else {
+        return;
+    };
+    state.update(cancel);
 }

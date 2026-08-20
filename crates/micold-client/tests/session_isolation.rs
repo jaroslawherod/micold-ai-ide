@@ -40,7 +40,7 @@ fn three_projects_run_concurrently_with_no_cap() {
 fn switching_among_projects_never_stops_a_session() {
     let mut st = three_projects();
     for p in ["/p2", "/p3", "/p1", "/p2"] {
-        assert!(st.switch_active(Path::new(p)));
+        assert!(st.switch_active(Path::new(p)).is_some());
         for q in ["/p1", "/p2", "/p3"] {
             let list = &st.workspace.sessions[Path::new(q)];
             assert_eq!(list.len(), 1, "no session dropped from {q}");
@@ -122,7 +122,7 @@ fn two_concurrent_default_sessions_are_independent() {
 fn displayed_session_always_belongs_to_the_active_project() {
     let mut st = three_projects();
     for p in ["/p2", "/p3", "/p1"] {
-        assert!(st.switch_active(Path::new(p)));
+        assert!(st.switch_active(Path::new(p)).is_some());
         let expected = st.workspace.sessions[Path::new(p)][0].id;
         assert_eq!(
             st.active_session,

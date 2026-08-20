@@ -64,6 +64,11 @@ builds the client and **silently skips the daemon**, leaving whatever `target-sh
 The `cp` then pins a matched-looking pair that is not one. It cost a pass two rounds: the daemon was
 a version behind, and the log said so plainly once it was read (`client_version=6 … daemon_version=5`).
 
+**Check that it happened**, rather than trusting the flags: `cargo build … | grep "Compiling micold"`
+should name **micold-core, micold-client and micold-daemon**. If the daemon is absent from that
+list, nothing you copy is yours — which is what the mismatch below actually means, and the reason it
+reads as a schema-hash quirk instead.
+
 One invocation, both binaries, copy inside the lock — then run the copies. Three details:
 
 - **The client and the daemon must come from the same build.** The client refuses a daemon whose

@@ -83,6 +83,88 @@ Re-measure at each phase checkpoint and append a row.
 | T022 (connection) | 3,561 | 1,727 | first `main.rs` movement; source was `ui/mod.rs` |
 | T023 (re-exports gone) | 3,561 | 1,689 | −38; every call site imports from `features::*` |
 | **T058 (SC-004b checkpoint)** | **1,672** | **1,872** | Tiers 1–2 + shell split merged; `app.rs` grew, see below |
+| **T078 (final)** | **1,675** | **1,334** | Phases 6–7; `app.rs` −538 as the reducer arms became routing |
+
+## T078 — final re-measurement (2026-08-20)
+
+Against the table at the top of this file, measured on the finished tree. **Comment lines are
+stripped before counting fields and variants**, which the baseline did not say it did; the shapes
+being counted are unambiguous either way.
+
+### The two target files
+
+| File | Baseline | Now | Change |
+|---|---:|---:|---|
+| `crates/micold-client/src/main.rs` | 3,567 | **1,675** | **−53%**, and it no longer holds an inline test module |
+| `crates/micold-client/src/app.rs` | 2,434 | **1,334** | **−45%** |
+
+Ranked among all source files, `main.rs` went **1st → 4th** and `app.rs` **2nd → 8th**.
+
+**SC-003 as this file framed it is half met, and the half that is not is `main.rs`.** The criterion
+reads "neither remains among the largest, with `server.rs` (1,483) becoming the largest source
+file". `server.rs` is now 1,582 and **5th**; the largest is `tests/app_state.rs` at 2,146, and
+`shell/daemon_sync.rs` at 2,118 is the largest *production* file. `main.rs` is still above
+`server.rs`. T069 records the substance: FR-005 governs, neither file holds more than one feature,
+and `root_is_routing_only.rs` pins that at an exact 0 rather than measuring it.
+
+### Ten largest source files
+
+| Lines | File | Then |
+|---:|---|---|
+| 2,146 | `crates/micold-client/tests/app_state.rs` | 1,220 (6th) |
+| 2,118 | `crates/micold-client/src/shell/daemon_sync.rs` | did not exist |
+| 1,745 | `crates/micold-client/src/ui/material/terminal_pane.rs` | 1,348 (4th) |
+| 1,675 | `crates/micold-client/src/main.rs` | 3,567 (1st) |
+| 1,582 | `crates/micold-daemon/src/server.rs` | 1,483 (3rd) |
+| 1,466 | `crates/micold-daemon/src/state.rs` | 1,317 (5th) |
+| 1,399 | `crates/micold-daemon/tests/mutation_semantics.rs` | 1,185 (7th) |
+| 1,334 | `crates/micold-client/src/app.rs` | 2,434 (2nd) |
+| 1,324 | `crates/micold-client/tests/feature_write_isolation.rs` | did not exist |
+| 1,231 | `crates/micold-client/src/ui/terminal.rs` | — |
+
+`shell/daemon_sync.rs` is where `main.rs`'s I/O went; it is the shell, not a feature, and is out of
+FR-005's scope for the reason T069 records. The daemon's two files grew ~7% on their own — Q1 put
+the daemon out of scope and it kept moving, which is the same drift the baseline was taken to
+measure.
+
+### Structural counts
+
+| Concern | Baseline | Now | Note |
+|---|---:|---:|---|
+| `State` fields | 37 | **41** | +4; other features shipped meanwhile |
+| `Message` variants | 130 | **116** | **−14**; T064 nested the form's vocabulary |
+| `Overlay` variants | 10 | **0** | the enum is gone (T037) |
+| `ClosingOverlay` variants | 9 | **0** | gone (T036) — one `Closing` type, no per-surface list |
+| Ad-hoc popover state fields | 7 | 8 | +1 (`about_open`, T037); they are no longer *ad hoc* — each is read by one registration |
+| Client integration-test files | 73 | **104** | +31 |
+| Service ports in core | 7 | **10** | +3 |
+| Registered floating surfaces | — | **16** | one line each, in one file |
+| Feature modules | — | **10** | one registration line each |
+| Cross-feature writes (`ALLOWED`) | — | **0** | 43 at its peak |
+| Root decision arms | 93 | **0** | exact, and pinned (T063) |
+
+### Reducers
+
+| Reducer | Baseline | Now | Change |
+|---|---:|---:|---|
+| `update_inner` (`main.rs`) | 1,253 | **186** | **−85%** |
+| `State::update` (`app.rs`) | 778 | **285** | **−63%**, and every one of its arms is routing |
+
+The two reducers together went from **2,031 lines to 471**. `State::update` is now one arm per
+message and nothing else; `update_inner` is the shell's I/O half.
+
+### Drift history
+
+| Date | `main.rs` | `app.rs` | `State` | `Message` |
+|---|---:|---:|---:|---:|
+| 2026-07-28 | 2,914 | 2,245 | 36 | 124 |
+| 2026-08-06 | 3,467 | 2,358 | 36 | 128 |
+| 2026-08-07 | 3,567 | 2,434 | 37 | 130 |
+| 2026-08-08 (baseline) | 3,567 | 2,434 | 37 | 130 |
+| **2026-08-20 (T078)** | **1,675** | **1,334** | **41** | **116** |
+
+The growth the baseline was taken to argue about has reversed: 22% and 8% up over the ten days
+before, 53% and 45% down over the twelve days since.
 
 ## T025 — SC-010 review at the Tier 1 checkpoint
 

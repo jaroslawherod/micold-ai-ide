@@ -4,6 +4,16 @@
 //! builds a `State`. What it holds to is the other half of SC-004 — it names no other feature's
 //! types. No sidebar rows, no overlays, no drafts.
 //!
+//! The three `let _ =` bindings below are the same decision spelled for a function whose answer is
+//! only outcomes: this file asserts on no sidebar field, so dropping them is the boundary rather
+//! than a shortcut. A test that asserts a *moved* consequence needs a draining helper instead —
+//! `tests/switch_active.rs` has one, and T067a-6 records the four files that needed it.
+//!
+//! `switch_active` now answers `Option<Vec<Outcome>>` rather than `bool` — `None` is still the
+//! refusal, and the outcomes are the sidebar consequences of arriving somewhere (T067a-6). This
+//! file drops them on the floor deliberately: it asserts on no sidebar field, which is the same
+//! boundary the header claims above, and the split turned out to fall exactly along it.
+//!
 //! The switch sequence is what is worth pinning here. Its step order is load-bearing
 //! (data-model.md I1) and every step is individually plausible in the wrong place, which is exactly
 //! the kind of thing a refactor breaks quietly.
@@ -54,7 +64,7 @@ fn switching_to_an_unknown_project_changes_nothing_and_says_so() {
     let (mut st, a, _) = two_projects(1, 1);
     st.active_session = Some(a[0]);
 
-    let switched = st.switch_active(Path::new("/nowhere"));
+    let switched = st.switch_active(Path::new("/nowhere")).is_some();
 
     assert!(
         !switched,
@@ -78,8 +88,8 @@ fn switching_away_and_back_returns_to_the_session_that_was_in_front() {
     let (mut st, a, _) = two_projects(2, 1);
     st.active_session = Some(a[1]);
 
-    assert!(st.switch_active(Path::new("/b")));
-    assert!(st.switch_active(Path::new("/a")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
+    assert!(st.switch_active(Path::new("/a")).is_some());
 
     assert_eq!(
         st.active_session,
@@ -94,7 +104,7 @@ fn switching_away_and_back_returns_to_the_session_that_was_in_front() {
 fn entering_a_project_with_no_recorded_foreground_falls_back_to_a_running_session() {
     let (mut st, _, b) = two_projects(1, 1);
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
 
     assert_eq!(
         st.active_session,
@@ -114,7 +124,7 @@ fn a_switch_lands_on_a_terminal_ready_to_type() {
     let (mut st, _, _) = two_projects(1, 1);
     st.update(micold_client::app::Message::TerminalFocusReleased);
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
 
     assert!(
         st.terminal_focused(),
@@ -145,7 +155,7 @@ fn a_restart_in_an_inactive_project_is_remembered_until_the_user_returns() {
         "it happened out of sight, so it is owed a notice"
     );
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
 
     assert!(
         !st.restarted_while_inactive.contains(&b[0]),
@@ -258,8 +268,8 @@ fn restoring_a_stopped_session_does_not_start_it() {
         session.record_clean_exit();
     }
 
-    assert!(st.switch_active(Path::new("/b")));
-    assert!(st.switch_active(Path::new("/a")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
+    assert!(st.switch_active(Path::new("/a")).is_some());
 
     assert_eq!(st.active_session, Some(a[0]), "restored");
     assert!(
@@ -305,8 +315,8 @@ fn the_choice_is_recorded_where_the_binary_can_log_it() {
     st.active_session = Some(a[0]);
     st.record_foreground();
 
-    assert!(st.switch_active(Path::new("/b")));
-    assert!(st.switch_active(Path::new("/a")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
+    assert!(st.switch_active(Path::new("/a")).is_some());
 
     assert_eq!(
         st.last_foreground_choice,
@@ -338,7 +348,7 @@ fn a_foreground_resolved_before_the_catalog_arrived_is_resolved_again_when_it_do
         .sessions
         .remove(Path::new("/a"))
         .expect("sessions");
-    st.restore_after_activation(Path::new("/a"));
+    let _ = st.restore_after_activation(Path::new("/a"));
     assert_eq!(
         st.last_foreground_choice,
         Some(ForegroundChoice::NoSessionsForKey),
@@ -350,7 +360,7 @@ fn a_foreground_resolved_before_the_catalog_arrived_is_resolved_again_when_it_do
     st.workspace.sessions.insert(PathBuf::from("/a"), staged);
 
     assert!(
-        st.resolve_foreground_after_catalog(),
+        st.resolve_foreground_after_catalog().is_some(),
         "the resolve must be re-run now that the data it needed exists"
     );
     assert_eq!(
@@ -373,7 +383,7 @@ fn a_deliberate_landing_on_the_project_overview_is_left_alone() {
     for s in st.workspace.sessions.get_mut(Path::new("/a")).unwrap() {
         s.record_clean_exit();
     }
-    st.restore_after_activation(Path::new("/a"));
+    let _ = st.restore_after_activation(Path::new("/a"));
     assert!(
         matches!(
             st.last_foreground_choice,
@@ -384,7 +394,7 @@ fn a_deliberate_landing_on_the_project_overview_is_left_alone() {
     );
 
     assert!(
-        !st.resolve_foreground_after_catalog(),
+        st.resolve_foreground_after_catalog().is_none(),
         "nothing was missing, so nothing is re-resolved — the user is on the overview because that \
          is where the rule put them (FR-007)"
     );
@@ -397,9 +407,9 @@ fn a_deliberate_landing_on_the_project_overview_is_left_alone() {
 fn a_catalog_arriving_mid_session_does_not_move_the_user() {
     let (mut st, ids_a, _) = two_projects(2, 0);
     st.workspace.active = Some(PathBuf::from("/a"));
-    st.set_current_session(Some(ids_a[1]));
+    let _ = st.set_current_session(Some(ids_a[1]));
 
-    assert!(!st.resolve_foreground_after_catalog());
+    assert!(st.resolve_foreground_after_catalog().is_none());
     assert_eq!(
         st.active_session,
         Some(ids_a[1]),

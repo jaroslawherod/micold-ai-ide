@@ -114,9 +114,14 @@ pub(crate) fn on_folder_chosen(app: &mut App, path: PathBuf) -> Task<Message> {
     app.core
         .workspace
         .open_or_activate(path.clone(), app.caps.scanner());
-    app.core.restore_after_activation(&path);
-    app.core
+    let arrival = app.core.restore_after_activation(&path);
+    micold_client::app::drain(arrival, |o| micold_client::app::interpret(&mut app.core, o));
+    let outcomes = app
+        .core
         .set_worktrees(discover_worktrees(app.caps.git(), &path));
+    micold_client::app::drain(outcomes, |o| {
+        micold_client::app::interpret(&mut app.core, o)
+    });
     app.core.worktree_error = None;
     crate::log_foreground_choice(app, &path);
     // The daemon is the single writer: tell it to learn this project (persist + discover),
@@ -139,9 +144,14 @@ pub(crate) fn on_known_project_reopened(app: &mut App, path: PathBuf) -> Task<Me
     // Non-destructive switch: keep the outgoing project's sessions running in the
     // background and restore the target project's foreground (feature 008, BS-1/BS-3).
     let previous = app.core.workspace.active.clone();
-    if app.core.switch_active(&path) {
-        app.core
+    if let Some(arrival) = app.core.switch_active(&path) {
+        micold_client::app::drain(arrival, |o| micold_client::app::interpret(&mut app.core, o));
+        let outcomes = app
+            .core
             .set_worktrees(discover_worktrees(app.caps.git(), &path));
+        micold_client::app::drain(outcomes, |o| {
+            micold_client::app::interpret(&mut app.core, o)
+        });
         crate::log_foreground_choice(app, &path);
         // Already a known project (no ProjectAdd); just move the daemon attachment.
         switch_daemon_attachment(app, previous, &path);

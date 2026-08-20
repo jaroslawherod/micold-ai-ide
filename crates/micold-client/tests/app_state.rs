@@ -1,11 +1,33 @@
 //! T011 — extended app base state: defaults + new message wiring (feature 005).
 
-use micold_client::app::{on_escape, FieldId, Message, State};
+use micold_client::app::{on_escape, Message, State};
+use micold_client::features::window::FieldId;
 use micold_client::ui::terminal::StripTab;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 /// Asked of the registry, which reads each dialog's own state, so this is the same question about
 /// the same fact rather than a weaker one.
+/// Switch project the way the root does: apply the outcomes, don't just produce them (T067a-6).
+///
+/// `switch_active` reports arriving in a project rather than performing its view resets, so a test
+/// that dropped the outcomes would assert against a half-applied switch.
+fn switch(state: &mut State, path: &std::path::Path) -> bool {
+    match state.switch_active(path) {
+        Some(outcomes) => {
+            micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
+            true
+        }
+        None => false,
+    }
+}
+
+/// Change the current session the way the root does (T067a-6): the commit of the outgoing row and
+/// the armed scroll are outcomes now, so a test that dropped them would assert against half a move.
+fn set_current(state: &mut State, next: Option<SessionId>) {
+    let outcomes = state.set_current_session(next);
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
+}
+
 fn open_dialog(state: &State) -> Option<&'static str> {
     micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
 }
@@ -32,7 +54,9 @@ fn defaults_are_empty() {
 #[test]
 fn opening_the_form_sets_overlay_and_draft() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
     assert_eq!(open_dialog(&state), Some("add_worktree"));
     assert!(state.worktree_form.is_some());
 }
@@ -40,10 +64,18 @@ fn opening_the_form_sets_overlay_and_draft() {
 #[test]
 fn form_edits_build_a_derived_preview() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
-    state.update(Message::AddWorktreeTicketChanged("ABC-1".to_string()));
-    state.update(Message::AddWorktreeNameChanged("Login".to_string()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TicketChanged("ABC-1".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("Login".to_string()),
+    ));
 
     let form = state.worktree_form.as_ref().unwrap();
     let derived = form.preview().unwrap();
@@ -55,17 +87,25 @@ fn form_edits_build_a_derived_preview() {
 #[test]
 fn submitting_an_invalid_form_records_the_error() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
     // No type selected, no name.
-    state.update(Message::AddWorktreeSubmitted);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Submitted,
+    ));
     assert!(state.worktree_form.as_ref().unwrap().error.is_some());
 }
 
 #[test]
 fn cancelling_the_form_clears_it() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeCancelled);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Cancelled,
+    ));
     assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_form.is_none());
 }
@@ -73,7 +113,9 @@ fn cancelling_the_form_clears_it() {
 #[test]
 fn created_worktree_is_added_and_form_closed() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
     let wt = Worktree {
         dir_name: "feat-x".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
@@ -81,7 +123,9 @@ fn created_worktree_is_added_and_form_closed() {
         status: WorktreeStatus::Valid,
         included: false,
     };
-    state.update(Message::WorktreeCreated(wt));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Created(wt),
+    ));
     assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_form.is_none());
     assert_eq!(state.worktrees.len(), 1);
@@ -90,8 +134,12 @@ fn created_worktree_is_added_and_form_closed() {
 #[test]
 fn create_started_marks_form_creating() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
     assert_eq!(
         state.worktree_form.as_ref().unwrap().status,
         WorktreeFormStatus::Creating
@@ -101,17 +149,29 @@ fn create_started_marks_form_creating() {
 #[test]
 fn field_edits_are_ignored_while_creating() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
-    state.update(Message::AddWorktreeNameChanged("Login".to_string()));
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("Login".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
 
     // The whole form is inactive while a create is in flight (feature 010 follow-up), not
     // just the submit button — edits during this window must be no-ops.
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Fix));
-    state.update(Message::AddWorktreeTicketChanged("ABC-1".to_string()));
-    state.update(Message::AddWorktreeNameChanged(
-        "Something else".to_string(),
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Fix),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TicketChanged("ABC-1".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("Something else".to_string()),
     ));
 
     let form = state.worktree_form.as_ref().unwrap();
@@ -123,9 +183,15 @@ fn field_edits_are_ignored_while_creating() {
 #[test]
 fn create_failed_keeps_form_open_and_resets_status_to_editing() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
-    state.update(Message::WorktreeCreateFailed("boom".to_string()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
     assert_eq!(state.worktree_error.as_deref(), Some("boom"));
     assert!(state.worktree_form.is_some(), "form stays open for retry");
     assert_eq!(
@@ -134,17 +200,76 @@ fn create_failed_keeps_form_open_and_resets_status_to_editing() {
     );
 }
 
+/// A worktree list change clears a create failure shown against the old list (T067a-4).
+///
+/// Written because probe P3 fired nothing: removing the root's routing of `WorktreesReplaced` to
+/// the form left all 104 client suites green, so this behaviour was unguarded — and had been since
+/// before T067a-4, when the clear lived in `worktree::loaded` with no test either. The routing is
+/// what makes `worktree_error` the form's own field rather than a thing the worktree feature
+/// reaches into, so it is worth pinning rather than trusting.
+#[test]
+fn a_worktree_list_change_clears_a_stale_create_failure() {
+    let mut state = State::default();
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
+    assert_eq!(state.worktree_error.as_deref(), Some("boom"));
+
+    state.update(Message::WorktreesLoaded(vec![]));
+    assert!(
+        state.worktree_error.is_none(),
+        "discovery answering makes a failure against the previous list stale"
+    );
+}
+
+/// The same, for the other path that alters the list (016 BUG-002).
+#[test]
+fn an_include_clears_a_stale_create_failure_too() {
+    let mut state = State::default();
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
+
+    state.update(Message::WorktreeIncluded(Worktree {
+        dir_name: "feat-x".to_string(),
+        path: PathBuf::from("/p/.claude/worktrees/feat-x"),
+        branch: Some("feat/x".to_string()),
+        status: WorktreeStatus::Valid,
+        included: true,
+    }));
+    assert!(state.worktree_error.is_none());
+    assert_eq!(state.worktrees.len(), 1, "the include still lands");
+}
+
 #[test]
 fn resubmitting_while_creating_is_a_no_op() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
-    state.update(Message::AddWorktreeNameChanged("Login".to_string()));
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("Login".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
     // Corrupt the form to prove the guard skips validation entirely while Creating —
     // an unguarded AddWorktreeSubmitted would call preview() and record an error here.
-    state.update(Message::AddWorktreeNameChanged(String::new()));
-    state.update(Message::AddWorktreeSubmitted);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged(String::new()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Submitted,
+    ));
     assert!(state.worktree_form.as_ref().unwrap().error.is_none());
 }
 
@@ -153,10 +278,14 @@ fn resubmitting_while_creating_is_a_no_op() {
 #[test]
 fn selecting_a_type_sets_the_form_value() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
     assert_eq!(state.worktree_form.as_ref().unwrap().type_, None);
 
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
     assert_eq!(
         state.worktree_form.as_ref().unwrap().type_,
         Some(ConventionalType::Feat)
@@ -166,12 +295,22 @@ fn selecting_a_type_sets_the_form_value() {
 #[test]
 fn type_selection_is_ignored_while_creating() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
-    state.update(Message::AddWorktreeNameChanged("Login".to_string()));
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("Login".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
 
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Fix));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Fix),
+    ));
     assert_eq!(
         state.worktree_form.as_ref().unwrap().type_,
         Some(ConventionalType::Feat)
@@ -193,13 +332,16 @@ fn session_started_selected_and_closed() {
     // session is started *from* its row. Feature 024 made this matter: a row is opened for the
     // current session only when the panel knows the location (FR-013), where the old expansion
     // write happened whether the location existed or not.
-    state.set_worktrees(vec![Worktree {
-        dir_name: "feat-x".to_string(),
-        path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
-        branch: Some("feat/x".to_string()),
-        status: WorktreeStatus::Valid,
-        included: false,
-    }]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![Worktree {
+            dir_name: "feat-x".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
+            branch: Some("feat/x".to_string()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
 
     let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     let id = session.id;
@@ -545,7 +687,7 @@ fn switching_projects_resets_the_reveal_control() {
     state.update(Message::ShowAgentWorktreesToggled);
     assert!(state.show_agent_worktrees);
 
-    assert!(state.switch_active(&other));
+    assert!(switch(&mut state, &other));
     assert!(
         !state.show_agent_worktrees,
         "the incoming project must be entered with agent worktrees hidden"
@@ -553,7 +695,7 @@ fn switching_projects_resets_the_reveal_control() {
 
     // Switching back does not restore it either — nothing is remembered per project.
     let first = PathBuf::from("/repo");
-    assert!(state.switch_active(&first));
+    assert!(switch(&mut state, &first));
     assert!(!state.show_agent_worktrees);
 }
 
@@ -866,9 +1008,15 @@ fn multi_remote_conflict() -> BranchSituation {
 /// A form with valid new-branch inputs, ready to submit.
 fn form_state() -> State {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
-    state.update(Message::AddWorktreeNameChanged("login".to_string()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("login".to_string()),
+    ));
     state
 }
 
@@ -883,7 +1031,9 @@ fn a_detected_conflict_opens_the_choice_prompt() {
     let mut state = form_state();
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
 
     assert_eq!(
         form(&state).resolution,
@@ -897,11 +1047,17 @@ fn a_detected_conflict_opens_the_choice_prompt() {
 #[test]
 fn cancelling_the_choice_restores_idle_and_preserves_every_input() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeTicketChanged("ABC-123".to_string()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TicketChanged("ABC-123".to_string()),
+    ));
     let before = form(&state).clone();
 
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
-    state.update(Message::AddWorktreeResolutionCancelled);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionCancelled,
+    ));
 
     let after = form(&state);
     assert_eq!(after.resolution, ResolutionState::Idle);
@@ -918,10 +1074,14 @@ fn cancelling_the_choice_restores_idle_and_preserves_every_input() {
 #[test]
 fn overwrite_requires_passing_through_the_confirmation() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
 
     // Invariant 1: the destructive mode cannot be chosen straight from the prompt.
-    state.update(Message::AddWorktreeResolutionChosen(CreateMode::Overwrite));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionChosen(CreateMode::Overwrite),
+    ));
     assert_eq!(
         form(&state).resolution,
         ResolutionState::Choosing {
@@ -930,7 +1090,9 @@ fn overwrite_requires_passing_through_the_confirmation() {
         "Overwrite must not resolve directly from the choice"
     );
 
-    state.update(Message::AddWorktreeOverwriteRequested);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::OverwriteRequested,
+    ));
     assert_eq!(
         form(&state).resolution,
         ResolutionState::ConfirmingOverwrite {
@@ -938,7 +1100,9 @@ fn overwrite_requires_passing_through_the_confirmation() {
         }
     );
 
-    state.update(Message::AddWorktreeOverwriteConfirmed);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::OverwriteConfirmed,
+    ));
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 }
 
@@ -946,10 +1110,16 @@ fn overwrite_requires_passing_through_the_confirmation() {
 fn backing_out_of_the_confirmation_returns_to_the_choice_not_the_form() {
     // Invariant 3 (US2 AS3): reuse and cancel must still be available afterwards.
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
-    state.update(Message::AddWorktreeOverwriteRequested);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::OverwriteRequested,
+    ));
 
-    state.update(Message::AddWorktreeResolutionCancelled);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionCancelled,
+    ));
 
     assert_eq!(
         form(&state).resolution,
@@ -963,8 +1133,12 @@ fn backing_out_of_the_confirmation_returns_to_the_choice_not_the_form() {
 fn overwrite_cannot_be_requested_for_a_remote_only_branch() {
     // There is no local branch to destroy, so the confirmation must never open.
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(remote_conflict()));
-    state.update(Message::AddWorktreeOverwriteRequested);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(remote_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::OverwriteRequested,
+    ));
 
     assert_eq!(
         form(&state).resolution,
@@ -977,16 +1151,22 @@ fn overwrite_cannot_be_requested_for_a_remote_only_branch() {
 #[test]
 fn choosing_reuse_or_track_resolves_the_prompt() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
-    state.update(Message::AddWorktreeResolutionChosen(CreateMode::ReuseLocal));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionChosen(CreateMode::ReuseLocal),
+    ));
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(remote_conflict()));
-    state.update(Message::AddWorktreeResolutionChosen(
-        CreateMode::TrackRemote {
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(remote_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionChosen(CreateMode::TrackRemote {
             remote: "origin".to_string(),
-        },
+        }),
     ));
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 }
@@ -995,8 +1175,12 @@ fn choosing_reuse_or_track_resolves_the_prompt() {
 #[test]
 fn starting_fresh_over_a_remote_branch_resolves_to_a_new_branch() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(remote_conflict()));
-    state.update(Message::AddWorktreeResolutionChosen(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(remote_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionChosen(CreateMode::NewBranch),
+    ));
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 }
 
@@ -1004,10 +1188,14 @@ fn starting_fresh_over_a_remote_branch_resolves_to_a_new_branch() {
 #[test]
 fn a_conflict_is_never_raised_while_a_create_is_in_flight() {
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
     assert_eq!(form(&state).status, WorktreeFormStatus::Creating);
 
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
 
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 }
@@ -1015,10 +1203,16 @@ fn a_conflict_is_never_raised_while_a_create_is_in_flight() {
 #[test]
 fn edits_are_ignored_while_a_prompt_is_open() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
 
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/other")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/other")),
+    ));
 
     assert_eq!(form(&state).source, BranchSource::New);
     assert_eq!(form(&state).selected_branch, None);
@@ -1042,8 +1236,12 @@ fn a_blocked_situation_offers_no_actionable_mode_and_dismisses_to_idle() {
 
         let mut state = form_state();
         let before = form(&state).clone();
-        state.update(Message::AddWorktreeConflictDetected(situation));
-        state.update(Message::AddWorktreeResolutionCancelled);
+        state.update(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::ConflictDetected(situation),
+        ));
+        state.update(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::ResolutionCancelled,
+        ));
 
         assert_eq!(form(&state).resolution, ResolutionState::Idle);
         assert_eq!(form(&state).name, before.name);
@@ -1104,12 +1302,18 @@ fn blocked_candidate(name: &str) -> BranchCandidate {
 #[test]
 fn switching_to_the_existing_source_and_back_clears_the_selection() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/other")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/other")),
+    ));
     assert_eq!(form(&state).source, BranchSource::Existing);
     assert!(form(&state).selected_branch.is_some());
 
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::New));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::New),
+    ));
 
     // FR-015: no residual state, and the new-branch inputs are untouched.
     assert_eq!(form(&state).selected_branch, None);
@@ -1122,13 +1326,15 @@ fn the_preview_follows_the_active_source() {
     let mut state = form_state();
     assert_eq!(form(&state).preview().unwrap().branch, "feat/login");
 
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
     // Nothing picked yet — no preview to show.
     assert!(form(&state).preview().is_err());
 
-    state.update(Message::AddWorktreeBranchSelected(candidate(
-        "release/v1.2",
-    )));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("release/v1.2")),
+    ));
     let derived = form(&state).preview().unwrap();
     // FR-014: the directory is derived from the branch, using the same naming rules.
     assert_eq!(derived.branch, "release/v1.2");
@@ -1146,18 +1352,22 @@ fn the_preview_follows_the_active_source() {
 #[test]
 fn a_blocked_candidate_cannot_even_become_the_selection() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
 
-    state.update(Message::AddWorktreeBranchSelected(blocked_candidate(
-        "main",
-    )));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(blocked_candidate("main")),
+    ));
     assert!(
         form(&state).selected_branch.is_none(),
         "a branch that is checked out elsewhere must not be choosable at all (FR-012a)"
     );
     assert!(!form(&state).can_submit());
 
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/free")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/free")),
+    ));
     assert_eq!(
         form(&state).selected_branch.as_ref().unwrap().name,
         "feat/free"
@@ -1181,11 +1391,15 @@ fn the_submit_guard_still_refuses_a_blocked_selection_if_one_ever_reached_it() {
 #[test]
 fn the_listed_candidates_are_stored_for_the_picker() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
-    state.update(Message::AddWorktreeBranchesListed(vec![
-        candidate("feat/a"),
-        blocked_candidate("main"),
-    ]));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchesListed(vec![
+            candidate("feat/a"),
+            blocked_candidate("main"),
+        ]),
+    ));
     assert_eq!(form(&state).candidates.len(), 2);
 }
 
@@ -1194,13 +1408,19 @@ fn submission_is_blocked_while_a_prompt_is_open_or_a_create_is_running() {
     let mut state = form_state();
     assert!(form(&state).can_submit());
 
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
     assert!(!form(&state).can_submit());
 
-    state.update(Message::AddWorktreeResolutionCancelled);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionCancelled,
+    ));
     assert!(form(&state).can_submit());
 
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
     assert!(!form(&state).can_submit());
 }
 
@@ -1247,10 +1467,14 @@ fn a_single_remote_needs_no_preference() {
 fn the_stage_label_is_worded_for_the_mode_in_flight() {
     // The whole point of FR-024: a reuse must not claim to be creating a branch.
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::ReuseLocal));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::ReuseLocal),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1258,10 +1482,14 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
     );
 
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1269,10 +1497,14 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
     );
 
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::Overwrite));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::Overwrite),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1280,12 +1512,16 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
     );
 
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::TrackRemote {
-        remote: "origin".to_string(),
-    }));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::TrackRemote {
+            remote: "origin".to_string(),
+        }),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1297,10 +1533,14 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
 fn stages_that_do_not_vary_by_mode_read_the_same_everywhere() {
     for mode in [CreateMode::NewBranch, CreateMode::ReuseLocal] {
         let mut state = form_state();
-        state.update(Message::WorktreeCreateStarted(mode));
-        state.update(Message::WorktreeCreateStageChanged(
-            CreateStage::SettingUpSubmodules,
-            None,
+        state.update(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::CreateStarted(mode),
+        ));
+        state.update(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::CreateStageChanged(
+                CreateStage::SettingUpSubmodules,
+                None,
+            ),
         ));
         assert_eq!(form(&state).stage_label(), Some("Setting up submodules"));
     }
@@ -1311,26 +1551,38 @@ fn there_is_no_stage_until_the_daemon_reports_one() {
     // The window between sending the RPC and git starting is real; the view falls back to the
     // generic wording rather than inventing a step.
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::ReuseLocal));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::ReuseLocal),
+    ));
     assert_eq!(form(&state).stage_label(), None);
 }
 
 #[test]
 fn a_new_attempt_never_inherits_the_previous_attempts_stage() {
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::Overwrite));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::Overwrite),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     // The create fails and the user retries with a plain new branch.
-    state.update(Message::WorktreeCreateFailed("boom".to_string()));
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
 
     assert_eq!(form(&state).stage_label(), None);
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1346,10 +1598,14 @@ fn a_live_output_line_is_kept_beside_the_stage_it_belongs_to() {
     // The reported case: "Setting up submodules" sat unchanged for the length of a fetch. The
     // daemon rate-limits these; the form's job is simply to hold the latest one.
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_detail,
@@ -1357,9 +1613,11 @@ fn a_live_output_line_is_kept_beside_the_stage_it_belongs_to() {
         "a stage arrives on its own"
     );
 
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        Some("Cloning into 'vendor/a'…".to_string()),
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            Some("Cloning into 'vendor/a'…".to_string()),
+        ),
     ));
     assert_eq!(
         form(&state).stage_detail.as_deref(),
@@ -1367,9 +1625,11 @@ fn a_live_output_line_is_kept_beside_the_stage_it_belongs_to() {
     );
 
     // Superseded, not accumulated — this is a "where it is now" signal, not a log.
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        Some("Receiving objects:  47%".to_string()),
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            Some("Receiving objects:  47%".to_string()),
+        ),
     ));
     assert_eq!(
         form(&state).stage_detail.as_deref(),
@@ -1387,18 +1647,26 @@ fn a_stage_change_drops_the_previous_stages_trailing_line() {
     // Otherwise a rollback would be captioned with the fetch line that preceded it — the most
     // misleading moment to show a stale line.
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
     ));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        Some("Receiving objects:  47%".to_string()),
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            None,
+        ),
     ));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::RollingBack,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            Some("Receiving objects:  47%".to_string()),
+        ),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::RollingBack,
+            None,
+        ),
     ));
 
     assert_eq!(form(&state).stage_label(), Some("Rolling back"));
@@ -1408,17 +1676,27 @@ fn a_stage_change_drops_the_previous_stages_trailing_line() {
 #[test]
 fn a_new_attempt_never_inherits_the_previous_attempts_line() {
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
     ));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        Some("Cloning into 'vendor/a'…".to_string()),
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            None,
+        ),
     ));
-    state.update(Message::WorktreeCreateFailed("boom".to_string()));
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            Some("Cloning into 'vendor/a'…".to_string()),
+        ),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
 
     assert_eq!(form(&state).stage_detail, None);
 }
@@ -1537,13 +1815,16 @@ fn collapsing_the_revealed_row_closes_it_and_it_stays_closed() {
          a different session is not swallowed by it (invariant I2)"
     );
 
-    state.set_worktrees(vec![Worktree {
-        dir_name: "feat-a".to_string(),
-        path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
-        branch: Some("feat/feat-a".to_string()),
-        status: WorktreeStatus::Valid,
-        included: false,
-    }]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![Worktree {
+            dir_name: "feat-a".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+            branch: Some("feat/feat-a".to_string()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
     assert!(
         !state.location_open(&location),
         "and a worktree re-discovery does not undo it — the case a one-shot implementation gets \
@@ -1606,7 +1887,7 @@ fn a_location_that_stops_holding_the_current_session_stays_open() {
     let mut state = state_with_current_session_in("feat-a");
     let location = SessionLocation::Worktree("feat-a".to_string());
 
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     assert!(
         state.location_open(&location),
@@ -1627,7 +1908,7 @@ fn a_row_the_user_closed_is_not_re_opened_by_the_commit() {
     let location = SessionLocation::Worktree("feat-a".to_string());
     state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
 
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     assert!(
         !state.location_open(&location),
@@ -1641,7 +1922,7 @@ fn clearing_the_current_session_arms_no_scroll() {
     let mut state = state_with_current_session_in("feat-a");
     state.pending_reveal_scroll = false;
 
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     assert!(
         !state.pending_reveal_scroll,
@@ -1661,7 +1942,7 @@ fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
     let next_id = next.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(next);
-    state.set_current_session(Some(next_id));
+    set_current(&mut state, Some(next_id));
 
     assert!(
         state.reveal_suppressed_for.is_none(),
@@ -1760,7 +2041,9 @@ fn a_reveal_waits_for_the_worktree_list_rather_than_scrolling_to_a_stale_row() {
     let mut state = state_with_many_worktrees(30);
     state.sidebar_viewport_height = 400;
     // The switch has happened but discovery has not reported yet: the panel knows of no locations.
-    state.set_worktrees(Vec::new());
+    micold_client::app::drain(state.set_worktrees(Vec::new()), |o| {
+        micold_client::app::interpret(&mut state, o)
+    });
 
     assert!(
         !state.current_session_is_listed(),
@@ -1779,22 +2062,25 @@ fn a_reveal_waits_for_the_worktree_list_rather_than_scrolling_to_a_stale_row() {
 #[test]
 fn starting_a_session_reveals_it() {
     let mut state = state_with_current_session_in("feat-a");
-    state.set_worktrees(vec![
-        Worktree {
-            dir_name: "feat-a".to_string(),
-            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
-            branch: Some("feat/feat-a".to_string()),
-            status: WorktreeStatus::Valid,
-            included: false,
-        },
-        Worktree {
-            dir_name: "feat-b".to_string(),
-            path: PathBuf::from("/repo/.claude/worktrees/feat-b"),
-            branch: Some("feat/feat-b".to_string()),
-            status: WorktreeStatus::Valid,
-            included: false,
-        },
-    ]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![
+            Worktree {
+                dir_name: "feat-a".to_string(),
+                path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+                branch: Some("feat/feat-a".to_string()),
+                status: WorktreeStatus::Valid,
+                included: false,
+            },
+            Worktree {
+                dir_name: "feat-b".to_string(),
+                path: PathBuf::from("/repo/.claude/worktrees/feat-b"),
+                branch: Some("feat/feat-b".to_string()),
+                status: WorktreeStatus::Valid,
+                included: false,
+            },
+        ]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
     state.pending_reveal_scroll = false;
 
     let started = Session::start_new(SessionLocation::Worktree("feat-b".to_string()));
@@ -1903,7 +2189,7 @@ fn applying_the_memory_makes_that_session_current_and_reveals_it() {
     let path = state.workspace.active.clone().unwrap();
 
     let choice = state.explain_foreground(&path);
-    state.set_current_session(choice.session());
+    set_current(&mut state, choice.session());
 
     assert_eq!(
         state.active_session,
@@ -1927,7 +2213,8 @@ fn applying_the_memory_starts_only_the_session_it_displays() {
         .map(|s| (s.id, s.lifecycle))
         .collect();
 
-    state.set_current_session(state.explain_foreground(&path).session());
+    let choice = state.explain_foreground(&path).session();
+    set_current(&mut state, choice);
 
     let after: Vec<_> = state
         .active_sessions()
@@ -1967,7 +2254,8 @@ fn applying_one_projects_memory_leaves_every_other_project_alone() {
         .insert(elsewhere.clone(), other_session);
     let untouched = state.workspace.sessions.get(&elsewhere).cloned().unwrap();
 
-    state.set_current_session(state.explain_foreground(&opened).session());
+    let choice = state.explain_foreground(&opened).session();
+    set_current(&mut state, choice);
 
     assert_eq!(
         state.workspace.sessions.get(&elsewhere),
@@ -1988,10 +2276,13 @@ fn a_memory_whose_worktree_is_gone_is_still_restored() {
     let path = state.workspace.active.clone().unwrap();
     // Deleted outside the application: the worktree is gone from discovery, but the session's
     // record survives in the project's state file.
-    state.set_worktrees(Vec::new());
+    micold_client::app::drain(state.set_worktrees(Vec::new()), |o| {
+        micold_client::app::interpret(&mut state, o)
+    });
     state.expanded.insert("kept-open".to_string());
 
-    state.set_current_session(state.explain_foreground(&path).session());
+    let choice = state.explain_foreground(&path).session();
+    set_current(&mut state, choice);
 
     assert_eq!(
         state.active_session,
@@ -2015,7 +2306,8 @@ fn a_memory_naming_a_closed_session_restores_nothing_and_disturbs_nothing() {
     }
     state.expanded.insert("kept-open".to_string());
 
-    state.set_current_session(state.explain_foreground(&path).session());
+    let choice = state.explain_foreground(&path).session();
+    set_current(&mut state, choice);
 
     assert!(
         state.active_session.is_none(),

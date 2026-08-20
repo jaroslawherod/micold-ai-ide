@@ -298,7 +298,8 @@ fn a_stopped_or_failed_session_that_is_current_is_still_marked() {
 // them, so what is tested is the answer rather than seven assignments agreeing.
 // See `specs/023-terminal-focus-flow/contracts/focus-model.md` (v2).
 
-use micold_client::app::{FieldId, Message};
+use micold_client::app::Message;
+use micold_client::features::window::FieldId;
 use micold_core::session::Session;
 
 /// A state showing one session's terminal, with nothing else claiming the keyboard.
@@ -691,7 +692,8 @@ fn restoring_a_session_leaves_its_terminal_ready_to_type() {
     // The shape after a restart: the memory survived, the pointer did not.
     state.active_session = None;
 
-    state.restore_after_activation(&path);
+    let outcomes = state.restore_after_activation(&path);
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut state, o));
 
     assert!(
         state.active_session.is_some(),
@@ -722,7 +724,8 @@ fn a_launch_that_restores_nothing_focuses_nothing() {
     }
     state.active_session = None;
 
-    state.restore_after_activation(&path);
+    let outcomes = state.restore_after_activation(&path);
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut state, o));
 
     assert!(state.active_session.is_none());
     assert!(

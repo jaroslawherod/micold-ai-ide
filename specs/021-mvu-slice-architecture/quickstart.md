@@ -103,6 +103,47 @@ thin glue with no decision logic of its own — and are recorded here as that ex
    migration prompt, no warning, and no rewrite of the state files.
 6. Quit, and diff the state directory against the backup. **Expect**: no structural change.
 
+#### Result — 2026-08-20, T072
+
+Run **not on a real display**: Xvfb `:78` at 1600×1400 with Mesa lavapipe, driven by `xdotool`,
+captured with `import`, state isolated via `XDG_DATA_HOME` and a short `XDG_RUNTIME_DIR`
+(`/tmp/m1rt`, so the daemon socket fits in `sun_path`). Fixture: a throwaway git repo with two
+worktrees. The developer's own app and daemon were left alone; each build ran with its **own**
+daemon, pinned by `MICOLD_DAEMON_BIN`.
+
+Step 1 deviates: the fixture project was seeded into `projects.json` rather than opened through the
+folder browser. Everything after that — the third worktree, both sessions, the theme and the
+scrollback — was performed in the pre-change GUI, which rewrote both files itself, so the state
+under test is pre-change-written.
+
+| # | Claim | Result |
+|---|---|---|
+| 5 | Same project, worktrees, sessions | **Pass** — same project active, same four worktrees in the same order with the same type tags, both sessions present with the same ids, `worktree_dir`, `mode` and `schema_version` |
+| 5 | Same theme and scrollback | **Pass** — `theme: dark`, `scrollback_lines: 4321`, both non-default and both honoured |
+| 5 | Same filters | **Not applicable — the application has never persisted them.** `sidebar_filters` is in-memory view state in both builds; nothing writes it to either file. The expectation is wrong about the application, not about the change |
+| 5 | No migration prompt, no warning | **Pass** — no banner, no dialog |
+| 6 | No structural change to the state directory | **Pass** — `projects.json` and `settings.json` **byte-identical**; `projects/<id>.json` differs in one field, `archived: false → true` on both sessions |
+
+**The one differing field is not a difference between the builds.** Stopping the pre-change daemon
+ends the AI CLI processes, and the daemon's restart reconciliation (FR-020c) marks the sessions
+archived from the provider's own marker — the field's own doc calls it "not authoritative". Fed the
+identical backup, the **pre-change build produces the identical file** (`c4e58c09…` from both), so
+this is the daemon doing its documented job, not the restructuring.
+
+**What M1's baseline cannot answer, and this is the finding worth keeping.** Step 1 names
+`44b9fd1`, which was "before feature 021 started" when quickstart.md was written. Four other
+features have shipped since (016, 022, 025, 026), so a `44b9fd1`-vs-HEAD comparison is *those plus*
+021. Rendered against identical state at identical geometry, the sidebar differs by **3,755
+pixels** — a global type-scale change — and none of it is attributable to this feature. Built at
+021's own merge base (`e02f971`) and compared the same way, the difference is **0 pixels**:
+
+- `evidence/m1-sidebar-base-vs-head.png` — merge base (red) vs HEAD (blue): pixel-identical
+- `evidence/m1-sidebar-44b9fd1-vs-head.png` — `44b9fd1` (red) vs HEAD (blue): the other features
+
+A long-lived feature that merges to main incrementally cannot use "the commit before it started" as
+a control, and M1 should say so rather than let the next reader attribute four features' work to
+this one.
+
 ### M2 — Overlay behavior is unchanged (FR-011, FR-012, FR-013)
 
 The exit-animation snapshot is the riskiest obligation in the feature (research.md §9). The

@@ -58,3 +58,84 @@ impl Registered for SettingsDialog {
         state.settings_draft.as_ref().map(|_| SettingsDialog)
     }
 }
+
+/// The theme mode was advanced one step (feature 003, FR-005).
+///
+/// The menu stays open, so repeated clicks cycle.
+pub fn theme_mode_cycled(state: &mut State) {
+    state.theme_pref = state.theme_pref.next();
+}
+
+/// A theme preference was chosen outright.
+///
+/// Pure state change; the shell persists it at the I/O boundary (FR-009).
+pub fn theme_preference_changed(state: &mut State, pref: micold_core::theme::ThemePreference) {
+    state.theme_pref = pref;
+}
+
+/// The OS reported its light/dark preference (feature 003).
+///
+/// `observe_system_scheme` is what decides whether a detection is believed: an OS that answers
+/// "unknown" must not overwrite a scheme already observed, or a single unanswered probe would
+/// flip the whole UI. The rule lives in core; this arm only records its answer.
+pub fn system_theme_changed(
+    state: &mut State,
+    detected: Result<micold_core::theme::SystemScheme, ()>,
+) {
+    state.system_scheme = micold_core::theme::observe_system_scheme(detected, state.system_scheme);
+}
+
+/// The Settings dialog was opened (feature 006, FR-020).
+///
+/// The shell seeds the current values; a draft is ensured here so the reducer path alone is
+/// enough to open the form in a test.
+pub fn opened(state: &mut State) {
+    state.clear_for_dialog();
+    if state.settings_draft.is_none() {
+        state.settings_draft = Some(SettingsDraft::default());
+    }
+}
+
+/// The scrollback field was edited.
+pub fn scrollback_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.scrollback_lines = text);
+}
+
+/// The environment-include toggle was flipped (feature 011).
+pub fn env_include_enabled_toggled(state: &mut State, enabled: bool) {
+    edit(state, |draft| draft.env_include_enabled = enabled);
+}
+
+/// The environment-include script path was edited (feature 011).
+pub fn env_include_path_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.env_include_script_path = text);
+}
+
+/// The environment-include timeout was edited (feature 011).
+pub fn env_include_timeout_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.env_include_timeout = text);
+}
+
+/// Apply an edit to the open draft, if there is one, and clear the pending error.
+///
+/// Every field edit did these two things and the second was easy to forget: a stale validation
+/// error left beside a field the user has since corrected is the form telling them they are wrong
+/// after they have fixed it. One place, so a new field cannot omit it.
+fn edit(state: &mut State, change: impl FnOnce(&mut SettingsDraft)) {
+    if let Some(draft) = &mut state.settings_draft {
+        change(draft);
+        draft.error = None;
+    }
+}
+
+/// The form was saved (feature 006).
+///
+/// Validation and persistence happen in the shell; the reducer closes the form.
+pub fn saved(state: &mut State) {
+    state.settings_draft = None;
+}
+
+/// The form was dismissed without saving.
+pub fn cancelled(state: &mut State) {
+    state.settings_draft = None;
+}

@@ -37,6 +37,7 @@ there together with the functions over them. There is no parallel `state.rs` / `
 | Worktree visibility, naming, tags, rename | `features/worktree.rs` |
 | Worktree-creation form | `features/worktree_form.rs` |
 | Help menu and the About dialog | `features/help.rs` |
+| Window size, pointer, which field holds the keyboard | `features/window.rs` |
 | Overlays | `overlay/mod.rs` + `overlay/registry.rs` — the surface type, and the one place surfaces are named |
 
 Views are **not** in these modules. They live in `crate::ui`, beside the feature they draw rather
@@ -69,33 +70,45 @@ holdout through Tier 1 — `Overlay` and `ClosingOverlay` were enumerated in `ap
 module anything lives *in* — and Tier 2 is what fixed it: each surface is described in the feature
 module that owns it, and `overlay/` holds only the shared type and the registration list.
 
-If a feature needs two modules, that is the signal something is misfiled — with one current
-exception, recorded rather than hidden: the Settings form's validation still lives in the
-`Message::SettingsSaved` arm — `shell/persist.rs::on_settings_saved` since the shell split moved it
-out of `main.rs` — because it is reducer code returning a `Task`. It joins `features/settings.rs` in
-Tier 3.
+If a feature needs two modules, that is the signal something is misfiled — with one exception,
+recorded rather than hidden: the Settings form's validation lives in `shell/persist.rs::on_settings_saved`
+rather than in `features/settings.rs`, because it parses a draft *and* returns a `Task` that writes
+the file, and a feature module may do neither. **Tier 3 was named as where this would be fixed and
+it was not**, which is worth saying plainly rather than leaving the promise standing: splitting the
+parse from the write is a change to the settings feature, not to this architecture, and it wants its
+own task. `features_settings.rs` says the same thing from the test side.
 
 ### What is still in `app.rs`
 
-`State`, `Message` and `on_escape`. `Overlay` and `ClosingOverlay` were here through Tier 1 and are
-gone as of Tier 2. Tier 1 moved the feature types out; the state root and the message vocabulary are
-Tier 3's to split. Because the transitional re-exports are gone, a `crate::app::` import is now an
-honest measure of how much monolith remains.
+Two shared vocabularies and a routing table: `State`, `Message`, `State::update`, and the outcome
+plumbing (`interpret`, `drain`, `on_escape`). `Overlay` and `ClosingOverlay` were here through
+Tier 1 and are gone as of Tier 2; every reducer arm is gone as of Tier 3, and
+`root_is_routing_only.rs` pins the number of arms that still *decide* anything at an exact **0**.
 
-Some feature modules still carry `impl State` blocks. That is expected in Tier 1 and not a
-boundary violation: `State` is one struct until Tier 3 splits it, and Rust resolves inherent methods
-on the type rather than the module, so moving them changed no call site. What it does mean is that
-those features cannot yet be tested without building a `State`, and their isolation tests say so
-rather than asserting something weaker to look cleaner.
+The file is 1,334 lines, of which the `Message` enum is 408 and the `State` struct 188 — so its
+length measures the size of the application's vocabulary, not the root's logic. That is why it is
+not split: FR-005 asks whether a file holds more than one feature, and this one holds none.
+
+Some feature modules still carry `impl State` blocks. That is not a boundary violation: `State` is
+one struct, and Rust resolves inherent methods on the type rather than the module, so moving them
+would change no call site. What it does mean is that those features cannot be tested without
+building a `State`, and their isolation tests say so rather than asserting something weaker to look
+cleaner.
 
 ### Visibility widening is a signal, not a cost of doing business
 
-Three helpers went from private to `pub(crate)` to cross a module boundary: `rematch_branches` and
+Four helpers went from private to `pub(crate)` to cross a module boundary: `rematch_branches` and
 `reset_branch_search` (worktree form), `worktree_tags` (worktree, read by the sidebar), and
-`session_mut` (session, called by seven reducer arms). Each is noted at its definition with the task
-that returns it to private. A helper that has to widen is telling you the boundary does not yet fall
-where the code assumes it does — Tier 3 is where most of them are answered, because the callers
-doing the reaching are reducer arms that have not moved yet.
+`session_mut` (session, called by seven reducer arms). A helper that has to widen is telling you the
+boundary does not fall where the code assumes it does.
+
+**Tier 3 was expected to answer most of them and answered none** — all four are still `pub(crate)`,
+and the reason is the same in each case: the reaching caller turned out to be a legitimate read
+rather than a misplaced arm. `worktree_tags` is the clearest, and it is the single entry in
+`ALLOWED_CROSS_FEATURE_NAMES` in `tests/feature_registration_cost.rs`: the sidebar renders a
+worktree row's tags and does not get to decide what they are. A widening that survives the
+restructuring it was blamed on is a widening that was never the restructuring's fault, and the
+signal is still worth having — it just says "read across a boundary" here, not "misfiled".
 
 ## Adding a floating surface
 
@@ -180,13 +193,33 @@ view would be drawn a second time, inside the modal band.
 In `overlay/registry.rs`, inside `register!`:
 
 ```rust
-crate::features::help::HelpMenu,                                        // a popover
+crate::features::session::SessionContextMenu,                                // a popover
 crate::features::project::RenameProjectDialog => crate::ui::rename::dialog,  // a dialog
+crate::features::help::HelpMenu {                                            // ...that displaces
+    displaces:
+        crate::features::project::ProjectSwitcher,
+        crate::features::sidebar::SidebarFilterPanel,
+        crate::features::project::ProjectContextMenu,
+},
 ```
 
-A type name, and for a dialog the view that draws it. This is the only list, and a macro rather than
-a plain array so the line can be a type name and nothing else — no closure to get subtly wrong, no
-place to tuck in a per-surface special case.
+A type name, and two optional clauses: for a dialog the view that draws it, and for a surface that
+closes others when it opens, what it closes. This is the only list, and a macro rather than a plain
+array so the line can be a type name and nothing else — no closure to get subtly wrong, no place to
+tuck in a per-surface special case.
+
+**Both clauses are here rather than on the surface, and for the same reason twice.** A view cannot
+be named in a feature module because FR-006 forbids one naming the rendering framework. Displacement
+cannot be declared there either: it is a fact about the *relation between* two surfaces, so it
+belongs to neither of them, and `tests/surface_registration_cost.rs` holds that a surface may be
+named only in its own module and here — a feature module saying what it displaces breaks that
+guarantee once per surface it names.
+
+There is no rule to derive displacement from, which is why it is declared. The three panel popovers
+are mutually exclusive *and* each closes the project row menu; the row menu closes two of the three
+and the worktree menu but deliberately **not** the switcher it was right-clicked in; the worktree
+menu closes only the row menu; the session and terminal menus close nothing. `tests/popover_displacement.rs`
+states all forty-two ordered pairs.
 
 ### 4. Open it
 
@@ -201,8 +234,9 @@ and `the_reducer_opens_a_dialog_through_that_mechanism` in `tests/overlay_regist
 ### What you do *not* do
 
 No match arm to extend, anywhere. Escape, scrim clicks, scroll-beneath dismissal, stacking order,
-"opening a dialog closes the popovers", and the exit-animation snapshot are all rules over the
-registry. Six central matches used to have to hear about a new surface; there are none.
+"opening a dialog closes the popovers", which popovers a new popover displaces, and the
+exit-animation snapshot are all rules over the registry. Six central matches used to have to hear
+about a new surface; there are none.
 
 ### The guards, and what each would catch
 
@@ -426,5 +460,118 @@ fails loudly instead of passing everything.
 
 ## Reading and writing across features
 
-_(Tier 3 — pending: fill when outcomes land, per task T068. Covers why guard tests hold this line
-rather than the type system.)_
+A feature may **read** any other feature's data. It may not **write** it. That asymmetry is the
+whole of the rule, and it is not arbitrary: a read cannot leave the app in a state its owner did not
+choose, and a write can.
+
+`State` is one struct, so nothing in the type system enforces this — every field is reachable from
+every `&mut State`. What holds the line is `tests/feature_write_isolation.rs`, which scans the
+feature modules, resolves what each operation writes (following calls to a fixed point), and fails
+on any write whose field belongs to another feature.
+
+### Why a guard test rather than the type system
+
+Splitting `State` into per-feature structs would make the rule a compile error, and that is the
+eventual destination. It is not where this codebase is, and a guard test buys the rule *now* at a
+cost the split does not: it can carry an allowlist. `ALLOWED` names each pre-existing violation with
+the task that will convert it, so the rule is enforced for new code while the backlog burns down
+rather than blocking on a rewrite. `the_allowlist_names_only_live_violations` fails when an entry
+stops being a violation, so the list cannot outlive what it permitted.
+
+The list is empty now — 43 to zero over feature 021's Phase 6 — but the mechanism is what mattered:
+a split `State` would have had to land in one commit, and this landed in fifteen, each of which
+built and passed. What the empty list buys going forward is that a new cross-feature write is a
+failing test rather than a line in a backlog.
+
+### What a feature returns instead: `Outcome`
+
+A feature that needs another's data changed returns a value saying so, and the root applies it:
+
+```rust
+pub fn loaded(state: &mut State, worktrees: Vec<Worktree>) -> Vec<Outcome> {
+    state.set_worktrees(worktrees)          // its own data, written directly
+}                                           // -> vec![Outcome::WorktreesReplaced(names)]
+```
+
+The root is the only interpreter (`app::interpret`), and `app::drain` applies outcomes to a fixed
+point with a bound, so an outcome may raise further outcomes without the root knowing which
+features are involved.
+
+Mark these returns `#[must_use]`. A dropped `Vec<Outcome>` is a silent behaviour loss — the code
+compiles and does less — and the attribute turns it into a compile error at every production call
+site. It caught all thirteen when `switch_active` was converted.
+
+### Three traps, each of which cost real time here
+
+**A row count is not a violation count when the writer is code the guard cannot name.** The scan
+attributes a write to the *feature operation* it appears in. When several features call one root
+helper, the helper's write is reported against each caller, and the burn-down looks like N
+violations when it is one misplaced function. Two of feature 021's largest clusters — eight rows and
+five — were retired by *moving a function into the feature that owned its data*, with no outcome
+written at all. Before designing an `Outcome`, ask where the code belongs; the answer is often that
+the guard was pointing at callers.
+
+**Ownership can be wrong, and a plausible name is how it stays wrong.** `worktree_error` reads like
+the worktree feature's, and is the add-worktree modal's — `crate::ui::worktree_form` is its only
+render site. Correcting `OWNERS` retired three rows that had been queued for conversion. When a
+field's writers and its one reader disagree about who owns it, believe the reader.
+
+**A test that calls a feature function directly stops exercising what moved.** Converting a write to
+an outcome moves behaviour *out of* the function, so any test that calls it rather than going
+through `State::update` silently tests less — and still compiles, because `#[must_use]` is satisfied
+by an `assert!` that consumes the value and never applies it. Four files hit this in one task. Tests
+that assert a moved consequence need a helper that drains the way the root does:
+
+```rust
+fn switch(st: &mut State, path: &str) -> bool {
+    match st.switch_active(Path::new(path)) {
+        Some(outcomes) => {
+            drain(outcomes, |o| interpret(st, o));
+            true
+        }
+        None => false,
+    }
+}
+```
+
+Tests that assert on *no* other feature's data need no such helper, and dropping the outcomes there
+is correct rather than lazy — `features_session.rs` says so in its header and turned out to be
+right.
+
+### A core type's own operation is not a cross-feature write
+
+`OWNERS` is keyed by *path*, not by field, because `Workspace` holds the project catalog, the
+session lists and two worktree maps in one value — six members answering to three features. That
+split is right for an ordinary write and wrong for `Workspace`'s own methods: `forget` clears
+everything held against a project's path because that is its invariant, and reporting it as the
+project feature writing session data would have three features each apply one clause of it, making
+a half-applied forget expressible for the first time.
+
+So a write a feature reaches **only** through a core method is exempt — the same principle that
+always exempted a feature writing its own field: the code that performs the write owns what it
+writes. The exemption is narrow in both directions. It does not cover a path the operation also
+writes on a line of its own (the scan keeps two closures over the call graph to tell those apart),
+and it is not silent: `CORE_MEDIATED` lists every one with the method that carries it, so reaching a
+neighbour through some *other* core method costs a line and an argument rather than nothing.
+
+### The guards, and what each would catch
+
+| Guard | Catches |
+|---|---|
+| `no_feature_writes_another_features_data` | a feature writing a field it does not own, directly or through a call |
+| `the_allowlist_names_only_live_violations` | an `ALLOWED` entry that no longer names a real write |
+| `core_mediated_writes_are_inventoried` | a feature reaching a neighbour through an unlisted core method — the exemption's only silent path |
+| `the_exemption_is_narrow` | a `CORE_MEDIATED` line that mediates nothing, or a write reported and exempted at once |
+| `every_state_field_has_an_owner` | a new `State` field nobody claimed in `OWNERS` |
+| `every_workspace_field_has_an_owner` | the same for `Workspace`'s members, which three features hold |
+| `every_method_called_on_state_is_classified` | a method the scan cannot tell reads from writes |
+| `the_scan_finds_the_operations_it_is_meant_to_read` | the scan going blind — a vacuity floor |
+
+That last one exists because this guard has failed silently twice. Once it could not see free
+functions at all (a reference it never peeled), reporting every feature clean while its own header
+promised otherwise. Once it suppressed a violation whenever the operation also called a sibling
+writing the same field — correct for an inherited write, wrong for one made on the spot as well,
+and a suppressed row is indistinguishable from no row. **A green guard is evidence only in
+proportion to what you have shown it can still fail on.** Probe it by reintroducing a write and
+confirming it fires on the row you expect; for a single-assertion guard, distinctness lives in the
+reported violation, not in the set of failing tests.

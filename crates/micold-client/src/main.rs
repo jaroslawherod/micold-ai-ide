@@ -14,6 +14,7 @@ use crate::shell::capabilities::Capabilities;
 use crate::shell::daemon_sync::PendingOp;
 use micold_client::app::{Message, State};
 use micold_client::features::session::SelectKind;
+use micold_client::features::worktree_form::Msg as FormMsg;
 use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
 use micold_client::overlay::registry::Closing;
@@ -541,14 +542,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::ThemePreferenceChanged(_) | Message::ThemeModeCycled => {
             shell::persist::on_theme_changed(app, message)
         }
-        Message::AddWorktreeSubmitted => shell::daemon_sync::on_add_worktree_submitted(app),
-        Message::AddWorktreeResolutionChosen(mode) => {
+        Message::WorktreeForm(FormMsg::Submitted) => {
+            shell::daemon_sync::on_add_worktree_submitted(app)
+        }
+        Message::WorktreeForm(FormMsg::ResolutionChosen(mode)) => {
             shell::daemon_sync::on_add_worktree_resolution_chosen(app, mode)
         }
-        Message::AddWorktreeOverwriteConfirmed => {
+        Message::WorktreeForm(FormMsg::OverwriteConfirmed) => {
             shell::daemon_sync::on_add_worktree_overwrite_confirmed(app)
         }
-        Message::AddWorktreeSourceChanged(source) => {
+        Message::WorktreeForm(FormMsg::SourceChanged(source)) => {
             shell::daemon_sync::on_add_worktree_source_changed(app, source)
         }
         Message::SessionStartRequested { location } => {

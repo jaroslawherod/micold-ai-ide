@@ -51,7 +51,7 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
     (
         "add_worktree",
         |s| s.worktree_form = Some(Default::default()),
-        Message::AddWorktreeCancelled,
+        Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
     ),
     (
         "settings",

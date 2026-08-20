@@ -149,7 +149,8 @@ fn boot() -> (App, Task<Message>) {
     // render. Session recovery from transcripts is now the daemon's responsibility (it owns
     // sessions); the client adopts them from the welcome catalog on connect (T055).
     if let Some(repo) = core.workspace.active.clone() {
-        core.set_worktrees(discover_worktrees(caps.git(), &repo));
+        let outcomes = core.set_worktrees(discover_worktrees(caps.git(), &repo));
+        micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut core, o));
         // Feature 025: land on the session this project was last showing, rather than on the
         // project overview. The memory came from the store above, beside that project's sessions.
         //
@@ -162,7 +163,8 @@ fn boot() -> (App, Task<Message>) {
         //
         // Ordering: after `prune_empty_sessions` above, so a memory naming a session with no
         // conversation on disk resolves to nothing rather than to a session about to be dropped.
-        core.restore_after_activation(&repo);
+        let outcomes = core.restore_after_activation(&repo);
+        micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut core, o));
     }
     (
         App {
