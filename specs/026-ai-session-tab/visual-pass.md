@@ -74,6 +74,23 @@ than a value, because the value was never wrong — `Divider::horizontal` has al
 was given, and what was wrong was what it was given. That is the same shape as this gate's other
 assertion one axis over: a figure intact in the source, competed away by the box around it.
 
+**And then the same defect on the other axis**, reported again after the width was fixed. The tab's
+column was content-sized — a 3dp rule over a ~21dp row — inside a button with a fixed 40dp height,
+so the button centred that 24dp block and left the rule floating clear of the edge it marks.
+Measured off the reported screenshot: an 80px state layer at 2× with **21px of tab still under the
+bar**, ~10dp.
+
+![the indicator flush against its tab, hovered](images/t013-indicator-flush.png)
+
+`Length::Fill` on **both** axes now. Composited and measured: the tab spans `y 1333..1372` (40px)
+and `x 28..147` (120px); the rule spans `y 1333..1335` and `x 28..147`. **A 0px gap above it**, and
+the same width. The gate grew the matching assertion — flush with *an* edge, top or bottom, without
+pinning which, since that is `IndicatorEdge`'s business and a gate that named one would fail on the
+orientation the gallery poses beside it.
+
+Both halves were invisible to every gate for the same reason: each node was exactly where its own
+layout said it was, and no assertion compared the rule's box to the tab's.
+
 ### Found and fixed — the stopped mark pulled its label 20dp off the midline
 
 ![marked, unmarked, stopped](images/t013-tab-states.png)
