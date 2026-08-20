@@ -351,19 +351,20 @@ pub fn view<'a>(
     // that one is anchored pane-local because a pane's origin is not known at render time, and this
     // point is already in window space, which is what this overlay takes.
     let shell_instance_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.shell_instance_menu.and_then(|(instance, x, y)| {
+        state.shell_instance_menu.and_then(|(tab, x, y)| {
             let session = state.active_session?;
-            let lifecycle = state
-                .active_sessions()
-                .iter()
-                .find(|s| s.id == session)?
-                .shells
-                .iter()
-                .find(|shell| shell.id == instance)?
-                .lifecycle;
+            let items = strip_tab_menu_items(state, session, tab);
+            // FR-006b: a menu with no items does not open, and the secondary press does nothing.
+            // With restart the only item and Close excluded (FR-004), this is the AI tab's state
+            // whenever the AI CLI is running, which is most of the time. An empty panel is a defect
+            // everywhere else in this application, and a panel whose entire content is inert is one
+            // too — so the offer is absent rather than present-and-useless.
+            if items.is_empty() {
+                return None;
+            }
             Some(
                 material::ContextMenu::new(
-                    shell_instance_menu_items(session, instance, lifecycle),
+                    items,
                     (x, y),
                     Message::ShellInstanceMenuClosed,
                     roles,
@@ -508,10 +509,24 @@ fn worktree_menu_items(
 /// Not "Rename". An instance has no title to set, and giving it one reaches persistence and the
 /// daemon's session state — it is the separate feature BUG-002's "Deferred" note describes, and
 /// this menu is where it will land.
-fn shell_instance_menu_items(
+///
+/// # The AI tab's menu is this menu minus Close (feature 026 FR-004, FR-006a)
+///
+/// Not a second list. FR-006a is worded as "the terminal tab's menu, except Close" precisely so the
+/// two cannot drift into offering different actions, and building it by **filtering** is what makes
+/// that structural rather than a promise — an item added below reaches both tabs, and Close stays
+/// excluded because a session has exactly one AI CLI process and terminating it is not an action
+/// offered from this control, by any press.
+///
+/// # Whether Restart is offered comes from the strip's own predicate (research R2)
+///
+/// `terminal::process_stopped`, the same function the stopped mark reads. FR-012d asks the mark and
+/// the menu to agree, and one predicate is what makes that true by construction — this file has
+/// paid twice for two readings of one fact, and both times the comment left behind says so.
+fn strip_tab_menu_items(
+    state: &State,
     session: SessionId,
-    instance: ShellInstanceId,
-    lifecycle: ShellLifecycle,
+    tab: terminal::StripTab,
 ) -> Vec<material::MenuItem<Message>> {
     // Labels without icons, like the terminal pane's own copy/paste menu and unlike the sidebar's
     // two. There is no restart glyph in `Icon`, and adding one to this menu would either leave
@@ -519,20 +534,45 @@ fn shell_instance_menu_items(
     // which reads as a missing icon rather than a deliberate one — or pull a new codepoint, its
     // registration and its documentation into a bugfix that is about layout. Two words are legible.
     let mut items = Vec::new();
-    if matches!(
-        lifecycle,
-        ShellLifecycle::NotStarted | ShellLifecycle::Exited
-    ) {
+    if terminal::process_stopped(state, session, tab) {
         items.push(material::MenuItem::labeled(
             "Restart",
-            Message::ShellInstanceRestartRequested(session, instance),
+            match tab {
+                terminal::StripTab::Instance(instance) => {
+                    Message::ShellInstanceRestartRequested(session, instance)
+                }
+                terminal::StripTab::Ai => Message::TerminalRestartRequested,
+            },
         ));
     }
-    items.push(material::MenuItem::labeled(
-        "Close",
-        Message::ShellInstanceCloseRequested(session, instance),
-    ));
+    if let terminal::StripTab::Instance(instance) = tab {
+        items.push(material::MenuItem::labeled(
+            "Close",
+            Message::ShellInstanceCloseRequested(session, instance),
+        ));
+    }
     items
+}
+
+/// The labels `strip_tab_menu_items` would produce, for a test that has no renderer.
+///
+/// A `MenuItem` carries a `Message`, which is not comparable, so the items themselves cannot be
+/// asserted against each other. The labels are what FR-006a is about — "the terminal tab's menu
+/// **minus Close**, in the same order" is a claim about which entries exist and in what order.
+#[cfg(test)]
+pub(crate) fn strip_tab_menu_labels(
+    state: &State,
+    session: SessionId,
+    tab: terminal::StripTab,
+) -> Vec<&'static str> {
+    let mut labels = Vec::new();
+    if terminal::process_stopped(state, session, tab) {
+        labels.push("Restart");
+    }
+    if matches!(tab, terminal::StripTab::Instance(_)) {
+        labels.push("Close");
+    }
+    labels
 }
 
 /// The items in a session's right-click context menu (bugfix BUG-003): "Close" archives (kept,

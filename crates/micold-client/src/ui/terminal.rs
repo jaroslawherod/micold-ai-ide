@@ -943,7 +943,7 @@ fn tab_strip_row<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
             // A secondary press opens this tab's menu; a primary press still selects the instance,
             // because the wrapper lets the child answer first and intercepts only the right button.
             .on_secondary_press(move |(x, y)| {
-                Message::ShellInstanceMenuRequested(instance.id, x, y)
+                Message::StripTabMenuRequested(StripTab::Instance(instance.id), x, y)
             }),
         );
     }
@@ -995,7 +995,17 @@ fn pinned_ai_tab<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
             material::Glyph::new(Icon::AiCli, TypeRole::Label, r).tint(content_colour(marked, r)),
             r,
         )
-        .active(marked)],
+        .active(marked)
+        // FR-006: a primary press shows the AI CLI and does nothing else. It **sets** the mode
+        // rather than toggling it, which is FR-007 — pressing this tab while the AI CLI is already
+        // displayed is a no-op with no visible change.
+        .on_press(Message::TerminalAiCliSelected(id))
+        // FR-006a: the same menu a terminal tab offers, minus Close. The wrapper lets the child
+        // answer first and intercepts only the right button, so the primary press above keeps
+        // working through it — the property feature 012 established and this reuses rather than
+        // re-establishes. FR-006b is what makes the press silent while the process is running: the
+        // menu would be empty, so none opens.
+        .on_secondary_press(move |(x, y)| Message::StripTabMenuRequested(StripTab::Ai, x, y))],
         r,
     )
     .into()
@@ -1067,6 +1077,86 @@ mod tests {
         state.workspace.sessions.insert(path, vec![session]);
         state.active_session = Some(id);
         (state, id)
+    }
+
+    /// FR-004/FR-006a/FR-006b: the AI tab's menu is a terminal tab's **minus Close**, in the same
+    /// order — and it is empty whenever the AI process is running, so no menu opens at all.
+    ///
+    /// Stated as "the terminal tab's menu minus Close" rather than as a list, because that is how
+    /// FR-006a is worded and for the reason it is worded that way: the two must not be able to
+    /// drift into offering different actions. A test that spelled out `["Restart"]` would pass
+    /// while the terminal tab's menu grew an item the AI tab never got.
+    #[test]
+    fn the_ai_tabs_menu_is_a_terminal_tabs_minus_close() {
+        for (lifecycle, shell) in [
+            (SessionLifecycle::Idle, ShellLifecycle::Exited),
+            (SessionLifecycle::Failed, ShellLifecycle::NotStarted),
+            (SessionLifecycle::InterruptedResumable, ShellLifecycle::Exited),
+            (SessionLifecycle::Running, ShellLifecycle::Running),
+            (SessionLifecycle::Starting, ShellLifecycle::Starting),
+            (SessionLifecycle::Restarting { attempts: 2 }, ShellLifecycle::Starting),
+        ] {
+            let (state, id) =
+                state_with_instances(TerminalMode::Regular, lifecycle.clone(), &[shell], Some(0));
+            let instance = state.active_sessions()[0].shells[0].id;
+
+            let for_instance = crate::ui::strip_tab_menu_labels(
+                &state,
+                id,
+                StripTab::Instance(instance),
+            );
+            let for_ai = crate::ui::strip_tab_menu_labels(&state, id, StripTab::Ai);
+
+            let expected: Vec<&str> = for_instance
+                .iter()
+                .filter(|label| **label != *"Close")
+                .copied()
+                .collect();
+            assert_eq!(
+                for_ai, expected,
+                "{lifecycle:?}: the AI tab's menu must be the terminal tab's with Close filtered \
+                 out, in the same order — FR-004 excludes Close by any press, and FR-006a is \
+                 worded to stop the two menus drifting apart"
+            );
+        }
+    }
+
+    /// FR-006b: a menu with no items does not open, and that is most of the time.
+    ///
+    /// With restart the only item and Close excluded, the AI tab's menu is empty whenever the AI
+    /// CLI is running — which is the ordinary state. An empty panel is a defect everywhere else in
+    /// this application, and a panel whose entire content is inert is one too, so the offer is
+    /// absent rather than present-and-useless. It also keeps the strip agreeing with the bar beside
+    /// it, which already shows a restart control only for a process that is not running.
+    #[test]
+    fn a_running_ai_tab_opens_no_menu_at_all() {
+        for lifecycle in [
+            SessionLifecycle::Running,
+            SessionLifecycle::Starting,
+            SessionLifecycle::Restarting { attempts: 1 },
+        ] {
+            let (state, id) =
+                state_with_instances(TerminalMode::AiCli, lifecycle.clone(), &[], None);
+            assert!(
+                crate::ui::strip_tab_menu_labels(&state, id, StripTab::Ai).is_empty(),
+                "{lifecycle:?}: a secondary press on a running AI tab must do nothing — an empty \
+                 panel says the offer exists and then withholds it"
+            );
+        }
+        for lifecycle in [
+            SessionLifecycle::Idle,
+            SessionLifecycle::Failed,
+            SessionLifecycle::InterruptedResumable,
+        ] {
+            let (state, id) =
+                state_with_instances(TerminalMode::AiCli, lifecycle.clone(), &[], None);
+            assert_eq!(
+                crate::ui::strip_tab_menu_labels(&state, id, StripTab::Ai),
+                vec!["Restart"],
+                "{lifecycle:?}: a stopped AI process has exactly one thing that can be done to it, \
+                 and the mark on its tab (FR-012d) is what points at it"
+            );
+        }
     }
 
     /// FR-002e, research R6: "content lies beyond this edge" is a pure function of the viewport

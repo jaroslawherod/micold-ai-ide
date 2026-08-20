@@ -90,7 +90,11 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
     // content. It carries the instance because the menu belongs to the tab it was opened on rather
     // than to the active one — FR-010a is about restarting an instance you have not selected.
     ("shell_instance_menu", "shell_instance_menu", |s| {
-        s.shell_instance_menu = Some((ShellInstanceId(1), 4, 2))
+        s.shell_instance_menu = Some((
+            micold_client::ui::terminal::StripTab::Instance(ShellInstanceId(1)),
+            4,
+            2,
+        ))
     }),
 ];
 

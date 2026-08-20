@@ -400,11 +400,24 @@ pub enum Message {
     /// body: mirrors `TerminalRestartRequested`, which only triggers binary-side spawn logic.
     /// Carries the owning session explicitly for the same reason as `ShellInstanceSelected`.
     ShellInstanceRestartRequested(SessionId, ShellInstanceId),
-    /// Open the context menu for one terminal tab, at a window-pixel point (feature 012, BUG-005,
-    /// FR-010b). Dispatched by a secondary (right) press on the tab.
-    ShellInstanceMenuRequested(ShellInstanceId, u16, u16),
+    /// Open the context menu for one strip tab, at a window-pixel point (feature 012 BUG-005
+    /// FR-010b, widened by feature 026 FR-006a). Dispatched by a secondary (right) press.
+    ///
+    /// Carries a `StripTab` rather than a `ShellInstanceId` since feature 026, because the AI tab
+    /// has a menu too and it is **the same menu** with Close filtered out (FR-004, FR-006a). One
+    /// message, one surface, one registration: two would be the shape that lets the two menus drift
+    /// into offering different actions for the same reason, which is the thing FR-006a is worded to
+    /// prevent.
+    StripTabMenuRequested(crate::ui::terminal::StripTab, u16, u16),
     /// Dismiss the terminal-tab context menu.
     ShellInstanceMenuClosed,
+    /// Show the session's AI CLI process in the pane (feature 026 FR-006, FR-007).
+    ///
+    /// **Sets** the mode rather than toggling it, which is FR-007: pressing the AI tab while the AI
+    /// CLI is already displayed must be a no-op with no visible change, and `TerminalModeToggled`
+    /// would switch away. Carries the session explicitly, for the same reason
+    /// `ShellInstanceSelected` does.
+    TerminalAiCliSelected(SessionId),
     /// A Regular Terminal instance reported it is running (feature 011; replaces feature 010's
     /// `ShellSessionRunning(SessionId)`, now id-addressed since a session may have more than one
     /// instance).
@@ -705,7 +718,7 @@ pub struct State {
     /// Window pixels rather than the pane-local point [`State::terminal_context_menu`] holds — that
     /// one is drawn on the pane's own overlay because a pane's origin is not known at render time,
     /// and this one is drawn on the window's, where the anchor is already in the right space.
-    pub shell_instance_menu: Option<(ShellInstanceId, u16, u16)>,
+    pub shell_instance_menu: Option<(crate::ui::terminal::StripTab, u16, u16)>,
     /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
     /// Why entering a project landed on the session it did, from the most recent switch.
@@ -1626,6 +1639,22 @@ impl State {
                 self.arm_tab_reveal();
                 self.focus_terminal();
             }
+            Message::TerminalAiCliSelected(id) => {
+                // FR-006: selecting is **all** this does. It sets the mode and nothing else — no
+                // process is started, stopped or restarted, and `active_shell` is left alone so
+                // switching back returns to the instance the user was on rather than an arbitrary
+                // one.
+                //
+                // It **sets** rather than toggles, which is FR-007: pressing the AI tab while the
+                // AI CLI is already displayed must be a no-op with no visible change.
+                // `TerminalModeToggled` would switch away, which is the opposite of what the press
+                // asked for and the reason this is its own message rather than a reuse.
+                if let Some(session) = self.session_mut(id) {
+                    session.set_mode(micold_core::session::TerminalMode::AiCli);
+                }
+                self.arm_tab_reveal();
+                self.focus_terminal(); // FR-011, as every other pane switch does
+            }
             Message::TerminalRestartRequested => {
                 // No pure state to update here — the binary decides which process to spawn based on
                 // the current mode. For an AI-CLI session the daemon owns the lifecycle and
@@ -1770,10 +1799,10 @@ impl State {
             }
 
             // ---- Feature 012 (BUG-005) ----
-            Message::ShellInstanceMenuRequested(instance, x, y) => {
+            Message::StripTabMenuRequested(tab, x, y) => {
                 // Replaces rather than stacks: a second right-click, on this tab or another, moves
                 // the one menu. Two menus open at once would each claim the next click.
-                self.shell_instance_menu = Some((instance, x, y));
+                self.shell_instance_menu = Some((tab, x, y));
             }
             Message::ShellInstanceMenuClosed => {
                 self.shell_instance_menu = None;
