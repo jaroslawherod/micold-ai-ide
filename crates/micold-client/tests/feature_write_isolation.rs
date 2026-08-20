@@ -36,6 +36,20 @@
 //! is resolved to the set of paths it writes, transitively to a fixed point, and a caller inherits
 //! its callees' writes.
 //!
+//! # A core type's own operation is not a cross-feature write
+//!
+//! The corollary of keying ownership by path is that `Workspace`'s six members answer to three
+//! different features — which is right for an ordinary write and wrong for `Workspace`'s own
+//! methods. `forget` clears everything held against a project's path because that is its
+//! invariant; it is core code writing core's own members. A write a feature reaches *only* through
+//! such a call is therefore exempt, and listed in [`CORE_MEDIATED`] rather than [`ALLOWED`] — not
+//! debt to be converted, but a fact to be acknowledged (T067a-3).
+//!
+//! The exemption is narrow in both directions. It does not apply to a path the operation also
+//! writes on a line of its own, and it does not apply silently: an unlisted one fails
+//! [`core_mediated_writes_are_inventoried`], so a feature reaching a neighbour through some other
+//! core method has to say which invariant that method carries.
+//!
 //! # The allowlist is the point, not an escape hatch
 //!
 //! The violations below exist today; this test is what makes them countable. T067 transcribes
@@ -164,13 +178,9 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // `focus_terminal` was a session operation sitting in the wrong file. **T067a-7 answered: the
     // wrong file.** The function moved into `features/session.rs` and this row, with five others,
     // collapsed into the single `focus_terminal` entry below.)
-    // Via `Workspace::activate`. Switching the active project *is* a project operation; the
-    // session feature calls it because the switch is what its own step 1 and step 3 bracket.
-    (
-        "session",
-        "workspace.active",
-        "features/session.rs::switch_active",
-    ),
+    // (`session::switch_active` -> `workspace.active` sat here from T059 until T067a-3. It goes
+    // through `Workspace::activate`, which made it the same question as the `Workspace::forget`
+    // block below rather than a row of its own — see CORE_MEDIATED.)
     // =============================================================================================
     // T062 — the reducer arms, which the guard could not see until they became feature code.
     //
@@ -268,31 +278,13 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "project_menu_open",
         "features/worktree.rs::menu_toggled",
     ),
-    // --- via `Workspace::forget`, which is `micold-core` code (T067) -----------------------------
-    // Forgetting a project drops everything held against its path, and three features hold
-    // something: its sessions and foreground choice, its worktree names and inclusions. The write
-    // is one call in core; the four members it reaches are what make it four entries here.
-    // `ProjectForgotten` is the obvious outcome, and it is the clearest case in the whole list.
-    (
-        "project",
-        "workspace.foreground_by_project",
-        "features/project.rs::forget_confirmed",
-    ),
-    (
-        "project",
-        "workspace.included_worktrees",
-        "features/project.rs::forget_confirmed",
-    ),
-    (
-        "project",
-        "workspace.sessions",
-        "features/project.rs::forget_confirmed",
-    ),
-    (
-        "project",
-        "workspace.worktree_names",
-        "features/project.rs::forget_confirmed",
-    ),
+    // --- group D is gone: `Workspace::forget` is core's own operation (T067a-3) -------------------
+    // Four rows sat here, one per `workspace` member that forgetting a project clears. T067 called
+    // `ProjectForgotten` "the clearest case in the whole list" and it was the wrong call: `forget`
+    // is `micold-core` code writing `Workspace`'s own members, and converting it would have three
+    // client features each apply one clause of a core invariant, with a half-applied forget
+    // leaving the workspace inconsistent. The guard's model was what needed changing, not the
+    // code. They are inventoried in CORE_MEDIATED instead.
     // --- via `State::push_notification`, a root helper (T067) ------------------------------------
     // `session::arm_notice` above is what is left of this group: T067a converted
     // `project::open_refused` to `notifications::error(..)` -> `Outcome::NotificationRaised`, the
@@ -308,6 +300,65 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // `worktree`'s error slot. `WorktreeCreated` / `WorktreeCreateFailed` are the outcomes, and
     // T064 — which promotes the form to a nested unit with its own message type — is where the
     // seam is most visible.
+];
+
+/// Writes a feature performs by calling a method of a core type on that type's own members.
+///
+/// These are **not** violations, and the reason is the one T067a-3 settled: `Workspace` holds the
+/// project catalog, the session lists and two worktree maps, and [`OWNERS`] splits those six
+/// members across three features because a field-level map has to say *something*. That split is
+/// an artefact of how this guard is written; it is not a boundary running through the middle of a
+/// core type. `Workspace::forget` clears everything held against a path — that is its invariant,
+/// argued outright in its own comment — and asking three client features to each apply one clause
+/// of it would make a half-applied forget expressible for the first time.
+///
+/// So the rule is the same one that already exempts a feature writing its own field: the code that
+/// performs the write owns what it writes. The exemption is narrow — it applies only when the
+/// operation reaches the path *solely* through the core call. A feature that also writes
+/// `state.workspace.sessions` on a line of its own is reported as before, and
+/// [`the_exemption_is_narrow`] holds that.
+///
+/// **It is inventoried rather than invisible.** This guard has twice gone quiet where it looked
+/// green (T067a-6, and the `mut_param` floor before it), so an exemption that reported nothing
+/// would be the third. Every core-mediated write is listed here and
+/// [`core_mediated_writes_are_inventoried`] fails on any that is not — a feature reaching a
+/// neighbour's data through some *other* core method has to add a line and say why, which is the
+/// same discipline [`ALLOWED`] imposes without the implication that the line is debt.
+const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
+    // Switching the active project. Step 2 of a three-step sequence the session feature brackets:
+    // record the outgoing foreground, activate, restore the incoming one (T067a-7).
+    (
+        "session",
+        "workspace.active",
+        "features/session.rs::switch_active",
+        "Workspace::activate",
+    ),
+    // Forgetting a project drops everything held against its path, and three features hold
+    // something: its sessions and foreground choice, its worktree names and its inclusions.
+    (
+        "project",
+        "workspace.foreground_by_project",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
+    (
+        "project",
+        "workspace.included_worktrees",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
+    (
+        "project",
+        "workspace.sessions",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
+    (
+        "project",
+        "workspace.worktree_names",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
 ];
 
 /// Methods that mutate the receiver, for state paths whose type this file does not decompose.
@@ -659,9 +710,14 @@ fn mut_param(args: &str, struct_name: &str) -> Option<String> {
 }
 
 /// What one operation writes directly, and which sibling operations it calls.
+///
+/// `writes` is what the operation's own lines write. `core_writes` is what it writes by calling a
+/// method of the nested core type — `state.workspace.forget(p)` — mapped to the method names that
+/// carried it, because that is the fact the message needs to state.
 #[derive(Default)]
 struct Reach {
     writes: BTreeSet<String>,
+    core_writes: BTreeMap<String, BTreeSet<String>>,
     calls: BTreeSet<String>,
 }
 
@@ -721,7 +777,14 @@ fn reach(
                     after = next;
                 } else if !sub.is_empty() && op.body[next..].trim_start().starts_with('(') {
                     match nested_api.get(&sub) {
-                        Some(Call::Writes(paths)) => r.writes.extend(paths.iter().cloned()),
+                        Some(Call::Writes(paths)) => {
+                            for path in paths.iter() {
+                                r.core_writes
+                                    .entry(path.clone())
+                                    .or_default()
+                                    .insert(sub.clone());
+                            }
+                        }
                         Some(Call::Reads) => {}
                         None => {
                             unclassified.insert(format!("{nested_name}.{sub}"));
@@ -779,6 +842,13 @@ fn read_ident(src: &str, from: usize) -> (String, usize) {
     (src[from..end].to_string(), end)
 }
 
+/// What each operation writes, keyed by `file::name`.
+type Writes = BTreeMap<String, BTreeSet<String>>;
+
+/// What each operation writes *through a core method*, and which methods carried it — the same
+/// keying, with the path mapped to the `Workspace` methods responsible.
+type CoreWrites = BTreeMap<String, BTreeMap<String, BTreeSet<String>>>;
+
 /// Resolve every operation to the full set of paths it writes, following calls to a fixed point.
 ///
 /// # Keyed by `file::name`, because names stopped being unique at T062
@@ -806,7 +876,7 @@ fn transitive_writes(
     nested: Option<(&str, &BTreeSet<String>)>,
     nested_api: &BTreeMap<String, Call<'_>>,
     unclassified: &mut BTreeSet<String>,
-) -> (BTreeMap<String, BTreeSet<String>>, BTreeMap<String, Reach>) {
+) -> (Writes, CoreWrites, BTreeMap<String, Reach>) {
     let siblings: BTreeSet<String> = ops.iter().map(|o| o.name.clone()).collect();
     let mut by_name: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut direct: BTreeMap<String, Reach> = BTreeMap::new();
@@ -815,26 +885,55 @@ fn transitive_writes(
         by_name.entry(op.name.clone()).or_default().insert(op.key());
         let entry = direct.entry(op.key()).or_default();
         entry.writes.extend(r.writes);
+        for (path, methods) in r.core_writes {
+            entry.core_writes.entry(path).or_default().extend(methods);
+        }
         entry.calls.extend(r.calls);
     }
-    let mut writes: BTreeMap<String, BTreeSet<String>> = direct
+    // Two closures over the same call graph. `core` is what a core method wrote, carried outward
+    // so a caller two steps up is judged on the same footing as the operation that made the call;
+    // `writes` is everything, which is what every other consumer of this scan means by a write.
+    let core = close(
+        direct
+            .iter()
+            .map(|(k, v)| (k.clone(), v.core_writes.clone()))
+            .collect(),
+        &direct,
+        &by_name,
+    );
+    let seed: BTreeMap<String, BTreeSet<String>> = direct
         .iter()
-        .map(|(k, v)| (k.clone(), v.writes.clone()))
+        .map(|(k, v)| {
+            let mut paths = v.writes.clone();
+            paths.extend(v.core_writes.keys().cloned());
+            (k.clone(), paths)
+        })
         .collect();
-    // Bounded by the call graph, so a cycle terminates rather than spinning.
+    let writes = close(seed, &direct, &by_name);
+    (writes, core, direct)
+}
+
+/// Everything a value in `seed` reaches by following calls, to a fixed point.
+///
+/// Generic over the value so the same walk serves the set of paths written and the map of paths to
+/// the core methods that wrote them: bounded by the call graph, so a cycle terminates rather than
+/// spinning.
+fn close<T: Merge + Clone>(
+    seed: BTreeMap<String, T>,
+    direct: &BTreeMap<String, Reach>,
+    by_name: &BTreeMap<String, BTreeSet<String>>,
+) -> BTreeMap<String, T> {
+    let mut out = seed;
     loop {
         let mut changed = false;
-        let snapshot = writes.clone();
-        for (key, r) in &direct {
+        let snapshot = out.clone();
+        for (key, r) in direct {
             for callee in &r.calls {
                 for callee_key in by_name.get(callee).into_iter().flatten() {
                     let Some(inherited) = snapshot.get(callee_key) else {
                         continue;
                     };
-                    let target = writes.entry(key.clone()).or_default();
-                    for path in inherited {
-                        changed |= target.insert(path.clone());
-                    }
+                    changed |= out.entry(key.clone()).or_default().merge(inherited);
                 }
             }
         }
@@ -842,7 +941,32 @@ fn transitive_writes(
             break;
         }
     }
-    (writes, direct)
+    out
+}
+
+/// Absorb another value of the same shape, answering whether anything was new.
+trait Merge: Default {
+    fn merge(&mut self, other: &Self) -> bool;
+}
+
+impl Merge for BTreeSet<String> {
+    fn merge(&mut self, other: &Self) -> bool {
+        let mut changed = false;
+        for path in other {
+            changed |= self.insert(path.clone());
+        }
+        changed
+    }
+}
+
+impl Merge for BTreeMap<String, BTreeSet<String>> {
+    fn merge(&mut self, other: &Self) -> bool {
+        let mut changed = false;
+        for (path, methods) in other {
+            changed |= self.entry(path.clone()).or_default().merge(methods);
+        }
+        changed
+    }
 }
 
 /// The feature a source file belongs to, or `None` for shell, view and root code.
@@ -862,6 +986,10 @@ fn owners() -> BTreeMap<String, String> {
 struct Scan {
     /// Cross-feature writes, as `(feature, path, "file::operation")`.
     violations: Vec<(String, String, String)>,
+    /// Writes a feature reaches only through a core method, as
+    /// `(feature, path, "file::operation", "Workspace::method")`. Not violations; see
+    /// [`CORE_MEDIATED`].
+    core_mediated: Vec<(String, String, String, String)>,
     /// Methods called on a state path that are in neither table.
     unclassified: BTreeSet<String>,
     /// Mutating operations found under `src/features/`.
@@ -891,7 +1019,7 @@ fn scan() -> Scan {
             body: o.body.clone(),
         })
         .collect();
-    let (ws_writes, _) = transitive_writes(
+    let (ws_writes, _, _) = transitive_writes(
         &ws_mutating,
         &workspace_fields,
         None,
@@ -931,7 +1059,7 @@ fn scan() -> Scan {
         .flat_map(|(file, src)| operations_in(file, src, "State"))
         .filter(|o| o.mutating)
         .collect();
-    let (writes, direct) = transitive_writes(
+    let (writes, core, direct) = transitive_writes(
         &ops,
         &fields,
         Some(("workspace", &workspace_fields)),
@@ -959,6 +1087,7 @@ fn scan() -> Scan {
 
     let owners = owners();
     let mut violations = Vec::new();
+    let mut core_mediated = Vec::new();
     for op in &ops {
         let Some(feature) = feature_of(&op.file) else {
             continue;
@@ -996,6 +1125,28 @@ fn scan() -> Scan {
             let written_directly = direct
                 .get(&op.key())
                 .is_some_and(|r| r.writes.contains(path));
+            // A path this operation reaches *only* through a `Workspace` method is not the feature
+            // writing a neighbour: it is core code writing its own members, and the ownership map
+            // splits `workspace` across three features for the guard's benefit, not because a
+            // boundary runs through the middle of that type. Reporting it asks three client
+            // features to each re-implement one clause of a core invariant (T067a-3). It is still
+            // counted — in CORE_MEDIATED, so a *new* one has to be acknowledged rather than
+            // arriving silently.
+            let via_core = core
+                .get(&op.key())
+                .and_then(|c| c.get(path))
+                .filter(|_| !written_directly);
+            if let Some(methods) = via_core {
+                for method in methods {
+                    core_mediated.push((
+                        feature.clone(),
+                        path.clone(),
+                        op.key(),
+                        format!("Workspace::{method}"),
+                    ));
+                }
+                continue;
+            }
             if inherited_from_a_feature && !written_directly {
                 continue;
             }
@@ -1004,8 +1155,11 @@ fn scan() -> Scan {
     }
     violations.sort();
     violations.dedup();
+    core_mediated.sort();
+    core_mediated.dedup();
     Scan {
         violations,
+        core_mediated,
         unclassified,
         feature_ops: ops.iter().filter(|o| feature_of(&o.file).is_some()).count(),
         state_fields: state_field_list.len(),
@@ -1124,6 +1278,78 @@ fn the_allowlist_names_only_live_violations() {
          Delete each line. An allowlist that outlives what it permitted is how the next real \
          violation gets waved through.",
         dead.join("\n")
+    );
+}
+
+#[test]
+fn core_mediated_writes_are_inventoried() {
+    let scan = scan();
+    let listed: BTreeSet<(&str, &str, &str, &str)> = CORE_MEDIATED.iter().copied().collect();
+    let live: BTreeSet<(&str, &str, &str, &str)> = scan
+        .core_mediated
+        .iter()
+        .map(|(f, p, w, m)| (f.as_str(), p.as_str(), w.as_str(), m.as_str()))
+        .collect();
+    let unlisted: Vec<String> = live
+        .difference(&listed)
+        .map(|(f, p, w, m)| format!("  {w} — `{f}` reaches `state.{p}` through `{m}`"))
+        .collect();
+    assert!(
+        unlisted.is_empty(),
+        "core-mediated writes with no entry in CORE_MEDIATED (T067a-3):\n{}\n\n\
+         These do not fail `no_feature_writes_another_features_data`, which is exactly why each \
+         has to be named here. Add a line saying which core invariant the method carries — or, if \
+         it carries none and is a single-member setter being used to reach into a neighbour, \
+         return an `Outcome` instead (FR-021).",
+        unlisted.join("\n")
+    );
+    let dead: Vec<String> = listed
+        .difference(&live)
+        .map(|(f, p, w, m)| format!("  {w} — `{f}` reaching `state.{p}` through `{m}`"))
+        .collect();
+    assert!(
+        dead.is_empty(),
+        "CORE_MEDIATED names writes that no longer happen:\n{}\n\n\
+         Delete each line, for the same reason ALLOWED may not outlive what it permitted.",
+        dead.join("\n")
+    );
+}
+
+#[test]
+fn the_exemption_is_narrow() {
+    // The exemption is the guard's only silent path, so it has to be shown to still fail. These
+    // two say what "solely through the core call" means, in the shape a probe would take: a
+    // feature that writes a `workspace` member on a line of its own is a violation whether or not
+    // it also calls a core method, and every path in CORE_MEDIATED is a real cross-feature path —
+    // one whose owner is a different feature — rather than a row the exemption invented.
+    let owners = owners();
+    for (feature, path, site, method) in CORE_MEDIATED {
+        let owner = owners
+            .get(*path)
+            .unwrap_or_else(|| panic!("`{path}` has no owner"));
+        assert_ne!(
+            owner, feature,
+            "{site} — `{path}` is owned by `{feature}` itself, so `{method}` is not mediating \
+             anything and this line does not belong in CORE_MEDIATED"
+        );
+    }
+    let scan = scan();
+    let exempted: BTreeSet<(&str, &str)> = scan
+        .core_mediated
+        .iter()
+        .map(|(_, p, w, _)| (p.as_str(), w.as_str()))
+        .collect();
+    let both: Vec<String> = scan
+        .violations
+        .iter()
+        .filter(|(_, p, w)| exempted.contains(&(p.as_str(), w.as_str())))
+        .map(|(f, p, w)| format!("  {w} — `{f}` and `state.{p}`"))
+        .collect();
+    assert!(
+        both.is_empty(),
+        "these are reported as violations *and* exempted, which the scan should make \
+         impossible:\n{}",
+        both.join("\n")
     );
 }
 
