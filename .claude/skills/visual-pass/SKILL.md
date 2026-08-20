@@ -54,11 +54,21 @@ branch under test had deleted, while the source contained no reference to it and
 
 ```bash
 scripts/build-lock.sh bash -c \
-  'cargo build -p micold-client --bin micold-ai-ide -p micold-daemon &&
-   cp "$CARGO_TARGET_DIR/debug/micold-ai-ide" "$CARGO_TARGET_DIR/debug/micold-daemon" ~/vp/bin/'
+  'cargo build -p micold-client --bin micold-ai-ide &&
+   cargo build -p micold-daemon --bin micold-daemon &&
+   cp "$CARGO_TARGET_DIR/debug/micold-ai-ide" ~/vp/bin/ &&
+   cp "$CARGO_TARGET_DIR/debug/micold-daemon" ~/vp/bin/'
 ```
 
-One invocation, both binaries, copy inside the lock — then run the copies. Three details:
+One lock, both binaries, copy inside it — then run the copies. Four details:
+
+- **`-p a --bin x -p b` builds nothing for `b`.** `--bin` narrows *target* selection across the
+  whole invocation, so the daemon is silently not built and the `cp` takes whatever branch last
+  wrote `target-shared/debug/micold-daemon`. The recipe above said exactly that for months and the
+  failure it produces is the version mismatch described two bullets down — which then reads as a
+  schema-hash quirk rather than as "you did not build the daemon". `cargo build … | grep "Compiling
+  micold"` should name **micold-core, micold-client and micold-daemon**; if the daemon is missing
+  from that list, nothing you copy is yours. Two invocations is the fix.
 
 - **The client and the daemon must come from the same build.** The client refuses a daemon whose
   protocol *schema hash* differs (`handshake::evaluate`), and the daemon logs that as `refusing
