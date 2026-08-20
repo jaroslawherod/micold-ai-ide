@@ -561,9 +561,11 @@ fn the_recorded_tab_overflow_is_the_instance_strip() {
 
         assert_eq!(
             tabs.len(),
-            INSTANCES,
-            "{path} holds {} children against {INSTANCES} open instances, so it is not the strip \
-             and the exemption is attributed to the wrong node",
+            INSTANCES + 1,
+            "{path} holds {} children against {INSTANCES} open instances plus the AI tab, so it \
+             is not the strip and the exemption is attributed to the wrong node. The `+ 1` is \
+             FR-001: the session's AI CLI process is a member of this strip, not a control beside \
+             it, and FR-002 puts it last.",
             tabs.len(),
         );
 

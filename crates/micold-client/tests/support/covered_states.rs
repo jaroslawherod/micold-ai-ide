@@ -90,6 +90,18 @@ const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0];
 const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0];
 const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 1];
 const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 2];
+/// The **AI tab** (feature 026 FR-001, FR-002), the strip's last child — one past the instances.
+///
+/// Two indices, because two covered states hold different numbers of instances and FR-002 pins this
+/// tab to the *end* rather than to a position. Named so `gates/tab_children_fit.rs` reports on it by
+/// name: its touch-target assertion catches this tab squeezed by the scrolling viewport, and
+/// `a_tabs_content_sits_on_its_tabs_midline` is what actually holds FR-010a's centred icon — the
+/// property that failed at 4.6dp on a terminal tab the morning before this feature was planned.
+const TERMINAL_TAB_AI_AFTER_THREE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 3];
+const TERMINAL_TAB_AI_AFTER_SIX: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 6];
+/// The strip in a session with **no** instances at all, where the AI tab is its only member — the
+/// state feature 012 deliberately drew nothing in, and where FR-003's whole visible change lands.
+const TERMINAL_TAB_AI_ALONE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0];
 /// Inside a tab: the button's content column, whose first child is the active indicator (or, on an
 /// inactive tab, the transparent rule reserving its height) and whose second is the tab's content
 /// row — leading spacer, label and close.
@@ -612,6 +624,19 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "terminal.bottom_bar.mode_toggle",
                     path: TERMINAL_MODE_TOGGLE,
                 },
+                // Feature 026 FR-003: this session has **no** instances, and until now that meant
+                // no strip at all. It has one now, with a single member — the AI tab. This is where
+                // the change lands for the user who never opens a second terminal, which is most of
+                // them, and it is the state most likely to read as a stray control rather than as a
+                // deliberate strip (T030 judges that; this makes the geometry visible).
+                Anchor {
+                    name: "terminal.tabs",
+                    path: TERMINAL_TAB_STRIP,
+                },
+                Anchor {
+                    name: "terminal.tabs.ai",
+                    path: TERMINAL_TAB_AI_ALONE,
+                },
             ],
         },
         // --- BUG-002's tab strip (feature 012 T057) ---------------------------------------------
@@ -712,6 +737,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "terminal.tabs.exited",
                     path: TERMINAL_TAB_EXITED,
                 },
+                Anchor {
+                    name: "terminal.tabs.ai",
+                    path: TERMINAL_TAB_AI_AFTER_THREE,
+                },
                 // The reference width for `bar_controls_hold_their_size`'s cross-state comparison
                 // (T015): this state has room to spare, and the overflowing one does not, so the
                 // toggle measuring the same in both is a direct reading of FR-002c.
@@ -777,6 +806,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "terminal.tabs",
                     path: TERMINAL_TAB_STRIP,
+                },
+                Anchor {
+                    name: "terminal.tabs.ai",
+                    path: TERMINAL_TAB_AI_AFTER_SIX,
                 },
                 Anchor {
                     name: "terminal.mode_toggle",

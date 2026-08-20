@@ -110,7 +110,7 @@ mod style_snapshot;
 #[cfg(test)]
 mod style_states;
 mod surface;
-mod tab;
+pub(crate) mod tab;
 mod tab_strip;
 mod tag;
 mod terminal_pane;

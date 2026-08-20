@@ -74,9 +74,12 @@ fn source_of(relative: &str) -> String {
     out
 }
 
-/// The body of `fn instance_switcher_row`, from its signature to the closing brace at column 0.
+/// The body of `fn tab_strip_row`, from its signature to the closing brace at column 0.
+///
+/// It was `instance_switcher_row` until feature 026 FR-003 made the strip unconditional and FR-001
+/// put the AI process in it — a strip of every displayable pane, not a switcher between instances.
 fn switcher_row_body(src: &str) -> String {
-    body_from(src, "fn instance_switcher_row")
+    body_from(src, "fn tab_strip_row")
 }
 
 /// The body of the tab component's conversion — where the indicator is chosen and reserved.
@@ -144,5 +147,62 @@ fn the_nested_close_control_is_tinted_from_its_tab() {
          which is near tone-on-tone against the `primary` fill the active tab paints — the close \
          glyph all but disappears on the one tab a user is most likely to want to close. Pass \
          `.tint(icon_role(..))` for the tab's own state."
+    );
+}
+
+// ---- feature 026: the AI process is a tab -------------------------------------------------------
+
+/// FR-001/FR-002/FR-003: the strip holds one tab per instance **plus** the AI tab, the AI tab is
+/// last, and the strip exists at zero and one instance too.
+///
+/// Source-level for the reason this file's module doc gives, and for one more: what is being
+/// asserted is the *membership rule*, and a membership rule read off a rendered element tree is
+/// read through whatever the layout did to it. The two facts that matter — that the AI tab is
+/// pushed after the loop over instances, and that nothing gates the strip on how many there are —
+/// are both statements about how the row is built.
+#[test]
+fn the_strip_holds_every_instance_plus_the_ai_tab_last() {
+    let body = switcher_row_body(&terminal_source());
+
+    assert!(
+        !body.contains("shells.len() <= 1") && !body.contains("shells.is_empty()"),
+        "the strip must be drawn whenever a session is displayed, including at zero and one \
+         instance (FR-003, superseding feature 012 FR-005). An early return on the instance count \
+         is what hid it, and it is also a bar child that comes and goes — feature 023 FR-008a."
+    );
+
+    let loop_at = body
+        .find("for instance in")
+        .expect("the strip must still build one tab per open instance (FR-001)");
+    let ai_at = body
+        .find("Icon::AiCli")
+        .expect("the strip must carry a tab for the session's AI CLI process (FR-001, FR-009)");
+    assert!(
+        ai_at > loop_at,
+        "the AI tab must be pushed **after** every terminal tab, so it holds the strip's \
+         right-hand end as instances are opened and closed (FR-002, SC-006). Built before them it \
+         would lead the strip, and the position FR-002 fixes would depend on iteration order."
+    );
+}
+
+/// FR-004/FR-005: the AI tab has no close control, and the mark comes from the shared rule.
+#[test]
+fn the_ai_tab_is_unclosable_and_marked_from_one_source() {
+    let body = switcher_row_body(&terminal_source());
+
+    let ai_at = body.find("Icon::AiCli").expect("the AI tab exists");
+    let after = &body[ai_at..];
+    assert!(
+        !after.contains("ShellInstanceCloseRequested"),
+        "the AI tab must not offer a close control (FR-004, SC-005). A session has exactly one AI \
+         CLI process and terminating it is not an action offered from this control — by any press."
+    );
+
+    assert!(
+        body.contains("marked_tab("),
+        "which tab is marked must come from `marked_tab(..)` (FR-005), whose own test proves it \
+         total. Comparing against `active_shell` here instead reintroduces the state the AI pane \
+         showed with nothing marked, which is the defect this feature exists to remove — and it \
+         would let the mode toggle and the strip disagree, which FR-008 forbids."
     );
 }
