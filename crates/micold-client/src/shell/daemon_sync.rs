@@ -609,7 +609,9 @@ pub fn on_connected(
     // below, so the attach that follows views the restored session rather than the overview.
     // Guarded to that one case; a mid-session reconnect changes nothing.
     if let Some(outcomes) = app.core.resolve_foreground_after_catalog() {
-        micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut app.core, o));
+        micold_client::app::drain(outcomes, |o| {
+            micold_client::app::interpret(&mut app.core, o)
+        });
     }
     // Record what this attach actually produced (`010` BUG-013). Written after the fold and the
     // re-resolve, so the counts describe the state the window is about to render from.

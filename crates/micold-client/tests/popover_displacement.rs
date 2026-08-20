@@ -76,7 +76,9 @@ fn opener(id: &str) -> Message {
         "worktree_menu" => Message::WorktreeMenuToggled("w1".into(), (20, 20)),
         "session_menu" => Message::SessionMenuToggled(SessionId::new(), (30, 30)),
         "terminal_context_menu" => Message::TerminalContextMenuOpened { x: 10, y: 20 },
-        "shell_instance_menu" => Message::StripTabMenuRequested(StripTab::Instance(ShellInstanceId(1)), 30, 40),
+        "shell_instance_menu" => {
+            Message::StripTabMenuRequested(StripTab::Instance(ShellInstanceId(1)), 30, 40)
+        }
         other => panic!("no opener for `{other}`"),
     }
 }
@@ -114,7 +116,8 @@ fn the_whole_displacement_relation() {
             let still_open = open_popovers(&st).contains(&other);
             let expected = !displaced.contains(&other);
             assert_eq!(
-                still_open, expected,
+                still_open,
+                expected,
                 "opening `{opened}` over `{other}`: expected `{other}` to be {} afterwards",
                 if expected { "still open" } else { "closed" }
             );
@@ -190,7 +193,11 @@ fn a_toggle_that_shut_its_surface_reports_nothing() {
     let mut st = State::default();
 
     let opened = micold_client::features::help::menu_toggled(&mut st);
-    assert_eq!(opened.len(), 1, "toggling the help menu open reports an opening");
+    assert_eq!(
+        opened.len(),
+        1,
+        "toggling the help menu open reports an opening"
+    );
 
     let closed = micold_client::features::help::menu_toggled(&mut st);
     assert!(
