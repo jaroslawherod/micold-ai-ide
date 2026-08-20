@@ -337,8 +337,14 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             path: PathBuf::from("/tmp/p"),
             anchor: (10, 10),
         }),
-        worktree_menu_open: Some("wt".to_string()),
-        session_menu_open: Some(SessionId::new()),
+        worktree_menu_open: Some(micold_client::features::worktree::WorktreeMenu {
+            dir_name: "wt".to_string(),
+            anchor: (120, 300),
+        }),
+        session_menu_open: Some(micold_client::features::session::SessionMenu {
+            id: SessionId::new(),
+            anchor: (120, 340),
+        }),
         terminal_context_menu: Some((4, 2)),
         selector: Some(Selector::open_at(PathBuf::from("/tmp"))),
         rename_draft: Some(RenameDraft {

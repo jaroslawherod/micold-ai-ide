@@ -71,10 +71,16 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
         })
     }),
     ("worktree_menu_open", "worktree_menu", |s| {
-        s.worktree_menu_open = Some("feature-x".to_string())
+        s.worktree_menu_open = Some(micold_client::features::worktree::WorktreeMenu {
+            dir_name: "feature-x".to_string(),
+            anchor: (120, 300),
+        })
     }),
     ("session_menu_open", "session_menu", |s| {
-        s.session_menu_open = Some(SessionId::new())
+        s.session_menu_open = Some(micold_client::features::session::SessionMenu {
+            id: SessionId::new(),
+            anchor: (120, 340),
+        })
     }),
     ("terminal_context_menu", "terminal_context_menu", |s| {
         s.terminal_context_menu = Some((4, 2))
@@ -84,7 +90,11 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
     // content. It carries the instance because the menu belongs to the tab it was opened on rather
     // than to the active one — FR-010a is about restarting an instance you have not selected.
     ("shell_instance_menu", "shell_instance_menu", |s| {
-        s.shell_instance_menu = Some((ShellInstanceId(1), 4, 2))
+        s.shell_instance_menu = Some((
+            micold_client::ui::terminal::StripTab::Instance(ShellInstanceId(1)),
+            4,
+            2,
+        ))
     }),
 ];
 

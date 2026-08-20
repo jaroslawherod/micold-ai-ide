@@ -147,6 +147,60 @@ fn the_bar_does_not_branch_on_focus() {
     );
 }
 
+/// Feature 026 FR-003/FR-008a: the bar must not add or remove a child as a function of **how many
+/// instances are open** either.
+///
+/// The same rule as `the_bar_does_not_branch_on_focus`, applied to the thing this feature changes.
+/// The strip used to be pushed only once a session had more than one instance — an
+/// `if let Some(switcher)` around a `push`, which is precisely the shape that shifts every sibling
+/// after it. Opening a second instance therefore renumbered the "+" and the mode toggle under
+/// whatever press was in flight.
+///
+/// FR-003 makes the strip unconditional, which removes today's trigger. This removes the class:
+/// as long as the bar's child list does not vary with the session's shape, no sibling can shift
+/// under a press. It reads the source rather than the behaviour for the reason the module doc
+/// gives — the failure is silent, and no behavioural test can see a press that was never published.
+#[test]
+fn the_bar_does_not_branch_on_how_many_instances_are_open() {
+    let src = crate_sources()
+        .into_iter()
+        .find(|(rel, _)| rel == "ui/terminal.rs" || rel == "ui\\terminal.rs")
+        .map(|(_, src)| src)
+        .expect("ui/terminal.rs must exist");
+
+    /// The ways the source can ask "how many instances does this session have".
+    const INSTANCE_COUNT_QUESTION: &[&str] = &[
+        "shells.len()",
+        "shells.is_empty()",
+        "instance_switcher_row(",
+        "tab_strip_row(",
+    ];
+
+    let lines: Vec<&str> = src.lines().collect();
+    let mut found = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        let is_guard = (line.contains("if ") || line.contains("if let"))
+            && INSTANCE_COUNT_QUESTION.iter().any(|q| line.contains(q));
+        if !is_guard {
+            continue;
+        }
+        let window = lines[i..lines.len().min(i + 3)].join(" ");
+        if PUSHES_A_CHILD.iter().any(|p| window.contains(p)) {
+            found.push(format!("ui/terminal.rs:{}  {}", i + 1, line.trim()));
+        }
+    }
+
+    assert!(
+        found.is_empty(),
+        "the terminal's bottom bar must not add or remove a child as a function of the session's \
+         instance count (feature 026 FR-003, feature 023 FR-008a). A conditional child shifts every \
+         sibling after it, and iced's positional tree diff then drops the pressed sibling's \
+         `is_pressed` — the press is silently swallowed and the user has to press twice. The strip \
+         is always drawn now; push it unconditionally:\n{}",
+        found.join("\n")
+    );
+}
+
 // ---- BUG-001/T037: the bar carries no release-focus control ----
 
 /// Feature 023 FR-021b: the bottom bar must not carry a release-focus affordance.

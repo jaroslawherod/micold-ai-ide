@@ -104,6 +104,14 @@ const OWNERS: &[(&str, &str)] = &[
     // The terminal is the session's pane: both fields are written only by `focus_terminal` /
     // `release_terminal`, and `tests/terminal_bar_stability.rs` already holds that line.
     ("terminal_released", "session"),
+    // The tab strip draws a *session's* tabs, so which one is marked and whether it is in view are
+    // the session's business (feature 026, arriving on `main` mid-feature). `arm_tab_reveal` came
+    // over as an `impl State` helper in `app.rs` and moved here for the reason T067a-7 gave for
+    // `focus_terminal`: root code the guard cannot attribute is reported against every caller.
+    ("pending_tab_reveal", "session"),
+    ("tab_strip_scroll_offset", "session"),
+    ("tab_strip_viewport_width", "session"),
+    ("tab_strip_content_width", "session"),
     ("terminal_context_menu", "session"),
     // The terminal *tab* menu (feature 012, BUG-005), which landed on `main` while this feature was
     // in flight. Same owner as the pane's own menu, and for the same reason: it acts on a shell
@@ -155,7 +163,11 @@ const OWNERS: &[(&str, &str)] = &[
     // has named. `focused_field`'s own doc — "one fact about the application, not four" — argues
     // for a single owner; it does not argue that the owner must be the root.
     ("focused_field", "window"),
-    ("cursor", "window"),
+    // `cursor` was the third of the three fields T063 created this feature for. `main`'s 018
+    // BUG-008 fix deleted it: a context menu now anchors at the point its own press landed on,
+    // carried by the message, rather than at a pointer position tracked separately and read later.
+    // That is a better answer than the one this feature was defending, and the window feature is
+    // two fields rather than three.
     ("window_size", "window"),
 ];
 

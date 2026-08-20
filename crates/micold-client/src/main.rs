@@ -363,6 +363,13 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
         None => task,
     };
 
+    // Feature 026 FR-002d: the same shape, one scroll region over. Drained here for the same
+    // reason — the viewport's width arrives with layout, not with the selection.
+    let task = match tab_reveal_scroll(app) {
+        Some(scroll) => Task::batch([task, scroll]),
+        None => task,
+    };
+
     // Hand a closing overlay's snapshot to the renderer so its exit has something to draw (US1).
     // The transition itself belongs to `material::Modal`, which reports back with
     // `OverlayTransitionFinished` once it is over; the snapshot is released there.
@@ -445,6 +452,32 @@ fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
             x: 0.0,
             y: offset as f32,
         },
+    ))
+}
+
+/// Scroll the marked tab into view, once there is a viewport to scroll it in (feature 026 FR-002d).
+///
+/// Deferred for the same two reasons [`reveal_scroll`] is: the viewport reports its width only once
+/// laid out, and `0` there means "unknown", never "nothing fits" — nothing is scrolled on a guess.
+///
+/// The offset may still be `None` once it drains: the marked tab was already fully visible, and
+/// FR-002d's whole point is that a user may scroll away from it by hand. A reveal that fired on
+/// every selection would yank them back each time, including on selections made with the mode
+/// toggle rather than with the strip.
+fn tab_reveal_scroll(app: &mut App) -> Option<Task<Message>> {
+    if !app.core.pending_tab_reveal || app.core.tab_strip_viewport_width == 0 {
+        return None;
+    }
+    app.core.pending_tab_reveal = false;
+    let index = micold_client::ui::terminal::marked_tab_index(&app.core)?;
+    let offset = micold_client::ui::terminal::scroll_into_view(
+        index,
+        app.core.tab_strip_scroll_offset as f32,
+        app.core.tab_strip_viewport_width as f32,
+    )?;
+    Some(iced::widget::operation::scroll_to(
+        micold_client::ui::terminal::TAB_STRIP_SCROLL_ID.clone(),
+        iced::widget::scrollable::AbsoluteOffset { x: offset, y: 0.0 },
     ))
 }
 

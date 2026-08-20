@@ -39,7 +39,12 @@ pub fn sha256(data: &[u8]) -> [u8; 32] {
     msg.extend_from_slice(&bit_len.to_be_bytes());
 
     let mut w = [0u32; 64];
-    for chunk in msg.chunks_exact(64) {
+    // `as_chunks::<64>().0` rather than `chunks_exact(64)`: identical 64-byte blocks, but the chunk
+    // arrives as `&[u8; 64]` so the four indexes below are bounds-checked once by the type instead
+    // of on every access. clippy 1.98 added `chunks_exact_to_as_chunks` and CI's
+    // `dtolnay/rust-toolchain@stable` picked it up; the message padding above guarantees a length
+    // that is a multiple of 64, so the discarded remainder is always empty.
+    for chunk in msg.as_chunks::<64>().0 {
         for (i, word) in w.iter_mut().enumerate().take(16) {
             let j = i * 4;
             *word = u32::from_be_bytes([chunk[j], chunk[j + 1], chunk[j + 2], chunk[j + 3]]);

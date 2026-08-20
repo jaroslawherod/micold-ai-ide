@@ -97,10 +97,23 @@ impl State {
     }
 }
 
+/// An open worktree right-click context menu (feature 008, FR-013): which worktree it acts on, and
+/// where to draw it. Mirrors [`crate::features::project::ProjectMenu`], deliberately — a row is a
+/// row, and the two menus differing was BUG-008.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorktreeMenu {
+    /// The worktree the menu acts on, by `dir_name`.
+    pub dir_name: String,
+    /// The menu panel's top-left corner, in window pixels (the press point) — clamped at render
+    /// time rather than here, so a resize while the menu is open cannot leave it hanging off the
+    /// edge (018 FR-029d).
+    pub anchor: (u16, u16),
+}
+
 /// A worktree row's right-click menu, as a floating surface (feature 021, T031).
 ///
-/// Anchored beside the sidebar rather than at the cursor, but a context menu all the same: it is
-/// opened over the row it acts on and must not fall behind it.
+/// Anchored at the press point since BUG-008, like every other context menu in the application
+/// (018 FR-029d). It is opened over the row it acts on and must not fall behind it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WorktreeContextMenu;
 
@@ -224,11 +237,17 @@ fn list_changed(state: &State) -> crate::features::Outcome {
 /// project row menu and nothing else — the two context menus replace each other, while a panel
 /// popover open elsewhere in the window survives a right-click in the sidebar (T067a-2).
 #[must_use = "what an opening menu displaces is the registry's business, not the caller's"]
-pub fn menu_toggled(state: &mut State, dir: String) -> Vec<crate::features::Outcome> {
-    state.worktree_menu_open = if state.worktree_menu_open.as_deref() == Some(dir.as_str()) {
-        None
-    } else {
-        Some(dir)
+pub fn menu_toggled(
+    state: &mut State,
+    dir: String,
+    anchor: (u16, u16),
+) -> Vec<crate::features::Outcome> {
+    state.worktree_menu_open = match &state.worktree_menu_open {
+        Some(open) if open.dir_name == dir => None,
+        _ => Some(WorktreeMenu {
+            dir_name: dir,
+            anchor,
+        }),
     };
     crate::features::surface_opened(state.worktree_menu_open.is_some(), WorktreeContextMenu::ID)
 }

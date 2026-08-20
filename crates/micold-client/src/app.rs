@@ -12,11 +12,11 @@
 
 use crate::features::notifications::NoticeLevel;
 use crate::features::project::{ProjectMenu, RenameDraft, SwitcherEntry};
-use crate::features::session::SelectKind;
+use crate::features::session::{SelectKind, SessionMenu};
 use crate::features::settings::SettingsDraft;
 use crate::features::sidebar::TagFilter;
 use crate::features::window::FieldId;
-use crate::features::worktree::WorktreeRenameDraft;
+use crate::features::worktree::{WorktreeMenu, WorktreeRenameDraft};
 use crate::features::worktree_form::WorktreeForm;
 use micold_core::notify;
 use micold_core::project::{Availability, FolderEntry};
@@ -89,15 +89,17 @@ pub enum Message {
     ProjectForgetCancelled,
 
     // ---- Feature 015: forget from the switcher's right-click menu ----
-    /// The pointer moved to this window-pixel position. Emitted by the binary only while the
-    /// project switcher is open, so a right-click can anchor its menu at the cursor.
-    CursorMoved { x: u16, y: u16 },
     /// The window was resized (or reported its initial size). Feeds context-menu clamping.
     WindowResized { width: u16, height: u16 },
-    /// Open (or close, if already open) a project's switcher right-click context menu, by path.
-    /// Anchored at the last known [`State::cursor`]. The switcher panel stays open behind it;
-    /// the other popovers are mutually exclusive.
-    ProjectMenuToggled(PathBuf),
+    /// Open (or close, if already open) a project's switcher right-click context menu, by path,
+    /// anchored at the press point in window pixels. The switcher panel stays open behind it; the
+    /// other popovers are mutually exclusive.
+    ///
+    /// The point rides on the message since BUG-008. It used to be read from a `State::cursor` fed
+    /// by a pointer subscription that ran only while the switcher was open — a side channel that
+    /// existed because the row handed over a bare message, and that answered `(0, 0)` to anyone
+    /// who was not the running binary.
+    ProjectMenuToggled(PathBuf, (u16, u16)),
     /// Dismiss the project context menu (outside click, or after an action is chosen).
     ProjectMenuDismissed,
     /// The user selected a theme preference (Follow system / Light / Dark) (FR-007, FR-008).
@@ -130,8 +132,9 @@ pub enum Message {
     DefaultExpansionToggled,
 
     // ---- Feature 008: worktree sidebar refinement ----
-    /// Open (or close, if already open) a worktree's right-click context menu, by `dir_name`.
-    WorktreeMenuToggled(String),
+    /// Open (or close, if already open) a worktree's right-click context menu, by `dir_name`,
+    /// anchored at the press point in window pixels (018 FR-029d).
+    WorktreeMenuToggled(String, (u16, u16)),
     /// Dismiss the worktree context menu (outside click, or after an action is chosen).
     WorktreeMenuDismissed,
     /// Request deletion of a worktree; opens the confirm dialog (FR-018), by `dir_name`.
@@ -198,6 +201,25 @@ pub enum Message {
     /// derives from it (FR-025a) — and the sidebar is the only scroll region beneath the bar, so it
     /// is the only thing that can answer "is content passing under it".
     SidebarScrolled(u32),
+    /// The terminal tab strip scrolled; carries the offset, the viewport's width and its content's,
+    /// all in whole pixels (feature 026 FR-002e).
+    ///
+    /// Three numbers in one message because they answer one question — "does anything lie beyond
+    /// this edge" — and the rendering stack delivers them together. Split across messages there
+    /// would be frames where one is stale, and a fade computed from a stale pair points at nothing
+    /// or fails to point at something.
+    TabStripScrolled {
+        offset: u32,
+        width: u32,
+        content: u32,
+    },
+    /// The tab strip's viewport was laid out, or resized (feature 026 FR-002e).
+    ///
+    /// Separate from [`Self::TabStripScrolled`] because the two answer different questions and fire
+    /// at different times — the same split the sidebar's pair makes. This one is what covers the
+    /// **first** frame, where nothing has scrolled yet and a strip that already overflows still has
+    /// to fade its edge.
+    TabStripViewportResized { width: u32 },
     /// The sidebar's scroll viewport was laid out at this height, in whole logical pixels
     /// (feature 024).
     ///
@@ -247,8 +269,9 @@ pub enum Message {
     SessionTitleUpdated { id: SessionId, title: String },
 
     // ---- Bugfix BUG-003: session Remove (distinct from Close/archive) ----
-    /// Open (or close, if already open) a session's right-click context menu.
-    SessionMenuToggled(SessionId),
+    /// Open (or close, if already open) a session's right-click context menu, anchored at the
+    /// press point in window pixels (018 FR-029d).
+    SessionMenuToggled(SessionId, (u16, u16)),
     /// Dismiss the session context menu (outside click, or after an action is chosen).
     SessionMenuDismissed,
     /// Request permanent removal of a session; opens the confirm dialog (FR-015c).
@@ -290,11 +313,24 @@ pub enum Message {
     /// body: mirrors `TerminalRestartRequested`, which only triggers binary-side spawn logic.
     /// Carries the owning session explicitly for the same reason as `ShellInstanceSelected`.
     ShellInstanceRestartRequested(SessionId, ShellInstanceId),
-    /// Open the context menu for one terminal tab, at a window-pixel point (feature 012, BUG-005,
-    /// FR-010b). Dispatched by a secondary (right) press on the tab.
-    ShellInstanceMenuRequested(ShellInstanceId, u16, u16),
+    /// Open the context menu for one strip tab, at a window-pixel point (feature 012 BUG-005
+    /// FR-010b, widened by feature 026 FR-006a). Dispatched by a secondary (right) press.
+    ///
+    /// Carries a `StripTab` rather than a `ShellInstanceId` since feature 026, because the AI tab
+    /// has a menu too and it is **the same menu** with Close filtered out (FR-004, FR-006a). One
+    /// message, one surface, one registration: two would be the shape that lets the two menus drift
+    /// into offering different actions for the same reason, which is the thing FR-006a is worded to
+    /// prevent.
+    StripTabMenuRequested(crate::ui::terminal::StripTab, u16, u16),
     /// Dismiss the terminal-tab context menu.
     ShellInstanceMenuClosed,
+    /// Show the session's AI CLI process in the pane (feature 026 FR-006, FR-007).
+    ///
+    /// **Sets** the mode rather than toggling it, which is FR-007: pressing the AI tab while the AI
+    /// CLI is already displayed must be a no-op with no visible change, and `TerminalModeToggled`
+    /// would switch away. Carries the session explicitly, for the same reason
+    /// `ShellInstanceSelected` does.
+    TerminalAiCliSelected(SessionId),
     /// A Regular Terminal instance reported it is running (feature 011; replaces feature 010's
     /// `ShellSessionRunning(SessionId)`, now id-addressed since a session may have more than one
     /// instance).
@@ -539,6 +575,29 @@ pub struct State {
     /// the first frame where a row for the current session actually exists (research R7,
     /// invariant I4).
     pub pending_reveal_scroll: bool,
+    /// The tab strip's scroll offset, in whole pixels from its leading edge (feature 026 FR-002e).
+    ///
+    /// Presentation, not state to persist: FR-002d scrolls the marked tab into view on selection,
+    /// and where the user has scrolled to is not remembered across sessions or restarts (spec
+    /// Assumptions). It lives here only because the edge fade and the reveal both have to read it,
+    /// and only the reducer sees both.
+    pub tab_strip_scroll_offset: u32,
+    /// The tab strip viewport's laid-out width, in whole pixels. `0` until the first layout, which
+    /// reads as "cannot decide yet" and never as "nothing fits" — the same rule
+    /// [`Self::sidebar_viewport_height`] follows, and for the same reason.
+    pub tab_strip_viewport_width: u32,
+    /// The strip's whole content width, in whole pixels — every tab plus the gaps between them.
+    ///
+    /// Reported rather than derived from the instance count, because the fade is about what is
+    /// actually laid out. A count is a claim about what *should* be there.
+    pub tab_strip_content_width: u32,
+    /// Whether the marked tab is waiting to be scrolled into view (feature 026 FR-002d).
+    ///
+    /// A flag, not a target, for the reason [`Self::pending_reveal_scroll`] is one: the offset
+    /// cannot be computed when the selection changes, because the viewport's width is not known
+    /// until layout. The reducer arms it; the binary computes and applies the scroll on the first
+    /// frame where the viewport has a width.
+    pub pending_tab_reveal: bool,
     /// The add-worktree form, present only while its overlay is shown (FR-005).
     pub worktree_form: Option<WorktreeForm>,
     /// A message shown when opening a non-git directory was refused (FR-001a), or a worktree
@@ -572,7 +631,7 @@ pub struct State {
     /// Window pixels rather than the pane-local point [`State::terminal_context_menu`] holds — that
     /// one is drawn on the pane's own overlay because a pane's origin is not known at render time,
     /// and this one is drawn on the window's, where the anchor is already in the right space.
-    pub shell_instance_menu: Option<(ShellInstanceId, u16, u16)>,
+    pub shell_instance_menu: Option<(crate::ui::terminal::StripTab, u16, u16)>,
     /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
     /// Why entering a project landed on the session it did, from the most recent switch.
@@ -606,19 +665,15 @@ pub struct State {
     /// `help_menu_open`.
     pub project_switcher_open: bool,
     /// The open project right-click context menu (feature 015), with the project it acts on and
-    /// the cursor anchor to draw it at. At most one is open. Mutually exclusive with the other
+    /// the press point to draw it at. At most one is open. Mutually exclusive with the other
     /// popovers, but the switcher panel itself stays open behind it. Transient — not persisted.
     pub project_menu_open: Option<ProjectMenu>,
-    /// Last known pointer position in window pixels (feature 015). Tracked only while the
-    /// project switcher is open — see the binary's cursor subscription — purely so a right-click
-    /// can anchor its context menu at the cursor. Transient — not persisted.
-    pub cursor: (u16, u16),
     /// Last known window size in pixels (feature 015), used to clamp a context menu so it cannot
     /// open off-screen. `(0, 0)` means "not reported yet", which disables clamping. Transient.
     pub window_size: (u16, u16),
-    /// The worktree whose right-click context menu is open, by `dir_name` (feature 008). At
-    /// most one is open at a time; `None` means no menu is showing.
-    pub worktree_menu_open: Option<String>,
+    /// The worktree whose right-click context menu is open, and where it was opened from
+    /// (feature 008). At most one is open at a time; `None` means no menu is showing.
+    pub worktree_menu_open: Option<WorktreeMenu>,
     /// The worktree pending deletion (its `dir_name`), shown in the confirm dialog (feature
     /// 008, FR-018/FR-019). Its presence *is* the confirm dialog being shown (T037).
     pub worktree_delete_target: Option<String>,
@@ -647,9 +702,10 @@ pub struct State {
     /// The worktree row the pointer is currently over, by `dir_name` (feature 008). Drives the
     /// hover-revealed row actions (add-session + delete). Transient.
     pub hovered_worktree: Option<String>,
-    /// The session whose right-click context menu is open (bugfix BUG-003). At most one is open
-    /// at a time; `None` means no menu is showing. Mirrors `worktree_menu_open`.
-    pub session_menu_open: Option<SessionId>,
+    /// The session whose right-click context menu is open, and where it was opened from (bugfix
+    /// BUG-003). At most one is open at a time; `None` means no menu is showing. Mirrors
+    /// `worktree_menu_open`.
+    pub session_menu_open: Option<SessionMenu>,
     /// The session pending permanent removal, shown in the confirm dialog (bugfix BUG-003,
     /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
     /// `worktree_delete_target`.
@@ -854,12 +910,11 @@ impl State {
             }
             Message::RenameConfirmed => crate::features::project::rename_confirmed(self),
             Message::RenameCancelled => crate::features::project::rename_cancelled(self),
-            Message::CursorMoved { x, y } => crate::features::window::cursor_moved(self, x, y),
             Message::WindowResized { width, height } => {
                 crate::features::window::resized(self, width, height)
             }
-            Message::ProjectMenuToggled(path) => {
-                let outcomes = crate::features::project::menu_toggled(self, path);
+            Message::ProjectMenuToggled(path, anchor) => {
+                let outcomes = crate::features::project::menu_toggled(self, path, anchor);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ProjectMenuDismissed => crate::features::project::menu_dismissed(self),
@@ -896,8 +951,8 @@ impl State {
                 let outcomes = self.toggle_location(SessionLocation::Default);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::WorktreeMenuToggled(dir) => {
-                let outcomes = crate::features::worktree::menu_toggled(self, dir);
+            Message::WorktreeMenuToggled(dir, anchor) => {
+                let outcomes = crate::features::worktree::menu_toggled(self, dir, anchor);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::WorktreeMenuDismissed => crate::features::worktree::menu_dismissed(self),
@@ -941,6 +996,14 @@ impl State {
             Message::SidebarViewportResized(height) => {
                 crate::features::sidebar::viewport_resized(self, height)
             }
+            Message::TabStripScrolled {
+                offset,
+                width,
+                content,
+            } => crate::features::session::tab_strip_scrolled(self, offset, width, content),
+            Message::TabStripViewportResized { width } => {
+                crate::features::session::tab_strip_viewport_resized(self, width)
+            }
             Message::SidebarScrolled(offset) => crate::features::sidebar::scrolled(self, offset),
             Message::ScrolledBeneathOverlay => self.dismiss_on_scroll_beneath(),
             Message::EscapePressed => self.dismiss_topmost(),
@@ -971,6 +1034,10 @@ impl State {
             }
             Message::TerminalModeToggled => {
                 let outcomes = crate::features::session::mode_toggled(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
+            Message::TerminalAiCliSelected(id) => {
+                let outcomes = crate::features::session::ai_cli_selected(self, id);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::TerminalRestartRequested => {
@@ -1018,7 +1085,9 @@ impl State {
                 let outcomes = crate::features::session::close_requested(self, id);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::SessionMenuToggled(id) => crate::features::session::menu_toggled(self, id),
+            Message::SessionMenuToggled(id, anchor) => {
+                crate::features::session::menu_toggled(self, id, anchor)
+            }
             Message::SessionMenuDismissed => crate::features::session::menu_dismissed(self),
             Message::SessionRemoveRequested(id) => crate::features::session::remove_requested(self, id),
             Message::SessionRemoveConfirmed => {
@@ -1045,8 +1114,8 @@ impl State {
                 crate::features::session::context_menu_opened(self, x, y)
             }
             Message::TerminalContextMenuClosed => crate::features::session::context_menu_closed(self),
-            Message::ShellInstanceMenuRequested(instance, x, y) => {
-                crate::features::session::shell_instance_menu_requested(self, instance, x, y)
+            Message::StripTabMenuRequested(tab, x, y) => {
+                crate::features::session::strip_tab_menu_requested(self, tab, x, y)
             }
             Message::ShellInstanceMenuClosed => {
                 crate::features::session::shell_instance_menu_closed(self)
@@ -1139,8 +1208,8 @@ impl State {
 
         if self
             .worktree_menu_open
-            .as_deref()
-            .is_some_and(|d| !names.contains(d))
+            .as_ref()
+            .is_some_and(|m| !names.contains(&m.dir_name))
         {
             self.worktree_menu_open = None;
         }

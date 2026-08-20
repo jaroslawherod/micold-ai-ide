@@ -5,12 +5,20 @@
 //! any future hierarchical navigation should reuse it rather than fork a bespoke widget.
 
 use crate::icons::Icon;
+use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
 use crate::ui::material::TypeRole;
 use iced::widget::{button, column, container, mouse_area, row, Row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::tokens::{anatomy, density, shape, spacing, Rgb, Roles};
+
+/// What a row's right-click becomes: a message built from the press point, in window pixels.
+///
+/// The same shape `cdk::ContextArea` publishes, deliberately — a row and a terminal tab answer the
+/// same gesture, and a second shape for it is how the sidebar came to answer it differently
+/// (BUG-008).
+type OnRightPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
 
 /// One row in a [`tree_view`]. Generic over the message type so it is reusable across features.
 pub struct TreeItem<'a, M> {
@@ -37,8 +45,14 @@ pub struct TreeItem<'a, M> {
     /// Color-coded tag chips rendered on a second line beneath the label as `(label, accent)`
     /// (feature 008, FR-001). Empty ⇒ single-line row.
     pub tags: Vec<(String, Rgb)>,
-    /// Message emitted on a right-click of the row (feature 008 context menu, FR-013).
-    pub on_right_press: Option<M>,
+    /// What a right-click of the row becomes, built from the **press point** in window
+    /// coordinates (feature 008 context menu, FR-013; the point since BUG-008, FR-029d).
+    ///
+    /// A message rather than a function was the whole of BUG-008: with no point to anchor to, both
+    /// sidebar menus opened at a constant corner, and the constant then acquired a doc comment
+    /// explaining that a row's position "the view does not know" — which was a description of this
+    /// missing parameter. `cdk::ContextArea` has published the point since feature 012's BUG-005.
+    pub on_right_press: Option<OnRightPress<'a, M>>,
     /// Message emitted when the pointer enters the row (feature 008 hover-reveal).
     pub on_hover: Option<M>,
     /// Message emitted when the pointer leaves the row (feature 008 hover-reveal).
@@ -115,9 +129,10 @@ impl<'a, M> TreeItem<'a, M> {
         self
     }
 
-    /// Emit `message` when the row is right-clicked (feature 008 context menu).
-    pub fn on_right_press(mut self, message: M) -> Self {
-        self.on_right_press = Some(message);
+    /// Emit `f(point)` when the row is right-clicked, `point` being where the press landed in
+    /// window coordinates — what a menu anchor takes (feature 008 context menu; FR-029d).
+    pub fn on_right_press(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
+        self.on_right_press = Some(Box::new(f));
         self
     }
 
@@ -484,16 +499,12 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 row_el
             };
 
-            // Wrap the row in a mouse_area when it needs pointer interactions: a right-click
-            // context menu and/or hover-reveal of its actions (feature 008).
-            let interactive: Element<'a, M> = if item.on_right_press.is_some()
-                || item.on_hover.is_some()
-                || item.on_unhover.is_some()
-            {
+            // Hover-reveal of the row's actions (feature 008) is a `mouse_area`; the right-click
+            // is not, because a `mouse_area`'s `on_right_press` takes a bare message and throws the
+            // press point away. `cdk::ContextArea` keeps it, which is what lets the menu open where
+            // the user pressed (BUG-008, FR-029d).
+            let hovering: Element<'a, M> = if item.on_hover.is_some() || item.on_unhover.is_some() {
                 let mut area = mouse_area(styled);
-                if let Some(msg) = item.on_right_press {
-                    area = area.on_right_press(msg);
-                }
                 if let Some(msg) = item.on_hover {
                     area = area.on_enter(msg);
                 }
@@ -503,6 +514,10 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 area.into()
             } else {
                 styled
+            };
+            let interactive: Element<'a, M> = match item.on_right_press {
+                Some(build) => ContextArea::new(hovering).on_secondary_press(build).into(),
+                None => hovering,
             };
             // A row-level location tooltip (feature 010, FR-010) wraps everything, including any
             // right-click/hover interaction area above.

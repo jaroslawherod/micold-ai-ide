@@ -86,16 +86,18 @@ fn at_most_one_field_can_hold_the_keyboard() {
 }
 
 #[test]
-fn the_pointer_and_the_window_are_recorded_as_reported() {
-    // Neither is chosen by the user or persisted; both are reported by the windowing system, and
-    // both exist so a context menu can be anchored and clamped.
+fn the_window_size_is_recorded_as_reported() {
+    // Not chosen by the user and not persisted: reported by the windowing system, and held so a
+    // context menu can be clamped inside the window.
+    //
+    // This covered the tracked pointer too until `main`'s 018 BUG-008 fix deleted it. A menu now
+    // anchors at the point its own press landed on, carried by the message, rather than at a
+    // position tracked separately and read later — which is a better answer than the one this
+    // feature was defending, and leaves `window` owning two fields rather than three.
     let mut st = State::default();
-    assert_eq!(st.cursor, (0, 0));
     assert_eq!(st.window_size, (0, 0), "unknown until the window says");
 
-    window::cursor_moved(&mut st, 412, 233);
     window::resized(&mut st, 1280, 720);
 
-    assert_eq!(st.cursor, (412, 233));
     assert_eq!(st.window_size, (1280, 720));
 }

@@ -85,7 +85,7 @@ fn switcher_row(label: &str, active: bool) -> MenuItem<Message> {
         message: Some(Message::NoOp),
         trailing_text: None,
         trailing_icon: None,
-        on_context: Some(Message::NoOp),
+        on_context: Some(Box::new(|_| Message::NoOp)),
     }
 }
 

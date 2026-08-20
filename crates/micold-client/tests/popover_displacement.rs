@@ -24,6 +24,7 @@
 //! popover suddenly closing the session menu, say — would have passed all of them.
 
 use micold_client::app::{Message, State};
+use micold_client::ui::terminal::StripTab;
 use micold_core::session::{SessionId, ShellInstanceId};
 use std::path::PathBuf;
 
@@ -71,11 +72,11 @@ fn opener(id: &str) -> Message {
         "help_menu" => Message::HelpMenuToggled,
         "project_switcher" => Message::ProjectSwitcherToggled,
         "sidebar_filter" => Message::SidebarFilterMenuToggled,
-        "project_menu" => Message::ProjectMenuToggled(PathBuf::from("/a")),
-        "worktree_menu" => Message::WorktreeMenuToggled("w1".into()),
-        "session_menu" => Message::SessionMenuToggled(SessionId::new()),
+        "project_menu" => Message::ProjectMenuToggled(PathBuf::from("/a"), (10, 10)),
+        "worktree_menu" => Message::WorktreeMenuToggled("w1".into(), (20, 20)),
+        "session_menu" => Message::SessionMenuToggled(SessionId::new(), (30, 30)),
         "terminal_context_menu" => Message::TerminalContextMenuOpened { x: 10, y: 20 },
-        "shell_instance_menu" => Message::ShellInstanceMenuRequested(ShellInstanceId(1), 30, 40),
+        "shell_instance_menu" => Message::StripTabMenuRequested(StripTab::Instance(ShellInstanceId(1)), 30, 40),
         other => panic!("no opener for `{other}`"),
     }
 }
@@ -164,9 +165,9 @@ fn toggling_a_popover_shut_displaces_nothing() {
     st.update(Message::HelpMenuToggled);
     assert_eq!(open_popovers(&st), Vec::<&str>::new());
 
-    st.update(Message::SessionMenuToggled(SessionId::new()));
-    st.update(Message::WorktreeMenuToggled("w1".into()));
-    st.update(Message::WorktreeMenuToggled("w1".into()));
+    st.update(Message::SessionMenuToggled(SessionId::new(), (30, 30)));
+    st.update(Message::WorktreeMenuToggled("w1".into(), (20, 20)));
+    st.update(Message::WorktreeMenuToggled("w1".into(), (20, 20)));
 
     assert_eq!(
         open_popovers(&st),

@@ -16,7 +16,9 @@ use std::path::PathBuf;
 
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::session::SessionMenu;
 use micold_client::features::settings::SettingsDraft;
+use micold_client::features::worktree::WorktreeMenu;
 use micold_client::features::worktree_form::{BranchSource, WorktreeForm};
 use micold_core::project::Availability;
 use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
@@ -47,12 +49,17 @@ const APP_BAR_OVERFLOW_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 3];
 /// `IconButton` since BUG-007, which is why the two paths now differ only in their last index.
 const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 2];
 
-// A layer index is **two per open-able surface** since BUG-008, and the paths below that begin at
-// one were re-pointed twice on the way here. First BUG-007 made the switcher a `MenuOverlay`, which
-// is pushed whether or not it is open — it owns its own fade, so it must outlive the flag that
-// opened it — giving every state one more layer. Then BUG-008 made a surface's *backdrop*
+// A layer index is **two per open-able surface**, and the paths below that begin at one were
+// re-pointed twice on the way here. First 018's BUG-007 made the switcher a `MenuOverlay`, which is
+// pushed whether or not it is open — it owns its own fade, so it must outlive the flag that opened
+// it — giving every state one more layer. Then 017's BUG-002 made a surface's *backdrop*
 // unconditional too, because a backdrop that came and went renumbered the panels above it and they
 // inherited each other's transitions.
+//
+// (Both of those were written here as "BUG-007" and "BUG-008", unqualified, in a file whose other
+// bug references are 018's. The second named no bug that existed: the backdrop fix is 017's
+// BUG-002, per the commit that made it. 018's BUG-008 is a different bug entirely — the sidebar's
+// context menus opening at a corner — and it arrived to find its number already spoken for.)
 //
 // So the arithmetic is now stated rather than discovered: base, then a backdrop and a panel for
 // each surface `ui::view` pushes, in `stack_order`. A dialog sits above the two popovers, at layer
@@ -63,16 +70,45 @@ const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 2];
 /// the way `sidebar.row.label` above was; an anchor that does not resolve fails by name
 /// (`an_anchor_whose_path_does_not_resolve_fails_naming_it`), so a stale path here cannot go quiet.
 const TERMINAL_BOTTOM_BAR: &[usize] = &[0, 0, 1, 1, 1];
+/// The mode toggle, the bar row's **last** child.
+///
+/// It was index 5 while the row carried a `Length::Fill` spacer between the title and the status.
+/// Feature 026's T016 deleted that spacer and made the tab strip the bar's one flexible member
+/// instead (FR-002c) — the spacer was doing the pushing, and a row with two content-sized ends and
+/// a filling middle cannot also have a member that grows. Every index after the spacer moved down
+/// one.
 const TERMINAL_MODE_TOGGLE: &[usize] = &[0, 0, 1, 1, 1, 0, 5];
 
 /// The instance tab strip, and three of its tabs (feature 012 T057). The bar's row holds its title,
 /// a filling spacer and the status text, then whichever optional controls the session's state calls
 /// for; with every instance already running there is no session-level restart, so the strip is the
 /// row's fourth child. Its own children are one tab per element of `Session.shells`, in order.
-const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
-const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 0];
-const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 1];
-const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 2];
+///
+/// The strip sits inside the bar's child 2 — the `EdgeFade` wrapping the `Length::Fill` horizontal
+/// `Scrollable` — so its own path is several levels down: fade → stack → layer → viewport → strip.
+///
+/// Deep, and deliberately not flattened. Each of those levels is a component doing one thing
+/// (`gates/tab_children_fit.rs` and `containment.rs` both read the strip through anchors rather
+/// than through these constants, so the depth costs them nothing), and an anchor that no longer
+/// resolves fails **by name** — `an_anchor_whose_path_does_not_resolve_fails_naming_it` — so a
+/// stale path here cannot go quiet.
+const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0];
+const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0];
+const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 1];
+const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 2];
+/// The **AI tab** (feature 026 FR-001, FR-002), the strip's last child — one past the instances.
+///
+/// Two indices, because two covered states hold different numbers of instances and FR-002 pins this
+/// tab to the *end* rather than to a position. Named so `gates/tab_children_fit.rs` reports on it by
+/// name: its touch-target assertion catches this tab squeezed by the scrolling viewport, and
+/// `a_tabs_content_sits_on_its_tabs_midline` is what actually holds FR-010a's centred icon — the
+/// property that failed at 4.6dp on a terminal tab the morning before this feature was planned.
+///
+/// One path, not one per instance count: FR-002b pins this tab **outside** the scrolling region, so
+/// it is the bar row's own child rather than the strip's last one, and its position no longer moves
+/// with the number of instances. That is the requirement stated as a path.
+const TERMINAL_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
+
 /// Inside a tab: the button's content column, whose first child is the active indicator (or, on an
 /// inactive tab, the transparent rule reserving its height) and whose second is the tab's content
 /// row — leading spacer, label and close.
@@ -82,7 +118,7 @@ const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 2];
 /// (FR-010b). Its anchor is deleted with it rather than left pointing at nothing —
 /// `an_anchor_whose_path_does_not_resolve_fails_naming_it` would fail on a stale one, which is the
 /// behaviour that makes an anchor worth writing.
-const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 1, 0, 0, 0];
+const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0];
 
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
@@ -309,7 +345,46 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "worktree-menu-open",
             build: || {
                 let mut state = with_project();
-                state.worktree_menu_open = Some(LONG_NAME.to_string());
+                // Opened from the row, not from a corner (018 BUG-008). The point is well down the
+                // sidebar precisely because the defect was invisible at the top of the list: the
+                // panel used to be recorded at 24, 96 whichever row it belonged to, and a fixture
+                // that only ever opened it near there could not tell the two apart.
+                state.window_size = (1280, 800);
+                state.worktree_menu_open = Some(WorktreeMenu {
+                    dir_name: LONG_NAME.to_string(),
+                    anchor: (120, 420),
+                });
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
+        },
+        // The other sidebar menu, and the clamp (018 BUG-008, FR-029d / 015 FR-006). Opened close
+        // enough to the bottom edge that the panel does not fit below it, so the fixture records a
+        // menu that has been slid back inside rather than one that merely happened to fit.
+        CoveredState {
+            name: "session-menu-open-at-the-bottom-edge",
+            build: || {
+                let session = Session::restored(
+                    SessionId::new(),
+                    SessionLocation::Worktree("feat-short".to_string()),
+                    SessionLabel::Named("feat/short".to_string()),
+                    TerminalMode::Regular,
+                );
+                let id = session.id;
+                let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
+                workspace.active = workspace.projects.first().map(|p| p.path.clone());
+
+                let mut state = with_project();
+                state.workspace = workspace;
+                state.expanded.insert("feat-short".to_string());
+                state.window_size = (1280, 800);
+                state.session_menu_open = Some(SessionMenu {
+                    id,
+                    anchor: (120, 760),
+                });
                 StateUnderTest::new(state)
             },
             anchors: &[Anchor {
@@ -556,6 +631,21 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "terminal.bottom_bar.mode_toggle",
                     path: TERMINAL_MODE_TOGGLE,
                 },
+                // Feature 026 FR-003: this session has **no** instances, and until now that meant
+                // no strip at all. It has one now, with a single member — the AI tab. This is where
+                // the change lands for the user who never opens a second terminal, which is most of
+                // them, and it is the state most likely to read as a stray control rather than as a
+                // deliberate strip (T030 judges that; this makes the geometry visible).
+                //
+                // Only the pinned tab is named. The **scrolling** strip is genuinely empty here —
+                // there are no instances — and an empty row lays out no node at all, so an anchor
+                // for it would point at nothing. That is not a gap: FR-002b is what puts the AI tab
+                // outside the viewport, so in a session with no instances the one tab there is is
+                // exactly the one this anchor names.
+                Anchor {
+                    name: "terminal.tabs.pinned",
+                    path: TERMINAL_TAB_AI_PINNED,
+                },
             ],
         },
         // --- BUG-002's tab strip (feature 012 T057) ---------------------------------------------
@@ -655,6 +745,84 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "terminal.tabs.exited",
                     path: TERMINAL_TAB_EXITED,
+                },
+                Anchor {
+                    name: "terminal.tabs.pinned",
+                    path: TERMINAL_TAB_AI_PINNED,
+                },
+                // The reference width for `bar_controls_hold_their_size`'s cross-state comparison
+                // (T015): this state has room to spare, and the overflowing one does not, so the
+                // toggle measuring the same in both is a direct reading of FR-002c.
+                Anchor {
+                    name: "terminal.mode_toggle",
+                    path: TERMINAL_MODE_TOGGLE,
+                },
+            ],
+        },
+        // --- feature 026's overflowing bar (T014, FR-002c) --------------------------------------
+        //
+        // Every state above this line holds at most three instances, which the bar has room for.
+        // Past about five it does not, and the way iced settles the shortfall is silent: a fixed
+        // parent width is a *budget*, and the trailing children are shrunk to fit it — laid out
+        // narrower, or at zero, with nothing reported. That is feature 012's BUG-005 one level out,
+        // and it is live on `main` today, independent of this feature.
+        //
+        // Six instances at the fixture's 1280dp window is past the wall by a clear margin: the bar
+        // is ~1014dp and a tab is 136 on a 144 pitch, so six tabs want 864 of it while the title,
+        // the status, the "+" and the mode toggle want the rest. `gates/bar_controls_hold_their_
+        // size.rs` is what reads the result; without this state it would inspect nothing, which is
+        // the "a pass that records nothing looks like a pass that found nothing" shape feature 019
+        // keeps meeting.
+        CoveredState {
+            name: "session-terminal-instance-tabs-overflowing",
+            build: || {
+                let mut session = Session::restored(
+                    SessionId::new(),
+                    SessionLocation::Worktree("feat-short".to_string()),
+                    SessionLabel::Named("feat/short".to_string()),
+                    TerminalMode::Regular,
+                );
+                let mut opened = Vec::new();
+                for _ in 0..6 {
+                    opened.push(session.open_shell_instance());
+                }
+                for id in &opened {
+                    session.mark_shell_running(*id);
+                }
+                // The second of six, so the marked tab is neither the leading one nor the trailing
+                // one — the two positions that cannot tell "the indicator spans its own tab" from
+                // "it spans everything up to here".
+                session.select_shell(opened[1]);
+
+                let active = session.id;
+                let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
+                workspace.active = workspace.projects.first().map(|p| p.path.clone());
+
+                let mut state = with_project();
+                state.workspace = workspace;
+                state.active_session = Some(active);
+                StateUnderTest::new(state)
+            },
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "terminal.bottom_bar",
+                    path: TERMINAL_BOTTOM_BAR,
+                },
+                Anchor {
+                    name: "terminal.tabs",
+                    path: TERMINAL_TAB_STRIP,
+                },
+                Anchor {
+                    name: "terminal.tabs.pinned",
+                    path: TERMINAL_TAB_AI_PINNED,
+                },
+                Anchor {
+                    name: "terminal.mode_toggle",
+                    path: TERMINAL_MODE_TOGGLE,
                 },
             ],
         },

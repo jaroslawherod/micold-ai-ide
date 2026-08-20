@@ -75,16 +75,38 @@ fn drag_width_is_clamped_to_bounds() {
 #[test]
 fn worktree_menu_toggles_replaces_and_dismisses() {
     let mut state = State::default();
-    // Toggle open.
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
-    assert_eq!(state.worktree_menu_open.as_deref(), Some("feat-a"));
+    let open_dir = |s: &State| s.worktree_menu_open.as_ref().map(|m| m.dir_name.clone());
+    // Toggle open, at the point the row was pressed (018 FR-029d).
+    state.update(Message::WorktreeMenuToggled(
+        "feat-a".to_string(),
+        (120, 300),
+    ));
+    assert_eq!(open_dir(&state).as_deref(), Some("feat-a"));
+    assert_eq!(
+        state.worktree_menu_open.as_ref().unwrap().anchor,
+        (120, 300)
+    );
     // Toggling the same one closes it.
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
+    state.update(Message::WorktreeMenuToggled(
+        "feat-a".to_string(),
+        (120, 300),
+    ));
     assert_eq!(state.worktree_menu_open, None);
-    // Opening a different one while one is open replaces it (only one open at a time).
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
-    state.update(Message::WorktreeMenuToggled("feat-b".to_string()));
-    assert_eq!(state.worktree_menu_open.as_deref(), Some("feat-b"));
+    // Opening a different one while one is open replaces it (only one open at a time) — and
+    // re-anchors at its own press point rather than keeping the first one's (BUG-008).
+    state.update(Message::WorktreeMenuToggled(
+        "feat-a".to_string(),
+        (120, 300),
+    ));
+    state.update(Message::WorktreeMenuToggled(
+        "feat-b".to_string(),
+        (140, 610),
+    ));
+    assert_eq!(open_dir(&state).as_deref(), Some("feat-b"));
+    assert_eq!(
+        state.worktree_menu_open.as_ref().unwrap().anchor,
+        (140, 610)
+    );
     // Dismiss clears.
     state.update(Message::WorktreeMenuDismissed);
     assert_eq!(state.worktree_menu_open, None);
@@ -96,7 +118,10 @@ fn worktree_menu_toggles_replaces_and_dismisses() {
 fn text_copy_requested_is_a_no_op_in_the_pure_reducer() {
     // The binary performs the actual clipboard write; the reducer has no state to update.
     let mut state = State::default();
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
+    state.update(Message::WorktreeMenuToggled(
+        "feat-a".to_string(),
+        (120, 300),
+    ));
     let before = state.clone();
     state.update(Message::TextCopyRequested("Login page".to_string()));
     assert_eq!(state, before);

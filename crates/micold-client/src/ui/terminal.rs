@@ -11,20 +11,22 @@ use crate::app::{Message, State};
 use crate::grid::GridCache;
 use crate::icons::Icon;
 use crate::icons::{mode_glyph, mode_tooltip};
-use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::{
-    self, Button, ButtonVariant, ContextMenu, Divider, GridSizeReporter, IconButton, MenuItem,
-    SurfaceKind, TerminalPane, Text, Tooltip, TooltipPosition, TypeRole,
+    self, tab_content_colour as content_colour, Button, ButtonVariant, ContextMenu,
+    GridSizeReporter, IconButton, MenuItem, SurfaceKind, Tab, TabStrip, TerminalPane, Text,
+    Tooltip, TooltipPosition, TypeRole, TAB_WIDTH,
 };
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
-use iced::widget::{column, container, row, Space};
+use iced::widget::{column, container, row};
 use iced::{Alignment, Color, Element, Font, Length};
 use micold_core::protocol::grid::{WireColor, WireStyle};
-use micold_core::session::{SessionId, SessionLifecycle, ShellLifecycle, TerminalMode};
+use micold_core::session::{
+    SessionId, SessionLifecycle, ShellInstanceId, ShellLifecycle, TerminalMode,
+};
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, anatomy, spacing, Rgb};
+use micold_core::tokens::{self, spacing, Rgb};
 
 /// The terminal font size (monospace). Cell metrics are derived from it.
 pub const TERM_FONT_SIZE: f32 = 13.0;
@@ -395,7 +397,6 @@ pub fn pane<'a>(
     let status = session_status(state, active);
     let mut bar = row![
         Text::new(session_title(state, active), TypeRole::Label, r),
-        Space::new().width(Length::Fill),
         Text::new(status, TypeRole::Label, r).muted(),
     ]
     .spacing(spacing::SM)
@@ -435,9 +436,99 @@ pub fn pane<'a>(
     // The instance-switching control: one entry per open Regular Terminal instance, visible only
     // once a session has more than one (feature 011, FR-004/FR-005). Placed just before the
     // "open a new instance" control, both ahead of the primary mode toggle.
-    if let Some(switcher) = instance_switcher_row(state, active, r) {
-        bar = bar.push(switcher);
-    }
+    // **The bar's one flexible member** (FR-002c). Everything else here is content-sized, so the
+    // strip is what absorbs whatever width is left over — and, crucially, what runs out of it
+    // first when there is not enough to go round.
+    //
+    // It used to be content-sized like its siblings, with a `Length::Fill` spacer between the title
+    // and the status doing the pushing. That was silently wrong past about five instances: a row's
+    // width is a **budget**, and iced settles a shortfall by shrinking the *trailing* children
+    // rather than by overflowing. The mode toggle is the last child, so it went first — laid out at
+    // **0.0dp** in `gates/bar_controls_hold_their_size.rs`'s six-instance state, which is nothing a
+    // user can press, and the toggle is the keyboard-independent route to the AI pane that
+    // FR-008 keeps working. Nothing overflowed, so nothing failed. This is feature 012's BUG-005
+    // one level out, and its own comment describes the same shape inside a tab.
+    //
+    // Making the strip `Fill` inverts it: the strip is allotted `bar - everything else`, so every
+    // other control keeps the size it measured and the strip is the thing that runs short. What it
+    // does when it runs short is FR-002a's business — it scrolls (T033).
+    //
+    // # Why the region also has to scroll
+    //
+    // Bounding the strip on its own does not fix the defect; it **relocates** it one level in. The
+    // strip is a row too, so a strip given less width than its tabs need settles the shortfall the
+    // same way the bar did — by shrinking its trailing children. Measured: at six instances the
+    // bar's controls were saved and a tab came out **55.5dp** wide with its close control at 0.0,
+    // which `gates/tab_children_fit.rs` reports as the very defect feature 012's BUG-005 was.
+    //
+    // So the region scrolls (FR-002a). Tabs keep their one fixed width and the ones that do not fit
+    // are reachable by the wheel rather than by being made smaller — no shrinking, no ellipsis, no
+    // dropping. It comes from `material::Scrollable` rather than from a hand-rolled scroller
+    // because that wrapper is where the design system's 4px themed bar lives and where
+    // dismiss-on-scroll is reported from; a private one would reintroduce exactly the divergence
+    // the component was created to end.
+    //
+    // The tabs sit at the **leading** edge of that region rather than being pushed to its trailing
+    // end. That is what FR-002c's second half asks for: no control may be *displaced* by the
+    // strip's growth either, and a strip that hugs the trailing edge moves its own first tab left
+    // every time an instance is opened.
+    //
+    // Pushed **unconditionally** (FR-003). It used to be `if let Some(switcher)`, which is a bar
+    // child that comes and goes with the session's shape — the very thing feature 023 FR-008a
+    // forbids, and for the reason recorded above the deleted release-focus control: a conditional
+    // child shifts every sibling after it, and iced's positional tree diff then hands the pressed
+    // control its neighbour's node and drops the press. Opening a second instance renumbered the
+    // "+" and the mode toggle under whatever press was in flight.
+    let beyond = overflowing(
+        state.tab_strip_scroll_offset as f32,
+        state.tab_strip_viewport_width as f32,
+        state.tab_strip_content_width as f32,
+    );
+    // FR-002e: the edge fade takes the **indicator's own accent** when the tab beyond it is the
+    // marked one, and the surface's tint otherwise. Two states of one cue differing only in role,
+    // so the edge is tinted with the very colour the user is scanning for — no glyph, no arrow, no
+    // second width. And no scroll-arrow controls at all (FR-002f): they would spend an interactive
+    // target's width at each end of the bar FR-002c exists to keep uncrowded, and the wheel over a
+    // scrollable is how this application already scrolls its sidebar and its scrollback.
+    let marked_beyond = match marked_tab_index(state) {
+        Some(index) => scroll_into_view(
+            index,
+            state.tab_strip_scroll_offset as f32,
+            state.tab_strip_viewport_width as f32,
+        )
+        .map(|target| target < state.tab_strip_scroll_offset as f32),
+        None => None,
+    };
+    bar = bar.push(
+        material::EdgeFade::new(
+            material::Scrollable::new(tab_strip_row(state, active, r), r)
+                .direction(material::ScrollDirection::Horizontal)
+                .width(Length::Fill)
+                .id(TAB_STRIP_SCROLL_ID.clone())
+                // Three numbers, one question. See `Scrollable::on_scroll_metrics`: an offset
+                // measured against a stale viewport width is a fade that points at nothing.
+                .on_scroll_metrics(|offset, width, content| Message::TabStripScrolled {
+                    offset,
+                    width,
+                    content,
+                })
+                // `on_scroll` fires only when something scrolls, and the frame that matters most is
+                // the **first** one, where nothing has: a strip that already overflows on its first
+                // layout must fade its edge before the user touches it.
+                .on_viewport_resize(|size| Message::TabStripViewportResized {
+                    width: crate::app::scroll_offset_px(size.width),
+                }),
+            r,
+        )
+        .leading(beyond.leading)
+        .trailing(beyond.trailing)
+        .accent_on(marked_beyond)
+        .width(Length::Fill),
+    );
+    // Outside the viewport above, so it keeps its right-hand position and stays reachable in one
+    // press at any instance count (FR-002b, SC-002, SC-008). Pushed unconditionally, like the
+    // viewport: the bar's child list must not vary (feature 023 FR-008a).
+    bar = bar.push(pinned_ai_tab(state, active, r));
     // Open an additional Regular Terminal instance (feature 011, FR-001/FR-005) — visible
     // whenever the session is in Regular mode, regardless of how many instances are already
     // open (including zero or one), so there is always a way to go from one instance to two.
@@ -578,177 +669,257 @@ fn restart_message(state: &State, id: SessionId) -> Message {
     }
 }
 
-/// Whether the bottom-bar restart control should show (FR-013): the currently-attached process
-/// (per `Session.mode`) is not running (contracts/terminal-mode-lifecycle.md's predicate).
-fn attached_process_restartable(state: &State, id: SessionId) -> bool {
+/// Which member of the strip something refers to (feature 026, `data-model.md`).
+///
+/// **A closed two-variant enum, not an `Option<ShellInstanceId>`.** Principle V asks that invalid
+/// states be unrepresentable, and this is where FR-005's "never zero, never two" is either
+/// structural or a rule somebody has to keep. `None` already means something else in this file —
+/// "this session has no active instance" — so overloading it to also mean "the AI tab" gives one
+/// value two meanings and makes [`marked_tab`] unanswerable in the one case that matters. A closed
+/// enum makes the marked tab a **total function** of `(TerminalMode, Option<ShellInstanceId>)`, so
+/// exactly one tab is marked because there is nowhere else for the answer to go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StripTab {
+    /// One open Regular Terminal instance.
+    Instance(ShellInstanceId),
+    /// The session's single AI CLI process.
+    Ai,
+}
+
+/// Which tab the strip marks — the one whose content the pane is displaying (FR-005).
+///
+/// Total by construction, which is the whole of FR-005's "never zero, never two". The `Regular`
+/// session with no active instance falls to the AI tab rather than to nothing: that is what the
+/// pane shows in that state, and a strip that marked no tab there would be the exact defect this
+/// feature exists to remove, arriving by a different route.
+///
+/// It reads `mode`, which the mode toggle also writes, so FR-008's "the toggle and the AI tab must
+/// not be able to disagree" is structural rather than a synchronisation effort — there is no second
+/// selection to keep in step.
+pub fn marked_tab(state: &State, id: SessionId) -> StripTab {
+    let Some(session) = state.active_sessions().iter().find(|s| s.id == id) else {
+        return StripTab::Ai;
+    };
+    match session.mode {
+        TerminalMode::AiCli => StripTab::Ai,
+        TerminalMode::Regular => session
+            .active_shell
+            .map(StripTab::Instance)
+            .unwrap_or(StripTab::Ai),
+    }
+}
+
+/// Whether the process behind `tab` is **stopped** — not running, and restartable (feature 026
+/// FR-012d, research R1/R2).
+///
+/// One predicate for both lifecycle vocabularies, and three things are derived from it: whether a
+/// tab wears the stopped mark (FR-012d), whether that tab's menu carries a restart item (FR-006a),
+/// and therefore whether the menu opens at all (FR-006b). FR-012d asks the mark and the menu to
+/// *agree*, and deriving both from one function is what makes that true by construction rather than
+/// by two matches happening to say the same thing.
+///
+/// This file has already paid twice for the alternative. `empty_terminal_message`'s own comment
+/// records that the pane and the bar disagreed "for exactly as long as they were two readings of
+/// one fact"; BUG-004 was `restart_message` re-deriving something the predicate beside it already
+/// had. [`attached_process_restartable`] is a call into this one for the same reason.
+///
+/// **The rule is translated, not the names.** FR-012d names `NotStarted` and `Exited`, which are a
+/// shell's vocabulary; the AI process has a larger lifecycle of its own. The rule underneath is
+/// FR-012d's: the mark appears exactly where a restart can act. `Starting` and `Restarting` are
+/// excluded in both rows by FR-012e — they are in progress, and a mark on a state nobody can act on
+/// sends a user to a press that does nothing (FR-006b), which is the dead end the mark exists to
+/// prevent.
+pub fn process_stopped(state: &State, id: SessionId, tab: StripTab) -> bool {
     let Some(session) = state.active_sessions().iter().find(|s| s.id == id) else {
         return false;
     };
-    match session.mode {
-        TerminalMode::AiCli => matches!(
+    match tab {
+        StripTab::Ai => matches!(
             session.lifecycle,
             SessionLifecycle::Idle
                 | SessionLifecycle::Failed
                 | SessionLifecycle::InterruptedResumable
         ),
-        TerminalMode::Regular => matches!(
-            session.active_shell_lifecycle(),
+        StripTab::Instance(instance) => matches!(
+            session
+                .shells
+                .iter()
+                .find(|s| s.id == instance)
+                .map(|s| s.lifecycle),
             None | Some(ShellLifecycle::NotStarted | ShellLifecycle::Exited)
         ),
     }
 }
 
-/// The accent an active switcher tab's indicator is drawn in — `None` for an inactive tab
-/// (BUG-002, FR-004b).
+/// Whether the bottom-bar restart control should show (FR-013): the currently-attached process
+/// (per `Session.mode`) is not running (contracts/terminal-mode-lifecycle.md's predicate).
 ///
-/// A tab strip marks its selected member with an **indicator**, not with a container. BUG-001 had
-/// this as `tab_variant`, choosing `Filled` for the active tab and `Outlined` for the rest, and
-/// that was the wrong idiom: it read the original defect (one filled pill among loose numbers) as
-/// "the entries need containers", when the missing container was only half of it. The half nothing
-/// had ever written down is that a tab strip underlines the active tab. Neither tab draws a
-/// container now.
-///
-/// Its own function for the same reason its predecessor was: the rule is then a pure value test
-/// rather than a claim about a `view()` no unit test can reach.
-pub(crate) fn tab_indicator_colour(is_active: bool, r: tokens::Roles) -> Option<Rgb> {
-    is_active.then_some(r.primary)
+/// A thin call into [`process_stopped`] since feature 026 (research R2), asking it about whichever
+/// tab the pane is currently showing. Keeping it as its own name rather than inlining the call: the
+/// bar's question is "is *the* attached process restartable", which is a different question from
+/// the strip's "is *this* tab's process restartable", and it happens to be the strip's question
+/// asked about the marked tab.
+fn attached_process_restartable(state: &State, id: SessionId) -> bool {
+    process_stopped(state, id, marked_tab(state, id))
 }
 
-/// A switcher tab's width (BUG-002).
+/// The tab strip's scroll viewport, by name, so `operation::scroll_to` can reach it (FR-002d).
 ///
-/// Uniform and fixed, which is what makes the indicator work at all. The indicator is a rule, and a
-/// rule spans the width it is given — `Length::Fill` inside a content-sized tab resolves against the
-/// *button's* available space, not the label's, so the active tab stretched to several times its
-/// neighbour's width and activation resized it under the pointer. Found by the visual pass; no gate
-/// could see it, because every node was exactly where its own layout said it was.
-///
-/// A fixed width fixes it at the root rather than by measuring: the indicator's `Fill` resolves to
-/// this, every tab measures the same whatever it contains, and SC-008 holds by construction instead
-/// of by arithmetic. It also survives the rename feature — a name ellipsises inside the tab rather
-/// than resizing the strip, which is how a browser tab bar behaves.
-///
-/// **Derived, not chosen** (BUG-005, FR-004c). It was written as a literal `128.0` — a number that
-/// made the three tab states the BUG-002 visual pass drew look right, and that no test could
-/// disagree with. There is a fourth state, and 128 is not enough for it: a tab whose instance has
-/// stopped carried a restart button too, and the row settled the 54.3dp shortfall by shrinking its
-/// trailing children until the button was 0.0 wide and the close control was 45.2, under §7.3's
-/// target. Nothing overflowed, so nothing failed.
-///
-/// BUG-005 answered that by moving the restart affordance out to a context menu (FR-010b) rather
-/// than by widening every tab to 204dp for a child only a stopped instance draws. What changed here
-/// is that the width is *computed from the things it has to hold*, so it moves when any of them
-/// does and a fifth child cannot be added without this sum being confronted.
-///
-/// It comes to **136**, not the 128 that was written — and the 8dp is worth reading rather than
-/// tuning away. The literal reserved about 8dp for the label, which is narrower than the two digits
-/// an instance ordinal already reaches and far narrower than any name. It was never noticed because
-/// a label smaller than its reserve simply leaves the tab looking roomy, and `1` is 6.8dp wide. The
-/// honest way to land back on 128 is to declare that a tab reserves less room for its own name than
-/// a two-digit number needs, and that is not true — so the sum stands and the strip grows 8dp a tab.
-/// Choosing the reserve to reproduce the old figure is exactly the move FR-004c was rewritten to
-/// forbid.
-const TAB_WIDTH: f32 = 2.0 * spacing::SM      // the tab button's own padding, both edges
-    + TAB_CLOSE_WIDTH                          // leading spacer, balancing the close control
-    + spacing::XS
-    + TAB_LABEL_MIN_WIDTH
-    + spacing::XS
-    + TAB_CLOSE_WIDTH; // the close control itself
+/// A `LazyLock` for the reason the sidebar's is one: `scrollable::Id` is not a `const`, and the id
+/// has to be the *same* one on the widget and in the operation or the operation finds nothing and
+/// reports nothing.
+pub static TAB_STRIP_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("terminal-tab-strip-scroll"));
 
-/// The widest a switcher tab's label may grow before it ellipsises (BUG-002, T054).
+/// Which edges of the scrolling region have tabs beyond them (FR-002e).
 ///
-/// A *maximum*, not the fixed two-digit box BUG-001 used. That box was sized for an ordinal, and an
-/// instance is to become renameable from a right-click menu — a tab will show a name, and a width
-/// chosen for `99` would have to be undone that day. Content-sized under a ceiling serves both, and
-/// costs nothing now.
-const TAB_LABEL_MAX_WIDTH: f32 = 120.0;
+/// Two independent facts, not one enum, because a strip scrolled to the middle has content beyond
+/// **both** edges and each fade is drawn on its own side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Beyond {
+    /// Tabs lie before the viewport's leading edge.
+    pub leading: bool,
+    /// Tabs lie after its trailing edge.
+    pub trailing: bool,
+}
 
-/// The label's share of the derived [`TAB_WIDTH`] — what a tab reserves for its own name before the
-/// two touch targets and the gaps are counted (BUG-005, FR-004c).
-///
-/// A floor, where [`TAB_LABEL_MAX_WIDTH`] is the ceiling at which a label ellipsises. It is not
-/// measured text: a shaped width is not available in a `const`, and reserving one would make the
-/// tab's width depend on its content, which is the thing FR-004c forbids. Sized instead by what has
-/// to remain legible — comfortably more than the two digits an ordinal needs, and enough of a name
-/// to tell two tabs apart once instances can be renamed.
-const TAB_LABEL_MIN_WIDTH: f32 = 16.0;
+/// Half a pixel — the same tolerance the layout gates use, and for the same reason: a strip
+/// scrolled exactly to one end must read as *at* that end rather than a hair short of it.
+const EDGE_TOLERANCE: f32 = 0.5;
 
-/// The trailing close control's layout footprint. A leading spacer of the same width balances it,
-/// putting the label on the tab's midline rather than off-centre toward the leading edge
-/// (FR-004a).
+/// Whether anything lies beyond either edge of a viewport `viewport` wide, holding `content`, and
+/// currently scrolled `offset` from the leading end (FR-002e, research R6).
 ///
-/// It is §7.3's 48dp minimum touch target, **not** the glyph's visible size: a pressable, non-
-/// compact `IconButton` wraps itself in a `MIN_TOUCH_TARGET` box so a small pill still gets a large
-/// target (`icon_button.rs`). Measuring the visible pill instead — this was 24 in the first cut of
-/// the fix — leaves the spacer narrower than the control it balances, and the label lands
-/// `(48 - 24) / 2 = 12`dp left of centre. That is exactly what the visual pass caught, and it is why
-/// this reads the anatomy constant rather than naming a number: the two must move together.
-const TAB_CLOSE_WIDTH: f32 = anatomy::button::MIN_TOUCH_TARGET;
-
-/// The instance-switching control (feature 011, FR-004/FR-005; contracts/terminal-instance-
-/// switcher-ui.md): one tab per open Regular Terminal instance, in creation order, labeled by
-/// its `ShellInstanceId`'s numeric value (the only display identity an instance has). `None`
-/// when the session isn't found or has zero/one instance — pixel-identical to the pre-feature-011
-/// single-instance experience in that case (FR-005).
-///
-/// Each tab is one `button` spanning the whole entry — a press anywhere on it selects that
-/// instance — with the close (and, when shown, restart) controls nested inside as their own
-/// buttons. iced's `Button` always gives its content first crack at an event, so a press that
-/// lands on the nested close/restart button is captured there and never reaches the tab's own
-/// `on_press`; a press anywhere else on the tab falls through to select it. The active tab is
-/// marked with a solid fill (`style::filled`) vs. the outlined container every other tab uses —
-/// a background-color difference is legible at a glance, unlike a thin edge accent (SC-004: users
-/// must be able to tell which instance is active from this row alone).
-///
-/// # Why every tab draws a container (BUG-001, FR-004a)
-///
-/// The inactive tabs used `ButtonVariant::Text`, which paints neither background nor outline. The
-/// row therefore rendered as one filled pill among loose numbers with close glyphs floating beside
-/// them — not a tab strip. Every behavioural test passed and SC-004 was met: you could tell which
-/// instance was active, and the row still looked wrong. The active/inactive distinction has to be
-/// *emphasis between two containers*, never container-versus-nothing, which is what `Outlined`
-/// gives the inactive ones.
-///
-/// Two sizing rules keep activation from reflowing the row (SC-008). Both variants get the same
-/// explicit `padding`, so neither §7.3 default applies and the two tabs measure alike; and the
-/// label sits in a fixed-width centred box, so a two-digit instance id does not resize its tab
-/// either. Nothing about *which* tab is active changes any child's size, so selecting a tab moves
-/// only colour — nothing shifts under the pointer between a press and its release.
-///
-/// # Why the nested controls are tinted explicitly (BUG-001, FR-011a)
-///
-/// `IconButton::new` defaults its glyph to the roles' `on_surface`. That is right on a surface and
-/// wrong the moment the button is nested inside something painting its own fill: on the active
-/// tab, `style::filled` lays down `primary` and `on_surface` over it is near tone-on-tone, so the
-/// close control all but disappeared on the one tab a user is most likely to want to close. The
-/// tab's *label* was fine — plain `Text` inherits the button's `text_color` — so only the icon
-/// opted out. Both nested controls now take `variant.content(r)`, the colour that variant draws
-/// its own label in, which is the same rule the label follows and stays right for any variant
-/// added later. `tests/icon_roles.rs` holds the contrast arithmetic; `tests/terminal_tabs.rs`
-/// holds the call site.
-fn instance_switcher_row<'a>(
-    state: &'a State,
-    id: SessionId,
-    r: tokens::Roles,
-) -> Option<Element<'a, Message>> {
-    let session = state.active_sessions().iter().find(|s| s.id == id)?;
-    if session.shells.len() <= 1 {
-        return None;
+/// Pure arithmetic, deliberately. The *fade* is appearance and no layout gate can see it — a
+/// gradient occupies the same box whether it is opaque or invisible, which is the family of defect
+/// the `visual-pass` skill exists for. What can be gated is the fact behind it, and this is it.
+pub(crate) fn overflowing(offset: f32, viewport: f32, content: f32) -> Beyond {
+    Beyond {
+        leading: offset > EDGE_TOLERANCE,
+        trailing: offset + viewport + EDGE_TOLERANCE < content,
     }
-    let mut entries = row![].spacing(spacing::SM).align_y(Alignment::Center);
-    for instance in &session.shells {
-        // No tab draws a container (FR-004b). The active one is marked by an indicator and by its
-        // label taking the accent; the rest are muted labels.
-        let indicator = tab_indicator_colour(session.active_shell == Some(instance.id), r);
+}
+
+/// The distance between one tab's leading edge and the next's.
+fn tab_pitch() -> f32 {
+    TAB_WIDTH + spacing::SM
+}
+
+/// Where to scroll a viewport `viewport` wide, currently at `offset`, to bring the tab at `index`
+/// fully into view — or `None` if it already is (FR-002d).
+///
+/// `None` rather than "scroll to where you already are" is the requirement, not an optimisation.
+/// FR-002d lets a user scroll away from the marked tab by hand, and a reveal that fires on every
+/// selection would yank them back each time — including on selections made with the mode toggle
+/// rather than with the strip, which are the ones they were not looking at the strip for.
+///
+/// It scrolls the tab **just** into view rather than centring it: the tabs either side are context,
+/// and a strip that recentres on every press moves more than the selection did.
+pub fn scroll_into_view(index: usize, offset: f32, viewport: f32) -> Option<f32> {
+    let pitch = tab_pitch();
+    let leading = index as f32 * pitch;
+    let trailing = leading + TAB_WIDTH;
+    if leading + EDGE_TOLERANCE < offset {
+        Some(leading)
+    } else if trailing > offset + viewport + EDGE_TOLERANCE {
+        Some(trailing - viewport)
+    } else {
+        None
+    }
+}
+
+/// The emphasis a tab's leading slot draws, or `None` when there is nothing to say (FR-012c,
+/// FR-012d).
+///
+/// A thin call into [`process_stopped`] rather than a lifecycle match of its own, and that is the
+/// whole point: FR-012d asks the mark and the menu to agree, and one predicate behind both is what
+/// makes it true by construction. A second match here would look right for exactly as long as
+/// nobody added a lifecycle variant.
+///
+/// `None` is drawn as an **empty slot of the same width**, never as an absent child — the slot is
+/// reserved by `material::tab`'s own `leading_slot`, because a child that comes and goes inside a
+/// pressable control shifts every sibling after it and iced's positional `Tree::diff_children`
+/// then drops the press (feature 023 FR-008a, research R4).
+pub(crate) fn stopped_mark(
+    state: &State,
+    id: SessionId,
+    tab: StripTab,
+) -> Option<material::BadgeEmphasis> {
+    process_stopped(state, id, tab).then_some(material::BadgeEmphasis::Stopped)
+}
+
+/// The marked tab's position **within the scrolling region**, or `None` when the marked tab is the
+/// pinned AI one (FR-002b, FR-002d).
+///
+/// `None` is not a failure and not "nothing is marked" — FR-005 makes that unrepresentable. It is
+/// the AI tab, which sits outside the viewport and therefore cannot be scrolled into it. There is
+/// nothing to do, which is exactly the right answer.
+pub fn marked_tab_index(state: &State) -> Option<usize> {
+    let id = state.active_session?;
+    let StripTab::Instance(instance) = marked_tab(state, id) else {
+        return None;
+    };
+    state
+        .active_sessions()
+        .iter()
+        .find(|s| s.id == id)?
+        .shells
+        .iter()
+        .position(|s| s.id == instance)
+}
+
+/// The session's tab strip: one tab per open Regular Terminal instance, in creation order, then the
+/// session's AI CLI process (feature 026 FR-001, FR-002).
+///
+/// It was `instance_switcher_row` and it returned `None` below two instances, which is what feature
+/// 012's FR-005 asked for — "pixel-identical to the pre-feature-011 single-instance experience".
+/// **FR-003 supersedes that.** The strip is drawn whenever a session is displayed, including at zero
+/// and one instance, because there is always something in it now: the AI tab. A user who never opens
+/// a second terminal is the one this changes, and they are most users.
+///
+/// It returns an `Element` rather than an `Option` for two reasons that are the same reason. A bar
+/// child that comes and goes shifts every sibling after it, and iced's positional tree diff then
+/// drops a pressed sibling's press (feature 023 FR-008a). And a session that cannot be found still
+/// has an answer — a strip holding just the AI tab — which is the same totality [`marked_tab`] has
+/// and for the same reason: FR-005 says never zero tabs, and an `Option` here is a way to return
+/// zero.
+///
+/// # What this function decides, and what it no longer does
+///
+/// A tab used to be assembled here — a button around a column around a row of three slots, with the
+/// indicator rule, the fixed width and the label's bounds all written at the call site. Feature 026
+/// promoted that into [`material::Tab`] and [`material::TabStrip`] (FR-013), so what is left is the
+/// half that needs a session to answer: which instances there are, which of them is marked, what
+/// each tab's controls dispatch, and what colour the controls nested inside a tab take.
+///
+/// The promotion changed no geometry. It was verified by regenerating nothing — a byte-identical
+/// `tests/fixtures/layout_snapshot.txt` is the proof that moving the assembly moved no rectangle.
+///
+/// # Why the nested close control is tinted explicitly (BUG-001, FR-011a)
+///
+/// `IconButton::new` defaults its glyph to the roles' `on_surface`. That was wrong the moment the
+/// button was nested inside something painting its own fill, and it stayed wrong when the fill went
+/// away: without a container the accent is the *only* thing separating the active tab from its
+/// neighbours, so a close glyph left on `on_surface` reads as belonging to a different tab than the
+/// label beside it. Both take [`content_colour`] for this tab's state, which is the same rule the
+/// label follows. `tests/icon_roles.rs` holds the contrast arithmetic; `tests/terminal_tabs.rs`
+/// holds the call site.
+fn tab_strip_row<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Element<'a, Message> {
+    let marked = marked_tab(state, id);
+    let shells = state
+        .active_sessions()
+        .iter()
+        .find(|s| s.id == id)
+        .map(|s| s.shells.as_slice())
+        .unwrap_or_default();
+    let mut tabs = Vec::with_capacity(shells.len() + 1);
+    for instance in shells {
+        let is_marked = marked == StripTab::Instance(instance.id);
         // Every nested control takes the colour this tab draws its own label in (FR-011a). That
-        // matters more without a container than it did with one: the accent is now the only thing
-        // separating the active tab from its neighbours, so a close glyph left on `on_surface`
+        // matters more without a container than it did with one: the accent is the only thing
+        // separating the marked tab from its neighbours, so a close glyph left on `on_surface`
         // would read as belonging to a different tab than the label beside it.
-        let tint = indicator.unwrap_or(r.on_surface_variant);
-        // Content-sized under a ceiling, centred (FR-004a's surviving clause). Not a fixed
-        // two-digit box: a tab is to show a name once instances can be renamed.
-        let label = container(Text::new(instance.id.0.to_string(), TypeRole::Label, r).tint(tint))
-            .max_width(TAB_LABEL_MAX_WIDTH)
-            .center_x(Length::Shrink);
+        let tint = content_colour(is_marked, r);
         let close = Tooltip::new(
             IconButton::new(Icon::Close, r)
                 .size(TypeRole::Label)
@@ -760,79 +931,101 @@ fn instance_switcher_row<'a>(
             r,
         )
         .position(TooltipPosition::Top);
-        // A leading spacer the width of the trailing close control, so the label centres about
-        // the tab's own midpoint rather than about the space left over beside the close: the two
-        // ends are then equal and the label's box sits exactly between them. A `Fill` spacer
-        // would do nothing here — the tab sizes to its content, so there is no slack to push
-        // against, and it would only add a gap on one side of the label.
-        let content = row![
-            Space::new().width(Length::Fixed(TAB_CLOSE_WIDTH)),
-            label,
-            close,
-        ]
-        .spacing(spacing::XS)
-        .align_y(Alignment::Center);
-        // The per-instance restart affordance used to be pushed here as a fourth child, and the
-        // comment above it read "It widens its own tab, which SC-008 permits: that is a lifecycle
-        // change, not a change of which tab is active." That was true until BUG-002 gave every tab
-        // one fixed width, and false in the same file from that commit on — a fixed width is a
-        // budget, and iced settles a shortfall by shrinking the trailing children rather than by
-        // overflowing. The button laid out at 0.0dp wide and the close control beside it at 45.2,
-        // under §7.3's target. Nothing overflowed, so nothing failed: `mise run test` was green
-        // over a control a user could not press, and the instance FR-010 exists for — one that
-        // exited in the background — could not be restarted from its own tab at all.
-        //
-        // It is offered from a context menu on the tab now (BUG-005, FR-010b). Widening the tab
-        // instead was measured first and rejected: the derivation comes to 204dp against 136, so
-        // three instances would take 628dp of a 1014dp bar that also carries a title, a status, the
-        // "+" and the mode toggle — every tab paying for a child only a stopped instance draws.
-        // The indicator sits at the tab's **top** edge, not Material's bottom: this bar is anchored
-        // to the window's bottom, so the pane a tab selects is *above* it and a bottom indicator
-        // would point away from what it marks (FR-004b).
-        //
-        // Every tab reserves the bar's height whether or not it draws one — an inactive tab gets a
-        // transparent rule of the same thickness. An indicator that appeared only on activation
-        // would grow its tab by 3dp and push the row, which is exactly the reflow SC-008 forbids,
-        // and it would do it under the pointer between a press and its release.
-        //
-        // `Fill` on the column, not `Shrink`, and that is the *width* half of the same rule. The
-        // active tab's `Divider` fills, so its column measures the tab's whole content box and the
-        // row below centres in it; an inactive tab's transparent spacer has no width, so a shrinking
-        // column would measure only the row and pin it to the leading edge. The label would then sit
-        // off the tab's midline on every inactive tab and slide across on activation — under the
-        // pointer, which is what SC-008 forbids — by half the slack. That was 0.6dp while the tab was
-        // 128 wide and became 4.6dp when FR-004c's derivation corrected it to 136: the same defect,
-        // amplified past visibility by a change that had nothing to do with it.
-        let marked = column![
-            match indicator {
-                Some(accent) => Divider::horizontal(r)
-                    .thickness(anatomy::tab::INDICATOR)
-                    .tint(accent)
-                    .into(),
-                None => Element::from(Space::new().height(Length::Fixed(anatomy::tab::INDICATOR))),
-            },
-            content,
-        ]
-        .width(Length::Fill)
-        .align_x(Alignment::Center);
-        entries = entries.push(
-            ContextArea::new(
-                Button::with_content(marked, ButtonVariant::Text, r)
-                    // `Text` on every tab: no background, no outline (FR-004b). One fixed width for all
-                    // of them, so the indicator's `Fill` resolves to the tab rather than to whatever
-                    // space the bar happens to offer, and every tab measures the same (SC-008).
-                    .width(Length::Fixed(TAB_WIDTH))
-                    .padding(spacing::SM)
-                    .on_press(Message::ShellInstanceSelected(id, instance.id)),
+        tabs.push(
+            // Labelled by the instance's `ShellInstanceId` — the only display identity an instance
+            // has until renaming arrives. The tab is what centres it and what bounds it.
+            Tab::new(
+                Text::new(instance.id.0.to_string(), TypeRole::Label, r).tint(tint),
+                r,
             )
+            .active(is_marked)
+            // The mark goes in the **leading spacer every tab already reserves** (FR-012c). That
+            // space exists only to balance the trailing close control and is empty today, so no tab
+            // grows and the derived width is untouched. Passed unconditionally with its emphasis
+            // carrying the state, never pushed-or-not (research R4).
+            .leading(material::ActivityBadge::for_emphasis(
+                stopped_mark(state, id, StripTab::Instance(instance.id)),
+                r,
+            ))
+            .trailing(close)
+            .on_press(Message::ShellInstanceSelected(id, instance.id))
             // A secondary press opens this tab's menu; a primary press still selects the instance,
             // because the wrapper lets the child answer first and intercepts only the right button.
             .on_secondary_press(move |(x, y)| {
-                Message::ShellInstanceMenuRequested(instance.id, x, y)
+                Message::StripTabMenuRequested(StripTab::Instance(instance.id), x, y)
             }),
         );
     }
-    Some(entries.into())
+    // The strip's own edge is the default `Top`, not Material's `Bottom`: this bar is anchored to
+    // the window's bottom, so the pane a tab selects is *above* it and a bottom indicator would
+    // point away from what it marks (feature 012 FR-004b).
+    TabStrip::new(tabs, r).into()
+}
+
+/// The AI tab, which sits **outside** the scrolling region (feature 026 FR-002b).
+///
+/// # Why it is a strip of one rather than a bare tab
+///
+/// It is a member of the strip that happens to be pinned, not a control beside it — FR-010 asks it
+/// to be visually consistent with the tabs it sits next to, and building it the same way is how
+/// that stops being an intention. It also keeps `gates/tab_children_fit.rs` covering it: that gate
+/// finds tabs as the immediate children of an anchored strip, and a lone `Tab` in the bar would
+/// have been a tab no gate recognised.
+///
+/// # Why it is outside the viewport
+///
+/// FR-002 says the AI tab holds the strip's right-hand end, and FR-002b is what that means under
+/// overflow: inside the scrolling region it would be reachable only by scrolling to the far end,
+/// which is exactly the state SC-002's "one press" forbids. FR-002 is only a meaningful requirement
+/// where there is more than fits.
+///
+/// # Its trailing slot is reserved and empty (FR-004, FR-010a)
+///
+/// A session has exactly one AI CLI process and terminating it is not an action offered from this
+/// control, so there is no close control to draw. A tab that reclaimed the space would be narrower
+/// than its neighbours, and a strip whose tabs are not all one size reads as a control among
+/// controls rather than as a strip — feature 012's BUG-001. Leaving it reserved is also what keeps
+/// the icon on the tab's own midline, since the leading slot is the same width.
+///
+/// # Not pressable yet
+///
+/// User Story 1's claim is that the strip *says* what the pane is showing. User Story 2 makes it a
+/// control (T041), and that needs a message which **sets** the mode rather than toggling it:
+/// `TerminalModeToggled` would switch away from the AI pane when this tab is pressed while it is
+/// already displayed, which FR-007 forbids.
+fn pinned_ai_tab<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Element<'a, Message> {
+    let marked = marked_tab(state, id) == StripTab::Ai;
+    TabStrip::new(
+        vec![Tab::new(
+            // The shared `Glyph`, at the same type role a terminal tab's label uses, so the two
+            // labels sit on one baseline and the size follows the role rather than a number named
+            // here (`tests/material_boundary.rs`). It is the glyph the mode toggle already shows
+            // for this mode, so the two routes to the AI pane wear the same mark (FR-009).
+            material::Glyph::new(Icon::AiCli, TypeRole::Label, r).tint(content_colour(marked, r)),
+            r,
+        )
+        .active(marked)
+        // The same mark in the same slot as a terminal tab's (FR-012, FR-010). "In the same place"
+        // is the requirement, not an aesthetic: FR-010's "consistent with the tabs it sits beside"
+        // is false in the one state that matters if this tab reports its lifecycle differently from
+        // its neighbours.
+        .leading(material::ActivityBadge::for_emphasis(
+            stopped_mark(state, id, StripTab::Ai),
+            r,
+        ))
+        // FR-006: a primary press shows the AI CLI and does nothing else. It **sets** the mode
+        // rather than toggling it, which is FR-007 — pressing this tab while the AI CLI is already
+        // displayed is a no-op with no visible change.
+        .on_press(Message::TerminalAiCliSelected(id))
+        // FR-006a: the same menu a terminal tab offers, minus Close. The wrapper lets the child
+        // answer first and intercepts only the right button, so the primary press above keeps
+        // working through it — the property feature 012 established and this reuses rather than
+        // re-establishes. FR-006b is what makes the press silent while the process is running: the
+        // menu would be empty, so none opens.
+        .on_secondary_press(move |(x, y)| Message::StripTabMenuRequested(StripTab::Ai, x, y))],
+        r,
+    )
+    .into()
 }
 
 #[cfg(test)]
@@ -862,6 +1055,475 @@ mod tests {
         state.workspace.sessions.insert(path, vec![session]);
         state.active_session = Some(id);
         (state, id)
+    }
+
+    /// A state with one project and one session in `mode`, holding `shells` instances at the given
+    /// lifecycles and marking `active` (an index into `shells`) as the displayed one.
+    fn state_with_instances(
+        mode: TerminalMode,
+        lifecycle: SessionLifecycle,
+        shells: &[ShellLifecycle],
+        active: Option<usize>,
+    ) -> (State, SessionId) {
+        let mut state = State::default();
+        let path = std::path::PathBuf::from("/repo");
+        state.workspace.projects.push(Project {
+            path: path.clone(),
+            display_name: "repo".to_string(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        });
+        state.workspace.active = Some(path.clone());
+        let mut session = Session::start_new(SessionLocation::Default);
+        session.lifecycle = lifecycle;
+        session.mode = mode;
+        let mut opened = Vec::new();
+        for want in shells {
+            let id = session.open_shell_instance();
+            // Written rather than driven through the transitions: `open_shell_instance` leaves an
+            // instance `Starting`, so `NotStarted` — a state a *restored* session's instances are
+            // in, and one of the two FR-012d names — is not reachable by any public transition.
+            // A table-driven test has to be able to state its inputs.
+            if let Some(instance) = session.shells.iter_mut().find(|s| s.id == id) {
+                instance.lifecycle = *want;
+            }
+            opened.push(id);
+        }
+        session.active_shell = active.map(|i| opened[i]);
+        let id = session.id;
+        state.workspace.sessions.insert(path, vec![session]);
+        state.active_session = Some(id);
+        (state, id)
+    }
+
+    /// FR-012/FR-012d/FR-012e: a tab wears the mark for exactly the states the predicate calls
+    /// stopped, for both kinds of member and never for an in-progress one.
+    ///
+    /// Asserted **through the predicate**, deliberately. The mark could be given its own lifecycle
+    /// match and would look right for a while; FR-012d asks the mark and the menu to agree, and the
+    /// only way that survives a variant being added is for both to be readings of one function.
+    /// This test fails if the mark ever grows a second opinion.
+    #[test]
+    fn a_tab_wears_the_mark_for_exactly_what_the_predicate_calls_stopped() {
+        for (mode, lifecycle, shell) in [
+            (
+                TerminalMode::AiCli,
+                SessionLifecycle::Idle,
+                ShellLifecycle::Running,
+            ),
+            (
+                TerminalMode::AiCli,
+                SessionLifecycle::Failed,
+                ShellLifecycle::Exited,
+            ),
+            (
+                TerminalMode::AiCli,
+                SessionLifecycle::InterruptedResumable,
+                ShellLifecycle::Starting,
+            ),
+            (
+                TerminalMode::AiCli,
+                SessionLifecycle::Running,
+                ShellLifecycle::NotStarted,
+            ),
+            (
+                TerminalMode::AiCli,
+                SessionLifecycle::Starting,
+                ShellLifecycle::Running,
+            ),
+            (
+                TerminalMode::Regular,
+                SessionLifecycle::Restarting { attempts: 1 },
+                ShellLifecycle::Exited,
+            ),
+        ] {
+            let (state, id) = state_with_instances(mode, lifecycle, &[shell], Some(0));
+            let instance = state.active_sessions()[0].shells[0].id;
+            for tab in [StripTab::Ai, StripTab::Instance(instance)] {
+                assert_eq!(
+                    stopped_mark(&state, id, tab).is_some(),
+                    process_stopped(&state, id, tab),
+                    "{mode:?}/{lifecycle:?}/{shell:?} {tab:?}: the mark and the predicate disagree. \
+                     A mark on a state nobody can act on sends a user to a press that does nothing \
+                     (FR-006b), which is the dead end the mark exists to prevent."
+                );
+            }
+        }
+    }
+
+    /// FR-012a: a tab can be marked-active **and** stopped, and the two cues must not read as one.
+    ///
+    /// Colour identity, not geometry — where the mark lands is `tab_children_fit`'s question and
+    /// the composited result is §8's, but "these two are not the same role" is assertable here and
+    /// is the requirement a tone-only cue would have failed. It has to be legible against both the
+    /// accent an active tab wears and the muted tint an inactive one does, in both schemes, which
+    /// is exactly what a third grey is worst at.
+    #[test]
+    fn the_mark_is_not_the_indicators_role_in_either_scheme() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            let accent = crate::ui::material::tab::indicator_colour(true, r)
+                .expect("an active tab has an indicator");
+            let muted = crate::ui::material::tab::content_colour(false, r);
+            assert_ne!(
+                r.error, accent,
+                "{scheme:?}: the stopped mark must not be drawn in the indicator's own accent — a \
+                 tab that is active *and* stopped would then wear one colour saying two things \
+                 (FR-012a)"
+            );
+            assert_ne!(
+                r.error, muted,
+                "{scheme:?}: nor in the muted tint an inactive tab wears, which is the other half \
+                 of the same requirement"
+            );
+        }
+    }
+
+    /// FR-004/FR-006a/FR-006b: the AI tab's menu is a terminal tab's **minus Close**, in the same
+    /// order — and it is empty whenever the AI process is running, so no menu opens at all.
+    ///
+    /// Stated as "the terminal tab's menu minus Close" rather than as a list, because that is how
+    /// FR-006a is worded and for the reason it is worded that way: the two must not be able to
+    /// drift into offering different actions. A test that spelled out `["Restart"]` would pass
+    /// while the terminal tab's menu grew an item the AI tab never got.
+    #[test]
+    fn the_ai_tabs_menu_is_a_terminal_tabs_minus_close() {
+        for (lifecycle, shell) in [
+            (SessionLifecycle::Idle, ShellLifecycle::Exited),
+            (SessionLifecycle::Failed, ShellLifecycle::NotStarted),
+            (
+                SessionLifecycle::InterruptedResumable,
+                ShellLifecycle::Exited,
+            ),
+            (SessionLifecycle::Running, ShellLifecycle::Running),
+            (SessionLifecycle::Starting, ShellLifecycle::Starting),
+            (
+                SessionLifecycle::Restarting { attempts: 2 },
+                ShellLifecycle::Starting,
+            ),
+        ] {
+            let (state, id) =
+                state_with_instances(TerminalMode::Regular, lifecycle, &[shell], Some(0));
+            let instance = state.active_sessions()[0].shells[0].id;
+
+            let for_instance =
+                crate::ui::strip_tab_menu_labels(&state, id, StripTab::Instance(instance));
+            let for_ai = crate::ui::strip_tab_menu_labels(&state, id, StripTab::Ai);
+
+            let expected: Vec<&str> = for_instance
+                .iter()
+                .copied()
+                .filter(|label| *label != "Close")
+                .collect();
+            assert_eq!(
+                for_ai, expected,
+                "{lifecycle:?}: the AI tab's menu must be the terminal tab's with Close filtered \
+                 out, in the same order — FR-004 excludes Close by any press, and FR-006a is \
+                 worded to stop the two menus drifting apart"
+            );
+        }
+    }
+
+    /// FR-006b: a menu with no items does not open, and that is most of the time.
+    ///
+    /// With restart the only item and Close excluded, the AI tab's menu is empty whenever the AI
+    /// CLI is running — which is the ordinary state. An empty panel is a defect everywhere else in
+    /// this application, and a panel whose entire content is inert is one too, so the offer is
+    /// absent rather than present-and-useless. It also keeps the strip agreeing with the bar beside
+    /// it, which already shows a restart control only for a process that is not running.
+    #[test]
+    fn a_running_ai_tab_opens_no_menu_at_all() {
+        for lifecycle in [
+            SessionLifecycle::Running,
+            SessionLifecycle::Starting,
+            SessionLifecycle::Restarting { attempts: 1 },
+        ] {
+            let (state, id) = state_with_instances(TerminalMode::AiCli, lifecycle, &[], None);
+            assert!(
+                crate::ui::strip_tab_menu_labels(&state, id, StripTab::Ai).is_empty(),
+                "{lifecycle:?}: a secondary press on a running AI tab must do nothing — an empty \
+                 panel says the offer exists and then withholds it"
+            );
+        }
+        for lifecycle in [
+            SessionLifecycle::Idle,
+            SessionLifecycle::Failed,
+            SessionLifecycle::InterruptedResumable,
+        ] {
+            let (state, id) = state_with_instances(TerminalMode::AiCli, lifecycle, &[], None);
+            assert_eq!(
+                crate::ui::strip_tab_menu_labels(&state, id, StripTab::Ai),
+                vec!["Restart"],
+                "{lifecycle:?}: a stopped AI process has exactly one thing that can be done to it, \
+                 and the mark on its tab (FR-012d) is what points at it"
+            );
+        }
+    }
+
+    /// FR-002e, research R6: "content lies beyond this edge" is a pure function of the viewport
+    /// offset and the content width.
+    ///
+    /// The *fade* is appearance and no gate can see it — a gradient occupies the same box whether
+    /// it is opaque or invisible, which is what the visual pass is for. The **fact behind it** is
+    /// arithmetic, and this is where it is held. Four cases, because a strip can be scrolled to
+    /// either end, to the middle, or not be scrollable at all, and the last one is the case a naive
+    /// `offset > 0` would get wrong in the direction that matters: a fade on a strip with nothing
+    /// beyond it tells the user to scroll toward nothing.
+    #[test]
+    fn an_edge_knows_whether_anything_lies_beyond_it() {
+        // Written as literals rather than as named constants on `Beyond` itself. The four names
+        // would have to be `#[cfg(test)]` — nothing in the drawing path wants a whole value, since
+        // each edge is drawn on its own side and asking "is this exactly BOTH" would couple the two
+        // together — and a second `#[cfg(test)]` block in this file breaks
+        // `tests/anatomy_call_sites.rs`, which truncates a source at the first one.
+        let beyond = |leading, trailing| Beyond { leading, trailing };
+
+        // Nothing to scroll: the content fits, so neither edge says anything.
+        assert_eq!(overflowing(0.0, 500.0, 300.0), beyond(false, false));
+        // Scrolled hard to the leading end, with more to come.
+        assert_eq!(overflowing(0.0, 300.0, 900.0), beyond(false, true));
+        // Somewhere in the middle: both.
+        assert_eq!(overflowing(300.0, 300.0, 900.0), beyond(true, true));
+        // Scrolled hard to the trailing end.
+        assert_eq!(overflowing(600.0, 300.0, 900.0), beyond(true, false));
+        // Exactly at the trailing end, to the pixel — not "a little more that way".
+        assert!(
+            !overflowing(600.0, 300.0, 900.0).trailing,
+            "an edge with nothing past it must not be faded; a cue that points at nothing is \
+             worse than none, because it is the same cue that means something elsewhere"
+        );
+    }
+
+    /// FR-002d: changing the marked tab yields a scroll request for **that** tab, and none at all
+    /// when it is already fully visible.
+    ///
+    /// The second half is the one worth a test. A reveal that did not need to move the strip must
+    /// not move it — a user who has scrolled by hand (which FR-002d explicitly allows) would
+    /// otherwise be yanked back on every selection, including selections they made with the
+    /// keyboard's mode toggle rather than with the strip.
+    #[test]
+    fn the_marked_tab_is_scrolled_into_view_only_when_it_is_not() {
+        let pitch = TAB_WIDTH + spacing::SM;
+
+        // Already fully visible at the leading end: nothing to do.
+        assert_eq!(scroll_into_view(0, 0.0, 3.0 * pitch), None);
+        assert_eq!(scroll_into_view(1, 0.0, 3.0 * pitch), None);
+
+        // Beyond the trailing edge: scroll just far enough that its **trailing edge** lands on the
+        // viewport's, not far enough to centre it — the neighbouring tabs are context, and a strip
+        // that recentres on every press moves more than the selection did.
+        //
+        // The figure is `5·pitch + TAB_WIDTH - viewport`, not `6·pitch - viewport`: a pitch is a
+        // tab plus the gap that follows it, and there is no gap after the last tab shown. The 8dp
+        // between them is a gap this would have opened at the viewport's trailing edge.
+        assert_eq!(
+            scroll_into_view(5, 0.0, 3.0 * pitch),
+            Some(5.0 * pitch + TAB_WIDTH - 3.0 * pitch),
+        );
+
+        // Beyond the leading edge: scroll to put its leading edge on the viewport's.
+        assert_eq!(scroll_into_view(0, 4.0 * pitch, 3.0 * pitch), Some(0.0));
+        assert_eq!(
+            scroll_into_view(2, 4.0 * pitch, 3.0 * pitch),
+            Some(2.0 * pitch)
+        );
+    }
+
+    /// FR-010a: the AI tab measures what a terminal tab measures, and its two slots are equal.
+    ///
+    /// The width half is what keeps the strip reading as a strip — a strip whose tabs are not all
+    /// one size reads as a control among controls, which is the defect feature 012's BUG-001 was
+    /// filed for. The slots half is what puts the icon on the tab's own midline: having no close
+    /// control (FR-004) must not make the AI tab narrower **or** push its content off centre, so
+    /// the trailing slot is left empty rather than reclaimed.
+    ///
+    /// It is asserted of the *component's* anatomy rather than of a rendered tab, because that is
+    /// where the answer is: both tabs are the same component, so "the same width" is not something
+    /// the call site can get wrong — what it *can* get wrong is the slots, and a tab that took one
+    /// end from the constant and the other from its content's own size is what pulled a stopped
+    /// tab's label 20dp off centre in T013's visual pass.
+    #[test]
+    fn the_ai_tab_measures_what_a_terminal_tab_measures() {
+        use crate::ui::material::tab;
+
+        assert_eq!(
+            2.0 * tab::SLOT_WIDTH + 2.0 * spacing::XS + tab::LABEL_MIN_WIDTH,
+            tab::WIDTH,
+            "a tab's width is the sum of what it holds (feature 012 FR-004c), and both slots are \
+             a term in it — so a slot that measured its content rather than the slot would make \
+             the derivation false without changing the constant. No padding term: a tab draws no \
+             inset, because the indicator and the state layer both span the whole tab and an inset \
+             makes them stop short of the thing they mark."
+        );
+    }
+
+    /// FR-005: exactly one tab is marked, for **every** combination of mode and active instance.
+    ///
+    /// "Never zero, never two" is a claim about **totality**, so this is where it is proved: the
+    /// function returns one `StripTab` and there is nowhere else for the answer to go. The case
+    /// that does the work is the last one — a `Regular` session whose `active_shell` is `None`,
+    /// which is what an `Option<ShellInstanceId>` would have had to answer twice for (Principle V).
+    #[test]
+    fn exactly_one_tab_is_marked_in_every_state() {
+        // AI CLI mode: the AI tab is marked whatever the instances are doing.
+        for active in [None, Some(0), Some(1)] {
+            let (state, id) = state_with_instances(
+                TerminalMode::AiCli,
+                SessionLifecycle::Running,
+                &[ShellLifecycle::Running, ShellLifecycle::Running],
+                active,
+            );
+            assert_eq!(
+                marked_tab(&state, id),
+                StripTab::Ai,
+                "in AiCli mode the AI tab is the displayed one regardless of active_shell \
+                 ({active:?})"
+            );
+        }
+
+        // Regular mode with an instance selected: that instance's tab, and not the AI tab.
+        let (state, id) = state_with_instances(
+            TerminalMode::Regular,
+            SessionLifecycle::Running,
+            &[ShellLifecycle::Running, ShellLifecycle::Running],
+            Some(1),
+        );
+        let selected = state.active_sessions()[0].shells[1].id;
+        assert_eq!(marked_tab(&state, id), StripTab::Instance(selected));
+
+        // Regular mode with **no** instance selected. `None` already means "this session has no
+        // active instance" in this file, so overloading it to also mean "the AI tab" would make
+        // this case unanswerable. The AI tab is what the pane shows, so the AI tab is marked.
+        let (state, id) =
+            state_with_instances(TerminalMode::Regular, SessionLifecycle::Running, &[], None);
+        assert_eq!(
+            marked_tab(&state, id),
+            StripTab::Ai,
+            "a Regular session with nothing to show falls back to the AI tab — never to no tab \
+             at all, which is the state FR-005 exists to forbid"
+        );
+
+        // A session that is not in the workspace at all still answers, because the return type
+        // leaves no room not to.
+        let (state, _) =
+            state_with_instances(TerminalMode::Regular, SessionLifecycle::Running, &[], None);
+        assert_eq!(marked_tab(&state, SessionId::new()), StripTab::Ai);
+    }
+
+    /// FR-012d / FR-012e, research R1 and R2: **one** predicate answers "this process is stopped"
+    /// for both lifecycle vocabularies.
+    ///
+    /// Asserted for every variant of both enums **by name**, so a variant added later fails here
+    /// rather than silently defaulting into one answer or the other. The rule is the same in both
+    /// rows and it is FR-012d's own: the mark appears exactly where a restart can act.
+    #[test]
+    fn one_predicate_calls_a_process_stopped_in_both_vocabularies() {
+        let (state, id) = state_with_instances(
+            TerminalMode::AiCli,
+            SessionLifecycle::Running,
+            &[
+                ShellLifecycle::NotStarted,
+                ShellLifecycle::Starting,
+                ShellLifecycle::Running,
+                ShellLifecycle::Exited,
+            ],
+            None,
+        );
+        let shells: Vec<_> = state.active_sessions()[0]
+            .shells
+            .iter()
+            .map(|s| s.id)
+            .collect();
+        for (i, (want, why)) in [
+            (true, "a shell that was never started is restartable"),
+            (
+                false,
+                "a starting shell is in progress, not stopped (FR-012e)",
+            ),
+            (false, "a running shell has nothing to restart"),
+            (true, "an exited shell is the case FR-012 exists for"),
+        ]
+        .iter()
+        .enumerate()
+        .map(|(i, (w, why))| (i, (*w, *why)))
+        {
+            assert_eq!(
+                process_stopped(&state, id, StripTab::Instance(shells[i])),
+                want,
+                "{why}"
+            );
+        }
+
+        for (lifecycle, want, why) in [
+            (SessionLifecycle::Idle, true, "a persisted-but-stopped session resumes on request"),
+            (SessionLifecycle::Starting, false, "starting is in progress, not stopped (FR-012e)"),
+            (SessionLifecycle::Running, false, "a running AI process has nothing to restart"),
+            (
+                SessionLifecycle::Restarting { attempts: 1 },
+                false,
+                "an auto-restart is already under way; a mark here would point at an action                  nobody needs to take",
+            ),
+            (SessionLifecycle::Failed, true, "auto-restart gave up; a manual one is the offer"),
+            (
+                SessionLifecycle::InterruptedResumable,
+                true,
+                "the service restarted and found a conversation — resuming it is the one action",
+            ),
+        ] {
+            let (state, id) =
+                state_with_instances(TerminalMode::AiCli, lifecycle, &[], None);
+            assert_eq!(
+                process_stopped(&state, id, StripTab::Ai),
+                want,
+                "{lifecycle:?}: {why}"
+            );
+        }
+    }
+
+    /// R2's other half: the bar's own restart control and the strip must not be able to disagree.
+    ///
+    /// `attached_process_restartable` is now a call into the predicate above rather than a second
+    /// match statement, so this asserts the two give the same answer for the process the bar is
+    /// describing. This file has paid twice for the alternative — `empty_terminal_message` and the
+    /// bar disagreed "for exactly as long as they were two readings of one fact", and BUG-004 was
+    /// `restart_message` re-deriving something the predicate beside it already had.
+    #[test]
+    fn the_bar_and_the_strip_read_one_predicate() {
+        for (mode, shells, active) in [
+            (TerminalMode::AiCli, &[][..], None),
+            (
+                TerminalMode::Regular,
+                &[ShellLifecycle::Exited][..],
+                Some(0),
+            ),
+            (
+                TerminalMode::Regular,
+                &[ShellLifecycle::Running][..],
+                Some(0),
+            ),
+            (TerminalMode::Regular, &[][..], None),
+        ] {
+            for lifecycle in [
+                SessionLifecycle::Idle,
+                SessionLifecycle::Running,
+                SessionLifecycle::Failed,
+            ] {
+                let (state, id) = state_with_instances(mode, lifecycle, shells, active);
+                let attached = match mode {
+                    TerminalMode::AiCli => StripTab::Ai,
+                    TerminalMode::Regular => state.active_sessions()[0]
+                        .active_shell
+                        .map(StripTab::Instance)
+                        .unwrap_or(StripTab::Ai),
+                };
+                assert_eq!(
+                    attached_process_restartable(&state, id),
+                    process_stopped(&state, id, attached),
+                    "{mode:?}/{lifecycle:?}: the bar's restart control and the strip's mark are \
+                     two readings of one fact and must not be able to differ"
+                );
+            }
+        }
     }
 
     /// `012` BUG-004 / FR-010. The bar's `restart` control restarted the **session**, whose AI CLI
@@ -991,95 +1653,6 @@ mod tests {
                 restartable, says_starting,
                 "{lifecycle:?}: the bar offers restart = {restartable}, and the body claims to be \
                  starting = {says_starting}. Exactly one of those is true of any session"
-            );
-        }
-    }
-
-    /// BUG-002, FR-004b: exactly the active tab carries an indicator.
-    ///
-    /// Replaces `tab_variant_always_draws_a_container`, which asserted neither arm was
-    /// `ButtonVariant::Text`. That test was right for BUG-001 and is wrong now — every tab is
-    /// `Text`, because no tab draws a container. It is replaced rather than deleted: a test that
-    /// pins a decision *should* fail when the decision changes, and what would be wrong is leaving
-    /// the new rule unpinned afterwards.
-    #[test]
-    fn only_the_active_tab_carries_an_indicator() {
-        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
-            let r = tokens::roles(scheme);
-            assert_eq!(
-                tab_indicator_colour(true, r),
-                Some(r.primary),
-                "{scheme:?}: the active tab must be marked by an accent indicator (FR-004b)"
-            );
-            assert_eq!(
-                tab_indicator_colour(false, r),
-                None,
-                "{scheme:?}: an inactive tab draws no indicator — the mark is what distinguishes \
-                 the active one, so a second bar would say two tabs are selected"
-            );
-        }
-    }
-
-    /// BUG-005, FR-004c: the tab's width is the sum of what it has to hold, not a number.
-    ///
-    /// The test that would have failed the day `TAB_WIDTH` was written as `128.0`. It cannot catch
-    /// a *missing* child on its own — a sum is only as complete as its terms, and the term this bug
-    /// was about (the restart affordance) is no longer one of them — so it is the pair to
-    /// `tests/gates/tab_children_fit.rs`, which reads what the children were actually given. This
-    /// end says the budget is the sum of its parts; that end says nobody was squeezed.
-    ///
-    /// Restated rather than referenced, deliberately. Writing `assert_eq!(TAB_WIDTH, TAB_WIDTH)`
-    /// through the same expression would pass on any value; spelling the arithmetic out means a
-    /// term silently dropped from the definition fails here.
-    #[test]
-    fn the_tab_width_is_the_sum_of_what_a_tab_holds() {
-        let padding = 2.0 * spacing::SM;
-        let targets = 2.0 * anatomy::button::MIN_TOUCH_TARGET; // leading spacer + close control
-        let gaps = 2.0 * spacing::XS;
-        assert_eq!(
-            TAB_WIDTH,
-            padding + targets + gaps + TAB_LABEL_MIN_WIDTH,
-            "TAB_WIDTH must be derived from the constants a tab's widest arrangement requires \
-             (FR-004c), not chosen against an observed one. A chosen figure is silently wrong the \
-             first time a tab gains a child, and wrong in the one way layout does not report: iced \
-             settles a shortfall by shrinking the trailing children, so the control disappears \
-             instead of the row overflowing."
-        );
-    }
-
-    /// The leading spacer balances the whole trailing edge, which is what puts the label on the
-    /// tab's midline (FR-004a).
-    ///
-    /// One control on that edge today. It was briefly two — the close and a restart button — and
-    /// the label was then off centre by 30dp with nothing to say so, because the spacer balanced
-    /// only the close. FR-010b took the restart out; this fails if anything is put back.
-    #[test]
-    fn the_leading_spacer_balances_the_trailing_edge() {
-        assert_eq!(
-            TAB_CLOSE_WIDTH,
-            anatomy::button::MIN_TOUCH_TARGET,
-            "the spacer must balance the control it faces at that control's laid-out footprint, \
-             not at its visible pill — a pressable non-compact `IconButton` wraps itself in a \
-             MIN_TOUCH_TARGET box, and measuring the pill put the label (48 - 24) / 2 = 12dp left \
-             of centre (BUG-002's visual pass)"
-        );
-    }
-
-    /// The indicator is the *only* difference between the two states, and it must be an accent —
-    /// not the surrounding bar's foreground, which would read as a border artefact rather than a
-    /// selection (SC-009).
-    #[test]
-    fn the_indicator_is_an_accent_not_a_surface_colour() {
-        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
-            let r = tokens::roles(scheme);
-            let accent = tab_indicator_colour(true, r).expect("active tab has an indicator");
-            assert_ne!(
-                accent, r.on_surface,
-                "{scheme:?}: the indicator must be an accent, not the bar's own foreground"
-            );
-            assert_ne!(
-                accent, r.surface,
-                "{scheme:?}: an indicator painted in the surface colour is invisible"
             );
         }
     }

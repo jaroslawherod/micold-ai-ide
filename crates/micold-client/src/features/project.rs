@@ -328,17 +328,19 @@ pub fn rename_cancelled(state: &mut State) {
 
 /// A project's right-click menu was toggled (feature 015).
 ///
-/// The same project closes; a different one replaces it (only ever one open), re-anchored at
-/// wherever the pointer now is. The switcher panel stays open behind the menu so the right-clicked
-/// row remains visible; the other popovers do not.
+/// The same project closes; a different one replaces it (only ever one open), re-anchored at the
+/// point *this* press landed on (018 BUG-008 — the anchor travels with the message rather than
+/// being read from a separately-tracked pointer). The switcher panel stays open behind the menu so
+/// the right-clicked row remains visible; the other popovers do not.
 #[must_use = "what an opening menu displaces is the registry's business, not the caller's"]
-pub fn menu_toggled(state: &mut State, path: PathBuf) -> Vec<crate::features::Outcome> {
+pub fn menu_toggled(
+    state: &mut State,
+    path: PathBuf,
+    anchor: (u16, u16),
+) -> Vec<crate::features::Outcome> {
     state.project_menu_open = match &state.project_menu_open {
         Some(open) if open.path == path => None,
-        _ => Some(ProjectMenu {
-            path,
-            anchor: state.cursor,
-        }),
+        _ => Some(ProjectMenu { path, anchor }),
     };
     crate::features::surface_opened(state.project_menu_open.is_some(), ProjectContextMenu::ID)
 }

@@ -1342,3 +1342,89 @@ it (SC-008e).
   >
   > **Still unrun**, unchanged from the first pass: the mid-flight look of the fade, for the same
   > reason.
+
+
+## Phase 20: BUG-008 — the sidebar's context menus opened at a corner, not at the row
+
+**Goal**: a context menu opened from an element opens at the press point, because the press point
+arrives with the gesture (FR-029d). The fix is mostly **subtraction** — a constant goes, and with it
+the pointer subscription that existed to work around a message with no point in it. What is added is
+the gate that reads a panel against the element it belongs to (SC-008f), which is the scope none of
+this feature's five checks had.
+
+**Note on `State::cursor`**: it exists because `MenuItem::on_context` hands over a bare message, so
+feature 015 tracked the pointer on the side and subscribed to moves *only while the switcher is
+open* to keep the idle window quiet (015 FR-010). Once the point rides on the message, the side
+channel has no remaining caller. Removing it is the stronger form of 015's own requirement, not a
+change to it.
+
+- [X] T142 Failing test first: `crates/micold-client/tests/gates/context_menu_anchor.rs`, compiled into the `layout_snapshot` binary for the reason `containment`, `panel_placement` and `sibling_parity` each give. For every context menu the application has — worktree row, session row, switcher project row, terminal tab — open it at **two distinct press points** and assert the laid-out panel's origin follows the point, clamped by `clamp_menu_anchor`, rather than holding still. Two points, not one, for `anatomy_size`'s reason one scope out: a single press cannot separate "anchored at the press" from "anchored at a constant that happens to be near it". The edge-anchored panels of FR-029d's exception (the overflow menu, the switcher panel, the tab menu's `rising_above`) are **declared** in the check, so the gate distinguishes a stated exception from a forgotten point. Confirm it fails today: the worktree and session panels report the same origin for both presses (SC-008f, FR-029d)
+
+  > **Red on all four, for the right reason.** `worktree` right-clicked at (126, 641) → menu at
+  > (24, 96), 555px away; `session` at (126, 249) → (24, 96); `moves` — presses 448px apart, panel
+  > moved 0px. The fourth is its own finding: the **project** menu, which feature 015 anchors
+  > correctly in the running application, opened at **(0, 0)** — it reads `State::cursor`, a side
+  > channel fed only by the binary's switcher-gated pointer subscription, so outside the binary it
+  > points at nothing. That is what T146 removes.
+  >
+  > **Two corrections the assertion had to make**, neither of them slack: the press point is `f32`
+  > at the widget and `u16` on the message, and a press within a panel's height of an edge is
+  > clamped. Both are the application's own arithmetic, and the clamp is read from the panel's
+  > *measured* size rather than restated.
+- [X] T143 Give `material::TreeItem::on_right_press` the shape `ContextArea::on_secondary_press` already has — `impl Fn((u16, u16)) -> M` — and let `tree_view.rs` wrap its row in `cdk::ContextArea` rather than `mouse_area`, so the press point reaches the message instead of being dropped at the widget boundary. This is the missing parameter the old `SIDEBAR_MENU_ANCHOR` doc comment described as a design decision (FR-029d, Principle VIII)
+- [X] T144 Carry the point on the messages and in the state: `WorktreeMenuToggled(String, (u16, u16))` and `SessionMenuToggled(SessionId, (u16, u16))`, with `worktree_menu_open` / `session_menu_open` holding an anchor beside their subject, as `ProjectMenu` already does (`features/project.rs`). Toggle semantics are unchanged and must stay covered: the same row closes the menu, a **different** row replaces it *and re-anchors* — FR-029d's second clause, and the case a fixed anchor could never fail (FR-029d)
+- [X] T145 `ui/mod.rs`: both sidebar menus clamp the point their message carried, and **`SIDEBAR_MENU_ANCHOR` is deleted**. `clamp_menu_anchor` stays exactly as it is — it is FR-029d's window-containment half and it was never the wrong part (FR-029d, 015 FR-006)
+- [X] T146 [P] Do the same at the last call site that reconstructs a point: `MenuItem::on_context` (`material/menu.rs`) takes the `ContextArea` shape, `ProjectMenuToggled` carries its own point, and `Message::CursorMoved`, `State::cursor` and `shell/subscriptions.rs`'s switcher-gated pointer subscription are **removed** — the workaround they were, together. Idle behaviour is unchanged and `idle_subscriptions.rs` must still pass; what changes is that no window state can now make the application listen to mouse moves (015 FR-010, FR-029d)
+- [X] T147 Cover the case the fixture cannot currently show: `tests/support/covered_states.rs`'s `worktree-menu-open` state opens its menu at a point **well down the sidebar**, and a session-menu state joins it. Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`UPDATE_LAYOUT_SNAPSHOT=1`); the diff is the proof, the panel moving off `24, 96` to the row it belongs to (feature 019, SC-008f)
+- [X] T148 [P] The structural half, so the next context menu cannot arrive with a constant: extend the call-site scan family (`anatomy_call_sites.rs` and its neighbours) to fail when a `MenuOverlay`/`ContextMenu` anchor is fed a `const` rather than a value carried by the state it renders, with FR-029d's edge exceptions named. The behavioural gate T142 catches the menus that exist; this catches the one written next year (SC-008f)
+
+  > **Proven able to fail, not merely observed passing.** Re-anchoring the worktree menu at a
+  > `const PROBE_ANCHOR: iced::Point = iced::Point::new(24.0, 96.0)` turns it red naming
+  > `src/ui/mod.rs:325` and the constant; reverted. The scan also unit-tests its own predicate, so
+  > `menu.anchor` and `iced::Point::new(x as f32, y as f32)` are not mistaken for shouts and
+  > `anatomy::app_bar::HEIGHT` is recognised as the stated exception rather than merely missed.
+- [X] T149 Confirm in the running application, by the `visual-pass` route: right-click the **last** worktree row and the **last** session row of a long sidebar and see the menu at the pointer; right-click a different row and see it move; right-click within a panel-height of the window's bottom edge and see it clamped and whole; and confirm the switcher's project menu and the terminal tab menu still open where they did (US4 scenario 14, SC-008f)
+
+  > **Run 2026-08-20 without a person at a display**, by the `visual-pass` route: the client and a
+  > matched daemon on a private Xvfb `:84` under lavapipe, driven with `xdotool`, captured with
+  > `import`. Isolated with `XDG_DATA_HOME`/`XDG_CONFIG_HOME`/`XDG_RUNTIME_DIR` pointed at a scratch
+  > dir, over an **invented** git repository with ten worktrees, so it could not reach the owner's
+  > daemon, catalogue or worktrees.
+  >
+  > **Passed, four checks:**
+  >
+  > - **The reported case.** A session row's `Close`/`Remove` right-clicked at (150, 248) opens at
+  >   (150, 248) — the panel's top-left corner on the row, where the bug report's screenshot has it
+  >   at the top of the sidebar over the "Worktrees" header.
+  > - **The last worktree row** of a ten-row list, right-clicked at (120, 758): menu at (120, 755).
+  > - **It moves.** Right-clicking `Bravo` at (150, 245) after `India` moves the panel to (150,
+  >   245) rather than leaving it where the last press put it.
+  > - **The clamp.** With the window shortened to 850, the same row at (120, 760) — whose 160dp
+  >   panel does not fit below it — opens at (111, 687), its bottom edge on the window's. The
+  >   pointer then sits over the panel's second item, which feature 015's own assumption records as
+  >   the accepted cost of clamping rather than flipping.
+  >
+  > **The two menus this change did not touch still open where they did**: the switcher's "Forget
+  > project", right-clicked at (1421, 97) inside the switcher panel, opens at (1360, 97) — clamped
+  > against the window's right edge, over the switcher, which stays open behind it (015 FR-009);
+  > and the terminal pane's own `Copy`/`Paste`, right-clicked at (800, 600), opens there. The first
+  > of those is the regression check that matters for T146: it now anchors from the message rather
+  > than from the `State::cursor` that went with the subscription.
+  >
+  > **Left unrun**: the **terminal tab strip's** instance menu. It is FR-029d's stated edge
+  > exception — it rises from the bar's top edge rather than falling from the press — its anchor
+  > was untouched by this change, and reaching it means switching a session to regular-terminal
+  > mode and opening a second instance. `gates/context_menu_anchor.rs` covers the three menus that
+  > fall from the press; the one that rises is covered by feature 012's own tests.
+  >
+  > Evidence: `evidence/BUG-008-menu-at-the-press-point.png` — the session menu at its row (red)
+  > beside the worktree menu clamped at the bottom edge (blue).
+- [X] T150 [P] Read `docs/user-guide/worktrees-and-sessions.md` §"Managing a worktree (right-click)" and §"Right-click a session" against the change. Neither states where the menu appears, so the documentation rule (FR-041) is expected to require **no edit** — record that it was checked rather than leaving the question open (FR-041)
+
+  > **Checked 2026-08-20; no edit.** §"Managing a worktree (right-click)" lists what the menu
+  > offers, and the session section likewise ("Right-click a session for **Close** and **Remove**").
+  > Neither states where the menu appears, so neither was made wrong by it appearing somewhere else
+  > for two years, and neither is made right by this fix. A sentence saying a context menu opens
+  > where you right-click would be documenting the absence of a bug.
+
+**Bugfix**: 2026-08-20 — BUG-008 added Phase 20 (T142–T150). No task is reopened: T107, which promoted `(24, 96)` to a named constant, is genuinely complete as written — it was scoped to whether the panel *fits*, and so was BUG-003's "adjacent risk" note before it. The work missing here was never a task.

@@ -2,6 +2,7 @@
 
 use micold_client::app::{on_escape, Message, State};
 use micold_client::features::window::FieldId;
+use micold_client::ui::terminal::StripTab;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 /// Asked of the registry, which reads each dialog's own state, so this is the same question about
@@ -34,7 +35,7 @@ use micold_client::features::sidebar::TagFilter;
 use micold_client::features::worktree_form::WorktreeFormStatus;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation};
+use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation, TerminalMode};
 use micold_core::worktree::{CreateStage, Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -768,17 +769,124 @@ fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
     // which is the case under test.
     assert_eq!(state.active_sessions()[0].active_shell, Some(active));
 
-    state.update(Message::ShellInstanceMenuRequested(background, 742, 761));
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(background),
+        742,
+        761,
+    ));
     assert_eq!(
         state.shell_instance_menu,
-        Some((background, 742, 761)),
+        Some((StripTab::Instance(background), 742, 761)),
         "the menu must record the instance whose tab was clicked, not the active one"
     );
 
     // Opening another tab's menu moves the one menu rather than stacking a second: two open menus
     // would each claim the next click, and only one of them would be the one the user is looking at.
-    state.update(Message::ShellInstanceMenuRequested(active, 880, 761));
-    assert_eq!(state.shell_instance_menu, Some((active, 880, 761)));
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(active),
+        880,
+        761,
+    ));
+    assert_eq!(
+        state.shell_instance_menu,
+        Some((StripTab::Instance(active), 880, 761))
+    );
+
+    state.update(Message::ShellInstanceMenuClosed);
+    assert_eq!(state.shell_instance_menu, None);
+}
+
+/// Feature 026 FR-006/FR-007/FR-011: a primary press on the AI tab shows the AI CLI and does
+/// nothing else at all.
+///
+/// The three "nothing else" clauses are the test. FR-006 says selecting is *all* a primary press
+/// does — it must not start, stop, restart or otherwise disturb any process, neither the AI CLI nor
+/// any terminal instance — and FR-007 says pressing it while already displayed is a no-op with no
+/// visible change. Acting on the process is FR-006a's menu, reached by a different press.
+#[test]
+fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let shell = {
+        let session = state.workspace.find_session_mut(id).unwrap().1;
+        let opened = session.open_shell_instance();
+        session.set_mode(TerminalMode::Regular);
+        opened
+    };
+    let before = state.active_sessions()[0].clone();
+    assert_eq!(before.mode, TerminalMode::Regular);
+
+    state.update(Message::TerminalAiCliSelected(id));
+    let after = &state.active_sessions()[0];
+    assert_eq!(
+        after.mode,
+        TerminalMode::AiCli,
+        "FR-006: the pane shows the AI CLI"
+    );
+    assert_eq!(
+        after.lifecycle, before.lifecycle,
+        "FR-006: selecting must not disturb the AI CLI process"
+    );
+    assert_eq!(
+        after.active_shell,
+        Some(shell),
+        "FR-006: the instance the user was on stays selected, so switching back returns to it \
+         rather than to an arbitrary one"
+    );
+    assert_eq!(
+        after.shells.iter().map(|s| s.lifecycle).collect::<Vec<_>>(),
+        before
+            .shells
+            .iter()
+            .map(|s| s.lifecycle)
+            .collect::<Vec<_>>(),
+        "FR-006: no terminal instance is started, stopped or restarted by selecting a tab"
+    );
+
+    // FR-007: pressing it again, while it is already what the pane shows, changes nothing at all.
+    let displayed = state.active_sessions()[0].clone();
+    state.update(Message::TerminalAiCliSelected(id));
+    let again = &state.active_sessions()[0];
+    assert_eq!(again.mode, displayed.mode);
+    assert_eq!(again.lifecycle, displayed.lifecycle);
+    assert_eq!(again.active_shell, displayed.active_shell);
+}
+
+/// FR-006a: the menu records **which tab** it was opened on, and the AI tab is one of them.
+///
+/// Extends feature 012's BUG-005 test to the AI tab, through the widened `StripTab` (research R8).
+/// One surface, not a second one: FR-006a defines the AI tab's menu as the terminal tab's menu with
+/// an item filtered, and two surfaces is the shape that lets them drift — which is the thing FR-006a
+/// is worded to prevent.
+#[test]
+fn the_tab_menu_records_which_tab_including_the_ai_one() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let shell = state
+        .workspace
+        .find_session_mut(id)
+        .unwrap()
+        .1
+        .open_shell_instance();
+
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(shell),
+        742,
+        761,
+    ));
+    assert_eq!(
+        state.shell_instance_menu,
+        Some((StripTab::Instance(shell), 742, 761))
+    );
+
+    // Opening the AI tab's menu **replaces** the instance's rather than stacking a second: two open
+    // menus would each claim the next click, and only one is the one the user is looking at.
+    state.update(Message::StripTabMenuRequested(StripTab::Ai, 880, 761));
+    assert_eq!(
+        state.shell_instance_menu,
+        Some((StripTab::Ai, 880, 761)),
+        "the AI tab's menu is the same surface, moved — not a second one beside it"
+    );
 
     state.update(Message::ShellInstanceMenuClosed);
     assert_eq!(state.shell_instance_menu, None);
@@ -800,7 +908,11 @@ fn the_tab_menu_closes_when_a_dialog_opens() {
         .1
         .open_shell_instance();
 
-    state.update(Message::ShellInstanceMenuRequested(shell, 742, 761));
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(shell),
+        742,
+        761,
+    ));
     assert!(state.shell_instance_menu.is_some());
 
     state.clear_for_dialog();

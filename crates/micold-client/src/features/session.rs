@@ -403,6 +403,18 @@ impl State {
     }
 }
 
+/// An open session right-click context menu (BUG-003): which session it acts on, and where to draw
+/// it. Mirrors [`crate::features::worktree::WorktreeMenu`], which mirrors feature 015's
+/// `ProjectMenu` — one shape for one gesture (018 FR-029d).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionMenu {
+    /// The session the menu acts on.
+    pub id: micold_core::session::SessionId,
+    /// The menu panel's top-left corner, in window pixels (the press point). Clamped at render
+    /// time, not here.
+    pub anchor: (u16, u16),
+}
+
 /// A session row's right-click menu, as a floating surface (feature 021, T031).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionContextMenu;
@@ -653,12 +665,11 @@ pub fn close_requested(state: &mut State, id: SessionId) -> Vec<crate::features:
 /// A session's right-click menu was toggled (bugfix BUG-003).
 ///
 /// Same session closes; a different one replaces it (only ever one open) — mirrors
-/// `worktree::menu_toggled`.
-pub fn menu_toggled(state: &mut State, id: SessionId) {
-    state.session_menu_open = if state.session_menu_open == Some(id) {
-        None
-    } else {
-        Some(id)
+/// `worktree::menu_toggled` — and re-anchors at its own press point (018 BUG-008).
+pub fn menu_toggled(state: &mut State, id: SessionId, anchor: (u16, u16)) {
+    state.session_menu_open = match &state.session_menu_open {
+        Some(open) if open.id == id => None,
+        _ => Some(SessionMenu { id, anchor }),
     };
 }
 
@@ -720,19 +731,83 @@ pub fn context_menu_closed(state: &mut State) {
 /// Replaces rather than stacks: a second right-click, on this tab or another, moves the one menu.
 /// Two open at once would each claim the next click.
 ///
-/// The instance travels with the anchor because the menu acts on the tab it was opened on and
-/// **not** on the active one — restarting a background instance without selecting it first is the
-/// whole of FR-010a.
+/// The tab travels with the anchor because the menu acts on the tab it was opened on and **not**
+/// on the active one — restarting a background instance without selecting it first is the whole of
+/// FR-010a.
 ///
 /// It arrived on `main` as an arm of `State::update` while this feature was in flight; it is a
 /// routing call here for the same reason every other arm is (FR-002).
-pub fn shell_instance_menu_requested(state: &mut State, instance: ShellInstanceId, x: u16, y: u16) {
-    state.shell_instance_menu = Some((instance, x, y));
+pub fn strip_tab_menu_requested(
+    state: &mut State,
+    tab: crate::ui::terminal::StripTab,
+    x: u16,
+    y: u16,
+) {
+    state.shell_instance_menu = Some((tab, x, y));
 }
 
 /// The terminal-tab context menu was dismissed.
 pub fn shell_instance_menu_closed(state: &mut State) {
     state.shell_instance_menu = None;
+}
+
+/// Ask for the marked tab to be scrolled into view on the next laid-out frame (feature 026,
+/// FR-002d).
+///
+/// Called from every reducer arm that can change which tab is marked — the same discipline
+/// `terminal_released` imposed on focus after seven scattered assignments had to keep each other
+/// correct: **one named intent, called from the arms that mean it**. A flag rather than a scroll,
+/// because the viewport's width is not known here and nothing is scrolled on a guess.
+///
+/// It arrived on `main` as an `impl State` method in `app.rs`. It lives here for the reason
+/// T067a-7 gave for `focus_terminal`: the strip draws a *session's* tabs, so which one is marked
+/// and whether it is in view are the session's business, and a helper in the root is a helper the
+/// write-isolation guard reports against every caller instead of the one function that writes it.
+pub(crate) fn arm_tab_reveal(state: &mut State) {
+    state.pending_tab_reveal = true;
+}
+
+/// The AI tab was pressed (feature 026, FR-006/FR-007).
+///
+/// Selecting is **all** this does. It sets the mode and nothing else — no process is started,
+/// stopped or restarted, and `active_shell` is left alone so switching back returns to the
+/// instance the user was on rather than an arbitrary one.
+///
+/// It **sets** rather than toggles, which is FR-007: pressing the AI tab while the AI CLI is
+/// already displayed must be a no-op with no visible change. `mode_toggled` would switch away,
+/// which is the opposite of what the press asked for and the reason this is its own message.
+///
+/// Arrived on `main` as an arm of `State::update`; routed here like every other arm (FR-002), and
+/// the keyboard hand-off it performs is an outcome rather than a reach into `focused_field`
+/// (T067a-9).
+#[must_use = "the field that holds the keyboard gives it up by draining this (T067a-9)"]
+pub fn ai_cli_selected(state: &mut State, id: SessionId) -> Vec<crate::features::Outcome> {
+    if let Some(session) = state.session_mut(id) {
+        session.set_mode(micold_core::session::TerminalMode::AiCli);
+    }
+    arm_tab_reveal(state);
+    // FR-011, as every other pane switch does.
+    state.focus_terminal()
+}
+
+/// The tab strip was scrolled (feature 026, FR-009).
+///
+/// A scrollable is a place the ground can move, so this dismisses whatever floats above it — the
+/// same rule `sidebar::scrolled` applies, from the second scroll region this application has.
+/// Without it the tab menu would hang over a tab that had scrolled out from under it.
+pub fn tab_strip_scrolled(state: &mut State, offset: u32, width: u32, content: u32) {
+    state.tab_strip_scroll_offset = offset;
+    state.tab_strip_viewport_width = width;
+    state.tab_strip_content_width = content;
+    state.dismiss_on_scroll_beneath();
+}
+
+/// The tab strip's viewport was resized.
+///
+/// Separate from [`tab_strip_scrolled`] because the two answer different questions and fire at
+/// different times; a resize moves nothing under an open menu, so it dismisses nothing.
+pub fn tab_strip_viewport_resized(state: &mut State, width: u32) {
+    state.tab_strip_viewport_width = width;
 }
 
 /// Sessions that no longer exist were dropped (feature 021, T065 — `Outcome::SessionsClosed`).

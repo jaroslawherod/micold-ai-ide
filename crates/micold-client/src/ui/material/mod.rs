@@ -35,6 +35,7 @@ pub(crate) mod dialog;
 #[cfg(test)]
 mod dialog_anatomy;
 mod divider;
+mod edge_fade;
 mod ellipsized;
 /// A field reporting and taking the keyboard, driven rather than posed — the gap the anatomy
 /// modules structurally cannot see (BUG-003).
@@ -110,6 +111,8 @@ mod style_snapshot;
 #[cfg(test)]
 mod style_states;
 mod surface;
+pub(crate) mod tab;
+mod tab_strip;
 mod tag;
 mod terminal_pane;
 /// The headless renderer the in-crate component tests share.
@@ -130,12 +133,13 @@ mod type_role_mapping;
 mod typeahead;
 
 pub use accordion::Accordion;
-pub use activity_badge::ActivityBadge;
+pub use activity_badge::{ActivityBadge, BadgeEmphasis};
 pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
 pub use button::{Button, Variant as ButtonVariant};
 pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;
 pub use divider::Divider;
+pub use edge_fade::EdgeFade;
 pub use ellipsized::Ellipsized;
 pub use filter_panel::FilterTrigger;
 pub use form_field::{FormField, Layer as FieldLayer};
@@ -149,10 +153,12 @@ pub use picker::Row as TypeaheadRow;
 pub use progress::StageProgress;
 pub use resize_handle::ResizeHandle;
 pub use ripple::{pulse as ripple_pulse, Ripple};
-pub use scrollable::Scrollable;
+pub use scrollable::{ScrollDirection, Scrollable};
 pub use select::Select;
 pub use snackbar::Snackbar;
 pub use surface::{Kind as SurfaceKind, Surface};
+pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
+pub use tab_strip::TabStrip;
 pub use tag::Tag;
 #[cfg(test)]
 pub(crate) use terminal_pane::scrollbar_metrics;

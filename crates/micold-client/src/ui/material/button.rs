@@ -85,6 +85,7 @@ pub struct Button<'a, M> {
     on_press: Option<M>,
     padding: Option<Padding>,
     width: Option<Length>,
+    shape: Option<f32>,
     leading: Option<(Icon, Option<Rgb>)>,
 }
 
@@ -119,6 +120,7 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
             padding: None,
             leading: None,
             width: None,
+            shape: None,
         }
     }
 
@@ -154,6 +156,24 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
     /// Lay the button out at a given width — `Length::Fill` for a full-width list row.
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.width = Some(width.into());
+        self
+    }
+
+    /// Override the corner radius of this button's **state layer** — the shape it draws on hover
+    /// and press, and nothing else (feature 026 FR-015).
+    ///
+    /// Every button is a pill by default, which is right for a button and wrong for a tab: a tab's
+    /// highlight is rectangular and spans the tab, and one built as a `Variant::Text` inherits the
+    /// pill from two places at once — this variant's own `shape::FULL` border radius under the
+    /// hover and press fill, and the `shape::FULL` the ripple is clipped to. Both are set from this
+    /// one value, so a caller cannot change half of it and leave a rounded ripple inside a square
+    /// fill.
+    ///
+    /// A step rather than a variant, because it is not a difference of emphasis: `Variant::Text` is
+    /// exactly the right variant for a tab — no container, the accent for its content — and the
+    /// only thing a tab disagrees with is the corner.
+    pub fn shape(mut self, radius: f32) -> Self {
+        self.shape = Some(radius);
         self
     }
 
@@ -226,9 +246,21 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         let content = container(inner)
             .height(Length::Fill)
             .align_y(Alignment::Center);
+        // The variant's own style, with the corner overridden if the caller asked. A decorator
+        // rather than a parameter threaded through `style.rs`: the radius is the *only* thing an
+        // override touches, and every other call site keeps the style function it has always had.
+        let base = b.variant.style(b.roles);
+        let style_fn: ButtonStyleFn = match b.shape {
+            Some(radius) => Box::new(move |theme, status| {
+                let mut style = base(theme, status);
+                style.border.radius = radius.into();
+                style
+            }),
+            None => base,
+        };
         let mut widget = button(content)
             .height(Length::Fixed(density::BUTTON_BASE))
-            .style(b.variant.style(b.roles));
+            .style(style_fn);
         // §7.3's horizontal padding, from the variant table. Vertical padding is zero because the
         // height above is what makes the button 40dp — padding on this axis would add to a figure
         // the contract fixes, and the centring wrapper is what places the content inside it.
@@ -254,7 +286,15 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         // would report a press that will never happen — worse than no feedback, because it says the
         // opposite of what the disabled styling says.
         if pressable {
-            super::Ripple::new(widget, b.variant.content(b.roles), shape::FULL).into()
+            // The ripple is clipped to the same corner the fill above draws, or a pill when
+            // nobody said otherwise — a wrapper cannot see the shape its child draws, so getting
+            // these two from one value is what stops them diverging silently.
+            super::Ripple::new(
+                widget,
+                b.variant.content(b.roles),
+                b.shape.unwrap_or(shape::FULL),
+            )
+            .into()
         } else {
             widget.into()
         }

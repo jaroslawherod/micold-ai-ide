@@ -85,14 +85,6 @@ pub fn field_focus_cleared(state: &mut State) {
     state.focused_field = None;
 }
 
-/// The pointer moved (feature 015).
-///
-/// Tracked only while the project switcher is open — see the shell's cursor subscription — purely
-/// so a right-click can anchor its context menu where the pointer is.
-pub fn cursor_moved(state: &mut State, x: u16, y: u16) {
-    state.cursor = (x, y);
-}
-
 /// The window was resized (feature 015).
 ///
 /// Used to clamp a context menu so it cannot open off-screen. `(0, 0)` means "not reported yet",
