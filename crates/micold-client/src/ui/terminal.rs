@@ -13,8 +13,8 @@ use crate::icons::Icon;
 use crate::icons::{mode_glyph, mode_tooltip};
 use crate::ui::material::{
     self, tab_content_colour as content_colour, Button, ButtonVariant, ContextMenu,
-    GridSizeReporter, IconButton, MenuItem, SurfaceKind, Tab, TabStrip, TerminalPane, Text, Tooltip,
-    TooltipPosition, TypeRole, TAB_WIDTH,
+    GridSizeReporter, IconButton, MenuItem, SurfaceKind, Tab, TabStrip, TerminalPane, Text,
+    Tooltip, TooltipPosition, TypeRole, TAB_WIDTH,
 };
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
@@ -783,25 +783,6 @@ pub(crate) struct Beyond {
     pub trailing: bool,
 }
 
-impl Beyond {
-    pub(crate) const NEITHER: Self = Self {
-        leading: false,
-        trailing: false,
-    };
-    pub(crate) const LEADING: Self = Self {
-        leading: true,
-        trailing: false,
-    };
-    pub(crate) const TRAILING: Self = Self {
-        leading: false,
-        trailing: true,
-    };
-    pub(crate) const BOTH: Self = Self {
-        leading: true,
-        trailing: true,
-    };
-}
-
 /// Half a pixel — the same tolerance the layout gates use, and for the same reason: a strip
 /// scrolled exactly to one end must read as *at* that end rather than a hair short of it.
 const EDGE_TOLERANCE: f32 = 0.5;
@@ -1125,15 +1106,38 @@ mod tests {
     #[test]
     fn a_tab_wears_the_mark_for_exactly_what_the_predicate_calls_stopped() {
         for (mode, lifecycle, shell) in [
-            (TerminalMode::AiCli, SessionLifecycle::Idle, ShellLifecycle::Running),
-            (TerminalMode::AiCli, SessionLifecycle::Failed, ShellLifecycle::Exited),
-            (TerminalMode::AiCli, SessionLifecycle::InterruptedResumable, ShellLifecycle::Starting),
-            (TerminalMode::AiCli, SessionLifecycle::Running, ShellLifecycle::NotStarted),
-            (TerminalMode::AiCli, SessionLifecycle::Starting, ShellLifecycle::Running),
-            (TerminalMode::Regular, SessionLifecycle::Restarting { attempts: 1 }, ShellLifecycle::Exited),
+            (
+                TerminalMode::AiCli,
+                SessionLifecycle::Idle,
+                ShellLifecycle::Running,
+            ),
+            (
+                TerminalMode::AiCli,
+                SessionLifecycle::Failed,
+                ShellLifecycle::Exited,
+            ),
+            (
+                TerminalMode::AiCli,
+                SessionLifecycle::InterruptedResumable,
+                ShellLifecycle::Starting,
+            ),
+            (
+                TerminalMode::AiCli,
+                SessionLifecycle::Running,
+                ShellLifecycle::NotStarted,
+            ),
+            (
+                TerminalMode::AiCli,
+                SessionLifecycle::Starting,
+                ShellLifecycle::Running,
+            ),
+            (
+                TerminalMode::Regular,
+                SessionLifecycle::Restarting { attempts: 1 },
+                ShellLifecycle::Exited,
+            ),
         ] {
-            let (state, id) =
-                state_with_instances(mode, lifecycle.clone(), &[shell], Some(0));
+            let (state, id) = state_with_instances(mode, lifecycle, &[shell], Some(0));
             let instance = state.active_sessions()[0].shells[0].id;
             for tab in [StripTab::Ai, StripTab::Instance(instance)] {
                 assert_eq!(
@@ -1187,20 +1191,23 @@ mod tests {
         for (lifecycle, shell) in [
             (SessionLifecycle::Idle, ShellLifecycle::Exited),
             (SessionLifecycle::Failed, ShellLifecycle::NotStarted),
-            (SessionLifecycle::InterruptedResumable, ShellLifecycle::Exited),
+            (
+                SessionLifecycle::InterruptedResumable,
+                ShellLifecycle::Exited,
+            ),
             (SessionLifecycle::Running, ShellLifecycle::Running),
             (SessionLifecycle::Starting, ShellLifecycle::Starting),
-            (SessionLifecycle::Restarting { attempts: 2 }, ShellLifecycle::Starting),
+            (
+                SessionLifecycle::Restarting { attempts: 2 },
+                ShellLifecycle::Starting,
+            ),
         ] {
             let (state, id) =
-                state_with_instances(TerminalMode::Regular, lifecycle.clone(), &[shell], Some(0));
+                state_with_instances(TerminalMode::Regular, lifecycle, &[shell], Some(0));
             let instance = state.active_sessions()[0].shells[0].id;
 
-            let for_instance = crate::ui::strip_tab_menu_labels(
-                &state,
-                id,
-                StripTab::Instance(instance),
-            );
+            let for_instance =
+                crate::ui::strip_tab_menu_labels(&state, id, StripTab::Instance(instance));
             let for_ai = crate::ui::strip_tab_menu_labels(&state, id, StripTab::Ai);
 
             let expected: Vec<&str> = for_instance
@@ -1231,8 +1238,7 @@ mod tests {
             SessionLifecycle::Starting,
             SessionLifecycle::Restarting { attempts: 1 },
         ] {
-            let (state, id) =
-                state_with_instances(TerminalMode::AiCli, lifecycle.clone(), &[], None);
+            let (state, id) = state_with_instances(TerminalMode::AiCli, lifecycle, &[], None);
             assert!(
                 crate::ui::strip_tab_menu_labels(&state, id, StripTab::Ai).is_empty(),
                 "{lifecycle:?}: a secondary press on a running AI tab must do nothing — an empty \
@@ -1244,8 +1250,7 @@ mod tests {
             SessionLifecycle::Failed,
             SessionLifecycle::InterruptedResumable,
         ] {
-            let (state, id) =
-                state_with_instances(TerminalMode::AiCli, lifecycle.clone(), &[], None);
+            let (state, id) = state_with_instances(TerminalMode::AiCli, lifecycle, &[], None);
             assert_eq!(
                 crate::ui::strip_tab_menu_labels(&state, id, StripTab::Ai),
                 vec!["Restart"],
@@ -1266,18 +1271,24 @@ mod tests {
     /// beyond it tells the user to scroll toward nothing.
     #[test]
     fn an_edge_knows_whether_anything_lies_beyond_it() {
+        // Written as literals rather than as named constants on `Beyond` itself. The four names
+        // would have to be `#[cfg(test)]` — nothing in the drawing path wants a whole value, since
+        // each edge is drawn on its own side and asking "is this exactly BOTH" would couple the two
+        // together — and a second `#[cfg(test)]` block in this file breaks
+        // `tests/anatomy_call_sites.rs`, which truncates a source at the first one.
+        let beyond = |leading, trailing| Beyond { leading, trailing };
+
         // Nothing to scroll: the content fits, so neither edge says anything.
-        assert_eq!(overflowing(0.0, 500.0, 300.0), Beyond::NEITHER);
+        assert_eq!(overflowing(0.0, 500.0, 300.0), beyond(false, false));
         // Scrolled hard to the leading end, with more to come.
-        assert_eq!(overflowing(0.0, 300.0, 900.0), Beyond::TRAILING);
+        assert_eq!(overflowing(0.0, 300.0, 900.0), beyond(false, true));
         // Somewhere in the middle: both.
-        assert_eq!(overflowing(300.0, 300.0, 900.0), Beyond::BOTH);
+        assert_eq!(overflowing(300.0, 300.0, 900.0), beyond(true, true));
         // Scrolled hard to the trailing end.
-        assert_eq!(overflowing(600.0, 300.0, 900.0), Beyond::LEADING);
+        assert_eq!(overflowing(600.0, 300.0, 900.0), beyond(true, false));
         // Exactly at the trailing end, to the pixel — not "a little more that way".
-        assert_eq!(
-            overflowing(600.0, 300.0, 900.0).trailing,
-            false,
+        assert!(
+            !overflowing(600.0, 300.0, 900.0).trailing,
             "an edge with nothing past it must not be faded; a cue that points at nothing is \
              worse than none, because it is the same cue that means something elsewhere"
         );
@@ -1312,7 +1323,10 @@ mod tests {
 
         // Beyond the leading edge: scroll to put its leading edge on the viewport's.
         assert_eq!(scroll_into_view(0, 4.0 * pitch, 3.0 * pitch), Some(0.0));
-        assert_eq!(scroll_into_view(2, 4.0 * pitch, 3.0 * pitch), Some(2.0 * pitch));
+        assert_eq!(
+            scroll_into_view(2, 4.0 * pitch, 3.0 * pitch),
+            Some(2.0 * pitch)
+        );
     }
 
     /// FR-010a: the AI tab measures what a terminal tab measures, and its two slots are equal.
@@ -1422,7 +1436,10 @@ mod tests {
             .collect();
         for (i, (want, why)) in [
             (true, "a shell that was never started is restartable"),
-            (false, "a starting shell is in progress, not stopped (FR-012e)"),
+            (
+                false,
+                "a starting shell is in progress, not stopped (FR-012e)",
+            ),
             (false, "a running shell has nothing to restart"),
             (true, "an exited shell is the case FR-012 exists for"),
         ]
@@ -1454,7 +1471,7 @@ mod tests {
             ),
         ] {
             let (state, id) =
-                state_with_instances(TerminalMode::AiCli, lifecycle.clone(), &[], None);
+                state_with_instances(TerminalMode::AiCli, lifecycle, &[], None);
             assert_eq!(
                 process_stopped(&state, id, StripTab::Ai),
                 want,
@@ -1474,8 +1491,16 @@ mod tests {
     fn the_bar_and_the_strip_read_one_predicate() {
         for (mode, shells, active) in [
             (TerminalMode::AiCli, &[][..], None),
-            (TerminalMode::Regular, &[ShellLifecycle::Exited][..], Some(0)),
-            (TerminalMode::Regular, &[ShellLifecycle::Running][..], Some(0)),
+            (
+                TerminalMode::Regular,
+                &[ShellLifecycle::Exited][..],
+                Some(0),
+            ),
+            (
+                TerminalMode::Regular,
+                &[ShellLifecycle::Running][..],
+                Some(0),
+            ),
             (TerminalMode::Regular, &[][..], None),
         ] {
             for lifecycle in [
@@ -1483,7 +1508,7 @@ mod tests {
                 SessionLifecycle::Running,
                 SessionLifecycle::Failed,
             ] {
-                let (state, id) = state_with_instances(mode, lifecycle.clone(), shells, active);
+                let (state, id) = state_with_instances(mode, lifecycle, shells, active);
                 let attached = match mode {
                     TerminalMode::AiCli => StripTab::Ai,
                     TerminalMode::Regular => state.active_sessions()[0]
@@ -1631,10 +1656,6 @@ mod tests {
             );
         }
     }
-
-
-
-
 
     #[test]
     fn spec_maps_to_truecolor() {

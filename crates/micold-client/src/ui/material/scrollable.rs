@@ -18,6 +18,13 @@ use iced::widget::{scrollable, Sensor};
 use iced::{Element, Length, Size};
 use micold_core::tokens::Roles;
 
+/// A subscription to the offset, the viewport's extent and the content's, all along the
+/// scrollable's own axis and all in whole pixels — see [`Scrollable::on_scroll_metrics`].
+///
+/// Its own name because the three arguments have no meaning in an inline `Box<dyn Fn(u32, u32, u32)>`
+/// and every reader would have to go and find out which is which.
+type ScrollMetrics<'a, M> = Box<dyn Fn(u32, u32, u32) -> M + 'a>;
+
 /// The scrollbar's width and its scroller's, in pixels, plus the margin holding it off the edge.
 /// Matches the sidebar's hand-rolled values exactly (FR-005).
 const BAR_WIDTH: f32 = 4.0;
@@ -49,7 +56,7 @@ pub struct Scrollable<'a, M> {
     width: Option<Length>,
     on_scroll: Option<M>,
     on_scroll_offset: Option<Box<dyn Fn(u32) -> M + 'a>>,
-    on_scroll_metrics: Option<Box<dyn Fn(u32, u32, u32) -> M + 'a>>,
+    on_scroll_metrics: Option<ScrollMetrics<'a, M>>,
     id: Option<Id>,
     on_viewport_resize: Option<Box<dyn Fn(Size) -> M + 'a>>,
 }

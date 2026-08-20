@@ -419,19 +419,19 @@ same mark in the same place. Restart either from its menu — the mark clears.
   `specs/012-multiple-regular-terminals/visual-pass.md`. This feature changes 012's terminal tabs —
   every one of them gains a slot (T049) and the strip they live in now scrolls — and §8 is that
   strip's appearance section. Recorded there rather than here because the control is 012's
-- [ ] T056 [P] Note in `specs/012-multiple-regular-terminals/spec.md` that FR-005 is superseded by
+- [X] T056 [P] Note in `specs/012-multiple-regular-terminals/spec.md` that FR-005 is superseded by
   026 FR-003 and that its tabs gained a stopped mark, so a reader of the older spec is not misled by
   a requirement this feature reversed
 - [ ] T057 [P] Confirm `specs/026-ai-session-tab/quickstart.md` §9 was run against the finished
   build, not only against Phase 2's — the tab gained a stopped-mark slot and a scrolling parent
   after T013 posed it, and the gallery poses the same component the application uses or it poses
   nothing worth looking at
-- [ ] T058 Run the whole of `specs/026-ai-session-tab/quickstart.md`'s automated section and
+- [X] T058 Run the whole of `specs/026-ai-session-tab/quickstart.md`'s automated section and
   `mise run test`; confirm `cargo fmt --check` and `cargo clippy --workspace --all-targets --
   -D warnings` are clean
 - [ ] T059 Verify the build and full suite on Linux, macOS and Windows (Principle VI) — the
   three-platform matrix in `.github/workflows/ci.yml`, run on the pull request, is the record
-- [ ] T060 [P] Cross-cutting documentation review in `docs/`: the user guide now describes a strip
+- [X] T060 [P] Cross-cutting documentation review in `docs/`: the user guide now describes a strip
   that is always present, scrolls, carries a state mark and offers two menus. Read it as a whole
   rather than as four appended paragraphs
 

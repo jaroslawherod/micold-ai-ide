@@ -146,6 +146,10 @@ pub fn indicator_colour(is_active: bool, r: Roles) -> Option<Rgb> {
     is_active.then_some(r.primary)
 }
 
+/// What a secondary press asks for, given the pressed point in window pixels — see
+/// [`Tab::on_secondary_press`].
+type SecondaryPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
+
 /// One member of a tab strip. Builder form (Principle VIII):
 /// `Tab::new(label, roles).active(true).trailing(close).on_press(msg).into()`.
 pub struct Tab<'a, M> {
@@ -156,7 +160,7 @@ pub struct Tab<'a, M> {
     pub(crate) edge: IndicatorEdge,
     active: bool,
     on_press: Option<M>,
-    on_secondary_press: Option<Box<dyn Fn((u16, u16)) -> M + 'a>>,
+    on_secondary_press: Option<SecondaryPress<'a, M>>,
 }
 
 impl<'a, M: Clone + 'a> Tab<'a, M> {
@@ -216,7 +220,6 @@ impl<'a, M: Clone + 'a> Tab<'a, M> {
         self.on_secondary_press = Some(Box::new(f));
         self
     }
-
 }
 
 /// The colour a tab draws its own content in — the accent when it is the marked one, the muted tint
@@ -421,13 +424,20 @@ mod tests {
             .trailing(Space::new())
             .edge(IndicatorEdge::Bottom)
             .active(true);
-        assert!(dressed.leading.is_some(), "the leading slot was not carried");
+        assert!(
+            dressed.leading.is_some(),
+            "the leading slot was not carried"
+        );
         assert!(
             dressed.trailing.is_some(),
             "the trailing slot was not carried"
         );
         assert!(dressed.active, "the active flag was not carried");
-        assert_eq!(dressed.edge, IndicatorEdge::Bottom, "the edge was not carried");
+        assert_eq!(
+            dressed.edge,
+            IndicatorEdge::Bottom,
+            "the edge was not carried"
+        );
 
         let _: Element<'_, ()> = dressed.into();
     }
