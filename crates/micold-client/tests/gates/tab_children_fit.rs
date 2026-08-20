@@ -129,9 +129,34 @@ fn nested_controls<'r>(records: &'r [LayoutRecord], tab: &LayoutRecord) -> Vec<&
     let Some(row) = content_row(records, tab) else {
         return Vec::new();
     };
-    inner
+    let children: Vec<_> = inner
         .iter()
         .filter(|c| c.path.len() == row.path.len() + 1 && c.path.starts_with(&row.path))
+        .copied()
+        .collect();
+    children
+        .iter()
+        // **Never the label.** A tab's content row is `[leading slot, label, trailing slot]` —
+        // three children, by construction, since feature 026 promoted the tab into a component
+        // (`material/tab.rs`). The middle one is what the tab shows and is not a control; the two
+        // slots are where controls go, and they are what this gate is about.
+        //
+        // Excluded by **position** rather than by the height rule below, because the height rule
+        // cannot see it in the case that matters. It works on a terminal tab by accident: the label
+        // is 16.0dp tall against a 21.0dp row, and the row is 21 because the close control in the
+        // trailing slot is. On the **AI tab** there is no close control — FR-004, the trailing slot
+        // is reserved and empty — so the label is the tallest thing in the row and the row is
+        // exactly as tall as the label. Every tab whose only visible child is its label therefore
+        // read as a tab holding one under-target control, which is not a defect and not what this
+        // gate was built to find.
+        //
+        // Naming the position is not a weakening. Before the promotion the arrangement inside a tab
+        // was a call-site detail and had to be discovered; it is now the component's own contract,
+        // and `a_tabs_content_sits_on_its_tabs_midline` below fails if the row stops having three
+        // children in that order.
+        .enumerate()
+        .filter(|(i, _)| *i != children.len() / 2)
+        .map(|(_, c)| c)
         .filter(|c| (c.height - row.height).abs() < TOLERANCE)
         .copied()
         .collect()

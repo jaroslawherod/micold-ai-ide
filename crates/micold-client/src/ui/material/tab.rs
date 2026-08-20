@@ -234,22 +234,29 @@ pub fn content_colour(is_active: bool, r: Roles) -> Rgb {
 /// Wrapping here rather than at each call site is what makes that unrepeatable: a caller cannot
 /// hand a tab something the wrong size, because the size is not the caller's to give.
 ///
-/// # Why only the leading one
+/// # Both slots, and why the trailing one waited
 ///
-/// The trailing slot passes its content through at whatever width that content measures, and it has
-/// to for now: the close control a terminal tab puts there is a **compact** `IconButton`
-/// (`.circular().padding(XS)`), which lays out at 20dp rather than the 48 [`SLOT_WIDTH`]'s own
-/// documentation assumes. Boxing it to 48 moves the committed layout fixture, which feature 026's
-/// promotion is required not to do.
+/// [`trailing_slot`] is the same function and was not, for one commit. The close control a terminal
+/// tab puts there is a **compact** `IconButton` (`.circular().padding(XS)`) laying out at 20dp
+/// against this constant's 48 — so the two ends were unequal, and a tab's label sat about 14dp
+/// right of its own midline. That is feature 012's, and boxing it moved the committed fixture,
+/// which the promotion commit was required not to do.
 ///
-/// So the two slots are **not** equal in the application today — 48 against 20 — and a tab's label
-/// therefore sits about 14dp right of its own midline. That is feature 012's, not this feature's:
-/// its `tab_children_fit` gate measures the *content row's* centre against the tab's, and a row
-/// whose two ends are unequal is still centred as a row, so the gate cannot see where the label
-/// inside it landed. Recorded here because measuring it is how it was found, and because T022 —
-/// which requires the AI tab's two slots to be equal — is where it has to be confronted rather than
-/// carried forward.
+/// It went unseen because `gates/tab_children_fit.rs` compares the **content row's** centre against
+/// the tab's, and a row whose two ends are unequal is still centred *as a row*. The gate is asking
+/// the right question of the wrong node. T022 is where it had to be confronted, because FR-010a
+/// requires the AI tab's slots to be equal and a tab cannot be consistent with a neighbour whose
+/// are not.
 fn leading_slot<'a, M: 'a>(content: Option<Element<'a, M>>) -> Element<'a, M> {
+    slot(content)
+}
+
+/// The trailing slot, at [`SLOT_WIDTH`] whether it is filled or not. See [`leading_slot`].
+fn trailing_slot<'a, M: 'a>(content: Option<Element<'a, M>>) -> Element<'a, M> {
+    slot(content)
+}
+
+fn slot<'a, M: 'a>(content: Option<Element<'a, M>>) -> Element<'a, M> {
     match content {
         Some(content) => container(content)
             .center_x(Length::Fixed(SLOT_WIDTH))
@@ -267,8 +274,7 @@ impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M> {
             container(t.label)
                 .max_width(LABEL_MAX_WIDTH)
                 .center_x(Length::Shrink),
-            t.trailing
-                .unwrap_or_else(|| Space::new().width(Length::Fixed(SLOT_WIDTH)).into()),
+            trailing_slot(t.trailing),
         ]
         .spacing(spacing::XS)
         .align_y(Alignment::Center);

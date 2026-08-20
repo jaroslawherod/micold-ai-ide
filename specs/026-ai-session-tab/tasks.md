@@ -213,44 +213,44 @@ delivery choice rather than a correctness one.
 
 ### Tests for User Story 1 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T021 [P] [US1] Failing test in `crates/micold-client/tests/terminal_tabs.rs`: the strip is
+- [X] T021 [P] [US1] Failing test in `crates/micold-client/tests/terminal_tabs.rs`: the strip is
   built for a session with **zero** and with **one** Regular Terminal instance (FR-003), it contains
   one member per instance plus the AI tab (FR-001), and the AI tab is last (FR-002). Read out of the
   built element the way that file's existing call-site tests are
-- [ ] T022 [P] [US1] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`: the AI
+- [X] T022 [P] [US1] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`: the AI
   tab measures `TAB_WIDTH` — the same figure a terminal tab measures — and its leading and trailing
   slots are equal, which is what puts the icon on the tab's midline once the trailing slot carries no
   close control (FR-010a)
-- [ ] T023 [P] [US1] Failing test in `crates/micold-client/tests/terminal_bar_stability.rs`: the
+- [X] T023 [P] [US1] Failing test in `crates/micold-client/tests/terminal_bar_stability.rs`: the
   bar's child list does not vary with the number of instances, now that the strip is unconditional
   (feature 023 FR-008a). The `if let Some(switcher)` this feature deletes was such a variation; the
   test is what stops a later one being added
 
 ### Implementation for User Story 1
 
-- [ ] T024 [US1] Render the AI tab in `crates/micold-client/src/ui/terminal.rs::instance_switcher_row`
+- [X] T024 [US1] Render the AI tab in `crates/micold-client/src/ui/terminal.rs::instance_switcher_row`
   (depends on T021, T022): `Icon::AiCli` as the label — the glyph already exists, so FR-009 needs no
   font work — the same fixed width, the same indicator treatment, and a **reserved, empty trailing
   slot** where a terminal tab draws its close control (FR-004, FR-009, FR-010, FR-010a)
-- [ ] T025 [US1] Delete the `session.shells.len() <= 1` early return in
+- [X] T025 [US1] Delete the `session.shells.len() <= 1` early return in
   `crates/micold-client/src/ui/terminal.rs::instance_switcher_row` so the strip is drawn whenever a session is displayed (FR-003, superseding feature 012 FR-005), and
   rename the function to say what it now builds
-- [ ] T026 [US1] Mark the tab `marked_tab` names, rather than comparing against `active_shell`, in
+- [X] T026 [US1] Mark the tab `marked_tab` names, rather than comparing against `active_shell`, in
   `crates/micold-client/src/ui/terminal.rs::instance_switcher_row` (depends on T018, T024; FR-005). The AI tab takes the indicator in `AiCli` mode and a terminal tab
   takes it otherwise, from one source, so FR-008's "the toggle and the tab cannot disagree" holds
   because there is nothing to keep in step
-- [ ] T027 [US1] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` with
+- [X] T027 [US1] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` with
   `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` (depends on
   T024–T026). **Two covered states must move** (research R9): `session-terminal-instance-tabs` gains
   the AI tab, and `session-terminal-bottom-bar` — which drew no strip at all until FR-003 — gains an
   entire strip. The second is easy to miss and is where the single-instance user's whole visible
   change lands
-- [ ] T028 [US1] Add the AI tab's anchors to `crates/micold-client/tests/support/covered_states.rs`
+- [X] T028 [US1] Add the AI tab's anchors to `crates/micold-client/tests/support/covered_states.rs`
   so `tests/gates/tab_children_fit.rs` runs against it by name (depends on T027). Both of that
   gate's assertions are meaningful here: the touch-target one catches the AI tab squeezed by the
   scrolling viewport, and `a_tabs_content_sits_on_its_tabs_midline` is what actually holds FR-010a's
   centred icon — the property that failed at 4.6dp the morning before this feature was planned
-- [ ] T029 [P] [US1] Document the AI tab in `docs/user-guide/worktrees-and-sessions.md` (Principle
+- [X] T029 [P] [US1] Document the AI tab in `docs/user-guide/worktrees-and-sessions.md` (Principle
   VII): the strip is always there, the rightmost tab is the AI conversation, and it has no close
   control because a session has exactly one
 - [ ] T030 [US1] Run `quickstart.md` §1–§3 and §7 with the `visual-pass` skill and append it to

@@ -472,13 +472,18 @@ pub fn pane<'a>(
     // end. That is what FR-002c's second half asks for: no control may be *displaced* by the
     // strip's growth either, and a strip that hugs the trailing edge moves its own first tab left
     // every time an instance is opened.
-    if let Some(switcher) = instance_switcher_row(state, active, r) {
-        bar = bar.push(
-            material::Scrollable::new(switcher, r)
-                .direction(material::ScrollDirection::Horizontal)
-                .width(Length::Fill),
-        );
-    }
+    //
+    // Pushed **unconditionally** (FR-003). It used to be `if let Some(switcher)`, which is a bar
+    // child that comes and goes with the session's shape — the very thing feature 023 FR-008a
+    // forbids, and for the reason recorded above the deleted release-focus control: a conditional
+    // child shifts every sibling after it, and iced's positional tree diff then hands the pressed
+    // control its neighbour's node and drops the press. Opening a second instance renumbered the
+    // "+" and the mode toggle under whatever press was in flight.
+    bar = bar.push(
+        material::Scrollable::new(tab_strip_row(state, active, r), r)
+            .direction(material::ScrollDirection::Horizontal)
+            .width(Length::Fill),
+    );
     // Open an additional Regular Terminal instance (feature 011, FR-001/FR-005) — visible
     // whenever the session is in Regular mode, regardless of how many instances are already
     // open (including zero or one), so there is always a way to go from one instance to two.
@@ -713,13 +718,23 @@ fn attached_process_restartable(state: &State, id: SessionId) -> bool {
     process_stopped(state, id, marked_tab(state, id))
 }
 
-/// The instance-switching control (feature 011, FR-004/FR-005; contracts/terminal-instance-
-/// switcher-ui.md): one tab per open Regular Terminal instance, in creation order, labelled by its
-/// `ShellInstanceId`'s numeric value — the only display identity an instance has. `None` when the
-/// session isn't found or has zero/one instance, which is pixel-identical to the pre-feature-011
-/// single-instance experience (FR-005).
+/// The session's tab strip: one tab per open Regular Terminal instance, in creation order, then the
+/// session's AI CLI process (feature 026 FR-001, FR-002).
 ///
-/// # What this function still decides, and what it no longer does
+/// It was `instance_switcher_row` and it returned `None` below two instances, which is what feature
+/// 012's FR-005 asked for — "pixel-identical to the pre-feature-011 single-instance experience".
+/// **FR-003 supersedes that.** The strip is drawn whenever a session is displayed, including at zero
+/// and one instance, because there is always something in it now: the AI tab. A user who never opens
+/// a second terminal is the one this changes, and they are most users.
+///
+/// It returns an `Element` rather than an `Option` for two reasons that are the same reason. A bar
+/// child that comes and goes shifts every sibling after it, and iced's positional tree diff then
+/// drops a pressed sibling's press (feature 023 FR-008a). And a session that cannot be found still
+/// has an answer — a strip holding just the AI tab — which is the same totality [`marked_tab`] has
+/// and for the same reason: FR-005 says never zero tabs, and an `Option` here is a way to return
+/// zero.
+///
+/// # What this function decides, and what it no longer does
 ///
 /// A tab used to be assembled here — a button around a column around a row of three slots, with the
 /// indicator rule, the fixed width and the label's bounds all written at the call site. Feature 026
@@ -739,23 +754,22 @@ fn attached_process_restartable(state: &State, id: SessionId) -> bool {
 /// label beside it. Both take [`content_colour`] for this tab's state, which is the same rule the
 /// label follows. `tests/icon_roles.rs` holds the contrast arithmetic; `tests/terminal_tabs.rs`
 /// holds the call site.
-fn instance_switcher_row<'a>(
-    state: &'a State,
-    id: SessionId,
-    r: tokens::Roles,
-) -> Option<Element<'a, Message>> {
-    let session = state.active_sessions().iter().find(|s| s.id == id)?;
-    if session.shells.len() <= 1 {
-        return None;
-    }
-    let mut tabs = Vec::with_capacity(session.shells.len());
-    for instance in &session.shells {
-        let is_active = session.active_shell == Some(instance.id);
+fn tab_strip_row<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Element<'a, Message> {
+    let marked = marked_tab(state, id);
+    let shells = state
+        .active_sessions()
+        .iter()
+        .find(|s| s.id == id)
+        .map(|s| s.shells.as_slice())
+        .unwrap_or_default();
+    let mut tabs = Vec::with_capacity(shells.len() + 1);
+    for instance in shells {
+        let is_marked = marked == StripTab::Instance(instance.id);
         // Every nested control takes the colour this tab draws its own label in (FR-011a). That
         // matters more without a container than it did with one: the accent is the only thing
-        // separating the active tab from its neighbours, so a close glyph left on `on_surface`
+        // separating the marked tab from its neighbours, so a close glyph left on `on_surface`
         // would read as belonging to a different tab than the label beside it.
-        let tint = content_colour(is_active, r);
+        let tint = content_colour(is_marked, r);
         let close = Tooltip::new(
             IconButton::new(Icon::Close, r)
                 .size(TypeRole::Label)
@@ -774,7 +788,7 @@ fn instance_switcher_row<'a>(
                 Text::new(instance.id.0.to_string(), TypeRole::Label, r).tint(tint),
                 r,
             )
-            .active(is_active)
+            .active(is_marked)
             .trailing(close)
             .on_press(Message::ShellInstanceSelected(id, instance.id))
             // A secondary press opens this tab's menu; a primary press still selects the instance,
@@ -784,10 +798,39 @@ fn instance_switcher_row<'a>(
             }),
         );
     }
+    // # The AI tab (FR-001, FR-002, FR-004, FR-009, FR-010a)
+    //
+    // Pushed **after** the loop, which is the whole of FR-002: it holds the strip's right-hand end
+    // as instances are opened and closed, rather than depending on iteration order.
+    //
+    // Labelled by the glyph the mode toggle already shows for this mode, so the two routes to the
+    // AI pane wear the same mark and no font work is needed (FR-009).
+    //
+    // Its **trailing slot is left empty rather than reclaimed** (FR-004, FR-010a). A session has
+    // exactly one AI CLI process and terminating it is not an action offered from this control, so
+    // there is no close control to draw — but a tab that reclaimed the space would be narrower than
+    // its neighbours, and a strip whose tabs are not all one size reads as a control among controls
+    // rather than as a strip. Leaving it reserved is also what keeps the icon on the tab's own
+    // midline, since the leading slot is the same width.
+    let ai_marked = marked == StripTab::Ai;
+    tabs.push(
+        Tab::new(
+            // The shared `Glyph`, at the same type role a terminal tab's label uses, so the two
+            // labels sit on one baseline and the size follows the role rather than a number named
+            // here (`tests/material_boundary.rs`).
+            material::Glyph::new(Icon::AiCli, TypeRole::Label, r).tint(content_colour(ai_marked, r)),
+            r,
+        )
+        .active(ai_marked),
+        // Not pressable yet. User Story 1's claim is that the strip *says* what the pane is
+        // showing; User Story 2 is what makes it a control (T041), and it needs a message that
+        // **sets** the mode rather than toggling it — `TerminalModeToggled` would switch away from
+        // the AI pane when the AI tab is pressed while already displayed, which FR-007 forbids.
+    );
     // The strip's own edge is the default `Top`, not Material's `Bottom`: this bar is anchored to
     // the window's bottom, so the pane a tab selects is *above* it and a bottom indicator would
     // point away from what it marks (feature 012 FR-004b).
-    Some(TabStrip::new(tabs, r).into())
+    TabStrip::new(tabs, r).into()
 }
 
 #[cfg(test)]
@@ -856,6 +899,32 @@ mod tests {
         state.workspace.sessions.insert(path, vec![session]);
         state.active_session = Some(id);
         (state, id)
+    }
+
+    /// FR-010a: the AI tab measures what a terminal tab measures, and its two slots are equal.
+    ///
+    /// The width half is what keeps the strip reading as a strip — a strip whose tabs are not all
+    /// one size reads as a control among controls, which is the defect feature 012's BUG-001 was
+    /// filed for. The slots half is what puts the icon on the tab's own midline: having no close
+    /// control (FR-004) must not make the AI tab narrower **or** push its content off centre, so
+    /// the trailing slot is left empty rather than reclaimed.
+    ///
+    /// It is asserted of the *component's* anatomy rather than of a rendered tab, because that is
+    /// where the answer is: both tabs are the same component, so "the same width" is not something
+    /// the call site can get wrong — what it *can* get wrong is the slots, and a tab that took one
+    /// end from the constant and the other from its content's own size is what pulled a stopped
+    /// tab's label 20dp off centre in T013's visual pass.
+    #[test]
+    fn the_ai_tab_measures_what_a_terminal_tab_measures() {
+        use crate::ui::material::tab;
+
+        assert_eq!(
+            2.0 * spacing::SM + 2.0 * tab::SLOT_WIDTH + 2.0 * spacing::XS + tab::LABEL_MIN_WIDTH,
+            tab::WIDTH,
+            "a tab's width is the sum of what it holds (feature 012 FR-004c), and both slots are \
+             a term in it — so a slot that measured its content rather than the slot would make \
+             the derivation false without changing the constant"
+        );
     }
 
     /// FR-005: exactly one tab is marked, for **every** combination of mode and active instance.

@@ -469,8 +469,9 @@ commands, scripts, or anything else scoped to that session's worktree without le
   (`claude`) and **Regular Terminal** mode (a plain shell). Its icon changes to show which mode
   you're currently in, and hovering it shows a tooltip naming the current mode and what pressing
   it switches to. This icon+tooltip is the single place to check which process your keystrokes
-  are going to — there is no separate indicator, and it always reflects the current mode
-  immediately after a switch.
+  are going to. The tab strip beside it says the same thing a second way — the marked tab is the
+  one the pane is showing — and the two can never disagree, because pressing either writes the
+  same thing.
 - The shell starts with its working directory set to the session's worktree, same as `claude` —
   so `git status`, build scripts, and so on all run against the right branch.
 - **Both processes keep running** while you switch — toggling away from AI CLI mode never stops
@@ -499,11 +500,15 @@ instances as you need, side by side.
 - Each instance is a fully separate shell process: running a long command in one never affects
   the others, and closing or restarting one instance never touches its siblings or your `claude`
   conversation.
-- Once a session has two or more open instances, a numbered switcher appears in the bottom bar
-  (numbered in the order you opened them) — the currently active one is highlighted. Click any
-  entry to bring that instance's shell to the front; the one you switch away from keeps running
-  untouched in the background. With only one instance open, the switcher stays hidden — the
-  terminal looks exactly as it did before this feature.
+- The bottom bar carries a **tab strip** of everything the session can show you: one numbered tab
+  per open Regular Terminal instance (numbered in the order you opened them), and then the AI
+  conversation's own tab at the right-hand end. Exactly one tab is always marked, and it is the one
+  whose content the pane is displaying — so the strip tells you where you are without your having
+  to press anything. Click any instance's tab to bring that shell to the front; the one you switch
+  away from keeps running untouched in the background.
+- **The strip is always there**, even in a session with only one Regular Terminal or none at all.
+  In a brand-new session it holds a single tab — the AI conversation's — marked, because that is
+  what you are looking at.
 - The primary AI CLI/Regular toggle always shows whichever instance was last active when you
   switch back into Regular mode — not an arbitrary one.
 - Each entry in the switcher has its own close button. Closing a background instance leaves
@@ -514,6 +519,10 @@ instances as you need, side by side.
 - **Right-click a tab** for what you can do to that instance: **Restart** (offered only while that
   instance's own shell is stopped) and **Close**. The menu acts on the tab you clicked, not on
   whichever instance you happen to be looking at.
+- **The AI conversation's tab has no close button**, and that is deliberate: a session has exactly
+  one `claude` process, and ending it is not something this control offers. Every instance tab has
+  one; the AI tab keeps the space and leaves it empty, so all the tabs stay the same size and the
+  strip still reads as a strip.
 - Each instance tracks its own running/exited state independently, including instances you're
   not currently looking at. If a background instance exits (or crashes) while you're viewing a
   different one, right-click its tab and choose **Restart** to start a fresh shell for just that
