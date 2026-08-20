@@ -59,8 +59,8 @@ impl<'a, M: Clone + 'a> From<TabStrip<'a, M>> for Element<'a, M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::material::{IndicatorEdge, Tab};
     use crate::ui::material::text::{Text, TypeRole};
+    use crate::ui::material::{IndicatorEdge, Tab};
     use iced::Element;
     use micold_core::theme::ColorScheme;
     use micold_core::tokens::{self, Roles};
@@ -88,7 +88,10 @@ mod tests {
         let r = roles();
         for edge in [IndicatorEdge::Top, IndicatorEdge::Bottom] {
             let strip: TabStrip<'_, ()> = TabStrip::new(tabs(r), r).edge(edge);
-            assert_eq!(strip.edge, edge, "the strip did not keep the edge it was given");
+            assert_eq!(
+                strip.edge, edge,
+                "the strip did not keep the edge it was given"
+            );
             assert!(
                 strip.tabs.iter().all(|t| t.edge == edge),
                 "{edge:?}: a tab in the strip is drawing its indicator on a different edge from \

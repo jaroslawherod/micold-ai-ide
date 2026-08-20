@@ -247,7 +247,11 @@ pub enum Message {
     /// this edge" — and the rendering stack delivers them together. Split across messages there
     /// would be frames where one is stale, and a fade computed from a stale pair points at nothing
     /// or fails to point at something.
-    TabStripScrolled { offset: u32, width: u32, content: u32 },
+    TabStripScrolled {
+        offset: u32,
+        width: u32,
+        content: u32,
+    },
     /// The tab strip's viewport was laid out, or resized (feature 026 FR-002e).
     ///
     /// Separate from [`Self::TabStripScrolled`] because the two answer different questions and fire

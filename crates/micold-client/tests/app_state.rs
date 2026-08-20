@@ -627,7 +627,11 @@ fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
     // which is the case under test.
     assert_eq!(state.active_sessions()[0].active_shell, Some(active));
 
-    state.update(Message::StripTabMenuRequested(StripTab::Instance(background), 742, 761));
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(background),
+        742,
+        761,
+    ));
     assert_eq!(
         state.shell_instance_menu,
         Some((StripTab::Instance(background), 742, 761)),
@@ -636,7 +640,11 @@ fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
 
     // Opening another tab's menu moves the one menu rather than stacking a second: two open menus
     // would each claim the next click, and only one of them would be the one the user is looking at.
-    state.update(Message::StripTabMenuRequested(StripTab::Instance(active), 880, 761));
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(active),
+        880,
+        761,
+    ));
     assert_eq!(
         state.shell_instance_menu,
         Some((StripTab::Instance(active), 880, 761))
@@ -668,7 +676,11 @@ fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
 
     state.update(Message::TerminalAiCliSelected(id));
     let after = &state.active_sessions()[0];
-    assert_eq!(after.mode, TerminalMode::AiCli, "FR-006: the pane shows the AI CLI");
+    assert_eq!(
+        after.mode,
+        TerminalMode::AiCli,
+        "FR-006: the pane shows the AI CLI"
+    );
     assert_eq!(
         after.lifecycle, before.lifecycle,
         "FR-006: selecting must not disturb the AI CLI process"
@@ -681,7 +693,11 @@ fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
     );
     assert_eq!(
         after.shells.iter().map(|s| s.lifecycle).collect::<Vec<_>>(),
-        before.shells.iter().map(|s| s.lifecycle).collect::<Vec<_>>(),
+        before
+            .shells
+            .iter()
+            .map(|s| s.lifecycle)
+            .collect::<Vec<_>>(),
         "FR-006: no terminal instance is started, stopped or restarted by selecting a tab"
     );
 
@@ -711,7 +727,11 @@ fn the_tab_menu_records_which_tab_including_the_ai_one() {
         .1
         .open_shell_instance();
 
-    state.update(Message::StripTabMenuRequested(StripTab::Instance(shell), 742, 761));
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(shell),
+        742,
+        761,
+    ));
     assert_eq!(
         state.shell_instance_menu,
         Some((StripTab::Instance(shell), 742, 761))
@@ -746,7 +766,11 @@ fn the_tab_menu_closes_when_a_dialog_opens() {
         .1
         .open_shell_instance();
 
-    state.update(Message::StripTabMenuRequested(StripTab::Instance(shell), 742, 761));
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(shell),
+        742,
+        761,
+    ));
     assert!(state.shell_instance_menu.is_some());
 
     state.clear_for_dialog();

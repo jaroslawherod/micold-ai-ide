@@ -291,24 +291,24 @@ fn every_control_inside_a_tab_holds_its_touch_target() {
 
     for (covered, records) in covered_states().iter().zip(all.iter()) {
         for strip in strip_paths(covered) {
-        for tab in tabs(records, strip) {
-            for control in nested_controls(records, tab) {
-                checked += 1;
-                if control.width + TOLERANCE < anatomy::button::MIN_TOUCH_TARGET {
-                    let name = lay::anchor_for(covered.anchors, &control.path)
-                        .map(|a| a.name.to_string())
-                        .unwrap_or_else(|| lay::path_token(&control.path));
-                    failures.push(format!(
-                        "  {} — {name} is {:.1}dp wide, under the {:.1}dp minimum interactive \
+            for tab in tabs(records, strip) {
+                for control in nested_controls(records, tab) {
+                    checked += 1;
+                    if control.width + TOLERANCE < anatomy::button::MIN_TOUCH_TARGET {
+                        let name = lay::anchor_for(covered.anchors, &control.path)
+                            .map(|a| a.name.to_string())
+                            .unwrap_or_else(|| lay::path_token(&control.path));
+                        failures.push(format!(
+                            "  {} — {name} is {:.1}dp wide, under the {:.1}dp minimum interactive \
                          target; its tab is {:.1}dp",
-                        covered.name,
-                        control.width,
-                        anatomy::button::MIN_TOUCH_TARGET,
-                        tab.width,
-                    ));
+                            covered.name,
+                            control.width,
+                            anatomy::button::MIN_TOUCH_TARGET,
+                            tab.width,
+                        ));
+                    }
                 }
             }
-        }
         }
     }
 
@@ -359,17 +359,17 @@ fn a_tabs_content_sits_on_its_tabs_midline() {
 
     for (covered, records) in covered_states().iter().zip(all.iter()) {
         for strip in strip_paths(covered) {
-        for tab in tabs(records, strip) {
-            let Some(row) = content_row(records, tab) else {
-                continue;
-            };
-            checked += 1;
-            let offset = (row.x + row.width / 2.0) - (tab.x + tab.width / 2.0);
-            if offset.abs() > TOLERANCE {
-                let name = lay::anchor_for(covered.anchors, &tab.path)
-                    .map(|a| a.name.to_string())
-                    .unwrap_or_else(|| lay::path_token(&tab.path));
-                failures.push(format!(
+            for tab in tabs(records, strip) {
+                let Some(row) = content_row(records, tab) else {
+                    continue;
+                };
+                checked += 1;
+                let offset = (row.x + row.width / 2.0) - (tab.x + tab.width / 2.0);
+                if offset.abs() > TOLERANCE {
+                    let name = lay::anchor_for(covered.anchors, &tab.path)
+                        .map(|a| a.name.to_string())
+                        .unwrap_or_else(|| lay::path_token(&tab.path));
+                    failures.push(format!(
                     "  {} — {name}: its content row is {offset:+.1}dp off the tab's midline (row \
                      {:.1}..{:.1} in a tab {:.1}..{:.1})",
                     covered.name,
@@ -378,8 +378,8 @@ fn a_tabs_content_sits_on_its_tabs_midline() {
                     tab.x,
                     tab.x + tab.width,
                 ));
+                }
             }
-        }
         }
     }
 

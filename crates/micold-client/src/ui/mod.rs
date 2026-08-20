@@ -363,21 +363,16 @@ pub fn view<'a>(
                 return None;
             }
             Some(
-                material::ContextMenu::new(
-                    items,
-                    (x, y),
-                    Message::ShellInstanceMenuClosed,
-                    roles,
-                )
-                // Upward, from the bar's top edge rather than down from the press point: the tab
-                // strip lives in the terminal's bottom bar, so a panel hung below the cursor has
-                // the bar's remaining height to open into and is cut off by the window. The
-                // press y is still what the primitive reports and still says which control was
-                // pressed; it is the x that places the panel here. `app_bar::HEIGHT` is that bar's
-                // height — §7.1's figure, read rather than restated (BUG-003's lesson, one bar
-                // over).
-                .rising_above(anatomy::app_bar::HEIGHT)
-                .into(),
+                material::ContextMenu::new(items, (x, y), Message::ShellInstanceMenuClosed, roles)
+                    // Upward, from the bar's top edge rather than down from the press point: the tab
+                    // strip lives in the terminal's bottom bar, so a panel hung below the cursor has
+                    // the bar's remaining height to open into and is cut off by the window. The
+                    // press y is still what the primitive reports and still says which control was
+                    // pressed; it is the x that places the panel here. `app_bar::HEIGHT` is that bar's
+                    // height — §7.1's figure, read rather than restated (BUG-003's lesson, one bar
+                    // over).
+                    .rising_above(anatomy::app_bar::HEIGHT)
+                    .into(),
             )
         });
 

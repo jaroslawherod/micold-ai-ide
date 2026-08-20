@@ -500,52 +500,85 @@ instances as you need, side by side.
 - Each instance is a fully separate shell process: running a long command in one never affects
   the others, and closing or restarting one instance never touches its siblings or your `claude`
   conversation.
-- The bottom bar carries a **tab strip** of everything the session can show you: one numbered tab
-  per open Regular Terminal instance (numbered in the order you opened them), and then the AI
-  conversation's own tab at the right-hand end. Exactly one tab is always marked, and it is the one
-  whose content the pane is displaying — so the strip tells you where you are without your having
-  to press anything. Click any instance's tab to bring that shell to the front; the one you switch
-  away from keeps running untouched in the background.
-- **The strip is always there**, even in a session with only one Regular Terminal or none at all.
-  In a brand-new session it holds a single tab — the AI conversation's — marked, because that is
-  what you are looking at.
-- The primary AI CLI/Regular toggle always shows whichever instance was last active when you
+- Each instance tracks its own running/exited state independently, including ones you're not
+  currently looking at — see **the tab strip** below, which is where that state is reported.
+- Closing a background instance leaves everything else exactly as it was. Closing the instance
+  you're currently looking at automatically brings up the next one in the list (or the previous one,
+  if you closed the last) — the pane is never left showing a closed instance. Closing your very last
+  instance falls back to AI CLI mode.
+- The AI CLI/Regular toggle always returns you to whichever instance was last active when you
   switch back into Regular mode — not an arbitrary one.
-- Each entry in the switcher has its own close button. Closing a background instance leaves
-  everything else exactly as it was. Closing the instance you're currently looking at
-  automatically brings up the next instance in the list (or the previous one, if you closed the
-  last one in the list) — the pane is never left showing a closed instance. Closing your very
-  last remaining instance falls back to AI CLI mode, same as today's single-terminal behavior.
-- **Right-click a tab** for what you can do to that instance: **Restart** (offered only while that
-  instance's own shell is stopped) and **Close**. The menu acts on the tab you clicked, not on
-  whichever instance you happen to be looking at.
-- **The AI conversation's tab has a menu too**, and it is the same one minus **Close** — so while
-  `claude` is stopped you get **Restart**, and while it is running the right-click does nothing at
-  all. That silence is deliberate: the only thing that menu could offer is a restart, and an empty
-  panel would say there is something to do here and then withhold it. If a tab's right-click does
-  nothing, its process is running and there is nothing to do to it.
-- **Clicking the AI tab only switches the view.** It never starts, stops or restarts anything —
-  not `claude`, and not any terminal instance — and clicking it while you are already looking at
-  the AI conversation does nothing at all. Switching away and back returns you to the same terminal
-  instance you left, not to an arbitrary one.
-- **The AI conversation's tab has no close button**, and that is deliberate: a session has exactly
-  one `claude` process, and ending it is not something this control offers. Every instance tab has
-  one; the AI tab keeps the space and leaves it empty, so all the tabs stay the same size and the
-  strip still reads as a strip.
-- **A tab whose process isn't running wears a small red ring** at its leading edge. It means "there
-  is something you can do here": right-click that tab and **Restart** will be waiting. It appears on
-  the AI conversation's tab in exactly the same place and for exactly the same reason, so one glance
-  along the strip tells you what is and isn't running.
-  - It shows for a process that has **stopped** — exited, crashed, or never started — and **not**
-    for one that is still starting up. A starting process is on its way and there is nothing to do
-    to it; the mark would only send you to a right-click that does nothing.
-  - It is independent of which tab is selected, so a tab can be both the one you're looking at and
-    the one that isn't running, and it says both.
-- Each instance tracks its own running/exited state independently, including instances you're
-  not currently looking at. If a background instance exits (or crashes) while you're viewing a
-  different one, its tab gains the ring without your having to select it — right-click and choose
-  **Restart** to start a fresh shell for just that instance, without switching to it first, and
-  without touching any sibling instance or your `claude` conversation.
+
+### The tab strip
+
+The bottom bar carries a **tab strip** of everything the session can show you: one numbered tab per
+open Regular Terminal instance, in the order you opened them, and then the AI conversation's own tab
+at the right-hand end.
+
+**Exactly one tab is always marked**, and it is the one whose content the pane is displaying — so
+the strip tells you where you are without your having to press anything. Click a tab to bring that
+pane to the front; whatever you switch away from keeps running untouched in the background. The
+strip and the mode toggle can never disagree, because pressing either writes the same thing.
+
+The strip is **always there**, even in a session with one Regular Terminal or none at all. A
+brand-new session shows a single tab — the AI conversation's — marked, because that is what you are
+looking at.
+
+#### The AI conversation's tab
+
+It sits at the right-hand end and stays there as you open and close instances, so it is always one
+press away. Three things make it different from its neighbours, and all three are deliberate:
+
+- **It has no close button.** A session has exactly one `claude` process, and ending it is not
+  something this control offers — by any press. Every instance tab has one; the AI tab keeps the
+  space and leaves it empty, so all the tabs stay the same size and the strip still reads as a strip.
+- **Clicking it only switches the view.** It never starts, stops or restarts anything — not
+  `claude`, and not any terminal instance — and clicking it while you are already looking at the AI
+  conversation does nothing at all. Switching away and back returns you to the same terminal
+  instance you left.
+- **Its right-click menu is a terminal tab's minus Close** (see below).
+
+#### What a right-click offers
+
+**Right-click any tab** for what you can do to that process. On an instance tab that is **Restart**
+(offered only while that instance's own shell is stopped) and **Close**; on the AI tab it is the
+same menu without Close. The menu acts on the tab you clicked, not on whichever pane you happen to
+be looking at.
+
+If a right-click **does nothing**, that is the answer rather than a fault: the only thing the menu
+could have offered is a restart, the process is running, and an empty panel would say there is
+something to do here and then withhold it.
+
+#### Which processes aren't running
+
+**A tab whose process isn't running wears a small red ring** at its leading edge. It means "there is
+something you can do here" — right-click that tab and **Restart** will be waiting. It appears on the
+AI conversation's tab in exactly the same place and for the same reason, so one glance along the
+strip tells you what is and isn't running.
+
+- It shows for a process that has **stopped** — exited, crashed, or never started — and **not** for
+  one that is still starting up. A starting process is on its way and there is nothing to do to it;
+  the mark would only send you to a right-click that does nothing.
+- It is independent of which tab is selected, so a tab can be both the one you're looking at and the
+  one that isn't running, and it says both.
+- It appears on a **background** instance without your having to select it. If one exits or crashes
+  while you're viewing a different one, its tab gains the ring where you can see it — right-click
+  and choose **Restart** to start a fresh shell for just that instance, without switching to it
+  first, and without touching any sibling or your `claude` conversation.
+
+#### When there are more tabs than fit
+
+Past about five open instances the tabs need more width than the bar can give them. They **scroll**
+rather than shrink: turn the mouse wheel over the strip to move along it. No tab is ever made
+narrower, ellipsised or dropped, and the AI tab, the "+" and the mode toggle keep their full size
+and position however many instances are open — the AI tab in particular stays one press away rather
+than being something you have to scroll to.
+
+- **A faded edge means there is more that way.** When the tab you are *looking at* is the one out of
+  sight, that edge takes the marked tab's own accent colour instead — so the fade tells you not just
+  that there is more, but which way the pane you are in has gone.
+- **Selecting a tab scrolls it into view**, so you never end up looking at a pane whose tab you
+  cannot see. If you then scroll away by hand, it stays where you put it.
 
 ## Sessions in the background
 

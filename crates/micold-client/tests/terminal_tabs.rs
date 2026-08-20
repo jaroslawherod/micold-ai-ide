@@ -91,7 +91,10 @@ fn ai_tab_body(src: &str) -> String {
 
 /// The body of the tab component's conversion — where the indicator is chosen and reserved.
 fn tab_conversion_body(src: &str) -> String {
-    body_from(src, "impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M>")
+    body_from(
+        src,
+        "impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M>",
+    )
 }
 
 /// A top-level item's text, from `marker` to the closing brace at column 0.
