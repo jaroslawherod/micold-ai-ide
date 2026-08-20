@@ -70,16 +70,26 @@ const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 2];
 /// the way `sidebar.row.label` above was; an anchor that does not resolve fails by name
 /// (`an_anchor_whose_path_does_not_resolve_fails_naming_it`), so a stale path here cannot go quiet.
 const TERMINAL_BOTTOM_BAR: &[usize] = &[0, 0, 1, 1, 1];
-const TERMINAL_MODE_TOGGLE: &[usize] = &[0, 0, 1, 1, 1, 0, 5];
+/// The mode toggle, the bar row's **last** child.
+///
+/// It was index 5 while the row carried a `Length::Fill` spacer between the title and the status.
+/// Feature 026's T016 deleted that spacer and made the tab strip the bar's one flexible member
+/// instead (FR-002c) — the spacer was doing the pushing, and a row with two content-sized ends and
+/// a filling middle cannot also have a member that grows. Every index after the spacer moved down
+/// one.
+const TERMINAL_MODE_TOGGLE: &[usize] = &[0, 0, 1, 1, 1, 0, 4];
 
 /// The instance tab strip, and three of its tabs (feature 012 T057). The bar's row holds its title,
 /// a filling spacer and the status text, then whichever optional controls the session's state calls
 /// for; with every instance already running there is no session-level restart, so the strip is the
 /// row's fourth child. Its own children are one tab per element of `Session.shells`, in order.
-const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
-const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 0];
-const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 1];
-const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 2];
+///
+/// The strip sits inside the `Length::Fill` horizontal `Scrollable` T016 gave it, so its own path
+/// gains levels: the bar row's child at index 2 is that viewport, and the strip is inside it.
+const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0];
+const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0];
+const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 1];
+const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 2];
 /// Inside a tab: the button's content column, whose first child is the active indicator (or, on an
 /// inactive tab, the transparent rule reserving its height) and whose second is the tab's content
 /// row — leading spacer, label and close.
@@ -89,7 +99,7 @@ const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 2];
 /// (FR-010b). Its anchor is deleted with it rather than left pointing at nothing —
 /// `an_anchor_whose_path_does_not_resolve_fails_naming_it` would fail on a stale one, which is the
 /// behaviour that makes an anchor worth writing.
-const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] = &[0, 0, 1, 1, 1, 0, 3, 1, 0, 0, 0];
+const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 1, 0, 0, 0];
 
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
@@ -701,6 +711,76 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "terminal.tabs.exited",
                     path: TERMINAL_TAB_EXITED,
+                },
+                // The reference width for `bar_controls_hold_their_size`'s cross-state comparison
+                // (T015): this state has room to spare, and the overflowing one does not, so the
+                // toggle measuring the same in both is a direct reading of FR-002c.
+                Anchor {
+                    name: "terminal.mode_toggle",
+                    path: TERMINAL_MODE_TOGGLE,
+                },
+            ],
+        },
+        // --- feature 026's overflowing bar (T014, FR-002c) --------------------------------------
+        //
+        // Every state above this line holds at most three instances, which the bar has room for.
+        // Past about five it does not, and the way iced settles the shortfall is silent: a fixed
+        // parent width is a *budget*, and the trailing children are shrunk to fit it — laid out
+        // narrower, or at zero, with nothing reported. That is feature 012's BUG-005 one level out,
+        // and it is live on `main` today, independent of this feature.
+        //
+        // Six instances at the fixture's 1280dp window is past the wall by a clear margin: the bar
+        // is ~1014dp and a tab is 136 on a 144 pitch, so six tabs want 864 of it while the title,
+        // the status, the "+" and the mode toggle want the rest. `gates/bar_controls_hold_their_
+        // size.rs` is what reads the result; without this state it would inspect nothing, which is
+        // the "a pass that records nothing looks like a pass that found nothing" shape feature 019
+        // keeps meeting.
+        CoveredState {
+            name: "session-terminal-instance-tabs-overflowing",
+            build: || {
+                let mut session = Session::restored(
+                    SessionId::new(),
+                    SessionLocation::Worktree("feat-short".to_string()),
+                    SessionLabel::Named("feat/short".to_string()),
+                    TerminalMode::Regular,
+                );
+                let mut opened = Vec::new();
+                for _ in 0..6 {
+                    opened.push(session.open_shell_instance());
+                }
+                for id in &opened {
+                    session.mark_shell_running(*id);
+                }
+                // The second of six, so the marked tab is neither the leading one nor the trailing
+                // one — the two positions that cannot tell "the indicator spans its own tab" from
+                // "it spans everything up to here".
+                session.select_shell(opened[1]);
+
+                let active = session.id;
+                let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
+                workspace.active = workspace.projects.first().map(|p| p.path.clone());
+
+                let mut state = with_project();
+                state.workspace = workspace;
+                state.active_session = Some(active);
+                StateUnderTest::new(state)
+            },
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "terminal.bottom_bar",
+                    path: TERMINAL_BOTTOM_BAR,
+                },
+                Anchor {
+                    name: "terminal.tabs",
+                    path: TERMINAL_TAB_STRIP,
+                },
+                Anchor {
+                    name: "terminal.mode_toggle",
+                    path: TERMINAL_MODE_TOGGLE,
                 },
             ],
         },
