@@ -294,6 +294,15 @@ impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M> {
         ]
         .spacing(spacing::XS)
         .align_y(Alignment::Center);
+        // The content takes **all** the height the indicator does not, and centres in it. Without
+        // this the column is content-sized — a 3dp rule over a ~21dp row — and the button centres
+        // that 24dp block in its 40dp box, which floats the indicator ~8dp clear of the edge it is
+        // supposed to be on. Horizontally the rule already reached both edges; this is the same
+        // requirement on the other axis, and the same cause: a mark that does not touch the tab
+        // reads as a rule *near* it rather than as the tab being selected.
+        let content = container(content)
+            .height(Length::Fill)
+            .center_y(Length::Fill);
 
         // Every tab reserves the indicator's height whether or not it draws one. An indicator that
         // appeared only on activation would grow its tab by 3dp and push the row — under the
@@ -318,6 +327,9 @@ impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M> {
             IndicatorEdge::Bottom => column![content, bar],
         }
         .width(Length::Fill)
+        // Fill on **both** axes. The width half makes the rule span the tab; the height half puts
+        // it against the tab's edge rather than 8dp inside it.
+        .height(Length::Fill)
         .align_x(Alignment::Center);
 
         let mut button = Button::with_content(marked, ButtonVariant::Text, r)
