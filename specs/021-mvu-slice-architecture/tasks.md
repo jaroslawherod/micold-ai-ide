@@ -296,7 +296,19 @@ root message enum.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T069 Measure SC-003: run `find crates -name '*.rs' -exec wc -l {} + | sort -rn | head -10` and confirm neither `app.rs` nor `main.rs` is near the top and neither holds more than one feature. **FR-005 governs; the 500-line figure is indicative** (clarified 2026-08-07). Record the count as a progress signal — do NOT split a single-feature module to cross a threshold
+- [x] T069 Measure SC-003: run `find crates -name '*.rs' -exec wc -l {} + | sort -rn | head -10` and confirm neither `app.rs` nor `main.rs` is near the top and neither holds more than one feature. **FR-005 governs; the 500-line figure is indicative** (clarified 2026-08-07). Record the count as a progress signal — do NOT split a single-feature module to cross a threshold
+  - **Half met, and the half that is not is `main.rs`.** Measured against the branch point `e02f971`:
+
+    | file | then | now | rank then | rank now |
+    |---|---|---|---|---|
+    | `src/app.rs` | 1885 | **1334** | 2nd | **8th** |
+    | `src/main.rs` | 1672 | **1675** | 5th | **4th** |
+    | `src/features/` (total) | 1938 (10 files) | **3426** (11 files) | — | — |
+
+    `app.rs` shed 551 lines and five places. `main.rs` did not move — it is *three lines longer* — and it ranks higher now only because `app.rs` fell past it. **So "neither is near the top" is false for `main.rs`, and saying otherwise would be reading the ranking backwards.**
+  - **The substantive half is met, and permanently.** Neither holds more than one feature, and that is not a measurement any more: `tests/root_is_routing_only.rs` pins `ROOT_DECISION_ARMS` at an exact **0** (T063), so a new feature adding one decision to the root fails the day it lands. What is left in `app.rs` is two shared vocabularies and a routing table — the `Message` enum is 408 lines and the `State` struct 188, together 596 of the 1334; `update` is 285 lines of one arm per message; and 664 lines (half the file) are comments. Its line count measures the size of the application's vocabulary, not the root's logic, which is why **no split is proposed** — the task's own instruction, and the right call here.
+  - **`main.rs` is the iced adaptation layer and is out of FR-005's scope by design.** FR-006 keeps rendering out of feature modules, so the binary is where the framework is named; its 1176 code lines are `view`/`update_inner`/subscriptions/effects. It was never a target of this feature and did not become one. **Recorded as a standing signal rather than closed**: the shell's `update_inner` is unreachable from integration tests (flagged during T067a), which is the fact that would matter if it were ever split.
+
 - [ ] T070 [P] Add the **permanent** SC-002 guard in `crates/micold-client/tests/feature_registration_cost.rs`, failing if adding a feature would require edits beyond its own module and one registration point (SC-002, SC-002a)
 - [ ] T071 [P] Verify SC-004 — each of the **eight** feature modules has an isolation test (T007–T014). The overlay registry is a ninth module but not a feature module, and is covered by its own guards instead
 - [ ] T072 Perform quickstart.md procedure M1 (persisted state written by the pre-change build loads and behaves identically) and record the result (SC-008, FR-026)
