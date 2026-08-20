@@ -78,6 +78,14 @@ mod sibling_parity;
 #[path = "gates/tab_children_fit.rs"]
 mod tab_children_fit;
 
+// --- The context-menu-anchor gate (BUG-008) -----------------------------------------------------
+
+// Here for a *different* reason than the four above: it builds its own states and reads no cache.
+// It shares this binary so that it can reuse `panel_placement`'s rule for what counts as an
+// anchored panel rather than restating it, which is the shape FR-029a forbids one level down.
+#[path = "gates/context_menu_anchor.rs"]
+mod context_menu_anchor;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).
