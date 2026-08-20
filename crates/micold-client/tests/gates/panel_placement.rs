@@ -51,9 +51,11 @@ const TOLERANCE: f32 = 0.5;
 
 /// Every anchored panel in a state: a layer's own child, smaller than the window on both axes.
 ///
+/// `pub(crate)` for `context_menu_anchor`, which asks a different question of the same set (BUG-008).
+///
 /// Records are depth-first with full paths, so a layer is a root child (`path == [i]`, `i >= 1`,
 /// index 0 being the shell) and its panel is `[i, 0]`.
-fn anchored_panels(records: &[LayoutRecord]) -> impl Iterator<Item = &LayoutRecord> {
+pub(crate) fn anchored_panels(records: &[LayoutRecord]) -> impl Iterator<Item = &LayoutRecord> {
     records.iter().filter(|r| {
         r.layer == lay::Layer::Base
             && r.path.len() == 2
