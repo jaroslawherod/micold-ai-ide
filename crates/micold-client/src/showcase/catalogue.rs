@@ -513,6 +513,30 @@ pub const COMPONENTS: &[Entry] = &[
         layout: Layout::FullWidth,
         render: sections::terminal::terminal_pane,
     },
+    Entry {
+        module: "material/tab.rs",
+        component: "Tab",
+        variants: &["Top", "Bottom"],
+        density: &[],
+        posed: &["marked", "unmarked", "stopped"],
+        live: &["hover — a rectangular state layer, never a pill", "press"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::terminal::tab,
+    },
+    Entry {
+        module: "material/tab_strip.rs",
+        component: "TabStrip",
+        variants: &["Top", "Bottom"],
+        density: &[],
+        posed: &["indicator on the top edge", "indicator on the bottom edge"],
+        live: &["hover along the strip"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::terminal::tab_strip,
+    },
     // ---- floating surfaces and their triggers -----------------------------------------------
     // `MenuItem` and `TreeItem` are deliberately absent: they are *records* the caller
     // fills in, not components — no element conversion, public fields — and the builder-API gate

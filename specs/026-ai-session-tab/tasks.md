@@ -89,27 +89,27 @@ T029, T044 and T052, inside the stories that add it.
 come out **byte-identical** after both, and that is the verification. A fixture that moves here means
 the promotion changed something it was not supposed to.
 
-- [ ] T006 [P] Failing test in a new `crates/micold-client/src/ui/material/tab.rs`'s `mod tests`:
+- [X] T006 [P] Failing test in a new `crates/micold-client/src/ui/material/tab.rs`'s `mod tests`:
   a `Tab` is built with its label and roles, takes its optional parts through chainable steps
   (leading slot, trailing slot, indicator edge, active) and converts with `.into()` — the builder
   shape Principle VIII mandates and `tests/material_builder_api.rs` enforces. Assert the parts it
   reports, not its pixels
-- [ ] T007 [P] Failing test in a new `crates/micold-client/src/ui/material/tab_strip.rs`'s
+- [X] T007 [P] Failing test in a new `crates/micold-client/src/ui/material/tab_strip.rs`'s
   `mod tests`: a `TabStrip` takes its tabs and an **indicator edge** — `Top` or `Bottom` — and each
   tab it builds carries the strip's edge. The edge is a variant, so `tests/inventory` will require it
   to be posed and `showcase_completeness.rs` C3 will require both values to have instances (FR-014)
-- [ ] T008 [P] Add `crates/micold-client/src/ui/material/tab.rs` and declare it in
+- [X] T008 [P] Add `crates/micold-client/src/ui/material/tab.rs` and declare it in
   `crates/micold-client/src/ui/material/mod.rs` (depends on T006; FR-013). Appearance only — it names
   colour, shape and spacing, so it belongs in `material/` and not in `cdk/`, which
   `tests/cdk_no_appearance.rs` and `tests/material_boundary.rs` hold either side of
-- [ ] T009 [P] Add `crates/micold-client/src/ui/material/tab_strip.rs` and declare it (depends on
+- [X] T009 [P] Add `crates/micold-client/src/ui/material/tab_strip.rs` and declare it (depends on
   T007, T008; FR-013)
-- [ ] T010 Rewire `crates/micold-client/src/ui/terminal.rs::instance_switcher_row` onto `Tab` and
+- [X] T010 Rewire `crates/micold-client/src/ui/terminal.rs::instance_switcher_row` onto `Tab` and
   `TabStrip`, deleting the inline assembly (depends on T008, T009). **A pure move**: regenerate
   nothing and confirm `cargo test -p micold-client --test layout_snapshot` is green *without*
   regenerating — a byte-identical fixture is the proof that promoting the component changed no
   geometry. If it moves, the move was not one
-- [ ] T010a Failing test in `crates/micold-client/src/ui/material/tab.rs`'s `mod tests`: a `Tab`
+- [X] T010a Failing test in `crates/micold-client/src/ui/material/tab.rs`'s `mod tests`: a `Tab`
   reports the shape of its state layer, and that shape is `shape::NONE` — not the `shape::FULL` a
   `ButtonVariant::Text` ripple wraps every button in (FR-015, SC-010). Principle I is
   NON-NEGOTIABLE and this is the one part of T011 that is a *value* rather than a composited pixel:
@@ -118,14 +118,14 @@ the promotion changed something it was not supposed to.
   its sole cover. What T013 still has to see is that a rectangle of the right size is actually
   *drawn*; what this task fixes in place is that nobody reintroduces the pill by reaching for the
   button's ripple again
-- [ ] T011 Give the tab a **rectangular** state layer in
+- [X] T011 Give the tab a **rectangular** state layer in
   `crates/micold-client/src/ui/material/tab.rs` — `shape::NONE`, spanning the tab's full width and
   height — instead of the `shape::FULL` pill a `ButtonVariant::Text` ripple draws (depends on T010a;
   FR-015, SC-010).
   An unhighlighted tab still draws nothing at all (feature 012 FR-004b). The fixture stays
   byte-identical here too: a state layer is drawn, not laid out, which is exactly why no gate can
   see this and the visual pass must
-- [ ] T012 Pose both strips in `crates/micold-client/src/showcase/catalogue.rs` and a section under
+- [X] T012 Pose both strips in `crates/micold-client/src/showcase/catalogue.rs` and a section under
   `crates/micold-client/src/showcase/sections/` — one strip with the indicator on the **top** edge
   and one on the **bottom**, side by side, each with an active tab and two inactive ones (depends on
   T009, T011; FR-014). C1 requires the entry, C3 requires both edge values, and the pairing is the

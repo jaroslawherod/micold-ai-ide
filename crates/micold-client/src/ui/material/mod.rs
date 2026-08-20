@@ -110,6 +110,8 @@ mod style_snapshot;
 #[cfg(test)]
 mod style_states;
 mod surface;
+mod tab;
+mod tab_strip;
 mod tag;
 mod terminal_pane;
 /// The headless renderer the in-crate component tests share.
@@ -150,6 +152,8 @@ pub use progress::StageProgress;
 pub use resize_handle::ResizeHandle;
 pub use ripple::{pulse as ripple_pulse, Ripple};
 pub use scrollable::{ScrollDirection, Scrollable};
+pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab};
+pub use tab_strip::TabStrip;
 pub use select::Select;
 pub use snackbar::Snackbar;
 pub use surface::{Kind as SurfaceKind, Surface};
