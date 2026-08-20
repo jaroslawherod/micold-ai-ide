@@ -359,38 +359,38 @@ same mark in the same place. Restart either from its menu — the mark clears.
 
 ### Tests for User Story 3 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T046 [P] [US3] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`: a tab
+- [X] T046 [P] [US3] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`: a tab
   wears the mark for exactly the states T020's predicate calls stopped, for both an instance and the
   AI process, and never for `Starting` or `Restarting { .. }` (FR-012, FR-012d, FR-012e). Assert it
   **through the predicate**, so the mark cannot be given its own lifecycle match later
-- [ ] T047 [P] [US3] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`: every
+- [X] T047 [P] [US3] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`: every
   tab builds the **same children** in the same order whether or not its process is stopped — the mark's slot is reserved and drawn empty,
   never pushed or omitted (research R4, feature 023 FR-008a). Without this the mark is a conditional
   child inside a pressable tab, and iced's positional `Tree::diff_children` hands the pressed control
   its neighbour's node and drops the press
-- [ ] T048 [P] [US3] Failing test in `crates/micold-client/tests/terminal_tabs.rs`: a tab that is
+- [X] T048 [P] [US3] Failing test in `crates/micold-client/tests/terminal_tabs.rs`: a tab that is
   both marked-active and stopped carries both cues, and the mark is not drawn in the indicator's role
   (FR-012a). Colour identity, not geometry — the composited result is §8's business, but "these two
   are not the same role" is assertable here
 
 ### Implementation for User Story 3
 
-- [ ] T049 [US3] Add the reserved leading slot to every tab in
+- [X] T049 [US3] Add the reserved leading slot to every tab in
   `crates/micold-client/src/ui/terminal.rs::instance_switcher_row`, drawing
   `ActivityBadge::for_emphasis` when stopped and an empty space of the same size otherwise (depends
   on T004, T020, T046, T047; FR-012c). The slot goes in the **leading spacer the tab already
   reserves** — it exists only to balance the trailing close control and is empty today, so no tab
   grows and `TAB_WIDTH` does not move
-- [ ] T050 [US3] Apply the same slot to the AI tab in
+- [X] T050 [US3] Apply the same slot to the AI tab in
   `crates/micold-client/src/ui/terminal.rs::instance_switcher_row` (depends on T024, T049;
   FR-012). The mark must sit
   in the same place on both, or FR-010's "consistent with the tabs it sits beside" is false in the
   one state that matters
-- [ ] T051 [US3] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (depends on
+- [X] T051 [US3] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (depends on
   T049, T050). **Every tab in every covered state gains a child.** The diff is the artefact: no tab
   changes width, no tab's label leaves its midline, and no control drops under its touch target —
   `tab_children_fit` is the gate that says so, and it now runs on the AI tab too (T028)
-- [ ] T052 [P] [US3] Document the mark in `docs/user-guide/worktrees-and-sessions.md` (Principle
+- [X] T052 [P] [US3] Document the mark in `docs/user-guide/worktrees-and-sessions.md` (Principle
   VII): what it means, that it appears on a background tab you have not selected, and that it is how
   you know which tab's menu has a restart in it
 - [ ] T053 [US3] Run `quickstart.md` §4 with the `visual-pass` skill and append it to

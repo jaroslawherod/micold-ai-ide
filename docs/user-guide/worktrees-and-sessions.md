@@ -532,11 +532,20 @@ instances as you need, side by side.
   one `claude` process, and ending it is not something this control offers. Every instance tab has
   one; the AI tab keeps the space and leaves it empty, so all the tabs stay the same size and the
   strip still reads as a strip.
+- **A tab whose process isn't running wears a small red ring** at its leading edge. It means "there
+  is something you can do here": right-click that tab and **Restart** will be waiting. It appears on
+  the AI conversation's tab in exactly the same place and for exactly the same reason, so one glance
+  along the strip tells you what is and isn't running.
+  - It shows for a process that has **stopped** — exited, crashed, or never started — and **not**
+    for one that is still starting up. A starting process is on its way and there is nothing to do
+    to it; the mark would only send you to a right-click that does nothing.
+  - It is independent of which tab is selected, so a tab can be both the one you're looking at and
+    the one that isn't running, and it says both.
 - Each instance tracks its own running/exited state independently, including instances you're
   not currently looking at. If a background instance exits (or crashes) while you're viewing a
-  different one, right-click its tab and choose **Restart** to start a fresh shell for just that
-  instance — without switching to it first, and without touching any sibling instance or your
-  `claude` conversation.
+  different one, its tab gains the ring without your having to select it — right-click and choose
+  **Restart** to start a fresh shell for just that instance, without switching to it first, and
+  without touching any sibling instance or your `claude` conversation.
 
 ## Sessions in the background
 

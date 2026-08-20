@@ -847,6 +847,26 @@ pub fn scroll_into_view(index: usize, offset: f32, viewport: f32) -> Option<f32>
     }
 }
 
+/// The emphasis a tab's leading slot draws, or `None` when there is nothing to say (FR-012c,
+/// FR-012d).
+///
+/// A thin call into [`process_stopped`] rather than a lifecycle match of its own, and that is the
+/// whole point: FR-012d asks the mark and the menu to agree, and one predicate behind both is what
+/// makes it true by construction. A second match here would look right for exactly as long as
+/// nobody added a lifecycle variant.
+///
+/// `None` is drawn as an **empty slot of the same width**, never as an absent child — the slot is
+/// reserved by `material::tab`'s own `leading_slot`, because a child that comes and goes inside a
+/// pressable control shifts every sibling after it and iced's positional `Tree::diff_children`
+/// then drops the press (feature 023 FR-008a, research R4).
+pub(crate) fn stopped_mark(
+    state: &State,
+    id: SessionId,
+    tab: StripTab,
+) -> Option<material::BadgeEmphasis> {
+    process_stopped(state, id, tab).then_some(material::BadgeEmphasis::Stopped)
+}
+
 /// The marked tab's position **within the scrolling region**, or `None` when the marked tab is the
 /// pinned AI one (FR-002b, FR-002d).
 ///
@@ -938,6 +958,14 @@ fn tab_strip_row<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
                 r,
             )
             .active(is_marked)
+            // The mark goes in the **leading spacer every tab already reserves** (FR-012c). That
+            // space exists only to balance the trailing close control and is empty today, so no tab
+            // grows and the derived width is untouched. Passed unconditionally with its emphasis
+            // carrying the state, never pushed-or-not (research R4).
+            .leading(material::ActivityBadge::for_emphasis(
+                stopped_mark(state, id, StripTab::Instance(instance.id)),
+                r,
+            ))
             .trailing(close)
             .on_press(Message::ShellInstanceSelected(id, instance.id))
             // A secondary press opens this tab's menu; a primary press still selects the instance,
@@ -996,6 +1024,14 @@ fn pinned_ai_tab<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
             r,
         )
         .active(marked)
+        // The same mark in the same slot as a terminal tab's (FR-012, FR-010). "In the same place"
+        // is the requirement, not an aesthetic: FR-010's "consistent with the tabs it sits beside"
+        // is false in the one state that matters if this tab reports its lifecycle differently from
+        // its neighbours.
+        .leading(material::ActivityBadge::for_emphasis(
+            stopped_mark(state, id, StripTab::Ai),
+            r,
+        ))
         // FR-006: a primary press shows the AI CLI and does nothing else. It **sets** the mode
         // rather than toggling it, which is FR-007 — pressing this tab while the AI CLI is already
         // displayed is a no-op with no visible change.
@@ -1077,6 +1113,66 @@ mod tests {
         state.workspace.sessions.insert(path, vec![session]);
         state.active_session = Some(id);
         (state, id)
+    }
+
+    /// FR-012/FR-012d/FR-012e: a tab wears the mark for exactly the states the predicate calls
+    /// stopped, for both kinds of member and never for an in-progress one.
+    ///
+    /// Asserted **through the predicate**, deliberately. The mark could be given its own lifecycle
+    /// match and would look right for a while; FR-012d asks the mark and the menu to agree, and the
+    /// only way that survives a variant being added is for both to be readings of one function.
+    /// This test fails if the mark ever grows a second opinion.
+    #[test]
+    fn a_tab_wears_the_mark_for_exactly_what_the_predicate_calls_stopped() {
+        for (mode, lifecycle, shell) in [
+            (TerminalMode::AiCli, SessionLifecycle::Idle, ShellLifecycle::Running),
+            (TerminalMode::AiCli, SessionLifecycle::Failed, ShellLifecycle::Exited),
+            (TerminalMode::AiCli, SessionLifecycle::InterruptedResumable, ShellLifecycle::Starting),
+            (TerminalMode::AiCli, SessionLifecycle::Running, ShellLifecycle::NotStarted),
+            (TerminalMode::AiCli, SessionLifecycle::Starting, ShellLifecycle::Running),
+            (TerminalMode::Regular, SessionLifecycle::Restarting { attempts: 1 }, ShellLifecycle::Exited),
+        ] {
+            let (state, id) =
+                state_with_instances(mode, lifecycle.clone(), &[shell], Some(0));
+            let instance = state.active_sessions()[0].shells[0].id;
+            for tab in [StripTab::Ai, StripTab::Instance(instance)] {
+                assert_eq!(
+                    stopped_mark(&state, id, tab).is_some(),
+                    process_stopped(&state, id, tab),
+                    "{mode:?}/{lifecycle:?}/{shell:?} {tab:?}: the mark and the predicate disagree. \
+                     A mark on a state nobody can act on sends a user to a press that does nothing \
+                     (FR-006b), which is the dead end the mark exists to prevent."
+                );
+            }
+        }
+    }
+
+    /// FR-012a: a tab can be marked-active **and** stopped, and the two cues must not read as one.
+    ///
+    /// Colour identity, not geometry — where the mark lands is `tab_children_fit`'s question and
+    /// the composited result is §8's, but "these two are not the same role" is assertable here and
+    /// is the requirement a tone-only cue would have failed. It has to be legible against both the
+    /// accent an active tab wears and the muted tint an inactive one does, in both schemes, which
+    /// is exactly what a third grey is worst at.
+    #[test]
+    fn the_mark_is_not_the_indicators_role_in_either_scheme() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            let accent = crate::ui::material::tab::indicator_colour(true, r)
+                .expect("an active tab has an indicator");
+            let muted = crate::ui::material::tab::content_colour(false, r);
+            assert_ne!(
+                r.error, accent,
+                "{scheme:?}: the stopped mark must not be drawn in the indicator's own accent — a \
+                 tab that is active *and* stopped would then wear one colour saying two things \
+                 (FR-012a)"
+            );
+            assert_ne!(
+                r.error, muted,
+                "{scheme:?}: nor in the muted tint an inactive tab wears, which is the other half \
+                 of the same requirement"
+            );
+        }
     }
 
     /// FR-004/FR-006a/FR-006b: the AI tab's menu is a terminal tab's **minus Close**, in the same
