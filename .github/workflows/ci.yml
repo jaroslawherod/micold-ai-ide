@@ -228,6 +228,7 @@ jobs:
       # developers rather than in the user guide (its FR-024), and the doc ships in the same change.
       - name: Required developer docs exist
         run: |
+          test -f docs/development/architecture.md
           test -f docs/development/component-library.md
           test -f docs/development/component-showcase.md
           # Feature 023 is developer-facing, so Principle VII is satisfied here rather than in the
