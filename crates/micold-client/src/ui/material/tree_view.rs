@@ -516,9 +516,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 styled
             };
             let interactive: Element<'a, M> = match item.on_right_press {
-                Some(build) => ContextArea::new(hovering)
-                    .on_secondary_press(build)
-                    .into(),
+                Some(build) => ContextArea::new(hovering).on_secondary_press(build).into(),
                 None => hovering,
             };
             // A row-level location tooltip (feature 010, FR-010) wraps everything, including any

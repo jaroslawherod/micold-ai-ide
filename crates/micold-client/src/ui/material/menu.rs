@@ -28,6 +28,15 @@ use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
 use micold_core::tokens::{anatomy, density, motion::duration, shape, spacing, Rgb, Roles};
 
+/// What a right-press on a menu item becomes: a message built from the press point, in window
+/// pixels.
+///
+/// `tree_view::OnRightPress` is the same shape for a sidebar row, and `cdk::ContextArea` publishes
+/// it for anything else. One gesture, one shape — a second one is how the sidebar came to answer a
+/// right-click differently from the switcher (BUG-008). No lifetime: the closure captures what the
+/// message names (a project's path, cloned), never the state it was read from.
+type OnContext<M> = Box<dyn Fn((u16, u16)) -> M>;
+
 /// One entry in a menu — a plain record the caller fills in, generic over the message type.
 ///
 /// Everything past the first three fields is here because the **project switcher's rows are these
@@ -64,7 +73,7 @@ pub struct MenuItem<M> {
     ///
     /// `'static` rather than borrowed: the closure captures what the message names (a project's
     /// path, cloned), never the state it was read from.
-    pub on_context: Option<Box<dyn Fn((u16, u16)) -> M>>,
+    pub on_context: Option<OnContext<M>>,
 }
 
 impl<M> MenuItem<M> {

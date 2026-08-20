@@ -16,8 +16,8 @@ use std::path::PathBuf;
 
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;
-use micold_client::features::settings::SettingsDraft;
 use micold_client::features::session::SessionMenu;
+use micold_client::features::settings::SettingsDraft;
 use micold_client::features::worktree::WorktreeMenu;
 use micold_client::features::worktree_form::{BranchSource, WorktreeForm};
 use micold_core::project::Availability;

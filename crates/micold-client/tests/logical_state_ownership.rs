@@ -82,11 +82,17 @@ fn open_overlay_identity_is_application_owned() {
 #[test]
 fn open_menu_identity_is_application_owned() {
     let mut state = State::default();
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string(), (120, 300)));
+    state.update(Message::WorktreeMenuToggled(
+        "feat-a".to_string(),
+        (120, 300),
+    ));
     let open = state.worktree_menu_open.as_ref().expect("the menu is open");
     assert_eq!(open.dir_name, "feat-a");
     assert_eq!(open.anchor, (120, 300));
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string(), (120, 300)));
+    state.update(Message::WorktreeMenuToggled(
+        "feat-a".to_string(),
+        (120, 300),
+    ));
     assert_eq!(state.worktree_menu_open, None);
 }
 
