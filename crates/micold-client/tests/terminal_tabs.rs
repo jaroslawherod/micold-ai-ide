@@ -25,10 +25,24 @@
 use std::fs;
 use std::path::Path;
 
-/// `ui/terminal.rs` with `//` and `/* */` comments stripped, so the doc comments on the very
-/// function under test — which discuss variants and containers at length — cannot read as a match.
+/// `ui/terminal.rs`, comment-stripped — the call site half.
 fn terminal_source() -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/terminal.rs");
+    source_of("src/ui/terminal.rs")
+}
+
+/// `ui/material/tab.rs`, comment-stripped — the component half.
+///
+/// Feature 026 promoted the tab out of the call site (FR-013), so the indicator rule this file
+/// pins now lives here. The property is unchanged and so is the argument for pinning it; only its
+/// address moved, which is the same move `tests/inventory/mod.rs` made for the same reason.
+fn tab_source() -> String {
+    source_of("src/ui/material/tab.rs")
+}
+
+/// A source file with `//` and `/* */` comments stripped, so the doc comments on the very code
+/// under test — which discuss variants and containers at length — cannot read as a match.
+fn source_of(relative: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
     let src = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let mut out = String::with_capacity(src.len());
     let mut chars = src.chars().peekable();
@@ -62,9 +76,19 @@ fn terminal_source() -> String {
 
 /// The body of `fn instance_switcher_row`, from its signature to the closing brace at column 0.
 fn switcher_row_body(src: &str) -> String {
+    body_from(src, "fn instance_switcher_row")
+}
+
+/// The body of the tab component's conversion — where the indicator is chosen and reserved.
+fn tab_conversion_body(src: &str) -> String {
+    body_from(src, "impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M>")
+}
+
+/// A top-level item's text, from `marker` to the closing brace at column 0.
+fn body_from(src: &str, marker: &str) -> String {
     let start = src
-        .find("fn instance_switcher_row")
-        .expect("ui/terminal.rs must define instance_switcher_row");
+        .find(marker)
+        .unwrap_or_else(|| panic!("the source must contain `{marker}`"));
     let rest = &src[start..];
     // Every top-level item ends at the first `\n}` — the function's own closing brace, since its
     // inner braces are all indented.
@@ -87,11 +111,11 @@ fn switcher_row_body(src: &str) -> String {
 /// indicator's height.
 #[test]
 fn every_tab_reserves_the_indicators_height() {
-    let body = switcher_row_body(&terminal_source());
+    let body = tab_conversion_body(&tab_source());
 
     assert!(
-        body.contains("tab_indicator_colour("),
-        "the active/inactive mark must come from `tab_indicator_colour(..)` (feature 012 FR-004b, \
+        body.contains("indicator_colour("),
+        "the active/inactive mark must come from `indicator_colour(..)` (feature 012 FR-004b, \
          BUG-002), whose own tests assert exactly the active tab carries one. Choosing inline here \
          puts the rule back where no test can see it."
     );
