@@ -519,6 +519,15 @@ instances as you need, side by side.
 - **Right-click a tab** for what you can do to that instance: **Restart** (offered only while that
   instance's own shell is stopped) and **Close**. The menu acts on the tab you clicked, not on
   whichever instance you happen to be looking at.
+- **The AI conversation's tab has a menu too**, and it is the same one minus **Close** — so while
+  `claude` is stopped you get **Restart**, and while it is running the right-click does nothing at
+  all. That silence is deliberate: the only thing that menu could offer is a restart, and an empty
+  panel would say there is something to do here and then withhold it. If a tab's right-click does
+  nothing, its process is running and there is nothing to do to it.
+- **Clicking the AI tab only switches the view.** It never starts, stops or restarts anything —
+  not `claude`, and not any terminal instance — and clicking it while you are already looking at
+  the AI conversation does nothing at all. Switching away and back returns you to the same terminal
+  instance you left, not to an arbitrary one.
 - **The AI conversation's tab has no close button**, and that is deliberate: a session has exactly
   one `claude` process, and ending it is not something this control offers. Every instance tab has
   one; the AI tab keeps the space and leaves it empty, so all the tabs stay the same size and the

@@ -1,6 +1,7 @@
 //! T011 — extended app base state: defaults + new message wiring (feature 005).
 
 use micold_client::app::{on_escape, FieldId, Message, State};
+use micold_client::ui::terminal::StripTab;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 /// Asked of the registry, which reads each dialog's own state, so this is the same question about
@@ -626,17 +627,20 @@ fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
     // which is the case under test.
     assert_eq!(state.active_sessions()[0].active_shell, Some(active));
 
-    state.update(Message::ShellInstanceMenuRequested(background, 742, 761));
+    state.update(Message::StripTabMenuRequested(StripTab::Instance(background), 742, 761));
     assert_eq!(
         state.shell_instance_menu,
-        Some((background, 742, 761)),
+        Some((StripTab::Instance(background), 742, 761)),
         "the menu must record the instance whose tab was clicked, not the active one"
     );
 
     // Opening another tab's menu moves the one menu rather than stacking a second: two open menus
     // would each claim the next click, and only one of them would be the one the user is looking at.
-    state.update(Message::ShellInstanceMenuRequested(active, 880, 761));
-    assert_eq!(state.shell_instance_menu, Some((active, 880, 761)));
+    state.update(Message::StripTabMenuRequested(StripTab::Instance(active), 880, 761));
+    assert_eq!(
+        state.shell_instance_menu,
+        Some((StripTab::Instance(active), 880, 761))
+    );
 
     state.update(Message::ShellInstanceMenuClosed);
     assert_eq!(state.shell_instance_menu, None);
@@ -698,8 +702,6 @@ fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
 /// is worded to prevent.
 #[test]
 fn the_tab_menu_records_which_tab_including_the_ai_one() {
-    use micold_client::ui::terminal::StripTab;
-
     let mut state = state_with_worktree_and_session("feat-x");
     let id = state.active_session.unwrap();
     let shell = state
@@ -744,7 +746,7 @@ fn the_tab_menu_closes_when_a_dialog_opens() {
         .1
         .open_shell_instance();
 
-    state.update(Message::ShellInstanceMenuRequested(shell, 742, 761));
+    state.update(Message::StripTabMenuRequested(StripTab::Instance(shell), 742, 761));
     assert!(state.shell_instance_menu.is_some());
 
     state.clear_for_dialog();

@@ -27,6 +27,15 @@
 //! spans the width it is given, and `Length::Fill` inside a content-sized tab resolves against the
 //! *button's* available space rather than the label's (feature 012 BUG-002).
 //!
+//! # A tab draws no inset
+//!
+//! [`TAB_PADDING`] is zero, and both of the marks a tab wears are why. The indicator rule and the
+//! state layer are properties of the **whole tab** — the region the strip is divided into — not of
+//! something sitting inside it. An 8dp inset on each side left the rule 16dp short of the tab it
+//! marked, floating clear of both edges, and it read as a rule *near* a tab rather than as the tab
+//! being selected. The two §7.3 slots are what keep the label off the edges, so the space is inside
+//! the slots rather than outside them, and [`WIDTH`]'s derivation has no padding term to match.
+//!
 //! # The highlight is a tab's, not a button's
 //!
 //! A tab draws a shape in exactly one state — highlighted — and that shape is
@@ -99,12 +108,19 @@ pub const LABEL_MAX_WIDTH: f32 = 120.0;
 ///
 /// Computing it from the things it has to hold means it moves when any of them does, and a further
 /// child cannot be added without this sum being confronted.
-pub const WIDTH: f32 = 2.0 * spacing::SM   // the tab's own padding, both edges
-    + SLOT_WIDTH                            // the leading slot
+pub const WIDTH: f32 = SLOT_WIDTH          // the leading slot
     + spacing::XS
     + LABEL_MIN_WIDTH
     + spacing::XS
     + SLOT_WIDTH; // the trailing slot
+
+/// A tab's own inset: **none**.
+///
+/// Named rather than left as a literal `0.0` at the call site, for the reason [`indicator_colour`]
+/// and [`state_layer_shape`] are named: the rule is then a pure value test rather than a claim
+/// about a `view()` no unit test can reach. It is also a term [`WIDTH`]'s derivation deliberately
+/// does not have, and a constant is where that stays visible.
+pub const TAB_PADDING: f32 = 0.0;
 
 /// The corner radius of a tab's hover and press state layer — `shape::NONE`, a rectangle spanning
 /// the whole tab (FR-015, SC-010).
@@ -308,8 +324,23 @@ impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M> {
             // `Text` on every tab: no background, no outline (FR-004b). One fixed width for all of
             // them, so the indicator's `Fill` resolves to the tab rather than to whatever space the
             // bar happens to offer.
+            // **No padding.** A tab is not a button with a label inside it; it is a region of the
+            // strip, and both of the things that mark it — the indicator rule and the state layer —
+            // are properties of that whole region. Padding insets the content column, which is what
+            // the rule fills, so an 8dp inset left the indicator 16dp short of the tab it marks and
+            // floating clear of both edges. It read as a rule *near* a tab rather than as the tab
+            // being selected.
+            //
+            // Dropping it also drops the `2 * spacing::SM` term from [`WIDTH`]'s derivation, which
+            // is the point: FR-004c says a tab's width is the sum of what it holds, and a tab that
+            // holds no padding must not reserve any. Keeping 136 while removing the inset would put
+            // a chosen number back, which is exactly what that requirement was rewritten to forbid.
+            //
+            // The two slots are §7.3 touch targets, so the label keeps its distance from the tab's
+            // edges without any inset of its own — the space is inside the slots rather than
+            // outside them.
             .width(Length::Fixed(WIDTH))
-            .padding(spacing::SM)
+            .padding(TAB_PADDING)
             // FR-015: a tab's highlight is a tab's. See the module doc.
             .shape(state_layer_shape());
         if let Some(message) = t.on_press {
@@ -491,17 +522,36 @@ mod tests {
     /// term silently dropped from the definition fails here.
     #[test]
     fn the_tab_width_is_the_sum_of_what_a_tab_holds() {
-        let padding = 2.0 * spacing::SM;
-        let targets = 2.0 * anatomy::button::MIN_TOUCH_TARGET; // leading spacer + close control
+        let targets = 2.0 * anatomy::button::MIN_TOUCH_TARGET; // the leading and trailing slots
         let gaps = 2.0 * spacing::XS;
         assert_eq!(
             WIDTH,
-            padding + targets + gaps + LABEL_MIN_WIDTH,
+            targets + gaps + LABEL_MIN_WIDTH,
             "WIDTH must be derived from the constants a tab's widest arrangement requires \
              (FR-004c), not chosen against an observed one. A chosen figure is silently wrong the \
              first time a tab gains a child, and wrong in the one way layout does not report: iced \
              settles a shortfall by shrinking the trailing children, so the control disappears \
-             instead of the row overflowing."
+             instead of the row overflowing.\n\nThere is no padding term. A tab draws no inset — \
+             the indicator rule and the state layer both span the whole tab, because both are \
+             properties of the region rather than of something inside it — so reserving width for \
+             one would be a chosen figure wearing a derivation's clothes."
+        );
+    }
+
+    /// FR-004b, and what the user meets: the indicator spans the **whole** tab, edge to edge.
+    ///
+    /// The rule fills the content column, and the content column is whatever the button's padding
+    /// leaves it. With `spacing::SM` on both sides that was 16dp short of the tab, so the mark
+    /// floated clear of both edges and read as a rule *near* a tab rather than as the tab being
+    /// selected. A value test rather than a geometry one, because the figure this turns on is the
+    /// padding: `layout_snapshot` records where the rule landed, but only after somebody has looked
+    /// at it and decided the inset was wrong.
+    #[test]
+    fn a_tab_draws_no_inset_so_its_indicator_reaches_both_edges() {
+        assert_eq!(
+            TAB_PADDING, 0.0,
+            "a tab insets nothing: the indicator and the state layer are properties of the whole \
+             tab, and an inset makes both stop short of the thing they mark"
         );
     }
 
