@@ -71,10 +71,16 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
         })
     }),
     ("worktree_menu_open", "worktree_menu", |s| {
-        s.worktree_menu_open = Some("feature-x".to_string())
+        s.worktree_menu_open = Some(micold_client::features::worktree::WorktreeMenu {
+            dir_name: "feature-x".to_string(),
+            anchor: (120, 300),
+        })
     }),
     ("session_menu_open", "session_menu", |s| {
-        s.session_menu_open = Some(SessionId::new())
+        s.session_menu_open = Some(micold_client::features::session::SessionMenu {
+            id: SessionId::new(),
+            anchor: (120, 340),
+        })
     }),
     ("terminal_context_menu", "terminal_context_menu", |s| {
         s.terminal_context_menu = Some((4, 2))

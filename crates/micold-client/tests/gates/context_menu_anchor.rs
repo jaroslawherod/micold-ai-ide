@@ -323,21 +323,52 @@ fn assert_menu_opens_at(mut state: State, point: (f32, f32), menu: &str) {
     let after = records(&state);
     let panel = menu_that_opened(&before, &after);
 
-    let dx = panel.x - point.0;
-    let dy = panel.y - point.1;
+    let (expected, clamped) = expected_origin(point, &panel);
+    let dx = panel.x - expected.0;
+    let dy = panel.y - expected.1;
     assert!(
         dx.abs() < TOLERANCE && dy.abs() < TOLERANCE,
-        "{menu}: right-clicked at ({:.1}, {:.1}) and its menu opened at ({:.1}, {:.1}) — {:.0}px \
-         away. A context menu opens at the press point that opened it, and the press point must be \
-         carried by the gesture rather than replaced by a constant (FR-029d). A menu positioned by \
-         anything else cannot say which element it acts on, which for a menu offering Delete and \
-         Remove is what BUG-008 was.",
+        "{menu}: right-clicked at ({:.1}, {:.1}) and its menu opened at ({:.1}, {:.1}), where it \
+         belongs at ({:.1}, {:.1}){} — {:.0}px away. A context menu opens at the press point that \
+         opened it, and the press point must be carried by the gesture rather than replaced by a \
+         constant (FR-029d). A menu positioned by anything else cannot say which element it acts \
+         on, which for a menu offering Delete and Remove is what BUG-008 was.",
         point.0,
         point.1,
         panel.x,
         panel.y,
+        expected.0,
+        expected.1,
+        if clamped {
+            ", the press being close enough to an edge that the panel is slid back inside"
+        } else {
+            ""
+        },
         (dx * dx + dy * dy).sqrt(),
     );
+}
+
+/// Where a panel of this size, opened at this press, belongs — and whether the window moved it.
+///
+/// Two corrections, both the application's own and neither of them slack in the assertion:
+///
+/// - The press point is `f32` at the widget and `u16` on the message, so a press at y=641.2 asks
+///   for 641. Comparing against the float would fail by a fifth of a pixel and say nothing.
+/// - A press within a panel's height of an edge is **clamped** back inside (FR-029d's second half,
+///   feature 015's FR-006). Asserting the raw press point would forbid the clamp, which is the
+///   behaviour the other half of this bug's requirement asks for. The panel's *measured* size is
+///   what it is clamped against, so nothing about the panel's dimensions is restated here.
+fn expected_origin(point: (f32, f32), panel: &LayoutRecord) -> ((f32, f32), bool) {
+    let asked = (point.0 as u16, point.1 as u16);
+    let clamped = micold_client::features::project::clamp_menu_anchor(
+        asked,
+        (panel.width as u16, panel.height as u16),
+        (lay::WINDOW.width as u16, lay::WINDOW.height as u16),
+    );
+    (
+        (clamped.0 as f32, clamped.1 as f32),
+        clamped != asked,
+    )
 }
 
 // --- The four context menus ---------------------------------------------------------------------
@@ -388,12 +419,12 @@ fn the_worktree_menu_moves_to_the_next_row_right_clicked() {
     let at_last = menu_that_opened(&before, &records(&state));
 
     let moved = at_last.y - at_first.y;
-    let expected = last_point.1 - first.1;
+    let expected = expected_origin(last_point, &at_last).0 .1 - expected_origin(first, &at_first).0 .1;
     assert!(
         (moved - expected).abs() < TOLERANCE,
-        "right-clicking a different row must re-anchor the menu (FR-029d): the presses were \
-         {expected:.0}px apart and the panel moved {moved:.0}px. A menu that stays put belongs to \
-         whichever row the user last looked at rather than to the one they pressed.",
+        "right-clicking a different row must re-anchor the menu (FR-029d): the panel should have \
+         moved {expected:.0}px between the two presses and moved {moved:.0}px. A menu that stays \
+         put belongs to whichever row the user last looked at rather than to the one they pressed.",
     );
 }
 

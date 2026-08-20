@@ -371,6 +371,18 @@ impl State {
     }
 }
 
+/// An open session right-click context menu (BUG-003): which session it acts on, and where to draw
+/// it. Mirrors [`crate::features::worktree::WorktreeMenu`], which mirrors feature 015's
+/// `ProjectMenu` — one shape for one gesture (018 FR-029d).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionMenu {
+    /// The session the menu acts on.
+    pub id: micold_core::session::SessionId,
+    /// The menu panel's top-left corner, in window pixels (the press point). Clamped at render
+    /// time, not here.
+    pub anchor: (u16, u16),
+}
+
 /// A session row's right-click menu, as a floating surface (feature 021, T031).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionContextMenu;

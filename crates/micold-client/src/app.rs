@@ -12,10 +12,10 @@
 
 use crate::features::notifications::NoticeLevel;
 use crate::features::project::{ProjectMenu, RenameDraft, SwitcherEntry};
-use crate::features::session::SelectKind;
+use crate::features::session::{SelectKind, SessionMenu};
 use crate::features::settings::SettingsDraft;
 use crate::features::sidebar::TagFilter;
-use crate::features::worktree::WorktreeRenameDraft;
+use crate::features::worktree::{WorktreeMenu, WorktreeRenameDraft};
 use crate::features::worktree_form::{
     BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
@@ -128,15 +128,17 @@ pub enum Message {
     ProjectForgetCancelled,
 
     // ---- Feature 015: forget from the switcher's right-click menu ----
-    /// The pointer moved to this window-pixel position. Emitted by the binary only while the
-    /// project switcher is open, so a right-click can anchor its menu at the cursor.
-    CursorMoved { x: u16, y: u16 },
     /// The window was resized (or reported its initial size). Feeds context-menu clamping.
     WindowResized { width: u16, height: u16 },
-    /// Open (or close, if already open) a project's switcher right-click context menu, by path.
-    /// Anchored at the last known [`State::cursor`]. The switcher panel stays open behind it;
-    /// the other popovers are mutually exclusive.
-    ProjectMenuToggled(PathBuf),
+    /// Open (or close, if already open) a project's switcher right-click context menu, by path,
+    /// anchored at the press point in window pixels. The switcher panel stays open behind it; the
+    /// other popovers are mutually exclusive.
+    ///
+    /// The point rides on the message since BUG-008. It used to be read from a `State::cursor` fed
+    /// by a pointer subscription that ran only while the switcher was open — a side channel that
+    /// existed because the row handed over a bare message, and that answered `(0, 0)` to anyone
+    /// who was not the running binary.
+    ProjectMenuToggled(PathBuf, (u16, u16)),
     /// Dismiss the project context menu (outside click, or after an action is chosen).
     ProjectMenuDismissed,
     /// The user selected a theme preference (Follow system / Light / Dark) (FR-007, FR-008).
@@ -169,8 +171,9 @@ pub enum Message {
     DefaultExpansionToggled,
 
     // ---- Feature 008: worktree sidebar refinement ----
-    /// Open (or close, if already open) a worktree's right-click context menu, by `dir_name`.
-    WorktreeMenuToggled(String),
+    /// Open (or close, if already open) a worktree's right-click context menu, by `dir_name`,
+    /// anchored at the press point in window pixels (018 FR-029d).
+    WorktreeMenuToggled(String, (u16, u16)),
     /// Dismiss the worktree context menu (outside click, or after an action is chosen).
     WorktreeMenuDismissed,
     /// Request deletion of a worktree; opens the confirm dialog (FR-018), by `dir_name`.
@@ -338,8 +341,9 @@ pub enum Message {
     SessionTitleUpdated { id: SessionId, title: String },
 
     // ---- Bugfix BUG-003: session Remove (distinct from Close/archive) ----
-    /// Open (or close, if already open) a session's right-click context menu.
-    SessionMenuToggled(SessionId),
+    /// Open (or close, if already open) a session's right-click context menu, anchored at the
+    /// press point in window pixels (018 FR-029d).
+    SessionMenuToggled(SessionId, (u16, u16)),
     /// Dismiss the session context menu (outside click, or after an action is chosen).
     SessionMenuDismissed,
     /// Request permanent removal of a session; opens the confirm dialog (FR-015c).
@@ -697,19 +701,15 @@ pub struct State {
     /// `help_menu_open`.
     pub project_switcher_open: bool,
     /// The open project right-click context menu (feature 015), with the project it acts on and
-    /// the cursor anchor to draw it at. At most one is open. Mutually exclusive with the other
+    /// the press point to draw it at. At most one is open. Mutually exclusive with the other
     /// popovers, but the switcher panel itself stays open behind it. Transient — not persisted.
     pub project_menu_open: Option<ProjectMenu>,
-    /// Last known pointer position in window pixels (feature 015). Tracked only while the
-    /// project switcher is open — see the binary's cursor subscription — purely so a right-click
-    /// can anchor its context menu at the cursor. Transient — not persisted.
-    pub cursor: (u16, u16),
     /// Last known window size in pixels (feature 015), used to clamp a context menu so it cannot
     /// open off-screen. `(0, 0)` means "not reported yet", which disables clamping. Transient.
     pub window_size: (u16, u16),
-    /// The worktree whose right-click context menu is open, by `dir_name` (feature 008). At
-    /// most one is open at a time; `None` means no menu is showing.
-    pub worktree_menu_open: Option<String>,
+    /// The worktree whose right-click context menu is open, and where it was opened from
+    /// (feature 008). At most one is open at a time; `None` means no menu is showing.
+    pub worktree_menu_open: Option<WorktreeMenu>,
     /// The worktree pending deletion (its `dir_name`), shown in the confirm dialog (feature
     /// 008, FR-018/FR-019). Its presence *is* the confirm dialog being shown (T037).
     pub worktree_delete_target: Option<String>,
@@ -738,9 +738,10 @@ pub struct State {
     /// The worktree row the pointer is currently over, by `dir_name` (feature 008). Drives the
     /// hover-revealed row actions (add-session + delete). Transient.
     pub hovered_worktree: Option<String>,
-    /// The session whose right-click context menu is open (bugfix BUG-003). At most one is open
-    /// at a time; `None` means no menu is showing. Mirrors `worktree_menu_open`.
-    pub session_menu_open: Option<SessionId>,
+    /// The session whose right-click context menu is open, and where it was opened from (bugfix
+    /// BUG-003). At most one is open at a time; `None` means no menu is showing. Mirrors
+    /// `worktree_menu_open`.
+    pub session_menu_open: Option<SessionMenu>,
     /// The session pending permanent removal, shown in the confirm dialog (bugfix BUG-003,
     /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
     /// `worktree_delete_target`.
@@ -1053,23 +1054,17 @@ impl State {
             Message::RenameCancelled => {
                 self.rename_draft = None;
             }
-            Message::CursorMoved { x, y } => {
-                self.cursor = (x, y);
-            }
             Message::WindowResized { width, height } => {
                 self.window_size = (width, height);
             }
-            Message::ProjectMenuToggled(path) => {
+            Message::ProjectMenuToggled(path, anchor) => {
                 // Toggle: the same project closes; a different one replaces (only one open),
-                // re-anchored at wherever the pointer now is. The switcher panel stays open
+                // re-anchored at the point *this* press landed on. The switcher panel stays open
                 // behind the menu (so the right-clicked row remains visible), but the other
                 // popovers are mutually exclusive with it.
                 self.project_menu_open = match &self.project_menu_open {
                     Some(open) if open.path == path => None,
-                    _ => Some(ProjectMenu {
-                        path,
-                        anchor: self.cursor,
-                    }),
+                    _ => Some(ProjectMenu { path, anchor }),
                 };
                 self.help_menu_open = false;
                 self.sidebar_filter_open = false;
@@ -1135,13 +1130,15 @@ impl State {
             Message::DefaultExpansionToggled => {
                 self.toggle_location(SessionLocation::Default);
             }
-            Message::WorktreeMenuToggled(dir) => {
-                // Toggle: same worktree closes; a different one replaces (only one open).
-                self.worktree_menu_open = if self.worktree_menu_open.as_deref() == Some(dir.as_str())
-                {
-                    None
-                } else {
-                    Some(dir)
+            Message::WorktreeMenuToggled(dir, anchor) => {
+                // Toggle: same worktree closes; a different one replaces (only one open) and
+                // re-anchors at its own press point (018 FR-029d).
+                self.worktree_menu_open = match &self.worktree_menu_open {
+                    Some(open) if open.dir_name == dir => None,
+                    _ => Some(WorktreeMenu {
+                        dir_name: dir,
+                        anchor,
+                    }),
                 };
                 // Mutually exclusive with the project context menu (feature 015).
                 self.project_menu_open = None;
@@ -1633,13 +1630,12 @@ impl State {
                     self.set_current_session(None);
                 }
             }
-            Message::SessionMenuToggled(id) => {
-                // Toggle: same session closes; a different one replaces (only one open) —
-                // mirrors `WorktreeMenuToggled` (bugfix BUG-003).
-                self.session_menu_open = if self.session_menu_open == Some(id) {
-                    None
-                } else {
-                    Some(id)
+            Message::SessionMenuToggled(id, anchor) => {
+                // Toggle: same session closes; a different one replaces (only one open) and
+                // re-anchors — mirrors `WorktreeMenuToggled` (bugfix BUG-003, 018 FR-029d).
+                self.session_menu_open = match self.session_menu_open {
+                    Some(open) if open.id == id => None,
+                    _ => Some(SessionMenu { id, anchor }),
                 };
             }
             Message::SessionMenuDismissed => {
@@ -1818,8 +1814,8 @@ impl State {
         self.expanded.retain(|d| names.contains(d));
         if self
             .worktree_menu_open
-            .as_deref()
-            .is_some_and(|d| !names.contains(d))
+            .as_ref()
+            .is_some_and(|m| !names.contains(&m.dir_name))
         {
             self.worktree_menu_open = None;
         }

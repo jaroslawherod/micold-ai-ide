@@ -49,7 +49,7 @@ fn project_rows(roles: Roles) -> Vec<material::MenuItem<Message>> {
                 Icon::Unavailable,
                 icon_role(IconSurface::Unavailable, roles),
             )),
-            on_context: Some(Message::NoOp),
+            on_context: Some(Box::new(|_| Message::NoOp)),
         })
         .collect()
 }

@@ -67,12 +67,6 @@ pub type DialogView = for<'a> fn(
     &'a micold_core::env_include::EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>>;
 
-/// Where the sidebar's own context menus open: just inside the sidebar, below the app bar.
-///
-/// A fixed point rather than the cursor — these menus are opened from a row whose position the view
-/// does not know — and the one place it is stated, rather than the two literals it was (T107).
-const SIDEBAR_MENU_ANCHOR: (u16, u16) = (24, 96);
-
 // The icon font and the two primitives that draw a glyph moved into the component library with
 // everything else that decides an appearance (FR-001). Re-exported here for `main`, which
 // registers the font at startup, and for the tests that assert what the font file advertises.
@@ -260,7 +254,9 @@ pub fn view<'a>(
             )),
             // Right-click a project row to reach its "Forget project" menu (feature 015). Offered
             // even for unavailable projects — those are precisely the ones a user wants to forget.
-            on_context: Some(Message::ProjectMenuToggled(e.path)),
+            on_context: Some(Box::new(move |point| {
+                Message::ProjectMenuToggled(e.path.clone(), point)
+            })),
         })
         .collect();
     // Trailing "Add project…" row opens the existing folder browser (008 FR-009). A row, not a
@@ -303,22 +299,23 @@ pub fn view<'a>(
             .into()
         });
 
-    // The worktree right-click context menu, anchored near the sidebar (feature 008, FR-013).
-    // Only present while a worktree's menu is open.
+    // The worktree right-click context menu, at the row it was opened from (feature 008, FR-013;
+    // the anchor since 018's BUG-008). Only present while a worktree's menu is open.
     //
-    // Clamped, like the project menu above and unlike its own past self (018's BUG-003, T107). The
-    // anchor is a fixed point rather than the cursor, so it never *starts* off-screen — but the
-    // panel it positions is now 48dp per item where it was 36, a four-item menu having grown from
-    // 152dp to 200, and nothing was stopping it running off the bottom of a short window.
+    // Clamped like the project menu above, and at the press point like it too. It was anchored at
+    // `SIDEBAR_MENU_ANCHOR = (24, 96)` until BUG-008 — a constant whose doc explained that a row's
+    // position "the view does not know", which was a description of a parameter the row's
+    // right-press did not carry rather than a decision about where a menu belongs.
     let worktree_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.worktree_menu_open.as_ref().map(|dir| {
+        state.worktree_menu_open.as_ref().map(|menu| {
+            let dir = &menu.dir_name;
             let included = state
                 .worktrees
                 .iter()
                 .any(|w| &w.dir_name == dir && w.included);
             let items = worktree_menu_items(dir, &state.worktree_display_name(dir), included);
             let (x, y) = crate::features::project::clamp_menu_anchor(
-                SIDEBAR_MENU_ANCHOR,
+                menu.anchor,
                 material::menu_panel_size(items.len()),
                 state.window_size,
             );
@@ -328,12 +325,12 @@ pub fn view<'a>(
         });
 
     // The session right-click context menu (feature 010's BUG-003). Only present while a session's
-    // menu is open. Same anchor and the same clamping as the worktree menu above.
+    // menu is open. Same anchor rule and the same clamping as the worktree menu above.
     let session_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.session_menu_open.map(|id| {
-            let items = session_menu_items(id);
+        state.session_menu_open.map(|menu| {
+            let items = session_menu_items(menu.id);
             let (x, y) = crate::features::project::clamp_menu_anchor(
-                SIDEBAR_MENU_ANCHOR,
+                menu.anchor,
                 material::menu_panel_size(items.len()),
                 state.window_size,
             );
