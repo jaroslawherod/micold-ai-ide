@@ -145,10 +145,15 @@ fn every_popover_is_in_the_table() {
 
 #[test]
 fn toggling_a_popover_shut_displaces_nothing() {
-    // The outcome says a surface *opened*. A toggle that closed its own surface has nothing on
-    // screen whose neighbours should go, and reporting one anyway would close a popover the user
-    // never touched. The old direct assignments got this wrong: they cleared the neighbours on the
-    // way out as well as on the way in.
+    // A behaviour change, and the one this conversion made: the old direct assignments cleared the
+    // neighbours on the way *out* as well as on the way in, so shutting the help menu also shut
+    // whatever else happened to be open. Nothing tested it either way.
+    //
+    // Two things hold it now, and only one of them is this test. `surface_opened` reports nothing
+    // when the toggle closed its surface, and `registry::displace` would do nothing with the
+    // report anyway because it resolves the surface out of the *open* set. So this test survives
+    // either mechanism being removed on its own — see
+    // `a_toggle_that_shut_its_surface_reports_nothing` for the half no state can observe.
     let mut st = State::default();
     st.update(Message::HelpMenuToggled);
     st.update(Message::HelpMenuToggled);
@@ -162,5 +167,29 @@ fn toggling_a_popover_shut_displaces_nothing() {
         open_popovers(&st),
         vec!["session_menu"],
         "the worktree menu toggled itself shut and took nothing with it"
+    );
+}
+
+#[test]
+fn a_toggle_that_shut_its_surface_reports_nothing() {
+    // The half of the previous test that no state can see. `registry::displace` skips a surface
+    // that is not open, so a reducer reporting `SurfaceOpened` for one it just closed changes
+    // nothing observable — a probe that made `surface_opened` report unconditionally failed no
+    // test in the client suite.
+    //
+    // That is not a reason to stop caring. An outcome is a feature's statement of what happened,
+    // and the whole read/write asymmetry rests on those statements being true; one that is merely
+    // harmless today is a trap for the next thing that interprets it. So this reads the return
+    // value directly, which is the only place the difference exists.
+    let mut st = State::default();
+
+    let opened = micold_client::features::help::menu_toggled(&mut st);
+    assert_eq!(opened.len(), 1, "toggling the help menu open reports an opening");
+
+    let closed = micold_client::features::help::menu_toggled(&mut st);
+    assert!(
+        closed.is_empty(),
+        "toggling it shut reports nothing — it did not open, and saying it did would be false \
+         whether or not anything acts on it"
     );
 }

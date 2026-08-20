@@ -114,9 +114,16 @@ pub enum Outcome {
 
 /// `Outcome::SurfaceOpened` when a toggle left its surface open, and nothing when it closed it.
 ///
-/// Five reducers spell the same two lines, and the mistake they would otherwise make is the same
-/// one: reporting an *opening* when the toggle just shut the surface, which would displace the
-/// neighbours of something no longer on screen.
+/// Five reducers spell the same two lines rather than each writing them.
+///
+/// **The check is not what makes the behaviour correct**, and a probe was what established that:
+/// reporting an opening unconditionally changes nothing observable, because
+/// `overlay::registry::displace` resolves the displacing surface out of the set that is *open* and
+/// a closed one is silently skipped. What this guards is the vocabulary, not the state — an
+/// `Outcome::SurfaceOpened` for a surface that did not open is a false statement about what
+/// happened, and outcomes are the one place in this design where a feature says what happened.
+/// `tests/popover_displacement.rs::a_toggle_that_shut_its_surface_reports_nothing` is what holds
+/// it, and it has to read the return value, since no state can tell the two apart.
 pub(crate) fn surface_opened(open: bool, id: crate::overlay::SurfaceId) -> Vec<Outcome> {
     if open {
         vec![Outcome::SurfaceOpened(id)]
