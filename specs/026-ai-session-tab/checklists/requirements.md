@@ -50,6 +50,19 @@ promotion the only route to FR-014. Two spec edits were needed to keep this chec
 than to tick it: code identifiers were taken back out of FR-013 and FR-015, and User Story 1 gained
 an acceptance scenario for the highlight so FR-015 has criteria and not only a success measure.
 
+A cross-artifact **analysis pass on 2026-08-20** found one constitution violation and four spec
+defects, all now remediated. The violation was Phase 2's T011 — a production change with no
+preceding failing test, because the only test near it (T006) deliberately asserts a tab's parts and
+not its appearance; T010a now pins the state layer's shape token as the *value* it is, leaving the
+visual pass to judge only what is composited. The spec defects: FR-002e asked the edge to "say
+specifically" that the marked tab lies beyond it without ever saying how, and now names the form
+(the indicator's own accent role, in place of the neutral surface tint) so the two states differ by
+role rather than by whoever implements them; FR-010 required "the same behaviour on secondary press"
+as a terminal tab while FR-006a deliberately makes it differ by one item, and now speaks of the same
+*gestures*; FR-012b was rationale occupying a numbered requirement slot, which is why it was the one
+requirement with no task, and is now labelled as rationale with FR-012d named as its testable form;
+and FR-006a's restatement of the no-close rule, the third of three, is now a cross-reference.
+
 FR-012 (a tab whose process is not running is visually distinct) was stated at P3 and **raised to
 P2** by the second 2026-08-19 clarification session. It was scoped as consistency polish — "the AI tab
 should not silently omit what the terminal tabs show" — and feature 012's BUG-005 then moved the

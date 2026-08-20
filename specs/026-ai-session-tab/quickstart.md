@@ -101,8 +101,9 @@ mise run run
 - Turn the mouse wheel over the strip. **Expect**: the terminal tabs scroll; the AI tab does not
   move.
 - **Expect**: the edge with tabs beyond it is faded, and there are no scroll-arrow buttons.
-- Scroll the **marked** tab out of view. **Expect**: the edge it lies beyond says so specifically.
-  Then select any tab. **Expect**: the newly marked tab is scrolled back into view.
+- Scroll the **marked** tab out of view. **Expect**: the edge it lies beyond switches from the
+  neutral surface fade to the **indicator's accent**, so the tint itself says which way the marked
+  tab lies. Then select any tab. **Expect**: the newly marked tab is scrolled back into view.
 
 ### 7. Sessions do not leak into each other — FR-011
 
@@ -121,8 +122,10 @@ schemes:
 - **The mark and the indicator together**, on a tab that is active *and* stopped.
 - **The AI tab beside a terminal tab**: same width, same form, no container, icon on the midline,
   empty trailing slot that does not read as a missing control.
-- **The edge fade**: visible when content is beyond, absent when it is not, and distinct when the
-  marked tab is the thing beyond it. Drawn, not laid out — no geometry gate can see any of this.
+- **The edge fade**: visible when content is beyond, absent when it is not, and **accent-tinted
+  rather than surface-tinted** when the marked tab is the thing beyond it — compare the two states
+  side by side, since a role difference is the whole cue. Drawn, not laid out — no geometry gate can
+  see any of this.
 - **The strip at zero instances**: one tab, marked, reading as a deliberate strip.
 - **The highlight is a tab's, not a button's** (FR-015). Rest the pointer on a tab: the state layer
   is **rectangular and fills the tab**, never a rounded pill. Move along the strip — it should read

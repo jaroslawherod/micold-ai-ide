@@ -126,7 +126,11 @@ exception is assembly — and even that is measured, since the tab geometry is u
 
 One thing the design confirms cannot be gated, recorded here rather than discovered later: **the
 edge fade and the stopped mark's legibility are appearance** (research R6). They are verified by the
-`visual-pass` skill, and `quickstart.md` §8 names each check. A plan that implied a gate covered them
+`visual-pass` skill, and `quickstart.md` §8 names each check. Both are **role** differences — the
+fade's two states differ only in whether it is tinted from the surface or from the indicator's
+accent, and the mark has to stay legible against both the accent an active tab wears and the muted
+tint an inactive one does — so each pass compares the two states at one crop rather than judging
+either alone. A plan that implied a gate covered them
 would be repeating what feature 012 learned twice.
 
 ## Project Structure

@@ -98,8 +98,8 @@ terminal and switch to it (that tab is marked, the AI tab is not), switch back.
    tabs scroll at their own width — none is shrunk, ellipsised or dropped — and the AI tab does not
    move.
 7. **Given** the user has scrolled the marked tab out of view, **When** they look at the strip,
-   **Then** the edge it lies beyond says so; **and when** they then select any tab, **Then** the
-   newly marked tab is scrolled back into view.
+   **Then** the edge it lies beyond carries the indicator's accent rather than the neutral fade;
+   **and when** they then select any tab, **Then** the newly marked tab is scrolled back into view.
 8. **Given** any tab, **When** the pointer rests on it, **Then** it draws a rectangular state layer
    filling the tab — not a rounded pill — and **when** the pointer leaves, **Then** it draws no
    shape at all.
@@ -187,8 +187,8 @@ either affecting the other.
   outside the scrolling region (FR-002b), and the bar's other controls are untouched (FR-002c). The
   wall is nearer than it looks: at a 136dp tab on a 144dp pitch, roughly five tabs exhaust a bar
   that also carries a title, a status, the "+" and the mode toggle.
-- **Tabs beyond an edge, marked tab still visible.** The edge fades, saying there is more that way,
-  without claiming the marked tab is out there (FR-002e).
+- **Tabs beyond an edge, marked tab still visible.** The edge fades in the neutral surface tint,
+  saying there is more that way without claiming the marked tab is out there (FR-002e).
 - **The marked tab scrolled out of view.** It keeps the indicator, and the scrolling region's edge
   says which way it lies (FR-002e). Pressing the AI tab, or selecting any instance, scrolls the new
   marked tab back into view (FR-002d).
@@ -219,8 +219,12 @@ either affecting the other.
 - **FR-002d**: Whenever the marked tab (FR-005) changes, the strip MUST scroll it into view. A user
   MAY then scroll away from it by hand.
 - **FR-002e**: Whenever tabs lie beyond either edge of the scrolling region, that edge MUST carry a
-  persistent fade saying so, and when the tab beyond it is the **marked** one the edge MUST say that
-  specifically. Without this the strip can show
+  persistent fade saying so, and when the tab beyond it is the **marked** one that fade MUST be
+  drawn in the **same accent role the active indicator wears** rather than the neutral surface tint
+  it carries otherwise. Two states of one cue, differing only in role: the accent is already the
+  application's word for "this is the one you are looking at", so an accent-tinted edge says which
+  way that tab lies without introducing a second vocabulary, and it survives both schemes because
+  the indicator itself has to. Without this the strip can show
   **nothing marked** — which is the exact defect this feature exists to remove (User Story 1),
   arriving by scrolling instead of by the AI pane, and it would hollow out SC-003's claim rather
   than narrow it. The AI tab is unaffected: FR-002b keeps it outside the scrolling region, so it is
@@ -248,8 +252,7 @@ either affecting the other.
   offers it today, and whatever is added to that menu in future without this requirement being
   revisited. Stated as "the terminal tab's menu minus Close" rather than as a list, so the two tabs
   cannot drift into offering different actions for the same reason FR-010 asks them to look alike.
-  Close is excluded by FR-004: a session has exactly one AI CLI process and terminating it is not
-  an action offered from this control, by any press.
+  Close is excluded by FR-004, which holds for every press and not only for the primary one.
 - **FR-006b**: When that menu would carry **no items**, no menu MUST open and the secondary press
   MUST do nothing. With restart the only item and Close excluded, this is the state whenever the AI
   CLI is running, which is most of the time. An empty panel is a defect everywhere else in the
@@ -264,8 +267,10 @@ either affecting the other.
 - **FR-009**: The AI tab MUST be labelled with the application's existing AI CLI icon — the same
   glyph the mode toggle shows for that mode — rather than with text.
 - **FR-010**: The AI tab MUST be visually consistent with the terminal tabs it sits beside: the same
-  tab form, the same indicator treatment, and the same behaviour on hover, on primary press and on
-  secondary press (feature 012 FR-004a/FR-004b/FR-010b).
+  tab form, the same indicator treatment, and the same answer to the same gestures — hover, primary
+  press, secondary press (feature 012 FR-004a/FR-004b/FR-010b). What the secondary press's menu
+  *holds* is FR-006a's, which deliberately differs by one item; the gesture, and the fact that it
+  opens a menu at all, do not.
 - **FR-010a**: The AI tab MUST measure the **same fixed width** as a terminal tab (feature 012
   FR-004c), and its icon MUST sit on the tab's own midline. Having no close control (FR-004) MUST
   NOT make it narrower than its neighbours: the trailing slot is left empty rather than reclaimed.
@@ -281,9 +286,11 @@ either affecting the other.
 - **FR-012a**: The stopped mark MUST be carried in addition to, and distinguishably from, the
   active indicator (FR-005) — a tab can be active *and* not running, and the strip must not read
   those two states as one.
-- **FR-012b**: This cue is what makes FR-006a's menu findable. Without it a user must open menus at
-  random to learn which instance is stopped, and by FR-006b every running tab answers that press
-  with silence — so the strip would be hiding the one action it offers.
+- **FR-012b** *(rationale for FR-012, not separately testable — no task implements it)*: This cue is
+  what makes FR-006a's menu findable. Without it a user must open menus at random to learn which
+  instance is stopped, and by FR-006b every running tab answers that press with silence — so the
+  strip would be hiding the one action it offers. The testable form of this intent is FR-012d, which
+  ties the mark to exactly the states the menu can act on.
 - **FR-012c**: The mark MUST be a **small state mark beside the label**, in the palette's error or
   warning role, drawn in the **leading spacer** every tab already reserves — not a third tone on
   the label. A tone-only cue has to be legible against both the accent an active tab wears and the
@@ -347,7 +354,7 @@ either affecting the other.
 - **SC-003**: Users can tell which pane is displayed from the strip alone, without pressing
   anything, in 100% of observed states — including the states where feature 012 previously showed no
   strip at all, and including states where the marked tab has been scrolled out of view, where the
-  edge indicator (FR-002e) says where it went.
+  edge fade takes the indicator's own accent to say which way it went (FR-002e).
 - **SC-004**: No press on the AI tab ever restarts, interrupts or reorders output in the AI
   conversation or in any terminal instance, in 100% of observed cases.
 - **SC-005**: The AI tab is never offered a close affordance in any state, so the single-AI-process
