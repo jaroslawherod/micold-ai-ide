@@ -7,6 +7,7 @@
 //! FR-019). On-disk format is the durable contract in
 //! `specs/003-material-design-layout/contracts/settings-schema.md`.
 
+use crate::session::AiCli;
 use crate::store::LoadStatus;
 use crate::theme::ThemePreference;
 use serde::{Deserialize, Serialize};
@@ -100,6 +101,14 @@ pub struct Settings {
     /// (FR-003/FR-004).
     #[serde(default = "default_env_include_timeout_secs")]
     pub env_include_timeout_secs: u64,
+    /// Which AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
+    ///
+    /// **Not validated against availability.** A default naming an uninstalled CLI is kept, not
+    /// silently rewritten: FR-004 asks the application to *tell* the user, and a preference that
+    /// quietly repaired itself would also lose the user's choice across a temporary `PATH` problem
+    /// (research R11).
+    #[serde(default)]
+    pub default_ai_cli: AiCli,
 }
 
 impl Default for Settings {
@@ -110,6 +119,7 @@ impl Default for Settings {
             env_include_enabled: DEFAULT_ENV_INCLUDE_ENABLED,
             env_include_script_path: default_env_include_script_path_string(),
             env_include_timeout_secs: DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
+            default_ai_cli: AiCli::default(),
         }
     }
 }
@@ -153,6 +163,14 @@ struct StoredSettings {
     /// Missing in pre-011 (v2) files → defaults to [`DEFAULT_ENV_INCLUDE_TIMEOUT_SECS`] (`10`).
     #[serde(default = "default_env_include_timeout_secs")]
     env_include_timeout_secs: u64,
+    /// Missing in pre-026 files → defaults to `ClaudeCode`, which is the right answer for every
+    /// settings file written before this feature (feature 026, FR-003).
+    ///
+    /// `settings_version` deliberately does **not** move for this. The `#[serde(default)]`
+    /// argument that spares `schema_version` in `store.rs` (research R8) spares this third version
+    /// number for the same reason: a bump would cost a migration path to express a default.
+    #[serde(default)]
+    default_ai_cli: AiCli,
 }
 
 impl StoredSettings {
@@ -164,6 +182,7 @@ impl StoredSettings {
             env_include_enabled: settings.env_include_enabled,
             env_include_script_path: settings.env_include_script_path.clone(),
             env_include_timeout_secs: settings.env_include_timeout_secs,
+            default_ai_cli: settings.default_ai_cli,
         }
     }
 
@@ -174,6 +193,10 @@ impl StoredSettings {
             env_include_enabled: self.env_include_enabled,
             env_include_script_path: self.env_include_script_path,
             env_include_timeout_secs: clamp_env_include_timeout(self.env_include_timeout_secs),
+            // Not clamped, and not checked against availability: unlike the two numbers above,
+            // there is no invalid value to repair — only a CLI that may not be installed today,
+            // which is the user's choice to keep (research R11).
+            default_ai_cli: self.default_ai_cli,
         }
     }
 }

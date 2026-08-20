@@ -65,6 +65,7 @@ fn catalog_with_session(
         SessionLocation::Default,
         SessionLabel::Named("S".into()),
         TerminalMode::AiCli,
+        micold_core::session::AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project.to_path_buf(), vec![session]);
@@ -97,6 +98,7 @@ fn catalog_with_shell_session(project: &std::path::Path, store: &std::path::Path
         SessionLocation::Default,
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        micold_core::session::AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project.to_path_buf(), vec![session]);

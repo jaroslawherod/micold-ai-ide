@@ -136,3 +136,21 @@ pub fn schema_hash(messages: &str, grid: &str, envelope: &str) -> [u8; 32] {
     buf.push_str(&canonicalize(envelope));
     sha256(buf.as_bytes())
 }
+
+/// The lowercase hex rendering of [`sha256`].
+///
+/// Copilot names each working directory's session index `<sha256_hex(cwd)>.json`
+/// (`specs/026-multi-provider-sessions/contracts/copilot-cli.md`), so this is what
+/// `CopilotProvider` derives that filename with — the workspace's own dependency-free SHA-256
+/// rather than a new crate (research R3).
+///
+/// `allow(dead_code)`: `build.rs` `include!`s this file and only ever calls `schema_hash`, so
+/// without it this function reads as unused there and warns.
+#[allow(dead_code)]
+pub fn sha256_hex(data: &[u8]) -> String {
+    let mut out = String::with_capacity(64);
+    for byte in sha256(data) {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}

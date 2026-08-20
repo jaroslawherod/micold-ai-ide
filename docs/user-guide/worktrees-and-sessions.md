@@ -377,22 +377,80 @@ Right-click a worktree in the sidebar to open its context menu:
 ## Starting, switching, and closing sessions
 
 - Select a valid worktree and use its **start session** action to launch a session. It appears as
-  a sub-item and its terminal opens on the right.
+  a sub-item and its terminal opens on the right. Which AI CLI it runs is your default, or whatever
+  you pick from the chevron beside that action — see
+  [Choosing which AI CLI a session runs](#choosing-which-ai-cli-a-session-runs).
 - A worktree can host **multiple concurrent sessions** — start as many as you need for parallel,
   non-interfering tasks.
 - **Switch** between sessions by selecting them in the sidebar. Background sessions keep running;
   only the displayed terminal changes.
 - Right-click a session for **Close** and **Remove**:
-  - **Close** stops its `claude` process and hides it from the sidebar. It does not reappear —
-    including on a later restart, even though the underlying `claude` conversation itself still
-    exists on disk. There is no way to bring a closed session back through the UI.
+  - **Close** stops its AI CLI process and hides it from the sidebar. It does not reappear —
+    including on a later restart, even though the underlying conversation itself still exists on
+    disk in the CLI's own storage. There is no way to bring a closed session back through the UI.
   - **Remove** permanently deletes the session's record, after a confirmation step. Unlike Close,
     there is no possible recovery path back into the sidebar either. Remove is only offered on a
     still-visible session — a closed session can't be removed separately, since it's already
     hidden.
 
-Session labels come from `claude` itself (its session title); until a title is available a
+Session labels come from the AI CLI itself (its own session title); until a title is available a
 placeholder is shown.
+
+## Choosing which AI CLI a session runs
+
+A session runs one AI coding CLI — Claude Code or GitHub Copilot — and which one is decided when
+the session is created.
+
+- **Press the start-session action** and you get the CLI set as your
+  [Default AI CLI](./settings.md#default-ai-cli), in one press, exactly as before.
+- **Press the small chevron beside it** to pick a different CLI for this session only. Your default
+  is not changed.
+- **If only one CLI is installed, the chevron is not there at all.** There is nothing to choose
+  between, so the affordance is the plain button it always was.
+- Only CLIs you actually have installed are ever offered.
+
+**The choice is fixed for the session's lifetime.** There is no way to switch a running session to
+the other CLI, and nothing switches it for you — not changing your default, not restarting the app,
+not restarting your machine. A session is a conversation with one tool, and the two tools keep their
+conversations in different places.
+
+**Two sessions in the same worktree can run different CLIs at once.** They do not interfere: each
+has its own process, its own terminal, its own conversation record, and its own title.
+
+### What the sidebar shows
+
+Each session row carries a short text label naming its CLI — `claude` or `copilot`. It is text, not
+a colour or an icon alone, so it reads the same way for everyone and survives a narrow sidebar: if
+the row runs out of room the *title* is what shortens, never the CLI label.
+
+Open a session and its terminal bar names the CLI too, so you can tell what you are talking to
+without going back to the sidebar.
+
+The busy/idle indicator works the same way for both CLIs — same shape, same states, no "less
+certain" variant for one of them.
+
+### Sessions you started outside this app
+
+If you run `claude` or `copilot` yourself in a worktree, this app finds that conversation the next
+time you open the project and lists it as a session of that CLI. This happens on **every** open, not
+just the first, so a conversation you start while the project is open shows up when you come back
+to it.
+
+Two things worth knowing about discovered sessions:
+
+- **A session you closed here stays closed.** Closing writes a durable marker in the CLI's own
+  storage, so it is not re-listed later even if this app's own records are lost.
+- **A discovered session shows no busy/idle indicator until you start it here.** The app is not
+  supervising it, so it makes no claim about what it is doing — it reads as unknown rather than
+  guessing at idle. Select it and start it and it becomes an ordinary session, indicator included.
+
+### When a CLI isn't installed
+
+- It is never offered — not in Settings, not in the per-session list.
+- Sessions that already run it are **still listed and still labelled with it**. They do not
+  disappear and they are not relabelled as something else.
+- Starting one tells you which CLI is missing, by name, and starts nothing. You get a clear failure
+  rather than a terminal that never comes to life.
 
 ### Reopening where you left off
 

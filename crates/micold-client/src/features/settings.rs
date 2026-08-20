@@ -13,6 +13,7 @@ use crate::app::{Message, State};
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::Layer;
+use micold_core::session::AiCli;
 
 /// In-progress Settings form state, present only while the Settings overlay is open (feature
 /// 006, FR-020). The scrollback field is edited as text and validated/parsed on save.
@@ -27,6 +28,12 @@ pub struct SettingsDraft {
     /// The editable environment-include timeout, in seconds as text (parsed/validated on save,
     /// FR-003).
     pub env_include_timeout: String,
+    /// The chosen default AI CLI (feature 026, FR-003).
+    ///
+    /// Not a `String`, unlike every field above it, and the difference is the point: those hold
+    /// what the user *typed*, which may not yet be a valid setting. This is a closed enum picked
+    /// from a list, so there is no half-typed state to represent and nothing to validate on save.
+    pub default_ai_cli: AiCli,
     /// The last validation error shown after a rejected save.
     pub error: Option<String>,
 }
@@ -114,6 +121,11 @@ pub fn env_include_path_changed(state: &mut State, text: String) {
 /// The environment-include timeout was edited (feature 011).
 pub fn env_include_timeout_changed(state: &mut State, text: String) {
     edit(state, |draft| draft.env_include_timeout = text);
+}
+
+/// The **Default AI CLI** select changed (feature 026, FR-003).
+pub fn default_ai_cli_changed(state: &mut State, which: AiCli) {
+    edit(state, |draft| draft.default_ai_cli = which);
 }
 
 /// Apply an edit to the open draft, if there is one, and clear the pending error.

@@ -44,7 +44,9 @@ use crate::panel_placement::anchored_panels;
 use crate::support::layout::{self as lay, LayoutRecord};
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::theme::{ColorScheme, ThemePreference};
 use micold_core::tokens::{anatomy, density};
 use micold_core::worktree::{Worktree, WorktreeStatus};
@@ -446,6 +448,7 @@ fn the_session_menu_opens_at_the_row_it_was_opened_from() {
         SessionLocation::Worktree("feat-00".to_string()),
         SessionLabel::Named("feat/00".to_string()),
         TerminalMode::AiCli,
+        AiCli::ClaudeCode,
     );
     let mut state = with_project(vec![session]);
     state.expanded.insert("feat-00".to_string());

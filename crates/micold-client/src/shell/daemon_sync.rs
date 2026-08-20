@@ -297,6 +297,10 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             app.env_include_enabled = settings.env_include_enabled;
             app.env_include_script_path = settings.env_include_script_path;
             app.env_include_timeout_secs = settings.env_include_timeout_secs;
+            // Service-owned, so the daemon's echo is what applies it — here and in
+            // `Welcome` below (feature 026, FR-003). The client's own write is a courtesy
+            // to the next boot; this is the value in force.
+            app.core.default_ai_cli = settings.default_ai_cli;
             app.env_include_cache.clear();
             let cwd = default_resolution_cwd(&app.core);
             refresh_env_include(app, &cwd);
@@ -599,6 +603,7 @@ pub fn on_connected(
     app.env_include_enabled = settings.env_include_enabled;
     app.env_include_script_path = settings.env_include_script_path;
     app.env_include_timeout_secs = settings.env_include_timeout_secs;
+    app.core.default_ai_cli = settings.default_ai_cli;
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
@@ -877,7 +882,13 @@ pub fn on_add_worktree_source_changed(app: &mut App, source: BranchSource) -> Ta
 /// feature 010): spawn `claude` and stream it (FR-010/012/013). A `Default` location
 /// never creates, modifies, or removes a worktree (FR-002) — it simply runs in `repo`
 /// itself, so this arm never calls into `micold_core::worktree`.
-pub fn on_session_start_requested(app: &mut App, location: SessionLocation) -> Task<Message> {
+pub fn on_session_start_requested(
+    app: &mut App,
+    location: SessionLocation,
+    provider: micold_core::session::AiCli,
+) -> Task<Message> {
+    // Chosen from the override list, or pressed directly — either way the list is done.
+    app.core.session_start_menu = None;
     // Correlated create: the daemon owns the id + catalog. The new session arrives via the
     // `CatalogChanged` push (reconciled into the core) and is selected + focused when the
     // `OperationOk { SessionCreated }` reply names its id.
@@ -886,11 +897,16 @@ pub fn on_session_start_requested(app: &mut App, location: SessionLocation) -> T
             SessionLocation::Worktree(dir) => dir.clone(),
             SessionLocation::Default => String::new(),
         };
+        // Copies the field across and no more (feature 026, T030a). The
+        // default-vs-override resolution happened in `features/session.rs`, which a test
+        // can link; this handler is in the GUI binary, which no integration test can, and a
+        // branch that drifted in here would become the feature's untestable mirror.
         send_op(app, PendingOp::CreateSession, |req| {
             ClientMsg::SessionCreate {
                 req,
                 project,
                 worktree_dir,
+                provider,
             }
         });
     }
@@ -1387,7 +1403,7 @@ pub(crate) mod tests {
     // imports only its tests use.
     use micold_client::app::State;
     use micold_core::protocol::messages::WireLifecycle;
-    use micold_core::session::{SessionLabel, SessionLifecycle};
+    use micold_core::session::{AiCli, SessionLabel, SessionLifecycle};
 
     // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
     // own stderr, e.g. naming which submodule failed and why) was destructured with `..` and
@@ -1439,6 +1455,7 @@ pub(crate) mod tests {
             id,
             worktree_dir: None,
             title: SessionLabel::Named(title.into()),
+            provider: AiCli::ClaudeCode,
             lifecycle,
             activity: ActivitySignal::Unknown,
             input_serial,
@@ -1717,6 +1734,111 @@ pub(crate) mod tests {
         );
     }
 
+    /// The same summary, on a chosen AI CLI (feature 026, T060a).
+    fn summary_on(
+        id: SessionId,
+        title: &str,
+        lifecycle: WireLifecycle,
+        provider: AiCli,
+    ) -> SessionSummary {
+        SessionSummary {
+            provider,
+            ..summary_at(id, title, lifecycle, 0)
+        }
+    }
+
+    /// A daemon-reported session materialises as a session of **the CLI the daemon named**
+    /// (feature 026, T060a — FR-012, FR-016, FR-016a).
+    ///
+    /// # Why this lives here
+    ///
+    /// Beside the fold's other tests, sharing their `summary_at`/`snapshot_with` helpers, and
+    /// beside the `Welcome` and `CatalogChanged` arms that call it — which is the whole reason a
+    /// defaulted provider here would be invisible. `micold-core/tests/session_reconciliation.rs`
+    /// mirrors the same rule on the pure side.
+    ///
+    /// # Why it is worth its weight
+    ///
+    /// This is the **only** path a daemon-reported session takes into the client model: every
+    /// session found by the FR-014 discovery pass, and every session at all after a client
+    /// restart. If the provider defaulted here, a Copilot session would come back labelled
+    /// `claude` on its sidebar row, `claude` on its terminal bar, and would resolve `claude` in the
+    /// split affordance — while the store, the wire and the daemon all said Copilot, and every
+    /// other test in the suite stayed green.
+    #[test]
+    fn a_daemon_reported_session_keeps_the_cli_the_daemon_named() {
+        let path = "/repo/demo";
+        let mut core = State::default();
+        let claude = SessionId::new();
+        let copilot = SessionId::new();
+
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![
+                    summary_on(claude, "A", WireLifecycle::Running, AiCli::ClaudeCode),
+                    summary_on(copilot, "B", WireLifecycle::Running, AiCli::Copilot),
+                ],
+            ),
+            false,
+        );
+
+        let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
+        let provider_of = |id: SessionId| {
+            list.iter()
+                .find(|s| s.id == id)
+                .map(|s| s.provider)
+                .expect("session adopted")
+        };
+        assert_eq!(provider_of(claude), AiCli::ClaudeCode);
+        assert_eq!(
+            provider_of(copilot),
+            AiCli::Copilot,
+            "the summary said Copilot and the client believed it"
+        );
+    }
+
+    /// And a session already in the model is not re-derived from the snapshot.
+    ///
+    /// The update branch adopts `lifecycle`, `activity` and a real `title` — deliberately not the
+    /// provider. A session's CLI is fixed for its lifetime (FR-001), so there is nothing a later
+    /// snapshot could correct, and a branch that "kept it in sync" would be a second place the
+    /// value could change.
+    #[test]
+    fn an_existing_sessions_cli_is_not_rewritten_by_a_later_snapshot() {
+        let path = "/repo/demo";
+        let mut core = State::default();
+        let id = SessionId::new();
+
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![summary_on(id, "A", WireLifecycle::Running, AiCli::Copilot)],
+            ),
+            false,
+        );
+
+        // A snapshot that disagrees — the shape a re-derivation bug would take.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![summary_on(id, "A", WireLifecycle::Idle, AiCli::ClaudeCode)],
+            ),
+            false,
+        );
+
+        let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
+        assert_eq!(list[0].provider, AiCli::Copilot);
+        assert_eq!(
+            list[0].lifecycle,
+            SessionLifecycle::Idle,
+            "the runtime fields still track the daemon — it is only the identity that does not"
+        );
+    }
+
     pub(crate) fn snapshot_with(path: &str, sessions: Vec<SessionSummary>) -> CatalogSnapshot {
         CatalogSnapshot {
             schema_version: 1,
@@ -1971,7 +2093,10 @@ pub(crate) mod tests {
     ) {
         let (mut app, rx) = connected_app();
         let project = PathBuf::from("/repo");
-        let mut session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+        let mut session = Session::start_new(
+            SessionLocation::Worktree("feat-x".to_string()),
+            micold_core::session::AiCli::ClaudeCode,
+        );
         let id = session.id;
         session.set_mode(TerminalMode::Regular);
         session.open_shell_instance();
@@ -2037,7 +2162,10 @@ pub(crate) mod tests {
     fn opening_a_terminal_from_the_ai_pane_switches_to_it() {
         let (mut app, mut rx) = connected_app();
         let project = PathBuf::from("/repo");
-        let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+        let session = Session::start_new(
+            SessionLocation::Worktree("feat-x".to_string()),
+            micold_core::session::AiCli::ClaudeCode,
+        );
         let id = session.id;
         assert_eq!(
             session.mode,

@@ -100,6 +100,9 @@ const OWNERS: &[(&str, &str)] = &[
     ("last_foreground_choice", "session"),
     ("restarted_while_inactive", "session"),
     ("session_menu_open", "session"),
+    // The "start a session on…" list is opened from a sidebar row and starts a session; what it
+    // holds is a session's location (feature 026, FR-004).
+    ("session_start_menu", "session"),
     ("session_remove_target", "session"),
     // The terminal is the session's pane: both fields are written only by `focus_terminal` /
     // `release_terminal`, and `tests/terminal_bar_stability.rs` already holds that line.
@@ -153,6 +156,11 @@ const OWNERS: &[(&str, &str)] = &[
     ("theme_pref", "settings"),
     ("system_scheme", "settings"),
     ("settings_draft", "settings"),
+    // Both are settings the shell fills at the I/O boundary and every other feature only reads
+    // (feature 026, FR-003/FR-006): the stored default, mirrored from `DaemonSettings`, and the
+    // availability snapshot refreshed when the choice is offered.
+    ("default_ai_cli", "settings"),
+    ("available_providers", "settings"),
     // --- notifications ------------------------------------------------------------------------
     ("notify", "notifications"),
     // --- window -------------------------------------------------------------------------------

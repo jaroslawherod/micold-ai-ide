@@ -52,6 +52,9 @@ tokio-util = { version = "0.7.19", features = ["codec"] }
 interprocess = { version = "2.4.2", features = ["tokio"] }
 bytes = "1"
 listenfd = "1.0.2"
+# Cross-platform filesystem change notification, for tailing a Copilot session's `events.jsonl`
+# (feature 026, FR-019). Vetted in `specs/026-multi-provider-sessions/research.md` R14.
+notify = "8.2.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 file-rotate = "0.8.0"

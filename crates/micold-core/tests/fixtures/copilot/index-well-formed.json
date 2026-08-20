@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "cwd": "/fixture/worktree",
+  "sessionIds": [
+    "aaaaaaaa-1111-4111-8111-111111111111",
+    "cccccccc-3333-4333-8333-333333333333",
+    "bbbbbbbb-2222-4222-8222-222222222222"
+  ]
+}

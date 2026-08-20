@@ -16,7 +16,7 @@ use micold_core::protocol::messages::{
     LogEntry, LogSink, OperationResult, ProjectSnapshot, RefusalReason, SessionSummary,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::session::{SessionId, SessionLabel, ShellInstanceId};
+use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use micold_core::worktree::{CreateMode, CreateStage};
 use uuid::Uuid;
 
@@ -164,6 +164,16 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             req: 7,
             project: PathBuf::from("/a"),
             worktree_dir: "feat-x".into(),
+            provider: AiCli::ClaudeCode,
+        },
+        // The same message on the second provider (feature 026, T021). Both variants ride the
+        // wire, not just the default one — an encoding that only ever saw `ClaudeCode` would
+        // round-trip fine and still lose `Copilot`.
+        ClientMsg::SessionCreate {
+            req: 71,
+            project: PathBuf::from("/a"),
+            worktree_dir: "feat-y".into(),
+            provider: AiCli::Copilot,
         },
         ClientMsg::SessionDelete {
             req: 8,
@@ -175,6 +185,17 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             env_include_enabled: Some(false),
             env_include_script_path: Some("/custom/rc".into()),
             env_include_timeout_secs: Some(20),
+            default_ai_cli: Some(AiCli::Copilot),
+        },
+        // And the "leave it unchanged" form, which is what every settings save that is not about
+        // the AI CLI sends.
+        ClientMsg::SettingsSet {
+            req: 91,
+            scrollback_lines: Some(50_000),
+            env_include_enabled: None,
+            env_include_script_path: None,
+            env_include_timeout_secs: None,
+            default_ai_cli: None,
         },
         ClientMsg::LogLocationRequest { req: 10 },
         ClientMsg::RecentErrorsRequest { req: 11, limit: 20 },
@@ -190,6 +211,7 @@ fn sample_summary() -> SessionSummary {
     SessionSummary {
         id: sid(),
         worktree_dir: Some("feat-x".into()),
+        provider: AiCli::Copilot,
         title: SessionLabel::Named("Fix login".into()),
         lifecycle: WireLifecycle::Failed {
             reason: "crash loop".into(),
@@ -283,6 +305,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 env_include_enabled: true,
                 env_include_script_path: "/home/user/.bashrc".into(),
                 env_include_timeout_secs: 10,
+                default_ai_cli: AiCli::ClaudeCode,
             },
         },
         DaemonMsg::Refused {
@@ -326,6 +349,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 env_include_enabled: false,
                 env_include_script_path: String::new(),
                 env_include_timeout_secs: 5,
+                default_ai_cli: AiCli::Copilot,
             },
         },
         DaemonMsg::SessionTitleChanged {

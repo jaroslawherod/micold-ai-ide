@@ -12,7 +12,7 @@ use alacritty_terminal::index::{Column, Line};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::SessionProcess;
 use micold_core::session::{
-    Session, SessionId, SessionLabel, SessionLocation, ShellInstanceId, TerminalMode,
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, ShellInstanceId, TerminalMode,
 };
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
@@ -58,6 +58,7 @@ fn catalog_with_session(
         SessionLocation::Default,
         SessionLabel::Named("S".into()),
         TerminalMode::AiCli,
+        AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project.to_path_buf(), vec![session]);

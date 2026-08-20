@@ -128,6 +128,77 @@ pub fn is_spinner_title(title: &str) -> bool {
         .any(|c| ('\u{2800}'..='\u{28FF}').contains(&c))
 }
 
+// ---------------------------------------------------------------------------------------
+// Copilot's event log → the same vocabulary (feature 026, T063 — FR-018)
+// ---------------------------------------------------------------------------------------
+
+/// Map one line of a Copilot `events.jsonl` to an [`ActivityEvent`], or `None` to ignore it.
+///
+/// **Typed at `ActivityEvent`, not at [`HookKind`]**, and that is not a stylistic choice: most of
+/// Copilot's turn events do land on a hook — `user.message` is a `UserPromptSubmit`,
+/// `assistant.turn_end` is a `Stop` — but `session.shutdown` and `session.error` land on
+/// `Ended { reason }`, which is a *sibling* variant of `ActivityEvent` with no `HookKind` to
+/// express it. A mapping returning `HookKind` could not report a session ending at all.
+///
+/// The state machine above is untouched by this feature. A second source feeds it the events it
+/// already consumes; nothing about the transitions changes.
+///
+/// # Everything it does not know is ignored, never rejected
+///
+/// This is another tool's internal log and it gains event types between releases — the 1.0.80
+/// capture alone added three that the 1.0.62 contract does not list. An unknown `type`, a line that
+/// is not JSON, a blank line and a line with no `type` at all all yield `None`, so a tail is never
+/// ended by something Copilot started writing.
+///
+/// # The two sources cannot contradict each other
+///
+/// A Copilot session has two, not one: this log, and the shared braille-spinner path in
+/// `terminal.rs`, which scans **every** PTY session's OSC-0 titles and is not provider-conditional.
+/// A Copilot TUI drawing a spinner will trip it. That is harmless by construction —
+/// `SpinnerObserved` only ever moves `Unknown → Working` and is a no-op from every other state
+/// (H1a/A1a) — so it can add nothing this mapping would have contradicted.
+pub fn copilot_event(line: &str) -> Option<ActivityEvent> {
+    let line = line.trim();
+    if line.is_empty() {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_str(line).ok()?;
+    let kind = value.get("type")?.as_str()?;
+    match kind {
+        // A turn is starting or continuing.
+        "user.message" => Some(ActivityEvent::Hook(HookKind::UserPromptSubmit)),
+        "assistant.turn_start" | "tool.execution_start" => {
+            Some(ActivityEvent::Hook(HookKind::PreToolUse))
+        }
+        // The turn continues — no state change until it ends. Mapped rather than ignored so the
+        // vocabulary stays complete and a reader can see the decision was made.
+        "tool.execution_complete" => Some(ActivityEvent::Hook(HookKind::PostToolUse)),
+        // The model is done, or is waiting on the user's answer to a permission prompt.
+        "assistant.turn_end" => Some(ActivityEvent::Hook(HookKind::Stop)),
+        "permission.requested" => Some(ActivityEvent::Hook(HookKind::Notification)),
+        // Terminal. `shutdownType` is Copilot's own word for how it went ("routine"); the error
+        // form carries a message. Either way the reason is best-effort — a missing one is not a
+        // reason to miss the ending.
+        "session.shutdown" => Some(ActivityEvent::Ended {
+            reason: value
+                .get("data")
+                .and_then(|d| d.get("shutdownType"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("session ended")
+                .to_string(),
+        }),
+        "session.error" => Some(ActivityEvent::Ended {
+            reason: value
+                .get("data")
+                .and_then(|d| d.get("message"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("session error")
+                .to_string(),
+        }),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

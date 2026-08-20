@@ -390,9 +390,15 @@ where
                             },
                         );
                         // Discover this project's worktrees from git now that a client is looking at
-                        // it, and send the refreshed catalog to *this* client only (FR-018, T053).
-                        // Attach is per-client and exclusive, so a broadcast would be both wrong
-                        // (others aren't in this project) and disruptive to their message stream.
+                        // it, then the sessions its CLIs recorded there that we have no record of
+                        // (feature 026, FR-014 — research R15), and send the refreshed catalog to
+                        // *this* client only (FR-018, T053). Attach is per-client and exclusive, so
+                        // a broadcast would be both wrong (others aren't in this project) and
+                        // disruptive to their message stream.
+                        //
+                        // The order is load-bearing: discovery reads the worktree cache the refresh
+                        // just filled, and both must land before the snapshot is built or a
+                        // discovered session appears only on the *next* open.
                         refresh_worktrees_and_send(state, id, project).await;
                     }
                     Err(reason) => {
@@ -515,11 +521,12 @@ where
                 req,
                 project,
                 worktree_dir,
+                provider,
             } => {
                 // The catalog write stays on the loop: it is a small atomic file write, and it is
                 // what mints the id every later message refers to. Only the spawn — the slow half
                 // — is deferred (BUG-009, T125).
-                match state.create_session(&project, &worktree_dir) {
+                match state.create_session(&project, &worktree_dir, provider) {
                     Ok(session) => {
                         // A brand-new session starts fresh (`claude --session-id`), never `--resume`
                         // against a conversation that does not exist yet.
@@ -659,6 +666,7 @@ where
                 env_include_enabled,
                 env_include_script_path,
                 env_include_timeout_secs,
+                default_ai_cli,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
@@ -677,6 +685,10 @@ where
                             env_include_timeout_secs,
                         )
                     }
+                })
+                .and_then(|()| match default_ai_cli {
+                    Some(which) => state.set_default_ai_cli(which),
+                    None => Ok(()),
                 });
                 match result {
                     Ok(()) => state.send(
@@ -1352,11 +1364,29 @@ async fn refresh_worktrees_and_send(
     );
 }
 
-/// Run the (blocking) git worktree discovery off the async runtime, updating the cache.
+/// Run the (blocking) git worktree discovery off the async runtime, updating the cache — and, in
+/// the same hop, the FR-014 pass that finds sessions started outside this application.
+///
+/// One `spawn_blocking` rather than two: the second step reads the worktree cache the first just
+/// filled, so they are one unit of blocking work and splitting them would add a runtime round trip
+/// for nothing (research R15).
 async fn refresh_worktrees_off_runtime(state: &Arc<DaemonState>, project: &std::path::Path) {
     let st = Arc::clone(state);
     let proj = project.to_path_buf();
-    let _ = tokio::task::spawn_blocking(move || st.refresh_worktrees(&proj)).await;
+    let discovered = tokio::task::spawn_blocking(move || {
+        st.refresh_worktrees(&proj);
+        st.discover_external_sessions(&proj)
+    })
+    .await;
+    if let Ok(count) = discovered {
+        if count > 0 {
+            tracing::info!(
+                project = %project.display(),
+                count,
+                "adopted sessions started outside this application"
+            );
+        }
+    }
 }
 
 /// Run empty-session pruning (which stats the provider's conversation store) off the async runtime.
@@ -1496,8 +1526,15 @@ fn spawn_session_start(
         let gate = task_state.session_gate(session);
         let _serialized = gate.lock().await;
         let worker = Arc::clone(&task_state);
-        let outcome =
-            tokio::task::spawn_blocking(move || worker.start_session(session, launch)).await;
+        let outcome = tokio::task::spawn_blocking(move || {
+            worker.start_session(session, launch)?;
+            // Watch this session's own event log, for a provider that reports one (feature 026,
+            // T064). In the same blocking hop as the spawn, and **only** for a session the daemon
+            // has just started — that is what keeps a merely discovered session unwatched.
+            worker.open_event_log_tail(session);
+            Ok::<(), std::io::Error>(())
+        })
+        .await;
         match outcome {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {

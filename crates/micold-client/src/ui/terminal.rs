@@ -1159,7 +1159,10 @@ mod tests {
             availability: Availability::Available,
         });
         state.workspace.active = Some(path.clone());
-        let mut session = Session::start_new(SessionLocation::Default);
+        let mut session = Session::start_new(
+            SessionLocation::Default,
+            micold_core::session::AiCli::ClaudeCode,
+        );
         session.lifecycle = lifecycle;
         let id = session.id;
         state.workspace.sessions.insert(path, vec![session]);
@@ -1184,7 +1187,10 @@ mod tests {
             availability: Availability::Available,
         });
         state.workspace.active = Some(path.clone());
-        let mut session = Session::start_new(SessionLocation::Default);
+        let mut session = Session::start_new(
+            SessionLocation::Default,
+            micold_core::session::AiCli::ClaudeCode,
+        );
         session.lifecycle = lifecycle;
         session.mode = mode;
         let mut opened = Vec::new();

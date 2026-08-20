@@ -2,6 +2,24 @@
 
 Open **Settings** from the overflow menu (the three-dots button) in the top toolbar.
 
+## Default AI CLI
+
+Which AI coding CLI a new session runs when you don't choose one for it.
+
+- **The choices** are the CLIs you actually have installed. If only one is installed, that is the
+  only option — and nothing else about starting a session changes for you.
+- **Default**: Claude Code.
+- **Changing it affects new sessions only.** A session's CLI is fixed when the session is created
+  and never changes afterwards, so sessions you already have keep running the CLI they started on.
+- You can override it per session without touching this setting — see
+  [Worktrees & sessions → Choosing which AI CLI a session runs](./worktrees-and-sessions.md#choosing-which-ai-cli-a-session-runs).
+
+**If your default names a CLI that isn't installed, the app keeps it rather than quietly changing
+it.** That is deliberate. A CLI can be missing for a moment — a `PATH` that hasn't loaded, an
+upgrade in progress — and silently rewriting your preference would lose a choice you made without
+saying so. The setting stays as you left it, and when you start a session the app tells you what is
+missing and offers the CLIs that are available instead of substituting one.
+
 ## Terminal scrollback limit
 
 Controls how many lines of earlier output each session's terminal keeps for scrolling back

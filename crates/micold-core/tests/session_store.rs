@@ -4,7 +4,7 @@
 
 use micold_core::project::{Availability, Project};
 use micold_core::session::{
-    Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,
+    AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,
 };
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -30,12 +30,14 @@ fn workspace_with_sessions() -> (Workspace, PathBuf, SessionId) {
                 SessionLocation::Worktree("feat-x".to_string()),
                 SessionLabel::Named("Add login".to_string()),
                 TerminalMode::AiCli,
+                AiCli::ClaudeCode,
             ),
             Session::restored(
                 SessionId::from_uuid(Uuid::from_u128(0x5678)),
                 SessionLocation::Worktree("chore-cleanup".to_string()),
                 SessionLabel::Pending,
                 TerminalMode::AiCli,
+                AiCli::ClaudeCode,
             ),
         ],
     );
@@ -98,6 +100,7 @@ fn null_title_restores_as_pending() {
             SessionLocation::Worktree("feat-x".to_string()),
             SessionLabel::Pending,
             TerminalMode::AiCli,
+            AiCli::ClaudeCode,
         )],
     );
     let ws = Workspace {
@@ -133,6 +136,7 @@ fn default_session_persists_as_null_worktree_dir_and_roundtrips() {
             SessionLocation::Default,
             SessionLabel::Pending,
             TerminalMode::AiCli,
+            AiCli::ClaudeCode,
         )],
     );
     let ws = Workspace {

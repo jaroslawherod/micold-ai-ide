@@ -104,7 +104,7 @@ fn boot() -> (App, Task<Message>) {
         core.workspace.refresh_availability(caps.scanner());
         // Drop any leftover empty sessions so a restart never resumes a nonexistent
         // conversation (bug fix; see spec Clarifications 2026-07-16).
-        prune_empty_sessions(caps.provider(), &mut core.workspace);
+        prune_empty_sessions(&mut core.workspace);
     }
     let mut scrollback_lines = micold_core::settings::DEFAULT_SCROLLBACK_LINES;
     let mut env_include_enabled = micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED;
@@ -117,7 +117,15 @@ fn boot() -> (App, Task<Message>) {
         env_include_enabled = loaded.env_include_enabled;
         env_include_script_path = loaded.env_include_script_path;
         env_include_timeout_secs = loaded.env_include_timeout_secs;
+        // The local read, superseded by `DaemonConnected`'s authoritative copy a moment later. It
+        // is here so the first frame has the user's own default rather than `ClaudeCode` (feature
+        // 026, FR-003).
+        core.default_ai_cli = loaded.default_ai_cli;
     }
+    // The availability set, filled at the I/O boundary the way `worktrees` is (feature 026,
+    // T014a). Refreshed when the choice is offered — the Settings overlay opening, the override
+    // menu opening — and never per frame.
+    core.available_providers = caps.available_providers();
     let boot_cwd = default_resolution_cwd(&core);
     let boot_snapshot = resolve_env_include(
         caps.env_include(),

@@ -18,7 +18,7 @@ use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
-use micold_core::session::{Session, SessionId, ShellInstanceId};
+use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
 use std::path::Path;
 
 /// Why entering a project landed on the session it did — or on none (feature 008 FR-003).
@@ -876,5 +876,176 @@ impl State {
     /// release affordance. It holds until they give it back or navigate to a terminal.
     pub(crate) fn release_terminal(&mut self) {
         self.terminal_released = true;
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Which AI CLI a new session runs (feature 026, T030/T032a/T075 — FR-002, FR-004, FR-006)
+// ---------------------------------------------------------------------------------------
+
+/// Which half of the split start affordance the user pressed (feature 026, FR-004).
+///
+/// The affordance is one control with two press targets: the primary half starts the default in a
+/// single interaction exactly as the plain button did, and the secondary half opens the list. The
+/// *view* reports which half was hit; everything that follows from that is decided here, because
+/// Principle I's GUI exception covers drawing and does not cover branching.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PressTarget {
+    /// The main button — "start a session".
+    Primary,
+    /// The adjacent control — "start a session on…".
+    Secondary,
+}
+
+/// What a press should actually do (feature 026, T032a).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartIntent {
+    /// Start immediately, on this CLI.
+    Start(AiCli),
+    /// Do not start anything; offer these CLIs to choose from.
+    ///
+    /// Two different presses land here and they are the same answer: the secondary half, which
+    /// asks for the list; and the primary half when the stored default is not installed, where
+    /// FR-004 says to *tell* the user and offer what is available rather than silently substituting
+    /// or silently doing nothing.
+    OfferChoice(Vec<AiCli>),
+    /// No AI CLI is installed, so there is nothing to start and nothing to offer (FR-006).
+    NothingAvailable,
+}
+
+impl State {
+    /// The CLI a new session should run: the per-session override if one was chosen, otherwise the
+    /// stored default (FR-004).
+    ///
+    /// Choosing an override does **not** touch the default — that is FR-004's other half, and it is
+    /// true here by shape: this function reads `default_ai_cli` and writes nothing.
+    pub fn provider_for_start(&self, chosen: Option<AiCli>) -> AiCli {
+        chosen.unwrap_or(self.default_ai_cli)
+    }
+
+    /// Whether the stored default is currently installed (FR-002).
+    ///
+    /// A `false` here is **not** a reason to rewrite the preference. The stored value stays as the
+    /// user left it and is shown marked, so a temporary `PATH` problem cannot silently discard a
+    /// choice (research R11).
+    pub fn default_ai_cli_is_available(&self) -> bool {
+        self.available_providers.contains(&self.default_ai_cli)
+    }
+
+    /// The CLIs to offer in a menu — the Settings select and the override list (FR-006, T075).
+    ///
+    /// A pure function over `State`, deliberately: `features/` cannot see `Capabilities` and must
+    /// not learn to, so the availability set arrives as state (T014a) and this reads it.
+    pub fn offered_providers(&self) -> Vec<AiCli> {
+        self.available_providers.clone()
+    }
+
+    /// Whether the split affordance's secondary half exists at all (FR-006, SC-001).
+    ///
+    /// Absent when fewer than two CLIs are available: a "choose which one" control that opens a
+    /// list of one is a worse single-CLI experience than the plain button it replaced.
+    pub fn start_affordance_offers_a_choice(&self) -> bool {
+        self.available_providers.len() >= 2
+    }
+
+    /// Resolve a press into what should happen (T032a).
+    ///
+    /// The whole branch lives here so `ui/sidebar.rs` only dispatches. The interesting case is the
+    /// primary half with an unavailable default: it neither starts the default (FR-002 forbids
+    /// substituting silently, and starting a missing binary is FR-010's failure, not FR-004's
+    /// answer) nor does nothing.
+    pub fn start_intent(&self, target: PressTarget) -> StartIntent {
+        if self.available_providers.is_empty() {
+            return StartIntent::NothingAvailable;
+        }
+        match target {
+            PressTarget::Primary if self.default_ai_cli_is_available() => {
+                StartIntent::Start(self.default_ai_cli)
+            }
+            // The default names a CLI that is not installed: say so and offer what is.
+            PressTarget::Primary => StartIntent::OfferChoice(self.offered_providers()),
+            PressTarget::Secondary => StartIntent::OfferChoice(self.offered_providers()),
+        }
+    }
+}
+
+/// The "start a session on…" list, and where it hangs from (feature 026, FR-004).
+///
+/// Mirrors [`SessionMenu`]: what the surface acts on, plus the press point it was opened at. The
+/// anchor arrives a message later than the location — see [`start_menu_anchored`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StartMenu {
+    /// Where a session started from this list would run.
+    pub location: SessionLocation,
+    /// The menu panel's top-left corner, in window pixels (the press point). Clamped at render
+    /// time, not here.
+    pub anchor: (u16, u16),
+}
+
+/// The "start a session on…" list was asked for at a location (feature 026, FR-004).
+///
+/// A second press on the same row's chevron closes it, like every other menu here — the same
+/// replace-or-close rule `menu_toggled` applies to the session context menu.
+///
+/// It opens at the origin and is moved by [`start_menu_anchored`], which the same press publishes
+/// immediately after this one. Deciding *whether* the list is open has to happen before the point
+/// is known, because the decision is a toggle and the point is the same for both answers.
+pub fn start_menu_toggled(state: &mut State, location: SessionLocation) {
+    state.session_start_menu = if state
+        .session_start_menu
+        .as_ref()
+        .is_some_and(|open| open.location == location)
+    {
+        None
+    } else {
+        Some(StartMenu {
+            location,
+            anchor: (0, 0),
+        })
+    };
+}
+
+/// Where the chevron that opened the list was pressed (018 BUG-008, FR-029d).
+///
+/// A no-op when nothing is open, which is what the *closing* half of the toggle above leaves
+/// behind: the same press publishes both messages, and iced applies every queued message before it
+/// draws, so the panel is never rendered at the origin the toggle opened it at.
+pub fn start_menu_anchored(state: &mut State, anchor: (u16, u16)) {
+    if let Some(open) = &mut state.session_start_menu {
+        open.anchor = anchor;
+    }
+}
+
+/// The "start a session on…" list was dismissed without choosing.
+pub fn start_menu_dismissed(state: &mut State) {
+    state.session_start_menu = None;
+}
+
+/// The "start a session on…" list, as a floating surface (feature 026, T033).
+///
+/// A menu, not a dialog: it is summoned from a row's chevron, it is anchored to the sidebar like
+/// the worktree and session context menus, and clicking away is how it goes. It registers here for
+/// the same reason they do — what closes a surface is one rule, stated once (FR-009).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionStartMenu;
+
+impl FloatingSurface for SessionStartMenu {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("session_start_menu")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::ContextMenu
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::ContextMenu)
+            .cancelled_by(Message::SessionStartMenuDismissed)
+    }
+}
+
+impl Registered for SessionStartMenu {
+    fn open_in(state: &State) -> Option<Self> {
+        state.session_start_menu.as_ref().map(|_| SessionStartMenu)
     }
 }

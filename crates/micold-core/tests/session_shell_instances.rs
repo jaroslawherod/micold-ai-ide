@@ -1,7 +1,7 @@
 //! T003 — `ShellInstanceId` allocation and the `Session` instance mutators (feature 011,
 //! FR-001–FR-004, FR-007–FR-013, FR-017; contracts/shell-instance-lifecycle.md).
 
-use micold_core::session::{Session, SessionLocation, ShellLifecycle, TerminalMode};
+use micold_core::session::{AiCli, Session, SessionLocation, ShellLifecycle, TerminalMode};
 
 fn worktree(name: &str) -> SessionLocation {
     SessionLocation::Worktree(name.to_string())
@@ -9,7 +9,7 @@ fn worktree(name: &str) -> SessionLocation {
 
 #[test]
 fn session_start_new_has_no_shell_instances() {
-    let s = Session::start_new(worktree("feature-x"));
+    let s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     assert!(s.shells.is_empty());
     assert_eq!(s.active_shell, None);
     assert_eq!(s.mode, TerminalMode::AiCli);
@@ -23,6 +23,7 @@ fn session_restored_has_no_shell_instances_even_in_regular_mode() {
         worktree("feature-x"),
         SessionLabel::Pending,
         TerminalMode::Regular,
+        AiCli::ClaudeCode,
     );
     assert!(s.shells.is_empty(), "no process survives a restart");
     assert_eq!(s.active_shell, None);
@@ -35,7 +36,7 @@ fn session_restored_has_no_shell_instances_even_in_regular_mode() {
 
 #[test]
 fn open_shell_instance_appends_and_becomes_active() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     let first = s.open_shell_instance();
     assert_eq!(s.shells.len(), 1);
     assert_eq!(s.shells[0].id, first);
@@ -55,7 +56,7 @@ fn open_shell_instance_appends_and_becomes_active() {
 
 #[test]
 fn shell_instance_ids_are_never_reused_across_open_and_close() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     let first = s.open_shell_instance();
     s.close_shell(first);
     assert!(s.shells.is_empty());
@@ -69,7 +70,7 @@ fn shell_instance_ids_are_never_reused_across_open_and_close() {
 
 #[test]
 fn select_shell_switches_the_active_instance() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     let first = s.open_shell_instance();
     let second = s.open_shell_instance();
     assert_eq!(s.active_shell, Some(second));
@@ -80,7 +81,7 @@ fn select_shell_switches_the_active_instance() {
 
 #[test]
 fn select_shell_is_a_no_op_for_an_unknown_id() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     let first = s.open_shell_instance();
     let unknown = s.open_shell_instance();
     s.close_shell(unknown);
@@ -95,7 +96,7 @@ fn select_shell_is_a_no_op_for_an_unknown_id() {
 
 #[test]
 fn close_shell_of_a_background_instance_leaves_active_shell_untouched() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     let first = s.open_shell_instance();
     let second = s.open_shell_instance();
     s.select_shell(first);
@@ -111,7 +112,7 @@ fn close_shell_of_a_background_instance_leaves_active_shell_untouched() {
 
 #[test]
 fn close_shell_of_the_active_instance_activates_the_next_in_list() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     let first = s.open_shell_instance();
     let second = s.open_shell_instance();
     let third = s.open_shell_instance();
@@ -131,7 +132,7 @@ fn close_shell_of_the_active_instance_activates_the_next_in_list() {
 
 #[test]
 fn close_shell_of_the_active_last_instance_falls_back_to_the_new_last() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     let first = s.open_shell_instance();
     let second = s.open_shell_instance();
     let third = s.open_shell_instance();
@@ -148,7 +149,7 @@ fn close_shell_of_the_active_last_instance_falls_back_to_the_new_last() {
 
 #[test]
 fn close_shell_of_the_last_remaining_instance_reverts_mode_to_ai_cli() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     s.set_mode(TerminalMode::Regular);
     let only = s.open_shell_instance();
 
@@ -164,7 +165,7 @@ fn close_shell_of_the_last_remaining_instance_reverts_mode_to_ai_cli() {
 
 #[test]
 fn close_shell_is_a_no_op_for_an_unknown_id() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     let only = s.open_shell_instance();
     let unknown = s.open_shell_instance();
     s.close_shell(unknown);
@@ -176,7 +177,7 @@ fn close_shell_is_a_no_op_for_an_unknown_id() {
 
 #[test]
 fn restart_shell_instance_delegates_to_that_instances_lifecycle() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     let id = s.open_shell_instance();
     s.mark_shell_running(id);
     assert_eq!(s.active_shell_lifecycle(), Some(ShellLifecycle::Running));
@@ -190,7 +191,7 @@ fn restart_shell_instance_delegates_to_that_instances_lifecycle() {
 
 #[test]
 fn restart_mark_running_mark_exited_are_no_ops_for_an_unknown_id() {
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     let id = s.open_shell_instance();
     let unknown = s.open_shell_instance();
     s.close_shell(unknown);
@@ -205,7 +206,7 @@ fn restart_mark_running_mark_exited_are_no_ops_for_an_unknown_id() {
 
 #[test]
 fn active_shell_lifecycle_is_none_when_there_are_no_instances() {
-    let s = Session::start_new(worktree("feature-x"));
+    let s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     assert_eq!(s.active_shell_lifecycle(), None);
 }
 
@@ -213,7 +214,7 @@ fn active_shell_lifecycle_is_none_when_there_are_no_instances() {
 fn shell_instance_mutators_never_touch_ai_cli_lifecycle() {
     use micold_core::session::SessionLifecycle;
 
-    let mut s = Session::start_new(worktree("feature-x"));
+    let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     s.mark_running();
     let ai_cli_before = s.lifecycle;
     assert_eq!(ai_cli_before, SessionLifecycle::Running);

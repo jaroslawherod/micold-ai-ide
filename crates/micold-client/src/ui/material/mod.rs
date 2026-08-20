@@ -56,6 +56,9 @@ mod form_field_anatomy;
 pub mod glyph;
 mod icon_button;
 mod icon_label;
+/// A toggle that names what it toggles — a glyph and a short word in one control (feature 026,
+/// T066a). The terminal bar's AI-CLI mode toggle carries the session's CLI with it.
+mod labelled_toggle;
 mod menu;
 /// §7.5's *spatial* figures — the item's inset, the panel's padding, the leading glyph, and what
 /// sits between two items. `anatomy_size` reads sizes; these are positions, and nothing read them
@@ -90,6 +93,9 @@ mod select;
 #[cfg(test)]
 mod select_anatomy;
 mod snackbar;
+/// The split action — a primary button with an adjacent "…or choose" chevron (feature 026,
+/// T033). Used by the sidebar's start-a-session row action.
+mod split_action;
 /// The one place design tokens become rendering types. Internal by intent (FR-002): a feature
 /// module that could reach it could render an off-spec variant of a shared component, which is
 /// exactly the drift this feature removes. `pub(crate)` rather than private only because the
@@ -151,6 +157,7 @@ pub use form_field::{FormField, Layer as FieldLayer};
 pub use glyph::Glyph;
 pub use icon_button::IconButton;
 pub use icon_label::IconLabel;
+pub use labelled_toggle::LabelledToggle;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use navigation_drawer::NavigationDrawer;
@@ -161,6 +168,7 @@ pub use ripple::{pulse as ripple_pulse, Ripple};
 pub use scrollable::{ScrollDirection, Scrollable};
 pub use select::Select;
 pub use snackbar::Snackbar;
+pub use split_action::SplitAction;
 pub use surface::{Kind as SurfaceKind, Surface};
 pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
 pub use tab_strip::TabStrip;
