@@ -69,8 +69,9 @@ anywhere in this feature is the defect 012 BUG-004 was.
   position regardless of instance count (FR-002c).
 - The strip scrolls to the **mouse wheel** while the pointer is over it. No scroll-arrow controls
   (FR-002f).
-- An edge with content beyond it carries a **fade**; when the content beyond it is the marked tab,
-  that edge says so specifically (FR-002e).
+- An edge with content beyond it carries a **fade**, tinted from the surface. When the content
+  beyond that edge is the **marked** tab, the fade is drawn in the **accent role the active
+  indicator wears** instead (FR-002e). Two states, one cue, differing only in role.
 - Changing the marked tab **scrolls it into view** (FR-002d). A user may then scroll away by hand.
 
 ## The tab's own shape

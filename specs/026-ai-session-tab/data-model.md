@@ -8,6 +8,9 @@ already holds. What follows is that shape.
 
 ### `StripTab` *(new, view-level)*
 
+The implementation of the spec's **Tab** entity: one type covering both kinds of member the strip
+holds, so "the AI tab" and "a terminal tab" are two variants rather than two code paths.
+
 Which member of the strip something refers to.
 
 | Variant | Payload | Means |

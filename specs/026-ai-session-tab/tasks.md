@@ -78,6 +78,13 @@ private to one feature. This feature is what makes it necessary rather than tidy
 serves two kinds of member, and it is about to carry a scrolling viewport, a state mark and a state
 layer.
 
+**This phase writes no user-guide page**, unlike every user-story phase below, and that is
+deliberate rather than an omission: Principle VII asks that a change a user must be *told* about
+ship with its documentation, and nothing here is. The promotion (T008–T010) is invisible by
+construction, and the highlight (T011) changes the shape of a hover state that the guide has never
+described and would not be clearer for describing. What a user does with the strip is documented in
+T029, T044 and T052, inside the stories that add it.
+
 **This phase changes no geometry.** T010 and T011 are a move and a redraw; `layout_snapshot.txt` must
 come out **byte-identical** after both, and that is the verification. A fixture that moves here means
 the promotion changed something it was not supposed to.
@@ -102,9 +109,19 @@ the promotion changed something it was not supposed to.
   nothing and confirm `cargo test -p micold-client --test layout_snapshot` is green *without*
   regenerating — a byte-identical fixture is the proof that promoting the component changed no
   geometry. If it moves, the move was not one
+- [ ] T010a Failing test in `crates/micold-client/src/ui/material/tab.rs`'s `mod tests`: a `Tab`
+  reports the shape of its state layer, and that shape is `shape::NONE` — not the `shape::FULL` a
+  `ButtonVariant::Text` ripple wraps every button in (FR-015, SC-010). Principle I is
+  NON-NEGOTIABLE and this is the one part of T011 that is a *value* rather than a composited pixel:
+  T006 asserts the parts a tab reports and deliberately not its appearance, so without this task the
+  only requirement Phase 2 exists to satisfy would land untested and the visual pass (T013) would be
+  its sole cover. What T013 still has to see is that a rectangle of the right size is actually
+  *drawn*; what this task fixes in place is that nobody reintroduces the pill by reaching for the
+  button's ripple again
 - [ ] T011 Give the tab a **rectangular** state layer in
   `crates/micold-client/src/ui/material/tab.rs` — `shape::NONE`, spanning the tab's full width and
-  height — instead of the `shape::FULL` pill a `ButtonVariant::Text` ripple draws (FR-015, SC-010).
+  height — instead of the `shape::FULL` pill a `ButtonVariant::Text` ripple draws (depends on T010a;
+  FR-015, SC-010).
   An unhighlighted tab still draws nothing at all (feature 012 FR-004b). The fixture stays
   byte-identical here too: a state layer is drawn, not laid out, which is exactly why no gate can
   see this and the visual pass must
@@ -257,13 +274,18 @@ delivery choice rather than a correctness one.
 - [ ] T034 [US1] Scroll the marked tab into view when it changes, in
   `crates/micold-client/src/ui/terminal.rs` (depends on T032; FR-002d)
 - [ ] T035 [US1] Draw the edge fade in `crates/micold-client/src/ui/terminal.rs` on any edge with
-  content beyond it, distinctly when the content beyond it is the marked tab (depends on T031;
-  FR-002e). Wheel scrolling comes from the scrollable;
+  content beyond it — tinted from the **surface** normally, and from the **primary/accent role the
+  active indicator wears** when the tab beyond that edge is the marked one (depends on T031;
+  FR-002e, research R6). One cue in two states differing only in role, so the edge is tinted with
+  the very colour the user is scanning for; do not add a glyph, an arrow or a second width. Wheel scrolling comes from the scrollable;
   **no scroll-arrow controls** (FR-002f) — they would spend an interactive target's width at each end
   of the bar T016 just finished protecting
 - [ ] T036 [US1] Run `quickstart.md` §6 with the `visual-pass` skill and append it to
-  `specs/026-ai-session-tab/visual-pass.md` (depends on T033–T035; SC-008, SC-009). The fade is drawn, not laid out, so this is the only check
-  that can see it at all; §6's first expectation is also the regression check for T016
+  `specs/026-ai-session-tab/visual-pass.md` (depends on T033–T035; SC-008, SC-009). The fade is
+  drawn, not laid out, so this is the only check that can see it at all. Capture the neutral and the
+  accent edge **at the same crop** and put them side by side: a role difference is the entire cue,
+  and it is the kind of difference two separately-framed screenshots hide. §6's first expectation is
+  also the regression check for T016
 
 **Checkpoint**: US1 complete. The strip is always present, always marked, and honest under overflow.
 
@@ -446,7 +468,7 @@ same mark in the same place. Restart either from its menu — the mark clears.
 ### Parallel opportunities
 
 - **Phase 1**: T001 ∥ T002, then T003 ∥ T004, then T005
-- **Phase 2**: T006 ∥ T007, then T008 ∥ T009; T010 → T011 → T012 → T013 is a strict chain
+- **Phase 2**: T006 ∥ T007, then T008 ∥ T009; T010 → T010a → T011 → T012 → T013 is a strict chain
 - **Phase 3**: T017 ∥ T019 (different concerns, same file — coordinate the edit); T014–T016 are a
   strict chain
 - **Phase 4**: T021 ∥ T022 ∥ T023; T031 ∥ T032; T029 ∥ any implementation task

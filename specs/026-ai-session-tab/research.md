@@ -117,9 +117,18 @@ requires the tabs to remain reachable.
 ## R6 — The edge fade, and what can gate it
 
 **Decision.** The fade is drawn as an overlay on the scrolling viewport's leading and trailing
-edges, present when content lies beyond that edge and given a distinct treatment when the tab beyond
-it is the marked one (FR-002e). It is **appearance**, so it is verified by the `visual-pass` skill,
-not by a layout gate — and the plan says so rather than implying a gate covers it.
+edges, present when content lies beyond that edge. It carries the surface's own tint normally and
+the **primary/accent role** — the one the active indicator wears — when the tab beyond that edge is
+the marked one (FR-002e). It is **appearance**, so it is verified by the `visual-pass` skill, not by
+a layout gate — and the plan says so rather than implying a gate covers it.
+
+**Why the accent rather than a second cue.** The alternatives were an arrow glyph at the edge
+(rejected with the scroll arrows, FR-002f: it reintroduces the thing that requirement removes), a
+thicker or wider fade (a magnitude difference, unreadable without the other state beside it to
+compare against), and a differently-coloured fade of its own (a third vocabulary for a strip that
+already has exactly two colour words). Reusing the indicator's accent means the edge is tinted with
+the very thing the user is looking for, so the two states differ by **role**, which is a value the
+style snapshot can record even though the composited gradient is not gateable.
 
 **Rationale.** The layout-snapshot gates resolve rectangles. A gradient is drawn, not laid out: it
 occupies the same box whether it is opaque or invisible, which is the family of defect the
