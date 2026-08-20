@@ -22,7 +22,9 @@ use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
 use iced::widget::{column, container, row};
 use iced::{Alignment, Color, Element, Font, Length};
 use micold_core::protocol::grid::{WireColor, WireStyle};
-use micold_core::session::{SessionId, SessionLifecycle, ShellLifecycle, TerminalMode};
+use micold_core::session::{
+    SessionId, SessionLifecycle, ShellInstanceId, ShellLifecycle, TerminalMode,
+};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Rgb};
 
@@ -617,24 +619,98 @@ fn restart_message(state: &State, id: SessionId) -> Message {
     }
 }
 
-/// Whether the bottom-bar restart control should show (FR-013): the currently-attached process
-/// (per `Session.mode`) is not running (contracts/terminal-mode-lifecycle.md's predicate).
-fn attached_process_restartable(state: &State, id: SessionId) -> bool {
+/// Which member of the strip something refers to (feature 026, `data-model.md`).
+///
+/// **A closed two-variant enum, not an `Option<ShellInstanceId>`.** Principle V asks that invalid
+/// states be unrepresentable, and this is where FR-005's "never zero, never two" is either
+/// structural or a rule somebody has to keep. `None` already means something else in this file —
+/// "this session has no active instance" — so overloading it to also mean "the AI tab" gives one
+/// value two meanings and makes [`marked_tab`] unanswerable in the one case that matters. A closed
+/// enum makes the marked tab a **total function** of `(TerminalMode, Option<ShellInstanceId>)`, so
+/// exactly one tab is marked because there is nowhere else for the answer to go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StripTab {
+    /// One open Regular Terminal instance.
+    Instance(ShellInstanceId),
+    /// The session's single AI CLI process.
+    Ai,
+}
+
+/// Which tab the strip marks — the one whose content the pane is displaying (FR-005).
+///
+/// Total by construction, which is the whole of FR-005's "never zero, never two". The `Regular`
+/// session with no active instance falls to the AI tab rather than to nothing: that is what the
+/// pane shows in that state, and a strip that marked no tab there would be the exact defect this
+/// feature exists to remove, arriving by a different route.
+///
+/// It reads `mode`, which the mode toggle also writes, so FR-008's "the toggle and the AI tab must
+/// not be able to disagree" is structural rather than a synchronisation effort — there is no second
+/// selection to keep in step.
+pub(crate) fn marked_tab(state: &State, id: SessionId) -> StripTab {
+    let Some(session) = state.active_sessions().iter().find(|s| s.id == id) else {
+        return StripTab::Ai;
+    };
+    match session.mode {
+        TerminalMode::AiCli => StripTab::Ai,
+        TerminalMode::Regular => session
+            .active_shell
+            .map(StripTab::Instance)
+            .unwrap_or(StripTab::Ai),
+    }
+}
+
+/// Whether the process behind `tab` is **stopped** — not running, and restartable (feature 026
+/// FR-012d, research R1/R2).
+///
+/// One predicate for both lifecycle vocabularies, and three things are derived from it: whether a
+/// tab wears the stopped mark (FR-012d), whether that tab's menu carries a restart item (FR-006a),
+/// and therefore whether the menu opens at all (FR-006b). FR-012d asks the mark and the menu to
+/// *agree*, and deriving both from one function is what makes that true by construction rather than
+/// by two matches happening to say the same thing.
+///
+/// This file has already paid twice for the alternative. `empty_terminal_message`'s own comment
+/// records that the pane and the bar disagreed "for exactly as long as they were two readings of
+/// one fact"; BUG-004 was `restart_message` re-deriving something the predicate beside it already
+/// had. [`attached_process_restartable`] is a call into this one for the same reason.
+///
+/// **The rule is translated, not the names.** FR-012d names `NotStarted` and `Exited`, which are a
+/// shell's vocabulary; the AI process has a larger lifecycle of its own. The rule underneath is
+/// FR-012d's: the mark appears exactly where a restart can act. `Starting` and `Restarting` are
+/// excluded in both rows by FR-012e — they are in progress, and a mark on a state nobody can act on
+/// sends a user to a press that does nothing (FR-006b), which is the dead end the mark exists to
+/// prevent.
+pub(crate) fn process_stopped(state: &State, id: SessionId, tab: StripTab) -> bool {
     let Some(session) = state.active_sessions().iter().find(|s| s.id == id) else {
         return false;
     };
-    match session.mode {
-        TerminalMode::AiCli => matches!(
+    match tab {
+        StripTab::Ai => matches!(
             session.lifecycle,
             SessionLifecycle::Idle
                 | SessionLifecycle::Failed
                 | SessionLifecycle::InterruptedResumable
         ),
-        TerminalMode::Regular => matches!(
-            session.active_shell_lifecycle(),
+        StripTab::Instance(instance) => matches!(
+            session
+                .shells
+                .iter()
+                .find(|s| s.id == instance)
+                .map(|s| s.lifecycle),
             None | Some(ShellLifecycle::NotStarted | ShellLifecycle::Exited)
         ),
     }
+}
+
+/// Whether the bottom-bar restart control should show (FR-013): the currently-attached process
+/// (per `Session.mode`) is not running (contracts/terminal-mode-lifecycle.md's predicate).
+///
+/// A thin call into [`process_stopped`] since feature 026 (research R2), asking it about whichever
+/// tab the pane is currently showing. Keeping it as its own name rather than inlining the call: the
+/// bar's question is "is *the* attached process restartable", which is a different question from
+/// the strip's "is *this* tab's process restartable", and it happens to be the strip's question
+/// asked about the marked tab.
+fn attached_process_restartable(state: &State, id: SessionId) -> bool {
+    process_stopped(state, id, marked_tab(state, id))
 }
 
 /// The instance-switching control (feature 011, FR-004/FR-005; contracts/terminal-instance-
@@ -741,6 +817,203 @@ mod tests {
         state.workspace.sessions.insert(path, vec![session]);
         state.active_session = Some(id);
         (state, id)
+    }
+
+    /// A state with one project and one session in `mode`, holding `shells` instances at the given
+    /// lifecycles and marking `active` (an index into `shells`) as the displayed one.
+    fn state_with_instances(
+        mode: TerminalMode,
+        lifecycle: SessionLifecycle,
+        shells: &[ShellLifecycle],
+        active: Option<usize>,
+    ) -> (State, SessionId) {
+        let mut state = State::default();
+        let path = std::path::PathBuf::from("/repo");
+        state.workspace.projects.push(Project {
+            path: path.clone(),
+            display_name: "repo".to_string(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        });
+        state.workspace.active = Some(path.clone());
+        let mut session = Session::start_new(SessionLocation::Default);
+        session.lifecycle = lifecycle;
+        session.mode = mode;
+        let mut opened = Vec::new();
+        for want in shells {
+            let id = session.open_shell_instance();
+            // Written rather than driven through the transitions: `open_shell_instance` leaves an
+            // instance `Starting`, so `NotStarted` — a state a *restored* session's instances are
+            // in, and one of the two FR-012d names — is not reachable by any public transition.
+            // A table-driven test has to be able to state its inputs.
+            if let Some(instance) = session.shells.iter_mut().find(|s| s.id == id) {
+                instance.lifecycle = *want;
+            }
+            opened.push(id);
+        }
+        session.active_shell = active.map(|i| opened[i]);
+        let id = session.id;
+        state.workspace.sessions.insert(path, vec![session]);
+        state.active_session = Some(id);
+        (state, id)
+    }
+
+    /// FR-005: exactly one tab is marked, for **every** combination of mode and active instance.
+    ///
+    /// "Never zero, never two" is a claim about **totality**, so this is where it is proved: the
+    /// function returns one `StripTab` and there is nowhere else for the answer to go. The case
+    /// that does the work is the last one — a `Regular` session whose `active_shell` is `None`,
+    /// which is what an `Option<ShellInstanceId>` would have had to answer twice for (Principle V).
+    #[test]
+    fn exactly_one_tab_is_marked_in_every_state() {
+        // AI CLI mode: the AI tab is marked whatever the instances are doing.
+        for active in [None, Some(0), Some(1)] {
+            let (state, id) = state_with_instances(
+                TerminalMode::AiCli,
+                SessionLifecycle::Running,
+                &[ShellLifecycle::Running, ShellLifecycle::Running],
+                active,
+            );
+            assert_eq!(
+                marked_tab(&state, id),
+                StripTab::Ai,
+                "in AiCli mode the AI tab is the displayed one regardless of active_shell \
+                 ({active:?})"
+            );
+        }
+
+        // Regular mode with an instance selected: that instance's tab, and not the AI tab.
+        let (state, id) = state_with_instances(
+            TerminalMode::Regular,
+            SessionLifecycle::Running,
+            &[ShellLifecycle::Running, ShellLifecycle::Running],
+            Some(1),
+        );
+        let selected = state.active_sessions()[0].shells[1].id;
+        assert_eq!(marked_tab(&state, id), StripTab::Instance(selected));
+
+        // Regular mode with **no** instance selected. `None` already means "this session has no
+        // active instance" in this file, so overloading it to also mean "the AI tab" would make
+        // this case unanswerable. The AI tab is what the pane shows, so the AI tab is marked.
+        let (state, id) =
+            state_with_instances(TerminalMode::Regular, SessionLifecycle::Running, &[], None);
+        assert_eq!(
+            marked_tab(&state, id),
+            StripTab::Ai,
+            "a Regular session with nothing to show falls back to the AI tab — never to no tab \
+             at all, which is the state FR-005 exists to forbid"
+        );
+
+        // A session that is not in the workspace at all still answers, because the return type
+        // leaves no room not to.
+        let (state, _) =
+            state_with_instances(TerminalMode::Regular, SessionLifecycle::Running, &[], None);
+        assert_eq!(marked_tab(&state, SessionId::new()), StripTab::Ai);
+    }
+
+    /// FR-012d / FR-012e, research R1 and R2: **one** predicate answers "this process is stopped"
+    /// for both lifecycle vocabularies.
+    ///
+    /// Asserted for every variant of both enums **by name**, so a variant added later fails here
+    /// rather than silently defaulting into one answer or the other. The rule is the same in both
+    /// rows and it is FR-012d's own: the mark appears exactly where a restart can act.
+    #[test]
+    fn one_predicate_calls_a_process_stopped_in_both_vocabularies() {
+        let (state, id) = state_with_instances(
+            TerminalMode::AiCli,
+            SessionLifecycle::Running,
+            &[
+                ShellLifecycle::NotStarted,
+                ShellLifecycle::Starting,
+                ShellLifecycle::Running,
+                ShellLifecycle::Exited,
+            ],
+            None,
+        );
+        let shells: Vec<_> = state.active_sessions()[0]
+            .shells
+            .iter()
+            .map(|s| s.id)
+            .collect();
+        for (i, (want, why)) in [
+            (true, "a shell that was never started is restartable"),
+            (false, "a starting shell is in progress, not stopped (FR-012e)"),
+            (false, "a running shell has nothing to restart"),
+            (true, "an exited shell is the case FR-012 exists for"),
+        ]
+        .iter()
+        .enumerate()
+        .map(|(i, (w, why))| (i, (*w, *why)))
+        {
+            assert_eq!(
+                process_stopped(&state, id, StripTab::Instance(shells[i])),
+                want,
+                "{why}"
+            );
+        }
+
+        for (lifecycle, want, why) in [
+            (SessionLifecycle::Idle, true, "a persisted-but-stopped session resumes on request"),
+            (SessionLifecycle::Starting, false, "starting is in progress, not stopped (FR-012e)"),
+            (SessionLifecycle::Running, false, "a running AI process has nothing to restart"),
+            (
+                SessionLifecycle::Restarting { attempts: 1 },
+                false,
+                "an auto-restart is already under way; a mark here would point at an action                  nobody needs to take",
+            ),
+            (SessionLifecycle::Failed, true, "auto-restart gave up; a manual one is the offer"),
+            (
+                SessionLifecycle::InterruptedResumable,
+                true,
+                "the service restarted and found a conversation — resuming it is the one action",
+            ),
+        ] {
+            let (state, id) =
+                state_with_instances(TerminalMode::AiCli, lifecycle.clone(), &[], None);
+            assert_eq!(
+                process_stopped(&state, id, StripTab::Ai),
+                want,
+                "{lifecycle:?}: {why}"
+            );
+        }
+    }
+
+    /// R2's other half: the bar's own restart control and the strip must not be able to disagree.
+    ///
+    /// `attached_process_restartable` is now a call into the predicate above rather than a second
+    /// match statement, so this asserts the two give the same answer for the process the bar is
+    /// describing. This file has paid twice for the alternative — `empty_terminal_message` and the
+    /// bar disagreed "for exactly as long as they were two readings of one fact", and BUG-004 was
+    /// `restart_message` re-deriving something the predicate beside it already had.
+    #[test]
+    fn the_bar_and_the_strip_read_one_predicate() {
+        for (mode, shells, active) in [
+            (TerminalMode::AiCli, &[][..], None),
+            (TerminalMode::Regular, &[ShellLifecycle::Exited][..], Some(0)),
+            (TerminalMode::Regular, &[ShellLifecycle::Running][..], Some(0)),
+            (TerminalMode::Regular, &[][..], None),
+        ] {
+            for lifecycle in [
+                SessionLifecycle::Idle,
+                SessionLifecycle::Running,
+                SessionLifecycle::Failed,
+            ] {
+                let (state, id) = state_with_instances(mode, lifecycle.clone(), shells, active);
+                let attached = match mode {
+                    TerminalMode::AiCli => StripTab::Ai,
+                    TerminalMode::Regular => state.active_sessions()[0]
+                        .active_shell
+                        .map(StripTab::Instance)
+                        .unwrap_or(StripTab::Ai),
+                };
+                assert_eq!(
+                    attached_process_restartable(&state, id),
+                    process_stopped(&state, id, attached),
+                    "{mode:?}/{lifecycle:?}: the bar's restart control and the strip's mark are \
+                     two readings of one fact and must not be able to differ"
+                );
+            }
+        }
     }
 
     /// `012` BUG-004 / FR-010. The bar's `restart` control restarted the **session**, whose AI CLI

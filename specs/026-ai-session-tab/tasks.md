@@ -169,23 +169,23 @@ where it can be verified on its own.
 - [X] T016 Bound the strip in `crates/micold-client/src/ui/terminal.rs::pane` so its growth cannot
   take width from its siblings (depends on T015; FR-002c). The strip becomes the bar's flexible
   member and every other control keeps its measured size
-- [ ] T017 [P] Failing test beside `restart_message` in `crates/micold-client/src/ui/terminal.rs`'s
+- [X] T017 [P] Failing test beside `restart_message` in `crates/micold-client/src/ui/terminal.rs`'s
   `mod tests`: a `StripTab` names either an instance or the AI process, and `marked_tab(session)`
   returns exactly one of them for every combination of `mode` and `active_shell` — including a
   `Regular` session whose `active_shell` is `None`. FR-005's "never zero, never two" is a claim about
   totality; this is where it is proved
-- [ ] T018 Add `StripTab` and `marked_tab` to `crates/micold-client/src/ui/terminal.rs` (depends on
+- [X] T018 Add `StripTab` and `marked_tab` to `crates/micold-client/src/ui/terminal.rs` (depends on
   T017; `data-model.md`). A closed two-variant enum, **not** an `Option<ShellInstanceId>`: `None`
   already means "this session has no active instance" in this file, and overloading it to also mean
   "the AI tab" gives one value two meanings and makes the marked tab unanswerable in the one case
   that matters (Principle V)
-- [ ] T019 [P] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`: one
+- [X] T019 [P] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`: one
   predicate answers "this process is stopped" for **both** vocabularies — `Idle | Failed |
   InterruptedResumable` for the AI process, `NotStarted | Exited` for an instance — and answers
   `false` for `Starting` and `Restarting { .. }` in both (research R1, FR-012d, FR-012e). Assert it
   for every variant of both enums by name, so a variant added later fails here rather than silently
   defaulting
-- [ ] T020 Generalise `attached_process_restartable` in `crates/micold-client/src/ui/terminal.rs`
+- [X] T020 Generalise `attached_process_restartable` in `crates/micold-client/src/ui/terminal.rs`
   into that predicate, taking a `StripTab` instead of implying the attached one, and re-express
   `attached_process_restartable` as a call into it (depends on T018, T019; research R2). This is the
   phase's load-bearing task: FR-012d asks the mark and the menu to agree, and deriving both from one
