@@ -261,22 +261,22 @@ delivery choice rather than a correctness one.
 
 ### Overflow (still User Story 1 — spec scenarios 5–7)
 
-- [ ] T031 [P] [US1] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`:
+- [X] T031 [P] [US1] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`:
   "content lies beyond this edge" is a pure function of the viewport offset and the content width,
   answered for the leading edge, the trailing edge, both and neither (FR-002e). Research R6 — the
   *fade* is appearance and cannot be gated, but the fact behind it can, and this is it
-- [ ] T032 [P] [US1] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`:
+- [X] T032 [P] [US1] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`:
   changing the marked tab yields a scroll-into-view request for it, and only for it (FR-002d)
-- [ ] T033 [US1] Put the **AI tab outside** the horizontal `material::Scrollable` in
+- [X] T033 [US1] Put the **AI tab outside** the horizontal `material::Scrollable` in
   `crates/micold-client/src/ui/terminal.rs::pane` (depends on T003, T024; FR-002a, FR-002b). *The
   scrollable itself landed early, with T016*: bounding the strip without one does not fix FR-002c,
   it relocates it — the bar's controls were saved and a tab came out 55.5dp wide with its close
   control at 0.0, which is feature 012's BUG-005 exactly. A bound and a scroll are one fix.
   Tabs keep their fixed width — no shrinking, no ellipsis, no dropping — and the AI tab keeps the
   right-hand end at any instance count
-- [ ] T034 [US1] Scroll the marked tab into view when it changes, in
+- [X] T034 [US1] Scroll the marked tab into view when it changes, in
   `crates/micold-client/src/ui/terminal.rs` (depends on T032; FR-002d)
-- [ ] T035 [US1] Draw the edge fade in `crates/micold-client/src/ui/terminal.rs` on any edge with
+- [X] T035 [US1] Draw the edge fade in `crates/micold-client/src/ui/terminal.rs` on any edge with
   content beyond it — tinted from the **surface** normally, and from the **primary/accent role the
   active indicator wears** when the tab beyond that edge is the marked one (depends on T031;
   FR-002e, research R6). One cue in two states differing only in role, so the edge is tinted with

@@ -82,6 +82,13 @@ fn switcher_row_body(src: &str) -> String {
     body_from(src, "fn tab_strip_row")
 }
 
+/// The body of `fn pinned_ai_tab` — the AI tab, which FR-002b puts **outside** the scrolling
+/// region so it keeps its right-hand position and stays reachable in one press at any instance
+/// count. Two functions because they are two nodes in the bar, not because they are two ideas.
+fn ai_tab_body(src: &str) -> String {
+    body_from(src, "fn pinned_ai_tab")
+}
+
 /// The body of the tab component's conversion — where the indicator is chosen and reserved.
 fn tab_conversion_body(src: &str) -> String {
     body_from(src, "impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M>")
@@ -171,17 +178,41 @@ fn the_strip_holds_every_instance_plus_the_ai_tab_last() {
          is what hid it, and it is also a bar child that comes and goes — feature 023 FR-008a."
     );
 
-    let loop_at = body
-        .find("for instance in")
-        .expect("the strip must still build one tab per open instance (FR-001)");
-    let ai_at = body
-        .find("Icon::AiCli")
-        .expect("the strip must carry a tab for the session's AI CLI process (FR-001, FR-009)");
     assert!(
-        ai_at > loop_at,
-        "the AI tab must be pushed **after** every terminal tab, so it holds the strip's \
-         right-hand end as instances are opened and closed (FR-002, SC-006). Built before them it \
-         would lead the strip, and the position FR-002 fixes would depend on iteration order."
+        body.contains("for instance in"),
+        "the strip must still build one tab per open instance (FR-001)"
+    );
+
+    let src = terminal_source();
+    let ai = ai_tab_body(&src);
+    assert!(
+        ai.contains("Icon::AiCli"),
+        "the session's AI CLI process must have a tab (FR-001, FR-009), labelled with the glyph \
+         the mode toggle already shows for that mode"
+    );
+    assert!(
+        ai.contains("Tab::new(") && ai.contains("TabStrip::new("),
+        "the AI tab must be built as a `Tab` in a `TabStrip`, like the tabs it sits beside \
+         (FR-010). It is a member of the strip that happens to be pinned, not a control next to \
+         one — and building it the same way is how that stops being an intention. It also keeps \
+         `gates/tab_children_fit.rs` covering it, since that gate finds tabs as an anchored \
+         strip's immediate children."
+    );
+
+    // FR-002b: the AI tab is pushed to the bar *after* the scrolling viewport, not into it. Inside,
+    // it would be reachable only by scrolling to the far end, which is what SC-002's "one press"
+    // forbids — and FR-002 is only a meaningful requirement where there is more than fits.
+    let pane = body_from(&src, "pub fn pane<'a>(");
+    let viewport_at = pane
+        .find("ScrollDirection::Horizontal")
+        .expect("the terminal tabs must scroll horizontally (FR-002a)");
+    let pinned_at = pane
+        .find("pinned_ai_tab(")
+        .expect("the AI tab must be pushed to the bar in its own right (FR-002b)");
+    assert!(
+        pinned_at > viewport_at,
+        "the AI tab must be pushed **after** the scrolling viewport and outside it (FR-002b, \
+         SC-002, SC-008), so it holds the bar's right-hand end at any instance count"
     );
 }
 
@@ -190,12 +221,14 @@ fn the_strip_holds_every_instance_plus_the_ai_tab_last() {
 fn the_ai_tab_is_unclosable_and_marked_from_one_source() {
     let body = switcher_row_body(&terminal_source());
 
-    let ai_at = body.find("Icon::AiCli").expect("the AI tab exists");
-    let after = &body[ai_at..];
+    let ai = ai_tab_body(&terminal_source());
     assert!(
-        !after.contains("ShellInstanceCloseRequested"),
+        !ai.contains("ShellInstanceCloseRequested") && !ai.contains(".trailing("),
         "the AI tab must not offer a close control (FR-004, SC-005). A session has exactly one AI \
-         CLI process and terminating it is not an action offered from this control — by any press."
+         CLI process and terminating it is not an action offered from this control — by any press. \
+         Its trailing slot stays reserved and empty rather than filled or reclaimed (FR-010a): \
+         reclaimed it would be narrower than its neighbours, and a strip whose tabs are not all \
+         one size reads as a control among controls."
     );
 
     assert!(

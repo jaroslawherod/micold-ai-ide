@@ -514,6 +514,23 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::terminal::terminal_pane,
     },
     Entry {
+        module: "material/edge_fade.rs",
+        component: "EdgeFade",
+        variants: &[],
+        density: &[],
+        posed: &[
+            "nothing beyond either edge",
+            "more that way",
+            "both edges",
+            "the marked tab is out there",
+        ],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::terminal::edge_fade,
+    },
+    Entry {
         module: "material/tab.rs",
         component: "Tab",
         variants: &["Top", "Bottom"],

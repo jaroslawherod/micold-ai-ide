@@ -67,20 +67,26 @@ const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 /// Half a pixel, matching `containment`, `panel_placement` and `sibling_parity`.
 const TOLERANCE: f32 = 0.5;
 
-/// The anchor naming the tab strip in the covered state that draws one.
-const STRIP_ANCHOR: &str = "terminal.tabs";
-
-/// The tab strip's own path in a state that has one, or `None` for a state without.
+/// The anchors naming a tab strip in the covered states that draw one.
 ///
-/// Taken from the anchor rather than from a constant path, so this gate covers any state that
+/// **Two of them**, since feature 026 FR-002b pinned the AI tab outside the scrolling region: the
+/// scrolling members are one strip and the pinned tab is another, and they are two nodes in the bar
+/// rather than one. A gate that knew only the first would have stopped covering the tab this whole
+/// feature adds, silently and while still passing — which is the shape feature 019 keeps meeting.
+const STRIP_ANCHORS: &[&str] = &["terminal.tabs", "terminal.tabs.pinned"];
+
+/// Every tab strip in a state, or an empty list for a state without one.
+///
+/// Taken from the anchors rather than from constant paths, so this gate covers any state that
 /// registers a strip — including one added later — and covers none that does not, silently and
 /// correctly. A state with no strip is not a failure; it is a screen without tabs.
-fn strip_path(covered: &'static lay::CoveredState) -> Option<&'static [usize]> {
+fn strip_paths(covered: &'static lay::CoveredState) -> Vec<&'static [usize]> {
     covered
         .anchors
         .iter()
-        .find(|a| a.name == STRIP_ANCHOR)
+        .filter(|a| STRIP_ANCHORS.contains(&a.name))
         .map(|a| a.path)
+        .collect()
 }
 
 /// The tabs: the strip's immediate children.
@@ -190,9 +196,7 @@ fn every_control_inside_a_tab_holds_its_touch_target() {
     let mut checked = 0usize;
 
     for (covered, records) in covered_states().iter().zip(all.iter()) {
-        let Some(strip) = strip_path(covered) else {
-            continue;
-        };
+        for strip in strip_paths(covered) {
         for tab in tabs(records, strip) {
             for control in nested_controls(records, tab) {
                 checked += 1;
@@ -211,6 +215,7 @@ fn every_control_inside_a_tab_holds_its_touch_target() {
                 }
             }
         }
+        }
     }
 
     assert!(
@@ -226,7 +231,7 @@ fn every_control_inside_a_tab_holds_its_touch_target() {
     assert!(
         checked > 0,
         "no control inside any tab was checked, so this gate proved nothing. Either no covered \
-         state registers a `{STRIP_ANCHOR}` anchor, or the way a nested control is recognised has \
+         state registers a `{STRIP_ANCHORS:?}` anchor, or the way a nested control is recognised has \
          drifted from what the tabs actually draw. A pass that inspects nothing is \
          indistinguishable from a pass that found nothing — the same defect feature 019's overlay \
          pass had (its T041)."
@@ -259,9 +264,7 @@ fn a_tabs_content_sits_on_its_tabs_midline() {
     let mut checked = 0usize;
 
     for (covered, records) in covered_states().iter().zip(all.iter()) {
-        let Some(strip) = strip_path(covered) else {
-            continue;
-        };
+        for strip in strip_paths(covered) {
         for tab in tabs(records, strip) {
             let Some(row) = content_row(records, tab) else {
                 continue;
@@ -282,6 +285,7 @@ fn a_tabs_content_sits_on_its_tabs_midline() {
                     tab.x + tab.width,
                 ));
             }
+        }
         }
     }
 
