@@ -65,19 +65,40 @@ pub fn surface<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
     )
 }
 
-/// `Scrollable` — content taller than its viewport, so the themed scrollbar is actually visible.
+/// `Scrollable` — content larger than its viewport on each axis, so the themed scrollbar is
+/// actually visible and both directions can be compared.
+///
+/// The horizontal instance is posed beside the vertical one rather than instead of it: the axis is
+/// a variant now (feature 026 FR-002a), and the thing worth seeing is that it is the *same* 4px
+/// themed bar turned through ninety degrees — not a second scrollbar that arrived with the second
+/// axis.
 pub fn scrollable<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
-    let mut long = iced::widget::column![].spacing(spacing::XS);
+    let mut tall = iced::widget::column![].spacing(spacing::XS);
     for (name, _) in samples::WORKTREES.iter().cycle().take(12) {
-        long = long.push(material::Text::new(*name, TypeRole::Body, roles));
+        tall = tall.push(material::Text::new(*name, TypeRole::Body, roles));
+    }
+    let mut wide = iced::widget::row![].spacing(spacing::MD);
+    for (name, _) in samples::WORKTREES.iter().cycle().take(12) {
+        wide = wide.push(material::Text::new(*name, TypeRole::Body, roles));
     }
     arrange(
-        vec![posed(
-            "scroll it",
-            iced::widget::container(material::Scrollable::new(long, roles))
-                .height(Length::Fixed(120.0)),
-            roles,
-        )],
+        vec![
+            posed(
+                "Vertical — scroll it",
+                iced::widget::container(material::Scrollable::new(tall, roles))
+                    .height(Length::Fixed(120.0)),
+                roles,
+            ),
+            posed(
+                "Horizontal — scroll it",
+                iced::widget::container(
+                    material::Scrollable::new(wide, roles)
+                        .direction(material::ScrollDirection::Horizontal),
+                )
+                .width(Length::Fixed(220.0)),
+                roles,
+            ),
+        ],
         Layout::Inline,
     )
 }

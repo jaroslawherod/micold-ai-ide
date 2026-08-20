@@ -130,7 +130,7 @@ mod type_role_mapping;
 mod typeahead;
 
 pub use accordion::Accordion;
-pub use activity_badge::ActivityBadge;
+pub use activity_badge::{ActivityBadge, BadgeEmphasis};
 pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
 pub use button::{Button, Variant as ButtonVariant};
 pub use checkbox::Checkbox;
@@ -149,7 +149,7 @@ pub use picker::Row as TypeaheadRow;
 pub use progress::StageProgress;
 pub use resize_handle::ResizeHandle;
 pub use ripple::{pulse as ripple_pulse, Ripple};
-pub use scrollable::Scrollable;
+pub use scrollable::{ScrollDirection, Scrollable};
 pub use select::Select;
 pub use snackbar::Snackbar;
 pub use surface::{Kind as SurfaceKind, Surface};
