@@ -14,7 +14,7 @@ use crate::icons::{mode_glyph, mode_tooltip};
 use crate::ui::material::{
     self, tab_content_colour as content_colour, Button, ButtonVariant, ContextMenu,
     GridSizeReporter, IconButton, MenuItem, SurfaceKind, Tab, TabStrip, TerminalPane, Text, Tooltip,
-    TooltipPosition, TypeRole,
+    TooltipPosition, TypeRole, TAB_WIDTH,
 };
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
@@ -479,11 +479,56 @@ pub fn pane<'a>(
     // child shifts every sibling after it, and iced's positional tree diff then hands the pressed
     // control its neighbour's node and drops the press. Opening a second instance renumbered the
     // "+" and the mode toggle under whatever press was in flight.
-    bar = bar.push(
-        material::Scrollable::new(tab_strip_row(state, active, r), r)
-            .direction(material::ScrollDirection::Horizontal)
-            .width(Length::Fill),
+    let beyond = overflowing(
+        state.tab_strip_scroll_offset as f32,
+        state.tab_strip_viewport_width as f32,
+        state.tab_strip_content_width as f32,
     );
+    // FR-002e: the edge fade takes the **indicator's own accent** when the tab beyond it is the
+    // marked one, and the surface's tint otherwise. Two states of one cue differing only in role,
+    // so the edge is tinted with the very colour the user is scanning for — no glyph, no arrow, no
+    // second width. And no scroll-arrow controls at all (FR-002f): they would spend an interactive
+    // target's width at each end of the bar FR-002c exists to keep uncrowded, and the wheel over a
+    // scrollable is how this application already scrolls its sidebar and its scrollback.
+    let marked_beyond = match marked_tab_index(state) {
+        Some(index) => scroll_into_view(
+            index,
+            state.tab_strip_scroll_offset as f32,
+            state.tab_strip_viewport_width as f32,
+        )
+        .map(|target| target < state.tab_strip_scroll_offset as f32),
+        None => None,
+    };
+    bar = bar.push(
+        material::EdgeFade::new(
+            material::Scrollable::new(tab_strip_row(state, active, r), r)
+                .direction(material::ScrollDirection::Horizontal)
+                .width(Length::Fill)
+                .id(TAB_STRIP_SCROLL_ID.clone())
+                // Three numbers, one question. See `Scrollable::on_scroll_metrics`: an offset
+                // measured against a stale viewport width is a fade that points at nothing.
+                .on_scroll_metrics(|offset, width, content| Message::TabStripScrolled {
+                    offset,
+                    width,
+                    content,
+                })
+                // `on_scroll` fires only when something scrolls, and the frame that matters most is
+                // the **first** one, where nothing has: a strip that already overflows on its first
+                // layout must fade its edge before the user touches it.
+                .on_viewport_resize(|size| Message::TabStripViewportResized {
+                    width: crate::app::scroll_offset_px(size.width),
+                }),
+            r,
+        )
+        .leading(beyond.leading)
+        .trailing(beyond.trailing)
+        .accent_on(marked_beyond)
+        .width(Length::Fill),
+    );
+    // Outside the viewport above, so it keeps its right-hand position and stays reachable in one
+    // press at any instance count (FR-002b, SC-002, SC-008). Pushed unconditionally, like the
+    // viewport: the bar's child list must not vary (feature 023 FR-008a).
+    bar = bar.push(pinned_ai_tab(state, active, r));
     // Open an additional Regular Terminal instance (feature 011, FR-001/FR-005) — visible
     // whenever the session is in Regular mode, regardless of how many instances are already
     // open (including zero or one), so there is always a way to go from one instance to two.
@@ -718,6 +763,110 @@ fn attached_process_restartable(state: &State, id: SessionId) -> bool {
     process_stopped(state, id, marked_tab(state, id))
 }
 
+/// The tab strip's scroll viewport, by name, so `operation::scroll_to` can reach it (FR-002d).
+///
+/// A `LazyLock` for the reason the sidebar's is one: `scrollable::Id` is not a `const`, and the id
+/// has to be the *same* one on the widget and in the operation or the operation finds nothing and
+/// reports nothing.
+pub static TAB_STRIP_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("terminal-tab-strip-scroll"));
+
+/// Which edges of the scrolling region have tabs beyond them (FR-002e).
+///
+/// Two independent facts, not one enum, because a strip scrolled to the middle has content beyond
+/// **both** edges and each fade is drawn on its own side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Beyond {
+    /// Tabs lie before the viewport's leading edge.
+    pub leading: bool,
+    /// Tabs lie after its trailing edge.
+    pub trailing: bool,
+}
+
+impl Beyond {
+    pub(crate) const NEITHER: Self = Self {
+        leading: false,
+        trailing: false,
+    };
+    pub(crate) const LEADING: Self = Self {
+        leading: true,
+        trailing: false,
+    };
+    pub(crate) const TRAILING: Self = Self {
+        leading: false,
+        trailing: true,
+    };
+    pub(crate) const BOTH: Self = Self {
+        leading: true,
+        trailing: true,
+    };
+}
+
+/// Half a pixel — the same tolerance the layout gates use, and for the same reason: a strip
+/// scrolled exactly to one end must read as *at* that end rather than a hair short of it.
+const EDGE_TOLERANCE: f32 = 0.5;
+
+/// Whether anything lies beyond either edge of a viewport `viewport` wide, holding `content`, and
+/// currently scrolled `offset` from the leading end (FR-002e, research R6).
+///
+/// Pure arithmetic, deliberately. The *fade* is appearance and no layout gate can see it — a
+/// gradient occupies the same box whether it is opaque or invisible, which is the family of defect
+/// the `visual-pass` skill exists for. What can be gated is the fact behind it, and this is it.
+pub(crate) fn overflowing(offset: f32, viewport: f32, content: f32) -> Beyond {
+    Beyond {
+        leading: offset > EDGE_TOLERANCE,
+        trailing: offset + viewport + EDGE_TOLERANCE < content,
+    }
+}
+
+/// The distance between one tab's leading edge and the next's.
+fn tab_pitch() -> f32 {
+    TAB_WIDTH + spacing::SM
+}
+
+/// Where to scroll a viewport `viewport` wide, currently at `offset`, to bring the tab at `index`
+/// fully into view — or `None` if it already is (FR-002d).
+///
+/// `None` rather than "scroll to where you already are" is the requirement, not an optimisation.
+/// FR-002d lets a user scroll away from the marked tab by hand, and a reveal that fires on every
+/// selection would yank them back each time — including on selections made with the mode toggle
+/// rather than with the strip, which are the ones they were not looking at the strip for.
+///
+/// It scrolls the tab **just** into view rather than centring it: the tabs either side are context,
+/// and a strip that recentres on every press moves more than the selection did.
+pub fn scroll_into_view(index: usize, offset: f32, viewport: f32) -> Option<f32> {
+    let pitch = tab_pitch();
+    let leading = index as f32 * pitch;
+    let trailing = leading + TAB_WIDTH;
+    if leading + EDGE_TOLERANCE < offset {
+        Some(leading)
+    } else if trailing > offset + viewport + EDGE_TOLERANCE {
+        Some(trailing - viewport)
+    } else {
+        None
+    }
+}
+
+/// The marked tab's position **within the scrolling region**, or `None` when the marked tab is the
+/// pinned AI one (FR-002b, FR-002d).
+///
+/// `None` is not a failure and not "nothing is marked" — FR-005 makes that unrepresentable. It is
+/// the AI tab, which sits outside the viewport and therefore cannot be scrolled into it. There is
+/// nothing to do, which is exactly the right answer.
+pub fn marked_tab_index(state: &State) -> Option<usize> {
+    let id = state.active_session?;
+    let StripTab::Instance(instance) = marked_tab(state, id) else {
+        return None;
+    };
+    state
+        .active_sessions()
+        .iter()
+        .find(|s| s.id == id)?
+        .shells
+        .iter()
+        .position(|s| s.id == instance)
+}
+
 /// The session's tab strip: one tab per open Regular Terminal instance, in creation order, then the
 /// session's AI CLI process (feature 026 FR-001, FR-002).
 ///
@@ -798,39 +947,58 @@ fn tab_strip_row<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
             }),
         );
     }
-    // # The AI tab (FR-001, FR-002, FR-004, FR-009, FR-010a)
-    //
-    // Pushed **after** the loop, which is the whole of FR-002: it holds the strip's right-hand end
-    // as instances are opened and closed, rather than depending on iteration order.
-    //
-    // Labelled by the glyph the mode toggle already shows for this mode, so the two routes to the
-    // AI pane wear the same mark and no font work is needed (FR-009).
-    //
-    // Its **trailing slot is left empty rather than reclaimed** (FR-004, FR-010a). A session has
-    // exactly one AI CLI process and terminating it is not an action offered from this control, so
-    // there is no close control to draw — but a tab that reclaimed the space would be narrower than
-    // its neighbours, and a strip whose tabs are not all one size reads as a control among controls
-    // rather than as a strip. Leaving it reserved is also what keeps the icon on the tab's own
-    // midline, since the leading slot is the same width.
-    let ai_marked = marked == StripTab::Ai;
-    tabs.push(
-        Tab::new(
-            // The shared `Glyph`, at the same type role a terminal tab's label uses, so the two
-            // labels sit on one baseline and the size follows the role rather than a number named
-            // here (`tests/material_boundary.rs`).
-            material::Glyph::new(Icon::AiCli, TypeRole::Label, r).tint(content_colour(ai_marked, r)),
-            r,
-        )
-        .active(ai_marked),
-        // Not pressable yet. User Story 1's claim is that the strip *says* what the pane is
-        // showing; User Story 2 is what makes it a control (T041), and it needs a message that
-        // **sets** the mode rather than toggling it — `TerminalModeToggled` would switch away from
-        // the AI pane when the AI tab is pressed while already displayed, which FR-007 forbids.
-    );
     // The strip's own edge is the default `Top`, not Material's `Bottom`: this bar is anchored to
     // the window's bottom, so the pane a tab selects is *above* it and a bottom indicator would
     // point away from what it marks (feature 012 FR-004b).
     TabStrip::new(tabs, r).into()
+}
+
+/// The AI tab, which sits **outside** the scrolling region (feature 026 FR-002b).
+///
+/// # Why it is a strip of one rather than a bare tab
+///
+/// It is a member of the strip that happens to be pinned, not a control beside it — FR-010 asks it
+/// to be visually consistent with the tabs it sits next to, and building it the same way is how
+/// that stops being an intention. It also keeps `gates/tab_children_fit.rs` covering it: that gate
+/// finds tabs as the immediate children of an anchored strip, and a lone `Tab` in the bar would
+/// have been a tab no gate recognised.
+///
+/// # Why it is outside the viewport
+///
+/// FR-002 says the AI tab holds the strip's right-hand end, and FR-002b is what that means under
+/// overflow: inside the scrolling region it would be reachable only by scrolling to the far end,
+/// which is exactly the state SC-002's "one press" forbids. FR-002 is only a meaningful requirement
+/// where there is more than fits.
+///
+/// # Its trailing slot is reserved and empty (FR-004, FR-010a)
+///
+/// A session has exactly one AI CLI process and terminating it is not an action offered from this
+/// control, so there is no close control to draw. A tab that reclaimed the space would be narrower
+/// than its neighbours, and a strip whose tabs are not all one size reads as a control among
+/// controls rather than as a strip — feature 012's BUG-001. Leaving it reserved is also what keeps
+/// the icon on the tab's own midline, since the leading slot is the same width.
+///
+/// # Not pressable yet
+///
+/// User Story 1's claim is that the strip *says* what the pane is showing. User Story 2 makes it a
+/// control (T041), and that needs a message which **sets** the mode rather than toggling it:
+/// `TerminalModeToggled` would switch away from the AI pane when this tab is pressed while it is
+/// already displayed, which FR-007 forbids.
+fn pinned_ai_tab<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Element<'a, Message> {
+    let marked = marked_tab(state, id) == StripTab::Ai;
+    TabStrip::new(
+        vec![Tab::new(
+            // The shared `Glyph`, at the same type role a terminal tab's label uses, so the two
+            // labels sit on one baseline and the size follows the role rather than a number named
+            // here (`tests/material_boundary.rs`). It is the glyph the mode toggle already shows
+            // for this mode, so the two routes to the AI pane wear the same mark (FR-009).
+            material::Glyph::new(Icon::AiCli, TypeRole::Label, r).tint(content_colour(marked, r)),
+            r,
+        )
+        .active(marked)],
+        r,
+    )
+    .into()
 }
 
 #[cfg(test)]
@@ -899,6 +1067,66 @@ mod tests {
         state.workspace.sessions.insert(path, vec![session]);
         state.active_session = Some(id);
         (state, id)
+    }
+
+    /// FR-002e, research R6: "content lies beyond this edge" is a pure function of the viewport
+    /// offset and the content width.
+    ///
+    /// The *fade* is appearance and no gate can see it — a gradient occupies the same box whether
+    /// it is opaque or invisible, which is what the visual pass is for. The **fact behind it** is
+    /// arithmetic, and this is where it is held. Four cases, because a strip can be scrolled to
+    /// either end, to the middle, or not be scrollable at all, and the last one is the case a naive
+    /// `offset > 0` would get wrong in the direction that matters: a fade on a strip with nothing
+    /// beyond it tells the user to scroll toward nothing.
+    #[test]
+    fn an_edge_knows_whether_anything_lies_beyond_it() {
+        // Nothing to scroll: the content fits, so neither edge says anything.
+        assert_eq!(overflowing(0.0, 500.0, 300.0), Beyond::NEITHER);
+        // Scrolled hard to the leading end, with more to come.
+        assert_eq!(overflowing(0.0, 300.0, 900.0), Beyond::TRAILING);
+        // Somewhere in the middle: both.
+        assert_eq!(overflowing(300.0, 300.0, 900.0), Beyond::BOTH);
+        // Scrolled hard to the trailing end.
+        assert_eq!(overflowing(600.0, 300.0, 900.0), Beyond::LEADING);
+        // Exactly at the trailing end, to the pixel — not "a little more that way".
+        assert_eq!(
+            overflowing(600.0, 300.0, 900.0).trailing,
+            false,
+            "an edge with nothing past it must not be faded; a cue that points at nothing is \
+             worse than none, because it is the same cue that means something elsewhere"
+        );
+    }
+
+    /// FR-002d: changing the marked tab yields a scroll request for **that** tab, and none at all
+    /// when it is already fully visible.
+    ///
+    /// The second half is the one worth a test. A reveal that did not need to move the strip must
+    /// not move it — a user who has scrolled by hand (which FR-002d explicitly allows) would
+    /// otherwise be yanked back on every selection, including selections they made with the
+    /// keyboard's mode toggle rather than with the strip.
+    #[test]
+    fn the_marked_tab_is_scrolled_into_view_only_when_it_is_not() {
+        let pitch = TAB_WIDTH + spacing::SM;
+
+        // Already fully visible at the leading end: nothing to do.
+        assert_eq!(scroll_into_view(0, 0.0, 3.0 * pitch), None);
+        assert_eq!(scroll_into_view(1, 0.0, 3.0 * pitch), None);
+
+        // Beyond the trailing edge: scroll just far enough that its **trailing edge** lands on the
+        // viewport's, not far enough to centre it — the neighbouring tabs are context, and a strip
+        // that recentres on every press moves more than the selection did.
+        //
+        // The figure is `5·pitch + TAB_WIDTH - viewport`, not `6·pitch - viewport`: a pitch is a
+        // tab plus the gap that follows it, and there is no gap after the last tab shown. The 8dp
+        // between them is a gap this would have opened at the viewport's trailing edge.
+        assert_eq!(
+            scroll_into_view(5, 0.0, 3.0 * pitch),
+            Some(5.0 * pitch + TAB_WIDTH - 3.0 * pitch),
+        );
+
+        // Beyond the leading edge: scroll to put its leading edge on the viewport's.
+        assert_eq!(scroll_into_view(0, 4.0 * pitch, 3.0 * pitch), Some(0.0));
+        assert_eq!(scroll_into_view(2, 4.0 * pitch, 3.0 * pitch), Some(2.0 * pitch));
     }
 
     /// FR-010a: the AI tab measures what a terminal tab measures, and its two slots are equal.

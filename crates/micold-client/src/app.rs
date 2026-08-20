@@ -240,6 +240,21 @@ pub enum Message {
     /// derives from it (FR-025a) — and the sidebar is the only scroll region beneath the bar, so it
     /// is the only thing that can answer "is content passing under it".
     SidebarScrolled(u32),
+    /// The terminal tab strip scrolled; carries the offset, the viewport's width and its content's,
+    /// all in whole pixels (feature 026 FR-002e).
+    ///
+    /// Three numbers in one message because they answer one question — "does anything lie beyond
+    /// this edge" — and the rendering stack delivers them together. Split across messages there
+    /// would be frames where one is stale, and a fade computed from a stale pair points at nothing
+    /// or fails to point at something.
+    TabStripScrolled { offset: u32, width: u32, content: u32 },
+    /// The tab strip's viewport was laid out, or resized (feature 026 FR-002e).
+    ///
+    /// Separate from [`Self::TabStripScrolled`] because the two answer different questions and fire
+    /// at different times — the same split the sidebar's pair makes. This one is what covers the
+    /// **first** frame, where nothing has scrolled yet and a strip that already overflows still has
+    /// to fade its edge.
+    TabStripViewportResized { width: u32 },
     /// The sidebar's scroll viewport was laid out at this height, in whole logical pixels
     /// (feature 024).
     ///
@@ -634,6 +649,29 @@ pub struct State {
     /// the first frame where a row for the current session actually exists (research R7,
     /// invariant I4).
     pub pending_reveal_scroll: bool,
+    /// The tab strip's scroll offset, in whole pixels from its leading edge (feature 026 FR-002e).
+    ///
+    /// Presentation, not state to persist: FR-002d scrolls the marked tab into view on selection,
+    /// and where the user has scrolled to is not remembered across sessions or restarts (spec
+    /// Assumptions). It lives here only because the edge fade and the reveal both have to read it,
+    /// and only the reducer sees both.
+    pub tab_strip_scroll_offset: u32,
+    /// The tab strip viewport's laid-out width, in whole pixels. `0` until the first layout, which
+    /// reads as "cannot decide yet" and never as "nothing fits" — the same rule
+    /// [`Self::sidebar_viewport_height`] follows, and for the same reason.
+    pub tab_strip_viewport_width: u32,
+    /// The strip's whole content width, in whole pixels — every tab plus the gaps between them.
+    ///
+    /// Reported rather than derived from the instance count, because the fade is about what is
+    /// actually laid out. A count is a claim about what *should* be there.
+    pub tab_strip_content_width: u32,
+    /// Whether the marked tab is waiting to be scrolled into view (feature 026 FR-002d).
+    ///
+    /// A flag, not a target, for the reason [`Self::pending_reveal_scroll`] is one: the offset
+    /// cannot be computed when the selection changes, because the viewport's width is not known
+    /// until layout. The reducer arms it; the binary computes and applies the scroll on the first
+    /// frame where the viewport has a width.
+    pub pending_tab_reveal: bool,
     /// The add-worktree form, present only while its overlay is shown (FR-005).
     pub worktree_form: Option<WorktreeForm>,
     /// A message shown when opening a non-git directory was refused (FR-001a), or a worktree
@@ -918,6 +956,17 @@ impl State {
     /// press into the pane made while a rename field had focus would depend on iced's blur
     /// arriving first. FR-018 permits taking the keyboard from a field for exactly this reason —
     /// it is a user press.
+    /// Ask for the marked tab to be scrolled into view on the next laid-out frame (FR-002d).
+    ///
+    /// Called from every reducer arm that can change which tab is marked, which is the same
+    /// discipline `terminal_released` imposed on focus after seven scattered assignments had to
+    /// keep each other correct: **one named intent, called from the arms that mean it**. A flag
+    /// rather than a scroll, because the viewport's width is not known here and nothing is scrolled
+    /// on a guess.
+    pub(crate) fn arm_tab_reveal(&mut self) {
+        self.pending_tab_reveal = true;
+    }
+
     pub(crate) fn focus_terminal(&mut self) {
         self.terminal_released = false;
         self.focused_field = None;
@@ -1237,6 +1286,23 @@ impl State {
             Message::SidebarViewportResized(height) => {
                 self.sidebar_viewport_height = height;
             }
+            Message::TabStripScrolled {
+                offset,
+                width,
+                content,
+            } => {
+                self.tab_strip_scroll_offset = offset;
+                self.tab_strip_viewport_width = width;
+                self.tab_strip_content_width = content;
+                // A scrollable is a place the ground can move, so this dismisses whatever floats
+                // above it — the same rule the sidebar's arm applies, from the second scroll
+                // region this application has (FR-009). Without it the tab menu would hang over a
+                // tab that had scrolled away from under it.
+                self.dismiss_on_scroll_beneath();
+            }
+            Message::TabStripViewportResized { width } => {
+                self.tab_strip_viewport_width = width;
+            }
             Message::SidebarScrolled(offset) => {
                 self.sidebar_scroll_offset = offset;
                 // The sidebar's scroll is *also* the dismissal trigger, and the rendering stack
@@ -1554,6 +1620,10 @@ impl State {
                 // keyboard (FR-011). This is the navigation the reported bug was about: it used to
                 // take two presses to reach and then left you looking at a terminal that ignored
                 // the keyboard.
+                //
+                // It also changes the marked tab (FR-005), and a marked tab scrolled out of view is
+                // the state SC-003 exists to prevent — arriving by a second route (FR-002d).
+                self.arm_tab_reveal();
                 self.focus_terminal();
             }
             Message::TerminalRestartRequested => {
@@ -1573,20 +1643,25 @@ impl State {
                 // claim a follow-up `ShellInstanceRunning` message, which is emitted nowhere and
                 // is why every instance sat at `NotStarted` for its whole life.
                 // The new instance is what the user will be looking at, so it holds the keyboard
-                // (FR-011).
+                // (FR-011) and is the newly marked tab — which, being appended, is the one most
+                // likely to be past the viewport's trailing edge (FR-002d).
+                self.arm_tab_reveal();
                 self.focus_terminal();
             }
             Message::ShellInstanceSelected(id, shell_id) => {
                 if let Some(session) = self.session_mut(id) {
                     session.select_shell(shell_id);
                 }
+                self.arm_tab_reveal(); // feature 026 FR-002d
                 self.focus_terminal(); // FR-011
             }
             Message::ShellInstanceCloseRequested(id, shell_id) => {
                 if let Some(session) = self.session_mut(id) {
                     session.close_shell(shell_id);
                 }
-                // Whichever instance takes its place is what the user is now looking at (FR-011).
+                // Whichever instance takes its place is what the user is now looking at (FR-011)
+                // and is the tab now marked, so it is what the strip has to show (FR-002d).
+                self.arm_tab_reveal();
                 self.focus_terminal();
             }
             Message::ShellInstanceRestartRequested(..) => {

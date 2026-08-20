@@ -77,19 +77,25 @@ const TERMINAL_BOTTOM_BAR: &[usize] = &[0, 0, 1, 1, 1];
 /// instead (FR-002c) — the spacer was doing the pushing, and a row with two content-sized ends and
 /// a filling middle cannot also have a member that grows. Every index after the spacer moved down
 /// one.
-const TERMINAL_MODE_TOGGLE: &[usize] = &[0, 0, 1, 1, 1, 0, 4];
+const TERMINAL_MODE_TOGGLE: &[usize] = &[0, 0, 1, 1, 1, 0, 5];
 
 /// The instance tab strip, and three of its tabs (feature 012 T057). The bar's row holds its title,
 /// a filling spacer and the status text, then whichever optional controls the session's state calls
 /// for; with every instance already running there is no session-level restart, so the strip is the
 /// row's fourth child. Its own children are one tab per element of `Session.shells`, in order.
 ///
-/// The strip sits inside the `Length::Fill` horizontal `Scrollable` T016 gave it, so its own path
-/// gains levels: the bar row's child at index 2 is that viewport, and the strip is inside it.
-const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0];
-const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0];
-const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 1];
-const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 2];
+/// The strip sits inside the bar's child 2 — the `EdgeFade` wrapping the `Length::Fill` horizontal
+/// `Scrollable` — so its own path is several levels down: fade → stack → layer → viewport → strip.
+///
+/// Deep, and deliberately not flattened. Each of those levels is a component doing one thing
+/// (`gates/tab_children_fit.rs` and `containment.rs` both read the strip through anchors rather
+/// than through these constants, so the depth costs them nothing), and an anchor that no longer
+/// resolves fails **by name** — `an_anchor_whose_path_does_not_resolve_fails_naming_it` — so a
+/// stale path here cannot go quiet.
+const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0];
+const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0];
+const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 1];
+const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 2];
 /// The **AI tab** (feature 026 FR-001, FR-002), the strip's last child — one past the instances.
 ///
 /// Two indices, because two covered states hold different numbers of instances and FR-002 pins this
@@ -97,11 +103,12 @@ const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 2];
 /// name: its touch-target assertion catches this tab squeezed by the scrolling viewport, and
 /// `a_tabs_content_sits_on_its_tabs_midline` is what actually holds FR-010a's centred icon — the
 /// property that failed at 4.6dp on a terminal tab the morning before this feature was planned.
-const TERMINAL_TAB_AI_AFTER_THREE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 3];
-const TERMINAL_TAB_AI_AFTER_SIX: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 6];
-/// The strip in a session with **no** instances at all, where the AI tab is its only member — the
-/// state feature 012 deliberately drew nothing in, and where FR-003's whole visible change lands.
-const TERMINAL_TAB_AI_ALONE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0];
+///
+/// One path, not one per instance count: FR-002b pins this tab **outside** the scrolling region, so
+/// it is the bar row's own child rather than the strip's last one, and its position no longer moves
+/// with the number of instances. That is the requirement stated as a path.
+const TERMINAL_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
+
 /// Inside a tab: the button's content column, whose first child is the active indicator (or, on an
 /// inactive tab, the transparent rule reserving its height) and whose second is the tab's content
 /// row — leading spacer, label and close.
@@ -111,7 +118,7 @@ const TERMINAL_TAB_AI_ALONE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0];
 /// (FR-010b). Its anchor is deleted with it rather than left pointing at nothing —
 /// `an_anchor_whose_path_does_not_resolve_fails_naming_it` would fail on a stale one, which is the
 /// behaviour that makes an anchor worth writing.
-const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 1, 0, 0, 0];
+const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0];
 
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
@@ -629,13 +636,15 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // the change lands for the user who never opens a second terminal, which is most of
                 // them, and it is the state most likely to read as a stray control rather than as a
                 // deliberate strip (T030 judges that; this makes the geometry visible).
+                //
+                // Only the pinned tab is named. The **scrolling** strip is genuinely empty here —
+                // there are no instances — and an empty row lays out no node at all, so an anchor
+                // for it would point at nothing. That is not a gap: FR-002b is what puts the AI tab
+                // outside the viewport, so in a session with no instances the one tab there is is
+                // exactly the one this anchor names.
                 Anchor {
-                    name: "terminal.tabs",
-                    path: TERMINAL_TAB_STRIP,
-                },
-                Anchor {
-                    name: "terminal.tabs.ai",
-                    path: TERMINAL_TAB_AI_ALONE,
+                    name: "terminal.tabs.pinned",
+                    path: TERMINAL_TAB_AI_PINNED,
                 },
             ],
         },
@@ -738,8 +747,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: TERMINAL_TAB_EXITED,
                 },
                 Anchor {
-                    name: "terminal.tabs.ai",
-                    path: TERMINAL_TAB_AI_AFTER_THREE,
+                    name: "terminal.tabs.pinned",
+                    path: TERMINAL_TAB_AI_PINNED,
                 },
                 // The reference width for `bar_controls_hold_their_size`'s cross-state comparison
                 // (T015): this state has room to spare, and the overflowing one does not, so the
@@ -808,8 +817,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: TERMINAL_TAB_STRIP,
                 },
                 Anchor {
-                    name: "terminal.tabs.ai",
-                    path: TERMINAL_TAB_AI_AFTER_SIX,
+                    name: "terminal.tabs.pinned",
+                    path: TERMINAL_TAB_AI_PINNED,
                 },
                 Anchor {
                     name: "terminal.mode_toggle",

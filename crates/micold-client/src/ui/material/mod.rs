@@ -35,6 +35,7 @@ pub(crate) mod dialog;
 #[cfg(test)]
 mod dialog_anatomy;
 mod divider;
+mod edge_fade;
 mod ellipsized;
 /// A field reporting and taking the keyboard, driven rather than posed — the gap the anatomy
 /// modules structurally cannot see (BUG-003).
@@ -152,7 +153,8 @@ pub use progress::StageProgress;
 pub use resize_handle::ResizeHandle;
 pub use ripple::{pulse as ripple_pulse, Ripple};
 pub use scrollable::{ScrollDirection, Scrollable};
-pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab};
+pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
+pub use edge_fade::EdgeFade;
 pub use tab_strip::TabStrip;
 pub use select::Select;
 pub use snackbar::Snackbar;

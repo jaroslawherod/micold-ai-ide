@@ -49,6 +49,7 @@ pub struct Scrollable<'a, M> {
     width: Option<Length>,
     on_scroll: Option<M>,
     on_scroll_offset: Option<Box<dyn Fn(u32) -> M + 'a>>,
+    on_scroll_metrics: Option<Box<dyn Fn(u32, u32, u32) -> M + 'a>>,
     id: Option<Id>,
     on_viewport_resize: Option<Box<dyn Fn(Size) -> M + 'a>>,
 }
@@ -64,6 +65,7 @@ impl<'a, M: Clone + 'a> Scrollable<'a, M> {
             width: None,
             on_scroll: None,
             on_scroll_offset: None,
+            on_scroll_metrics: None,
             id: None,
             on_viewport_resize: None,
         }
@@ -110,6 +112,23 @@ impl<'a, M: Clone + 'a> Scrollable<'a, M> {
     /// unsettled viewport reads as "at the top" rather than as movement.
     pub fn on_scroll_offset(mut self, f: impl Fn(u32) -> M + 'a) -> Self {
         self.on_scroll_offset = Some(Box::new(f));
+        self
+    }
+
+    /// Report the offset, the viewport's extent and the content's, all along this scrollable's own
+    /// axis and all in whole pixels (feature 026 FR-002e).
+    ///
+    /// Three numbers in one call because they answer **one** question — "does anything lie beyond
+    /// this edge" — and the rendering stack delivers them together in a single `Viewport`. Split
+    /// across subscriptions there would be frames where one is stale, and a fade computed from a
+    /// stale pair points at nothing or fails to point at something.
+    ///
+    /// Along the scrollable's own axis, not always vertically: this component now has two
+    /// ([`ScrollDirection`]), and a horizontal viewport reporting its `y` would report zero forever.
+    /// [`Self::on_scroll_offset`] is the older, one-number form, kept because the sidebar's
+    /// elevate-on-scroll asks a strictly smaller question.
+    pub fn on_scroll_metrics(mut self, f: impl Fn(u32, u32, u32) -> M + 'a) -> Self {
+        self.on_scroll_metrics = Some(Box::new(f));
         self
     }
 
@@ -166,9 +185,30 @@ impl<'a, M: Clone + 'a> From<Scrollable<'a, M>> for Element<'a, M> {
         // One subscription, because the rendering stack gives a scrollable one. The offset form
         // wins when both are set: it carries strictly more information, and its reducer arm runs
         // the dismissal too, so nothing is lost by preferring it.
-        if let Some(f) = s.on_scroll_offset {
+        if let Some(f) = s.on_scroll_metrics {
+            let axis = s.direction;
             widget = widget.on_scroll(move |viewport| {
-                f(crate::app::scroll_offset_px(viewport.absolute_offset().y))
+                let offset = viewport.absolute_offset();
+                let window = viewport.bounds();
+                let content = viewport.content_bounds();
+                let (o, w, c) = match axis {
+                    ScrollDirection::Vertical => (offset.y, window.height, content.height),
+                    ScrollDirection::Horizontal => (offset.x, window.width, content.width),
+                };
+                f(
+                    crate::app::scroll_offset_px(o),
+                    crate::app::scroll_offset_px(w),
+                    crate::app::scroll_offset_px(c),
+                )
+            });
+        } else if let Some(f) = s.on_scroll_offset {
+            let axis = s.direction;
+            widget = widget.on_scroll(move |viewport| {
+                let offset = viewport.absolute_offset();
+                f(crate::app::scroll_offset_px(match axis {
+                    ScrollDirection::Vertical => offset.y,
+                    ScrollDirection::Horizontal => offset.x,
+                }))
             });
         } else if let Some(message) = s.on_scroll {
             widget = widget.on_scroll(move |_| message.clone());

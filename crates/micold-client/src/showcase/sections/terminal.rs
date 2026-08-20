@@ -144,3 +144,53 @@ pub fn tab_strip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
         Layout::FullWidth,
     )
 }
+
+/// `EdgeFade` — the four states of a scrolling region's edges, posed side by side.
+///
+/// Posed rather than left live, and that is the entry's whole reason to exist. The fade's two
+/// states differ **only in role** — the surface's own tint for "there is more that way", the
+/// indicator's accent for "and the marked member is what is out there" (FR-002e) — and a magnitude
+/// or a hue difference is unreadable without the other state beside it to compare against. A live
+/// instance would show one of them at a time, which is exactly how this cue fails.
+///
+/// The content behind it is a strip of tabs, because that is what it fades in the application and
+/// a gradient over a flat ground says nothing about whether it competes with what it covers.
+pub fn edge_fade<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let strip = || {
+        let tabs = (1..=4)
+            .map(|n| {
+                material::Tab::new(
+                    material::Text::new(n.to_string(), material::TypeRole::Label, roles)
+                        .tint(material::tab_content_colour(n == 1, roles)),
+                    roles,
+                )
+                .active(n == 1)
+                .on_press(Message::NoOp)
+            })
+            .collect();
+        material::TabStrip::new(tabs, roles)
+    };
+    let posed_fade = |label: &'static str, leading: bool, trailing: bool, accent: Option<bool>| {
+        posed(
+            label,
+            iced::widget::container(
+                material::EdgeFade::new(strip(), roles)
+                    .leading(leading)
+                    .trailing(trailing)
+                    .accent_on(accent)
+                    .width(Length::Fixed(300.0)),
+            )
+            .width(Length::Fixed(300.0)),
+            roles,
+        )
+    };
+    arrange(
+        vec![
+            posed_fade("nothing beyond either edge", false, false, None),
+            posed_fade("more that way", false, true, None),
+            posed_fade("both edges", true, true, None),
+            posed_fade("the marked tab is out there", false, true, Some(false)),
+        ],
+        Layout::FullWidth,
+    )
+}

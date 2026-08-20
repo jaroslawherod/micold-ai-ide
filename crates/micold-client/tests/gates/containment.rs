@@ -148,7 +148,7 @@ const PICKER_LIST_CONTENT: &[&str] = &["0/0/0/0/0/0/0"];
 ///
 /// `the_recorded_tab_overflow_is_the_instance_strip` proves the attribution from the records rather
 /// than from the shape.
-const TAB_STRIP_CONTENT: &[&str] = &["0/0/0/1/1/1/0/2/0"];
+const TAB_STRIP_CONTENT: &[&str] = &["0/0/0/1/1/1/0/2/0/0/0/0"];
 
 /// Every overhang this gate does not treat as a finding, with the reason it is allowed.
 fn clips_deliberately(child_path: &str) -> Option<&'static str> {
@@ -561,11 +561,14 @@ fn the_recorded_tab_overflow_is_the_instance_strip() {
 
         assert_eq!(
             tabs.len(),
-            INSTANCES + 1,
-            "{path} holds {} children against {INSTANCES} open instances plus the AI tab, so it \
-             is not the strip and the exemption is attributed to the wrong node. The `+ 1` is \
-             FR-001: the session's AI CLI process is a member of this strip, not a control beside \
-             it, and FR-002 puts it last.",
+            INSTANCES,
+            "{path} holds {} children against {INSTANCES} open instances, so it is not the \
+             scrolling strip and the exemption is attributed to the wrong node.\n\nDeliberately \
+             **not** `INSTANCES + 1`. The session's AI CLI process is a tab (FR-001), but FR-002b \
+             pins it outside this viewport so it keeps its right-hand position and stays reachable \
+             in one press however many instances are open — inside, it would be reachable only by \
+             scrolling to the far end, which is the state SC-002 forbids. This node holds exactly \
+             what scrolls.",
             tabs.len(),
         );
 
