@@ -803,8 +803,14 @@ impl State {
             | Message::DiagnosticsRequested
             | Message::LogoutSurvivalRequested
             | Message::LogoutSurvivalOutcome(_) => {}
-            Message::HelpMenuToggled => crate::features::help::menu_toggled(self),
-            Message::ProjectSwitcherToggled => crate::features::project::switcher_toggled(self),
+            Message::HelpMenuToggled => {
+                let outcomes = crate::features::help::menu_toggled(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
+            Message::ProjectSwitcherToggled => {
+                let outcomes = crate::features::project::switcher_toggled(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::AboutOpened => crate::features::help::about_opened(self),
             Message::AboutClosed => crate::features::help::about_closed(self),
             Message::SelectorNavigatedInto(path) => {
@@ -831,7 +837,10 @@ impl State {
             Message::WindowResized { width, height } => {
                 crate::features::window::resized(self, width, height)
             }
-            Message::ProjectMenuToggled(path) => crate::features::project::menu_toggled(self, path),
+            Message::ProjectMenuToggled(path) => {
+                let outcomes = crate::features::project::menu_toggled(self, path);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::ProjectMenuDismissed => crate::features::project::menu_dismissed(self),
             Message::ProjectForgetRequested(path) => {
                 crate::features::project::forget_requested(self, path)
@@ -866,7 +875,10 @@ impl State {
                 let outcomes = self.toggle_location(SessionLocation::Default);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::WorktreeMenuToggled(dir) => crate::features::worktree::menu_toggled(self, dir),
+            Message::WorktreeMenuToggled(dir) => {
+                let outcomes = crate::features::worktree::menu_toggled(self, dir);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::WorktreeMenuDismissed => crate::features::worktree::menu_dismissed(self),
             // 016 BUG-002. The request itself changes nothing here: the daemon owns the included
             // set, as it owns every other piece of durable state, and answers with the worktree as
@@ -912,7 +924,8 @@ impl State {
             Message::ScrolledBeneathOverlay => self.dismiss_on_scroll_beneath(),
             Message::EscapePressed => self.dismiss_topmost(),
             Message::SidebarFilterMenuToggled => {
-                crate::features::sidebar::filter_menu_toggled(self)
+                let outcomes = crate::features::sidebar::filter_menu_toggled(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ShowAgentWorktreesToggled => {
                 crate::features::sidebar::show_agent_worktrees_toggled(self)
@@ -1169,6 +1182,7 @@ pub fn interpret(
     match outcome {
         Outcome::SessionsClosed(ids) => return crate::features::session::closed(state, &ids),
         Outcome::OverlayDismissed(id) => crate::overlay::registry::dismiss(state, id),
+        Outcome::SurfaceOpened(id) => crate::overlay::registry::displace(state, id),
         Outcome::NotificationRaised(notification) => state.notify.push(notification),
         Outcome::WorktreesReplaced(names) => {
             crate::features::sidebar::worktrees_replaced(state, &names);

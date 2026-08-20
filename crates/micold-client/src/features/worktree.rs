@@ -104,9 +104,16 @@ impl State {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WorktreeContextMenu;
 
+impl WorktreeContextMenu {
+    /// This surface's identity, nameable by the surfaces that displace it or that it
+    /// displaces (T067a-2). The declaration has to point at something, and pointing at the
+    /// literal string in two places is how the two would come to disagree.
+    pub const ID: SurfaceId = SurfaceId::new("worktree_menu");
+}
+
 impl FloatingSurface for WorktreeContextMenu {
     fn id(&self) -> SurfaceId {
-        SurfaceId::new("worktree_menu")
+        Self::ID
     }
 
     fn layer(&self) -> Layer {
@@ -215,13 +222,14 @@ fn list_changed(state: &State) -> crate::features::Outcome {
 ///
 /// Same worktree closes; a different one replaces it (only ever one open). Mutually exclusive with
 /// the project context menu (feature 015).
-pub fn menu_toggled(state: &mut State, dir: String) {
+#[must_use = "what an opening menu displaces is the registry's business, not the caller's"]
+pub fn menu_toggled(state: &mut State, dir: String) -> Vec<crate::features::Outcome> {
     state.worktree_menu_open = if state.worktree_menu_open.as_deref() == Some(dir.as_str()) {
         None
     } else {
         Some(dir)
     };
-    state.project_menu_open = None;
+    crate::features::surface_opened(state.worktree_menu_open.is_some(), WorktreeContextMenu::ID)
 }
 
 /// The worktree context menu was dismissed.

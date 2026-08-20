@@ -93,6 +93,16 @@ pub enum Outcome {
     /// The sidebar owns the row and knows the twisty was clicked; whether that suppresses the
     /// reveal is a fact about the *session*, which is why it travels rather than being written.
     RevealSuppressed(bool),
+    /// This surface opened, so whatever it displaces should close (T067a-2).
+    ///
+    /// The feature reports that *its* surface is now open and stops there. Which other surfaces
+    /// that closes is the relation between surfaces, which no single feature owns: the three panel
+    /// popovers are mutually exclusive, a context menu displaces the other one and two of the
+    /// three panels, and the project row menu deliberately leaves the switcher it was opened from
+    /// alone. `FloatingSurface::displaces` declares it and `overlay::registry::displace` applies
+    /// it, so a toggle no longer assigns its neighbours' fields — the twelve cross-feature writes
+    /// that were the last of the T067 catalogue.
+    SurfaceOpened(crate::overlay::SurfaceId),
     /// A terminal took the keyboard, so no text field holds it any more (FR-018; T067a-9).
     ///
     /// Unconditional, unlike `window::field_focus_changed`'s guarded blur: a press on the pane is
@@ -100,6 +110,19 @@ pub enum Outcome {
     /// has focus. The session feature knows the terminal was asked for; the window feature owns
     /// what having focus means.
     FieldFocusCleared,
+}
+
+/// `Outcome::SurfaceOpened` when a toggle left its surface open, and nothing when it closed it.
+///
+/// Five reducers spell the same two lines, and the mistake they would otherwise make is the same
+/// one: reporting an *opening* when the toggle just shut the surface, which would displace the
+/// neighbours of something no longer on screen.
+pub(crate) fn surface_opened(open: bool, id: crate::overlay::SurfaceId) -> Vec<Outcome> {
+    if open {
+        vec![Outcome::SurfaceOpened(id)]
+    } else {
+        Vec::new()
+    }
 }
 
 pub mod connection;

@@ -82,9 +82,16 @@ pub struct RenameDraft {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProjectSwitcher;
 
+impl ProjectSwitcher {
+    /// This surface's identity, nameable by the surfaces that displace it or that it
+    /// displaces (T067a-2). The declaration has to point at something, and pointing at the
+    /// literal string in two places is how the two would come to disagree.
+    pub const ID: SurfaceId = SurfaceId::new("project_switcher");
+}
+
 impl FloatingSurface for ProjectSwitcher {
     fn id(&self) -> SurfaceId {
-        SurfaceId::new("project_switcher")
+        Self::ID
     }
 
     fn layer(&self) -> Layer {
@@ -111,9 +118,16 @@ impl Registered for ProjectSwitcher {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProjectContextMenu;
 
+impl ProjectContextMenu {
+    /// This surface's identity, nameable by the surfaces that displace it or that it
+    /// displaces (T067a-2). The declaration has to point at something, and pointing at the
+    /// literal string in two places is how the two would come to disagree.
+    pub const ID: SurfaceId = SurfaceId::new("project_menu");
+}
+
 impl FloatingSurface for ProjectContextMenu {
     fn id(&self) -> SurfaceId {
-        SurfaceId::new("project_menu")
+        Self::ID
     }
 
     fn layer(&self) -> Layer {
@@ -212,11 +226,10 @@ impl Registered for ConfirmForgetProjectDialog {
 /// Mutually exclusive with the other two lightweight popovers and with the project context menu.
 /// The writes into `help` and `sidebar` data are the shared toolbar rule, catalogued in
 /// `tests/feature_write_isolation.rs`; `help::menu_toggled` carries the same rule from its side.
-pub fn switcher_toggled(state: &mut State) {
+#[must_use = "what an opening popover displaces is the registry's business, not the caller's"]
+pub fn switcher_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
     state.project_switcher_open = !state.project_switcher_open;
-    state.help_menu_open = false;
-    state.sidebar_filter_open = false;
-    state.project_menu_open = None;
+    crate::features::surface_opened(state.project_switcher_open, ProjectSwitcher::ID)
 }
 
 /// The folder browser descended into `path`.
@@ -318,7 +331,8 @@ pub fn rename_cancelled(state: &mut State) {
 /// The same project closes; a different one replaces it (only ever one open), re-anchored at
 /// wherever the pointer now is. The switcher panel stays open behind the menu so the right-clicked
 /// row remains visible; the other popovers do not.
-pub fn menu_toggled(state: &mut State, path: PathBuf) {
+#[must_use = "what an opening menu displaces is the registry's business, not the caller's"]
+pub fn menu_toggled(state: &mut State, path: PathBuf) -> Vec<crate::features::Outcome> {
     state.project_menu_open = match &state.project_menu_open {
         Some(open) if open.path == path => None,
         _ => Some(ProjectMenu {
@@ -326,9 +340,7 @@ pub fn menu_toggled(state: &mut State, path: PathBuf) {
             anchor: state.cursor,
         }),
     };
-    state.help_menu_open = false;
-    state.sidebar_filter_open = false;
-    state.worktree_menu_open = None;
+    crate::features::surface_opened(state.project_menu_open.is_some(), ProjectContextMenu::ID)
 }
 
 /// The project context menu was dismissed.

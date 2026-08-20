@@ -27,9 +27,16 @@ pub fn help_actions() -> &'static [&'static str] {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HelpMenu;
 
+impl HelpMenu {
+    /// This surface's identity, nameable by the surfaces that displace it or that it
+    /// displaces (T067a-2). The declaration has to point at something, and pointing at the
+    /// literal string in two places is how the two would come to disagree.
+    pub const ID: SurfaceId = SurfaceId::new("help_menu");
+}
+
 impl FloatingSurface for HelpMenu {
     fn id(&self) -> SurfaceId {
-        SurfaceId::new("help_menu")
+        Self::ID
     }
 
     fn layer(&self) -> Layer {
@@ -81,11 +88,10 @@ impl Registered for AboutDialog {
 /// writes into other features' data**, catalogued in `tests/feature_write_isolation.rs` rather than
 /// hidden: the rule they encode is one fact about the toolbar that no single feature owns, and
 /// T067 is where it gets an outcome.
-pub fn menu_toggled(state: &mut State) {
+#[must_use = "what an opening popover displaces is the registry's business, not the caller's"]
+pub fn menu_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
     state.help_menu_open = !state.help_menu_open;
-    state.project_switcher_open = false;
-    state.sidebar_filter_open = false;
-    state.project_menu_open = None;
+    crate::features::surface_opened(state.help_menu_open, HelpMenu::ID)
 }
 
 /// The About dialog was opened (feature 001, FR-011).

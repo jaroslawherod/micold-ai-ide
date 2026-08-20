@@ -542,9 +542,16 @@ impl State {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SidebarFilterPanel;
 
+impl SidebarFilterPanel {
+    /// This surface's identity, nameable by the surfaces that displace it or that it
+    /// displaces (T067a-2). The declaration has to point at something, and pointing at the
+    /// literal string in two places is how the two would come to disagree.
+    pub const ID: SurfaceId = SurfaceId::new("sidebar_filter");
+}
+
 impl FloatingSurface for SidebarFilterPanel {
     fn id(&self) -> SurfaceId {
-        SurfaceId::new("sidebar_filter")
+        Self::ID
     }
 
     fn layer(&self) -> Layer {
@@ -598,11 +605,10 @@ pub fn scrolled(state: &mut State, offset: u32) {
 /// which is why this writes three fields it does not own — catalogued in
 /// `tests/feature_write_isolation.rs`, and the same shared toolbar rule `help::menu_toggled`
 /// carries from the other side.
-pub fn filter_menu_toggled(state: &mut State) {
+#[must_use = "what an opening popover displaces is the registry's business, not the caller's"]
+pub fn filter_menu_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
     state.sidebar_filter_open = !state.sidebar_filter_open;
-    state.help_menu_open = false;
-    state.project_switcher_open = false;
-    state.project_menu_open = None;
+    crate::features::surface_opened(state.sidebar_filter_open, SidebarFilterPanel::ID)
 }
 
 /// Agent-owned worktrees were shown or hidden (feature 014, FR-010).

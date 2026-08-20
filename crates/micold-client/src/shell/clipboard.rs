@@ -45,7 +45,8 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::RevealScrollArmed
         | Outcome::ProjectEntered
         | Outcome::RevealSuppressed(_)
-        | Outcome::FieldFocusCleared => Task::none(),
+        | Outcome::FieldFocusCleared
+        | Outcome::SurfaceOpened(_) => Task::none(),
     }
 }
 

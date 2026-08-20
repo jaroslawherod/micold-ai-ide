@@ -204,6 +204,22 @@ No match arm to extend, anywhere. Escape, scrim clicks, scroll-beneath dismissal
 "opening a dialog closes the popovers", and the exit-animation snapshot are all rules over the
 registry. Six central matches used to have to hear about a new surface; there are none.
 
+### A core type's own operation is not a cross-feature write
+
+`OWNERS` is keyed by *path*, not by field, because `Workspace` holds the project catalog, the
+session lists and two worktree maps in one value — six members answering to three features. That
+split is right for an ordinary write and wrong for `Workspace`'s own methods: `forget` clears
+everything held against a project's path because that is its invariant, and reporting it as the
+project feature writing session data would have three features each apply one clause of it, making
+a half-applied forget expressible for the first time.
+
+So a write a feature reaches **only** through a core method is exempt — the same principle that
+always exempted a feature writing its own field: the code that performs the write owns what it
+writes. The exemption is narrow in both directions. It does not cover a path the operation also
+writes on a line of its own (the scan keeps two closures over the call graph to tell those apart),
+and it is not silent: `CORE_MEDIATED` lists every one with the method that carries it, so reaching a
+neighbour through some *other* core method costs a line and an argument rather than nothing.
+
 ### The guards, and what each would catch
 
 | Guard | Catches |
@@ -409,6 +425,22 @@ that grew an `if` would still compile and still pass every behaviour test.
 The paste does **not** convert. Reads arrive back as an ordinary message exactly as before, and no
 feature requests one — `clipboard::read` is a shell call, not an effect a reducer asks for.
 
+### A core type's own operation is not a cross-feature write
+
+`OWNERS` is keyed by *path*, not by field, because `Workspace` holds the project catalog, the
+session lists and two worktree maps in one value — six members answering to three features. That
+split is right for an ordinary write and wrong for `Workspace`'s own methods: `forget` clears
+everything held against a project's path because that is its invariant, and reporting it as the
+project feature writing session data would have three features each apply one clause of it, making
+a half-applied forget expressible for the first time.
+
+So a write a feature reaches **only** through a core method is exempt — the same principle that
+always exempted a feature writing its own field: the code that performs the write owns what it
+writes. The exemption is narrow in both directions. It does not cover a path the operation also
+writes on a line of its own (the scan keeps two closures over the call graph to tell those apart),
+and it is not silent: `CORE_MEDIATED` lists every one with the method that carries it, so reaching a
+neighbour through some *other* core method costs a line and an argument rather than nothing.
+
 ### The guards, and what each would catch
 
 | Guard | Catches |
@@ -443,6 +475,11 @@ cost the split does not: it can carry an allowlist. `ALLOWED` names each pre-exi
 the task that will convert it, so the rule is enforced for new code while the backlog burns down
 rather than blocking on a rewrite. `the_allowlist_names_only_live_violations` fails when an entry
 stops being a violation, so the list cannot outlive what it permitted.
+
+The list is empty now — 43 to zero over feature 021's Phase 6 — but the mechanism is what mattered:
+a split `State` would have had to land in one commit, and this landed in fifteen, each of which
+built and passed. What the empty list buys going forward is that a new cross-feature write is a
+failing test rather than a line in a backlog.
 
 ### What a feature returns instead: `Outcome`
 
@@ -499,12 +536,30 @@ Tests that assert on *no* other feature's data need no such helper, and dropping
 is correct rather than lazy — `features_session.rs` says so in its header and turned out to be
 right.
 
+### A core type's own operation is not a cross-feature write
+
+`OWNERS` is keyed by *path*, not by field, because `Workspace` holds the project catalog, the
+session lists and two worktree maps in one value — six members answering to three features. That
+split is right for an ordinary write and wrong for `Workspace`'s own methods: `forget` clears
+everything held against a project's path because that is its invariant, and reporting it as the
+project feature writing session data would have three features each apply one clause of it, making
+a half-applied forget expressible for the first time.
+
+So a write a feature reaches **only** through a core method is exempt — the same principle that
+always exempted a feature writing its own field: the code that performs the write owns what it
+writes. The exemption is narrow in both directions. It does not cover a path the operation also
+writes on a line of its own (the scan keeps two closures over the call graph to tell those apart),
+and it is not silent: `CORE_MEDIATED` lists every one with the method that carries it, so reaching a
+neighbour through some *other* core method costs a line and an argument rather than nothing.
+
 ### The guards, and what each would catch
 
 | Guard | Catches |
 |---|---|
 | `no_feature_writes_another_features_data` | a feature writing a field it does not own, directly or through a call |
 | `the_allowlist_names_only_live_violations` | an `ALLOWED` entry that no longer names a real write |
+| `core_mediated_writes_are_inventoried` | a feature reaching a neighbour through an unlisted core method — the exemption's only silent path |
+| `the_exemption_is_narrow` | a `CORE_MEDIATED` line that mediates nothing, or a write reported and exempted at once |
 | `every_state_field_has_an_owner` | a new `State` field nobody claimed in `OWNERS` |
 | `every_workspace_field_has_an_owner` | the same for `Workspace`'s members, which three features hold |
 | `every_method_called_on_state_is_classified` | a method the scan cannot tell reads from writes |

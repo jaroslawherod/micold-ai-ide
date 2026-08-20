@@ -158,14 +158,20 @@ const OWNERS: &[(&str, &str)] = &[
 /// Cross-feature writes that exist today, each with the feature that performs it and the path it
 /// reaches into.
 ///
-/// **Adding an entry requires a task reference in the note.** Removing one is what T067a does.
+/// **It is empty, and that is the point.** T059 found eight on the Tier 1 tree; T062 moved the
+/// reducer arms inside `src/features/` where the scan could finally see them and it stood at 43;
+/// T067 catalogued those into `cross-feature-writes.md` and T067a converted them a commit at a
+/// time, ending at zero when group C's twelve popover rows became a declaration (T067a-2). The
+/// comments left behind in place of each group are deliberate: what a row *was* is the only record
+/// of why the code is shaped the way it is now, and four of the seven groups turned out not to
+/// want the outcome the catalogue proposed.
 ///
-/// The first eight are what the guard found on the tree T059 was written against — Tier 1 code,
-/// already inside `src/features/`. T062 added the rest by moving the reducer arms in, which is the
-/// only reason the guard can see them; see the banner in the middle of the list. Every entry is
-/// pre-existing behaviour and none is converted here: T059 is the guard, T067 catalogues these
-/// into `cross-feature-writes.md` with a proposed outcome for each, and T067a converts them one
-/// commit at a time.
+/// **Adding an entry requires a task reference in the note**, and an entry is now debt rather than
+/// inventory — [`no_feature_writes_another_features_data`] is the test that fails without one, and
+/// [`the_allowlist_names_only_live_violations`] is what stops a line outliving the write it
+/// permitted. Two things that are *not* violations have their own homes: a feature writing its own
+/// field was never one, and a write reached only through a core method is inventoried in
+/// [`CORE_MEDIATED`].
 const ALLOWED: &[(&str, &str, &str)] = &[
     // (The reveal's eight rows lived here until T067a-6 converted them. They were never the
     // reveal: the revealed row is *derived* by `location_open` and never written, and what these
@@ -211,73 +217,16 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // out of `app.rs`.** Converting first would have given six reducers an outcome apiece for a
     // write none of them performs — the guard reported callers because the writer was root code it
     // could not attribute. One function writes it; one row names it.
-    // --- the popover mutual-exclusion rule (features 009 and 015; T067) --------------------------
-    // At most one lightweight popover is open, and the project context menu is exclusive with all
-    // of them. It is **one rule about the toolbar** that no single feature owns, so each toggle
-    // writes its neighbours' openness. The likeliest shape for T067 is one outcome — "a popover
-    // opened" — applied by the root to every other registered popover, which would delete this
-    // whole block at once. `overlay::registry::close_popovers` already exists for the dialog path;
-    // these arms predate it and still assign by hand.
-    (
-        "help",
-        "project_menu_open",
-        "features/help.rs::menu_toggled",
-    ),
-    (
-        "help",
-        "project_switcher_open",
-        "features/help.rs::menu_toggled",
-    ),
-    (
-        "help",
-        "sidebar_filter_open",
-        "features/help.rs::menu_toggled",
-    ),
-    (
-        "project",
-        "help_menu_open",
-        "features/project.rs::menu_toggled",
-    ),
-    (
-        "project",
-        "sidebar_filter_open",
-        "features/project.rs::menu_toggled",
-    ),
-    (
-        "project",
-        "worktree_menu_open",
-        "features/project.rs::menu_toggled",
-    ),
-    (
-        "project",
-        "help_menu_open",
-        "features/project.rs::switcher_toggled",
-    ),
-    (
-        "project",
-        "sidebar_filter_open",
-        "features/project.rs::switcher_toggled",
-    ),
-    (
-        "sidebar",
-        "help_menu_open",
-        "features/sidebar.rs::filter_menu_toggled",
-    ),
-    (
-        "sidebar",
-        "project_menu_open",
-        "features/sidebar.rs::filter_menu_toggled",
-    ),
-    (
-        "sidebar",
-        "project_switcher_open",
-        "features/sidebar.rs::filter_menu_toggled",
-    ),
-    (
-        "worktree",
-        "project_menu_open",
-        "features/worktree.rs::menu_toggled",
-    ),
+    // --- group C is gone: displacement is declared, not assigned (T067a-2) -----------------------
+    // Twelve rows sat here, three or four per popover toggle. T067 guessed at "one outcome — a
+    // popover opened — applied by the root to every other registered popover", and the guess was
+    // right about the shape and wrong about the rule: there is no uniform rule. The project row
+    // menu deliberately leaves the switcher it was opened from alone, the worktree menu closes
+    // only the project one, and the session and terminal menus close nothing. So a surface now
+    // *declares* what it displaces (`FloatingSurface::displaces`), `Outcome::SurfaceOpened` says
+    // one opened, and `overlay::registry::displace` closes each through the cancellation that
+    // surface already declared. `tests/popover_displacement.rs` states the whole relation
+    // independently — all forty-two ordered pairs, including the thirty nobody had a test for.
     // --- group D is gone: `Workspace::forget` is core's own operation (T067a-3) -------------------
     // Four rows sat here, one per `workspace` member that forgetting a project clears. T067 called
     // `ProjectForgotten` "the clearest case in the whole list" and it was the wrong call: `forget`
