@@ -594,6 +594,7 @@ Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`
 | Divider         | 1dp `outline_variant`                        |
 | Panel top edge  | §7.1's bottom edge, for a panel anchored below the app bar (FR-029a) |
 | Panel width     | 240 for a panel anchored below the app bar; 160 for a cursor-anchored context menu (FR-029c) |
+| Panel anchor    | the **press point**, in window coordinates, for a context menu opened from an element — clamped so the panel stays inside the window (FR-029d). The edge anchors are the stated exceptions: §7.1's bottom edge for a panel hanging from the app bar (FR-029a), and a bar's top edge for one that must rise rather than fall |
 | Panel transition| §6's menu enter and exit — the panel plays both, so every panel of the kind does (FR-029c) |
 | States          | full state-layer set (§5)                     |
 
