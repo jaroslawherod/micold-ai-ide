@@ -42,7 +42,10 @@ use std::path::{Path, PathBuf};
 /// that belong to a demonstration rather than to a user's press.
 fn rendering_layer() -> Vec<PathBuf> {
     let mut files = Vec::new();
-    collect(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui"), &mut files);
+    collect(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui"),
+        &mut files,
+    );
     files
 }
 

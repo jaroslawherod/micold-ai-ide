@@ -71,7 +71,9 @@ const WORKTREE_COUNT: usize = 8;
 fn worktree(dir_name: &str, branch: &str) -> Worktree {
     Worktree {
         dir_name: dir_name.to_string(),
-        path: PathBuf::from(PROJECT).join(".claude/worktrees").join(dir_name),
+        path: PathBuf::from(PROJECT)
+            .join(".claude/worktrees")
+            .join(dir_name),
         branch: Some(branch.to_string()),
         status: WorktreeStatus::Valid,
         included: false,
@@ -150,7 +152,9 @@ fn right_press_at(state: &mut State, point: (f32, f32)) -> usize {
     );
     let mut tree = Tree::new(element.as_widget());
     let limits = layout::Limits::new(Size::ZERO, lay::WINDOW);
-    let node = element.as_widget_mut().layout(&mut tree, &renderer, &limits);
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &limits);
 
     // Settle whatever is already on screen before pressing into it. A panel mounts at opacity zero
     // and `Fade` returns early below `HIDDEN` for every event that is not a `Window` event, so a
@@ -365,10 +369,7 @@ fn expected_origin(point: (f32, f32), panel: &LayoutRecord) -> ((f32, f32), bool
         (panel.width as u16, panel.height as u16),
         (lay::WINDOW.width as u16, lay::WINDOW.height as u16),
     );
-    (
-        (clamped.0 as f32, clamped.1 as f32),
-        clamped != asked,
-    )
+    ((clamped.0 as f32, clamped.1 as f32), clamped != asked)
 }
 
 // --- The four context menus ---------------------------------------------------------------------
@@ -410,16 +411,25 @@ fn the_worktree_menu_moves_to_the_next_row_right_clicked() {
     let mut state = with_project(Vec::new());
 
     let before = records(&state);
-    let first = centre_of(&before, &sidebar_row(FIRST_WORKTREE_ROW), "the first worktree row");
+    let first = centre_of(
+        &before,
+        &sidebar_row(FIRST_WORKTREE_ROW),
+        "the first worktree row",
+    );
     right_press_at(&mut state, first);
     let at_first = menu_that_opened(&before, &records(&state));
 
-    let last_point = centre_of(&before, &sidebar_row(LAST_WORKTREE_ROW), "the last worktree row");
+    let last_point = centre_of(
+        &before,
+        &sidebar_row(LAST_WORKTREE_ROW),
+        "the last worktree row",
+    );
     right_press_at(&mut state, last_point);
     let at_last = menu_that_opened(&before, &records(&state));
 
     let moved = at_last.y - at_first.y;
-    let expected = expected_origin(last_point, &at_last).0 .1 - expected_origin(first, &at_first).0 .1;
+    let expected =
+        expected_origin(last_point, &at_last).0 .1 - expected_origin(first, &at_first).0 .1;
     assert!(
         (moved - expected).abs() < TOLERANCE,
         "right-clicking a different row must re-anchor the menu (FR-029d): the panel should have \
