@@ -220,6 +220,30 @@ fn the_active_indicator_spans_its_whole_tab() {
                     continue;
                 };
                 checked += 1;
+                // Flush against **an** edge, top or bottom: which one is `IndicatorEdge`'s
+                // business and this gate must not pin it. The rule floated ~8dp clear of both for
+                // as long as the tab's column was content-sized inside a fixed-height button —
+                // the same defect as the horizontal inset, on the other axis, and invisible for
+                // the same reason: every node was exactly where its own layout said it was.
+                let flush_top = (rule.y - tab.y).abs() <= TOLERANCE;
+                let flush_bottom =
+                    ((rule.y + rule.height) - (tab.y + tab.height)).abs() <= TOLERANCE;
+                if !flush_top && !flush_bottom {
+                    let name = lay::anchor_for(covered.anchors, &tab.path)
+                        .map(|a| a.name.to_string())
+                        .unwrap_or_else(|| lay::path_token(&tab.path));
+                    failures.push(format!(
+                        "  {} — {name}: the rule sits {:.1}..{:.1} in a tab {:.1}..{:.1}, touching \
+                         neither edge — {:.1}dp clear of the top and {:.1}dp of the bottom",
+                        covered.name,
+                        rule.y,
+                        rule.y + rule.height,
+                        tab.y,
+                        tab.y + tab.height,
+                        rule.y - tab.y,
+                        (tab.y + tab.height) - (rule.y + rule.height),
+                    ));
+                }
                 if (rule.x - tab.x).abs() > TOLERANCE || (rule.width - tab.width).abs() > TOLERANCE
                 {
                     let name = lay::anchor_for(covered.anchors, &tab.path)
