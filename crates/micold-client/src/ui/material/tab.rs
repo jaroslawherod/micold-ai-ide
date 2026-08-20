@@ -215,18 +215,60 @@ pub fn content_colour(is_active: bool, r: Roles) -> Rgb {
     indicator_colour(is_active, r).unwrap_or(r.on_surface_variant)
 }
 
+/// The leading slot, at [`SLOT_WIDTH`] whether it is filled or not.
+///
+/// The width is the slot's, never its content's, and that is the whole point of the function. A
+/// slot nobody filled is still a slot — see the module doc, and feature 023 FR-008a: a child that
+/// comes and goes inside a pressable control is the positional-`diff_children` trap.
+///
+/// **A slot that resized to fit is the same defect wearing the other hat**, and it is the one this
+/// function was extracted to fix. Feature 026's stopped mark is an `ActivityBadge`, which reserves
+/// the sidebar tag's ~11dp rather than a touch target's 48 — so a tab whose process had stopped
+/// built a row 37dp narrower than its neighbours', and the centring column pulled its label 20dp
+/// toward the leading edge. Every geometry gate was green: `tab_children_fit` asks about tabs in
+/// the *application*, where no tab carries a mark until T049, and each node was exactly where its
+/// own layout said it was. It was found by measuring glyph ink across the gallery's own row (T013)
+/// — the labels fell at 94.5, 255.5 and 396.5 on a 161dp pitch, so the third was 20 short of the
+/// 416.5 its own midline was at.
+///
+/// Wrapping here rather than at each call site is what makes that unrepeatable: a caller cannot
+/// hand a tab something the wrong size, because the size is not the caller's to give.
+///
+/// # Why only the leading one
+///
+/// The trailing slot passes its content through at whatever width that content measures, and it has
+/// to for now: the close control a terminal tab puts there is a **compact** `IconButton`
+/// (`.circular().padding(XS)`), which lays out at 20dp rather than the 48 [`SLOT_WIDTH`]'s own
+/// documentation assumes. Boxing it to 48 moves the committed layout fixture, which feature 026's
+/// promotion is required not to do.
+///
+/// So the two slots are **not** equal in the application today — 48 against 20 — and a tab's label
+/// therefore sits about 14dp right of its own midline. That is feature 012's, not this feature's:
+/// its `tab_children_fit` gate measures the *content row's* centre against the tab's, and a row
+/// whose two ends are unequal is still centred as a row, so the gate cannot see where the label
+/// inside it landed. Recorded here because measuring it is how it was found, and because T022 —
+/// which requires the AI tab's two slots to be equal — is where it has to be confronted rather than
+/// carried forward.
+fn leading_slot<'a, M: 'a>(content: Option<Element<'a, M>>) -> Element<'a, M> {
+    match content {
+        Some(content) => container(content)
+            .center_x(Length::Fixed(SLOT_WIDTH))
+            .center_y(Length::Shrink)
+            .into(),
+        None => Space::new().width(Length::Fixed(SLOT_WIDTH)).into(),
+    }
+}
+
 impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M> {
     fn from(t: Tab<'a, M>) -> Self {
         let r = t.roles;
-        // A slot nobody filled is still a slot. See the module doc: a child that comes and goes
-        // inside a pressable control is the positional-`diff_children` trap.
-        let slot = || Element::from(Space::new().width(Length::Fixed(SLOT_WIDTH)));
         let content = row![
-            t.leading.unwrap_or_else(slot),
+            leading_slot(t.leading),
             container(t.label)
                 .max_width(LABEL_MAX_WIDTH)
                 .center_x(Length::Shrink),
-            t.trailing.unwrap_or_else(slot),
+            t.trailing
+                .unwrap_or_else(|| Space::new().width(Length::Fixed(SLOT_WIDTH)).into()),
         ]
         .spacing(spacing::XS)
         .align_y(Alignment::Center);
@@ -364,6 +406,39 @@ mod tests {
             "`shape::FULL` is the fully rounded pill every `Button` wraps itself in by default — \
              the shape a tab inherits by being built as one, and the shape FR-015 exists to \
              replace"
+        );
+    }
+
+    /// FR-010a / feature 012 FR-004a: a slot measures the slot, not what is in it.
+    ///
+    /// The leading spacer balances the trailing close control so the label sits on the tab's
+    /// midline. That holds while the slot is empty and stops holding the moment something narrower
+    /// than a touch target goes in it — which is exactly what feature 026's stopped mark is. Found
+    /// by measuring glyph ink in the gallery (T013): the marked tab's label was 20dp left of where
+    /// its neighbours' sat, with every geometry gate green, because no tab in the application
+    /// carries a mark yet.
+    #[test]
+    fn a_slot_is_the_slots_width_whatever_is_in_it() {
+        let r = roles();
+        let empty: Element<'_, ()> = leading_slot(None);
+        assert_eq!(
+            empty.as_widget().size().width,
+            Length::Fixed(SLOT_WIDTH),
+            "an empty slot must still reserve a touch target's width"
+        );
+        let filled: Element<'_, ()> = leading_slot(Some(
+            crate::ui::material::ActivityBadge::for_emphasis(
+                Some(crate::ui::material::BadgeEmphasis::Stopped),
+                r,
+            )
+            .into(),
+        ));
+        assert_eq!(
+            filled.as_widget().size().width,
+            Length::Fixed(SLOT_WIDTH),
+            "a filled slot must measure the slot, not its content — a mark narrower than the \
+             control it balances pulls the label off the tab's midline, and no geometry gate can \
+             see it until a tab in a covered state carries one"
         );
     }
 
