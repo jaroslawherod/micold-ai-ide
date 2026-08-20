@@ -150,3 +150,83 @@ forward.
 - **Mid-flight animation.** The ripple's own expanding circle was not caught at a chosen frame; what
   is recorded is the settled press fill. A screenshot pipeline cannot reliably sample a 150ms
   transition, and lavapipe's frame pacing says nothing about a real GPU's.
+
+---
+
+## 2026-08-20 — the application: §1–§8, consolidated (T030, T036, T045, T053, T054, T055, T057)
+
+**Consolidated deliberately, and it is a scope decision rather than a shortcut.** The task list asks
+for a pass per story — §1–§3 and §7 at T030, §6 at T036, §5 at T045, §4 at T053, §8 at T054 — each
+against that story's build. Five passes need five setups of the same thing: a matched client and
+daemon, a private display, a throwaway git project, and a session with instances in it. They were
+run as **one** session against the finished build, which is what T054 asks for anyway; what is lost
+is the early warning a per-story pass gives, and by the time this ran all three stories were already
+implemented, so there was no early left to be warned in.
+
+**Ran on**: Xvfb `:77` (1600×1400) + lavapipe (Mesa's software Vulkan rasteriser), **not a physical
+display**. `micold-ai-ide` and `micold-daemon`, `debug`, built in **one** locked invocation from
+`feat/026-ai-session-tab` and copied together to `~/vp/bin/` — the shared target directory holds
+whatever branch built last, and `--bin` filters the whole invocation, which is how a pass once
+pinned a daemon a version behind. The pair connecting was confirmed from the client's own log
+(`attach: connected`), which is the check that catches every cause at once. Private
+`XDG_RUNTIME_DIR=/tmp/vp77` and `XDG_DATA_HOME`, with a throwaway git project at `/tmp/vpproj`; the
+user's own app, daemon and project catalog were untouched, and only processes whose
+`XDG_RUNTIME_DIR` read `/tmp/vp77` were ever stopped.
+
+### Passed — the strip exists in a session with no instances at all (FR-003, SC-003)
+
+![one tab, marked](images/t054-zero-instance-strip.png)
+
+The state feature 012 deliberately drew nothing in, and where FR-003's whole visible change lands
+for the user who never opens a second terminal. A single tab — the AI conversation's — marked, at
+the bar's trailing end before the mode toggle. **Judged rather than merely observed**, as T030 asks:
+it reads as a strip of one rather than as a stray control, because the indicator above it is the
+same rule the multi-tab strip draws and it sits in the same place relative to the toggle.
+
+Measured: the indicator spans `x 1416..1535` — **120px, `material::tab::WIDTH` exactly**.
+
+### Passed — membership, order and the single mark (FR-001, FR-002, FR-004, FR-005, SC-001, SC-006)
+
+![the strip, dark then light, at identical crop geometry](images/t054-strip-both-schemes.png)
+
+Three open instances plus the AI conversation, in a session switched to Regular Terminal mode.
+
+- **One tab per instance, then the AI tab last.** Opening instances appends to the scrolling region
+  and the AI tab holds the bar's trailing end throughout — it never moved.
+- **Exactly one tab is marked** in every state observed, and it is the one the pane displays. In AI
+  CLI mode that was the AI tab; after the toggle it was the instance's, and the AI tab went muted.
+- **No close control on the AI tab**, while every instance tab has one. The trailing slot is
+  reserved rather than reclaimed, so all four tabs measure the same.
+- **The AI tab sits outside the scrolling region** (FR-002b), between it and the "+".
+
+### Passed — the stopped mark, in both schemes (FR-012, FR-012a, FR-012c, SC-007)
+
+`exit` in the displayed instance. Its tab gained a **red ring in the leading slot** while keeping
+the accent indicator — a tab that is marked *and* not running, saying both, which is the state
+FR-012a exists for and the one a tone-only cue would have failed.
+
+The two crops above are dark and light at **identical geometry**, so the comparison is one image.
+The ring is legible against both grounds and is neither the accent the indicator wears nor the muted
+tint the inactive tabs wear. The label stayed on its tab's midline with the ring beside it — the
+`leading_slot` fix holding in the application, not only in the gallery.
+
+### Passed — the menus, including the silence (FR-006a, FR-006b, SC-005)
+
+![Restart and Close on a stopped tab](images/t054-stopped-tab-menu.png)
+
+- A secondary press on the **stopped instance tab** opened Restart + Close, rising above the bar.
+- A secondary press on the **running AI tab produced nothing at all** — no panel, no empty panel.
+  What the frame shows is the tab's hover state layer and no menu. This is the check worth the setup:
+  FR-006b is a requirement about an absence, and an absence is exactly what a green suite cannot
+  distinguish from a control that failed to open.
+- That state layer is visibly a **rectangle spanning the tab**, which is FR-015 confirmed in the
+  application rather than only in the gallery (T057).
+
+### Not covered
+
+- **Overflow in the application.** Six instances at 1600×1400 do not overflow the bar the way six do
+  at the fixture's 1280dp, so the edge fade and the scroll were not exercised here. They are covered
+  by `gates/bar_controls_hold_their_size.rs` and `containment.rs`'s attribution proof, which read the
+  1280dp covered state, and by `EdgeFade`'s four posed states in the gallery — but the composited
+  fade over a real scrolling strip is **unverified**, and §6's first expectation with it.
+- **Mid-flight animation**, for the reason the pass above gives.
