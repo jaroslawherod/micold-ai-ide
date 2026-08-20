@@ -442,10 +442,46 @@ fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
         || app.core.sidebar_viewport_height == 0
         || !app.core.current_session_is_listed()
     {
+        if app.core.pending_reveal_scroll && micold_client::reveal_trace::enabled() {
+            micold_client::reveal_trace::line(format_args!(
+                "armed, waiting: viewport_h={} listed={}",
+                app.core.sidebar_viewport_height,
+                app.core.current_session_is_listed()
+            ));
+        }
         return None;
     }
     app.core.pending_reveal_scroll = false;
-    let offset = app.core.reveal_scroll_offset()?;
+    let offset = app.core.reveal_scroll_offset();
+    if micold_client::reveal_trace::enabled() {
+        match offset {
+            Some(y) => micold_client::reveal_trace::line(format_args!(
+                "drained: viewport_h={} scroll_offset={} -> scrolling to {y}",
+                app.core.sidebar_viewport_height, app.core.sidebar_scroll_offset,
+            )),
+            None => micold_client::reveal_trace::line(format_args!(
+                "drained: viewport_h={} scroll_offset={} -> no scroll, the row is already visible \
+                 (FR-009)",
+                app.core.sidebar_viewport_height, app.core.sidebar_scroll_offset,
+            )),
+        }
+    }
+    let offset = offset?;
+    // Record where the list was sent, rather than waiting to be told (BUG-002).
+    //
+    // `sidebar_scroll_offset` is a mirror of the scrollable's position whose only writer is
+    // `Message::SidebarScrolled` — and the rendering stack publishes that from `notify_viewport`,
+    // which returns *without publishing* whenever the content fits the viewport
+    // (`iced_widget/src/scrollable.rs`). A reveal in a project whose sidebar fits therefore moves
+    // the list silently, and the mirror keeps the offset of the project before it. The next
+    // arrival then measures its row against a position the panel is nowhere near, concludes the
+    // row is already visible, and consumes the arm under FR-009 — the deepest row in a 30-location
+    // list left below the fold with nothing to move it.
+    //
+    // The application does not need to be told what it just did. `offset` is already clamped into
+    // this list's own scrollable range by `scroll_target`, so it is the position the panel will
+    // hold whether or not a notification follows.
+    app.core.sidebar_scroll_offset = offset;
     Some(iced::widget::operation::scroll_to(
         micold_client::ui::SIDEBAR_SCROLL_ID.clone(),
         iced::widget::scrollable::AbsoluteOffset {
@@ -1312,6 +1348,68 @@ pub(crate) mod tests {
             sent.iter()
                 .any(|m| matches!(m, ClientMsg::SetViewedSession { session: None, .. })),
             "the daemon is still told that no session is viewed"
+        );
+    }
+
+    /// BUG-002 (024): a drained reveal must record where it sent the list, because the list will
+    /// not always tell us.
+    ///
+    /// `sidebar_scroll_offset` is a mirror of the scrollable's position, and its only writer is
+    /// `Message::SidebarScrolled` — which iced publishes from `notify_viewport`, and
+    /// `notify_viewport` returns without publishing when the content fits the viewport
+    /// (`iced_widget/src/scrollable.rs`). So a reveal that runs in a project whose sidebar fits —
+    /// the short project you pass through on the way somewhere — moves the list and is never told,
+    /// and the mirror keeps the *previous* project's offset.
+    ///
+    /// What that costs is the whole feature: on the next arrival the drain measures the row against
+    /// an offset the list is nowhere near, decides it is already visible, and consumes the arm
+    /// under FR-009. Reproduced on screen 2026-08-20 — the panel sat at the top with the marked row
+    /// 1,968px below the fold, and the trace read `scroll_offset=734 -> no scroll, the row is
+    /// already visible` immediately followed by `the scrollable reports offset 0`.
+    #[test]
+    fn a_drained_reveal_records_where_it_sent_the_list() {
+        use micold_core::project::{Availability, Project};
+        use micold_core::session::Session;
+        use micold_core::worktree::{Worktree, WorktreeStatus};
+
+        let mut app = base_app();
+        let path = PathBuf::from("/repo");
+        app.core.workspace.projects.push(Project {
+            path: path.clone(),
+            display_name: "repo".to_string(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        });
+        app.core.workspace.active = Some(path.clone());
+        app.core.worktrees = vec![Worktree {
+            dir_name: "only".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/only"),
+            branch: Some("feat/only".to_string()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }];
+        let session = Session::start_new(SessionLocation::Worktree("only".to_string()));
+        let id = session.id;
+        app.core.workspace.sessions.insert(path, vec![session]);
+        app.core.active_session = Some(id);
+        // Everything here fits: one location in a tall panel. This is the project that scrolls
+        // without reporting.
+        app.core.sidebar_viewport_height = 400;
+        // Left behind by the project we just came from, whose list was long enough to scroll.
+        app.core.sidebar_scroll_offset = 734;
+        app.core.pending_reveal_scroll = true;
+
+        assert!(
+            reveal_scroll(&mut app).is_some(),
+            "precondition: the reveal drains and asks for a scroll — 734 is not where this \
+             one-location list can be"
+        );
+
+        assert_eq!(
+            app.core.sidebar_scroll_offset, 0,
+            "the reveal knows where it sent the list, so it must not wait to be told: leaving 734 \
+             here is BUG-002, and the next arrival measures its row against a position the panel \
+             left long ago"
         );
     }
 
