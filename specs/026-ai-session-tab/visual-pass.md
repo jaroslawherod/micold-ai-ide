@@ -55,6 +55,25 @@ same tabs, same accent, same pitch, only the rule's side differs. This is what t
 for: the application inverts Material's default placement deliberately (feature 012 FR-004b), and an
 inversion that is never shown next to the thing it inverts reads as a mistake to the next person.
 
+### Found and fixed — the indicator did not reach the tab's edges
+
+**Reported by the user, not by this pass**, and worth recording as such: the selection bar stopped
+short of both edges, and the tab should not have had padding. One cause. A tab was a `Button` with
+`spacing::SM` on each side, and the indicator fills the *content column* — which padding is exactly
+what makes narrower than the tab. It measured **120dp inside a 136dp tab**, floating clear at both
+ends, and it read as a rule *near* a tab rather than as the tab being selected.
+
+The padding is gone. The bar and its tab are now the same box — `512.5..632.5` in the fixture, and
+**28..147 (120dp)** measured off the composited frame with the label's ink centred on it at 87.5.
+Dropping the inset also drops the `2 × spacing::SM` term from `WIDTH`'s derivation, which is the
+point rather than a consequence: FR-004c says a tab's width is the sum of what it holds, so a tab
+that holds no padding must not reserve any, and keeping 136 would have put a chosen number back.
+
+`gates/tab_children_fit.rs::the_active_indicator_spans_its_whole_tab` now holds it. Geometry rather
+than a value, because the value was never wrong — `Divider::horizontal` has always filled what it
+was given, and what was wrong was what it was given. That is the same shape as this gate's other
+assertion one axis over: a figure intact in the source, competed away by the box around it.
+
 ### Found and fixed — the stopped mark pulled its label 20dp off the midline
 
 ![marked, unmarked, stopped](images/t013-tab-states.png)
