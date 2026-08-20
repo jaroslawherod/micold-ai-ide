@@ -9,7 +9,7 @@ use micold_client::features::window::FieldId;
 /// Switch project the way the root does: apply the outcomes, don't just produce them (T067a-6).
 ///
 /// `switch_active` reports arriving in a project rather than performing its view resets, so a test
-/// that dropped the outcomes would asserts against a half-applied switch.
+/// that dropped the outcomes would assert against a half-applied switch.
 fn switch(state: &mut State, path: &std::path::Path) -> bool {
     match state.switch_active(path) {
         Some(outcomes) => {
