@@ -19,6 +19,7 @@ pub mod icons;
 pub mod input;
 pub mod keymap;
 pub mod overlay;
+pub mod reveal_trace;
 pub mod selection;
 pub mod showcase;
 pub mod ui;
