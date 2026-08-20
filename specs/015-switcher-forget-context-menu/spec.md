@@ -100,6 +100,14 @@ corner of a small window, and verify the menu is always at the pointer and alway
   other menu/panel; dismissing it MUST forget nothing.
 - **FR-005**: The menu MUST be positioned at the pointer, with its top-left corner at the click
   point, and MUST re-position when a different row is right-clicked.
+
+  > **Lifted to the kind, 2026-08-20 ([018](../018-material3-visual-system/spec.md)'s BUG-008).**
+  > This requirement, and US2 above it, are scoped to the switcher's project rows — and the
+  > sidebar's worktree and session menus, written before them, opened at a fixed corner for years
+  > because nothing said the rule was about *context menus* rather than about this one. It now is:
+  > **018's FR-029d** states it for every context menu opened from an element, with the press point
+  > carried by the gesture, and **SC-008f** gates it over the set. Nothing here changes; what
+  > changes is that this is no longer the only place it is written.
 - **FR-006**: The menu MUST remain fully within the window, including when opened near an edge and
   when the window is resized while it is open.
 - **FR-007**: Non-project rows (the "Add project…" affordance) MUST NOT offer a context menu.
@@ -133,3 +141,5 @@ corner of a small window, and verify the menu is always at the pointer and alway
   pointer rather than beside it.
 - **Right-click is the only new trigger.** The known-projects list keeps its explicit Forget
   button; no context menu is added there.
+
+**Amended**: 2026-08-20 — 018's BUG-008 records that FR-005/US2 were lifted from this feature's switcher to the whole context-menu kind (018 FR-029d, SC-008f). No behaviour specified here changes.
