@@ -290,15 +290,26 @@ pub enum Message {
     /// body: mirrors `TerminalRestartRequested`, which only triggers binary-side spawn logic.
     /// Carries the owning session explicitly for the same reason as `ShellInstanceSelected`.
     ShellInstanceRestartRequested(SessionId, ShellInstanceId),
+    /// Open the context menu for one terminal tab, at a window-pixel point (feature 012, BUG-005,
+    /// FR-010b). Dispatched by a secondary (right) press on the tab.
+    ShellInstanceMenuRequested(ShellInstanceId, u16, u16),
+    /// Dismiss the terminal-tab context menu.
+    ShellInstanceMenuClosed,
     /// A Regular Terminal instance reported it is running (feature 011; replaces feature 010's
     /// `ShellSessionRunning(SessionId)`, now id-addressed since a session may have more than one
     /// instance).
     ///
     /// **Emitted nowhere in production**, like [`Self::SessionRunning`]. The daemon owns this
     /// transition and publishes it as `SessionSummary::live_shells`, which `reconcile_catalog`
-    /// adopts (`012` FR-008, BUG-003). Kept as the reducer's own `→ Running` edge: it is the only
-    /// lever the integration tests in `tests/` have, since `reconcile_catalog` lives in the binary
-    /// crate and those tests can only reach the library.
+    /// adopts (`012` FR-008, BUG-003). Kept as the reducer's own `→ Running` edge, which feature
+    /// 023's FR-019 rule (a session reaching `Running` must not move the keyboard) is asserted
+    /// through.
+    ///
+    /// The older reason for keeping it — that it was the *only* lever `tests/` had, because
+    /// `reconcile_catalog` sat in the binary crate — no longer holds: the fold now lives in
+    /// [`crate::catalog_sync`] and `crates/micold-daemon/tests/catalog_join.rs` drives the real
+    /// daemon → wire → client path. That is the coverage this variant was standing in for, and
+    /// standing in badly: it let `012` BUG-003 ship an incomplete fix.
     ShellInstanceRunning(SessionId, ShellInstanceId),
     /// A Regular Terminal instance's shell process exited (intentional or crash) — never
     /// auto-restarted (FR-008; replaces feature 010's `ShellSessionExited(SessionId)`).
@@ -552,6 +563,16 @@ pub struct State {
     /// The open terminal right-click context menu's anchor in pane-local pixels, or `None` when
     /// no menu is showing (feature 006, FR-013).
     pub terminal_context_menu: Option<(u16, u16)>,
+    /// The open terminal-tab context menu — which instance it belongs to, and where it was opened
+    /// in window pixels — or `None` when no menu is showing (feature 012, BUG-005, FR-010b).
+    ///
+    /// Carries the instance because the menu acts on the tab it was opened on, **not** on the
+    /// active one: restarting a background instance without selecting it first is the whole of
+    /// FR-010a, and it is what addressing the restart message by instance id was built for.
+    /// Window pixels rather than the pane-local point [`State::terminal_context_menu`] holds — that
+    /// one is drawn on the pane's own overlay because a pane's origin is not known at render time,
+    /// and this one is drawn on the window's, where the anchor is already in the right space.
+    pub shell_instance_menu: Option<(ShellInstanceId, u16, u16)>,
     /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
     /// Why entering a project landed on the session it did, from the most recent switch.
@@ -1024,6 +1045,12 @@ impl State {
                 crate::features::session::context_menu_opened(self, x, y)
             }
             Message::TerminalContextMenuClosed => crate::features::session::context_menu_closed(self),
+            Message::ShellInstanceMenuRequested(instance, x, y) => {
+                crate::features::session::shell_instance_menu_requested(self, instance, x, y)
+            }
+            Message::ShellInstanceMenuClosed => {
+                crate::features::session::shell_instance_menu_closed(self)
+            }
             Message::SettingsOpened => crate::features::settings::opened(self),
             Message::SettingsScrollbackChanged(text) => {
                 crate::features::settings::scrollback_changed(self, text)

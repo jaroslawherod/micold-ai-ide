@@ -5,6 +5,9 @@
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md),
 [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
 
+**Bugfix**: 2026-08-19 — [BUG-001](./bugs/BUG-001.md) Updated from bugfix patch: T021 reopened,
+Phase 8 added (T061–T065).
+
 **Tests**: Per Constitution Principle I (Test-First, NON-NEGOTIABLE), test tasks are MANDATORY and
 are written to fail first. The three things no test in this repository can see — a single frame, a
 perceptual weight, a row's position against a real viewport — are quickstart §B's job, not an excuse
@@ -83,7 +86,12 @@ that session's row is marked as current.
 - [X] T018 [US1] Add `State::set_current_session(Option<SessionId>)` in `crates/micold-client/src/features/session.rs` performing, in order: commit the outgoing forced location (I3, on **every** transition including one to `None`) → clear `reveal_suppressed_for` (I2) → arm `pending_reveal_scroll` **only when the new value is `Some`** (I5, contract §3.0a). Arming on a clear would leave the field armed with no target — armed forever by I4, then applied to whatever row appeared next — and FR-001a forbids scrolling when the user closes the session they were on
 - [X] T019 [US1] Route `restore_after_activation`'s write to `active_session` (`crates/micold-client/src/features/session.rs:92`) through `set_current_session`, so the project switch arms a reveal without a new message
 - [X] T020 [US1] Add `TypeRole::SidebarSessionCurrent` in `crates/micold-client/src/ui/material/text.rs` — variant, `resolved()` arm mapping to `typography::LABEL_MEDIUM`, `ALL` 11 → 12 (including the `[TypeRole; 11]` length and the type-level prose that says "the eleven the application actually distinguishes"), and `name()`. Deliberately no new core token: `LABEL_MEDIUM` already carries exactly the right figures, and adding a `SIDEBAR_SESSION_CURRENT` alias would widen `typography::SIDEBAR` and the core tests that enumerate it for no gain (research R9 stays true — `micold-core` is untouched)
-- [X] T021 [US1] Render the current session row's name at that role in `crates/micold-client/src/ui/material/tree_view.rs`, reached by a chainable builder on the existing `TreeItem` (Principle VIII), leaving the `secondary_container` pill exactly as it is and touching neither the lifecycle tint nor the activity dot (contract §4.2, §4.3)
+- [X] T021 [US1] (reopened and closed by BUG-001, T063) Render the current session row's name at that role in `crates/micold-client/src/ui/material/tree_view.rs`, reached by a chainable builder on the existing `TreeItem` (Principle VIII), leaving the `secondary_container` pill exactly as it is and touching neither the lifecycle tint nor the activity dot (contract §4.2, §4.3)
+  - **Reopened (BUG-001)**: the role is selected here and then discarded one layer down —
+    `Ellipsized::at_role` keeps `role.size()` and drops `role.font()`, so the row renders at 400
+    like its siblings. Closes only when the weight is on screen, not when the role is named.
+  - **Closed again (2026-08-19)**: `Ellipsized` now carries the role's font, so the role this task
+    selects reaches the pixels. §A-level proof is T061/T062; the on-screen half is T065.
 - [X] T022 [US1] Set that builder from `session_tree_item` in `crates/micold-client/src/ui/sidebar.rs:455` off the `selected` value it already computes — no second source of truth for "is current"
 - [X] T023 [US1] Document the reveal and the mark in `docs/user-guide/worktrees-and-sessions.md` under `## Starting, switching, and closing sessions`: switching a project opens the row holding the session you land on and marks it, closing that row sticks, and the mark is independent of keyboard focus and of run state (FR-014, FR-015)
 
@@ -189,10 +197,92 @@ stays hidden.
 - [X] T054 Run the whole automated gate: `mise run test`, and record which of quickstart §A's rows each new test satisfies
 - [X] T055 Add the two assertions §A cannot currently claim: exactly one session row carries the mark when several sessions share a location (FR-002, contract §4.1) in `crates/micold-client/tests/features_sidebar.rs`, and the mark is independent of `terminal_focused` and of `lifecycle` (FR-014, FR-015, §4.4) in `crates/micold-client/tests/terminal_focus.rs`
 - [X] T056 Run quickstart §B B1–B6 with the repo's `visual-pass` skill and fill in the recording table in [quickstart.md](./quickstart.md) — a step that fails is a defect, not a note. B1, B2 and B4 are the three headline claims and none can be automated; if §B was not run, say so rather than leaving the table blank
+
+**§B was run on 2026-08-18** (T056/T057), against the client rather than the showcase, with the
+`visual-pass` skill. B1, B3, B5 and B6 pass. **B2 and B4 fail**, and per T056's own rule a step that
+fails is a defect: [BUG-001](./bugs/BUG-001.md) — the current session's name is not drawn heavier,
+because `Ellipsized::at_role` keeps only the role's size — and [BUG-002](./bugs/BUG-002.md) — a
+project switch never scrolls the current session's row into view in a list long enough to need it.
+Both are FR-level failures with no fix in this change; the recording table in
+[quickstart.md](./quickstart.md) carries the measurements and the evidence. **T058's branch is now
+answerable**: R4's fallback was for a 500 weight that proved too subtle, and the honest finding is
+that the weight is absent rather than subtle — so BUG-001 comes first, and R4's question can only be
+re-asked once there is a weight on screen to judge.
+
 - [X] T057 Capture the §B screenshots with `mise run screenshot` — B1's first frame after a switch and B2's pair of schemes — and check B2's pair in greyscale, which is the only real test of FR-003a
 - [X] T058 If §B judges the 500-weight name too subtle, apply R4's pre-argued fallback (an outline on the pill) rather than inventing a third cue — and record the decision in [research.md](./research.md) R4
 - [X] T059 [P] Cross-cutting docs review in `docs/`: confirm the two edited sections still read as one narrative and that nothing else in the user guide now describes the old collapsed-after-switch behaviour
 - [X] T060 Confirm CI is green on Linux, macOS and Windows for `.github/workflows/ci.yml` (Principle VI) — the feature has no platform branch, so a platform-specific failure means a geometry assumption leaked
+
+---
+
+## Phase 8: Bugfix BUG-001 — the current session's name is not drawn heavier
+
+**Goal**: The non-colour half of the mark reaches the pixels. `Ellipsized` carries the font its
+role asks for, so `SidebarSessionCurrent`'s 500 weight is visible on the current session's row
+while its siblings stay at 400 (FR-003a, FR-003a-i, SC-005a).
+
+**Independent Test**: Crop the current session's row and a sibling session's row at identical
+geometry in both schemes; the current name's normalised ink area exceeds the sibling's by the
+margin a 400 → 500 step produces, not by the 0.3% measured on 2026-08-18.
+
+### Tests for BUG-001 (MANDATORY — Constitution Principle I) ⚠️
+
+> Written FIRST; confirmed to FAIL before implementation.
+>
+> **How that was confirmed here (2026-08-19)**: not in the usual order. Both tests name a helper the
+> fix introduces (`needs_reshape`), so they could not compile against the unfixed widget — they were
+> written and implemented in one pass, and the failure was demonstrated afterwards by reverting the
+> two lines of fix (`at_role`'s font, and the font in the reshape key) and re-running:
+> `a_role_brings_its_font_and_not_only_its_size` and `a_change_of_font_alone_re_shapes_the_label`
+> both FAILED, the other ten passed. That is the same evidence Principle I asks for, obtained in the
+> other order, and it is recorded rather than glossed.
+
+- [X] T061 [BUG-001] Add a failing unit test in `crates/micold-client/src/ui/material/ellipsized.rs`:
+  `at_role` carries the role's font, not only its size — assert the constructed widget's font is
+  `TypeRole::SidebarSessionCurrent.font()`, that it differs from `SidebarSession`'s, and that the two
+  roles' *sizes* are equal (which is why the font is the only thing left to tell them apart). Assert
+  too that `Ellipsized::new` still defers to the renderer's default font, so the size-only
+  constructor's appearance does not move. This is the assertion `type_role_mapping.rs` and
+  `type_role_call_sites.rs` structurally cannot make: they check which role is *named*, and the
+  defect is entirely in what the drawing widget does with it (BUG-001, "Why no gate saw it")
+- [X] T062 [P] [BUG-001] Add a failing test that a change of font alone re-shapes the label. The
+  cached paragraph is keyed on content, width and size; the two sidebar roles are deliberately the
+  *same size*, so without the font in that key a row that becomes current would keep the paragraph
+  shaped at 400 and the fix would not show. Extract the staleness rule into a pure function and
+  assert it says "re-shape" when only the font differs
+
+### Implementation for BUG-001
+
+- [X] T063 [BUG-001] Give `Ellipsized` a `font: Option<Font>` field — `Some(role.font())` in
+  `at_role`, `None` in `new`, resolved against `renderer.default_font()` at layout time — and use it
+  in place of `renderer.default_font()` in the shaping template
+  (`crates/micold-client/src/ui/material/ellipsized.rs:64,128`), which is the one place both the
+  measurement and the drawn paragraph come from. `Option` rather than a bare `Font`, because the
+  application's default font *is* Roboto (`shell/startup.rs:84`) while `Font::DEFAULT` is not — a
+  bare default would silently restyle every size-only call site. Add the font to the reshape key.
+  Closes T021
+- [X] T064 [BUG-001] Audit every other `Ellipsized::at_role` call site for the same shape: a role
+  chosen for a weight the widget could not carry. Record which call sites change appearance as a
+  result — a widget whose whole job is text has until now had no way to say which face to draw it in,
+  so the fix is not necessarily confined to the sidebar
+  - **Result**: only two other `at_role` call sites exist, both showcase poses at `TypeRole::Body`
+    (weight 400, which is what the application's default font already was) — nothing moves there.
+    `TreeView`'s unselected `label_role` is `SidebarName` = `BODY_SMALL` = 400, also unchanged. One
+    other thing does change and should: the showcase's own tree pose
+    (`showcase/sections/surfaces.rs:259`, `selected_label_role(TypeRole::Label)` = `LABEL_MEDIUM`)
+    was exhibiting the same defect and now draws the weight it advertises
+
+### Verification for BUG-001
+
+- [X] T065 [BUG-001] Re-run quickstart §B2 with the `visual-pass` skill against the fixed build, in
+  both schemes, and record the ink-area measurement in [quickstart.md](./quickstart.md) beside the
+  2026-08-18 numbers. Only then is T058's R4 question answerable — whether a 500 weight that is
+  actually on screen is *sufficient*, or whether R4's outline fallback is still needed
+  - **Done 2026-08-19**: ink-area ratio **1.222** dark and **1.221** light, against 1.003/1.002
+    before the fix; measured on the luminance channel, so it is also the greyscale check SC-005 and
+    FR-003a ask for. **R4's fallback is not needed** — the weight carries on its own in both
+    schemes, so T058 stands as closed rather than reopened
 
 ---
 

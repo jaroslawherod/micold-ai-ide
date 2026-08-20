@@ -78,8 +78,9 @@ fn form_edits_build_a_derived_preview() {
 
     let form = state.worktree_form.as_ref().unwrap();
     let derived = form.preview().unwrap();
-    assert_eq!(derived.dir_name, "feat-abc-1-login");
-    assert_eq!(derived.branch, "feat/abc-1-login");
+    // Both carry the ticket boundary, so the branch maps back to this directory exactly (BUG-003).
+    assert_eq!(derived.dir_name, "feat-abc-1_login");
+    assert_eq!(derived.branch, "feat/abc-1_login");
 }
 
 #[test]
@@ -744,6 +745,68 @@ fn shell_instance_running_and_exited_update_that_instances_lifecycle() {
     assert_eq!(
         state.active_sessions()[0].active_shell_lifecycle(),
         Some(ShellLifecycle::Exited)
+    );
+}
+
+/// The tab context menu remembers **which tab** it was opened on (feature 012, BUG-005, FR-010b).
+///
+/// The whole reason the menu carries an instance id rather than reading the active one: FR-010a is
+/// about restarting an instance that is *not* selected, and reading `active_shell` at the moment the
+/// item is pressed would restart whichever tab the user happens to be looking at instead. That is a
+/// mistake no screenshot would catch — the menu opens on the right tab and does the wrong thing.
+#[test]
+fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let (background, active) = {
+        let session = state.workspace.find_session_mut(id).unwrap().1;
+        let first = session.open_shell_instance();
+        let second = session.open_shell_instance();
+        (first, second)
+    };
+    // `open_shell_instance` leaves the last-opened one active, so `background` is not selected —
+    // which is the case under test.
+    assert_eq!(state.active_sessions()[0].active_shell, Some(active));
+
+    state.update(Message::ShellInstanceMenuRequested(background, 742, 761));
+    assert_eq!(
+        state.shell_instance_menu,
+        Some((background, 742, 761)),
+        "the menu must record the instance whose tab was clicked, not the active one"
+    );
+
+    // Opening another tab's menu moves the one menu rather than stacking a second: two open menus
+    // would each claim the next click, and only one of them would be the one the user is looking at.
+    state.update(Message::ShellInstanceMenuRequested(active, 880, 761));
+    assert_eq!(state.shell_instance_menu, Some((active, 880, 761)));
+
+    state.update(Message::ShellInstanceMenuClosed);
+    assert_eq!(state.shell_instance_menu, None);
+}
+
+/// Opening a dialog closes the tab menu with every other popover (feature 021, T031).
+///
+/// Registered rather than remembered: `clear_for_dialog` asks the registry which surfaces are open
+/// instead of assigning to a list of fields, so this passes because `ShellInstanceMenu` is in the
+/// registry. A menu left out of it would survive a dialog opening over it and take the next click.
+#[test]
+fn the_tab_menu_closes_when_a_dialog_opens() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let shell = state
+        .workspace
+        .find_session_mut(id)
+        .unwrap()
+        .1
+        .open_shell_instance();
+
+    state.update(Message::ShellInstanceMenuRequested(shell, 742, 761));
+    assert!(state.shell_instance_menu.is_some());
+
+    state.clear_for_dialog();
+    assert_eq!(
+        state.shell_instance_menu, None,
+        "a menu that outlives the dialog opening over it claims the next click"
     );
 }
 

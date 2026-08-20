@@ -289,6 +289,7 @@ register! {
     crate::features::session::ConfirmSessionRemoveDialog => crate::ui::confirm_session_remove::dialog,
     crate::features::session::SessionContextMenu,
     crate::features::session::TerminalContextMenu,
+    crate::features::session::ShellInstanceMenu,
     crate::features::settings::SettingsDialog => crate::ui::settings_form::dialog,
     crate::features::sidebar::SidebarFilterPanel {
         displaces:

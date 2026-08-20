@@ -6,7 +6,8 @@
 
 use micold_core::git::FakeGit;
 use micold_core::worktree::{
-    preflight, BlockReason, BranchSituation, CreateError, CreateMode, WorktreeOwner,
+    explain_directory_taken, preflight, BlockReason, BranchSituation, CreateError, CreateMode,
+    WorktreeOwner,
 };
 use std::path::{Path, PathBuf};
 
@@ -768,5 +769,49 @@ fn the_project_checkout_is_unaffected_by_inclusion() {
             reason: BlockReason::CheckedOutInProjectRoot,
         },
         "the project checkout is the project. It is named as such whatever the included set says",
+    );
+}
+
+// ---------------------------------------------------------------------------------------
+// How a directory clash is explained (FR-022; BUG-003 item 3)
+// ---------------------------------------------------------------------------------------
+
+/// The folder the user would go looking for, and the one thing they can do about it.
+#[test]
+fn a_directory_clash_names_the_folder_and_says_what_to_do() {
+    let clash = explain_directory_taken(Path::new("/repo/.claude/worktrees/feat-login"));
+    assert_eq!(
+        clash.fact,
+        "A worktree folder named 'feat-login' already exists."
+    );
+    assert_eq!(
+        clash.guidance,
+        "Choose a different name, or remove the existing folder first."
+    );
+}
+
+/// A path with no final component still says something — the full path, rather than an empty
+/// name in quotation marks.
+#[test]
+fn a_directory_clash_without_a_folder_name_falls_back_to_the_path() {
+    let clash = explain_directory_taken(Path::new("/"));
+    assert!(clash.fact.contains('/'), "{}", clash.fact);
+    assert!(!clash.fact.contains("''"), "{}", clash.fact);
+}
+
+/// BUG-003 item 3. The two surfaces that report this clash — the form's pre-flight refusal and the
+/// daemon's create-time one — build their text from these two fields, so a one-string surface says
+/// everything the two-line one does. Before this, the daemon's own sentence said neither the folder
+/// name nor what to do.
+#[test]
+fn the_one_line_form_of_a_directory_clash_carries_both_halves() {
+    let clash = explain_directory_taken(Path::new("/repo/.claude/worktrees/feat-login"));
+    let line = clash.to_string();
+    assert!(line.contains(&clash.fact), "{line}");
+    assert!(line.contains(clash.guidance), "{line}");
+    assert_eq!(
+        line,
+        format!("{} {}", clash.fact, clash.guidance),
+        "one line is the two parts joined, never a third wording of them"
     );
 }

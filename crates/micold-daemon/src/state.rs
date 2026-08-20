@@ -58,6 +58,13 @@ struct Inner {
     /// carries its own [`InputReceiver`] so the append-only input contract (G2) is enforced per
     /// session, independent of which connection — or how many reconnects — drove it.
     sessions: HashMap<SessionId, LiveSession>,
+    /// Shell instances already announced as dead (`012` FR-008, BUG-003). A shell that exits is not
+    /// removed from `procs` — its PTY holds the final screen — so nothing else marks the moment it
+    /// stopped being live. The supervision tick broadcasts once per instance and records it here;
+    /// without the marker a dead shell would re-broadcast on every tick for as long as it is open.
+    /// Cleared for an instance when it is closed or restarted, which is what makes a restart
+    /// announceable again.
+    announced_dead_shells: std::collections::HashSet<(SessionId, ShellInstanceId)>,
     /// The worktrees discovered live from git + the filesystem, per project (FR-018, T053). Git is
     /// the single source of truth for worktrees; this is a cache refreshed at well-defined points
     /// (client attach, and after each worktree mutation) so the catalog snapshot can surface them
@@ -181,6 +188,7 @@ impl DaemonState {
                 clients: HashMap::new(),
                 attachments: HashMap::new(),
                 sessions: HashMap::new(),
+                announced_dead_shells: std::collections::HashSet::new(),
                 worktrees: HashMap::new(),
                 env_include_cache: HashMap::new(),
                 worktree_gates: HashMap::new(),
@@ -348,12 +356,15 @@ impl DaemonState {
                 // `012` FR-008/BUG-003: which shell instances exist is durable-ish client state,
                 // but which are *alive* is only knowable here. The client cannot infer it — no
                 // frames is a quiet shell as much as a dead one.
+                // Filtered by actual liveness, not merely by presence in the map: a shell that
+                // exits stays registered so its final screen survives, and reporting it live would
+                // make `exited` unreachable — the state `012` FR-008 most needs (BUG-003).
                 summary.live_shells = live
                     .procs
-                    .keys()
-                    .filter_map(|p| match p {
-                        SessionProcess::Shell(id) => Some(*id),
-                        SessionProcess::Primary => None,
+                    .iter()
+                    .filter_map(|(p, proc)| match p {
+                        SessionProcess::Shell(id) if proc.pty.is_alive() => Some(*id),
+                        _ => None,
                     })
                     .collect();
                 if let Some(title) = &live.last_title {
@@ -999,22 +1010,46 @@ impl DaemonState {
                     Some((project, SupervisionAction::Restart, cwd, mode)) => {
                         // Session exit + restart-attempt event, with the reason (FR-045).
                         tracing::warn!(session = %id.0, reason = "unexpected exit", "session crashed; restarting");
-                        changed.push(project);
+                        changed.push(project.to_path_buf());
                         to_respawn.push((id, cwd, mode));
                     }
                     Some((project, SupervisionAction::GiveUp, _, _)) => {
                         tracing::error!(session = %id.0, reason = "crash loop", "session gave up after repeated crashes (Failed)");
-                        changed.push(project);
+                        changed.push(project.to_path_buf());
                         to_drop.push(id);
                     }
                     Some((project, SupervisionAction::Stop, _, _)) => {
                         tracing::info!(session = %id.0, reason = "clean exit", "session stopped");
-                        changed.push(project);
+                        changed.push(project.to_path_buf());
                         to_drop.push(id);
                     }
                     // Session already gone from the catalog (closed concurrently) — just reap the
                     // orphaned live entry, no catalog change to broadcast.
                     None => to_drop.push(id),
+                }
+            }
+            // Shell instances that have stopped since the last tick (`012` FR-008, BUG-003). They
+            // are deliberately NOT removed from `procs` — the PTY holds the final screen the user
+            // is still looking at — so nothing else marks the transition, and `overlay_live_summaries`
+            // would go on reporting the same absence without ever announcing it. Announced once per
+            // instance: the marker is what stops a dead shell re-broadcasting on every tick.
+            let mut newly_dead: Vec<(SessionId, ShellInstanceId)> = Vec::new();
+            for (id, live) in &inner.sessions {
+                for (key, proc) in &live.procs {
+                    if let SessionProcess::Shell(instance) = key {
+                        if !proc.pty.is_alive()
+                            && !inner.announced_dead_shells.contains(&(*id, *instance))
+                        {
+                            newly_dead.push((*id, *instance));
+                        }
+                    }
+                }
+            }
+            for (id, instance) in newly_dead {
+                inner.announced_dead_shells.insert((id, instance));
+                if let Some((project, _)) = inner.catalog.workspace().find_session(id) {
+                    tracing::info!(session = %id.0, instance = instance.0, "shell instance exited");
+                    changed.push(project.to_path_buf());
                 }
             }
             // Survivors: a session still alive while marked `Restarting` has stayed up since its
@@ -1023,7 +1058,7 @@ impl DaemonState {
             for id in alive {
                 if let Some(project) = inner.catalog.mark_running_if_restarting(id) {
                     tracing::info!(session = %id.0, reason = "restart survived", "session recovered; running");
-                    changed.push(project);
+                    changed.push(project.to_path_buf());
                 }
             }
         }
@@ -1316,6 +1351,9 @@ impl DaemonState {
         let key = SessionProcess::Shell(instance);
         let (_removed, reattach) = {
             let mut inner = self.lock();
+            // A closed instance can be opened again under the same id (that is what restart is), so
+            // its death must be announceable a second time (BUG-003).
+            inner.announced_dead_shells.remove(&(session, instance));
             let live = inner.sessions.get_mut(&session)?;
             let removed = live.procs.remove(&key);
             let reattach = if live.attached == key {

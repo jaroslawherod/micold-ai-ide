@@ -97,7 +97,7 @@ fn duplicate_target_dir_is_rejected() {
         &mut |_| {},
     )
     .unwrap_err();
-    assert_eq!(err, CreateError::DuplicateDir);
+    assert_eq!(err, CreateError::DuplicateDir { dir: target() });
 }
 
 #[test]
@@ -246,7 +246,7 @@ fn duplicate_registered_worktree_is_rejected() {
         &mut |_| {},
     )
     .unwrap_err();
-    assert_eq!(err, CreateError::DuplicateDir);
+    assert_eq!(err, CreateError::DuplicateDir { dir: target() });
 }
 
 // =======================================================================================

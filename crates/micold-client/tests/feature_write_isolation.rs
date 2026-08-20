@@ -105,6 +105,10 @@ const OWNERS: &[(&str, &str)] = &[
     // `release_terminal`, and `tests/terminal_bar_stability.rs` already holds that line.
     ("terminal_released", "session"),
     ("terminal_context_menu", "session"),
+    // The terminal *tab* menu (feature 012, BUG-005), which landed on `main` while this feature was
+    // in flight. Same owner as the pane's own menu, and for the same reason: it acts on a shell
+    // instance, and a shell instance belongs to a session.
+    ("shell_instance_menu", "session"),
     // --- worktree -----------------------------------------------------------------------------
     ("workspace.worktree_names", "worktree"),
     ("workspace.included_worktrees", "worktree"),

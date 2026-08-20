@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-21
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "change the overlay form to create new worktree instead of radio buttons create a select from list. Create material select item component which will fallow material design look. After clicking create show progress bar with information what is happening and what staging is happenging. The delete of worktree should also ask if the branch should be deleted"
 

@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-27
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "Layout snapshot parity gate. Feature 017 established that CI can verify colour but not layout: `style_snapshot` pins all 116 resolved styles byte-for-byte across both schemes, so a colour regression fails the build, but nothing catches a spacing, sizing or structural regression. That gap is why the sidebar-name-overlapping-its-close-button defect reached a human instead of a test, and why feature 017's parity tasks T001b/T048/T049/T050 could only be closed on manual inspection. This feature closes it: walk the widget tree at fixed window sizes, resolve the layout, and pin the resulting bounds as a committed fixture asserted byte-for-byte in CI, the same shape as the style snapshot — so a layout drift names the widget that moved instead of relying on someone noticing."
 

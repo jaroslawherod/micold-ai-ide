@@ -128,21 +128,51 @@ here rather than leaving the table blank and implying it was.
 
 | Recorded | |
 |---|---|
-| Date | 2026-08-10 |
-| Platform | Linux. **Xvfb :77 + Mesa lavapipe (software Vulkan), not a real display**, driving `micold-showcase` — see the caveat below |
-| B1 — first frame after a switch, worktree and Default | **NOT RUN** — needs the client with a live daemon and two projects holding real sessions |
-| B2 — weight, hover, greyscale, both schemes | **PARTIAL.** Weight and greyscale ✅ (evidence below). Hover-vs-current, and the second scheme, **not run** — both need the sidebar in the client |
-| B3 — close sticks across a worktree refresh | **NOT RUN** — needs live sessions. Covered automatically by `tests/sidebar_state.rs` and `tests/app_state.rs`, which is not the same as seen |
-| B4 — 30 locations, both densities, no needless scroll | **NOT RUN** — this is the geometry check, and it is the one §A cannot stand in for |
-| B5 — one exempt row, chipped, in place | **NOT RUN** — needs live sessions |
-| B6 — the three non-arming paths | **NOT RUN** — needs live sessions |
+| Date | 2026-08-10 (§B2's showcase-only half); **2026-08-18 — §B run end to end against the client** |
+| Platform | Linux. **Xvfb :77 + Mesa lavapipe (software Vulkan), not a real display.** The 2026-08-18 run drove the real client (`micold-ai-ide`) with its own daemon, three seeded git projects and six live `claude` sessions, via the repo's `visual-pass` skill — see the method note below. The 2026-08-10 half drove `micold-showcase`, which is why it could not reach any step but B2's token comparison |
+| B1 — first frame after a switch, worktree and Default | **PASS**, both — [evidence](./evidence/B1-first-frame-after-switch.png). Switching away and back, the location holding the current session is already open and that session's row is already marked on the earliest frame the capture pipeline can take, and on the three consecutive frames after it. No collapse-then-expand flicker, and no frame with a session in the main area and nothing marked in the panel (SC-002). Repeated for a session in the **Default** (project-root) row with the same result |
+| B2 — weight, hover, greyscale, both schemes | **FAIL — [BUG-001](./bugs/BUG-001.md).** The current session's name is **not** drawn heavier: normalised ink area 185.3 vs 184.8 in dark and 185.4 vs 185.0 in light (ratio 1.003 / 1.002, where a 400→500 step is worth 8–15%), and both labels measure 67–68px wide with a 9px cap height — [evidence](./evidence/B2-weight-absent-both-schemes.png). `Ellipsized::at_role` keeps only `role.size()` and draws with the renderer's default font, so the role the tree view selects for the marked row reaches the glyphs as a pixel size and nothing else. FR-003a's colour-independent channel does not exist in the sidebar. **Steps 2–4 pass**: hovering a different row is tellable apart from the current row in greyscale (fill 42 vs 86 against a 28 background), the current row hovered reads as both (86 → 96), and the activity dot and lifecycle tint are pixel-identical before and after the row becomes current — [evidence](./evidence/B2-hover-vs-current-greyscale.png), [evidence](./evidence/B2-activity-dot-unchanged.png). **Both schemes captured**; in light the mark survives greyscale on a 16-level fill step alone (228 vs 244) — [evidence](./evidence/B2-light-scheme-greyscale.png) |
+| B2 — re-run 2026-08-19 after [BUG-001](./bugs/BUG-001.md) | **PASS.** The weight is on screen — [evidence](./evidence/B2-weight-present-both-schemes.png) (dark left, light right; sibling above in blue, current below in red). Two sessions in one location, same string, cropped at identical geometry, measured on the **luminance** channel, which makes this the greyscale test rather than a separate one. Normalised ink area — each pixel's distance from its own row's background, over the peak, which cancels the two rows' different fills: dark **221.2 vs 181.1 = 1.222**, light **221.3 vs 181.3 = 1.221**. Against 1.003 / 1.002 before the fix, and against the 8–15% a 400 → 500 step is worth. A second, independent measure agrees — pixels above half peak, 230 vs 192 (dark) and 229 vs 192 (light). Glyph extents are now 67×9 against the sibling's 66×9: same cap height, one pixel wider, which is what 11 characters of 0.40 → 0.50 letter-spacing comes to. **T058's R4 question is now answerable and the answer is no**: the 500 weight is legible on its own, in both schemes, so R4's outline fallback is not needed |
+| B3 — close sticks across a worktree refresh | **PASS**, all three — [evidence](./evidence/B3-close-sticks-then-reopens.png). Collapsing the row the app opened sticks across four consecutive frames and across seconds of further interaction. It then survives a real re-discovery: creating a worktree through the app's own form redrew the list with two new locations (one of them created behind the app's back) and left the collapsed row collapsed, and the user's own expansion of a different row expanded — [evidence](./evidence/B3-survives-rediscovery.png), SC-008. Switching away and back re-opens it, because the current session was re-revealed |
+| B4 — 30 locations, both densities, no needless scroll | **FAIL — [BUG-002](./bugs/BUG-002.md).** Arriving at the 30-worktree project leaves the list at the top (`Default`, `301 w01` … `319 w19`); the current session's row, 28 locations down, is never scrolled into view — identical across the switch frames and after settling ([evidence](./evidence/B4-arrival-list-at-top.png)). Scrolling by hand shows the reveal's *other* half did run: `328 w28` is open and its session marked ([evidence](./evidence/B4-marked-row-below-the-fold.png)). So the row is opened for a session the panel never shows you. Reproduced on two arrivals. Step 3 (the list stays where you put it, FR-010/SC-007) holds — the sidebar is pixel-identical five seconds after a manual scroll — but that is worth little while nothing moves the list at all. Step 4, "repeat at both densities", **has no user-facing route in this build**: `SIDEBAR_DENSITY` is a compile-time constant and settings carries no density field, so there is no second density to repeat at |
+| B5 — one exempt row, chipped, in place | **PASS**, all five — [evidence](./evidence/B5-exempt-row-chipped.png). Filtering to `fix` while the current session sits in a `feat` worktree leaves that location showing, open, marked, and carrying a **`current session`** chip beside its type tag (§5.4); no other excluded location appears (§5.2); it sits where it would sit unfiltered rather than pinned to the top (§5.5); and the chip row gains nothing (§5.6). With agent worktrees hidden and the current session inside one, the same holds and the *other* agent worktree stays hidden — and the `untyped` filter chip that existed only because of those rows goes with them. Selecting a session in an admitted location makes the exempt row disappear entirely (§5.3) |
+| B5 — re-run 2026-08-19 under the `MICOLD_SIDEBAR_FILTER` hook | **Steps 1, 2 and 5 PASS** — [evidence](./evidence/B5-exempt-row-under-hook.png). With `MICOLD_SIDEBAR_FILTER=feat` and the current session in `W25` (a `fix` worktree), the excluded location appears anyway, expanded, its session marked, carrying `fix`, `ABC-125` **and a `current session` chip** (§5.4); the four other `fix` worktrees do not appear (§5.2); and it sits after `W30` — where it sits unfiltered — rather than pinned to the top (§5.5). Starting a session in `W30`, which the filter admits, removed the exempt row from the list entirely (§5.3). **Steps 3 and 4 not driven**: the chip row's own contents (§5.6) and the agent-worktree case need the filter *panel* open, which is the thing the hook exists to avoid. The arrival also **scrolled** — 479 — so B4 holds with a filter on |
+| B6 — the three non-arming paths | **PASS**, all three — [evidence](./evidence/B6-click-and-close.png). Starting a session reveals and marks it. Clicking an already-visible session marks it with nothing else opened and no scroll (FR-006). Closing the current session leaves nothing marked, closes no row on your behalf, and promotes no successor, with other sessions available to promote (FR-001a, US3 scenario 3) |
 
-### What was actually verified, and what it cost
+### Method, so the run can be disbelieved or repeated
 
-**B2's weight claim is verified.** `SidebarSession` (400) and `SidebarSessionCurrent` (500) were
-cropped at identical geometry, stacked, magnified 6× and converted to greyscale. The current role is
-visibly heavier with colour removed, which is the whole of FR-003a — see
-`evidence/b2-weight-greyscale.png`.
+Xvfb `:77` at 1600×1400 + lavapipe, its own `XDG_DATA_HOME` and a short `XDG_RUNTIME_DIR`
+(`/tmp/vp77` — the scratchpad path exceeds `sun_path`), driven with `xdotool`. Three throwaway git
+projects: two small ones and a 30-worktree one for SC-003. Sessions were created **through the UI**,
+so they are real `claude` processes with real terminals, not seeded records — hand-seeded sessions
+are archived by the daemon's own reconciliation on attach, which is worth knowing before trying to
+shortcut this.
+
+**Both binaries were pinned to a private directory, and the first attempt was wrong.** The first copy
+out of `target-shared/` took a `micold-daemon` another worktree had just built, and the client came
+up with a contract-mismatch banner (client v6, daemon v5) — the one symptom that says the pair is
+mixed. Rebuilt, re-copied, and confirmed banner-free before any of the above was recorded.
+
+**Transcript saving was off** for the sessions (an inherited `CLAUDE_CODE_CHILD_SESSION` marker), so
+nothing here says anything about what survives a restart. Nothing in §B asks it to; 025's §B does.
+
+### What this run could not answer
+
+The two the skill names, unchanged: a chosen frame of a 150ms transition, and perceived smoothness on
+real hardware. B1's "first frame" is therefore the earliest frame `import` can capture plus the three
+after it, not a guarantee about frame zero — a wrong intermediate frame shorter than the capture
+interval would not be seen. Every other B1 claim (already open, already marked, no flicker across
+consecutive frames) is directly observed.
+
+### The 2026-08-10 half, and why its PASS did not survive
+
+**B2's weight claim was recorded as verified on 2026-08-10 and was wrong about the sidebar.**
+`SidebarSession` (400) and `SidebarSessionCurrent` (500) were cropped from `micold-showcase` at
+identical geometry, stacked, magnified 6× and converted to greyscale, and the current role *is*
+visibly heavier there — `evidence/b2-weight-greyscale.png` is a real image of a real difference. The
+showcase poses those roles through `Text`, which applies `role.font()`. The sidebar draws its session
+rows through `Ellipsized`, which does not. The tokens differ; the screen does not. See
+[BUG-001](./bugs/BUG-001.md).
 
 **Getting there found a real defect, in the gallery rather than in this feature.**
 `showcase/main.rs` registered the icon font but neither Roboto face, so every weight-500 role fell
@@ -152,15 +182,16 @@ been that way since the gallery was built, affecting `Caption`/`Label` and `Body
 as this feature's pair. Fixed in the same change; `evidence/b2-type-scale.png` is the corrected
 scale.
 
-**Why the rest is unrun, stated plainly.** B1, B3, B4, B5 and B6 all need the *client*, with a
-session daemon and at least two projects holding real `claude` sessions. The showcase renders
-components, not the application, so it cannot reach any of them. B1 (one frame after a switch), B4
-(geometry against a real viewport) and B2's hover comparison remain exactly what this quickstart
-said they were: claims a green §A does not establish. **This feature has not been seen working end
-to end.**
+**The lesson worth keeping**: a component gallery answers questions about components. Both of this
+feature's headline claims are about the application, and both of the defects above waited in the gap
+between those two sentences until §B was run against the client.
 
 ### Screenshots
 
-`mise run screenshot` pulls a frame off the monitor's PipeWire node — the only route to a screenshot
-on a stock GNOME/Wayland session. Worth capturing: B1's first frame after a switch, and B2's pair of
-schemes (which is what a reviewer can re-check in greyscale later without re-running anything).
+Captured with `import -window root` on the private Xvfb display, per the `visual-pass` skill — not
+with `mise run screenshot`, which pulls a frame off the logged-in desktop's PipeWire node and puts
+whatever is on the user's monitor into the record. Comparisons are cropped at **identical geometry**
+and stacked, so a difference in the image is a difference in the pixels rather than in the framing;
+the weight comparisons are magnified 6× and desaturated, which is the only way to judge a 400-vs-500
+step, and are backed by a measured ink area because that judgement is exactly the one an eye
+argues about.

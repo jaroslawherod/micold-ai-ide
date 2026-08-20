@@ -15,7 +15,12 @@
           "speckit.bugfix.verify"
         ]
       },
-      "registered_skills": [],
+      "registered_skills": [
+        "speckit-bugfix-report",
+        "speckit-bugfix-patch",
+        "speckit-bugfix-switch",
+        "speckit-bugfix-verify"
+      ],
       "installed_at": "2026-07-16T09:12:22.503581+00:00"
     }
   }

@@ -20,8 +20,8 @@ use micold_core::protocol::messages::{
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
-    branch_candidates, create_worktree, parse_worktrees, preflight, remove_worktree,
-    remove_worktree_dir, CreateError, CreateProgressEvent, Leftover,
+    branch_candidates, create_worktree, explain_directory_taken, parse_worktrees, preflight,
+    remove_worktree, remove_worktree_dir, CreateError, CreateProgressEvent, Leftover,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
@@ -589,7 +589,13 @@ where
                         tracing::warn!(session = %session.0, instance = instance.0, %err, "open shell failed")
                     }
                     Ok(()) => {
-                        tracing::info!(session = %session.0, instance = instance.0, "shell instance opened")
+                        tracing::info!(session = %session.0, instance = instance.0, "shell instance opened");
+                        // The set of live shell instances just changed, so say so (`012` FR-008,
+                        // BUG-003). Publishing `live_shells` in the snapshot is not enough on its
+                        // own: nothing else broadcasts on this path, so without this the client
+                        // holds the instance at `Starting` until some unrelated change happens to
+                        // push a snapshot — which is exactly what the visual pass found.
+                        state.broadcast_catalog();
                     }
                 }
             }
@@ -597,6 +603,8 @@ where
                 if let Some((pty, framer)) = state.close_shell(session, instance) {
                     restart_view(state, id, &mut view_stream, pty, framer);
                 }
+                // Closed or not (the id may name nothing), the live set may have changed.
+                state.broadcast_catalog();
             }
             ClientMsg::SessionRestartShell { session, instance } => {
                 // `close_shell` returns the primary it reattached to iff this instance was attached.
@@ -621,6 +629,8 @@ where
                         }
                     }
                 }
+                // A restart is a death and a birth; both change the live set (`012` BUG-003).
+                state.broadcast_catalog();
             }
             ClientMsg::SessionResize {
                 session,
@@ -1403,9 +1413,13 @@ fn describe_create_error(err: CreateError) -> (ErrorKind, String, Option<String>
             "the branch changed while you were deciding, so nothing was done".into(),
             None,
         ),
-        CreateError::DuplicateDir => (
+        // Feature 016 (FR-022), BUG-003 item 3: the arm left behind when `BranchInUse` was fixed
+        // after BUG-001, and the same defect. The sentence comes from core, so this reads exactly
+        // as the form's own pre-flight refusal — including the half that says what to do about it,
+        // which the hand-written wording here did not have.
+        CreateError::DuplicateDir { dir } => (
             ErrorKind::AlreadyExists,
-            "a worktree with that name already exists".into(),
+            explain_directory_taken(&dir).to_string(),
             None,
         ),
         CreateError::RolledBack(stderr) => (
@@ -1578,5 +1592,42 @@ async fn stream_view(
                 return;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod create_error_tests {
+    //! BUG-003 item 3 — the drift gate.
+    //!
+    //! Both surfaces that report a directory clash build their text from `explain_directory_taken`,
+    //! and this is what says so of *this* one. The form's half is structural — it renders the two
+    //! fields — but nothing stopped an edit here from writing a sentence again, which is exactly
+    //! what had happened: `BranchInUse` was moved into core after BUG-001 and the arm one lower was
+    //! left saying "a worktree with that name already exists", naming neither the folder nor the
+    //! remedy.
+
+    use super::*;
+
+    #[test]
+    fn a_directory_clash_is_reported_in_cores_own_words() {
+        let dir = std::path::PathBuf::from("/repo/.claude/worktrees/feat-login");
+        let (kind, message, detail) =
+            describe_create_error(CreateError::DuplicateDir { dir: dir.clone() });
+
+        assert_eq!(kind, ErrorKind::AlreadyExists);
+        assert_eq!(message, explain_directory_taken(&dir).to_string());
+        assert_eq!(detail, None);
+    }
+
+    /// …which means it names the folder and says what to do — the two things the hand-written
+    /// version did not. Asserted against the *content* as well as against the source, because an
+    /// equality with core would still pass if core's sentence lost either half.
+    #[test]
+    fn a_directory_clash_names_the_folder_and_offers_a_remedy() {
+        let (_, message, _) = describe_create_error(CreateError::DuplicateDir {
+            dir: std::path::PathBuf::from("/repo/.claude/worktrees/feat-login"),
+        });
+        assert!(message.contains("feat-login"), "{message}");
+        assert!(message.contains("Choose a different name"), "{message}");
     }
 }

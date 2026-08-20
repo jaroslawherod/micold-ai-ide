@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-26
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "Creation of worktree creates a new branch but if the branch already exists should ask user what to do. Overwrite the branch or reuse it. It's required e.g. to continue the work that was started outside of micold ide"
 
@@ -206,6 +206,7 @@ session, and is byte-for-byte unchanged on disk.
 - **FR-021a**: When the holder is a worktree the app does not manage — one living outside the directory the app creates its worktrees in — the explanation MUST say that it is outside the app, and MUST identify it by its full location rather than by a bare folder name. A bare folder name is indistinguishable from an entry in the app's worktree list, which sends the user looking for something that is not there (BUG-001). *(BUG-002: this is also the one holder the user can do something about from here — the explanation MUST offer to include it, per FR-027.)*
 - **FR-021b**: When the holder is a worktree the app manages but is not currently showing — an assistant-created worktree while the reveal control is off — the explanation MUST say that the holder is hidden and how to reveal it, rather than naming a worktree the user cannot see (BUG-001).
 - **FR-022**: A pre-existing target directory MUST continue to block creation as it does today, and MUST be reported without offering the existing-branch choice.
+- **FR-022a** *(bugfix BUG-003 item 3)*: The words reporting that block MUST come from one place, whether the clash is caught by the form's pre-flight or by the daemon at create time. Both MUST name the folder and both MUST say what the user can do about it — there is exactly one remedy, since by FR-022 no branch choice can resolve a directory clash. Two hand-written wordings for one condition is how BUG-001's holder taxonomy came to be wrong in one place and right in neither; this is the same defect one arm lower in the same `match`, and the daemon's copy named neither the folder nor the remedy.
 - **FR-023**: A worktree created by reusing, overwriting, or continuing from a remote branch MUST be indistinguishable from any other worktree in subsequent use — listing, sessions, and deletion (including the option to delete the branch) behave identically.
 - **FR-024**: Progress and outcome reporting for creation MUST cover the reuse, overwrite, and remote-continuation paths, naming the step being performed, consistent with the reporting shown for conflict-free creation.
 - **FR-025**: Creating a worktree on a branch name that does not exist anywhere MUST behave exactly as it does today, with no additional prompts or steps.

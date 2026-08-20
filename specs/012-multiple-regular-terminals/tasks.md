@@ -665,7 +665,12 @@ deleting it and leaving the new rule unpinned, so each is replaced by its indica
   Fixed with a uniform `TAB_WIDTH`, and the pass then confirmed both themes, no reflow at identical
   crop geometry, and the squint test.
 
-- [ ] T057 [P] **Follow-up, not required by BUG-002**: register a covered state with two or more
+- [X] T063 [P] *(filed and completed as **T057**; renumbered by BUG-004's patch — Phase 11's
+  T057–T062 were written in a parallel worktree against the same highest id and merged two days
+  earlier, so two different tasks carried T057 in one file. The contiguous BUG-003 block keeps
+  its numbers because its bug report, its commits and its checkpoint all name them; this one
+  moves. Commit `fcc2f2a`, PR #194 and the comments in `tests/support/covered_states.rs` say
+  T057 and mean this task.)* **Follow-up, not required by BUG-002**: register a covered state with two or more
   Regular Terminal instances in `019-layout-snapshot-parity`'s set, so the tab strip's geometry is
   under the snapshot gate at all. Discovered by this bugfix: the strip was rebuilt — containers to
   indicator, fixed tab width, an extra row per tab — and `layout_snapshot.txt` did not change one
@@ -674,6 +679,43 @@ deleting it and leaving the new rule unpinned, so each is replaced by its indica
   several times too wide) are *pure geometry* and would have been in range of the fixture had the
   control ever been rendered into it. One registration by 019's FR-016; belongs to 019's covered
   set, and churns its fixture, which is why it is not done here.
+
+  **Done, and it found a defect on its first regeneration.** Registered as
+  `session-terminal-instance-tabs` in `crates/micold-client/tests/support/covered_states.rs` — one
+  entry, per 019 FR-016 — with three instances, the **middle** one active (an active *trailing* tab
+  cannot tell "the indicator spans its own tab" from "the indicator spans everything after the tab
+  before it") and the trailing one `Exited`, so one tab draws the per-instance restart affordance
+  its siblings do not. Eight anchors, so a failure names the strip, each tab, the active indicator
+  and the exited tab's restart control rather than printing a path.
+
+  What it recorded of BUG-002's own work is green: all three tabs measure **128.0 × 40.0**, the
+  active tab's indicator is **112.0 × 3.0**, and the inactive tabs reserve a 3.0-high rule they do
+  not draw. FR-004c and SC-008 hold, now against a fixture rather than against a screenshot.
+
+  **The defect is the tab that restarts.** `TAB_WIDTH` gives the content row 112dp; its children
+  want `48 (leading spacer) + 4 + 6.8 (label) + 4 + 48 (close) + 4 + 51.5 (restart) = 166.3`, so
+  iced shrinks the trailing two — the restart button lays out **0.0 wide** and the close control at
+  **45.2**, under `anatomy::button::MIN_TOUCH_TARGET`. A background instance that exits cannot be
+  restarted from its own tab (feature 011 FR-010), and `ui/terminal.rs`'s comment on that affordance
+  — "It widens its own tab, which SC-008 permits" — describes behaviour a fixed width forbids. The
+  contradiction is between the comment and `TAB_WIDTH`, both written by BUG-002 and neither visible
+  to any test until this state existed.
+
+  Pinned as the fixture's baseline rather than fixed here, on 019 spec.md's own precedent — a
+  snapshot records what it is shown, so a pre-existing defect becomes the expected value and the
+  gate's contribution is to prove the fix. **`mise run test`: 1914 passed, 0 failed**, every gate
+  green over a zero-width button, which measures how far outside their reach this control was.
+  Needs its own bug report against feature 012: either `TAB_WIDTH` grows to fit a restartable tab,
+  or the restart affordance moves out of the tab (a context menu is the obvious home, and the
+  deferred rename below wants one anyway).
+
+  **Cost, per 019 SC-006a**: the twelfth state adds **0.01s** — `layout_snapshot` 0.26s with it
+  against 0.25s without, three runs each — against a 3s ceiling, with the suite at 27.0s against a
+  60s budget. Measured warm by removing the state and putting it back, not derived. Recorded in
+  `019-layout-snapshot-parity/quickstart.md` and `docs/development/layout-snapshot.md` with the
+  thing worth flagging: the eleventh state cost 2.09s and `layout_snapshot` took 17.0s two weeks
+  ago, and nothing committed to the apparatus since accounts for the difference. Both documents now
+  say to re-measure rather than trust either figure.
 
 **Checkpoint**: the strip reads as a tab bar with the active tab underlined from above, no
 containers, and activation moves colour only.
@@ -738,10 +780,305 @@ registry and not on the wire at all. Same shape as `010` BUG-011, one layer out.
   lever the integration tests have — deleting them would delete that coverage, including feature
   023's FR-019 rule that a session reaching `Running` must not move the keyboard
 
+- [X] T063 [BUG-003] **The fix above was incomplete; a visual pass found it.** Two gaps, neither
+  caught by T057/T058: the `SessionOpenShell`/`CloseShell`/`RestartShell` arms in
+  `crates/micold-daemon/src/server.rs` never called `broadcast_catalog`, so the value was published
+  and never announced — on screen the instance sat at `starting…` more than 20 s after its shell was
+  up and printing a prompt; and `live_shells` reported *presence* in `procs` rather than *liveness*,
+  so a shell that exits on its own (which is deliberately not removed, its PTY holds the final
+  screen) went on being reported live and `exited` stayed unreachable. Now: the three arms broadcast,
+  `overlay_live_summaries` filters on `pty.is_alive()`, and the supervision tick announces each death
+  once via an `announced_dead_shells` marker in `Inner`. Two more tests in
+  `crates/micold-daemon/tests/shell_instances.rs` — a shell that exits **by itself** stops being
+  reported live, and the tick names its project exactly once. T057 had used `close_shell`, an explicit
+  close that *does* remove the process, so no test had ever let a shell die on its own
+
 **Checkpoint**: a Regular Terminal reads `running` while its shell is up, `exited` once it is not,
-and FR-010's per-instance restart control appears for the instance that needs it.
+and FR-010's per-instance restart control appears for the instance that needs it. **Confirmed on
+screen** 2026-08-18 (Xvfb + lavapipe, stub `claude`): AI CLI session `running`, Regular Terminal
+`running` while up, `exited` with `restart` after typing `exit` —
+[evidence](./evidence/BUG-003-status-after-fix.png).
 
 **Bugfix**: 2026-08-16 — BUG-003. **No requirement added**: FR-008 already stated this exactly, and
 no task is reopened — the client-side machinery T029/T030 built is correct and was simply never
 driven. `PROTOCOL_VERSION` 5 → 6 is the visible cost; a client and service across that boundary refuse
 each other and the service must be restarted once (`010` FR-021/FR-022). See `bugs/BUG-003.md`.
+
+---
+
+## Phase 12: Bugfix BUG-004 — the bar's `restart` restarts the session, not the instance it describes
+
+**Goal**: Make FR-010 reachable. The bottom bar's `restart` control pressed
+`Message::TerminalRestartRequested` unconditionally, which restarts the **session**; in Regular mode
+the session's AI CLI primary is still alive, so `DaemonState::start_session` took its already-live
+early return and the control did nothing. With a single instance there is no tab strip either, so
+FR-010's per-instance restart had no reachable route in the commonest case.
+
+The predicate that *shows* the control already knew better: `attached_process_restartable` splits on
+`session.mode` and asks about the **attached** process. One fact — "the thing you are looking at is
+not running" — was read correctly to decide whether to offer a restart, then ignored when deciding
+what the restart does. This phase makes both read it once.
+
+Reachable only after [BUG-003](./bugs/BUG-004.md): before it an instance never left `Starting`, which
+is not in the predicate's set, so the bar never offered `restart` in Regular mode and the mis-wiring
+had nothing to act on. Making a state observable is what exposed it.
+
+### Tests for BUG-004 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T064 [BUG-004] Pin the decision in `ui/terminal.rs`'s unit tests
+  (`the_bars_restart_targets_the_process_the_bar_is_describing`): asserted on the **message** the
+  control carries, not on the presence of a control — the defect was a live, correctly-drawn button
+  asking for the wrong thing. Four cases: `AiCli` mode keeps the session-level request, Regular mode
+  with an instance names that instance, Regular mode with none falls back (there is nothing
+  instance-shaped to name, and that path lazily opens the first one), and an unknown session must not
+  panic the render path
+- [X] T065 [BUG-004] Pin the **wiring** in `tests/terminal_bar_stability.rs`
+  (`the_bars_restart_control_asks_which_process_it_is_restarting`), read out of the source the way
+  `the_bar_does_not_branch_on_focus` beside it is: the button must take its message from
+  `restart_message`, and a bare `on_press(Message::TerminalRestartRequested)` in the bar is the bug
+  itself. T064 alone cannot catch this — `restart_message` can be perfectly correct and simply not
+  called, which is exactly the state the bug was in
+
+### Implementation for BUG-004
+
+- [X] T066 [BUG-004] Add `restart_message` (`crates/micold-client/src/ui/terminal.rs`) beside
+  `attached_process_restartable` and give the bar's button `.on_press(restart_message(state, active))`.
+  No new message variant: `ShellInstanceRestartRequested` already exists and works, reachable until
+  now only from the per-tab affordance
+
+**Checkpoint**: with one Regular Terminal instance, `exit` shows `exited` + `restart`, and pressing
+`restart` restarts *that instance*. **Confirmed on screen** 2026-08-19 (Xvfb + lavapipe, stub
+`claude`, single instance so no tab strip was on screen): the bar read `exited` with `restart`,
+pressing it flipped the bar to `running`, and the new shell answered `echo` —
+[evidence](./evidence/BUG-004-restart-works.png). Scope was confirmed from the daemon's process
+table rather than from the pixels, which cannot show it: the shell was respawned at the moment of
+the press (its pid matching the one the restarted shell printed) while the session's AI CLI primary
+kept its original start time, i.e. FR-010's "restarting only that instance". What a screenshot pass
+still cannot answer is unchanged from BUG-003 — nothing here depended on a mid-flight frame.
+
+**Bugfix**: 2026-08-18 — BUG-004. **No requirement added**: FR-010 already said "restarting only that
+instance"; the control simply did not. No task reopened — `ShellInstanceRestartRequested` and its
+handler were built correctly by Phase 6 and were merely unreachable from the bar. See
+`bugs/BUG-004.md`. Note for next time: `ui::terminal`'s unit tests live in the **lib** target, so
+they run under `cargo test -p micold-client --lib`, not `--bin`.
+
+---
+
+## Phase 13: Bugfix BUG-005 — the tab that offers a restart cannot fit one
+
+**Goal**: Make FR-010 reachable from the tab strip, and make the class of defect that hid it
+reportable.
+
+Written as "Phase 12 / BUG-004" and renumbered on merge: a parallel worktree filed and merged its
+own BUG-004 against the same feature — the bar's `restart` restarting the session rather than the
+instance the bar describes — while this one was in flight. The two are independent and both real;
+that one is why the *bar's* control did nothing, this one is why the *tab's* could not be pressed.
+Its phase is above.
+
+Phase 11's checkpoint reads "FR-010's per-instance restart control **appears** for the instance that
+needs it", and it does — at 0.0dp wide. `TAB_WIDTH` gives a tab's content row 112dp and a restartable
+tab's children ask for 166.3, so iced settles the 54.3dp shortfall by shrinking the trailing two: the
+restart button vanishes and the close control beside it drops to 45.2, under the 48dp target feature
+018 FR-027 sets. Nothing overflows, nothing escapes, and `mise run test` is green over all of it.
+
+The width is the fix. The gate is the point: a squeezed child satisfies every invariant this
+repository currently checks, which is why a control could be reduced to nothing between two bugfixes
+that were each looking straight at it.
+
+### Tests for BUG-005 (MANDATORY — Constitution Principle I) ⚠️
+
+- [x] T067 [BUG-005] Failing test in `crates/micold-client/tests/` (new `tab_children_fit.rs`, or a
+  gate compiled into the `layout_snapshot` binary beside `sibling_parity` if it needs the shared
+  record cache): in the `session-terminal-instance-tabs` covered state, **no child of a tab is laid
+  out narrower than the width it asks for** (SC-010). Ask it the way the defect presents: every
+  interactive control in a tab must measure at least `anatomy::button::MIN_TOUCH_TARGET` wide, and
+  the sum of a tab's children plus its gaps and padding must not exceed the tab. Must **fail on
+  today's `main`**, naming the exited tab's restart control at 0.0 and its close at 45.2. This is the
+  gate the whole phase exists for, and it outlives the particular fix: it is the first check here
+  that reads a laid-out child against *what it requested* rather than against a constant or against
+  its parent's bounds, so it holds whether the affordance is inside the tab or not — feature 018's
+  BUG-002 (a 48dp figure written and then overwritten) and this bug (the same figure competed away)
+  would both have failed it
+- [x] T068 [P] [BUG-005] Failing value test beside `tab_indicator_colour` in `src/ui/terminal.rs`'s
+  `mod tests`: `TAB_WIDTH` equals the sum its derivation requires (FR-004c), computed from
+  `anatomy::button::MIN_TOUCH_TARGET`, `spacing::SM`, `spacing::XS` and a minimum label rather than
+  written as a literal. A test that re-states a magic number proves nothing; this one fails if any
+  constant it is built from moves, which is the property FR-004c requires and a chosen figure cannot
+  have. The figure was expected to come out at today's 128 once FR-010b takes the restart affordance
+  out and **did not** — it is **136**, because the literal reserved about 8dp for the label, under
+  the two digits an ordinal already reaches. Record that rather than tuning the label floor to
+  reproduce 128, which is the move FR-004c forbids. So this task is regression cover *and* an 8dp
+  correction: it is the test that would have failed the day T056 chose the number
+- [x] T069 [BUG-005] Failing test for the secondary-click primitive, in a `mod tests` beside it: a
+  right (secondary) press inside the wrapped content publishes the message with the press point, a
+  press outside publishes nothing, and a **primary** press publishes nothing and is left for the
+  child — the tab's own `on_press` selects the instance and must keep working through the wrapper
+- [x] T070 [P] [BUG-005] Failing test in `crates/micold-client/tests/app_state.rs` (or beside the
+  reducer): opening the tab menu for one instance records that instance; opening it for another
+  replaces rather than stacks; the "close every menu" path clears it; and restart dispatched from the
+  menu targets the instance the menu was opened on, **not** the active one (FR-010a, FR-010b)
+
+### Implementation for BUG-005
+
+- [x] T071 [BUG-005] Add the secondary-click primitive to `crates/micold-client/src/ui/cdk/` (new
+  `context_area.rs`, declared in `cdk/mod.rs`) — a single-child wrapper that delegates layout, draw,
+  operate and overlay to its content and intercepts only `mouse::Event::ButtonPressed(Right)` while
+  the cursor is over it, publishing a message built from the press point (depends on T069). It
+  belongs in the **cdk** and not in `material/`: it holds no appearance, which is the boundary
+  `tests/material_boundary.rs` enforces. `ui/material/checkbox.rs::TakesTheKeyboard` is the
+  delegation template; `ui/material/terminal_pane.rs` is the existing right-click handler and the
+  reason this is a *new* primitive rather than a reused one — that one is fused into a bespoke widget
+  and cannot wrap anything
+- [x] T072 [BUG-005] Wire the menu's state and messages:
+  `Message::ShellInstanceMenuRequested(SessionId, ShellInstanceId, u16, u16)` and
+  `ShellInstanceMenuClosed` in `src/app.rs`, with `shell_instance_menu: Option<(ShellInstanceId,
+  u16, u16)>` on `State` (depends on T070). Clear it wherever the other menus are cleared — the list
+  at `app.rs`'s "close every menu" path names `worktree_menu_open`, `session_menu_open` and
+  `terminal_context_menu`, and a fourth that is not in it is a menu that survives a navigation.
+  Register the surface beside `terminal_context_menu` in `src/features/session.rs` and
+  `src/overlay/registry.rs`
+- [x] T073 [BUG-005] Remove the restart affordance from `instance_switcher_row`
+  (`src/ui/terminal.rs`) and offer it from a `ContextMenu` on the tab instead (depends on
+  T071–T072; FR-010b): wrap each tab in the T071 primitive, and mount the menu on the bar the way
+  `pane()` already mounts the terminal's own context menu — `cdk::overlay::Overlay` around the
+  content, anchored at the press point. Items: **Restart** when that instance's own lifecycle is
+  `NotStarted | Exited`, **Close** always. Not Rename: an instance has no title to set, and giving it
+  one touches persistence and the daemon's session state, which is the separate feature the
+  "Deferred" note below already describes. With the affordance gone the tab's children are the
+  leading spacer, the label and the close control again, which is exactly what `TAB_WIDTH` was
+  derived for, and T067 goes green without the figure moving
+- [x] T074 [BUG-005] Correct the comment in `src/ui/terminal.rs` on the restart affordance — "It
+  widens its own tab, which SC-008 permits: that is a lifecycle change, not a change of which tab is
+  active." That was true before T056 introduced a fixed width and false from that commit on, in the
+  same file, and no test reads comments. It should now say why the affordance is not in the tab at
+  all
+- [x] T075 [BUG-005] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` with
+  `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` (depends on T073).
+  The diff is the artefact: `terminal.tabs.exited.restart` disappears, the exited tab's close returns
+  to 48.0, and every tab moves 128.0 → **136.0** with the strip widening 400.0 → 424.0 — the 8dp the
+  derivation corrected (T068), not a reflow. Every other covered state must be
+  untouched; the strip is in one state only. The `terminal.tabs.exited.restart` anchor in
+  `tests/support/covered_states.rs` must go with it, or it fails by name, which is the behaviour that
+  makes an anchor worth having
+- [x] T076 [P] [BUG-005] Re-run `quickstart.md` **§4 and §8** with the `visual-pass` skill and record
+  both in `visual-pass.md` (depends on T073). §4 "Independent lifecycle and restart" is the section
+  that would have caught this and it has not been run since `TAB_WIDTH` existed — BUG-002's pass ran
+  §8, the appearance section, which was right about its own subject. §8 is here because the tab's
+  children change: with the restart gone the label's centring is back on the tab's midline, and that
+  is §8's subject and beyond the fixture's reach — a 12dp centring error is precisely what it missed
+  last time. In §4, exercise a **background** exit specifically, through the new menu: the whole of
+  FR-010a is about the instance that is not the active one
+- [x] T077 [P] [BUG-005] Update `contracts/terminal-instance-switcher-ui.md` — its "Tab form" section
+  lists what sets the fixed width, and the per-entry restart bullet places the affordance inside the
+  tab. Move it to the menu, record that the width is derived rather than chosen, and state what the
+  tab's children now are
+- [x] T078 [P] [BUG-005] Document the tab context menu in `docs/user-guide/worktrees-and-sessions.md`
+  (Principle VII): right-click a terminal tab to restart a stopped instance or close it. The
+  affordance is no longer visible on the tab, so the user guide is now the only place it is written
+  down for a user — which is the cost FR-010b accepts, and the mitigation
+
+- [x] T079 [BUG-005] Centre a tab's content on the tab whether or not it draws an indicator
+  (`src/ui/terminal.rs`): the column carrying the indicator and the content row takes
+  `Length::Fill`, so an inactive tab measures its content box like an active one instead of
+  shrinking to the row and pinning it to the leading edge. With a failing gate first —
+  `a_tabs_content_sits_on_its_tabs_midline` in `tests/gates/tab_children_fit.rs`, asked per tab
+  against its own midline. Found by T076, which measured every inactive tab's label **4.6dp** left
+  of centre and sliding that far on activation, in both schemes. Older than this bugfix and
+  amplified by it: the offset was 0.6dp at `TAB_WIDTH = 128` and became 4.6 when T068's derivation
+  corrected the width to 136 — a change with nothing to do with centring, multiplying an invisible
+  defect by eight (FR-004a, SC-008)
+- [x] T080 [BUG-005] Open the tab menu **upward** (`src/ui/cdk/overlay.rs`,
+  `src/ui/material/menu.rs`, `src/ui/mod.rs`): a new `Anchor::BottomStart { bottom, start }` places
+  a panel's bottom-left corner against the window's bottom edge, and
+  `ContextMenu::rising_above(bottom)` selects it; the tab menu passes `anatomy::app_bar::HEIGHT`,
+  read rather than restated. Found by T076: anchored at the press point, the menu opened into the
+  27px of window below the bottom bar and its single item was cut through — with the instance
+  exited, the second item would be entirely off-screen. `Anchor::Point` documents that clamping is
+  the caller's job, and a caller inside a bar pinned to that edge cannot do it. Pose the new anchor
+  in the showcase beside the cursor-anchored default (C3 requires it, and comparison is the point)
+
+**Checkpoint**: an instance that exits in the background can be restarted from its own tab's menu
+without being selected first, every tab is 136dp with a full 48dp close target, a tab's content sits
+on its midline in every state, the menu opens where it can be read, and a gate fails if any tab's
+child is ever squeezed or pushed off-centre again. **Confirmed on screen** 2026-08-19 (Xvfb +
+lavapipe, three instances, both schemes): instance 1 exited while instance 3 stayed active, its tab's
+menu offered **Restart** and **Close** fully inside the window, and pressing Restart brought its shell
+back with a fresh prompt while instance 3 kept the indicator and was never selected. See
+`visual-pass.md`.
+
+**Bugfix**: 2026-08-18 — BUG-005 Updated from bugfix patch. Phase 13 added (T067–T078), extended to T080 by the T076 visual pass. **No task
+reopened**: T029 built the affordance correctly and its condition is still right, and T056 chose a
+width that solved the defect its visual pass could see, against three tab states none of which was
+exited. The conflict is between two requirements written for two different bugfixes — FR-004c
+(BUG-002) and FR-011a (BUG-001) — and is invisible from either one alone. **Re-patched during
+implementation** once the derivation was computed: FR-004c's own rule gives a 204dp tab and 628dp of
+a 1014dp bar at three instances, so FR-010b moves the affordance out of the tab rather than widening
+every tab for a child most never draw; the earlier T069/T070 (derive a wider width, re-balance the
+leading spacer) are replaced by T071–T073, and `TAB_WIDTH` does not move. **One renumbering**: Phase
+10's T057 becomes T063, because Phase 11's T057–T062 were written in a parallel worktree against the
+same highest id; the note on T063 records what its commits and PR call it. See `bugs/BUG-005.md`.
+
+**Visual pass, 2026-08-19 (T076)**: two defects found and fixed here — T079 (a tab's content 4.6dp
+off its midline, sliding that far on activation) and T080 (the menu opening downward into 27px of
+window). A third was diagnosed and nearly filed: the exited lifecycle never arriving, so **Restart**
+was never offered. It was already fixed on `main` by BUG-003's second commit, which this branch was
+two commits behind — a pass on a branch is a pass on its dependencies too. After merging, §4 runs end
+to end: a background instance exited, restarted from its own tab's menu without being selected, and
+its sibling and the active tab untouched.
+
+---
+
+## Phase 14: Close the seam BUG-003, BUG-004 and `010` BUG-011 all lived in
+
+**Goal**: Make the *join* testable. Not a bugfix — a fix to why three bugfixes were needed.
+
+`reconcile_catalog` is where the daemon's snapshot becomes what the client renders. It sat in the
+**binary** crate (`shell/daemon_sync.rs`), and nothing in any `tests/` directory can reach a binary
+crate. So the two sides of that fold were each well tested and the fold itself was not:
+
+| Bug | Both halves tested | What no test could see |
+|---|---|---|
+| `010` BUG-011 | `Session::start`, `mark_running` | nothing on the start path called them |
+| `012` BUG-003 | the daemon's registry; the client's adoption | liveness was never put on the wire |
+| `012` BUG-004 | `restart_message`'s decision | the button never asked for it |
+
+BUG-003 is the sharpest evidence, because its **first** fix shipped still broken *past* both suites:
+the daemon-side test ended its shell with `close_shell`, which removes the process, so no test ever
+let a shell die on its own and `live_shells` went on reporting presence rather than liveness. A
+visual pass caught it (T063). That is the cost this phase is paying down.
+
+### Tests for Phase 14 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T081 Add `crates/micold-daemon/tests/catalog_join.rs`, holding **both** ends —
+  `micold-daemon` already dev-depends on `micold-client` (not a cycle; the client never depends on
+  the daemon). The snapshot under test is **not written by the test**: it is what
+  `DaemonState::welcome_payload` would hand a connecting client, taken after driving a real PTY, and
+  folded through the real `reconcile_catalog`. Two cases, one per seam — a shell instance up and
+  then dead **by the user's own `exit`** (never `close_shell`, the shortcut that let the incomplete
+  fix through), and a session through the real `start_session`
+- [X] T082 Prove both are guards rather than decoration, by reverting each fix and observing the
+  matching failure: dropping BUG-003's `pty.is_alive()` filter fails with `left: Running, right:
+  Exited`; dropping BUG-011's `mark_session_running` fails with `left: Idle, right: Running`. Each
+  is the original defect's exact symptom, which is what says the test would have caught it
+
+### Implementation for Phase 14
+
+- [X] T083 Move `reconcile_catalog`, `wire_to_lifecycle` and `wire_to_worktree_status` from
+  `crates/micold-client/src/shell/daemon_sync.rs` into the library as
+  `micold_client::catalog_sync`. **Bodies verbatim** — a behavioural difference between the moved
+  code and what was reviewed would be a defect, not a decision. T052's argument for grouping the
+  three together was right and is untouched; what was wrong was the *crate*
+- [X] T084 Correct `app.rs`'s note on `ShellInstanceRunning`/`ShellInstanceExited`. They **stay** —
+  feature 023's FR-019 rule (a session reaching `Running` must not move the keyboard) is asserted
+  through them — but the reason recorded for keeping them, that they were "the only lever the
+  integration tests have", is now false, and it was a poor stand-in: it is what let BUG-003 ship an
+  incomplete fix. T062 kept them for exactly this reason and worked *around* the seam; T083 removes
+  the need to
+
+**Deliberately not done**: the three `reconcile_*` unit tests stay in `daemon_sync.rs`. They still
+exercise the function through the new import, and they share `snapshot_with`/`summary`/`summary_at`
+with `main.rs`'s tests — moving them would duplicate those fixtures to buy nothing. What was missing
+was never a unit test of the fold; it was a test of the *join*, which is T081.
+
+**Checkpoint**: a change that breaks the daemon → wire → client path fails a test, rather than
+waiting for someone to look at a screen.

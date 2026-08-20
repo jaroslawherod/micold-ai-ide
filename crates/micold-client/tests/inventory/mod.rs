@@ -645,10 +645,11 @@ mod tests {
             .expect("cdk/overlay.rs declares `Anchor`");
         assert_eq!(
             anchor.variants,
-            vec!["Point", "TopEnd", "Center", "BottomCenter"],
+            vec!["Point", "TopEnd", "Center", "BottomCenter", "BottomStart"],
             "the scanner is meant to read a struct-like variant's *name* and skip its fields — \
-             `BottomCenter {{ bottom }}` was added for the snackbar, and if its field leaked in as \
-             a variant this list would say so"
+             `BottomCenter {{ bottom }}` was added for the snackbar and `BottomStart {{ bottom, \
+             start }}` for a menu opened from a bottom bar, and if either's fields leaked in as \
+             variants this list would say so"
         );
     }
 

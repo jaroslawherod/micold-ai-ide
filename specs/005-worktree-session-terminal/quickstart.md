@@ -49,8 +49,13 @@ Each scenario is covered by an automated pure-core test (against `FakeGit` /
 ### V3 — Create a worktree via the form (US2, FR-005–009, SC-003/003b)
 - Form offers Conventional types, optional ticket, name; shows derived `dir`/`branch` preview
   (FR-008a).
-- Submit `feat` + `ABC-123` + `Login page` → branch `feat/abc-123-login-page`, worktree at
-  `.claude/worktrees/feat-abc-123-login-page`; appears in the sidebar.
+- Submit `feat` + `ABC-123` + `Login page` → branch `feat/abc-123_login-page`, worktree at
+  `.claude/worktrees/feat-abc-123_login-page`; appears in the sidebar as "Login page" with an
+  `ABC-123` tag.
+- Submit `feat` + `#123` + `Login page` → worktree at `.claude/worktrees/feat-123_login-page`,
+  tagged `#123` (BUG-003: a numeric reference used to be discarded silently).
+- Delete that worktree, then re-create it from the **existing branch** picker → same directory,
+  same `ABC-123` tag (BUG-003: the branch carries the boundary, so the ticket round-trips).
 - Empty ticket → segment omitted (`chore/cleanup`).
 - Duplicate dir/branch → blocked with a message (FR-009).
 - Forced git failure → full rollback, no orphan branch/dir/sidebar entry (FR-006b).

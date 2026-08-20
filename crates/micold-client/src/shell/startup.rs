@@ -34,6 +34,7 @@ use std::sync::Arc;
 
 use iced::Task;
 use micold_client::app::{Message, State};
+use micold_client::features::sidebar::{filters_from_env_value, FILTER_ENV_VAR};
 use micold_client::input::SessionInputStamper;
 use micold_core::settings::Settings;
 
@@ -129,6 +130,21 @@ fn boot() -> (App, Task<Message>) {
     let mut env_include_cache = HashMap::new();
     env_include_cache.insert(boot_cwd, boot_snapshot);
     core.system_scheme = observe_system_scheme(detect_system_scheme(), core.system_scheme);
+    // The §B5 test hook. Applied through the same message the filter popover sends, so a visual
+    // pass photographs the real filter rather than a second implementation of one — and refused
+    // loudly on a typo, for the reason `MICOLD_FRAME_PROBE` is: a value that was asked for and
+    // silently not applied is the one failure that looks exactly like a pass.
+    match filters_from_env_value(std::env::var(FILTER_ENV_VAR).ok().as_deref()) {
+        Ok(filters) => {
+            for filter in filters {
+                core.update(Message::SidebarFilterToggled(filter));
+            }
+        }
+        Err(message) => {
+            eprintln!("{message}");
+            std::process::exit(2);
+        }
+    }
     // If a project is already active from a previous run, discover its worktrees for the initial
     // render. Session recovery from transcripts is now the daemon's responsibility (it owns
     // sessions); the client adopts them from the welcome catalog on connect (T055).

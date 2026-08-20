@@ -54,21 +54,22 @@ branch under test had deleted, while the source contained no reference to it and
 
 ```bash
 scripts/build-lock.sh bash -c \
-  'cargo build -p micold-client --bin micold-ai-ide &&
-   cargo build -p micold-daemon --bin micold-daemon &&
-   cp "$CARGO_TARGET_DIR/debug/micold-ai-ide" ~/vp/bin/ &&
-   cp "$CARGO_TARGET_DIR/debug/micold-daemon" ~/vp/bin/'
+  'cargo build -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon &&
+   cp "$CARGO_TARGET_DIR/debug/micold-ai-ide" "$CARGO_TARGET_DIR/debug/micold-daemon" ~/vp/bin/'
 ```
 
-One lock, both binaries, copy inside it — then run the copies. Four details:
+**Name both bins.** `--bin` filters the whole invocation to the targets it names, so
+`-p micold-client --bin micold-ai-ide -p micold-daemon` — what this recipe said until 2026-08-18 —
+builds the client and **silently skips the daemon**, leaving whatever `target-shared` already held.
+The `cp` then pins a matched-looking pair that is not one. It cost a pass two rounds: the daemon was
+a version behind, and the log said so plainly once it was read (`client_version=6 … daemon_version=5`).
 
-- **`-p a --bin x -p b` builds nothing for `b`.** `--bin` narrows *target* selection across the
-  whole invocation, so the daemon is silently not built and the `cp` takes whatever branch last
-  wrote `target-shared/debug/micold-daemon`. The recipe above said exactly that for months and the
-  failure it produces is the version mismatch described two bullets down — which then reads as a
-  schema-hash quirk rather than as "you did not build the daemon". `cargo build … | grep "Compiling
-  micold"` should name **micold-core, micold-client and micold-daemon**; if the daemon is missing
-  from that list, nothing you copy is yours. Two invocations is the fix.
+**Check that it happened**, rather than trusting the flags: `cargo build … | grep "Compiling micold"`
+should name **micold-core, micold-client and micold-daemon**. If the daemon is absent from that
+list, nothing you copy is yours — which is what the mismatch below actually means, and the reason it
+reads as a schema-hash quirk instead.
+
+One invocation, both binaries, copy inside the lock — then run the copies. Three details:
 
 - **The client and the daemon must come from the same build.** The client refuses a daemon whose
   protocol *schema hash* differs (`handshake::evaluate`), and the daemon logs that as `refusing
@@ -78,7 +79,12 @@ One lock, both binaries, copy inside it — then run the copies. Four details:
 - **`cp` fails with "Text file busy" if your previous run is still using the destination.** Stop it
   first, or the `&&` chain aborts after the first copy and you launch a mismatched pair.
 - **Verify what you pinned**, cheaply: `strings <binary> | grep -c "<a string your change adds or
-  removes>"`. One grep is much shorter than the detour it saves.
+  removes>"`. One grep is much shorter than the detour it saves. Run it against **both** binaries —
+  a serde field name your change adds appears in whichever of them serializes the type, so a zero on
+  one side and a non-zero on the other is a mismatched pair, before you have launched anything.
+- **Then confirm the pair actually connects.** Launch once and grep the sandbox daemon log for
+  `client attached to daemon`; `refusing client: contract or build mismatch` means the pin failed.
+  This is the check that catches every cause at once, including the ones not yet listed here.
 
 ### 3. A private X server
 

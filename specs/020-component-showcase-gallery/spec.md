@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-28
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "A component showcase gallery for the shared UI library, shipped as a second binary in the micold-client crate. Every visual acceptance criterion in this project is verified by a human walking the running IDE, and those walkthroughs get skipped. The showcase renders every component the shared library provides, across every interaction state, variant and density, in both schemes, on one screen — with no daemon, no git repository and no application state required. Completeness must be enforced rather than trusted. Zero change to the IDE binary. Lands before feature 018's implementation begins."
 

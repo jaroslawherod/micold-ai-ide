@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-27
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: Split from the Material 3 Visual System specification on 2026-07-27, per that spec's clarification session. This feature carries the **structural** half; the visual half is [`specs/018-material3-visual-system/`](../018-material3-visual-system/spec.md), which depends on this one.
 

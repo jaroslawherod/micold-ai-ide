@@ -131,6 +131,20 @@ icon saying what the field is for, and a trailing action that empties the query 
 assumption is that a gap in the shared library is closed by extending it, and a search field is not
 the last thing that will want a clear button.
 
+**C4.1b — A leading slot moves the label as well as the value (BUG-002).** A field carrying a
+leading affordance MUST inset its label past that slot, in **both** of the label's positions — the
+resting one, where the label occupies the value's line, and the floating one above it. The label and
+the value start on **one** column, computed once, and that column is the container's padding plus a
+**fixed** icon slot plus the gap after it (§7.7's adornment rows in
+`018-material3-visual-system/contracts/design-tokens.md`), not the glyph's own advance.
+
+Stated here as well as in §7.7 because this component is the only one in the application that fills
+the leading slot, so it is the only place the requirement is exercised — and it was exercised
+wrongly for the life of the feature. Two individually correct decisions composed into one wrong
+result: the icon was drawn inside the input, which insets its own text past it, and the label was
+drawn by the wrapper at the container's padding, which knew of no icon. Nothing said the two were
+one column, which is how both could be right and the pair wrong.
+
 **C4.1a — Every part is a library component.** Material Design 3 has no type-ahead: the pattern it
 sanctions is *a text field with an attached menu*, and this component is that assembly. So each part
 is the library's existing Material component rather than a widget styled here:

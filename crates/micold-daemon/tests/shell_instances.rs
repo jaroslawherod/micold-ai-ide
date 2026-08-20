@@ -289,3 +289,102 @@ fn the_snapshot_reports_which_shell_instances_are_live() {
     }
     drop(primary);
 }
+
+/// `012` BUG-003, second pass — found by the visual pass, not by the first round of tests.
+///
+/// The first test used `close_shell`, an explicit close that removes the process from the registry.
+/// A shell that **exits on its own** does not: its PTY stays registered so the final screen survives.
+/// So `live_shells` went on naming a dead shell, and `exited` — the state FR-008 most needs — stayed
+/// unreachable. Nothing caught it because no test let a shell die by itself.
+#[test]
+fn a_shell_instance_that_exits_on_its_own_stops_being_reported_live() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let sid = SessionId::new();
+    let state = DaemonState::new(catalog_with_session(project.path(), store.path(), sid));
+
+    let mut cmd = CommandBuilder::new("cat");
+    cmd.cwd(std::env::temp_dir());
+    let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
+    let primary = state.register_session(primary);
+
+    let inst = ShellInstanceId(0);
+    state.open_shell(sid, inst).expect("open shell instance");
+    let (shell, _) = state
+        .attach_process(sid, SessionProcess::Shell(inst))
+        .expect("attach the shell instance");
+    assert!(wait_until(Duration::from_secs(5), || shell.is_alive()));
+    assert_eq!(reported_live_shells(&state, sid), vec![inst]);
+
+    // Let it end the way a user ends one.
+    state.session_input(sid, 0, b"exit\n");
+    assert!(
+        wait_until(Duration::from_secs(10), || !shell.is_alive()),
+        "the shell must actually exit for this test to be testing anything"
+    );
+
+    assert!(
+        reported_live_shells(&state, sid).is_empty(),
+        "a shell whose process has ended must not be reported live — reporting presence in the \
+         registry rather than liveness is what kept `exited` unreachable"
+    );
+
+    // Still registered, deliberately: the client is looking at its final output.
+    assert!(
+        state
+            .session_ptys(sid)
+            .iter()
+            .any(|p| std::sync::Arc::ptr_eq(p, &shell)),
+        "the dead instance keeps its PTY so the pane keeps its last screen"
+    );
+
+    for pty in state.session_ptys(sid) {
+        pty.kill().ok();
+    }
+    drop(primary);
+}
+
+/// The other half: something has to *announce* the death. The supervision tick names the owning
+/// project the first time it observes a shell instance gone — that is what makes the caller
+/// broadcast — and does not keep naming it afterwards, or a dead shell would re-broadcast on every
+/// tick for as long as it stayed open.
+#[test]
+fn the_supervision_tick_announces_a_dead_shell_instance_exactly_once() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let sid = SessionId::new();
+    let state = DaemonState::new(catalog_with_session(project.path(), store.path(), sid));
+
+    let mut cmd = CommandBuilder::new("cat");
+    cmd.cwd(std::env::temp_dir());
+    let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
+    let primary = state.register_session(primary);
+
+    let inst = ShellInstanceId(0);
+    state.open_shell(sid, inst).expect("open shell instance");
+    let (shell, _) = state
+        .attach_process(sid, SessionProcess::Shell(inst))
+        .expect("attach");
+    assert!(wait_until(Duration::from_secs(5), || shell.is_alive()));
+
+    // While it lives, the tick has nothing to say about it.
+    assert!(state.supervise_exited_sessions().is_empty());
+
+    state.session_input(sid, 0, b"exit\n");
+    assert!(wait_until(Duration::from_secs(10), || !shell.is_alive()));
+
+    assert_eq!(
+        state.supervise_exited_sessions(),
+        vec![project.path().to_path_buf()],
+        "the first tick after the shell died must name its project, so the catalog is broadcast"
+    );
+    assert!(
+        state.supervise_exited_sessions().is_empty(),
+        "and no tick after that — announcing once is what stops a dead shell broadcasting forever"
+    );
+
+    for pty in state.session_ptys(sid) {
+        pty.kill().ok();
+    }
+    drop(primary);
+}

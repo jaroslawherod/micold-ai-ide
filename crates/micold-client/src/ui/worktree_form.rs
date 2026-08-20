@@ -24,7 +24,9 @@ use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
-use micold_core::worktree::{BlockReason, BranchOrigin, BranchSituation, CreateMode};
+use micold_core::worktree::{
+    explain_directory_taken, BlockReason, BranchOrigin, BranchSituation, CreateMode,
+};
 
 /// The add-worktree form as the dialog body; `ui::view` wraps it in the shared
 /// [`Modal`](crate::ui::material::Modal) transition.
@@ -431,24 +433,15 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
             }
 
             // FR-022: no branch choice can resolve a directory clash.
+            //
+            // Both lines come from core (BUG-003 item 3), so the daemon's create-time refusal —
+            // the same condition, caught after this pre-flight passed — reads as the same words
+            // rather than a second hand-written version of them.
             BranchSituation::DirectoryTaken { dir } => {
-                let name = dir
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| dir.display().to_string());
+                let clash = explain_directory_taken(dir);
                 column![
-                    Text::new(
-                        format!("A worktree folder named '{name}' already exists."),
-                        TypeRole::Body,
-                        r
-                    )
-                    .tint(r.error),
-                    Text::new(
-                        "Choose a different name, or remove the existing folder first.",
-                        TypeRole::Caption,
-                        r
-                    )
-                    .muted(),
+                    Text::new(clash.fact, TypeRole::Body, r).tint(r.error),
+                    Text::new(clash.guidance, TypeRole::Caption, r).muted(),
                     row![cancel("OK")].spacing(spacing::SM),
                 ]
                 .spacing(spacing::SM)

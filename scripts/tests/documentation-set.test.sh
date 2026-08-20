@@ -38,13 +38,15 @@ expect specs/001-app-shell-about/spec.md          set
 expect README.md                                  set
 expect CLAUDE.md                                  set
 expect LICENSE                                    set
-expect dialog-list.png                            set
 expect .claude/skills/visual-pass/SKILL.md        set
 
 echo
 echo "== deleted paths still classify (check-attr never touches the worktree) =="
 expect docs/gone/removed-page.md                  set
 expect specs/999-removed/spec.md                  set
+# Covers `/*.png`. It was a real root-level screenshot until it was deleted as orphaned; the
+# verdict is unchanged, which is the property this section exists to pin.
+expect dialog-list.png                            set
 
 echo
 echo "== compiled into the binary, so NOT documentation =="

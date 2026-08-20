@@ -24,7 +24,7 @@
 //! popover suddenly closing the session menu, say — would have passed all of them.
 
 use micold_client::app::{Message, State};
-use micold_core::session::SessionId;
+use micold_core::session::{SessionId, ShellInstanceId};
 use std::path::PathBuf;
 
 /// Which surfaces each popover closes by opening.
@@ -56,9 +56,13 @@ const DISPLACES: &[(&str, &[&str])] = &[
     // The two context menus replace each other. A panel popover open elsewhere in the window is
     // unaffected by a right-click in the sidebar.
     ("worktree_menu", &["project_menu"]),
-    // Neither of these has ever closed anything, and this is the first test to say so.
+    // None of these has ever closed anything, and this is the first test to say so.
     ("session_menu", &[]),
     ("terminal_context_menu", &[]),
+    // Feature 012's terminal-tab menu, which arrived on `main` mid-feature. It replaces itself on a
+    // second right-click and touches nothing else — including the pane's own context menu, which is
+    // a different surface on the same pane.
+    ("shell_instance_menu", &[]),
 ];
 
 /// The message that opens each popover, by the id it registers under.
@@ -71,6 +75,7 @@ fn opener(id: &str) -> Message {
         "worktree_menu" => Message::WorktreeMenuToggled("w1".into()),
         "session_menu" => Message::SessionMenuToggled(SessionId::new()),
         "terminal_context_menu" => Message::TerminalContextMenuOpened { x: 10, y: 20 },
+        "shell_instance_menu" => Message::ShellInstanceMenuRequested(ShellInstanceId(1), 30, 40),
         other => panic!("no opener for `{other}`"),
     }
 }

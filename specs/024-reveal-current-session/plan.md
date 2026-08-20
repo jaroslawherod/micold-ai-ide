@@ -2,6 +2,11 @@
 
 **Branch**: `024-reveal-current-session` | **Date**: 2026-08-09 | **Spec**: [spec.md](./spec.md)
 
+**Bugfix**: 2026-08-19 — [BUG-001](./bugs/BUG-001.md) Updated from bugfix patch: the file tree
+named `tree_view.rs` and `text.rs` as the whole of the 500-weight name, and left out the widget
+that actually draws it. `ui/material/ellipsized.rs` is added below as the third file FR-003a
+depends on.
+
 **Input**: Feature specification from `/specs/024-reveal-current-session/spec.md`
 
 ## Summary
@@ -27,6 +32,10 @@ machinery, not a new subsystem:
 
 The non-colour half of the mark (FR-003a) is a fourth, smaller change: the current row's name
 renders at the type scale's 500 weight while other session rows stay at 400.
+
+> **BUG-001 (2026-08-19)**: this was built as a role selection and stopped there. `Ellipsized`,
+> which draws every session name, takes a role's *size* and discards its font, so the two roles are
+> indistinguishable on screen. The change is smaller than it looked, but it is one file wider.
 
 ## Technical Context
 
@@ -135,6 +144,8 @@ crates/micold-client/src/
 │   └── material/
 │       ├── scrollable.rs           # +.id(), +.on_viewport_resize() (Sensor-backed)
 │       ├── tree_view.rs            # the current row's 500-weight name (FR-003a)
+│       ├── ellipsized.rs           # draws that name; must carry the role's font, not only its
+│                                   #   size (BUG-001)
 │       └── text.rs                 # the 500-weight sidebar-session role
 └── main.rs                         # drains pending_reveal_scroll into operation::scroll_to
 

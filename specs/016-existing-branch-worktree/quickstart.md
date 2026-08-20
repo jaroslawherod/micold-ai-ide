@@ -13,9 +13,9 @@ see the test obligations in each contract.
 ## Automated gate — run first
 
 ```bash
-mise run test                                  # render-free core, matches CI
-cargo test --features gui                      # GUI-feature build
-cargo clippy --features gui --all-targets      # lints
+mise run test                                  # whole workspace, matches CI
+cargo fmt --all -- --check                     # CI's fmt gate
+cargo clippy --workspace --all-targets         # lints
 ```
 
 All three must pass before the manual scenarios mean anything. Expect coverage in:

@@ -674,6 +674,28 @@ the placeholder. Material's animated transition between the two positions is **n
 the label snaps. Both endpoints are correct; only the transition is absent. Accepted fidelity gap
 #4.
 
+**Adornments (BUG-003 item 1).** The row this section did not have, which is why the label and the
+leading icon were positioned by two different rules and drawn on top of each other:
+
+| Property           | Value                                                              |
+|--------------------|--------------------------------------------------------------------|
+| Leading icon slot  | fixed at 24, **not** the glyph's advance — §7.2's rule, BUG-006's lesson |
+| Leading icon gap   | 16, between that slot and everything after it                       |
+| Content column     | `padding + slot + gap` when there is a leading icon, `padding` otherwise — followed by the value **and** the label, in either of the label's positions |
+| Adornment baseline | both adornments centred on the container's own middle, not on the floating value's line |
+| Adornment height   | the **container's**, not the value line's — a trailing `IconButton` keeps §7.3's 48dp target rather than being squeezed into 24dp |
+
+The content column is one figure for two things on purpose. The value was inset past the icon and
+the label was pinned at the padding, so an empty unfocused field with a leading icon drew its label
+underneath that icon — which is the state every searchable picker opens in. A figure with nothing
+stating its intent is the shape all of this section's bugs have had; this is that figure.
+
+The height row is the same defect one slot over. An adornment is not a second line of value, and
+offering it only the 24dp value line did not refuse the icon button that wanted 48 — it squeezed it:
+8dp of padding top and bottom out of 24 left the glyph an 8dp box, which it drew out of and down the
+field, ~11dp below the centre line with half the target §7.3 requires. It cost nothing at the gates,
+because the slot was the right size and the child fitted inside it.
+
 **Content migration (FR-031a, FR-031b).** Today's placeholders bundle the field name and a hint
 into one string. These split:
 

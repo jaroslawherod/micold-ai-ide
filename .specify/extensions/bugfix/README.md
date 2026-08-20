@@ -26,7 +26,7 @@ The Bugfix Workflow extension adds four commands that close the gap between bug 
 ## Installation
 
 ```bash
-specify extension add --from https://github.com/Quratulain-bilal/spec-kit-bugfix/archive/refs/tags/v1.0.0.zip
+specify extension add bugfix --from https://github.com/Quratulain-bilal/spec-kit-bugfix/archive/refs/tags/v1.1.0.zip
 ```
 
 ## Bug Types

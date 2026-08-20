@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-09
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "change focuse management for terminal to be more natural and not require double click in some cases . E.g. if terminal is focused and I want to switch to regular I need to click once to release the focuse from terminal and click second time to switch. it should be done in one click. The other case is when I switch between windows or sessions often focuse is not set to terminal and requires a explicit click to gain focuse. That should happen automatically"
 

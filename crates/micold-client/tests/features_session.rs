@@ -4,6 +4,11 @@
 //! builds a `State`. What it holds to is the other half of SC-004 — it names no other feature's
 //! types. No sidebar rows, no overlays, no drafts.
 //!
+//! The three `let _ =` bindings below are the same decision spelled for a function whose answer is
+//! only outcomes: this file asserts on no sidebar field, so dropping them is the boundary rather
+//! than a shortcut. A test that asserts a *moved* consequence needs a draining helper instead —
+//! `tests/switch_active.rs` has one, and T067a-6 records the four files that needed it.
+//!
 //! `switch_active` now answers `Option<Vec<Outcome>>` rather than `bool` — `None` is still the
 //! refusal, and the outcomes are the sidebar consequences of arriving somewhere (T067a-6). This
 //! file drops them on the floor deliberately: it asserts on no sidebar field, which is the same
@@ -318,5 +323,139 @@ fn the_choice_is_recorded_where_the_binary_can_log_it() {
         Some(ForegroundChoice::Remembered(a[0])),
         "the reducer decides; the binary logs. Keeping the reason on the state is what lets the \
          log line say why without the decision leaking into the I/O boundary"
+    );
+}
+
+/// `010` BUG-013. The client boots, restores its project, and resolves which session to show —
+/// all **before** the daemon's catalog arrives. Sessions live on the daemon, so at that instant
+/// the project has none and the resolve honestly answers `NoSessionsForKey`. Then the catalog
+/// lands and the sessions appear, and nothing ever asked the question again.
+///
+/// The visible cost was not a missing selection: it was a sidebar that looked *empty*. A location
+/// row opens when it holds the current session (`effective_open`), so with nothing current the
+/// Default row stayed shut and the sessions inside it — present in state, listed in the catalog —
+/// were never drawn. The session survived the restart in every layer except the one the user
+/// can see.
+#[test]
+fn a_foreground_resolved_before_the_catalog_arrived_is_resolved_again_when_it_does() {
+    let (mut st, ids_a, _) = two_projects(1, 0);
+    st.workspace.active = Some(PathBuf::from("/a"));
+
+    // Boot order: the resolve runs against a project the client has, but whose sessions are still
+    // on the wire.
+    let staged = st
+        .workspace
+        .sessions
+        .remove(Path::new("/a"))
+        .expect("sessions");
+    let _ = st.restore_after_activation(Path::new("/a"));
+    assert_eq!(
+        st.last_foreground_choice,
+        Some(ForegroundChoice::NoSessionsForKey),
+        "with no sessions filed under the key, this is the honest answer — the bug is that it is final"
+    );
+    assert_eq!(st.active_session, None);
+
+    // The catalog arrives; `reconcile_catalog` files the sessions under the project.
+    st.workspace.sessions.insert(PathBuf::from("/a"), staged);
+
+    assert!(
+        st.resolve_foreground_after_catalog().is_some(),
+        "the resolve must be re-run now that the data it needed exists"
+    );
+    assert_eq!(
+        st.active_session,
+        Some(ids_a[0]),
+        "the session the daemon was hosting all along is now the current one, which is also what \
+         opens its row in the sidebar"
+    );
+}
+
+/// The narrow guard, and the reason it is narrow: FR-007 forbids choosing a session for the user
+/// when they are landing on the project overview. `NoneActive` is that landing — the project *has*
+/// sessions and none is running — and re-resolving there would make a choice the user did not ask
+/// for. Only `NoSessionsForKey` means "the resolve ran against data that had not arrived".
+#[test]
+fn a_deliberate_landing_on_the_project_overview_is_left_alone() {
+    let (mut st, _ids, _) = two_projects(1, 0);
+    st.workspace.active = Some(PathBuf::from("/a"));
+    // A project whose only session has stopped: sessions exist, none is active.
+    for s in st.workspace.sessions.get_mut(Path::new("/a")).unwrap() {
+        s.record_clean_exit();
+    }
+    let _ = st.restore_after_activation(Path::new("/a"));
+    assert!(
+        matches!(
+            st.last_foreground_choice,
+            Some(ForegroundChoice::NoneActive { .. })
+        ),
+        "got {:?}",
+        st.last_foreground_choice
+    );
+
+    assert!(
+        st.resolve_foreground_after_catalog().is_none(),
+        "nothing was missing, so nothing is re-resolved — the user is on the overview because that \
+         is where the rule put them (FR-007)"
+    );
+    assert_eq!(st.active_session, None);
+}
+
+/// A session already chosen must never be replaced by a later catalog: a reconnect mid-session
+/// arrives at `on_connected` exactly like a boot does.
+#[test]
+fn a_catalog_arriving_mid_session_does_not_move_the_user() {
+    let (mut st, ids_a, _) = two_projects(2, 0);
+    st.workspace.active = Some(PathBuf::from("/a"));
+    let _ = st.set_current_session(Some(ids_a[1]));
+
+    assert!(st.resolve_foreground_after_catalog().is_none());
+    assert_eq!(
+        st.active_session,
+        Some(ids_a[1]),
+        "a reconnect must not relocate the user to a different session"
+    );
+}
+
+/// `010` BUG-013 — the wiring half, which the three tests above cannot reach.
+///
+/// `resolve_foreground_after_catalog` can be perfectly correct and never called, which is the state
+/// this codebase has been in three times now (`010` BUG-011, `012` BUG-003, `012` BUG-004): both
+/// halves tested, the join untested, the application broken. `shell/daemon_sync.rs` lives in the
+/// binary crate and cannot be reached from here, so the call is read out of the source — the same
+/// idiom as `terminal_bar_stability.rs`'s gates, and for the same reason.
+///
+/// Order matters as much as presence: `on_connected` reads `active_session` further down to decide
+/// whether to view-and-start a session or send the empty overview view. Re-resolving after that
+/// read would set the session and then not act on it.
+#[test]
+fn the_connect_path_re_resolves_the_foreground_after_folding_the_catalog() {
+    let src = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("shell")
+            .join("daemon_sync.rs"),
+    )
+    .expect("daemon_sync.rs");
+
+    let connected = src
+        .split_once("pub fn on_connected")
+        .expect("on_connected exists")
+        .1;
+    let fold = connected
+        .find("reconcile_catalog(")
+        .expect("on_connected folds the catalog");
+    let resolve = connected.find("resolve_foreground_after_catalog()").expect(
+        "on_connected must re-resolve the foreground: the boot-time resolve ran before this \
+             catalog existed and answered `NoSessionsForKey` against sessions still on the wire",
+    );
+    let reads_active = connected
+        .find("app.core.active_session")
+        .expect("on_connected decides what to view from active_session");
+
+    assert!(
+        fold < resolve && resolve < reads_active,
+        "the re-resolve must sit between folding the catalog and reading `active_session` \
+         (fold={fold}, resolve={resolve}, read={reads_active})"
     );
 }
