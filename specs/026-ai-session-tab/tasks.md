@@ -153,12 +153,12 @@ are laid out narrower, or at zero, silently. That is feature 012's BUG-005 one l
 feature meets it sooner by making the strip always visible and adding a tab, so it is fixed first,
 where it can be verified on its own.
 
-- [ ] T014 Register a covered state in `crates/micold-client/tests/support/covered_states.rs` with
+- [X] T014 Register a covered state in `crates/micold-client/tests/support/covered_states.rs` with
   **enough Regular Terminal instances to overflow the bar** (six or more at the fixture's 1280dp
   window). Feature 019 FR-016 makes this file the single registration site. Without this state the
   next task's gate inspects nothing, which is the "a pass that records nothing looks like a pass
   that found nothing" shape 019 keeps meeting
-- [ ] T015 Failing gate in `crates/micold-client/tests/gates/` (new `bar_controls_hold_their_size.rs`,
+- [X] T015 Failing gate in `crates/micold-client/tests/gates/` (new `bar_controls_hold_their_size.rs`,
   compiled into the `layout_snapshot` binary beside `tab_children_fit` so it shares the record
   cache): in every covered state that draws a bottom bar, **no control in that bar is laid out
   narrower than the width it asks for** — the "+", the mode toggle, the status and the title
@@ -166,7 +166,7 @@ where it can be verified on its own.
   their widths. This is the same question `tab_children_fit` asks one level in, and the reason it is
   a second gate rather than a widened first one is that the bar's children are not tabs and are not
   recognised by that gate's structural rule
-- [ ] T016 Bound the strip in `crates/micold-client/src/ui/terminal.rs::pane` so its growth cannot
+- [X] T016 Bound the strip in `crates/micold-client/src/ui/terminal.rs::pane` so its growth cannot
   take width from its siblings (depends on T015; FR-002c). The strip becomes the bar's flexible
   member and every other control keeps its measured size
 - [ ] T017 [P] Failing test beside `restart_message` in `crates/micold-client/src/ui/terminal.rs`'s
@@ -267,8 +267,11 @@ delivery choice rather than a correctness one.
   *fade* is appearance and cannot be gated, but the fact behind it can, and this is it
 - [ ] T032 [P] [US1] Failing test in `crates/micold-client/src/ui/terminal.rs`'s `mod tests`:
   changing the marked tab yields a scroll-into-view request for it, and only for it (FR-002d)
-- [ ] T033 [US1] Put the terminal tabs in a horizontal `material::Scrollable` inside
-  `crates/micold-client/src/ui/terminal.rs::instance_switcher_row`, with the AI tab **outside** it (depends on T003, T024; FR-002a, FR-002b).
+- [ ] T033 [US1] Put the **AI tab outside** the horizontal `material::Scrollable` in
+  `crates/micold-client/src/ui/terminal.rs::pane` (depends on T003, T024; FR-002a, FR-002b). *The
+  scrollable itself landed early, with T016*: bounding the strip without one does not fix FR-002c,
+  it relocates it — the bar's controls were saved and a tab came out 55.5dp wide with its close
+  control at 0.0, which is feature 012's BUG-005 exactly. A bound and a scroll are one fix.
   Tabs keep their fixed width — no shrinking, no ellipsis, no dropping — and the AI tab keeps the
   right-hand end at any instance count
 - [ ] T034 [US1] Scroll the marked tab into view when it changes, in

@@ -19,7 +19,7 @@ use crate::ui::material::{
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
-use iced::widget::{column, container, row, Space};
+use iced::widget::{column, container, row};
 use iced::{Alignment, Color, Element, Font, Length};
 use micold_core::protocol::grid::{WireColor, WireStyle};
 use micold_core::session::{SessionId, SessionLifecycle, ShellLifecycle, TerminalMode};
@@ -395,7 +395,6 @@ pub fn pane<'a>(
     let status = session_status(state, active);
     let mut bar = row![
         Text::new(session_title(state, active), TypeRole::Label, r),
-        Space::new().width(Length::Fill),
         Text::new(status, TypeRole::Label, r).muted(),
     ]
     .spacing(spacing::SM)
@@ -435,8 +434,48 @@ pub fn pane<'a>(
     // The instance-switching control: one entry per open Regular Terminal instance, visible only
     // once a session has more than one (feature 011, FR-004/FR-005). Placed just before the
     // "open a new instance" control, both ahead of the primary mode toggle.
+    // **The bar's one flexible member** (FR-002c). Everything else here is content-sized, so the
+    // strip is what absorbs whatever width is left over — and, crucially, what runs out of it
+    // first when there is not enough to go round.
+    //
+    // It used to be content-sized like its siblings, with a `Length::Fill` spacer between the title
+    // and the status doing the pushing. That was silently wrong past about five instances: a row's
+    // width is a **budget**, and iced settles a shortfall by shrinking the *trailing* children
+    // rather than by overflowing. The mode toggle is the last child, so it went first — laid out at
+    // **0.0dp** in `gates/bar_controls_hold_their_size.rs`'s six-instance state, which is nothing a
+    // user can press, and the toggle is the keyboard-independent route to the AI pane that
+    // FR-008 keeps working. Nothing overflowed, so nothing failed. This is feature 012's BUG-005
+    // one level out, and its own comment describes the same shape inside a tab.
+    //
+    // Making the strip `Fill` inverts it: the strip is allotted `bar - everything else`, so every
+    // other control keeps the size it measured and the strip is the thing that runs short. What it
+    // does when it runs short is FR-002a's business — it scrolls (T033).
+    //
+    // # Why the region also has to scroll
+    //
+    // Bounding the strip on its own does not fix the defect; it **relocates** it one level in. The
+    // strip is a row too, so a strip given less width than its tabs need settles the shortfall the
+    // same way the bar did — by shrinking its trailing children. Measured: at six instances the
+    // bar's controls were saved and a tab came out **55.5dp** wide with its close control at 0.0,
+    // which `gates/tab_children_fit.rs` reports as the very defect feature 012's BUG-005 was.
+    //
+    // So the region scrolls (FR-002a). Tabs keep their one fixed width and the ones that do not fit
+    // are reachable by the wheel rather than by being made smaller — no shrinking, no ellipsis, no
+    // dropping. It comes from `material::Scrollable` rather than from a hand-rolled scroller
+    // because that wrapper is where the design system's 4px themed bar lives and where
+    // dismiss-on-scroll is reported from; a private one would reintroduce exactly the divergence
+    // the component was created to end.
+    //
+    // The tabs sit at the **leading** edge of that region rather than being pushed to its trailing
+    // end. That is what FR-002c's second half asks for: no control may be *displaced* by the
+    // strip's growth either, and a strip that hugs the trailing edge moves its own first tab left
+    // every time an instance is opened.
     if let Some(switcher) = instance_switcher_row(state, active, r) {
-        bar = bar.push(switcher);
+        bar = bar.push(
+            material::Scrollable::new(switcher, r)
+                .direction(material::ScrollDirection::Horizontal)
+                .width(Length::Fill),
+        );
     }
     // Open an additional Regular Terminal instance (feature 011, FR-001/FR-005) — visible
     // whenever the session is in Regular mode, regardless of how many instances are already
