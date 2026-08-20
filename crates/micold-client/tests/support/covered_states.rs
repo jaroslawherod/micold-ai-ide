@@ -17,6 +17,8 @@ use std::path::PathBuf;
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;
 use micold_client::features::settings::SettingsDraft;
+use micold_client::features::session::SessionMenu;
+use micold_client::features::worktree::WorktreeMenu;
 use micold_client::features::worktree_form::{BranchSource, WorktreeForm};
 use micold_core::project::Availability;
 use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
@@ -47,12 +49,17 @@ const APP_BAR_OVERFLOW_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 3];
 /// `IconButton` since BUG-007, which is why the two paths now differ only in their last index.
 const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 2];
 
-// A layer index is **two per open-able surface** since BUG-008, and the paths below that begin at
-// one were re-pointed twice on the way here. First BUG-007 made the switcher a `MenuOverlay`, which
-// is pushed whether or not it is open — it owns its own fade, so it must outlive the flag that
-// opened it — giving every state one more layer. Then BUG-008 made a surface's *backdrop*
+// A layer index is **two per open-able surface**, and the paths below that begin at one were
+// re-pointed twice on the way here. First 018's BUG-007 made the switcher a `MenuOverlay`, which is
+// pushed whether or not it is open — it owns its own fade, so it must outlive the flag that opened
+// it — giving every state one more layer. Then 017's BUG-002 made a surface's *backdrop*
 // unconditional too, because a backdrop that came and went renumbered the panels above it and they
 // inherited each other's transitions.
+//
+// (Both of those were written here as "BUG-007" and "BUG-008", unqualified, in a file whose other
+// bug references are 018's. The second named no bug that existed: the backdrop fix is 017's
+// BUG-002, per the commit that made it. 018's BUG-008 is a different bug entirely — the sidebar's
+// context menus opening at a corner — and it arrived to find its number already spoken for.)
 //
 // So the arithmetic is now stated rather than discovered: base, then a backdrop and a panel for
 // each surface `ui::view` pushes, in `stack_order`. A dialog sits above the two popovers, at layer
@@ -309,7 +316,46 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "worktree-menu-open",
             build: || {
                 let mut state = with_project();
-                state.worktree_menu_open = Some(LONG_NAME.to_string());
+                // Opened from the row, not from a corner (018 BUG-008). The point is well down the
+                // sidebar precisely because the defect was invisible at the top of the list: the
+                // panel used to be recorded at 24, 96 whichever row it belonged to, and a fixture
+                // that only ever opened it near there could not tell the two apart.
+                state.window_size = (1280, 800);
+                state.worktree_menu_open = Some(WorktreeMenu {
+                    dir_name: LONG_NAME.to_string(),
+                    anchor: (120, 420),
+                });
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
+        },
+        // The other sidebar menu, and the clamp (018 BUG-008, FR-029d / 015 FR-006). Opened close
+        // enough to the bottom edge that the panel does not fit below it, so the fixture records a
+        // menu that has been slid back inside rather than one that merely happened to fit.
+        CoveredState {
+            name: "session-menu-open-at-the-bottom-edge",
+            build: || {
+                let session = Session::restored(
+                    SessionId::new(),
+                    SessionLocation::Worktree("feat-short".to_string()),
+                    SessionLabel::Named("feat/short".to_string()),
+                    TerminalMode::Regular,
+                );
+                let id = session.id;
+                let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
+                workspace.active = workspace.projects.first().map(|p| p.path.clone());
+
+                let mut state = with_project();
+                state.workspace = workspace;
+                state.expanded.insert("feat-short".to_string());
+                state.window_size = (1280, 800);
+                state.session_menu_open = Some(SessionMenu {
+                    id,
+                    anchor: (120, 760),
+                });
                 StateUnderTest::new(state)
             },
             anchors: &[Anchor {

@@ -453,7 +453,10 @@ fn build_items(
 
         let mut item = TreeItem::new(0, node.display_name.clone(), tint)
             .tags(tags)
-            .on_right_press(Message::WorktreeMenuToggled(dir.clone()))
+            .on_right_press({
+                let dir = dir.clone();
+                move |point| Message::WorktreeMenuToggled(dir.clone(), point)
+            })
             .hover(
                 Message::WorktreeHovered(dir.clone()),
                 Message::WorktreeUnhovered(dir.clone()),
@@ -513,7 +516,11 @@ fn session_tree_item(
         .badge(ActivityBadge::<Message>::new(session.activity.clone(), r))
         .selected(selected)
         .on_press(Message::SessionSelected(session.id))
-        .on_right_press(Message::SessionMenuToggled(session.id))
+        .on_right_press({
+            // The id, copied out of the borrow: the closure outlives this `&Session`.
+            let id = session.id;
+            move |point| Message::SessionMenuToggled(id, point)
+        })
         .trailing(
             Icon::Close,
             Message::SessionCloseRequested(session.id),

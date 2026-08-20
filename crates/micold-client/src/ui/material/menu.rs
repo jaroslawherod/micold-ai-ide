@@ -23,7 +23,7 @@ use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
 use crate::ui::material::{menu_panel, IconButton, Text, TypeRole};
-use iced::widget::{button, column, mouse_area, opaque, row, Space};
+use iced::widget::{button, column, opaque, row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
 use micold_core::tokens::{anatomy, density, motion::duration, shape, spacing, Rgb, Roles};
@@ -59,8 +59,12 @@ pub struct MenuItem<M> {
     pub trailing_text: Option<String>,
     /// Trailing badge glyph and its tint (the switcher's unavailable marker).
     pub trailing_icon: Option<(Icon, Rgb)>,
-    /// Message emitted on right-press, opening the item's own context menu (feature 015).
-    pub on_context: Option<M>,
+    /// What a right-press on the item becomes, built from the **press point** in window pixels —
+    /// the item's own context menu (feature 015; the point since BUG-008, 018 FR-029d).
+    ///
+    /// `'static` rather than borrowed: the closure captures what the message names (a project's
+    /// path, cloned), never the state it was read from.
+    pub on_context: Option<Box<dyn Fn((u16, u16)) -> M>>,
 }
 
 impl<M> MenuItem<M> {
@@ -216,8 +220,13 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
             pressable = pressable.on_press(message);
         }
         let entry = super::Ripple::new(pressable, r.on_surface, shape::FULL);
+        // `cdk::ContextArea`, not `mouse_area`: the latter's `on_right_press` takes a bare message
+        // and drops the press point, which is how a context menu comes to open somewhere other
+        // than where it was asked for (BUG-008).
         let entry: Element<'a, M> = match item.on_context {
-            Some(message) => mouse_area(entry).on_right_press(message).into(),
+            Some(build) => crate::ui::cdk::context_area::ContextArea::new(entry)
+                .on_secondary_press(build)
+                .into(),
             None => entry.into(),
         };
         // …and "not pressable" has to mean the press stops here. A button without `on_press`

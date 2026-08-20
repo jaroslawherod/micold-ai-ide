@@ -76,14 +76,17 @@ fn open_overlay_identity_is_application_owned() {
     );
 }
 
-/// Menu identity is a *string* — which worktree's menu is open — not a boolean about a panel. The
-/// panel owns its fade; the application owns whose menu it is.
+/// Menu identity is a *worktree and a point* — whose menu is open and where it was opened from —
+/// not a boolean about a panel. The panel owns its fade; the application owns whose menu it is and
+/// where the user asked for it (018 FR-029d).
 #[test]
 fn open_menu_identity_is_application_owned() {
     let mut state = State::default();
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
-    assert_eq!(state.worktree_menu_open.as_deref(), Some("feat-a"));
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
+    state.update(Message::WorktreeMenuToggled("feat-a".to_string(), (120, 300)));
+    let open = state.worktree_menu_open.as_ref().expect("the menu is open");
+    assert_eq!(open.dir_name, "feat-a");
+    assert_eq!(open.anchor, (120, 300));
+    state.update(Message::WorktreeMenuToggled("feat-a".to_string(), (120, 300)));
     assert_eq!(state.worktree_menu_open, None);
 }
 
