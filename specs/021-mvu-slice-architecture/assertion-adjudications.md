@@ -118,3 +118,26 @@ was: assert!(arm.lines().take(12).any(is_a_write),"theonepermitteddirectwriteiss
 ```
 was: assert_eq!(writes.len(),1,"`app.rs`maywrite`active_session`exactlyonce—the`SessionSelected`arm.Found:\n\{}\n\nEverythingelsethereducerdoestothecurrentsessiongoesthrough\`set_current_session`;aseconddirectwritehereistheshapethiswholecheckexiststo\catch,becauseitlooksentirelyordinaryinreview.",writes.join("\n"))
 ```
+
+## Merge of `main` — `resolve_foreground_after_catalog` answers `Option<Vec<Outcome>>`
+
+Three, and unlike every group above these are not this feature's own removals: they belong to
+`main`'s `fix(010): ask which session to show again once the catalog arrives (BUG-013)`, which
+landed after this branch diverged and was merged in at the end.
+
+The collision is the same one T067a-6 caused everywhere else. `resolve_foreground_after_catalog`
+answered `bool` — did it move the pointer — and moved it by calling `set_current_session`, which
+had become outcome-returning here in the meantime. Merged as written it compiled with a warning and
+**dropped the reveal**: the right session would be resolved and its row left off-screen, which is
+precisely the half-fix BUG-013 was filed about. So it now answers `Option<Vec<Outcome>>`, `Some`
+meaning exactly what `true` meant, and the shell drains it — the shape `switch_active` already has,
+for the same reason and with the same `None`-is-the-refusal reading.
+
+The assertions are `.is_some()` / `.is_none()` over the same call in the same tests, and they assert
+the same proposition. The merge commit records the rest of the integration.
+
+was: assert!(st.resolve_foreground_after_catalog(),"theresolvemustbere-runnowthatthedataitneededexists")
+
+was: assert!(!st.resolve_foreground_after_catalog(),"nothingwasmissing,sonothingisre-resolved—theuserisontheoverviewbecausethat\iswheretheruleputthem(FR-007)")
+
+was: assert!(!st.resolve_foreground_after_catalog())
