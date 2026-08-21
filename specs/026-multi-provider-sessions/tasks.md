@@ -497,7 +497,7 @@ session.
 
 **Goal**: The sidebar names each session's CLI in text, labels a Copilot row with Copilot's own title
 once it has one, and shows a busy/idle badge — identical for both CLIs. An open session names its
-CLI on its own terminal bar (FR-016a).
+CLI on its own terminal bar, on the pinned AI tab (FR-016a).
 
 **Independent Test**: With one session of each kind in a project, the sidebar distinguishes them
 without hovering or opening; opening each shows its CLI named on the terminal bar; and a Copilot
@@ -541,9 +541,16 @@ session mid-response reads as working **within one second** (quickstart §B B4, 
   computed scroll target drifts from the rendered rows and nothing complains. This file is already
   the only test over `row_heights`/`scroll_target`, so the assertion costs a line here and has
   nowhere else to live
-- [ ] T058a [P] [US3] Add a test to `crates/micold-client/tests/terminal_bar_stability.rs` (or a
-  sibling) asserting the AI-CLI mode toggle carries the session's **command name** (`claude`,
-  `copilot`) as its own text in AI CLI mode, and is unchanged from pre-feature behaviour in regular-terminal mode (FR-016a, US3 scenario 4)
+- [X] T058a [P] [US3] Add a test to `crates/micold-client/tests/terminal_bar_stability.rs` (or a
+  sibling) asserting the bar's **pinned AI tab** carries the session's **command name** (`claude`,
+  `copilot`) as text beside its glyph, in both of a session's panes (FR-016a, US3 scenario 4).
+  Landed as two halves, because neither alone is enough: `ui/terminal.rs`'s unit test
+  `the_bar_reads_the_session_own_cli_by_command_name` proves `session_provider` answers with the
+  session's own CLI and falls back to the default for a session the projection has not caught up
+  with, and `terminal_bar_stability.rs::the_pinned_ai_tab_names_the_sessions_cli` proves the tab
+  still *asks* it and still asks in the `command()` register. A label rewritten to a literal or to
+  `display_name()` leaves the first green — that is the whole reason the second is a source gate.
+  Retargeted from the mode toggle when feature 027 deleted it; see FR-016a's amendment
 - [X] T058b [P] [US3] Extend `crates/micold-daemon/tests/copilot_activity.rs` so the badge reaches
   `Working` within **1 second** of a `user.message` line being appended, on the event-driven path
   (SC-005 as tightened 2026-08-16) — and prove it was the **log** that moved it. The shared
@@ -577,7 +584,7 @@ session mid-response reads as working **within one second** (quickstart §B B4, 
   model: every session discovered by R15's pass, and every session at all after a client restart. It
   has to live in that module because `reconcile_catalog` is a free function in the GUI binary and no
   integration test can link it — the same constraint T030a records. Without it the provider silently
-  defaults and the row label, the terminal bar and the split affordance all read `claude` for a
+  defaults and the row label, the AI tab and the split affordance all read `claude` for a
   Copilot session, with every other test still green (FR-012, FR-016, FR-016a)
 
 ### Implementation for User Story 3
@@ -607,7 +614,16 @@ session mid-response reads as working **within one second** (quickstart §B B4, 
   which stays reserved for menus and messages (FR-006, FR-010, Clarifications 2026-08-18); if the existing `icon_label`/`tag` primitives do not suffice, add the new one to `crates/micold-client/src/ui/material/` with a chainable builder terminating in `.into()` (Principle VIII), not inline in the sidebar. Declare the row's width budget explicitly: actions and CLI label are fixed, the title takes the remainder and ellipsizes via `ui/material/ellipsized.rs` — the identification must not be what a narrow row drops (T058d is the gate). The label changes the
   row's *content*, never its *height* — `features/sidebar.rs::row_heights` says a session row is one
   line and the scroll arithmetic believes it (T058)
-- [X] T066a [US3] Give the AI-CLI mode toggle its CLI's **command name** in `crates/micold-client/src/ui/terminal.rs` (the `IconButton::new(mode_glyph(mode), r)` at the bar's bottom-right). `IconButton` is not merely icon-only by
+- [X] T066a [US3] Give the bar's bottom-right control its CLI's **command name** in `crates/micold-client/src/ui/terminal.rs`.
+  **Re-landed on the pinned AI tab.** As originally written this task named the AI-CLI mode toggle,
+  and it was built as `material::LabelledToggle` — a labelled toggle that satisfies the note below.
+  Feature 027 then deleted the toggle (its FR-001) and the pinned AI tab took that corner, so the
+  name moved with it: `pinned_ai_tab` now labels itself `material::IconLabel::new(Icon::AiCli,
+  session_provider(..).provider().command(), ..)`, which is the existing shared component for a
+  glyph and a word (and the only permitted one — `tests/composite_call_sites.rs` forbids a feature
+  module assembling `row![Glyph, Text]` itself). `LabelledToggle` outlives its call site in the
+  showcase; it is a correct component with nothing currently posing it, not a mistake to undo here.
+  The original note, which still holds for any labelled *button*: `IconButton` is not merely icon-only by
   habit — its module contract says so and `crates/micold-client/src/ui/material/anatomy_size.rs`
   asserts a disabled one *is sized by its glyph* and a compact one *is sized by its glyph, not by the
   room it is given*. So **do not add `.label(...)` to `IconButton`**; compose
@@ -621,12 +637,12 @@ session mid-response reads as working **within one second** (quickstart §B B4, 
   them, do not run them in parallel
 - [X] T067a [US3] Regenerate the layout parity fixture for the states T066 and T066a move —
   `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client layout_snapshot` — and review the diff
-  deliberately. A row that gains a CLI label and a terminal bar whose mode toggle gains text both
+  deliberately. A row that gains a CLI label and a terminal bar whose pinned AI tab gains text both
   change resolved geometry that `crates/micold-client/tests/layout_snapshot.rs` asserts against a
   **committed** fixture, and `layout_snapshot_regeneration.rs` exists precisely so the gate cannot
   heal itself. Without this the phase ends on a red gate that reads like a mystery; with it, the
   diff is the evidence the label landed where it was meant to (depends on T066, T066a)
-- [X] T068 [P] [US3] Document what the sidebar shows per CLI — the row's CLI label, titles, and the activity badge — and that an open session names its CLI on its own terminal bar (FR-016a), in `docs/user-guide/worktrees-and-sessions.md`
+- [X] T068 [P] [US3] Document what the sidebar shows per CLI — the row's CLI label, titles, and the activity badge — and that an open session names its CLI on its own terminal bar, on the pinned AI tab (FR-016a), in `docs/user-guide/worktrees-and-sessions.md`
 
 **Checkpoint**: US1–US3 work. A mixed project is legible at a glance.
 

@@ -47,7 +47,7 @@ Green is the gate. What each gate is watching, for this feature:
 | the client boot-prune test T008b adds *(new)* | the same rule on the client side: `main.rs::prune_empty_sessions`, reached from `shell/startup.rs`, judges each session by **its own** provider. It drops sessions from the workspace, and it passes `no_concrete_implementations.rs` while doing so, because it names nothing concrete |
 | `micold-daemon/tests/session_survival.rs` | a Copilot session survives a **daemon** restart on the right provider — the leg of FR-012 neither the store round-trip nor §B B3 reaches |
 | `micold-daemon/tests/copilot_activity_is_event_driven.rs` *(new)* | *this application* schedules no polling timer, no periodic wakeup and no per-idle-session work, and no debouncer sits in the path. Explicitly **not** an assertion about the watch crate's internals (FR-019, SC-006) |
-| `micold-client/tests/terminal_bar_stability.rs` | the AI-CLI mode toggle carries the session's **command name** (`claude`, `copilot`) as its own text in AI CLI mode, and is unchanged in regular-terminal mode (FR-016a) |
+| `micold-client/tests/terminal_bar_stability.rs` | the bar's pinned AI tab carries the session's **command name** (`claude`, `copilot`) as text beside its glyph, in both of a session's panes (FR-016a) |
 | `micold-client/src/main.rs`'s own `#[cfg(test)]` module | a `SessionSummary` carrying `Copilot` becomes a **Copilot** session in `reconcile_catalog` — the one path every daemon-reported session takes into the client, which is every discovered session and every session after a client restart. `Session::restored` is the constructor involved, and it is the one T012 has to change alongside `start_new`; miss it and the provider defaults silently while every other test stays green |
 | `micold-client/tests/features_sidebar.rs` | the CLI label changes a row's **content, not its height**. `features/sidebar.rs::row_heights` hardcodes one line per session row and the scroll target is computed from it — the one place in the sidebar where a wrong answer is silent rather than visible |
 | `micold-client/tests/features_sidebar.rs` + `features_settings.rs` | the two naming registers stay apart: rows and the terminal bar use `command()`, the Settings select / override list / failure messages use `display_name()`. Both strings hang off the same provider, which is what makes the drift likely |
@@ -112,9 +112,9 @@ With one session of each CLI open:
 - **Each row names its CLI in text**, as the command name — `claude`, `copilot` — not by colour, not
   by a glyph you have to recognise, not in a tooltip. Check it at a narrow sidebar width too: the
   title ellipsizes, the CLI name does not go.
-- **Each open session names its CLI on its own terminal bar**, again as the command name, as the text
-  of the sparkle mode toggle at the bottom-right (FR-016a). Switch that session to regular-terminal
-  mode: the control goes back to what it was before this feature.
+- **Each open session names its CLI on its own terminal bar**, again as the command name, as text
+  beside the sparkle glyph on the pinned AI tab at the bottom-right (FR-016a). Switch that session to
+  regular-terminal mode: the tab and its name stay exactly where they are — only the mark moves.
 - **The menus disagree with the labels, on purpose.** Settings and the override list read "Claude
   Code" and "GitHub Copilot"; the rows and the bar read `claude` and `copilot`. If they have
   converged, one register has leaked into the other.

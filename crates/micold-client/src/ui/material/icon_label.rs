@@ -31,6 +31,7 @@ pub struct IconLabel<'a, M> {
     role: TypeRole,
     roles: Roles,
     tint: Option<Rgb>,
+    label_tint: Option<Rgb>,
     muted: bool,
     _marker: std::marker::PhantomData<M>,
 }
@@ -44,6 +45,7 @@ impl<'a, M: 'a> IconLabel<'a, M> {
             role,
             roles,
             tint: None,
+            label_tint: None,
             muted: false,
             _marker: std::marker::PhantomData,
         }
@@ -53,6 +55,18 @@ impl<'a, M: 'a> IconLabel<'a, M> {
     /// [`icon_role`](crate::icons::icon_role) — the same reason [`Glyph`] asks for it.
     pub fn tint(mut self, tint: Rgb) -> Self {
         self.tint = Some(tint);
+        self
+    }
+
+    /// Tint the **label** too, so the whole unit reads as one colour.
+    ///
+    /// Separate from [`tint`](Self::tint) because the two cases are different: a badge tints its
+    /// glyph to say what kind of thing it is and leaves the words in body colour, while a labelled
+    /// icon that is *itself* a state — the terminal bar's AI tab, marked or not — has to carry that
+    /// state in both halves or the glyph and the word disagree about whether the tab is selected.
+    /// Mutually exclusive with [`muted`](Self::muted) in practice; a call site sets one or neither.
+    pub fn label_tint(mut self, tint: Rgb) -> Self {
+        self.label_tint = Some(tint);
         self
     }
 
@@ -72,6 +86,9 @@ impl<'a, M: 'a> From<IconLabel<'a, M>> for Element<'a, M> {
         let mut text = Text::new(l.label, l.role, l.roles);
         if l.muted {
             text = text.muted();
+        }
+        if let Some(tint) = l.label_tint {
+            text = text.tint(tint);
         }
         row![glyph, text]
             .spacing(spacing::XS)

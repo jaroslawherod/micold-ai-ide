@@ -294,7 +294,7 @@ crates/micold-client/src/
 ├── features/settings.rs            # the Default AI CLI preference
 ├── ui/settings_form.rs             # reuses ui/material/select.rs (feature 022)
 ├── ui/sidebar.rs                   # per-row CLI text label (FR-016) + the split start affordance
-└── ui/terminal.rs                  # the AI-CLI mode toggle names the CLI (FR-016a)
+└── ui/terminal.rs                  # the pinned AI tab names the CLI (FR-016a)
 
 crates/micold-core/tests/           # provider paths & parsers (no CLI needed), seam substitutability,
                                     # store/settings round-trip, schema hash, reconciliation

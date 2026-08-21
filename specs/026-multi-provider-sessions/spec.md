@@ -89,7 +89,9 @@
 - Q: Is the sidebar the only place a session's CLI needs to be identifiable? → A (user-directed): No.
   The terminal bar's AI-CLI mode toggle — the sparkle button at the bar's bottom-right — must carry
   the CLI's name as its own label, so the session you are looking at says which CLI it is running
-  without a glance back at the sidebar. Recorded as FR-016a.
+  without a glance back at the sidebar. Recorded as FR-016a. *(The control named here is gone —
+  feature 027 deleted the mode toggle. The answer's requirement is not: FR-016a records how it was
+  re-homed onto the pinned AI tab that took the same corner.)*
 - Q: A user who has run `copilot` by hand in a worktree for months has a lot of recorded history —
   253 session directories on the development machine, from incidental use. How much of it does a
   first project-open pull in? → A: All of it, on identical rules for both CLIs. Whatever a CLI
@@ -141,8 +143,8 @@
   outside the application appears without the user asking for it — including the second such session,
   which a first-open-only rule would never show. The cost is one index read or one directory listing
   per location, not work per conversation, so it does not grow with history.
-- Q: FR-016 requires "a short text label" on the row and FR-016a the CLI's name on the mode toggle,
-  but neither says what the text is — and the row's width budget makes the string length a constraint
+- Q: FR-016 requires "a short text label" on the row and FR-016a the CLI's name on the bar's
+  trailing control, but neither says what the text is — and the row's width budget makes the string length a constraint
   rather than a detail. → A: The **command name** — `claude`, `copilot`. It is what the user types,
   what their process list shows, and the shortest form that is still exact. This governs the two
   identification surfaces only; where the application *offers* a choice or *names a failure* — the
@@ -252,10 +254,10 @@ Open each in turn: its terminal bar names the CLI it is running.
 3. **Given** a Copilot session that is mid-response,
    **When** I look at the sidebar,
    **Then** its activity badge reflects that it is working, within a second of it starting to.
-4. **Given** a Copilot session I have open in AI CLI mode,
+4. **Given** a Copilot session I have open,
    **When** I look at its terminal bar,
-   **Then** the AI-CLI mode toggle names GitHub Copilot beside its icon; switching that session to
-   regular-terminal mode leaves the control as it was before this feature.
+   **Then** the pinned AI tab reads `copilot` beside its glyph — and a Claude session's reads
+   `claude` — whichever pane the session is showing.
 
 ---
 
@@ -402,9 +404,22 @@ The missing CLI is either absent or clearly marked unavailable, and cannot be ch
   colour alone, on a glyph alone, or on a tooltip — it MUST be readable from the sidebar as rendered,
   at any contrast setting (SC-004).
 - **FR-016a**: The open session's own terminal bar MUST name its AI CLI by the same command name
-  FR-016 uses, as the text of the AI-CLI mode toggle beside that control's existing icon — so the session in front of the user says which
-  CLI it is running without a glance back at the sidebar. The name appears only while the session is
-  in AI CLI mode; in regular-terminal mode there is no CLI to name and the control is unchanged.
+  FR-016 uses, as text beside the existing glyph on the bar's **pinned AI tab** — so the session in
+  front of the user says which CLI it is running without a glance back at the sidebar. The name is
+  drawn whichever pane the session is showing, because the tab is (feature 027 FR-007).
+
+  ~~*as the text of the AI-CLI mode toggle beside that control's existing icon … The name appears
+  only while the session is in AI CLI mode; in regular-terminal mode there is no CLI to name and the
+  control is unchanged.*~~ — **amended**. The clarification this requirement came from named the
+  control at the bar's bottom-right, which was the AI-CLI/Regular mode toggle on the `main` this
+  feature branched from. Feature `027-tabs-only-switching` deleted that toggle (its FR-001) and the
+  pinned AI tab took the corner, so the name is re-homed onto the tab rather than retired: what the
+  clarification asked for is the *session naming its own CLI*, and the control it named was simply
+  the one standing there at the time. 027's "and no control MUST replace it" is not violated —
+  nothing is added to the bar. The tab was already there, already unconditional, and 027's own
+  reasoning for preferring tabs to a toggle is that *a tab names where it goes*; a glyph-only AI tab
+  says only that it goes to an assistant, not which one. The mode condition goes with the toggle: a
+  tab that came and went with the pane would break 027 FR-007 (feature 023 FR-008a).
 - **FR-017**: For each supported CLI, a session's sidebar label MUST use the title that CLI has
   recorded for the conversation, when it has recorded one; a missing or unreadable title MUST fall
   back to the existing label and MUST NOT fail the session.

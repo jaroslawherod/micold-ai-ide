@@ -423,8 +423,9 @@ Each session row carries a short text label naming its CLI — `claude` or `copi
 a colour or an icon alone, so it reads the same way for everyone and survives a narrow sidebar: if
 the row runs out of room the *title* is what shortens, never the CLI label.
 
-Open a session and its terminal bar names the CLI too, so you can tell what you are talking to
-without going back to the sidebar.
+Open a session and its terminal bar names the CLI too — on the AI tab at the bottom-right, beside
+its sparkle, reading `claude` or `copilot` — so you can tell what you are talking to without going
+back to the sidebar. It is there whichever pane the session is showing.
 
 The busy/idle indicator works the same way for both CLIs — same shape, same states, no "less
 certain" variant for one of them.

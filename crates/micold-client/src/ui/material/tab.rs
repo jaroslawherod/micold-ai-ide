@@ -157,6 +157,7 @@ pub struct Tab<'a, M> {
     roles: Roles,
     leading: Option<Element<'a, M>>,
     trailing: Option<Element<'a, M>>,
+    content_sized: bool,
     pub(crate) edge: IndicatorEdge,
     active: bool,
     on_press: Option<M>,
@@ -172,6 +173,7 @@ impl<'a, M: Clone + 'a> Tab<'a, M> {
             roles,
             leading: None,
             trailing: None,
+            content_sized: false,
             edge: IndicatorEdge::Top,
             active: false,
             on_press: None,
@@ -191,6 +193,41 @@ impl<'a, M: Clone + 'a> Tab<'a, M> {
     /// are not all one size reads as a control among controls rather than as a strip.
     pub fn trailing(mut self, content: impl Into<Element<'a, M>>) -> Self {
         self.trailing = Some(content.into());
+        self
+    }
+
+    /// Size this tab to its own label instead of to the uniform [`WIDTH`].
+    ///
+    /// # Why this is an opt-in and not the default
+    ///
+    /// [`WIDTH`] is uniform because feature 012's BUG-001 found that a strip whose tabs are not all
+    /// one size reads as a control among controls rather than as a strip. That is a statement about
+    /// **neighbours**, and it stays the default for exactly that reason: every member of a strip
+    /// with more than one member keeps the derived width, whatever it holds.
+    ///
+    /// The terminal bar's pinned AI tab has no neighbours — it is deliberately a `TabStrip` of one,
+    /// outside the scrolling region, sitting beside the instance strip rather than inside it. It is
+    /// also the one tab whose label is a *word* (`claude`, `copilot` — feature
+    /// 026-multi-provider-sessions FR-016a) rather than an ordinal, and [`WIDTH`] reserves
+    /// [`LABEL_MIN_WIDTH`] for a label. A word does not fit in 16dp, and a fixed-width tab settles
+    /// that the way iced always does: it shrinks the trailing children, which put the reserved slot
+    /// at 12dp — under §7.3's target, with nothing overflowing and nothing failing. That is
+    /// BUG-005's shape again, and `gates/tab_children_fit.rs` is what catches it.
+    ///
+    /// So the tab grows instead of its slots shrinking. Both slots keep [`SLOT_WIDTH`], and the
+    /// label keeps its natural width under the [`LABEL_MAX_WIDTH`] ceiling — which is what that
+    /// ceiling was written for ("a tab will show a name … content-sized under a ceiling serves
+    /// both").
+    ///
+    /// It is not bounded below by [`WIDTH`]; iced's container has no minimum width, and reaching
+    /// for one would be reintroducing a chosen number by another route. What does bound it is the
+    /// anatomy: the two reserved slots and the gaps between them are fixed, so no content-sized tab
+    /// is ever narrower than `2 * SLOT_WIDTH + 2 * spacing::XS`, and one carrying a word is wider
+    /// than [`WIDTH`] long before that floor is interesting. **A tab with neighbours must not use
+    /// this** — that is BUG-001, and `gates/tab_children_fit.rs` cannot see it, because a strip of
+    /// mismatched-but-adequate tabs breaks no geometry rule.
+    pub fn content_sized(mut self) -> Self {
+        self.content_sized = true;
         self
     }
 
@@ -354,7 +391,14 @@ impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M> {
             // The two slots are §7.3 touch targets, so the label keeps its distance from the tab's
             // edges without any inset of its own — the space is inside the slots rather than
             // outside them.
-            .width(Length::Fixed(WIDTH))
+            .width(match t.content_sized {
+                // See [`Tab::content_sized`]. `Shrink` measures the content row, whose two slots
+                // are fixed at [`SLOT_WIDTH`] and whose label container is capped at
+                // [`LABEL_MAX_WIDTH`], so the result is never smaller than the two slots and the
+                // gaps and never wider than the ceiling.
+                true => Length::Shrink,
+                false => Length::Fixed(WIDTH),
+            })
             .padding(TAB_PADDING)
             // FR-015: a tab's highlight is a tab's. See the module doc.
             .shape(state_layer_shape());
@@ -419,10 +463,17 @@ mod tests {
              indicator would point away from what it marks"
         );
 
+        assert!(
+            !bare.content_sized,
+            "a tab takes the strip's uniform width unless it is told otherwise — BUG-001's rule is \
+             the default, and the one tab that opts out is the one with no neighbours"
+        );
+
         let dressed: Tab<'_, ()> = Tab::new(label(r), r)
             .leading(Space::new())
             .trailing(Space::new())
             .edge(IndicatorEdge::Bottom)
+            .content_sized()
             .active(true);
         assert!(
             dressed.leading.is_some(),
@@ -433,6 +484,10 @@ mod tests {
             "the trailing slot was not carried"
         );
         assert!(dressed.active, "the active flag was not carried");
+        assert!(
+            dressed.content_sized,
+            "the content-sized flag was not carried"
+        );
         assert_eq!(
             dressed.edge,
             IndicatorEdge::Bottom,
