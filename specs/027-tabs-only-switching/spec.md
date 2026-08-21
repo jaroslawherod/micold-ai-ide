@@ -150,6 +150,19 @@ the AI tab do not move; the tabs grow and shrink leftward.
   process's output into the pane and delivering the user's keystrokes to it.
 - **FR-007**: The bar's child list MUST NOT vary with the session's pane or its instance count
   (feature 023 FR-008a). Every control named here is drawn unconditionally.
+- **FR-008**: The terminal tabs MUST share a vertical midline with the "+" and the AI tab beside
+  them. Added after the visual pass (T024) found them 4dp above both: the strip's edge-fade box is a
+  bar control's full height so the fade spans the whole edge, and a container's default vertical
+  alignment is `Start`. Nothing was out of place while the strip lived at the bar's *leading* edge
+  with nothing beside it; FR-002 put it against two controls the bar row centres, and the step then
+  reads as two rows of controls sharing a bar rather than the one trailing group FR-002 claims.
+- **FR-009**: Every strip control that changes which tab is marked MUST ask for that tab to be
+  scrolled into view (feature 026 FR-002d) — the "+" and a tab's close control included, not only
+  the two tabs. Also from T024: at six instances the strip overflows, and pressing "+" created an
+  instance, marked it, and left it behind the trailing edge fade. The reveal machinery was present
+  and correct; two of the four arms that move the mark simply never asked it to run. That was
+  survivable while the "+" opened instances into a strip with room for them, and FR-002/FR-003 are
+  what make it reachable with a single press.
 
 ### Key Entities
 

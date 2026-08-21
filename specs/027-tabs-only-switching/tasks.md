@@ -129,5 +129,33 @@ requires the opposite alignment. Amended in place with a superseded-by note, not
 ## Phase 5: Verification
 
 - [X] T023 Full `mise run test` — 2044 tests across 209 binaries, 0 failed.
-- [ ] T024 Visual pass at a display: the bar's trailing group at zero, one, three and six
-  instances, in both schemes.
+- [X] T024 Visual pass at a display: the bar's trailing group at zero, one, three and six
+  instances, in both schemes. Run headlessly with the `visual-pass` skill and recorded in
+  `visual-pass.md`; FR-001–FR-004 and SC-003 confirmed, three defects found and fixed below.
+
+## Phase 6: What the visual pass found
+
+**Purpose**: three defects, none of which any gate could see, and each gated before it was fixed.
+The first is this feature's own; the other two are older code that FR-002's arrangement made
+reachable. Recorded as tasks rather than folded into T024 so that each names the gate that now
+holds it.
+
+- [X] T025 The strip's edge fade drew at the trailing edge of a bar that did not overflow — the
+  first instance opened, and a rule appeared beside it. It derived from a *measured* content width
+  paired with a live viewport, two numbers from different frames. `strip_overflow` now derives it
+  from the same source the layout does (the tab count), `Message::TabStripScrolled` carries two
+  numbers instead of three, and `State::tab_strip_content_width` is deleted. Unit-tested in
+  `ui/terminal.rs`.
+- [X] T026 [FR-008] The terminal tabs sat 4dp above the "+" and the AI tab. `EdgeFade` boxes its
+  content to `MIN_TOUCH_TARGET` so the fade spans the whole edge, and a container's default
+  `align_y` is `Start`; the fix is one `.align_y(Center)`. Gated first by
+  `gates/tabs_anchor_the_trailing_edge.rs`'s third test, which compares the strip's midline with
+  each trailing control's. Regenerate the layout fixture: 150 nodes shift exactly +4 in y, no x or
+  width changes.
+- [X] T027 [FR-009] Pressing "+" for the sixth instance created a tab, marked it, and left it behind
+  the trailing fade. Two of the four arms that move the mark never called `arm_tab_reveal` —
+  `ShellInstanceOpenRequested` and `ShellInstanceCloseRequested`. The open arm is routed to a new
+  `session::shell_instance_open_requested` rather than doing its work inline in `app.rs`, matching
+  its three siblings. Gated by `tests/tab_reveal.rs`, which asserts the invariant over the set of
+  arms rather than the one case, since the doc comment on `arm_tab_reveal` always claimed the set.
+- [X] T028 Full `mise run test` after the three fixes.
