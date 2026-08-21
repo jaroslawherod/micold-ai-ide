@@ -283,8 +283,11 @@ pub enum Message {
     SessionRemoveCancelled,
 
     // ---- Feature 010: switchable regular terminal mode ----
-    /// The mode toggle was pressed for the active session (FR-001–FR-004, FR-010).
-    TerminalModeToggled,
+    // The mode toggle's `TerminalModeToggled` lived here until feature 027 deleted the control.
+    // The tab strip is the only route between a session's panes now, so a message meaning "switch
+    // to whichever pane is not showing" has no sender and, more to the point, no meaning: a strip
+    // names its destination. `TerminalAiCliSelected` and `ShellInstanceSelected` are what remain,
+    // and both **set** rather than flip — see FR-007 below for why that distinction is load-bearing.
     /// The manual restart affordance was pressed for the active session's currently-attached,
     /// not-running process — for the AI CLI branch, and for whichever Regular Terminal instance
     /// is currently active (FR-013; contracts/terminal-mode-lifecycle.md).
@@ -327,7 +330,7 @@ pub enum Message {
     /// Show the session's AI CLI process in the pane (feature 026 FR-006, FR-007).
     ///
     /// **Sets** the mode rather than toggling it, which is FR-007: pressing the AI tab while the AI
-    /// CLI is already displayed must be a no-op with no visible change, and `TerminalModeToggled`
+    /// CLI is already displayed must be a no-op with no visible change, and a flipping message
     /// would switch away. Carries the session explicitly, for the same reason
     /// `ShellInstanceSelected` does.
     TerminalAiCliSelected(SessionId),
@@ -1031,10 +1034,6 @@ impl State {
             Message::SessionRunning(id) => crate::features::session::running(self, id),
             Message::SessionTitleUpdated { id, title } => {
                 crate::features::session::title_updated(self, id, title)
-            }
-            Message::TerminalModeToggled => {
-                let outcomes = crate::features::session::mode_toggled(self);
-                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::TerminalAiCliSelected(id) => {
                 let outcomes = crate::features::session::ai_cli_selected(self, id);

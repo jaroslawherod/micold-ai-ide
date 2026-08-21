@@ -163,7 +163,7 @@ fn opening_a_shell_on_a_session_whose_primary_is_not_running_still_attaches_a_sh
     let attached = state.attach_process(id, SessionProcess::Shell(instance));
     assert!(
         attached.is_some(),
-        "the shell instance must exist and be attachable — otherwise the mode toggle silently \
+        "the shell instance must exist and be attachable — otherwise pressing its tab silently \
          does nothing (FR-003, FR-007)"
     );
     assert!(
@@ -178,7 +178,7 @@ fn opening_a_shell_on_a_session_whose_primary_is_not_running_still_attaches_a_sh
 /// `remove_session` returns only the *primary* handle for the caller to `kill()`, and there is no
 /// primary here. What actually reclaims the shell is the removal of the whole `LiveSession`: each
 /// `Proc`'s `Drop` kills and joins its child. This pins that, since a future refactor that leaned
-/// on the returned handle instead would leak a shell per toggle.
+/// on the returned handle instead would leak a shell per switch.
 #[test]
 fn a_shell_opened_without_a_primary_is_reclaimed_when_the_session_is_removed() {
     let project = tempfile::tempdir().unwrap();

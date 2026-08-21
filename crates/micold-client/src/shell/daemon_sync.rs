@@ -949,36 +949,26 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
     Task::none()
 }
 
-/// Switch the active session's terminal between AI CLI and Regular modes (feature 010,
-/// FR-001–FR-004, FR-010): flip the mode, then reattach/spawn whichever process it now
-/// selects. Neither process is ever killed as a side effect (FR-006) — the previously-
-/// attached one simply stops being displayed/written to and keeps running in the
-/// background (research R6).
-pub fn on_terminal_mode_toggled(app: &mut App) -> Task<Message> {
-    app.core.update(Message::TerminalModeToggled);
-    if let Some(id) = app.core.active_session {
-        // Entering Regular with no instance yet: lazily open the session's first one
-        // (feature 011 FR-007), spawning it on the daemon.
-        let needs_first_shell = app
-            .core
-            .workspace
-            .find_session(id)
-            .is_some_and(|(_, s)| s.mode == TerminalMode::Regular && s.shells.is_empty());
-        if needs_first_shell {
-            let shell_id = app
-                .core
-                .workspace
-                .find_session_mut(id)
-                .map(|(_, s)| s.open_shell_instance());
-            if let (Some(shell_id), Some(d)) = (shell_id, &app.daemon) {
-                d.send(ClientMsg::SessionOpenShell {
-                    session: id,
-                    instance: shell_id,
-                });
-            }
-        }
-        attach_current_process(app, id);
-    }
+/// The AI tab was pressed — display the session's AI CLI and attach its process (feature 027,
+/// FR-002; feature 010 FR-001–FR-004 for what "attach" means).
+///
+/// # Why this arm has to exist
+///
+/// It is the deleted mode toggle's other half. `Message::TerminalAiCliSelected`'s reducer sets the
+/// mode and nothing more (feature 026 FR-006), and until feature 027 the message had **no arm in
+/// `main.rs` at all** — it fell through to the catch-all, which runs the reducer and stops. So the
+/// AI tab moved the mark while the daemon went on streaming and driving whichever shell instance
+/// was attached: the strip said AI CLI and the keys went to bash.
+///
+/// That was invisible while a mode toggle existed to do the attach, and it only opens after a trip
+/// through Regular mode — which is exactly the trip a tab strip invites. `tests` below hold it.
+///
+/// Unlike the toggle it replaces this never opens a shell instance: a session has exactly one AI
+/// CLI process and it is not created here. Neither process is killed as a side effect (010 FR-006)
+/// — the previously-attached one stops being displayed and keeps running (research R6).
+pub fn on_terminal_ai_cli_selected(app: &mut App, id: SessionId) -> Task<Message> {
+    app.core.update(Message::TerminalAiCliSelected(id));
+    attach_current_process(app, id);
     Task::none()
 }
 
@@ -1035,23 +1025,32 @@ pub fn on_shell_instance_restart_requested(
 /// instance, even if one is already running.
 pub fn on_shell_instance_open_requested(app: &mut App) -> Task<Message> {
     if let Some(id) = app.core.active_session {
-        if let Some((_cwd, TerminalMode::Regular, _)) =
-            session_cwd_mode_and_active_shell(&app.core, id)
-        {
-            let shell_id = {
-                let Some((_, session)) = app.core.workspace.find_session_mut(id) else {
-                    return Task::none();
-                };
-                session.open_shell_instance()
+        let shell_id = {
+            let Some((_, session)) = app.core.workspace.find_session_mut(id) else {
+                return Task::none();
             };
-            if let Some(d) = &app.daemon {
-                d.send(ClientMsg::SessionOpenShell {
-                    session: id,
-                    instance: shell_id,
-                });
-            }
-            attach_current_process(app, id);
+            // Feature 027 FR-004: the "+" is shown on the AI tab too now, so it has to *take* the
+            // user to Regular rather than assume they are already there. Feature 011's FR-019 made
+            // both this control and its chord a no-op outside Regular, which was coherent only
+            // while a mode toggle existed and the "+" was hidden there — the no-op was unreachable.
+            // Reachable, it is a control that reports success and changes nothing the user can see,
+            // and a session sitting on its AI tab with no instances would have no way to make one.
+            session.set_mode(TerminalMode::Regular);
+            session.open_shell_instance()
+        };
+        if let Some(d) = &app.daemon {
+            d.send(ClientMsg::SessionOpenShell {
+                session: id,
+                instance: shell_id,
+            });
         }
+        attach_current_process(app, id);
+        // The new instance is what the user is now looking at, so it holds the keyboard (023
+        // FR-011) and is the newly marked tab (026 FR-002d). This reducer used to be unreachable
+        // from here: `update_inner` routes the message to this handler *instead of* the core, so
+        // nothing ran it. Harmless while the "+" could not change which pane was displayed; not
+        // harmless now that it can.
+        app.core.update(Message::ShellInstanceOpenRequested);
     }
     Task::none()
 }
@@ -1959,6 +1958,131 @@ pub(crate) mod tests {
         assert_eq!(
             visible.message,
             "A background session was restarted while you were away."
+        );
+    }
+
+    // ---- feature 027: the tab strip is the only route between the panes --------------------
+
+    /// A connected app displaying a session in Regular mode with one open shell instance.
+    fn app_showing_a_shell() -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        SessionId,
+    ) {
+        let (mut app, rx) = connected_app();
+        let project = PathBuf::from("/repo");
+        let mut session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+        let id = session.id;
+        session.set_mode(TerminalMode::Regular);
+        session.open_shell_instance();
+        app.core
+            .workspace
+            .sessions
+            .insert(project.clone(), vec![session]);
+        app.core.workspace.active = Some(project);
+        app.core.active_session = Some(id);
+        (app, rx, id)
+    }
+
+    /// Everything the client put on the wire since the last drain.
+    fn wire(rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>) -> Vec<ClientMsg> {
+        let mut sent = Vec::new();
+        while let Ok(m) = rx.try_recv() {
+            sent.push(m);
+        }
+        sent
+    }
+
+    /// Pressing the AI tab repoints the attached process at the AI CLI (feature 027 FR-002).
+    ///
+    /// # The defect this exists for, which is live on `main`
+    ///
+    /// `Message::TerminalAiCliSelected` had **no arm in `main.rs`** — it fell through to the
+    /// catch-all, which runs the pure reducer and nothing else. So the AI tab moved the mark and
+    /// the mode while the daemon went on streaming and driving whichever shell instance was
+    /// attached: the user pressed the AI tab, the strip said AI, and the keys went to bash.
+    ///
+    /// It survived feature 026 because the mode toggle was still there doing the attach, and
+    /// because the AI process is normally attached already — the divergence only opens after a
+    /// trip through Regular mode, which is exactly the trip a tab strip invites. Feature 027
+    /// deletes the toggle, so this stops being a redundancy and becomes the only route.
+    #[test]
+    fn selecting_the_ai_tab_attaches_the_ai_process() {
+        let (mut app, mut rx, id) = app_showing_a_shell();
+        let _ = wire(&mut rx); // the setup's traffic, if any
+
+        let _ = on_terminal_ai_cli_selected(&mut app, id);
+
+        let sent = wire(&mut rx);
+        assert!(
+            sent.iter().any(|m| matches!(
+                m,
+                ClientMsg::SessionAttachProcess {
+                    session,
+                    process: SessionProcess::Primary
+                } if *session == id
+            )),
+            "pressing the AI tab must tell the daemon to attach the session's primary process, \
+             or the pane shows the AI CLI while the keyboard still drives the shell. Sent: {sent:?}"
+        );
+    }
+
+    /// "+" opens an instance from the AI pane too, and lands the user on it (feature 027 FR-004).
+    ///
+    /// Feature 011's FR-019 made both the control and its `Ctrl+Shift+T` chord a **no-op outside
+    /// Regular mode**, which was coherent while a mode toggle existed: the "+" was hidden there,
+    /// so the no-op was unreachable. With the toggle gone the "+" is always shown, and a session
+    /// sitting on its AI tab with no instances yet would otherwise have no way to make one.
+    #[test]
+    fn opening_a_terminal_from_the_ai_pane_switches_to_it() {
+        let (mut app, mut rx) = connected_app();
+        let project = PathBuf::from("/repo");
+        let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+        let id = session.id;
+        assert_eq!(
+            session.mode,
+            TerminalMode::AiCli,
+            "precondition: a new session starts on its AI tab with no instances"
+        );
+        app.core
+            .workspace
+            .sessions
+            .insert(project.clone(), vec![session]);
+        app.core.workspace.active = Some(project);
+        app.core.active_session = Some(id);
+        let _ = wire(&mut rx);
+
+        let _ = on_shell_instance_open_requested(&mut app);
+
+        let opened = app
+            .core
+            .workspace
+            .find_session(id)
+            .expect("the session is still there")
+            .1;
+        assert_eq!(
+            opened.mode,
+            TerminalMode::Regular,
+            "opening a terminal from the AI pane has to show it, or the control reports success \
+             and changes nothing the user can see"
+        );
+        assert_eq!(opened.shells.len(), 1, "exactly one instance was opened");
+        let shell = opened.shells[0].id;
+
+        let sent = wire(&mut rx);
+        assert!(
+            sent.iter()
+                .any(|m| matches!(m, ClientMsg::SessionOpenShell { session, instance }
+                    if *session == id && *instance == shell)),
+            "the daemon is told to spawn the new instance. Sent: {sent:?}"
+        );
+        assert!(
+            sent.iter().any(|m| matches!(
+                m,
+                ClientMsg::SessionAttachProcess { session, process: SessionProcess::Shell(s) }
+                    if *session == id && *s == shell
+            )),
+            "and the attachment follows it, so the keyboard drives what is displayed. Sent: {sent:?}"
         );
     }
 }

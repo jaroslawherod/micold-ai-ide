@@ -84,6 +84,13 @@ mod tab_children_fit;
 #[path = "gates/bar_controls_hold_their_size.rs"]
 mod bar_controls_hold_their_size;
 
+/// Feature 027's FR-002/FR-003, beside the gate above rather than inside it: that one asks whether
+/// a bar control kept its **size**, this one whether it kept its **place**. Deleting the mode
+/// toggle made the arrangement itself the requirement — tabs, then "+", then the AI tab, all
+/// against the trailing edge — and an arrangement is a fact about coordinates.
+#[path = "gates/tabs_anchor_the_trailing_edge.rs"]
+mod tabs_anchor_the_trailing_edge;
+
 // --- The context-menu-anchor gate (BUG-008) -----------------------------------------------------
 
 // Here for a *different* reason than the five above: it builds its own states and reads no cache.

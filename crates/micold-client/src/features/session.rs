@@ -581,21 +581,6 @@ pub fn title_updated(state: &mut State, id: SessionId, title: String) {
     }
 }
 
-/// The displayed session switched between its AI-CLI and Regular modes.
-///
-/// Switching mode puts a different terminal in front of the user, so it holds the keyboard
-/// (FR-011). That is the navigation the reported bug was about: it used to take two presses to
-/// reach and then left you looking at a terminal that ignored the keyboard.
-pub fn mode_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
-    if let Some(id) = state.active_session {
-        if let Some(session) = state.session_mut(id) {
-            let next = session.mode.other();
-            session.set_mode(next);
-        }
-    }
-    state.focus_terminal()
-}
-
 /// A shell instance was selected (feature 012).
 pub fn shell_instance_selected(
     state: &mut State,
@@ -604,7 +589,14 @@ pub fn shell_instance_selected(
 ) -> Vec<crate::features::Outcome> {
     if let Some(session) = state.session_mut(id) {
         session.select_shell(shell_id);
+        // Feature 027 FR-002: and **display** it. Selecting used to set `active_shell` alone, which
+        // from the AI pane changed nothing anyone could see — the indicator and the attached
+        // process are both derived from the mode, so all three layers agreed on a no-op. That was
+        // survivable only while a mode toggle offered a second way across; the tab is the only one
+        // now. Setting rather than flipping, for the reason `ai_cli_selected` records.
+        session.set_mode(micold_core::session::TerminalMode::Regular);
     }
+    arm_tab_reveal(state); // 026 FR-002d — the newly marked tab has to be in view
     state.focus_terminal() // FR-011
 }
 
@@ -774,7 +766,7 @@ pub(crate) fn arm_tab_reveal(state: &mut State) {
 /// instance the user was on rather than an arbitrary one.
 ///
 /// It **sets** rather than toggles, which is FR-007: pressing the AI tab while the AI CLI is
-/// already displayed must be a no-op with no visible change. `mode_toggled` would switch away,
+/// already displayed must be a no-op with no visible change. A flipping message would switch away,
 /// which is the opposite of what the press asked for and the reason this is its own message.
 ///
 /// Arrived on `main` as an arm of `State::update`; routed here like every other arm (FR-002), and

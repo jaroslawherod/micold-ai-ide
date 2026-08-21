@@ -7,7 +7,7 @@
 //! a shortfall the way iced always does: **a fixed parent width is a budget, and the trailing
 //! children are shrunk to fit it** — laid out narrower, or at zero, with nothing reported. Nothing
 //! overflows, so nothing fails. Past about five open instances the bar's trailing controls, the "+"
-//! and the mode toggle, are the ones that pay.
+//! and the AI tab, are the ones that pay.
 //!
 //! That is feature 012's BUG-005 one level out. Its own comment records what it cost inside a tab:
 //! "the button laid out at 0.0dp wide and the close control beside it at 45.2, under §7.3's target.
@@ -77,7 +77,7 @@ fn controls<'r>(records: &'r [LayoutRecord], row: &LayoutRecord) -> Vec<&'r Layo
 /// nothing by a neighbour that grew (FR-002c, SC-008).
 ///
 /// The assertion is deliberately the weakest one that catches the defect: **no control is laid out
-/// at zero width**, and the controls the bar owns unconditionally — the mode toggle above all — are
+/// at zero width**, and the controls the bar owns unconditionally — the "+" above all — are
 /// laid out at the same width in an overflowing state as in a state with room to spare. A control
 /// squeezed from 40dp to 12 is as unpressable as one squeezed to 0, but 0 is the figure that cannot
 /// be argued with, and the cross-state comparison is what catches the rest.
@@ -129,14 +129,16 @@ fn no_control_in_the_bar_is_squeezed_by_the_strip() {
     );
 }
 
-/// The mode toggle is the same size whether the strip is empty or overflowing (FR-002c, SC-008).
+/// The "+" is the same size whether the strip is empty or overflowing (FR-002c, SC-008).
 ///
-/// The half of the requirement a zero-width check cannot reach. The toggle is the bar's last child
-/// and therefore the first to be squeezed, and it is present in **every** state that draws a bar —
-/// so its width across states is a direct reading of whether the strip's growth is taking width
-/// from its siblings. If they differ, the bar is redistributing rather than bounding.
+/// The half of the requirement a zero-width check cannot reach. Feature 027 deleted the mode toggle
+/// this used to read (027 FR-001) and left the "+" as the bar's last *unconditional* control before
+/// the AI tab, in the position the toggle held: at the trailing end, where iced settles a shortfall
+/// first, and present in **every** state that draws a bar. So its width across states is a direct
+/// reading of whether the strip's growth is taking width from its siblings. If they differ, the bar
+/// is redistributing rather than bounding.
 #[test]
-fn the_mode_toggle_measures_the_same_at_every_instance_count() {
+fn the_add_instance_control_measures_the_same_at_every_instance_count() {
     let renderer = lay::renderer();
     let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
     let mut seen: Vec<(&str, f32)> = Vec::new();
@@ -145,7 +147,7 @@ fn the_mode_toggle_measures_the_same_at_every_instance_count() {
         let Some(anchor) = covered
             .anchors
             .iter()
-            .find(|a| a.name == "terminal.mode_toggle")
+            .find(|a| a.name == "terminal.add_instance")
         else {
             continue;
         };
@@ -160,8 +162,8 @@ fn the_mode_toggle_measures_the_same_at_every_instance_count() {
 
     assert!(
         seen.len() > 1,
-        "fewer than two states name the mode toggle, so there is nothing to compare — this gate \
-         needs both a roomy bar and an overflowing one to say anything at all (T014)"
+        "fewer than two states name the \"+\", so there is nothing to compare — this gate needs \
+         both a roomy bar and an overflowing one to say anything at all (T014)"
     );
     let (first_name, first) = seen[0];
     let disagreeing: Vec<String> = seen
@@ -171,10 +173,10 @@ fn the_mode_toggle_measures_the_same_at_every_instance_count() {
         .collect();
     assert!(
         disagreeing.is_empty(),
-        "the mode toggle is a different size depending on how many instances are open (feature 026 \
-         FR-002c):\n  {first_name}: {first:.1}dp (the reference)\n{}\n\nIt is the bar's last child \
-         and therefore the first thing a row shrinks. A control whose size depends on its \
-         neighbour's content is not laid out; it is left over.",
+        "the \"+\" is a different size depending on how many instances are open (feature 026 \
+         FR-002c):\n  {first_name}: {first:.1}dp (the reference)\n{}\n\nIt sits at the bar's \
+         trailing end and is therefore among the first things a row shrinks. A control whose size \
+         depends on its neighbour's content is not laid out; it is left over.",
         disagreeing.join("\n")
     );
 }

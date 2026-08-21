@@ -699,28 +699,69 @@ fn switching_projects_resets_the_reveal_control() {
     assert!(!state.show_agent_worktrees);
 }
 
-// --- Feature 010: switchable regular terminal mode ---
+// --- Feature 027: the tab strip is the only route between a session's panes ---
 
+/// A terminal tab pressed while the AI pane is showing has to **show that terminal** (FR-002).
+///
+/// # The defect this exists for, which feature 026 shipped
+///
+/// `Session::select_shell` sets `active_shell` and nothing else. From the AI pane that moved a
+/// field nobody was looking at: `marked_tab` derives the indicator from the *mode*, so the mark
+/// stayed on the AI tab, and `session_process` derives the attachment from the mode too, so the
+/// keyboard stayed with the AI CLI. Three layers agreeing on a no-op is indistinguishable from a
+/// press that never registered.
+///
+/// It stayed hidden because a mode toggle sat beside the strip: the way to a terminal was to press
+/// *that*, and it landed on whichever instance `active_shell` already named — including one this
+/// no-op had quietly set. Feature 027 deletes the toggle, so the tab is the only route and has to
+/// carry the whole switch.
 #[test]
-fn terminal_mode_toggled_flips_the_active_sessions_mode() {
+fn selecting_a_terminal_tab_shows_that_terminal() {
     use micold_core::session::TerminalMode;
 
     let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let shell = state
+        .workspace
+        .find_session_mut(id)
+        .unwrap()
+        .1
+        .open_shell_instance();
+    // The precondition that makes this a test rather than a tautology: the AI pane is showing.
+    state.update(Message::TerminalAiCliSelected(id));
     assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
 
-    state.update(Message::TerminalModeToggled);
-    assert_eq!(state.active_sessions()[0].mode, TerminalMode::Regular);
+    state.update(Message::ShellInstanceSelected(id, shell));
 
-    state.update(Message::TerminalModeToggled);
-    assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
+    assert_eq!(
+        state.active_sessions()[0].mode,
+        TerminalMode::Regular,
+        "pressing a terminal tab has to display that terminal, not merely record it as the one a \
+         later switch would land on"
+    );
+    assert_eq!(state.active_sessions()[0].active_shell, Some(shell));
 }
 
+/// And back again by the AI tab — the round trip the deleted mode toggle used to make on its own.
 #[test]
-fn terminal_mode_toggled_is_a_no_op_with_no_active_session() {
-    let mut state = State::default();
-    // No panic, no-op: there is no active session to address.
-    state.update(Message::TerminalModeToggled);
-    assert!(state.active_session.is_none());
+fn the_two_kinds_of_tab_move_the_session_between_its_panes() {
+    use micold_core::session::TerminalMode;
+
+    let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let shell = state
+        .workspace
+        .find_session_mut(id)
+        .unwrap()
+        .1
+        .open_shell_instance();
+    assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
+
+    state.update(Message::ShellInstanceSelected(id, shell));
+    assert_eq!(state.active_sessions()[0].mode, TerminalMode::Regular);
+
+    state.update(Message::TerminalAiCliSelected(id));
+    assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
 }
 
 #[test]
