@@ -215,4 +215,3 @@ pub const fn icon_role(surface: IconSurface, roles: Roles) -> Rgb {
         IconSurface::MenuItem => roles.on_surface_variant,
     }
 }
-
