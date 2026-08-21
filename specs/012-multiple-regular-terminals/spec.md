@@ -89,13 +89,19 @@ A developer has several Regular Terminal instances open, one of them exits (the 
 - What happens to shell state (working directory, in-shell environment, scrollback) already accumulated in an instance that isn't currently visible? It MUST be preserved exactly as today's single instance already preserves it — opening or closing sibling instances MUST NOT reset or otherwise touch it.
 - What happens if the user reopens the app while a session had several Regular Terminal instances open in the prior run? Consistent with the non-goal of adding no new persistence, the session resumes in whatever mode it was last in with at most one (freshly started) Regular Terminal instance, the same as today's single-instance restart behavior — the prior instance count is not restored.
 - What happens to focus gating, the reserved focus-release shortcut, and copy/paste behavior across multiple instances? They behave identically and independently per instance, exactly as they already do for the single instance today.
-- What happens if the user presses the open-new-terminal-instance keyboard shortcut while the session is in AI CLI mode? Nothing happens — the shortcut only opens a new Regular Terminal instance when Regular Terminal mode is already active for that session; it does not also switch the session's mode.
+- What happens if the user presses the open-new-terminal-instance keyboard shortcut while the session is in AI CLI mode? ~~Nothing happens — the shortcut only opens a new Regular Terminal instance when Regular Terminal mode is already active for that session; it does not also switch the session's mode.~~ *(Answered the other way by feature 027 FR-004, 2026-08-21: it opens an instance and switches to it. The original answer was consistent with a bar whose "+" was only visible in Regular Terminal mode; since 026 both panes share one bar, and a shortcut that silently does nothing is the defect, not the safeguard.)*
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST let the user open an additional Regular Terminal instance for a session at any time the session is in Regular Terminal mode, regardless of how many instances (including exactly one) are already open for that session.
+- **FR-001** *(amended by feature 027 FR-004, 2026-08-21)*: The system MUST let the user open an
+  additional Regular Terminal instance for a session at any time, ~~the session is in Regular
+  Terminal mode,~~ regardless of how many instances (including exactly one) are already open for
+  that session. *(The mode precondition is struck. It made sense when the AI pane hid the strip and
+  its "+"; 026 gave both panes one bar, so the control is on screen while the AI pane is showing and
+  a "+" that does nothing where it is drawn is a defect. 027 FR-004 requires it to work from either
+  pane, opening the instance and switching to it.)*
 - **FR-002**: Each Regular Terminal instance MUST run as an independent shell process with its own pty, scoped to the session's working directory (its worktree or the project's Default root, per the session's existing location).
 - **FR-003**: Opening a new Regular Terminal instance MUST NOT affect the session's AI CLI process or any other already-open Regular Terminal instance for that session.
 - **FR-004**: The system MUST let the user see a list of all currently open Regular Terminal instances for a session and switch the visible pane to any one of them.
@@ -122,8 +128,22 @@ A developer has several Regular Terminal instances open, one of them exits (the 
   under overflow (026 FR-002a) instead of letting the bar shrink its own controls, which is a defect
   that was live here: past about five instances the mode toggle was laid out at 0.0dp wide and
   nothing reported it.
-- **FR-006**: The existing primary AI-CLI/Regular mode-toggle control MUST continue to work as it does today: a single icon-button that switches the visible pane between the session's AI CLI process and Regular Terminal mode.
-- **FR-007**: Activating the primary toggle to switch a session into Regular Terminal mode MUST show whichever Regular Terminal instance was last active for that session, or start a first instance if the session has never had one, never an arbitrary instance.
+- **FR-006** *(**superseded** by feature 027 FR-001, 2026-08-21)*: ~~The existing primary
+  AI-CLI/Regular mode-toggle control MUST continue to work as it does today: a single icon-button
+  that switches the visible pane between the session's AI CLI process and Regular Terminal mode.~~
+
+  **There is no toggle any more.** Feature 026 put the AI CLI process in this strip as a tab of its
+  own, which left the button naming a destination the strip already named — and naming it worse,
+  since a toggle can only say "the other one". 027 deletes it, and the strip becomes the sole route
+  between panes. What this requirement was protecting — that switching to the AI pane stays
+  available and one press away — is carried by 027 FR-002, which pins the AI tab last in the bar.
+- **FR-007** *(amended by feature 027, 2026-08-21)*: Switching a session into Regular Terminal mode
+  MUST show whichever Regular Terminal instance was last active for that session, or start a first
+  instance if the session has never had one, never an arbitrary instance. *(The clause read
+  "activating the primary toggle to switch"; the toggle is gone per FR-006 above. The rule is
+  unchanged and now applies to the route that replaced it — pressing a terminal tab, which per 027
+  FR-005 sets the mode **and** the instance in one press, so "which instance" is answered by the
+  tab itself. It still governs any switch that names no instance.)*
 - **FR-008**: Each Regular Terminal instance MUST independently track its own shell lifecycle (not-started, starting, running, exited), matching the lifecycle states already defined for today's single instance, with no automatic restart on unexpected exit.
 - **FR-009**: A transition in one Regular Terminal instance's lifecycle (starting, running, exiting) MUST NOT cause a lifecycle transition in any sibling instance or in the session's AI CLI process.
 - **FR-010**: The system MUST let the user manually restart an individual Regular Terminal instance after it has exited, restarting only that instance without affecting sibling instances or the AI CLI process.
@@ -138,7 +158,11 @@ A developer has several Regular Terminal instances open, one of them exits (the 
 - **FR-016**: The number of AI CLI processes per session MUST remain exactly one; this feature MUST NOT create, allow, or expose more than one AI CLI process for a session.
 - **FR-017**: Reopening a session, including after an application restart, MUST NOT restore more than one Regular Terminal instance automatically — a session found in Regular Terminal mode resumes with at most one (freshly started) instance, regardless of how many instances were open in a prior run.
 - **FR-018**: Deleting or otherwise tearing down a session MUST terminate the AI CLI process and every open Regular Terminal instance belonging to that session.
-- **FR-019**: The system MUST provide a keyboard shortcut (Ctrl+Shift+T, or Cmd+Shift+T on macOS) that opens a new Regular Terminal instance for the current session whenever that session is in Regular Terminal mode, equivalent to using the on-screen affordance from FR-001.
+- **FR-019** *(amended by feature 027 FR-004, 2026-08-21)*: The system MUST provide a keyboard
+  shortcut (Ctrl+Shift+T, or Cmd+Shift+T on macOS) that opens a new Regular Terminal instance for
+  the current session ~~whenever that session is in Regular Terminal mode~~, equivalent to using the
+  on-screen affordance from FR-001 — which now means from either pane, for the reason recorded
+  against FR-001.
 
 ### Key Entities
 
@@ -163,8 +187,8 @@ A developer has several Regular Terminal instances open, one of them exits (the 
 
 ## Assumptions
 
-- The primary AI-CLI/Regular mode-toggle icon-button from the prior feature is unchanged by this feature; only a new secondary control for listing/switching/opening Regular Terminal instances is added alongside it.
-- An affordance to open a new Regular Terminal instance is available whenever a session is in Regular Terminal mode, independent of the instance-switching control's visibility — so a user can always go from one instance to two, even though the switching/list portion of the control only appears once two or more instances exist.
+- ~~The primary AI-CLI/Regular mode-toggle icon-button from the prior feature is unchanged by this feature; only a new secondary control for listing/switching/opening Regular Terminal instances is added alongside it.~~ *(No longer true: the secondary control absorbed the primary one. Feature 026 made the AI pane a tab in this strip and 027 deleted the toggle — see FR-006.)*
+- An affordance to open a new Regular Terminal instance is available ~~whenever a session is in Regular Terminal mode~~ whenever a session is displayed, independent of the instance-switching control's visibility — so a user can always go from one instance to two, even though the switching/list portion of the control only appears once two or more instances exist. *(Widened by 027 FR-004; the strip itself is now always drawn, per FR-005 above.)*
 - Regular Terminal instances are identified in the switching control by their creation order (e.g., sequentially numbered), since — unlike AI CLI sessions — a shell process has no independent title source to display.
 - There is no artificial cap on the number of concurrent Regular Terminal instances a session may have open; the practical limit is whatever the host system's resources allow, consistent with there being no such cap on the number of sessions today.
 - New Regular Terminal instances are appended to the end of the instance list in the order they are opened; closed instances are removed from the list and their position is not reused by later instances.
