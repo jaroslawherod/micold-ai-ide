@@ -600,9 +600,28 @@ pub fn shell_instance_selected(
     state.focus_terminal() // FR-011
 }
 
+/// A new shell instance was opened from the "+" (feature 011 FR-001, feature 027 FR-004).
+///
+/// The instance itself is opened by the binary — it has a daemon to tell and a process to spawn,
+/// and `Session::open_shell_instance` lives on the other side of that call. What is pure here is
+/// the consequence: the new instance is the one the user is now looking at, so it holds the
+/// keyboard (023 FR-011) and is the newly marked tab (026 FR-002d).
+///
+/// The reveal is the half that was missing until feature 027's visual pass (T024). It cost nothing
+/// while the "+" opened instances into a strip with room for them; feature 027 put the "+" beside a
+/// right-aligned strip, and the sixth press then created a tab, marked it, and left it behind the
+/// trailing edge fade — the user's own new terminal, and the one thing the bar would not show.
+pub fn shell_instance_open_requested(state: &mut State) -> Vec<crate::features::Outcome> {
+    arm_tab_reveal(state);
+    state.focus_terminal()
+}
+
 /// A shell instance was closed (feature 012).
 ///
-/// Whichever instance takes its place is what the user is now looking at (FR-011).
+/// Whichever instance takes its place is what the user is now looking at (FR-011) — so it is also
+/// the newly marked tab, and has to be in view (026 FR-002d). Closing shortens the strip, which
+/// moves every tab after the closed one; the mark can land outside the viewport without anything
+/// having scrolled.
 pub fn shell_instance_close_requested(
     state: &mut State,
     id: SessionId,
@@ -611,6 +630,7 @@ pub fn shell_instance_close_requested(
     if let Some(session) = state.session_mut(id) {
         session.close_shell(shell_id);
     }
+    arm_tab_reveal(state);
     state.focus_terminal()
 }
 
