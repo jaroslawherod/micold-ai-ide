@@ -1,5 +1,4 @@
-//! The application window: its size, the pointer in it, and which field holds the keyboard
-//! (feature 021, T063).
+//! The application window: its size, and which field holds the keyboard (feature 021, T063).
 //!
 //! # Why this is a feature rather than root state
 //!
@@ -10,23 +9,34 @@
 //! because the overflow menu had no home either: FR-001 asks where a feature lives, not how big
 //! it is.
 //!
-//! The three belong together because they answer one question — *what is the window doing right
-//! now* — and because every one of them is transient. None is persisted, none survives a restart,
-//! and each is reported by the windowing system rather than chosen by the user.
+//! The three belonged together because they answered one question — *what is the window doing
+//! right now* — and because every one of them is transient. None is persisted, none survives a
+//! restart, and each is reported by the windowing system rather than chosen by the user.
+//!
+//! **Two of the three are left, and the third was deleted rather than rehoused.** `main`'s 018
+//! BUG-008 fix landed while this feature was in flight: a context menu now anchors at the point
+//! its own press landed on, carried on the message, rather than at a pointer position tracked in
+//! `State::cursor` and read later. That is a better answer than the one this module was
+//! defending, and it costs the argument above nothing — a field the root still decides about is
+//! still a feature nobody has named. There are two.
 //!
 //! # Everything here is read across features, and that is fine
 //!
-//! `cursor` and `window_size` exist so a context menu can be anchored and clamped; `focused_field`
-//! decides every text field's focus chrome. FR-003a permits cross-feature *reads* explicitly —
-//! isolation is enforced on writes. So `features/project.rs` reading `state.cursor` to anchor its
-//! menu is not a violation and never was.
+//! `window_size` exists so a context menu can be clamped to it; `focused_field` decides every text
+//! field's focus chrome. FR-003a permits cross-feature *reads* explicitly — isolation is enforced
+//! on writes. So `ui/mod.rs` reading `state.window_size` to clamp a menu is not a violation and
+//! never was.
 //!
-//! What *is* watched is who writes them. `tests/feature_write_isolation.rs` now attributes these
-//! three paths to `window`, which turns the writes reaching them from root helpers
-//! (`State::clear_for_dialog`, `State::focus_terminal`) into cross-feature writes with a named
-//! owner instead of an unanswerable question about `root`. That is the point of naming the
-//! feature: T067 can now propose an outcome for them, which it could not do while the owner was
-//! "nobody".
+//! What *is* watched is who writes them. `tests/feature_write_isolation.rs` attributes both paths
+//! to `window`, which turned the writes reaching them from root helpers into cross-feature writes
+//! with a named owner instead of an unanswerable question about `root`. That is the point of
+//! naming the feature: T067 could then propose an outcome for them, which it could not do while
+//! the owner was "nobody". **Both halves were answered, and only one of them needed an outcome.**
+//! T067a-5 moved `clear_for_dialog` here and wrote none — a feature writing its own field is not
+//! a cross-feature write at all. `focus_terminal` could not follow it: it also writes
+//! `terminal_released`, which is the session's, so T067a-7 moved the function into the session and
+//! T067a-9 converted its `focused_field` write into `Outcome::FieldFocusCleared`, applied by
+//! [`field_focus_cleared`] below.
 
 use crate::app::State;
 

@@ -12,16 +12,17 @@
 //! So the mechanism is a declaration — `FloatingSurface::displaces`, applied by
 //! `overlay::registry::displace` — and this file is the independent statement of what it should
 //! say. [`DISPLACES`] is written from the behaviour, not read out of the registry, and
-//! [`the_whole_displacement_relation`] drives all forty-two ordered pairs through `State::update`.
+//! [`the_whole_displacement_relation`] drives all fifty-six ordered pairs through `State::update`.
 //! A table read back out of the code under test would only ever catch the two halves disagreeing,
 //! never both being wrong.
 //!
 //! # What this adds over the tests that were already here
 //!
 //! `switcher_forget_menu.rs` pins the switcher exception and the four openers that close the
-//! project menu; `keyboard.rs` and `overlay_registry.rs` cover Escape and scroll. None of them
-//! says what happens to the *other* thirty pairs, and a displacement quietly widened — every panel
-//! popover suddenly closing the session menu, say — would have passed all of them.
+//! project menu; `keyboard.rs` and `overlay_registry.rs` cover Escape and scroll. That is five of
+//! the fifty-six pairs. None of them says what happens to the other fifty-one, and a displacement
+//! quietly widened — every panel popover suddenly closing the session menu, say — would have
+//! passed all of them.
 
 use micold_client::app::{Message, State};
 use micold_client::ui::terminal::StripTab;
