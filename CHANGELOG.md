@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.10.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.9.0...micold-ai-ide-v0.10.0) (2026-08-21)
+
+
+### Features
+
+* **021:** finish the MVU slice architecture — cross-feature writes 43 → 0 ([#215](https://github.com/jaroslawherod/micold-ai-ide/issues/215)) ([d413c81](https://github.com/jaroslawherod/micold-ai-ide/commit/d413c81a2cb4a64e54eb8b853b9119ad1f58c205))
+
+
+### Bug Fixes
+
+* **021:** an adjudication is a claim about the tree, not about the diff ([d9fb608](https://github.com/jaroslawherod/micold-ai-ide/commit/d9fb6082d459fdb8c1615e764ce561cecea0fa65))
+
+
+### Build & CI
+
+* **021:** run the assertion gate's own cases before the gate ([c27ab14](https://github.com/jaroslawherod/micold-ai-ide/commit/c27ab14bc2f5f369c42290eedf16a4030fcccb85))
+
 ## [0.9.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.8.0...micold-ai-ide-v0.9.0) (2026-08-20)
 
 
