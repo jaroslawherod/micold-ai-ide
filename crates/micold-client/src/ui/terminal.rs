@@ -478,9 +478,10 @@ pub fn pane<'a>(
     // anchored to the bar's edge instead of sliding with the tab count, which is the arrangement
     // the toggle's deletion made load-bearing.
     //
-    // The push comes from a fixed-width `Space` ahead of the strip, not from a `Length::Fill`.
-    // Inside a horizontal `Scrollable` a `Fill` resolves against an **unbounded** width limit —
-    // infinity, not "whatever is left" — so it would carry the strip out of the viewport entirely.
+    // The push is this container's own **padding**, not a `Length::Fill` and not a `Space`. Inside
+    // a horizontal `Scrollable` a `Fill` resolves against an **unbounded** width limit — infinity,
+    // not "whatever is left" — so it would carry the strip out of the viewport entirely, and a
+    // zero-width `Space` is void, which iced drops from the tree entirely (see `right_aligned_tabs`).
     // `leading_slack` derives the figure from the tab *count* rather than from the measured
     // `tab_strip_content_width`, because the slack is laid out inside that content and feeding the
     // measurement back in makes the strip swing flush-right, flush-left on alternate frames.
@@ -493,10 +494,10 @@ pub fn pane<'a>(
     // "+" and everything past it under whatever press was in flight. The "+" itself carried the
     // same latent defect until feature 027 — it was pushed only in `TerminalMode::Regular`, so the
     // AI pane renumbered the bar's tail — and it is unconditional now for the same reason.
-    let beyond = overflowing(
+    let beyond = strip_overflow(
         state.tab_strip_scroll_offset as f32,
         state.tab_strip_viewport_width as f32,
-        state.tab_strip_content_width as f32,
+        strip_tab_count(state, active),
     );
     // FR-002e: the edge fade takes the **indicator's own accent** when the tab beyond it is the
     // marked one, and the surface's tint otherwise. Two states of one cue differing only in role,
@@ -519,12 +520,13 @@ pub fn pane<'a>(
                 .direction(material::ScrollDirection::Horizontal)
                 .width(Length::Fill)
                 .id(TAB_STRIP_SCROLL_ID.clone())
-                // Three numbers, one question. See `Scrollable::on_scroll_metrics`: an offset
-                // measured against a stale viewport width is a fade that points at nothing.
-                .on_scroll_metrics(|offset, width, content| Message::TabStripScrolled {
+                // Two numbers, one question. See `Scrollable::on_scroll_metrics`: an offset
+                // measured against a stale viewport width is a fade that points at nothing. The
+                // third number it reports — the content width — is deliberately dropped; see
+                // `strip_overflow` for why a measured one cannot be paired with a live viewport.
+                .on_scroll_metrics(|offset, width, _content| Message::TabStripScrolled {
                     offset,
                     width,
-                    content,
                 })
                 // `on_scroll` fires only when something scrolls, and the frame that matters most is
                 // the **first** one, where nothing has: a strip that already overflows on its first
@@ -800,6 +802,39 @@ pub(crate) fn overflowing(offset: f32, viewport: f32, content: f32) -> Beyond {
         leading: offset > EDGE_TOLERANCE,
         trailing: offset + viewport + EDGE_TOLERANCE < content,
     }
+}
+
+/// What lies beyond the strip's edges, for a viewport `viewport` wide holding `tabs` tabs and
+/// scrolled `offset` from the leading end (FR-002e; feature 027 FR-003).
+///
+/// # Why the content width is derived here and not measured
+///
+/// `State::tab_strip_content_width` is only ever written by a scroll event, so between the strip's
+/// first layout and the user's first scroll it holds whatever it last held — and since feature 027
+/// the content width is a function of the viewport (the slack is laid out inside it), so a stale
+/// pair can claim an overflow the strip does not have. It did: the first terminal instance opened
+/// in a fresh session drew a trailing fade across its own tab, over the indicator, with nothing
+/// beyond that edge at all. Found by the visual pass, invisible to every gate — a gradient occupies
+/// the same box whether it is opaque or not.
+///
+/// Deriving it from the tab count is what makes the fade and the geometry incapable of disagreeing:
+/// the strip lays out `leading_slack(..) + natural_strip_width(..)`, so that *is* the content width,
+/// and it is known on the same frame the layout is rather than one scroll later.
+///
+/// A viewport of zero means "not measured yet" — nothing has been laid out, so nothing is known to
+/// lie beyond anything, and the honest answer is neither edge.
+pub(crate) fn strip_overflow(offset: f32, viewport: f32, tabs: usize) -> Beyond {
+    if viewport <= 0.0 {
+        return Beyond {
+            leading: false,
+            trailing: false,
+        };
+    }
+    overflowing(
+        offset,
+        viewport,
+        leading_slack(viewport, tabs) + natural_strip_width(tabs),
+    )
 }
 
 /// The distance between one tab's leading edge and the next's.
@@ -1367,6 +1402,31 @@ mod tests {
             "an edge with nothing past it must not be faded; a cue that points at nothing is \
              worse than none, because it is the same cue that means something elsewhere"
         );
+    }
+
+    /// FR-002e + feature 027 FR-003: the fade asks the tab count, not the last measurement.
+    ///
+    /// The case this exists for is the one the visual pass found: a strip that fits draws no fade,
+    /// on the very first frame, before anything has scrolled. `overflowing` above is still right
+    /// about the arithmetic; what was wrong was the numbers it was handed.
+    #[test]
+    fn a_strip_that_fits_fades_neither_edge_before_anything_has_scrolled() {
+        let beyond = |leading, trailing| Beyond { leading, trailing };
+        let pitch = TAB_WIDTH + spacing::SM;
+
+        // Never laid out: nothing is known, so nothing is claimed.
+        assert_eq!(strip_overflow(0.0, 0.0, 1), beyond(false, false));
+        // One tab in a bar with room for five — the state that drew a fade over its own tab.
+        assert_eq!(strip_overflow(0.0, 5.0 * pitch, 1), beyond(false, false));
+        // Room for exactly as many as there are.
+        assert_eq!(
+            strip_overflow(0.0, 3.0 * TAB_WIDTH + 2.0 * spacing::SM, 3),
+            beyond(false, false)
+        );
+        // More tabs than room, unscrolled: there is something that way, and only that way.
+        assert_eq!(strip_overflow(0.0, 3.0 * pitch, 6), beyond(false, true));
+        // Scrolled off the leading end with more still to come.
+        assert_eq!(strip_overflow(pitch, 3.0 * pitch, 6), beyond(true, true));
     }
 
     /// FR-002d: changing the marked tab yields a scroll request for **that** tab, and none at all

@@ -204,15 +204,18 @@ pub enum Message {
     /// The terminal tab strip scrolled; carries the offset, the viewport's width and its content's,
     /// all in whole pixels (feature 026 FR-002e).
     ///
-    /// Three numbers in one message because they answer one question — "does anything lie beyond
-    /// this edge" — and the rendering stack delivers them together. Split across messages there
-    /// would be frames where one is stale, and a fade computed from a stale pair points at nothing
-    /// or fails to point at something.
-    TabStripScrolled {
-        offset: u32,
-        width: u32,
-        content: u32,
-    },
+    /// Two numbers in one message because they answer one question — "does anything lie beyond this
+    /// edge" — and the rendering stack delivers them together. Split across messages there would be
+    /// frames where one is stale, and a fade computed from a stale pair points at nothing or fails
+    /// to point at something.
+    ///
+    /// It was three until feature 027. The content width came with them and is no longer carried:
+    /// the strip's content is now a function of its viewport (the trailing alignment's slack is
+    /// laid out inside it), so a *measured* content width paired with the current viewport is
+    /// exactly the stale pair this doc warns about — and it went stale for real, because this
+    /// message is the only thing that ever wrote it and it fires only when something scrolls. The
+    /// fade derives the width from the tab count instead (`ui::terminal::strip_overflow`).
+    TabStripScrolled { offset: u32, width: u32 },
     /// The tab strip's viewport was laid out, or resized (feature 026 FR-002e).
     ///
     /// Separate from [`Self::TabStripScrolled`] because the two answer different questions and fire
@@ -589,11 +592,6 @@ pub struct State {
     /// reads as "cannot decide yet" and never as "nothing fits" — the same rule
     /// [`Self::sidebar_viewport_height`] follows, and for the same reason.
     pub tab_strip_viewport_width: u32,
-    /// The strip's whole content width, in whole pixels — every tab plus the gaps between them.
-    ///
-    /// Reported rather than derived from the instance count, because the fade is about what is
-    /// actually laid out. A count is a claim about what *should* be there.
-    pub tab_strip_content_width: u32,
     /// Whether the marked tab is waiting to be scrolled into view (feature 026 FR-002d).
     ///
     /// A flag, not a target, for the reason [`Self::pending_reveal_scroll`] is one: the offset
@@ -999,11 +997,9 @@ impl State {
             Message::SidebarViewportResized(height) => {
                 crate::features::sidebar::viewport_resized(self, height)
             }
-            Message::TabStripScrolled {
-                offset,
-                width,
-                content,
-            } => crate::features::session::tab_strip_scrolled(self, offset, width, content),
+            Message::TabStripScrolled { offset, width } => {
+                crate::features::session::tab_strip_scrolled(self, offset, width)
+            }
             Message::TabStripViewportResized { width } => {
                 crate::features::session::tab_strip_viewport_resized(self, width)
             }
