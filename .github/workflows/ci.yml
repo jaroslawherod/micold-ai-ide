@@ -198,6 +198,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # needs history to diff against the base ref
+      # The gate's own cases, before the gate runs. They existed and nothing ran them, which is how
+      # a staleness rule that failed on every branch cut from main reached main: the suite is the
+      # only place that mistake is cheap to catch, and it was being asked on no machine at all.
+      - name: The check's own cases
+        run: scripts/tests/check-assertions-frozen.test.sh
       - name: Assertions frozen since base
         env:
           # A pull request checks out a detached merge commit, so the branch name is not in the
