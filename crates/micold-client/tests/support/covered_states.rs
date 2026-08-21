@@ -70,14 +70,16 @@ const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 2];
 /// the way `sidebar.row.label` above was; an anchor that does not resolve fails by name
 /// (`an_anchor_whose_path_does_not_resolve_fails_naming_it`), so a stale path here cannot go quiet.
 const TERMINAL_BOTTOM_BAR: &[usize] = &[0, 0, 1, 1, 1];
-/// The mode toggle, the bar row's **last** child.
+/// The "+" that opens another instance, and the AI tab, the bar row's **last two** children.
 ///
-/// It was index 5 while the row carried a `Length::Fill` spacer between the title and the status.
-/// Feature 026's T016 deleted that spacer and made the tab strip the bar's one flexible member
-/// instead (FR-002c) — the spacer was doing the pushing, and a row with two content-sized ends and
-/// a filling middle cannot also have a member that grows. Every index after the spacer moved down
-/// one.
-const TERMINAL_MODE_TOGGLE: &[usize] = &[0, 0, 1, 1, 1, 0, 5];
+/// Feature 027 deleted the mode toggle that used to sit past them (FR-001) and reordered what was
+/// left: the trailing group reads "+", then AI tab, so the one control that is always present
+/// anchors the row's trailing edge. Both indices moved — the "+" was 4, the AI tab 3.
+///
+/// The AI tab being **last** is load-bearing, not incidental: iced settles a row's shortfall by
+/// shrinking trailing children, so the last child is the first thing squeezed when the bar runs out
+/// of room. `gates/bar_controls_hold_their_size.rs` reads this anchor for exactly that reason.
+const TERMINAL_ADD_INSTANCE: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
 
 /// The instance tab strip, and three of its tabs (feature 012 T057). The bar's row holds its title,
 /// a filling spacer and the status text, then whichever optional controls the session's state calls
@@ -92,10 +94,27 @@ const TERMINAL_MODE_TOGGLE: &[usize] = &[0, 0, 1, 1, 1, 0, 5];
 /// than through these constants, so the depth costs them nothing), and an anchor that no longer
 /// resolves fails **by name** — `an_anchor_whose_path_does_not_resolve_fails_naming_it` — so a
 /// stale path here cannot go quiet.
-const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0];
-const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0];
-const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 1];
-const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 2];
+/// The width the bar hands the scrolling tab region at the fixture's 1280dp window, as recorded.
+///
+/// See the two states that set it. It is a measurement pasted in, not a constant the view reads —
+/// the view has no opinion about it at all; the running application measures it each frame.
+/// The same two controls in a state whose session offers a **restart** (`session-terminal-bottom-
+/// bar`): that control is a bar child of its own at index 2, so everything after it moves down one.
+///
+/// Two constants rather than an offset applied to the pair above, because an anchor that resolves
+/// to the wrong node is worse than one that does not resolve at all — it is checked, named and
+/// silently about something else. That is not hypothetical here: before feature 027 this state
+/// borrowed `TERMINAL_TAB_AI_PINNED`, which in a bar with a restart control lands on the *scrolling
+/// region*, and `gates/tab_children_fit.rs` had been measuring that region as though it were a tab.
+const TERMINAL_RESTARTABLE_ADD_INSTANCE: &[usize] = &[0, 0, 1, 1, 1, 0, 4];
+const TERMINAL_RESTARTABLE_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 0, 5];
+
+const TAB_STRIP_VIEWPORT: u32 = 703;
+
+const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0];
+const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 0];
+const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 1];
+const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 2];
 /// The **AI tab** (feature 026 FR-001, FR-002), the strip's last child — one past the instances.
 ///
 /// Two indices, because two covered states hold different numbers of instances and FR-002 pins this
@@ -107,7 +126,7 @@ const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 2];
 /// One path, not one per instance count: FR-002b pins this tab **outside** the scrolling region, so
 /// it is the bar row's own child rather than the strip's last one, and its position no longer moves
 /// with the number of instances. That is the requirement stated as a path.
-const TERMINAL_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
+const TERMINAL_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 0, 4];
 
 /// Inside a tab: the button's content column, whose first child is the active indicator (or, on an
 /// inactive tab, the transparent rule reserving its height) and whose second is the tab's content
@@ -118,7 +137,8 @@ const TERMINAL_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
 /// (FR-010b). Its anchor is deleted with it rather than left pointing at nothing —
 /// `an_anchor_whose_path_does_not_resolve_fails_naming_it` would fail on a stale one, which is the
 /// behaviour that makes an anchor worth writing.
-const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0];
+const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] =
+    &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0];
 
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
@@ -628,8 +648,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: TERMINAL_BOTTOM_BAR,
                 },
                 Anchor {
-                    name: "terminal.bottom_bar.mode_toggle",
-                    path: TERMINAL_MODE_TOGGLE,
+                    name: "terminal.bottom_bar.add_instance",
+                    path: TERMINAL_RESTARTABLE_ADD_INSTANCE,
                 },
                 // Feature 026 FR-003: this session has **no** instances, and until now that meant
                 // no strip at all. It has one now, with a single member — the AI tab. This is where
@@ -644,7 +664,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // exactly the one this anchor names.
                 Anchor {
                     name: "terminal.tabs.pinned",
-                    path: TERMINAL_TAB_AI_PINNED,
+                    path: TERMINAL_RESTARTABLE_TAB_AI_PINNED,
                 },
             ],
         },
@@ -711,6 +731,17 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut state = with_project();
                 state.workspace = workspace;
                 state.active_session = Some(active);
+                // The width the bar actually gives the scrolling region, which the running
+                // application learns from `Scrollable::on_viewport_resize` and a hand-built state
+                // does not. Feature 027 FR-003 spends whatever of it the tabs do not need as
+                // leading slack, so a state that left this at its default would render the strip
+                // flush **left** — the one arrangement the feature exists to replace, and the one
+                // `gates/tabs_anchor_the_trailing_edge.rs` could then never see.
+                //
+                // Not a magic number: that gate compares the strip's leading gap against the
+                // recorded viewport, so a figure that has drifted from what the bar hands out fails
+                // there with the current one in the message.
+                state.tab_strip_viewport_width = TAB_STRIP_VIEWPORT;
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -752,10 +783,12 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 // The reference width for `bar_controls_hold_their_size`'s cross-state comparison
                 // (T015): this state has room to spare, and the overflowing one does not, so the
-                // toggle measuring the same in both is a direct reading of FR-002c.
+                // AI tab measuring the same in both is a direct reading of FR-002c. It is the bar
+                // row's last child since feature 027, which makes it the first control iced shrinks
+                // — the strongest position to read that requirement from.
                 Anchor {
-                    name: "terminal.mode_toggle",
-                    path: TERMINAL_MODE_TOGGLE,
+                    name: "terminal.add_instance",
+                    path: TERMINAL_ADD_INSTANCE,
                 },
             ],
         },
@@ -801,6 +834,17 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut state = with_project();
                 state.workspace = workspace;
                 state.active_session = Some(active);
+                // The width the bar actually gives the scrolling region, which the running
+                // application learns from `Scrollable::on_viewport_resize` and a hand-built state
+                // does not. Feature 027 FR-003 spends whatever of it the tabs do not need as
+                // leading slack, so a state that left this at its default would render the strip
+                // flush **left** — the one arrangement the feature exists to replace, and the one
+                // `gates/tabs_anchor_the_trailing_edge.rs` could then never see.
+                //
+                // Not a magic number: that gate compares the strip's leading gap against the
+                // recorded viewport, so a figure that has drifted from what the bar hands out fails
+                // there with the current one in the message.
+                state.tab_strip_viewport_width = TAB_STRIP_VIEWPORT;
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -821,8 +865,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: TERMINAL_TAB_AI_PINNED,
                 },
                 Anchor {
-                    name: "terminal.mode_toggle",
-                    path: TERMINAL_MODE_TOGGLE,
+                    name: "terminal.add_instance",
+                    path: TERMINAL_ADD_INSTANCE,
                 },
             ],
         },

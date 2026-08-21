@@ -562,7 +562,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             shell::daemon_sync::on_session_close_requested(app, id)
         }
         Message::SessionRemoveConfirmed => shell::daemon_sync::on_session_remove_confirmed(app),
-        Message::TerminalModeToggled => shell::daemon_sync::on_terminal_mode_toggled(app),
+        Message::TerminalAiCliSelected(id) => {
+            shell::daemon_sync::on_terminal_ai_cli_selected(app, id)
+        }
         Message::TerminalRestartRequested => shell::daemon_sync::on_terminal_restart_requested(app),
         Message::ShellInstanceRestartRequested(id, shell_id) => {
             shell::daemon_sync::on_shell_instance_restart_requested(app, id, shell_id)

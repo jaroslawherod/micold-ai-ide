@@ -10,7 +10,6 @@
 use crate::app::{Message, State};
 use crate::grid::GridCache;
 use crate::icons::Icon;
-use crate::icons::{mode_glyph, mode_tooltip};
 use crate::ui::material::{
     self, tab_content_colour as content_colour, Button, ButtonVariant, ContextMenu,
     GridSizeReporter, IconButton, MenuItem, SurfaceKind, Tab, TabStrip, TerminalPane, Text,
@@ -20,7 +19,7 @@ use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
 use iced::widget::{column, container, row};
-use iced::{Alignment, Color, Element, Font, Length};
+use iced::{Alignment, Color, Element, Font, Length, Padding};
 use micold_core::protocol::grid::{WireColor, WireStyle};
 use micold_core::session::{
     SessionId, SessionLifecycle, ShellInstanceId, ShellLifecycle, TerminalMode,
@@ -391,9 +390,9 @@ pub fn pane<'a>(
     };
 
     // A slim bottom status bar: the current session name (left) and its attached-process status
-    // (right), with the mode toggle anchored in the bottom-right corner as the bar's last
-    // element. A live activity indicator (spinner/idle icon) is a planned follow-up feature.
-    let mode = session_mode(state, active);
+    // (right), with the tab strip, the "+" and the AI tab filling the rest and finishing flush
+    // against the bar's trailing edge (feature 027 FR-001). A live activity indicator
+    // (spinner/idle icon) is a planned follow-up feature.
     let status = session_status(state, active);
     let mut bar = row![
         Text::new(session_title(state, active), TypeRole::Label, r),
@@ -433,9 +432,10 @@ pub fn pane<'a>(
     // not. `tests/terminal_bar_stability.rs` holds both ends: `the_bar_does_not_branch_on_focus`
     // and `the_bar_has_no_release_focus_control`.
     //
-    // The instance-switching control: one entry per open Regular Terminal instance, visible only
-    // once a session has more than one (feature 011, FR-004/FR-005). Placed just before the
-    // "open a new instance" control, both ahead of the primary mode toggle.
+    // The instance-switching control: one tab per open Regular Terminal instance (feature 011,
+    // FR-004/FR-005), always visible (026 FR-003). Placed just before the "open a new instance"
+    // control and the AI tab, which are what the row's trailing end holds since feature 027
+    // deleted the mode toggle that used to sit past them.
     // **The bar's one flexible member** (FR-002c). Everything else here is content-sized, so the
     // strip is what absorbs whatever width is left over — and, crucially, what runs out of it
     // first when there is not enough to go round.
@@ -443,11 +443,13 @@ pub fn pane<'a>(
     // It used to be content-sized like its siblings, with a `Length::Fill` spacer between the title
     // and the status doing the pushing. That was silently wrong past about five instances: a row's
     // width is a **budget**, and iced settles a shortfall by shrinking the *trailing* children
-    // rather than by overflowing. The mode toggle is the last child, so it went first — laid out at
-    // **0.0dp** in `gates/bar_controls_hold_their_size.rs`'s six-instance state, which is nothing a
-    // user can press, and the toggle is the keyboard-independent route to the AI pane that
-    // FR-008 keeps working. Nothing overflowed, so nothing failed. This is feature 012's BUG-005
-    // one level out, and its own comment describes the same shape inside a tab.
+    // rather than by overflowing. The bar's last child goes first — it was the mode toggle then,
+    // laid out at **0.0dp** in `gates/bar_controls_hold_their_size.rs`'s six-instance state, which
+    // is nothing a user can press. It is the AI tab now (027 FR-002), which makes the consequence
+    // worse rather than better: the AI tab is the *only* route back to the assistant since the
+    // toggle went, so a squeezed one is a pane with no way into it. Nothing overflowed, so nothing
+    // failed. This is feature 012's BUG-005 one level out, and its own comment describes the same
+    // shape inside a tab.
     //
     // Making the strip `Fill` inverts it: the strip is allotted `bar - everything else`, so every
     // other control keeps the size it measured and the strip is the thing that runs short. What it
@@ -468,17 +470,29 @@ pub fn pane<'a>(
     // dismiss-on-scroll is reported from; a private one would reintroduce exactly the divergence
     // the component was created to end.
     //
-    // The tabs sit at the **leading** edge of that region rather than being pushed to its trailing
-    // end. That is what FR-002c's second half asks for: no control may be *displaced* by the
-    // strip's growth either, and a strip that hugs the trailing edge moves its own first tab left
-    // every time an instance is opened.
+    // The tabs sit at the **trailing** edge of that region (027 FR-003), which reverses what 012
+    // FR-002c's second half asked for and is amended there rather than quietly contradicted. The
+    // cost that clause named is real and is now paid deliberately: a strip that hugs the trailing
+    // edge moves its own first tab left every time an instance is opened. What is bought with it is
+    // that the two controls a user reaches for by muscle memory — the "+" and the AI tab — stay
+    // anchored to the bar's edge instead of sliding with the tab count, which is the arrangement
+    // the toggle's deletion made load-bearing.
+    //
+    // The push comes from a fixed-width `Space` ahead of the strip, not from a `Length::Fill`.
+    // Inside a horizontal `Scrollable` a `Fill` resolves against an **unbounded** width limit —
+    // infinity, not "whatever is left" — so it would carry the strip out of the viewport entirely.
+    // `leading_slack` derives the figure from the tab *count* rather than from the measured
+    // `tab_strip_content_width`, because the slack is laid out inside that content and feeding the
+    // measurement back in makes the strip swing flush-right, flush-left on alternate frames.
     //
     // Pushed **unconditionally** (FR-003). It used to be `if let Some(switcher)`, which is a bar
     // child that comes and goes with the session's shape — the very thing feature 023 FR-008a
     // forbids, and for the reason recorded above the deleted release-focus control: a conditional
     // child shifts every sibling after it, and iced's positional tree diff then hands the pressed
     // control its neighbour's node and drops the press. Opening a second instance renumbered the
-    // "+" and the mode toggle under whatever press was in flight.
+    // "+" and everything past it under whatever press was in flight. The "+" itself carried the
+    // same latent defect until feature 027 — it was pushed only in `TerminalMode::Regular`, so the
+    // AI pane renumbered the bar's tail — and it is unconditional now for the same reason.
     let beyond = overflowing(
         state.tab_strip_scroll_offset as f32,
         state.tab_strip_viewport_width as f32,
@@ -501,7 +515,7 @@ pub fn pane<'a>(
     };
     bar = bar.push(
         material::EdgeFade::new(
-            material::Scrollable::new(tab_strip_row(state, active, r), r)
+            material::Scrollable::new(right_aligned_tabs(state, active, r), r)
                 .direction(material::ScrollDirection::Horizontal)
                 .width(Length::Fill)
                 .id(TAB_STRIP_SCROLL_ID.clone())
@@ -525,41 +539,40 @@ pub fn pane<'a>(
         .accent_on(marked_beyond)
         .width(Length::Fill),
     );
-    // Outside the viewport above, so it keeps its right-hand position and stays reachable in one
-    // press at any instance count (FR-002b, SC-002, SC-008). Pushed unconditionally, like the
-    // viewport: the bar's child list must not vary (feature 023 FR-008a).
-    bar = bar.push(pinned_ai_tab(state, active, r));
-    // Open an additional Regular Terminal instance (feature 011, FR-001/FR-005) — visible
-    // whenever the session is in Regular mode, regardless of how many instances are already
-    // open (including zero or one), so there is always a way to go from one instance to two.
-    if mode == TerminalMode::Regular {
-        bar = bar.push(
-            Tooltip::new(
-                IconButton::new(Icon::AddTerminalInstance, r)
-                    .padding(spacing::SM)
-                    .on_press(Message::ShellInstanceOpenRequested),
-                "Open a new terminal instance (Ctrl+Shift+T)",
-                r,
-            )
-            // This button sits at (or very near) the bar's right edge — open the tooltip to the
-            // left so it opens inward instead of overflowing past the window edge.
-            .position(TooltipPosition::Left),
-        );
-    }
-    // The mode toggle anchors the bar's bottom-right corner (spec Clarifications, 2026-07-18) —
-    // pushed last so it always sits at the far right regardless of which other controls are
-    // present.
+    // Open an additional Regular Terminal instance (feature 011, FR-001/FR-005). **Unconditional**
+    // since feature 027 FR-004: it used to be drawn only in Regular mode, which was coherent while
+    // a mode toggle existed — a session on its AI tab had another way back to a terminal. It has
+    // none now, so a "+" that disappears there would strand a session with no instances yet.
+    //
+    // Pushing it unconditionally is also what feature 023 FR-008a asks for and what the `if` here
+    // was quietly breaking: a bar child that comes and goes with the session's mode shifts every
+    // sibling after it, and iced's positional `Tree::diff_children` then hands the pressed control
+    // its neighbour's node and drops the press.
+    //
+    // It sits **before** the AI tab rather than after it. Both are anchored at the bar's trailing
+    // edge and the strip grows leftward away from them, so neither is displaced by an instance
+    // count — which is the half of feature 012's FR-002c that survives right-alignment.
     bar = bar.push(
         Tooltip::new(
-            IconButton::new(mode_glyph(mode), r)
+            IconButton::new(Icon::AddTerminalInstance, r)
                 .padding(spacing::SM)
-                .on_press(Message::TerminalModeToggled),
-            mode_tooltip(mode),
+                .on_press(Message::ShellInstanceOpenRequested),
+            "Open a new terminal instance (Ctrl+Shift+T)",
             r,
         )
-        // Always the rightmost element in the bar — same reasoning as the "+" button above.
+        // This button sits at (or very near) the bar's right edge — open the tooltip to the
+        // left so it opens inward instead of overflowing past the window edge.
         .position(TooltipPosition::Left),
     );
+    // The AI tab anchors the bar's bottom-right corner (feature 027 FR-001) — pushed last so it
+    // always sits at the far right regardless of which other controls are present. Outside the
+    // scrolling viewport above, so it keeps that position and stays reachable in one press at any
+    // instance count (026 FR-002b, SC-002, SC-008), and pushed unconditionally like every other
+    // child here: the bar's child list must not vary (feature 023 FR-008a). The mode toggle
+    // held this corner from feature 010 until feature 027 deleted it: with every pane reachable by
+    // its own tab, a control meaning "switch to the other one" was a second vocabulary for the same
+    // navigation, and the only one that could not say where it was going.
+    bar = bar.push(pinned_ai_tab(state, active, r));
     let bottom_bar = material::Surface::new(bar, SurfaceKind::Toolbar, r)
         .width(Length::Fill)
         .padding(spacing::SM);
@@ -582,17 +595,6 @@ fn session_title(state: &State, id: SessionId) -> String {
         .find(|s| s.id == id)
         .map(|s| s.label.display().to_string())
         .unwrap_or_else(|| "Session".to_string())
-}
-
-/// The session's currently-attached mode (feature 010) — defaults to `AiCli` if the session
-/// can't be found (shouldn't happen for an `active` id, but keeps this total).
-fn session_mode(state: &State, id: SessionId) -> TerminalMode {
-    state
-        .active_sessions()
-        .iter()
-        .find(|s| s.id == id)
-        .map(|s| s.mode)
-        .unwrap_or_default()
 }
 
 /// Status text for the process currently attached to the pane (feature 010) — the AI CLI's
@@ -693,9 +695,9 @@ pub enum StripTab {
 /// pane shows in that state, and a strip that marked no tab there would be the exact defect this
 /// feature exists to remove, arriving by a different route.
 ///
-/// It reads `mode`, which the mode toggle also writes, so FR-008's "the toggle and the AI tab must
-/// not be able to disagree" is structural rather than a synchronisation effort — there is no second
-/// selection to keep in step.
+/// It reads `mode`, and since feature 027 nothing else writes it but the tabs themselves, so
+/// FR-008's "two routes to this pane must not be able to disagree" is structural rather than a
+/// synchronisation effort — there is no second selection to keep in step.
 pub fn marked_tab(state: &State, id: SessionId) -> StripTab {
     let Some(session) = state.active_sessions().iter().find(|s| s.id == id) else {
         return StripTab::Ai;
@@ -810,7 +812,7 @@ fn tab_pitch() -> f32 {
 ///
 /// `None` rather than "scroll to where you already are" is the requirement, not an optimisation.
 /// FR-002d lets a user scroll away from the marked tab by hand, and a reveal that fires on every
-/// selection would yank them back each time — including on selections made with the mode toggle
+/// selection would yank them back each time — including on selections made from the keyboard
 /// rather than with the strip, which are the ones they were not looking at the strip for.
 ///
 /// It scrolls the tab **just** into view rather than centring it: the tabs either side are context,
@@ -904,6 +906,78 @@ pub fn marked_tab_index(state: &State) -> Option<usize> {
 /// label beside it. Both take [`content_colour`] for this tab's state, which is the same rule the
 /// label follows. `tests/icon_roles.rs` holds the contrast arithmetic; `tests/terminal_tabs.rs`
 /// holds the call site.
+/// How many members the scrolling part of the strip has — one per open Regular Terminal instance.
+///
+/// The pinned AI tab is deliberately not counted: it lives outside the scrolling viewport (feature
+/// 026 FR-002b), so it is not part of what has to be pushed rightward inside it.
+fn strip_tab_count(state: &State, id: SessionId) -> usize {
+    state
+        .active_sessions()
+        .iter()
+        .find(|s| s.id == id)
+        .map(|s| s.shells.len())
+        .unwrap_or(0)
+}
+
+/// What a strip of `tabs` members measures, derived from the tab's own width and the strip's own
+/// spacing (feature 027 FR-001).
+///
+/// # Why this is derived rather than measured
+///
+/// `State::tab_strip_content_width` is the same number, reported by the scrollable from the content
+/// it actually laid out — and it cannot be used here, because [`leading_slack`]'s result becomes
+/// part of that content. Feeding the measurement back in would make the space a function of itself:
+/// a strip with room to spare would compute a slack, grow its content by exactly that slack,
+/// measure no slack on the next frame, collapse to the left, and flip back — oscillating between
+/// flush-right and flush-left for as long as it was on screen. The tab count is an input the strip
+/// does not influence, so deriving from it terminates.
+pub fn natural_strip_width(tabs: usize) -> f32 {
+    match tabs {
+        0 => 0.0,
+        n => n as f32 * TAB_WIDTH + (n - 1) as f32 * spacing::SM,
+    }
+}
+
+/// The empty width the strip leaves at its **leading** edge so its tabs finish against the "+" and
+/// the AI tab at the bar's trailing end (feature 027 FR-001).
+///
+/// Zero once the tabs no longer fit: there is no slack to distribute then, and the strip scrolls
+/// instead (feature 026 FR-002a). That is also what keeps the edge fades honest — the fade asks
+/// whether content exceeds viewport, and a slack that padded an already-full strip would report an
+/// overflow that is not there.
+pub fn leading_slack(viewport: f32, tabs: usize) -> f32 {
+    (viewport - natural_strip_width(tabs)).max(0.0)
+}
+
+/// The scrolling strip, pushed to the trailing edge of its own viewport (FR-001).
+///
+/// The push is a fixed width rather than an alignment because the strip is inside a horizontal
+/// `Scrollable`, which lays its content out against an unbounded width limit — a `Fill` there
+/// resolves to infinity, not to "whatever is left". A width computed from the tab count is finite
+/// by construction and is a pure function two tests can read (`leading_slack`).
+///
+/// It is spent as this container's **padding**, not as a `Space` beside the strip. A
+/// `Space::new().width(Fixed(0.0))` is void, and iced drops a void child from the tree entirely —
+/// so the strip would be the wrapper's child 1 while there was slack and its child 0 once the tabs
+/// filled the bar. That is a child list varying with state, which feature 023 FR-008a forbids for
+/// the reason recorded on the bar itself: `Tree::diff_children` is positional, so the shift hands a
+/// pressed tab its neighbour's node and the press is dropped. The same defect that made the
+/// sidebar's `Fixed(0)` indent spacer disappear (feature 019 §7.2), one control along. A container
+/// with zero padding is still a container.
+fn right_aligned_tabs<'a>(
+    state: &'a State,
+    id: SessionId,
+    r: tokens::Roles,
+) -> Element<'a, Message> {
+    let slack = leading_slack(
+        state.tab_strip_viewport_width as f32,
+        strip_tab_count(state, id),
+    );
+    container(tab_strip_row(state, id, r))
+        .padding(Padding::ZERO.left(slack))
+        .into()
+}
+
 fn tab_strip_row<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Element<'a, Message> {
     let marked = marked_tab(state, id);
     let shells = state
@@ -990,17 +1064,18 @@ fn tab_strip_row<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
 /// # Not pressable yet
 ///
 /// User Story 1's claim is that the strip *says* what the pane is showing. User Story 2 makes it a
-/// control (T041), and that needs a message which **sets** the mode rather than toggling it:
-/// `TerminalModeToggled` would switch away from the AI pane when this tab is pressed while it is
-/// already displayed, which FR-007 forbids.
+/// control (T041), and that needs a message which **sets** the mode rather than toggling it: a
+/// flipping message would switch away from the AI pane when this tab is pressed while it is already
+/// displayed, which FR-007 forbids. That is the whole reason feature 027 could delete the toggle
+/// without replacing it — the tab was never the toggle in a different shape.
 fn pinned_ai_tab<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Element<'a, Message> {
     let marked = marked_tab(state, id) == StripTab::Ai;
     TabStrip::new(
         vec![Tab::new(
             // The shared `Glyph`, at the same type role a terminal tab's label uses, so the two
             // labels sit on one baseline and the size follows the role rather than a number named
-            // here (`tests/material_boundary.rs`). It is the glyph the mode toggle already shows
-            // for this mode, so the two routes to the AI pane wear the same mark (FR-009).
+            // here (`tests/material_boundary.rs`). It is the glyph this mode has worn since the
+            // toggle carried it, so the tab that replaced the toggle wears the same mark (FR-009).
             material::Glyph::new(Icon::AiCli, TypeRole::Label, r).tint(content_colour(marked, r)),
             r,
         )
@@ -1299,8 +1374,8 @@ mod tests {
     ///
     /// The second half is the one worth a test. A reveal that did not need to move the strip must
     /// not move it — a user who has scrolled by hand (which FR-002d explicitly allows) would
-    /// otherwise be yanked back on every selection, including selections they made with the
-    /// keyboard's mode toggle rather than with the strip.
+    /// otherwise be yanked back on every selection, including selections they made from the
+    /// keyboard rather than with the strip.
     #[test]
     fn the_marked_tab_is_scrolled_into_view_only_when_it_is_not() {
         let pitch = TAB_WIDTH + spacing::SM;
@@ -1327,6 +1402,45 @@ mod tests {
             scroll_into_view(2, 4.0 * pitch, 3.0 * pitch),
             Some(2.0 * pitch)
         );
+    }
+
+    /// Feature 027 FR-003: the strip sits against the **trailing** edge of its viewport, and the
+    /// slack that puts it there is a pure function of the tab count.
+    ///
+    /// Derived from the count, never from the measured content width. The slack is laid out
+    /// *inside* the scrolling content, so it is part of what `State::tab_strip_content_width`
+    /// reports back — computing it from that measurement would feed its own output back in and the
+    /// strip would swing flush-right, flush-left, flush-right on successive frames. From the count
+    /// it terminates by construction, which is why this is arithmetic a test can read rather than a
+    /// `Length::Fill`: `Fill` inside a horizontal `Scrollable` resolves against an unbounded width
+    /// limit — infinity, not "whatever is left" — so it pushes the strip out of the viewport
+    /// entirely.
+    #[test]
+    fn the_strip_hugs_the_trailing_edge_of_its_viewport() {
+        let pitch = TAB_WIDTH + spacing::SM;
+
+        // No tabs, no strip: nothing to push, and a viewport's worth of slack would be a scrollable
+        // region made entirely of emptiness.
+        assert_eq!(natural_strip_width(0), 0.0);
+        assert_eq!(leading_slack(600.0, 0), 600.0);
+
+        // One tab is a tab, not a tab plus a trailing gap — n tabs carry n-1 gaps between them.
+        assert_eq!(natural_strip_width(1), TAB_WIDTH);
+        assert_eq!(natural_strip_width(3), 3.0 * TAB_WIDTH + 2.0 * spacing::SM);
+
+        // Room to spare: the slack is exactly what is left, so the strip's trailing edge lands on
+        // the viewport's however few tabs there are.
+        assert_eq!(leading_slack(3.0 * pitch, 1), 3.0 * pitch - TAB_WIDTH);
+        assert_eq!(
+            leading_slack(3.0 * pitch, 2),
+            3.0 * pitch - (2.0 * TAB_WIDTH + spacing::SM)
+        );
+
+        // Overflowing: there is no slack to give, and the answer is zero rather than negative. A
+        // negative width would be a panic in iced; worse, a slack that shrank as the strip grew
+        // would let the strip keep scrolling past its own leading tab.
+        assert_eq!(leading_slack(3.0 * pitch, 6), 0.0);
+        assert_eq!(leading_slack(0.0, 3), 0.0);
     }
 
     /// FR-010a: the AI tab measures what a terminal tab measures, and its two slots are equal.

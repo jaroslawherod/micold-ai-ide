@@ -482,7 +482,7 @@ fn a_field_still_holds_the_keyboard_after_a_window_round_trip() {
 #[test]
 fn every_navigation_to_a_terminal_clears_a_release() {
     // The gap this closes: selecting and starting already focused, so the user learned to expect
-    // it — and then the mode toggle, the instance controls and a project switch each left them
+    // it — and then the pane switches, the instance controls and a project switch each left them
     // looking at a terminal that ignored the keyboard. An explicit release is about the present
     // moment, not a property a session carries, so deliberately going to a terminal ends it.
     let shell = micold_core::session::ShellInstanceId(1);
@@ -503,8 +503,10 @@ fn every_navigation_to_a_terminal_clears_a_release() {
             Box::new(|s: &State| Message::SessionSelected(s.active_session.expect("displayed"))),
         ),
         (
-            "TerminalModeToggled",
-            Box::new(|_: &State| Message::TerminalModeToggled),
+            "TerminalAiCliSelected",
+            Box::new(|s: &State| {
+                Message::TerminalAiCliSelected(s.active_session.expect("displayed"))
+            }),
         ),
         (
             "ShellInstanceOpenRequested",

@@ -1,7 +1,6 @@
 //! T003/T016/T022 — `TerminalMode`/`ShellLifecycle` transitions, `Session` defaults, the
 //! mode→icon/tooltip mapping, and lifecycle independence (feature 010, FR-001–FR-010, FR-013).
 
-use micold_client::icons::Icon;
 use micold_core::session::{Session, SessionLocation, ShellLifecycle, TerminalMode};
 
 fn worktree(name: &str) -> SessionLocation {
@@ -13,11 +12,6 @@ fn terminal_mode_defaults_to_ai_cli() {
     assert_eq!(TerminalMode::default(), TerminalMode::AiCli);
 }
 
-#[test]
-fn terminal_mode_other_toggles_both_directions() {
-    assert_eq!(TerminalMode::AiCli.other(), TerminalMode::Regular);
-    assert_eq!(TerminalMode::Regular.other(), TerminalMode::AiCli);
-}
 
 #[test]
 fn shell_lifecycle_defaults_to_not_started() {
@@ -98,32 +92,13 @@ fn session_set_mode_always_succeeds_regardless_of_process_state() {
 // its own concern: the `TerminalMode`/`ShellLifecycle` enums themselves, `set_mode`, and the
 // mode -> icon/tooltip mapping below.
 
-// --- T016 (US1): the mode -> icon/tooltip mapping is total and distinct per variant ---
-
-#[test]
-fn mode_glyph_is_distinct_per_variant() {
-    assert_ne!(
-        micold_client::icons::mode_glyph(TerminalMode::AiCli),
-        micold_client::icons::mode_glyph(TerminalMode::Regular)
-    );
-    assert_eq!(
-        micold_client::icons::mode_glyph(TerminalMode::AiCli),
-        Icon::AiCli
-    );
-    assert_eq!(
-        micold_client::icons::mode_glyph(TerminalMode::Regular),
-        Icon::RegularTerminal
-    );
-}
-
-#[test]
-fn mode_tooltip_is_distinct_per_variant() {
-    let ai = micold_client::icons::mode_tooltip(TerminalMode::AiCli);
-    let regular = micold_client::icons::mode_tooltip(TerminalMode::Regular);
-    assert_ne!(ai, regular);
-    assert!(!ai.is_empty());
-    assert!(!regular.is_empty());
-}
+// --- T016 (US1): the mode -> icon/tooltip mapping ---
+//
+// Deleted with the control it existed for (feature 027). `icons::mode_glyph`/`mode_tooltip`
+// answered "which glyph and which words does the toggle wear right now", a question only a
+// control that flips between two modes can ask. The tab strip names its destination instead: the
+// AI tab wears `Icon::AiCli` unconditionally, and it is the tab's own label rather than a mapping
+// from state, so `tests/terminal_tabs.rs` covers it where the tab is built.
 
 // --- T022 (feature 010, US2): set_mode never mutates the AI CLI lifecycle (FR-006) ---
 // (Shell-instance-mutator independence from `lifecycle` is covered by

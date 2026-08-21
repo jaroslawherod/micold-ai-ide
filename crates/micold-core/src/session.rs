@@ -106,15 +106,9 @@ pub enum TerminalMode {
     Regular,
 }
 
-impl TerminalMode {
-    /// The mode a single toggle press switches *to*.
-    pub const fn other(self) -> TerminalMode {
-        match self {
-            TerminalMode::AiCli => TerminalMode::Regular,
-            TerminalMode::Regular => TerminalMode::AiCli,
-        }
-    }
-}
+// `TerminalMode::other()` — "the mode a single toggle press switches *to*" — was removed with the
+// toggle in feature 027. Nothing else ever wanted it: a tab names the mode it selects, so every
+// remaining caller assigns a mode outright rather than asking what the opposite one is.
 
 /// Runtime state of a session's shell process (feature 010). Deliberately **not** a copy of
 /// [`SessionLifecycle`] — no crash-loop, no `Failed`; restart is always manual (spec

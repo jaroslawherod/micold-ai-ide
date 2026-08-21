@@ -10,7 +10,6 @@
 //! codepoints are pinned from the shipped font and documented in
 //! `assets/fonts/PROVENANCE.md`; `tests/icons.rs` regression-locks them.
 
-use micold_core::session::TerminalMode;
 use micold_core::tokens::{Rgb, Roles};
 
 /// A named Material symbol representing one concept or action.
@@ -217,24 +216,3 @@ pub const fn icon_role(surface: IconSurface, roles: Roles) -> Rgb {
     }
 }
 
-/// The icon that identifies `mode` at a glance on the terminal's mode-toggle button (FR-009;
-/// contracts/mode-toggle-ui.md). Total and distinct per variant — the button re-derives this
-/// on every render rather than caching it, so the indicator is always current by construction.
-///
-/// Lives in the client (not core `session`): it maps the render-free [`TerminalMode`] onto a
-/// client-only [`Icon`], so core stays iced/render-free (FR-040).
-pub const fn mode_glyph(mode: TerminalMode) -> Icon {
-    match mode {
-        TerminalMode::AiCli => Icon::AiCli,
-        TerminalMode::Regular => Icon::RegularTerminal,
-    }
-}
-
-/// The toggle button's tooltip copy for `mode` (FR-009; contracts/mode-toggle-ui.md) — states
-/// the current mode and what pressing the button switches to.
-pub const fn mode_tooltip(mode: TerminalMode) -> &'static str {
-    match mode {
-        TerminalMode::AiCli => "AI CLI — switch to Regular Terminal",
-        TerminalMode::Regular => "Regular Terminal — switch to AI CLI",
-    }
-}

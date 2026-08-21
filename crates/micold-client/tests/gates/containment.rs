@@ -146,6 +146,11 @@ const PICKER_LIST_CONTENT: &[&str] = &["0/0/0/0/0/0/0"];
 /// do not fit are reached by scrolling (FR-002a), which is a node outside a node exactly as the
 /// sidebar's list is.
 ///
+/// The path names the **padding container** feature 027 put around the strip, not the strip itself
+/// (FR-003) — that container carries the leading slack that pushes the tabs to the viewport's
+/// trailing edge, so it is the node that overhangs, and the strip inside it is exactly its size.
+/// `the_recorded_tab_overflow_is_the_instance_strip` descends through it before counting tabs.
+///
 /// `the_recorded_tab_overflow_is_the_instance_strip` proves the attribution from the records rather
 /// than from the shape.
 const TAB_STRIP_CONTENT: &[&str] = &["0/0/0/1/1/1/0/2/0/0/0/0"];
@@ -550,12 +555,32 @@ fn the_recorded_tab_overflow_is_the_instance_strip() {
                  in {STATE}; the tree renumbered around it"
             )
         });
-        let tabs: Vec<_> = records
+        // One level in: the exempted node is feature 027's padding container, whose whole job is
+        // the leading slack (FR-003). Its single child is the strip. Asserted rather than assumed —
+        // a container that grew a second child is a strip this gate would then be counting the
+        // wrong node's children for, and the count below would fail with a confusing figure.
+        let inner: Vec<_> = records
             .iter()
             .filter(|r| {
                 r.layer == lay::Layer::Base
                     && r.path.len() == content.path.len() + 1
                     && r.path.starts_with(&content.path)
+            })
+            .collect();
+        assert_eq!(
+            inner.len(),
+            1,
+            "{path} holds {} children; feature 027's slack container holds exactly one, the strip",
+            inner.len(),
+        );
+        let strip = inner[0];
+
+        let tabs: Vec<_> = records
+            .iter()
+            .filter(|r| {
+                r.layer == lay::Layer::Base
+                    && r.path.len() == strip.path.len() + 1
+                    && r.path.starts_with(&strip.path)
             })
             .collect();
 
