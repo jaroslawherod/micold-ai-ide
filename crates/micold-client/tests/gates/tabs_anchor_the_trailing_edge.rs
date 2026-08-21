@@ -175,3 +175,64 @@ fn the_terminal_tabs_meet_the_trailing_controls() {
          been. A state needs `tab_strip_viewport_width` set to what the bar hands out."
     );
 }
+
+/// The tabs sit on the same midline as the two controls beside them (FR-002, FR-003).
+///
+/// The axis the arrangement made matter. While the strip lived at the bar's **leading** edge there
+/// was nothing next to it to be out of line with, and a few dp of vertical drift read as nothing at
+/// all. Feature 027 moved it up against the "+" and the AI tab, and a strip whose labels ride above
+/// the glyph beside them then reads as two rows of controls that happen to share a bar — which is
+/// the opposite of the claim, that these are one trailing group.
+///
+/// Found at a display and not by any gate here, for the ordinary reason: **every node was exactly
+/// where its own layout said it was.** `EdgeFade` boxes its content to a bar control's height so the
+/// fade spans the whole edge, and a container's default vertical alignment is `Start`, so a 40dp
+/// strip inside a 48dp box sat at its top — 4dp above the AI tab, which the bar row centres. Two
+/// correct decisions, and no assertion anywhere compared the two boxes.
+#[test]
+fn the_tabs_share_a_midline_with_the_controls_beside_them() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+    let mut checked = 0usize;
+
+    for (covered, records) in covered_states().iter().zip(all.iter()) {
+        let (Some(strip), Some(ai)) = (
+            at(covered, records, "terminal.tabs"),
+            at(covered, records, "terminal.tabs.pinned"),
+        ) else {
+            continue;
+        };
+        let plus = at(covered, records, "terminal.add_instance")
+            .or_else(|| at(covered, records, "terminal.bottom_bar.add_instance"));
+
+        let midline = |r: &LayoutRecord| r.y + r.height / 2.0;
+        for (name, other) in [Some(("the AI tab", ai)), plus.map(|p| ("the \"+\"", p))]
+            .into_iter()
+            .flatten()
+        {
+            assert!(
+                (midline(strip) - midline(other)).abs() <= TOLERANCE,
+                "{}: the terminal tabs do not share a midline with {name} — the strip's centre is \
+                 at {:.1}dp and {name}'s at {:.1} (feature 027 FR-002/FR-003).\n\n\
+                 The strip spans y {:.1}..{:.1} and {name} spans {:.1}..{:.1}. They are one \
+                 trailing group and are pressed as one; a strip riding above the controls beside \
+                 it reads as a second row of them, and nothing in iced reports the step — each \
+                 box is exactly where its own layout put it.",
+                covered.name,
+                midline(strip),
+                midline(other),
+                strip.y,
+                strip.y + strip.height,
+                other.y,
+                other.y + other.height,
+            );
+            checked += 1;
+        }
+    }
+
+    assert!(
+        checked > 0,
+        "no state registered the strip beside a trailing control, so this gate proved nothing — a \
+         pass that inspects nothing looks exactly like a pass that found nothing"
+    );
+}

@@ -1052,8 +1052,10 @@ impl State {
                 // claim a follow-up `ShellInstanceRunning` message, which is emitted nowhere and
                 // is why every instance sat at `NotStarted` for its whole life.
                 // The new instance is what the user will be looking at, so it holds the keyboard
-                // (FR-011).
-                let outcomes = self.focus_terminal();
+                // (FR-011) and is scrolled into view (026 FR-002d) — see
+                // `session::shell_instance_open_requested` for why the second half was missing
+                // until feature 027 put the "+" beside the strip it fills.
+                let outcomes = crate::features::session::shell_instance_open_requested(self);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ShellInstanceSelected(id, shell_id) => {

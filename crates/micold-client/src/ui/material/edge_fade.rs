@@ -151,7 +151,17 @@ impl<'a, M: 'a> From<EdgeFade<'a, M>> for Element<'a, M> {
         }
         // The strip is a bar control, so it is as tall as one — the fade spans it exactly rather
         // than guessing, which is what keeps it from reading as a rule across part of an edge.
-        let mut out = container(layers).height(Length::Fixed(anatomy::button::MIN_TOUCH_TARGET));
+        //
+        // **Centred**, and that is the whole of a defect a visual pass caught (feature 027 T024).
+        // A container's default vertical alignment is `Start`, so content shorter than this box —
+        // a 40dp tab strip inside a 48dp touch target — sat at its top. That was invisible while
+        // the strip lived at the bar's leading edge with nothing beside it; feature 027 put it up
+        // against the "+" and the AI tab, which the bar row centres, and the 4dp step then read as
+        // two rows of controls sharing a bar. Every node was where its own layout said it was, so
+        // no gate saw it; `gates/tabs_anchor_the_trailing_edge.rs` now compares the two midlines.
+        let mut out = container(layers)
+            .height(Length::Fixed(anatomy::button::MIN_TOUCH_TARGET))
+            .align_y(iced::Alignment::Center);
         if let Some(width) = f.width {
             out = out.width(width);
         }
