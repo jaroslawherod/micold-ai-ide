@@ -111,7 +111,6 @@ const OWNERS: &[(&str, &str)] = &[
     ("pending_tab_reveal", "session"),
     ("tab_strip_scroll_offset", "session"),
     ("tab_strip_viewport_width", "session"),
-    ("tab_strip_content_width", "session"),
     ("terminal_context_menu", "session"),
     // The terminal *tab* menu (feature 012, BUG-005), which landed on `main` while this feature was
     // in flight. Same owner as the pane's own menu, and for the same reason: it acts on a shell

@@ -787,10 +787,9 @@ pub fn ai_cli_selected(state: &mut State, id: SessionId) -> Vec<crate::features:
 /// A scrollable is a place the ground can move, so this dismisses whatever floats above it — the
 /// same rule `sidebar::scrolled` applies, from the second scroll region this application has.
 /// Without it the tab menu would hang over a tab that had scrolled out from under it.
-pub fn tab_strip_scrolled(state: &mut State, offset: u32, width: u32, content: u32) {
+pub fn tab_strip_scrolled(state: &mut State, offset: u32, width: u32) {
     state.tab_strip_scroll_offset = offset;
     state.tab_strip_viewport_width = width;
-    state.tab_strip_content_width = content;
     state.dismiss_on_scroll_beneath();
 }
 
