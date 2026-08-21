@@ -25,7 +25,7 @@ The strip's members, left to right:
 
 | Property | Value | Requirement |
 |---|---|---|
-| Label | `Icon::AiCli`, the glyph the mode toggle already shows for that mode. No text. | FR-009 |
+| Label | `Icon::AiCli`, the application's glyph for that mode ~~the mode toggle already shows~~. No text. | FR-009 |
 | Width | The same fixed `TAB_WIDTH` as a terminal tab. | FR-010a |
 | Leading slot | The stopped-mark slot, always reserved. | FR-012c, R4 |
 | Trailing slot | Reserved and **empty** — no close control, by any press. | FR-004, FR-010a |
@@ -65,8 +65,9 @@ anywhere in this feature is the defect 012 BUG-004 was.
 
 - When the terminal tabs need more width than the bar can give, they **scroll horizontally at their
   own fixed width** (FR-002a). No tab is shrunk, ellipsised or dropped.
-- The AI tab, the "+", the mode toggle, the session title and the status keep their full size and
-  position regardless of instance count (FR-002c).
+- The AI tab, the "+" ~~, the mode toggle~~, the session title and the status keep their full size
+  and position regardless of instance count (FR-002c). *(Feature 027 removed the toggle; the tabs
+  now also sit against the trailing edge of the region they scroll in, 027 FR-003.)*
 - The strip scrolls to the **mouse wheel** while the pointer is over it. No scroll-arrow controls
   (FR-002f).
 - An edge with content beyond it carries a **fade**, tinted from the surface. When the content
@@ -100,15 +101,21 @@ anywhere in this feature is the defect 012 BUG-004 was.
 
 ## Interaction with the primary mode toggle
 
-Unchanged and now doubled: the toggle keeps its position and its behaviour (FR-008, 012 FR-006).
+*(**Superseded** by feature 027 FR-001, 2026-08-21: there is no toggle to interact with. The
+structural argument below is what made deleting it safe — the indicator was already derived from
+`mode` rather than held separately, so removing one of the two writers changed nothing about what
+the strip shows.)*
+
+~~Unchanged and now doubled: the toggle keeps its position and its behaviour (FR-008, 012 FR-006).
 Both it and the AI tab write the session's `mode`, and the marked tab is derived from `mode` — so
 they cannot disagree, structurally, rather than by being kept in step. Pressing either from a
-terminal moves the pane and the indicator together.
+terminal moves the pane and the indicator together.~~
 
 ## What this contract does not cover
 
-- **Keyboard access to the strip.** Out of scope, explicitly (spec "Out of scope"). The mode toggle
-  remains the route that needs no pointer.
+- **Keyboard access to the strip.** Out of scope, explicitly (spec "Out of scope"). ~~The mode
+  toggle remains the route that needs no pointer.~~ *(Since feature 027 there is no such route: the
+  AI pane is reachable by pointer only. 027 records this as an accepted cost, not an oversight.)*
 - **Renaming a tab**, and any menu item that would.
 - **Closing the AI CLI process** by any route.
 - **How lifecycle is tracked.** This contract presents state the application already holds.

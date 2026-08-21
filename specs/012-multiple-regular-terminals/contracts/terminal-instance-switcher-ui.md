@@ -116,8 +116,14 @@ that.)*
 
 ## Interaction with the primary mode toggle
 
-Unchanged from feature 010: the primary toggle only flips `Session.mode`. It never touches
-`shells`/`active_shell` — switching into Regular mode shows whichever instance `active_shell`
+*(**Superseded** by feature 027 FR-001/FR-005, 2026-08-21. There is no primary toggle; a terminal
+tab is the only way into Regular mode, and it names the instance as well as the mode, so it writes
+`Session.mode` **and** `active_shell` in one press. The lazy-open rule below still governs the one
+remaining mode-only route — a session resuming into Regular mode with no instances — and is
+otherwise how the AI tab still behaves in reverse.)*
+
+~~Unchanged from feature 010: the primary toggle only flips `Session.mode`. It never touches
+`shells`/`active_shell` —~~ switching into Regular mode shows whichever instance `active_shell`
 already names (FR-007), lazily calling `open_shell_instance()` only if `shells` is currently
 empty (first-ever switch for that session, or the state just after the last instance was closed
 and `mode` fell back to `AiCli`, FR-013).

@@ -58,7 +58,10 @@ always marks one of them.
 - Q: Does a starting process wear the not-running mark? → A: No — the mark means actionable, shown
   for not-started and exited only; starting keeps the existing in-progress treatment.
 - Q: Is keyboard access to the strip in scope? → A: No — explicitly out of scope; the strip is
-  pointer-driven and the existing mode toggle stays the non-tab route to the AI pane.
+  pointer-driven and the existing mode toggle stays the non-tab route to the AI pane. *(The second
+  half is void as of feature 027, 2026-08-21: the toggle is deleted and the strip is the only route.
+  The decision — no keymap in this feature — is unchanged; what changed is that it can no longer be
+  justified by a fallback that still exists. See 027's spec, which accepts that cost.)*
 
 ### Session 2026-08-19 (third pass)
 
@@ -92,8 +95,8 @@ terminal and switch to it (that tab is marked, the AI tab is not), switch back.
 4. **Given** any session state, **When** the user counts the marked tabs, **Then** exactly one tab
    is marked — never zero, never two.
 5. **Given** more open instances than the bar can show at once, **When** the user looks at the
-   strip, **Then** the AI tab is still at the right-hand end at full size, the "+" and the mode
-   toggle are still present at full size, and the edge the hidden tabs lie beyond is faded.
+   strip, **Then** the AI tab is still at the right-hand end at full size, the "+" is still present
+   at full size ~~and the mode toggle~~, and the edge the hidden tabs lie beyond is faded.
 6. **Given** that same strip, **When** the user turns the mouse wheel over it, **Then** the terminal
    tabs scroll at their own width — none is shrunk, ellipsised or dropped — and the AI tab does not
    move.
@@ -109,7 +112,7 @@ terminal and switch to it (that tab is marked, the AI tab is not), switch back.
 ### User Story 2 - Reaching the AI CLI by pressing its tab (Priority: P1)
 
 A developer working in a shell presses the AI tab and the pane shows the AI conversation, exactly as
-the mode toggle would have done.
+the mode toggle used to (feature 027 removed it; the tab is now the only route).
 
 **Why this priority**: A tab that shows state but cannot be pressed is a status light, not a tab.
 This is what makes Story 1's display honest.
@@ -123,8 +126,11 @@ CLI. Press a terminal tab; the pane shows that terminal.
    **Then** the pane shows the session's AI CLI process and the indicator moves to the AI tab.
 2. **Given** a session displaying the AI CLI, **When** the user presses the AI tab again, **Then**
    nothing changes — no process is restarted and no output is disturbed.
-3. **Given** a session displaying the AI CLI, **When** the user presses the existing mode toggle,
-   **Then** the pane and the indicator move together, exactly as if a tab had been pressed.
+3. ~~**Given** a session displaying the AI CLI, **When** the user presses the existing mode toggle,
+   **Then** the pane and the indicator move together, exactly as if a tab had been pressed.~~
+   *(Unreachable as of feature 027 — there is no toggle to press. The property it tested, that the
+   indicator can never disagree with what the pane shows, survives as 027 FR-005: a tab press is the
+   only writer of that state, so the two cannot come apart.)*
 4. **Given** any session, **When** the user looks at the AI tab, **Then** it has **no close
    control** — a session has exactly one AI CLI process and closing it is not an available action.
 5. **Given** a session whose AI CLI process has exited, **When** the user presses the AI tab with
@@ -186,7 +192,8 @@ either affecting the other.
 - **Many instances open.** The terminal tabs scroll (FR-002a) while the AI tab holds its position
   outside the scrolling region (FR-002b), and the bar's other controls are untouched (FR-002c). The
   wall is nearer than it looks: at a 136dp tab on a 144dp pitch, roughly five tabs exhaust a bar
-  that also carries a title, a status, the "+" and the mode toggle.
+  that also carries a title, a status and the "+" ~~and the mode toggle~~ — one tab further out
+  since feature 027 reclaimed the toggle's width.
 - **Tabs beyond an edge, marked tab still visible.** The edge fades in the neutral surface tint,
   saying there is more that way without claiming the marked tab is out there (FR-002e).
 - **The marked tab scrolled out of view.** It keeps the indicator, and the scrolling region's edge
@@ -210,8 +217,8 @@ either affecting the other.
 - **FR-002b**: The AI tab MUST sit **outside** that scrolling region, so it keeps its right-hand
   position and stays reachable in one press no matter how many terminal instances are open. FR-002
   is only a meaningful requirement under overflow; this is what it means there.
-- **FR-002c**: No control in the bar — the "+", the mode toggle, the session title or the status —
-  MUST be shrunk or displaced by the strip's growth. Today the bar lays its controls out in one row
+- **FR-002c**: No control in the bar — the "+", ~~the mode toggle,~~ the session title or the
+  status — MUST be shrunk or displaced by the strip's growth. Today the bar lays its controls out in one row
   with no bound on the strip, so the controls at its trailing end absorb any shortfall silently —
   drawn narrower, or not at all, with nothing reported. That is the failure mode feature 012's
   BUG-005 was filed for, one level out, and making the strip always visible (FR-003) brings the bar
@@ -261,11 +268,20 @@ either affecting the other.
   shows a restart control only for a process that is not running.
 - **FR-007**: Pressing the AI tab when the AI CLI is already displayed MUST be a no-op with no
   visible change and no effect on the running process.
-- **FR-008**: The existing AI-CLI/Regular mode toggle MUST continue to work (feature 012 FR-006),
-  and the indicator MUST follow whatever it does. The toggle and the AI tab MUST NOT be able to
-  disagree about what is displayed.
-- **FR-009**: The AI tab MUST be labelled with the application's existing AI CLI icon — the same
-  glyph the mode toggle shows for that mode — rather than with text.
+- **FR-008** *(**superseded** by feature 027 FR-001, 2026-08-21)*: ~~The existing AI-CLI/Regular
+  mode toggle MUST continue to work (feature 012 FR-006), and the indicator MUST follow whatever it
+  does. The toggle and the AI tab MUST NOT be able to disagree about what is displayed.~~
+
+  **The toggle is gone.** This requirement was the price of keeping two controls for one piece of
+  state, and it was paid twice over: the toggle's glyph named the pane it would switch *to* while
+  the tab beside it named the pane it *is*, which is the ambiguity the feature's own premise (two
+  mental models for "what am I looking at") set out to remove. 027 deletes the toggle rather than
+  keep them in agreement. The non-disagreement guarantee is stronger afterwards, not weaker: with
+  one writer there is nothing to disagree with.
+- **FR-009**: The AI tab MUST be labelled with the application's existing AI CLI icon ~~— the same
+  glyph the mode toggle shows for that mode —~~ rather than with text. *(The glyph is unchanged; it
+  can no longer be identified by pointing at the toggle, which feature 027 removed. It is the
+  sparkle the application uses for the AI CLI everywhere else.)*
 - **FR-010**: The AI tab MUST be visually consistent with the terminal tabs it sits beside: the same
   tab form, the same indicator treatment, and the same answer to the same gestures — hover, primary
   press, secondary press (feature 012 FR-004a/FR-004b/FR-010b). What the secondary press's menu
@@ -350,7 +366,8 @@ either affecting the other.
 - **SC-001**: In every observed session state — AI showing, a terminal showing, zero instances, many
   instances — exactly one tab is marked, and it is the one whose content the pane displays.
 - **SC-002**: A user can move from a terminal to the AI conversation in **one press**, from the
-  strip, without using the mode toggle.
+  strip ~~, without using the mode toggle~~ — which since feature 027 is the only way there, making
+  this criterion load-bearing rather than comparative.
 - **SC-003**: Users can tell which pane is displayed from the strip alone, without pressing
   anything, in 100% of observed states — including the states where feature 012 previously showed no
   strip at all, and including states where the marked tab has been scrolled out of view, where the
@@ -364,8 +381,9 @@ either affecting the other.
 - **SC-007**: A user can tell which tabs' processes are not running from the strip alone, without
   selecting or pressing anything, in 100% of observed states — including a background terminal
   instance whose shell has exited, which no control showed before this feature.
-- **SC-008**: At any number of open terminal instances, the AI tab, the "+", the mode toggle and
-  the session status are all present at their full size, and the AI tab is reachable in one press.
+- **SC-008**: At any number of open terminal instances, the AI tab, the "+" ~~, the mode toggle~~
+  and the session status are all present at their full size, and the AI tab is reachable in one
+  press.
 - **SC-009**: Whenever any tab is off-screen, the strip says so at the edge it lies beyond, so a
   user never has to scroll to discover whether there is anything to scroll to.
 - **SC-010**: A tab draws a shape in exactly one state — highlighted — and that shape is
@@ -380,10 +398,14 @@ either affecting the other.
 - **"At the right side" means the right end of the tab strip**, after the terminal tabs — not that
   the strip as a whole moves, since it already sits toward the bar's trailing edge. If the intent
   was instead about the strip's own alignment within the bar, FR-002 is the only requirement that
-  changes.
-- The mode toggle is **kept**, not replaced. It becomes a second route to something the strip now
+  changes. *(It was the other reading. Feature 027 FR-003 pulls the tabs themselves to the trailing
+  edge of the space they scroll in, so at one instance the strip hugs the "+" instead of stranding a
+  lone tab across the bar. The guess recorded here was wrong and the note is kept as written.)*
+- ~~The mode toggle is **kept**, not replaced. It becomes a second route to something the strip now
   also offers, which is safe because both write the same underlying state rather than each holding
-  their own (see Dependencies).
+  their own (see Dependencies).~~ *(Reversed by feature 027: the second route was the problem, not
+  the safeguard. Shared state made the two controls agree; it could not make them say the same
+  thing, since a toggle names its destination and a tab names itself.)*
 - The strip being always visible is acceptable in a session with no terminal instances, where it
   shows a single marked AI tab. This is a deliberate reversal of feature 012's FR-005 and its
   "pixel-identical to the single-instance experience" intent.
@@ -416,7 +438,9 @@ either affecting the other.
   holds and adds no selection of its own, while a keymap is a separate interaction surface with a
   mode-gating problem of its own (feature 012's FR-019 had to gate its chord because the terminal
   pane swallows keystrokes). Nothing becomes unreachable — the mode toggle is the keyboard-
-  independent route to the AI pane and FR-008 keeps it working.
+  independent route to the AI pane and FR-008 keeps it working. *(Both sentences are void since
+  feature 027 removed the toggle. The AI pane is reachable by pointer only, from its tab; 027
+  records that as an accepted cost and the keymap as still-unbuilt work.)*
 - Any change to a tab's **content** beyond what FR-009 and FR-012c add. Promoting the tab into the
   component library (FR-013) is a move, not a redesign: the tab that comes out of it draws what
   feature 012's tab drew, plus this feature's own additions.
