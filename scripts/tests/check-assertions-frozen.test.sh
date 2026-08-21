@@ -228,6 +228,31 @@ claim_021 "$d"; commit_in "$d" stale
 run "a stale adjudication fails even with nothing lost" 1 "not missing from the suite" "$d" HEAD~1
 rm -rf "$d"
 
+# ...but "no longer missing" is a claim about the *tree*, not about the diff, and judging it by the
+# diff is what took this job red on main the hour it landed. Once the branch merges, the removal is
+# behind the base as well as in front of it: absent from both sides, so it can never appear in a
+# diff again, and every entry in the file turns stale the moment it lands -- on main, and on every
+# branch cut from main afterwards, in scope or out, since the staleness verdict precedes the scope
+# gate. The adjudication file would be unlandable by construction, correct only in the one commit
+# that cannot exist.
+d="$(new_repo)"
+sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
+adjudicate "$d" "T0xx — the counter moved into the daemon" 'assert_eq!(state.count,0)'
+claim_021 "$d"; commit_in "$d" adjudicated
+run "an adjudication survives its own merge" 0 "intact" "$d" HEAD
+rm -rf "$d"
+
+# The same thing one commit later: an unrelated change, cut from the merge, that touches no
+# assertion the file names and has no business being told about them.
+d="$(new_repo)"
+sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
+adjudicate "$d" "T0xx — the counter moved into the daemon" 'assert_eq!(state.count,0)'
+claim_021 "$d"; commit_in "$d" adjudicated
+printf '#[test]\nfn later() {\n    assert!(state.other);\n}\n' > "$d/crates/thing/tests/b.rs"
+commit_in "$d" unrelated
+run "a merged adjudication does not fail later branches" 0 "added" "$d" HEAD~1
+rm -rf "$d"
+
 # An entry with no heading has nobody's name on it, which is the thing the file exists to prevent.
 d="$(new_repo)"
 sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"

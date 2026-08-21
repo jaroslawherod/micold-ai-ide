@@ -356,7 +356,23 @@ gained = after - before
 # Adjudications are checked even when nothing is lost, because a stale one is exactly as wrong as
 # an unadjudicated removal and would otherwise sit here indefinitely once the burn-down finished.
 judged, unheaded = adjudications(ADJUDICATIONS)
-stale = [a for a in judged if a not in lost]
+
+# Stale means the assertion is BACK IN THE TREE, not that it is absent from this diff. The two read
+# alike and are not: `a not in lost` was true of every entry the moment the branch merged, because a
+# removal behind the base is missing from both sides and can never appear in a diff again. That took
+# this job red on main within the hour and kept it red on every branch cut from main afterwards --
+# in scope or out, since the verdict below precedes the scope gate -- which made the file unlandable
+# by construction: correct on the branch, wrong in the commit after, with no commit in between to
+# fix it in. `a in after` is what the report has always said and what the design paragraph above
+# promised: an entry is a claim about the current tree, re-verified every run. It goes stale when
+# someone reinstates the assertion, which is the burial the rule exists to prevent, and it survives
+# the merge that made it true.
+#
+# The cost is that an entry naming an assertion that never existed -- a typo, a hand-written key --
+# is no longer caught, because after the merge nothing distinguishes it from a removal that stuck.
+# Nothing available at a single revision can: nobody's tree contains it either way. The heading rule
+# is what covers that entry, by requiring a task and a reason a reader can check against the diff.
+stale = [a for a in judged if a in after]
 adjudicated = Counter({a: lost[a] for a in judged if a in lost})
 lost = lost - adjudicated
 
