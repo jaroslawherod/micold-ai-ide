@@ -158,4 +158,4 @@ holds it.
   `session::shell_instance_open_requested` rather than doing its work inline in `app.rs`, matching
   its three siblings. Gated by `tests/tab_reveal.rs`, which asserts the invariant over the set of
   arms rather than the one case, since the doc comment on `arm_tab_reveal` always claimed the set.
-- [X] T028 Full `mise run test` after the three fixes.
+- [X] T028 Full `mise run test` after the three fixes — 2047 tests across 210 binaries, 0 failed.
