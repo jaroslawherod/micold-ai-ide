@@ -2071,9 +2071,10 @@ pub(crate) mod tests {
 
         let sent = wire(&mut rx);
         assert!(
-            sent.iter()
-                .any(|m| matches!(m, ClientMsg::SessionOpenShell { session, instance }
-                    if *session == id && *instance == shell)),
+            sent.iter().any(
+                |m| matches!(m, ClientMsg::SessionOpenShell { session, instance }
+                    if *session == id && *instance == shell)
+            ),
             "the daemon is told to spawn the new instance. Sent: {sent:?}"
         );
         assert!(

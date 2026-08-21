@@ -12,7 +12,6 @@ fn terminal_mode_defaults_to_ai_cli() {
     assert_eq!(TerminalMode::default(), TerminalMode::AiCli);
 }
 
-
 #[test]
 fn shell_lifecycle_defaults_to_not_started() {
     assert_eq!(ShellLifecycle::default(), ShellLifecycle::NotStarted);

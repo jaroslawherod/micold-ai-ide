@@ -137,8 +137,7 @@ const TERMINAL_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 0, 4];
 /// (FR-010b). Its anchor is deleted with it rather than left pointing at nothing —
 /// `an_anchor_whose_path_does_not_resolve_fails_naming_it` would fail on a stale one, which is the
 /// behaviour that makes an anchor worth writing.
-const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] =
-    &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0];
+const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0];
 
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
