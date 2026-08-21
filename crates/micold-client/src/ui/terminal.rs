@@ -22,7 +22,7 @@ use iced::widget::{column, container, row};
 use iced::{Alignment, Color, Element, Font, Length, Padding};
 use micold_core::protocol::grid::{WireColor, WireStyle};
 use micold_core::session::{
-    SessionId, SessionLifecycle, ShellInstanceId, ShellLifecycle, TerminalMode,
+    AiCli, SessionId, SessionLifecycle, ShellInstanceId, ShellLifecycle, TerminalMode,
 };
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Rgb};
@@ -590,6 +590,20 @@ pub fn pane<'a>(
     .into()
 }
 
+/// Which AI CLI the open session runs, for the name on its pinned AI tab (FR-016a).
+///
+/// Falls back to [`AiCli::default`] rather than refusing to render: a bar drawn for a session the
+/// projection does not (yet) list is a transient the view has to survive, and the default is the
+/// same one a session with nothing recorded resumes on (FR-003, FR-013).
+fn session_provider(state: &State, id: SessionId) -> AiCli {
+    state
+        .active_sessions()
+        .iter()
+        .find(|s| s.id == id)
+        .map(|s| s.provider)
+        .unwrap_or_default()
+}
+
 fn session_title(state: &State, id: SessionId) -> String {
     state
         .active_sessions()
@@ -1091,10 +1105,21 @@ fn tab_strip_row<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
 /// # Its trailing slot is reserved and empty (FR-004, FR-010a)
 ///
 /// A session has exactly one AI CLI process and terminating it is not an action offered from this
-/// control, so there is no close control to draw. A tab that reclaimed the space would be narrower
-/// than its neighbours, and a strip whose tabs are not all one size reads as a control among
-/// controls rather than as a strip — feature 012's BUG-001. Leaving it reserved is also what keeps
-/// the icon on the tab's own midline, since the leading slot is the same width.
+/// control, so there is no close control to draw. Leaving the slot reserved rather than reclaiming
+/// it is what keeps the glyph on the tab's own midline, since the leading slot is the same width.
+///
+/// # Why it is wider than the tabs beside it
+///
+/// It is the one tab that does not take the strip's uniform `TAB_WIDTH` (`Tab::content_sized`), and
+/// that is a departure from feature 012's BUG-001 — *a strip whose tabs are not all one size reads
+/// as a control among controls rather than as a strip* — so it is worth saying why it does not
+/// reopen it. BUG-001 is about **members of one strip**, and this is a strip of one: the tabs it
+/// sits beside are in a different strip, inside the scrolling viewport, and nothing about a bar
+/// whose pinned tab is wider than its scrolling ones reads as a row of loose controls. What forced
+/// it is FR-016a — this tab's label is a *word*, `claude` or `copilot`, where every other tab's is
+/// an ordinal, and `TAB_WIDTH` reserves 16dp for a label. A fixed tab settles that shortfall by
+/// competing its own reserved slot down to 12dp, silently, which is BUG-005's shape rather than
+/// BUG-001's and is what `gates/tab_children_fit.rs` catches.
 ///
 /// # Not pressable yet
 ///
@@ -1105,16 +1130,42 @@ fn tab_strip_row<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
 /// without replacing it — the tab was never the toggle in a different shape.
 fn pinned_ai_tab<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Element<'a, Message> {
     let marked = marked_tab(state, id) == StripTab::Ai;
+    let tint = content_colour(marked, r);
     TabStrip::new(
         vec![Tab::new(
-            // The shared `Glyph`, at the same type role a terminal tab's label uses, so the two
-            // labels sit on one baseline and the size follows the role rather than a number named
-            // here (`tests/material_boundary.rs`). It is the glyph this mode has worn since the
-            // toggle carried it, so the tab that replaced the toggle wears the same mark (FR-009).
-            material::Glyph::new(Icon::AiCli, TypeRole::Label, r).tint(content_colour(marked, r)),
+            // The glyph this mode has worn since the toggle carried it, so the tab that replaced
+            // the toggle wears the same mark (feature 026-ai-session-tab FR-009) — and beside it
+            // the session's CLI by its **command** name, `claude` or `copilot`, the same register
+            // the sidebar row uses (026-multi-provider-sessions FR-016/FR-016a).
+            //
+            // That clarification asked for the name beside "that control's existing icon" at the
+            // bar's bottom-right, which was the mode toggle when it was written; feature 027
+            // deleted the toggle and this tab took the corner, so the name comes here. Nothing is
+            // *added* to the bar by doing so — 027 FR-001's "no control MUST replace it" forbids a
+            // second switcher, and this is the tab 027 made the only one, now saying which
+            // assistant it goes to rather than only that it goes to one.
+            //
+            // `IconLabel` rather than a `row![Glyph, Text]` of this module's own, which
+            // `tests/composite_call_sites.rs` forbids outright: it is the type that keeps the glyph
+            // at the *label's* role, so the two sit on one baseline and the size follows the role
+            // rather than a number named here (`tests/material_boundary.rs`).
+            material::IconLabel::new(
+                Icon::AiCli,
+                session_provider(state, id).provider().command(),
+                TypeRole::Label,
+                r,
+            )
+            .tint(tint)
+            .label_tint(tint),
             r,
         )
         .active(marked)
+        // Sized by what it holds, not by the strip's uniform `TAB_WIDTH` — the one tab in the
+        // application whose label is a word rather than an ordinal, and the one with no neighbours
+        // to be uniform with. See `material::Tab::content_sized`; without it the CLI's name
+        // competes the reserved trailing slot down to 12dp, which is `gates/tab_children_fit.rs`'s
+        // subject and feature 012's BUG-005 all over again.
+        .content_sized()
         // The same mark in the same slot as a terminal tab's (FR-012, FR-010). "In the same place"
         // is the requirement, not an aesthetic: FR-010's "consistent with the tabs it sits beside"
         // is false in the one state that matters if this tab reports its lifecycle differently from
@@ -1210,6 +1261,42 @@ mod tests {
         state.workspace.sessions.insert(path, vec![session]);
         state.active_session = Some(id);
         (state, id)
+    }
+
+    /// FR-016a (T058a): the pinned AI tab names the session's own CLI, by its **command** name.
+    ///
+    /// Asserted through `session_provider`, which is the only input the tab's label has — the label
+    /// is `session_provider(..).provider().command()` and nothing else, so a tab naming the wrong
+    /// CLI can only be this function answering wrongly. `tests/terminal_bar_stability.rs` holds the
+    /// other half, that the label is still built from `command()` rather than `display_name()`;
+    /// between them the two registers cannot swap without something going red.
+    ///
+    /// The fallback is asserted too, and it is not a formality: `pane` draws the bar for whatever
+    /// session id is active, and the projection it looks that id up in is refreshed by the daemon.
+    /// A frame in which the two disagree must render, and rendering `claude` there is the same
+    /// answer a session with nothing recorded resumes on (FR-003, FR-013).
+    #[test]
+    fn the_bar_reads_the_session_own_cli_by_command_name() {
+        for cli in AiCli::ALL {
+            let (mut state, id) = state_showing(SessionLifecycle::Running);
+            for session in state.workspace.sessions.values_mut() {
+                for s in session.iter_mut() {
+                    s.provider = cli;
+                }
+            }
+            assert_eq!(
+                session_provider(&state, id),
+                cli,
+                "the bar read a different CLI from the one the session records"
+            );
+        }
+
+        assert_eq!(
+            session_provider(&State::default(), SessionId::new()),
+            AiCli::default(),
+            "a bar drawn for a session the projection does not list must still render, on the \
+             same default a session with nothing recorded resumes on"
+        );
     }
 
     /// FR-012/FR-012d/FR-012e: a tab wears the mark for exactly the states the predicate calls

@@ -168,10 +168,26 @@ fn nested_controls<'r>(records: &'r [LayoutRecord], tab: &LayoutRecord) -> Vec<&
         .collect()
 }
 
-/// A tab's content row: the deepest node inside it holding more than one child of its own.
+/// A tab's content row: the **shallowest** node inside it holding exactly [`ROW_CHILDREN`] children.
 ///
 /// Found structurally for the same reason the controls are — the arrangement inside a tab is the
 /// thing under test and must be free to change.
+///
+/// # Why the count, and not "the deepest node with more than one child"
+///
+/// That is what this was, and it read the tree correctly for as long as every tab's label was a
+/// single widget. Feature 026-multi-provider-sessions' FR-016a put a *labelled icon* on the pinned
+/// AI tab — `material::IconLabel`, which is a `row![Glyph, Text]` — and that row is both deeper
+/// than the content row and multi-child, so "deepest" found **it**. The gate then measured the
+/// glyph as a control in a slot and failed the tab at 12.0dp, and
+/// `a_tabs_content_sits_on_its_tabs_midline` compared the label's own centre against the tab's and
+/// passed by luck rather than by asking the question it names.
+///
+/// The count is not a tightening of the rule but a reading of the component's contract, which
+/// `material/tab.rs` states and this file's `nested_controls` already relies on: a tab's content row
+/// is `[leading slot, label, trailing slot]`, three children, always, because both slots are
+/// reserved whether or not anything fills them. A label may be as deep and as wide as it likes
+/// underneath the middle one without this gate mistaking its parts for controls.
 fn content_row<'r>(records: &'r [LayoutRecord], tab: &LayoutRecord) -> Option<&'r LayoutRecord> {
     let inner = descendants(records, tab);
     inner
@@ -181,11 +197,18 @@ fn content_row<'r>(records: &'r [LayoutRecord], tab: &LayoutRecord) -> Option<&'
                 .iter()
                 .filter(|c| c.path.len() == r.path.len() + 1 && c.path.starts_with(&r.path))
                 .count()
-                > 1
+                == ROW_CHILDREN
         })
-        .max_by_key(|r| r.path.len())
+        .min_by_key(|r| r.path.len())
         .copied()
 }
+
+/// What a tab's content row holds: `[leading slot, label, trailing slot]`.
+///
+/// The component's contract, not an observation — `material/tab.rs` builds exactly this row and
+/// reserves both slots unconditionally, and `a_tabs_content_sits_on_its_tabs_midline` fails if it
+/// ever stops having three children in that order.
+const ROW_CHILDREN: usize = 3;
 
 /// FR-004b, the face a user meets: the selection mark spans the **whole** tab, edge to edge.
 ///
