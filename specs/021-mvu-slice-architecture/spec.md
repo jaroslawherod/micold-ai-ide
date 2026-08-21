@@ -33,7 +33,7 @@ criteria measure the cost of change rather than the behavior of the product.
 | Closing-snapshot `ClosingOverlay` enum | `app.rs` | 9 variants | — |
 | Ad-hoc popover state fields | `app.rs` | 7 separate fields | 7 |
 
-The two files above remain the largest and second-largest source files in the repository.
+On that date the two files above were the largest and second-largest source files in the repository. (They are not any more — see the re-measurement below.)
 
 **The drift is itself evidence.** In the ten days between the two measurements the shell file grew
 by 22% and the state file by 8%; the message enum gained six variants and the state struct a field,
@@ -42,6 +42,38 @@ without anyone setting out to enlarge them. The figures were taken twice during 
 grown between those two readings alone. Nothing in the current structure resists accretion into
 these two files; that is the cost this feature exists to remove, and the reason SC-003 states an
 absolute line-count target rather than a relative improvement.
+
+### Re-measured at completion (T078, 2026-08-21, pinned to `d413c81`)
+
+| Concern | Baseline, 2026-08-07 | At completion | Delta |
+|---|---|---|---|
+| Application state, messages, reducer (`app.rs`) | 2,434 lines | **1,430** | −41% (production 1,467 → **657**, −55%) |
+| Shell + all remaining I/O (`main.rs`) | 3,567 lines | **1,708** | −52% (production 2,588 → **1,197**, −54%) |
+| Single flat `State` struct | 37 fields | **45** | **+8** |
+| Single `Message` enum | 130 variants | **120** | −10 (22 removed, 1 nested wrapper added, 11 arrived from other features) |
+| Modal `Overlay` enum | 10 variants | **deleted** | −10 |
+| Closing-snapshot `ClosingOverlay` enum | 9 variants | **deleted** | −9 |
+| Ad-hoc popover state fields | 7 separate fields | **8** | +1, and no longer ad hoc |
+
+**The two files are no longer the largest and second-largest.** By total lines `main.rs` is fifth
+and `app.rs` eighth; by production lines `main.rs` is sixth and `app.rs` does not reach the top
+fifteen. Neither is near the indicative 500 lines, and per Q1 FR-005 governs rather than the
+figure: `app.rs` is now 51% comment, and what is left of it is two shared vocabularies and a
+routing table (T069).
+
+**Two rows moved the wrong way, and both say the count was the wrong instrument.** The `State`
+struct gained eight fields — but the flatness the row was a proxy for is what this feature
+removed, and it removed it by *naming an owner for every field* rather than by shortening the
+list. `tests/feature_write_isolation.rs` asserts exactly that, on every field, on every run; a
+number in a table asserts it on the day it was taken. The same is true of the popover row: there
+are eight popovers now rather than seven because feature 012's terminal-tab menu arrived, and it
+cost one line in `register!` and one row in the displacement table — which is SC-002 being paid
+out, not a regression.
+
+**The figures moved a fifth time during this measurement.** Feature 027 landed on `main` while
+T078 was being run, taking `app.rs` to 1,427 and the struct to 44 — it *removed* a field and
+updated the ownership guard itself. The table above is therefore pinned to a revision rather than
+to a date, which is the lesson the drift paragraph above was already arguing.
 
 ### What already exists (scope reducers, not scope)
 
