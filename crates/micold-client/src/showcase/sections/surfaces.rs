@@ -162,7 +162,13 @@ pub fn toolbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
     )
 }
 
-/// `ConnectionBanner` — both notice levels, and one carrying an action.
+/// `ConnectionBanner` — both notice levels, and one carrying an action **on each of them**.
+///
+/// The two action specimens sit side by side because that pair is the rule made visible. On `Error`
+/// the button takes `on_error`, the fill's own paired foreground; on `Info` it keeps §7.3's
+/// `primary`, because `surface_variant` is inside §1.3's neutral enumeration. Showing only the red
+/// one would read as "the banner recolours its button" — showing both says the button asks what it
+/// is standing on, and gets a different answer (FR-004a, BUG-009 T156).
 pub fn connection_banner<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
         vec![
@@ -194,6 +200,17 @@ pub fn connection_banner<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Eleme
                     roles,
                 )
                 .action("Take over", Message::NoOp),
+                roles,
+            ),
+            posed(
+                "with an action, on Info",
+                material::ConnectionBanner::new(
+                    "Reconnecting to the session service",
+                    "You can keep working; unsent changes are queued.",
+                    roles,
+                )
+                .level(NoticeLevel::Info)
+                .action("Retry now", Message::NoOp),
                 roles,
             ),
         ],
