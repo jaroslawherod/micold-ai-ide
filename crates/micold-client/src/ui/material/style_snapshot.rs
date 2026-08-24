@@ -130,7 +130,12 @@ fn render_all() -> String {
         // the neutral pose is recorded rather than skipped.
         let hosts: Vec<(String, style::Host)> = NoticeLevel::ALL
             .into_iter()
-            .map(|lvl| (format!("notification[{lvl:?}]"), style::notification_host(r, lvl)))
+            .map(|lvl| {
+                (
+                    format!("notification[{lvl:?}]"),
+                    style::notification_host(r, lvl),
+                )
+            })
             .chain(std::iter::once((
                 "snackbar".to_string(),
                 style::snackbar_host(r),

@@ -599,7 +599,10 @@ pub fn outlined(r: Roles, host: Option<Host>) -> impl Fn(&Theme, button::Status)
 
 /// Text button: transparent, no border, `primary` label (low-emphasis actions) — or the host's
 /// `on_*` role where it stands on an accent fill (FR-004a).
-pub fn text_button(r: Roles, host: Option<Host>) -> impl Fn(&Theme, button::Status) -> button::Style {
+pub fn text_button(
+    r: Roles,
+    host: Option<Host>,
+) -> impl Fn(&Theme, button::Status) -> button::Style {
     let front = host
         .and_then(Host::imposed)
         .map_or(r.primary, |(_, on_fill)| on_fill);

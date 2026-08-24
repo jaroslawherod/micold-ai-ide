@@ -8,9 +8,9 @@
 
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
-// `contrast` and `luminance` come from the crate that owns the colours, not from a copy here — see
+// `contrast` comes from the crate that owns the colours, not from a copy here — see
 // the note in `tokens_contrast.rs`.
-use micold_core::tokens::{contrast, luminance, roles, typography, Rgb, Roles, AA_TEXT};
+use micold_core::tokens::{contrast, roles, typography, Rgb, Roles, AA_TEXT};
 
 /// The foreground/surface pairs that carry text and must meet AA. Includes the worktree tag
 /// chips (feature 008): every per-type fill and the issue fill, paired with `on_tag`.

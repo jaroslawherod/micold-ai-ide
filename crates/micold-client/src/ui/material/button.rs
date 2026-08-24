@@ -49,7 +49,11 @@ impl Variant {
     /// substitutes its own pair for the accent roles: the filled variant's container becomes the
     /// host's foreground and its label the host's fill, and the two variants that draw no container
     /// take the host's foreground for their content.
-    pub(crate) fn content(self, roles: Roles, host: Option<style::Host>) -> micold_core::tokens::Rgb {
+    pub(crate) fn content(
+        self,
+        roles: Roles,
+        host: Option<style::Host>,
+    ) -> micold_core::tokens::Rgb {
         match (self, host.and_then(style::Host::imposed)) {
             (Variant::Filled, Some((fill, _))) => fill,
             (Variant::Outlined | Variant::Text, Some((_, on_fill))) => on_fill,

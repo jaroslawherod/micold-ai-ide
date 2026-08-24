@@ -95,7 +95,8 @@ fn a_component_on_an_accent_fill_is_legible_against_it() {
                 for (state_name, status) in STATES {
                     let s = style_fn(&theme, status);
                     let bg = behind(host.fill, &s);
-                    let where_ = format!("{scheme:?} / {level:?} banner / {variant:?} / {state_name}");
+                    let where_ =
+                        format!("{scheme:?} / {level:?} banner / {variant:?} / {state_name}");
 
                     let label = contrast(rgb(s.text_color), bg);
                     if label < AA_TEXT {
