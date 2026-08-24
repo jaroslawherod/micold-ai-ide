@@ -106,13 +106,16 @@ in both schemes. The automated test asserts every row and fails the build on any
 | `on_error_container`      | `error_container`                                                                                                       |
 | `inverse_on_surface`      | `inverse_surface`                                                                                                       |
 | `inverse_primary`         | `inverse_surface`                                                                                                       |
-| `primary`                 | `surface`, `surface_container_low`, `surface_container` (text/outlined buttons and links draw `primary` on a surface)    |
+| `primary`                 | `surface`, `surface_container_low`, `surface_container` — **neutral surfaces only** (text/outlined buttons and links draw `primary` on a surface). `primary` MUST NOT be drawn on an **accent fill**: not on `primary`, `secondary`, `tertiary`, `error` or any `*_container`. A component on an accent fill draws that fill's paired `on_*` role (FR-004a) |
 | `error`                   | `surface`, `surface_container` (error helper text)                                                                       |
 | each tag's text tone      | that same tag's fill tone, for all 11 tags (§1.4)                                                                        |
 
 `outline`, `outline_variant`, `scrim` and `shadow` carry no text and are exempt from the text
 contrast obligation. `outline` MUST still meet the non-text 3:1 threshold against the surfaces it
-divides.
+divides — and it is a neutral-variant tone, chosen against those surfaces, so it clears the
+threshold against **neutral** surfaces only. An outlined component standing on an **accent fill**
+draws its border from that fill's paired `on_*` role at the border's own opacity, not from `outline`
+(FR-004a; `outline` on `error` is **1.42:1**, below the 3:1 this paragraph already imposes).
 
 ### 1.4 Worktree tag and issue tag colors (FR-006, FR-006a)
 
@@ -560,7 +563,30 @@ The label-alignment row is FR-030a applied here: 40dp of height around a 20dp `l
 20dp of slack by construction, and a height that does not say where its content sits resolves it
 against the top edge. Stated for the same reason §7.6's chip row states it.
 
-Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`.
+Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`. That substitution
+is about the action's **meaning**; the next paragraph is about the surface underneath it, and the two
+are independent.
+
+**Host surface (FR-004a, FR-027b).** The `Container` and `Label / icon` rows above describe a button
+on a **neutral surface**. A button placed on an **accent-filled container** — the connection banner's
+`error` fill, a snackbar's `inverse_surface`, a filled tag or chip — draws its label, its 1dp border,
+its state layers (§5) and its ripple from that container's paired foreground role instead:
+
+| Host fill              | Button foreground     |
+|------------------------|-----------------------|
+| `error`                | `on_error`            |
+| `primary` / `secondary` / `tertiary` | `on_primary` / `on_secondary` / `on_tertiary` |
+| any `*_container`      | that container's `on_*_container`             |
+| `inverse_surface`      | `inverse_primary`     |
+| a neutral surface      | the table's own value (`primary`, `on_primary`, `on_surface_variant`) |
+
+The outlined variant's border takes the same role at the border's opacity — `outline` is 1.42:1 on
+`error`, below §1.3's 3:1 non-text threshold — and the state layer takes it too, since `primary` at
+low alpha over red is no more visible than `primary` is. The foreground is a **parameter of the
+component**, not a choice at the call site (FR-027b): one definition of each variant, taking the role
+it should draw in, and the value derived from the same decision that produced the fill. *(Added by
+BUG-009 — `primary` on `error` is 1.00:1 in the light scheme and 1.01:1 in the dark, both roles
+reading their ramps at the tone their scheme assigns them.)*
 
 ### 7.4 Dialogs (FR-028)
 
