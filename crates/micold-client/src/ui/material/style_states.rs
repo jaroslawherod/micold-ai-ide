@@ -31,9 +31,9 @@ type ButtonStyleFn = Box<dyn Fn(&Theme, button::Status) -> button::Style>;
 
 fn buttons(r: Roles) -> Vec<(&'static str, ButtonStyleFn)> {
     vec![
-        ("filled", Box::new(style::filled(r)) as ButtonStyleFn),
-        ("outlined", Box::new(style::outlined(r))),
-        ("text_button", Box::new(style::text_button(r))),
+        ("filled", Box::new(style::filled(r, None)) as ButtonStyleFn),
+        ("outlined", Box::new(style::outlined(r, None))),
+        ("text_button", Box::new(style::text_button(r, None))),
         (
             "circular_icon_button",
             Box::new(style::circular_icon_button(r)),
@@ -124,7 +124,7 @@ fn the_state_layers_come_from_the_token_scale() {
     let surface = style::color(r.surface);
     // `text_button` paints nothing at rest, so its hovered/pressed fills are the state layers
     // themselves rather than a blend — the cleanest place to read the opacity back out.
-    let f = style::text_button(r);
+    let f = style::text_button(r, None);
     let hovered = f(&theme, button::Status::Hovered);
     let pressed = f(&theme, button::Status::Pressed);
 

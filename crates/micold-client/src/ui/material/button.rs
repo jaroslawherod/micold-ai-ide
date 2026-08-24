@@ -34,6 +34,9 @@ pub enum Variant {
 }
 
 impl Variant {
+    /// Every variant, so a gate that reads the set cannot silently miss one added later.
+    pub const ALL: [Variant; 3] = [Variant::Filled, Variant::Outlined, Variant::Text];
+
     /// The content colour this variant draws its label in — and therefore the colour its ripple
     /// takes, since a state layer is the content colour over the container (contract §5).
     ///
@@ -42,18 +45,24 @@ impl Variant {
     /// overrides anything inherited, and its default is the roles' `on_surface` — wrong on any
     /// variant that paints its own fill. Asking the variant is what keeps the two in step; feature
     /// 012 BUG-001 is what happens when they are not.
-    pub(crate) fn content(self, roles: Roles) -> micold_core::tokens::Rgb {
-        match self {
-            Variant::Filled => roles.on_primary,
-            Variant::Outlined | Variant::Text => roles.primary,
+    /// `host` is what the button is standing on, where anything told it (FR-004a). An accent fill
+    /// substitutes its own pair for the accent roles: the filled variant's container becomes the
+    /// host's foreground and its label the host's fill, and the two variants that draw no container
+    /// take the host's foreground for their content.
+    pub(crate) fn content(self, roles: Roles, host: Option<style::Host>) -> micold_core::tokens::Rgb {
+        match (self, host.and_then(style::Host::imposed)) {
+            (Variant::Filled, Some((fill, _))) => fill,
+            (Variant::Outlined | Variant::Text, Some((_, on_fill))) => on_fill,
+            (Variant::Filled, None) => roles.on_primary,
+            (Variant::Outlined | Variant::Text, None) => roles.primary,
         }
     }
 
-    fn style(self, roles: Roles) -> ButtonStyleFn {
+    pub(crate) fn style(self, roles: Roles, host: Option<style::Host>) -> ButtonStyleFn {
         match self {
-            Variant::Filled => Box::new(style::filled(roles)),
-            Variant::Outlined => Box::new(style::outlined(roles)),
-            Variant::Text => Box::new(style::text_button(roles)),
+            Variant::Filled => Box::new(style::filled(roles, host)),
+            Variant::Outlined => Box::new(style::outlined(roles, host)),
+            Variant::Text => Box::new(style::text_button(roles, host)),
         }
     }
 
@@ -87,6 +96,7 @@ pub struct Button<'a, M> {
     width: Option<Length>,
     shape: Option<f32>,
     leading: Option<(Icon, Option<Rgb>)>,
+    host: Option<style::Host>,
 }
 
 impl<'a, M: Clone + 'a> Button<'a, M> {
@@ -121,6 +131,7 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
             leading: None,
             width: None,
             shape: None,
+            host: None,
         }
     }
 
@@ -211,6 +222,26 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
         self.leading = Some((glyph, Some(tint)));
         self
     }
+
+    /// What this button is standing on (FR-004a, FR-027b; contract §7.3 "Host surface").
+    ///
+    /// §7.3's `Container` and `Label / icon` rows describe a button on a **neutral surface**. On an
+    /// accent-filled one — a banner's `error`, a filled tag, a snackbar's inverse surface — they do
+    /// not hold: `primary` is 1.00:1 on `error` in the light scheme and 1.01:1 in the dark, because
+    /// both roles read their ramps at the tone their scheme assigns and two roles at the same tone
+    /// have the same luminance by construction. The host's own paired foreground is what reads
+    /// there, and it is the component's business rather than the call site's, so the label, the
+    /// border, the state layer, the leading glyph and the ripple all move together — the fix for
+    /// one control in two colours cannot be four matching edits.
+    ///
+    /// A [`Host`](style::Host) that is **not** an accent fill imposes nothing, so a call site may
+    /// hand over whatever it stands on without first deciding whether it matters. Saying nothing at
+    /// all keeps §7.3's table exactly as it is, which is what makes this a parameter rather than a
+    /// migration.
+    pub fn on_host(mut self, host: style::Host) -> Self {
+        self.host = Some(host);
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
@@ -235,7 +266,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
             Some((glyph, tint)) => {
                 // The variant's own content colour unless the call site meant something by the
                 // glyph's tone — one control, one colour, by default.
-                let tint = tint.unwrap_or_else(|| b.variant.content(b.roles));
+                let tint = tint.unwrap_or_else(|| b.variant.content(b.roles, b.host));
                 row![icon(glyph, anatomy::button::LEADING_ICON, tint), b.content]
                     .spacing(spacing::XS)
                     .align_y(Alignment::Center)
@@ -249,7 +280,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         // The variant's own style, with the corner overridden if the caller asked. A decorator
         // rather than a parameter threaded through `style.rs`: the radius is the *only* thing an
         // override touches, and every other call site keeps the style function it has always had.
-        let base = b.variant.style(b.roles);
+        let base = b.variant.style(b.roles, b.host);
         let style_fn: ButtonStyleFn = match b.shape {
             Some(radius) => Box::new(move |theme, status| {
                 let mut style = base(theme, status);
@@ -291,7 +322,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
             // these two from one value is what stops them diverging silently.
             super::Ripple::new(
                 widget,
-                b.variant.content(b.roles),
+                b.variant.content(b.roles, b.host),
                 b.shape.unwrap_or(shape::FULL),
             )
             .into()

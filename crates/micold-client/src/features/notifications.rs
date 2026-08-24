@@ -28,6 +28,9 @@ pub enum NoticeLevel {
 }
 
 impl NoticeLevel {
+    /// Every level, so a gate that reads the set cannot silently miss one added later.
+    pub const ALL: [NoticeLevel; 2] = [NoticeLevel::Info, NoticeLevel::Error];
+
     /// The queue level this severity corresponds to.
     ///
     /// The one place the banner's vocabulary meets the core's. Written as a method on the source

@@ -40,9 +40,9 @@ fn every_button_variant_is_a_pill() {
         let r = micold_core::tokens::roles(scheme);
         let theme = style::theme(scheme);
         let variants: Vec<(&str, ButtonStyleFn)> = vec![
-            ("filled", Box::new(style::filled(r)) as ButtonStyleFn),
-            ("outlined", Box::new(style::outlined(r))),
-            ("text_button", Box::new(style::text_button(r))),
+            ("filled", Box::new(style::filled(r, None)) as ButtonStyleFn),
+            ("outlined", Box::new(style::outlined(r, None))),
+            ("text_button", Box::new(style::text_button(r, None))),
             (
                 "circular_icon_button",
                 Box::new(style::circular_icon_button(r)),
