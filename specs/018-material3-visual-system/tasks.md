@@ -1428,3 +1428,125 @@ change to it.
   > where you right-click would be documenting the absence of a bug.
 
 **Bugfix**: 2026-08-20 — BUG-008 added Phase 20 (T142–T150). No task is reopened: T107, which promoted `(24, 96)` to a named constant, is genuinely complete as written — it was scoped to whether the panel *fits*, and so was BUG-003's "adjacent risk" note before it. The work missing here was never a task.
+
+## Phase 21: BUG-009 — the action on a red banner was drawn in the accent it stood on
+
+**Goal**: a component placed on an accent fill takes its foreground from that fill's paired `on_*`
+role, and the **component** carries it rather than the call site (FR-004a, FR-027b). The gate reads a
+**composition** pair — the role a component's foreground resolves to, against the role of the
+container it is rendered in — which is the scope FR-004's token-set test structurally cannot have
+(SC-008g).
+
+**Note on why every gate was green**: `tokens_contrast.rs` is exhaustive over the pairs §1.3
+*enumerates*, and §1.3 can only enumerate compositions somebody thought of; `style_snapshot` pins
+`container.notification[error]`'s fill and the button's colour, both correct, one style at a time;
+`anatomy_size` and the 019 probes measure geometry, and this costs no pixels. The showcase renders
+the failing composition and has been through visual passes — it reads as a design choice unless you
+know `primary` is not supposed to be there.
+
+**Note on the seam**: `Variant::content(roles)` already exists as the one place a variant's content
+colour is decided, and already has a second caller for exactly this reason — a nested `IconButton`
+sets an explicit glyph colour and must ask the variant rather than default to `on_surface` (012
+BUG-001). The foreground override belongs there, so the label, the nested glyph, the border, the
+state layer and the ripple stay in step by construction rather than by four matching edits.
+
+- [X] T151 Failing test first: ~~`crates/micold-client/tests/composition_contrast.rs`~~
+  `crates/micold-client/src/ui/material/composition_contrast.rs` — the style layer is `pub(crate)`
+  by design (017 FR-002), so an integration test in `tests/` cannot call `style::notification` or a
+  variant's style function at all, and resolving both halves "by calling the functions the view
+  calls" is the whole point of this gate. In-crate, beside `style_snapshot.rs`, which is in-crate
+  for the same reason. For every
+  `NoticeLevel` and every button variant an application banner puts inside one, resolve the
+  container's `background` from `style::notification` and the button's `text_color` and border
+  colour from the same style function the view reaches, in **both** schemes and at every
+  `button::Status`, and assert 4.5:1 for the label and 3:1 for the border against that background.
+  Resolve both halves by **calling the functions the view calls** — an inventory of "which component
+  sits on which container" restated beside the code is FR-029a's copied constant in another form
+  (SC-008g). Confirm it fails today: `Error` × outlined is 1.00:1 light and 1.01:1 dark, its border
+  1.42:1, and its hover and pressed fills are `primary` at low alpha on red (FR-004a, SC-008g).
+  **Confirmed red, 2026-08-21**: 27 violations. On `Error`, exactly as predicted — outlined label
+  1.00:1 light / 1.01:1 dark, its border 1.44:1 / 1.86:1, text label the same, and hover and press
+  moving them only to 1.04–1.05:1. The gate accumulates every violation rather than stopping at the
+  first, because one wrong foreground is wrong on both schemes at every state and a fail-fast gate
+  turns one cause into a queue of reruns. Nine further violations landed on the **neutral** `Info`
+  host and are **not** this bug — see the scope note below
+- [X] T152 Give the button variants the foreground they draw in. `Variant::content` takes the
+  override; `style::outlined`, `style::filled` and `style::text_button` take the content role rather
+  than reading `r.primary` / `r.on_primary` unconditionally, and the outlined variant's border takes
+  that role at the border's opacity instead of `r.outline`. One definition of each variant,
+  parameterised — not a second outlined button at the call site, which FR-021/FR-027 forbid and T080
+  has already deleted once (FR-027b, §7.3's **Host surface** table)
+- [X] T153 `Button` gains the builder that carries it, and the state layer and ripple follow the same
+  role — a control on a filled container is one control in one colour, not a recoloured label over an
+  accent-tinted press. Keep the neutral-surface default exactly as it is: a call site that says
+  nothing gets §7.3's table unchanged, which is what makes this a parameter rather than a migration
+  (FR-027b, FR-024)
+- [X] T154 The connection banner derives its action's foreground from **the same decision that
+  produced its fill** — the `(bg, fg)` match in `style::notification` — rather than restating the
+  role beside it at the call site. `connection_banner.rs` asks for the pair once and hands the
+  foreground to the action, so a fifth notice level cannot arrive with a readable banner and an
+  unreadable button (FR-004a, FR-027b, FR-029a's rule in colour)
+- [X] T155 [P] Sweep the other hosts. The two `Restart service` banners (`ui/mod.rs:93-130`,
+  `VersionMismatch` and `BuildMismatch`) go through the same component, so the expected finding is
+  that T154 already fixed them — **record that they were checked**, rather than leaving it implied.
+  Then look at every other accent-filled container that hosts an interactive child: filled tags and
+  chips (§7.6), the snackbar's action on `inverse_surface`, and any dialog surface that is not
+  neutral. Fix or record each, so FR-004a's class is closed rather than its one instance — the shape
+  T107 got right and BUG-008 shows is worth doing (FR-004a). **Checked, 2026-08-21**: the two
+  `Restart service` banners (`ui/mod.rs:98-129`) and the takeover banner are all three built by
+  `ConnectionBanner`, so T154 fixed all three at once — recorded rather than implied. The
+  **snackbar** was a real second instance and is fixed: its `Dismiss` label was already
+  `inverse_primary`, but *tinted onto the label at the call site*, so the hover and press layers and
+  the ripple stayed `primary` over the inverted fill — BUG-009's shape at a smaller amplitude, and
+  precisely what FR-027b's "the component carries it" is for. It now takes
+  `style::snackbar_host(r)`, and the manual tint is gone. Tags and chips (§7.6) are **tonal** —
+  `alpha(accent, 0.20)` behind `accent` — not accent fills, and they host no interactive child; the
+  dialog surface is neutral. Nothing else in the crate fills a container with an accent role
+- [X] T156 [P] The showcase's "with an action" specimen
+  (`showcase/sections/surfaces.rs:189-198`) renders the corrected pairing, and gains the `Info` host
+  beside it so both banner surfaces are visible together. The `Info` banner's action is readable
+  today only because `surface_variant` happens to be inside §1.3's neutral enumeration — luck, not a
+  rule — and BUG-009's "adjacent risk" note records it. Showing the two side by side is what makes
+  the rule visible rather than the coincidence (FR-004a, SC-007)
+- [X] T157 [P] `style_snapshot.rs` pins the button style as it resolves **on each notice level**, not
+  only on the surface. The snapshot records styles one at a time by design; naming the composition is
+  how a composition gets into it, and it is the byte-for-byte half that T151's threshold assertion
+  deliberately is not (SC-008g). Every host is posed, the neutral ones included: a level whose fill
+  stops imposing is exactly the regression this file exists to make visible, and it can only show up
+  if the neutral pose is recorded rather than skipped. The regenerated fixture is **78 added lines
+  and no changed ones** — the parameter is genuinely opt-in, and no call site that says nothing has
+  moved
+- [X] T158 Confirm in the running application by the `visual-pass` route, in **both** schemes: the
+  takeover banner and a version-mismatch banner, label and border legible against the red, at rest
+  and under hover and press. Both schemes rather than one — the dark scheme fails identically at
+  1.01:1, and a light-only screenshot would not show it. Record the result in
+  `../evidence/BUG-009-action-on-the-error-banner.png` (SC-008g, FR-004a). **Run 2026-08-21** on
+  Xvfb `:91` + lavapipe (software Vulkan), showcase binary pinned out of `target-shared` and
+  verified as this branch's before launching. Both schemes, `ConnectionBanner` § "with an action",
+  at rest, under hover and under press — six poses, all legible: light draws the label and the pill
+  border in white on the red fill with a white state layer lightening it under the pointer, dark
+  draws both in the dark-scheme `on_error` maroon on the salmon fill. The `Info` specimen beside it
+  keeps `primary`, which is the pair T156 put there to make visible. The **snackbar**'s `Dismiss`
+  was checked in the same pass and reads `inverse_primary` on the inverted fill. What this route
+  cannot answer, unchanged from every prior pass: mid-flight animation frames and perceived
+  smoothness — neither is claimed here, and neither is at issue in a colour fix
+- [X] T159 [P] Read `docs/` against the change (FR-041). The takeover banner is described by its
+  behaviour, not by its colours, so the expected outcome is **no edit** — record that it was checked
+  rather than leaving the question open (FR-041). **Checked, 2026-08-21, no edit.**
+  `docs/daemon.md:165-202` describes the banner and its `Take over` button by what they do;
+  `docs/user-guide/appearance-theming.md:32` says outlines are used for "the border of an outlined
+  button", which names the visual device and not the role that colours it, and stays true
+
+**Scope note (T151)**: the gate asserts the composition on hosts that **impose** — accent fills —
+because that is what FR-004a is a rule about. Run unscoped it also reports nine near-misses on the
+`Info` banner's neutral `surface_variant`: labels at 4.40–4.49:1 under the hover and pressed state
+layers, and an `outline` border at 2.42–2.96:1 in the dark scheme, against thresholds of 4.5 and 3.
+Two causes, neither of them this bug — a state layer eroding a pair §1.3 measured at rest, and
+`outline` on `surface_variant` missing 3:1 in the dark scheme before any layer at all. Both predate
+Phase 21 and are unchanged by it. They are filed as [BUG-010](bugs/BUG-010.md) rather than absorbed
+here, because widening this gate to cover them would make it fail for a reason BUG-009 did not
+cause, and because choosing between "retune the tone" and "declare state layers exempt on neutral
+hosts" is a contract decision rather than an implementation one. The filter is a single
+`imposed().is_none()` skip, so removing it is one edit when that decision is made.
+
+**Bugfix**: 2026-08-21 — BUG-009 added Phase 21 (T151–T159). **No task is reopened.** T080 rebuilt the banner's action on the shared `Button` and is complete as written — the hand-rolled control it replaced called `style::outlined` and was purple-on-red too, so the task did not introduce the defect; what it did was make the colour arrive from the shared library, which is where the missing rule has to live. T000a/T000b built the contrast gate faithfully over §1.3's table, and the table is the gap rather than the gate. T036 applied the state layers as specified; they are `primary` at low alpha and follow the label's role once FR-027b puts that role in the component. The work missing here was never a task, and could not have been while no artifact said a component's foreground depends on what it is standing on.
