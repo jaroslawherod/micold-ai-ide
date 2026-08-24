@@ -18,35 +18,21 @@
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::palette::{self, Ramp};
-use micold_core::tokens::{roles, Rgb, Roles};
+use micold_core::tokens::{contrast, luminance, roles, Rgb, Roles, AA_NON_TEXT, AA_TEXT};
 
 // ---------------------------------------------------------------------------------------------
 // WCAG contrast
 // ---------------------------------------------------------------------------------------------
+//
+// `contrast`, `luminance` and the two thresholds live in `micold_core::tokens` rather than here.
+// This file had its own copy, and so did `tokens.rs`, `icon_roles.rs` and — once BUG-009 added a
+// composition gate — a fourth. Four transcriptions of the sRGB linearisation is four chances for
+// one of them to drift, and a drifted copy does not fail: it quietly measures something else and
+// still passes. One definition, in the crate that owns the colours (FR-029a's rule, in maths).
 
-fn linearize(channel: u8) -> f64 {
-    let c = channel as f64 / 255.0;
-    if c <= 0.039_28 {
-        c / 12.92
-    } else {
-        ((c + 0.055) / 1.055).powf(2.4)
-    }
-}
-
-fn luminance(color: Rgb) -> f64 {
-    0.2126 * linearize(color.r) + 0.7152 * linearize(color.g) + 0.0722 * linearize(color.b)
-}
-
-fn contrast(a: Rgb, b: Rgb) -> f64 {
-    let (la, lb) = (luminance(a), luminance(b));
-    let (hi, lo) = if la >= lb { (la, lb) } else { (lb, la) };
-    (hi + 0.05) / (lo + 0.05)
-}
-
-/// Normal text.
-const AA_NORMAL: f64 = 4.5;
-/// Non-text — what a divider or an outlined control's border must clear.
-const AA_NON_TEXT: f64 = 3.0;
+/// Normal text. Named `AA_NORMAL` here because the assertions below read that way; it is
+/// `tokens::AA_TEXT`.
+const AA_NORMAL: f64 = AA_TEXT;
 
 /// Every surface level `on_surface` and `on_surface_variant` are drawn over (§1.3).
 fn all_surfaces(r: &Roles) -> Vec<(&'static str, Rgb)> {

@@ -45,6 +45,40 @@ impl Rgb {
     }
 }
 
+/// One channel of an sRGB colour, linearised — WCAG 2.1 §"relative luminance".
+fn linearize(channel: u8) -> f64 {
+    let c = channel as f64 / 255.0;
+    if c <= 0.039_28 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// WCAG relative luminance.
+pub fn luminance(color: Rgb) -> f64 {
+    0.2126 * linearize(color.r) + 0.7152 * linearize(color.g) + 0.0722 * linearize(color.b)
+}
+
+/// The WCAG contrast ratio between two colours, from 1.0 (identical luminance) to 21.0.
+///
+/// Here rather than copied into each gate that needs it. Four test files had written out the same
+/// twelve lines, which is the shape FR-029a forbids for a *number* and this feature's BUG-009 found
+/// again in colour: a restated definition is correct only until the original moves. It is `pub`
+/// from the token module because contrast is a property **of** the token set — §1.3's obligation
+/// table is a claim about these ratios, and the thresholds it imposes (4.5:1 for text, 3:1 for
+/// non-text) are read by gates in both crates.
+pub fn contrast(a: Rgb, b: Rgb) -> f64 {
+    let (la, lb) = (luminance(a), luminance(b));
+    let (hi, lo) = if la >= lb { (la, lb) } else { (lb, la) };
+    (hi + 0.05) / (lo + 0.05)
+}
+
+/// WCAG AA for normal text.
+pub const AA_TEXT: f64 = 4.5;
+/// WCAG AA for non-text — what a divider, a focus ring or an outlined control's border must clear.
+pub const AA_NON_TEXT: f64 = 3.0;
+
 /// The Material 3 semantic color roles for one scheme (contract §1.2).
 ///
 /// Every field is produced by reading a [`palette`] ramp at a stated tone — see [`LIGHT`] and

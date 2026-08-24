@@ -8,29 +8,9 @@
 
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{roles, typography, Rgb, Roles};
-
-/// Linearize a single 0..=255 sRGB channel per the WCAG definition.
-fn linearize(channel: u8) -> f64 {
-    let c = channel as f64 / 255.0;
-    if c <= 0.039_28 {
-        c / 12.92
-    } else {
-        ((c + 0.055) / 1.055).powf(2.4)
-    }
-}
-
-/// WCAG relative luminance of an sRGB color.
-fn luminance(color: Rgb) -> f64 {
-    0.2126 * linearize(color.r) + 0.7152 * linearize(color.g) + 0.0722 * linearize(color.b)
-}
-
-/// WCAG contrast ratio between two colors (>= 1.0; higher is more legible).
-fn contrast(a: Rgb, b: Rgb) -> f64 {
-    let (la, lb) = (luminance(a), luminance(b));
-    let (hi, lo) = if la >= lb { (la, lb) } else { (lb, la) };
-    (hi + 0.05) / (lo + 0.05)
-}
+// `contrast` and `luminance` come from the crate that owns the colours, not from a copy here — see
+// the note in `tokens_contrast.rs`.
+use micold_core::tokens::{contrast, luminance, roles, typography, Rgb, Roles, AA_TEXT};
 
 /// The foreground/surface pairs that carry text and must meet AA. Includes the worktree tag
 /// chips (feature 008): every per-type fill and the issue fill, paired with `on_tag`.
@@ -86,7 +66,7 @@ fn pairs(r: &Roles) -> Vec<(&'static str, Rgb, Rgb)> {
     out
 }
 
-const AA_NORMAL: f64 = 4.5;
+const AA_NORMAL: f64 = AA_TEXT;
 
 #[test]
 fn light_scheme_meets_aa_contrast() {
