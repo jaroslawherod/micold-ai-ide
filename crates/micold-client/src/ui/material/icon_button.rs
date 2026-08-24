@@ -159,7 +159,7 @@ impl<'a, M: Clone + 'a> From<IconButton<'a, M>> for Element<'a, M> {
         let style_fn: ButtonStyleFn = if b.circular {
             Box::new(style::circular_icon_button(b.roles))
         } else {
-            Box::new(style::text_button(b.roles))
+            Box::new(style::text_button(b.roles, None))
         };
         let pressable = b.on_press.is_some();
         let mut btn = button(content).padding(b.inset()).style(style_fn);

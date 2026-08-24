@@ -76,7 +76,16 @@ impl<'a, M: 'a + Clone> From<ConnectionBanner<'a, M>> for Element<'a, M> {
             // put a second definition of "an outlined button" in the library — one that a change to
             // `Button` never reaches — and it would not ripple, because the ripple is composed
             // inside the component rather than by its callers (FR-021, FR-027).
-            line = line.push(super::Button::outlined(label, b.roles).on_press(on_press));
+            //
+            // `.on_host(...)` reads the *same* `notification_host` the container below styles
+            // itself from, so the action's colours are derived from the decision that produced the
+            // fill rather than restated beside it — a level added to `NoticeLevel` cannot give the
+            // banner one colour and its button another (FR-004a, FR-027b, BUG-009).
+            line = line.push(
+                super::Button::outlined(label, b.roles)
+                    .on_host(style::notification_host(b.roles, b.level))
+                    .on_press(on_press),
+            );
         }
 
         container(line)
