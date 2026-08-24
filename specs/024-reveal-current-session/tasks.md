@@ -339,6 +339,10 @@ is nowhere near, calls it visible, and consumes the arm under FR-009.
 - **US3 (Phase 5)**: depends on Phase 2 and on T018 (`set_current_session`, introduced in US1)
 - **US4 (Phase 6)**: depends on Phase 2; the exemption is meaningless without US1's reveal
 - **Polish (Phase 7)**: depends on the stories being delivered
+- **Bugfix BUG-001 (Phase 8)**: depends on Phase 3 — it reopens T021, whose role selection is where
+  the defect starts; independent of Phase 9
+- **Bugfix BUG-002 (Phase 9)**: depends on Phase 4 — it repairs the drain T033 introduced;
+  independent of Phase 8
 
 ### Within Each User Story
 
