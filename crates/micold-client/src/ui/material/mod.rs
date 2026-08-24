@@ -23,6 +23,11 @@ mod button;
 #[cfg(test)]
 mod button_anatomy;
 mod checkbox;
+/// A component read against the container it is *rendered in*, not against the surfaces its own
+/// role was enumerated for. The first check here that reads a **composition** rather than the
+/// token set (BUG-009).
+#[cfg(test)]
+mod composition_contrast;
 mod connection_banner;
 /// Where a component puts its content inside a height taller than that content. In-crate for the
 /// same reason as `form_field_anatomy`, and the first check that reads what a component *drew*
