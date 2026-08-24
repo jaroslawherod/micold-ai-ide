@@ -644,6 +644,37 @@ session mid-response reads as working **within one second** (quickstart §B B4, 
   diff is the evidence the label landed where it was meant to (depends on T066, T066a)
 - [X] T068 [P] [US3] Document what the sidebar shows per CLI — the row's CLI label, titles, and the activity badge — and that an open session names its CLI on its own terminal bar, on the pinned AI tab (FR-016a), in `docs/user-guide/worktrees-and-sessions.md`
 
+- [X] T067b [US3] Look at the pinned AI tab in the real GUI, for both CLIs, both schemes, marked and
+  unmarked. T067a regenerates a fixture of *rectangles*; a word inside a tab that was sized for a
+  16dp label is a question about ink — crowding, truncation, glyph/label spacing, whether the label
+  takes the marked tint with its glyph — and `layout_snapshot` is structurally blind to all of it.
+  Run it with the repo's `visual-pass` skill (Xvfb + lavapipe, a seeded project, a private display),
+  not by asking a person (depends on T066a, T067a)
+
+  **Ran 2026-08-24**, Xvfb 1600×1400 + lavapipe (software Vulkan), against pinned binaries built
+  from this branch — *not* a real display or a real GPU. Evidence:
+  `evidence/FR-016a-ai-tab-names-its-cli.png`, four strips cropped at identical geometry: marked
+  `claude` (dark), unmarked `claude` beside three numbered tabs (dark), marked `copilot` with a
+  stopped badge (dark), unmarked `claude` beside three numbered tabs (light).
+
+  Nothing wrong found. What the frames actually show, beyond "it fits":
+
+  - The label takes the marked tint **with** its glyph and the muted one with it — `label_tint`
+    doing what `tint` alone could not. An unmarked tab's word is clearly subordinate to the marked
+    numbered tab beside it in both schemes.
+  - The word sits on the numbered tabs' baseline, not near it.
+  - **A stopped badge does not move the label.** The leading slot is a fixed 48dp whether or not it
+    holds a badge, so the ring appears beside an unshifted word — the anatomy's promise, confirmed
+    against the two frames rather than assumed.
+  - The tab's real extent, which only the active indicator and the hover state layer reveal, is
+    ~156dp for `claude` and ~4dp more for `copilot`; both **anchor their trailing edge**, so the
+    longer name grows leftward and the strip's right edge does not move. The content centres inside
+    it, because both 48dp slots are reserved.
+
+  Not covered, and not claimable from this: mid-transition frames and perceived smoothness (a
+  software rasteriser says nothing about frame pacing), and every §B step other than B4's
+  terminal-bar half.
+
 **Checkpoint**: US1–US3 work. A mixed project is legible at a glance.
 
 ---

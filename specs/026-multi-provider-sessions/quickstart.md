@@ -186,7 +186,7 @@ click budget is a claim about an interaction, and no test in this repository cou
 | B1 — a Copilot session starts in the right worktree | |
 | B2 — one press starts the default; secondary control overrides; open sessions untouched | |
 | B3 — the choice and the conversation survive a restart | |
-| B4 — row names the CLI in text; terminal bar names it too; title; badge within 1s; both badges identical | |
+| B4 — row names the CLI in text; terminal bar names it too; title; badge within 1s; both badges identical | **terminal-bar half only, 2026-08-24** — see T067b. The pinned AI tab names both CLIs correctly in both schemes, marked and unmarked, and the sidebar rows carry their labels in the same frames. Run on Xvfb + lavapipe, so the badge's one-second claim and the title are **not** covered here. Evidence: `evidence/FR-016a-ai-tab-names-its-cli.png` |
 | B5 — externally-started session discovered on every open; unknown activity; a still-attached one is attempted and reported, not pre-checked; closing sticks | |
 | B6 — untrusted worktree | |
 | B7 — only one CLI installed; unavailable default offers the available ones and is not rewritten | |
