@@ -524,38 +524,34 @@ You keep control of the panel:
 Each session's terminal can also run a plain shell instead of `claude` — useful for running git
 commands, scripts, or anything else scoped to that session's worktree without leaving the app.
 
-- The toggle button in the terminal's bottom bar switches the pane between **AI CLI** mode
-  (`claude`) and **Regular Terminal** mode (a plain shell). Its icon changes to show which mode
-  you're currently in, and hovering it shows a tooltip naming the current mode and what pressing
-  it switches to. This icon+tooltip is the single place to check which process your keystrokes
-  are going to. The tab strip beside it says the same thing a second way — the marked tab is the
-  one the pane is showing — and the two can never disagree, because pressing either writes the
-  same thing.
+- The **tab strip** in the terminal's bottom bar is how you move between the AI CLI (`claude` or
+  `copilot`) and a plain shell: press the AI tab at the right-hand end to talk to the CLI, press a
+  numbered tab to get a shell. The marked tab is the one the pane is showing, so the strip is the
+  single place to check which process your keystrokes are going to — it names where each press
+  takes you rather than just saying "the other one".
 - The shell starts with its working directory set to the session's worktree, same as `claude` —
   so `git status`, build scripts, and so on all run against the right branch.
-- **Both processes keep running** while you switch — toggling away from AI CLI mode never stops
-  or restarts `claude`, and toggling away from Regular mode leaves the shell running in the
-  background. Switching back reattaches to whichever process was already there, exactly as you
-  left it.
+- **Both processes keep running** while you switch — leaving the AI tab never stops or restarts
+  the CLI, and leaving a shell's tab leaves that shell running in the background. Switching back
+  reattaches to whichever process was already there, exactly as you left it.
 - If the shell exits (you typed `exit`, or it crashed), a **restart** control appears in the same
   bar so you can start a fresh one; unlike `claude`, the shell never restarts on its own.
-- Switching to Regular mode never stops, restarts, or otherwise touches your `claude`
-  conversation — even mid-turn. It keeps running in the background exactly as it was, including
-  its own crash-auto-restart if it happens to exit while you're looking at the shell, and
-  switching back reattaches to that same conversation with nothing lost.
+- Switching to a shell never stops, restarts, or otherwise touches your `claude` conversation —
+  even mid-turn. It keeps running in the background exactly as it was, including its own
+  crash-auto-restart if it happens to exit while you're looking at the shell, and switching back
+  reattaches to that same conversation with nothing lost.
 
 ### Running more than one Regular Terminal instance
 
 A session isn't limited to a single Regular Terminal — you can open as many independent shell
 instances as you need, side by side.
 
-- Whenever a session is in Regular Terminal mode, an **open a new instance** button sits in the
-  bottom bar next to the mode toggle. Press it (or use **Ctrl+Shift+T** / **Cmd+Shift+T** on
-  macOS while the terminal has focus) to start another independent shell, scoped to the same
-  session working directory as the first. The button is there even when only one instance is
-  open, so you can always go from one to two.
+- An **open a new instance** button — the "+" — sits in the bottom bar at the end of the numbered
+  tabs. Press it (or use **Ctrl+Shift+T** / **Cmd+Shift+T** on macOS while the terminal has focus)
+  to start another independent shell, scoped to the same session working directory as the first.
+  The button is there even when only one instance is open, so you can always go from one to two.
 - The keyboard shortcut only opens a new instance while the session is already showing a Regular
-  Terminal — pressing it in AI CLI mode does nothing and does not switch modes.
+  Terminal — pressing it while the AI tab is marked does nothing and does not change tabs.
 - Each instance is a fully separate shell process: running a long command in one never affects
   the others, and closing or restarting one instance never touches its siblings or your `claude`
   conversation.
@@ -564,9 +560,9 @@ instances as you need, side by side.
 - Closing a background instance leaves everything else exactly as it was. Closing the instance
   you're currently looking at automatically brings up the next one in the list (or the previous one,
   if you closed the last) — the pane is never left showing a closed instance. Closing your very last
-  instance falls back to AI CLI mode.
-- The AI CLI/Regular toggle always returns you to whichever instance was last active when you
-  switch back into Regular mode — not an arbitrary one.
+  instance marks the AI tab.
+- Coming back from the AI tab always returns you to whichever instance was last active — not an
+  arbitrary one.
 
 ### The tab strip
 
@@ -576,8 +572,7 @@ at the right-hand end.
 
 **Exactly one tab is always marked**, and it is the one whose content the pane is displaying — so
 the strip tells you where you are without your having to press anything. Click a tab to bring that
-pane to the front; whatever you switch away from keeps running untouched in the background. The
-strip and the mode toggle can never disagree, because pressing either writes the same thing.
+pane to the front; whatever you switch away from keeps running untouched in the background.
 
 The strip is **always there**, even in a session with one Regular Terminal or none at all. A
 brand-new session shows a single tab — the AI conversation's — marked, because that is what you are
@@ -629,8 +624,8 @@ strip tells you what is and isn't running.
 
 Past about five open instances the tabs need more width than the bar can give them. They **scroll**
 rather than shrink: turn the mouse wheel over the strip to move along it. No tab is ever made
-narrower, ellipsised or dropped, and the AI tab, the "+" and the mode toggle keep their full size
-and position however many instances are open — the AI tab in particular stays one press away rather
+narrower, ellipsised or dropped, and the "+" and the AI tab keep their full size and position
+however many instances are open — the AI tab in particular stays one press away rather
 than being something you have to scroll to.
 
 - **A faded edge means there is more that way.** When the tab you are *looking at* is the one out of
@@ -702,7 +697,7 @@ Keystrokes stream straight to `claude` as you press them, exactly like a standal
 ### One press does what you pressed
 
 Every control in the window acts on the **first** press, whatever the terminal was holding. Press
-the mode toggle and the mode switches; press a session in the sidebar and it opens; press a toolbar
+a tab and the pane switches to it; press a session in the sidebar and it opens; press a toolbar
 button and it fires. You never press something twice — once to get out of the terminal, once to
 actually use it.
 
