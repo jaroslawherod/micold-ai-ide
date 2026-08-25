@@ -368,7 +368,15 @@ docs state per-platform support (quickstart S14).
   about process-tree teardown, the `0x03` interrupt path, or the inverted `portable-pty` `kill()`
   result. Those need the implementation first and then their own tests; splitting the CI-gate clause
   (met) from the Windows-behaviour clause (not started) is what this checkbox now records.
-- [ ] T084 Run all quickstart.md scenarios S1–S15 and record outcomes. **Partially blocked**: the scenarios are GUI/interactive (`mise run run`, multi-window, logout). Their underlying behaviour is covered by automated tests — S5/S7 (`version_recovery`), S6 (`exclusivity`/`liveness`), S8 (`mutation_semantics`/`mutation_atomicity`), supervision (`supervision_restart`/`supervision_giveup`) — but the manual walkthrough + outcome log still needs a human at the GUI.
+- [x] T084 Run all quickstart.md scenarios S1–S15 and record outcomes.
+  **Run 2026-08-25** — `evidence/T084-quickstart-pass.md`. The "needs a human at the GUI" note above
+  was wrong: every scenario except two named clauses was driven headlessly against a real client on
+  Xvfb `:83` with lavapipe, using `xdotool`. Thirteen of fifteen pass outright or pass on every
+  clause this environment can decide; S5 splits (BUG-016) and S10 fails on responsiveness (BUG-021,
+  with BUG-022 behind it). Six further findings sat behind a green suite — BUG-015, BUG-018,
+  BUG-019, BUG-020, BUG-021/022 and BUG-023 — which is the point of walking a quickstart the
+  tests already "cover". **Out of reach here and not claimed**: S2's 3 s cold-start budget (software
+  rasteriser), S14's actual logout, S15's non-Linux platforms (CI is the gate; T083, BUG-008).
 - [x] T085 [P] Measure retargeted `TerminalPane` repaint cost at 60 Hz on the client (Risk 2 — all
   streaming measurements were daemon-side); record whether the tick rate is the right knob.
   **Measured 2026-08-25** — the "blocked" note above was wrong on both halves: the frame profiler
