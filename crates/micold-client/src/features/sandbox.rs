@@ -220,6 +220,34 @@ impl Sandbox {
         self.state = SandboxState::Failed(failure);
     }
 
+    /// The one-occurrence fallback the app should be offering right now, if there is one
+    /// (US5 scenario 2, FR-035a).
+    ///
+    /// A failed bring-up leaves the user with no service at all unless something offers them the
+    /// way back. That offer is *this*, and it exists as a method rather than as a rule the view
+    /// applies because the view is not the place to decide when running unsandboxed is on the
+    /// table — `micold_core::sandbox::lifecycle::accept_fallback` decides that, and this is the
+    /// same question asked one step earlier so the two cannot disagree.
+    ///
+    /// The reason carried here is the *cause* rather than the whole failure sentence: it is read
+    /// back after an em dash by [`Self::persistent_notice`] for as long as the user stays
+    /// unsandboxed, and "Running without the sandbox for now — The sandbox failed while checking
+    /// the container runtime." says when it broke rather than what broke.
+    ///
+    /// `None` once the offer has been taken. An offer still on screen after it was accepted reads
+    /// as though pressing it did nothing.
+    pub fn fallback_offer(&self) -> Option<ConsentedFallback> {
+        if self.fallback.is_some() {
+            return None;
+        }
+        match &self.state {
+            SandboxState::Failed(f) => Some(ConsentedFallback {
+                because: f.error.reason(),
+            }),
+            _ => None,
+        }
+    }
+
     /// Record that the user chose to run unsandboxed for this occurrence (FR-035a).
     ///
     /// Only reachable from a failed sandbox — `micold_core::sandbox::lifecycle::accept_fallback`
@@ -366,6 +394,122 @@ mod tests {
         // ...but it is not a failure, so nothing persistent is shown for it. The daemon section
         // renders it beside the field it belongs to.
         assert!(s.persistent_notice().is_none());
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // T096 — a runtime that cannot be used says which way it cannot, and leaves a way forward
+    // (US5 scenario 2)
+    // -----------------------------------------------------------------------------------------
+
+    /// The three answers a probe can give, for whichever runtime the user selected.
+    fn detect_failures(kind: RuntimeKind) -> [Failure; 3] {
+        [
+            RuntimeError::NotInstalled { kind },
+            RuntimeError::NotRunning { kind },
+            RuntimeError::PermissionDenied { kind },
+        ]
+        .map(|error| Failure {
+            stage: Stage::Probing,
+            error,
+        })
+    }
+
+    /// Each of the three reads differently, and each ends somewhere the user can go.
+    ///
+    /// The three are not interchangeable: "install it", "start it" and "you are not allowed to use
+    /// it" send a user to three different places, and a probe that collapses them into "the
+    /// sandbox did not start" costs them the afternoon. Asserted for both runtimes, because the
+    /// notice names the one the user actually selected — telling a podman user to start Docker is
+    /// the same dead end wearing a different word.
+    #[test]
+    fn each_way_a_runtime_can_be_unusable_reads_differently_and_names_the_runtime() {
+        for kind in RuntimeKind::ALL {
+            let mut notices = Vec::new();
+            for failure in detect_failures(kind) {
+                let mut s = Sandbox::for_placement(PlacementKind::LocalSandbox);
+                s.failed(failure);
+
+                let notice = s
+                    .persistent_notice()
+                    .unwrap_or_else(|| panic!("{kind}: a failed probe must be visible"));
+                assert!(
+                    notice.contains(kind.label()),
+                    "{kind}: the notice must name the runtime the user selected: {notice}"
+                );
+                assert!(
+                    notice.len() > "The sandbox failed while checking the container runtime.".len(),
+                    "{kind}: a cause with no next step is a dead end: {notice}"
+                );
+                notices.push(notice);
+            }
+            notices.sort();
+            notices.dedup();
+            assert_eq!(
+                notices.len(),
+                3,
+                "{kind}: the three answers must not collapse into one"
+            );
+        }
+    }
+
+    /// A failed probe is never the end of the road.
+    ///
+    /// FR-035 forbids falling back on the user's behalf, which leaves exactly one requirement in
+    /// its place: that the way back is *offered*. Without this the app has no working service path
+    /// at all after a failed detect — the sandbox refuses sessions, and nothing else is on the
+    /// table.
+    #[test]
+    fn a_failed_probe_offers_the_way_back_and_taking_it_leaves_a_working_service() {
+        for kind in RuntimeKind::ALL {
+            for failure in detect_failures(kind) {
+                let mut s = Sandbox::for_placement(PlacementKind::LocalSandbox);
+                s.failed(failure);
+
+                assert!(
+                    !s.state.accepts_sessions(),
+                    "{kind}: a failed sandbox must not quietly serve sessions"
+                );
+                let offer = s
+                    .fallback_offer()
+                    .unwrap_or_else(|| panic!("{kind}: a failure with no offer is a dead end"));
+                assert!(
+                    offer.because.contains(kind.label()),
+                    "{kind}: the user consents to something named: {}",
+                    offer.because
+                );
+
+                assert!(s.accept_fallback(offer.clone()), "{kind}");
+                let notice = s
+                    .persistent_notice()
+                    .unwrap_or_else(|| panic!("{kind}: running unsandboxed must stay visible"));
+                assert!(notice.contains(&offer.because), "{kind}: {notice}");
+                assert!(
+                    s.fallback_offer().is_none(),
+                    "{kind}: an offer already taken must stop being offered"
+                );
+            }
+        }
+    }
+
+    /// Nothing else offers it — in particular, a sandbox that is working does not.
+    #[test]
+    fn no_offer_is_made_from_a_state_that_has_not_failed() {
+        for state in [
+            SandboxState::Disabled,
+            SandboxState::Probing,
+            SandboxState::Starting,
+            SandboxState::Running(ContainerId("x".into())),
+            SandboxState::Stale(ContainerId("x".into())),
+        ] {
+            let s = Sandbox {
+                state: state.clone(),
+                ..Sandbox::default()
+            };
+            assert!(
+                s.fallback_offer().is_none(),
+                "{state:?} is not a failure and must not offer a way out of the sandbox"
+            );
+        }
     }
 
     // -----------------------------------------------------------------------------------------

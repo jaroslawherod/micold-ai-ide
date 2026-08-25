@@ -60,7 +60,7 @@ than by hand.
 
 ### B.1 — First enable, cold
 
-Start from no image present (`docker rmi` the tag first). Settings → Daemon → enable the sandbox.
+Start from no image present (`docker rmi` the tag first). Settings → Session service → enable the sandbox.
 
 - [ ] Progress moves continuously through image acquisition; no silent stretch longer than a few
       seconds (SC-004, C-8)

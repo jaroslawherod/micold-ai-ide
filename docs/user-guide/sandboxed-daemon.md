@@ -11,11 +11,70 @@ what a session can reach when it goes looking.
 
 Settings → **Session service** → "Run the service in a container", then restart the application.
 
-You need a container runtime installed. Docker is supported today; Podman works and is exercised by
-the same test suite, so if you already run Podman you can select it once the daemon section lands.
+You need a container runtime installed — Docker or Podman; see **Container runtimes** below.
 
 The first start downloads the service's image, which can take a few minutes on a slow connection.
 After that it starts in seconds.
+
+## Container runtimes
+
+Settings → **Session service** → **Container runtime** chooses between them. Docker is the default;
+nothing changes runtime on your behalf, and only the one you selected is ever run.
+
+| | Docker | Podman |
+|---|---|---|
+| Minimum version | 20.10 | 4.0 |
+| Runs as | the Docker service, as root | you, rootless |
+| Needs first-time setup | membership of the `docker` group | subuid/subgid ranges for your user |
+| Writable storage limit | usually enforceable | often not |
+
+Everything this page promises holds on both. They are not a shim around one runtime with the other
+bolted on: both are driven through the same interface and both pass the same conformance suite, so
+a claim that survives on Docker and not on Podman is a bug in this application rather than a
+difference you are expected to work around.
+
+### What is different about Podman
+
+**It runs as you, not as a service running as root.** That is why it needs no group membership, and
+why files a session writes into a project already come out owned by you. Docker reaches the same
+result by being told your user and group explicitly; Podman by mapping your own user into the
+container (`--userns=keep-id`). The outcome is identical; the mechanism is not, and it is the
+mechanism that fails differently.
+
+**Its characteristic first-run failure is a missing subuid range.** Rootless Podman needs a block of
+subordinate user and group ids allocated to you in `/etc/subuid` and `/etc/subgid`. Without them
+nothing starts, and Podman says so in its own words rather than saying "permission denied". The
+application classifies it as a permission problem anyway and points at `podman system migrate`,
+because the alternative — reporting it as an unrecognised error — leaves you one `usermod` away
+from a working sandbox with no way to know it.
+
+**"Not running" means something else.** Docker has a daemon to start. Rootless Podman does not: on
+Linux "not running" means its user-level service is down, and on macOS and Windows it means the
+`podman machine` virtual machine has not been started. The failure message names the command that
+applies to your setup.
+
+**The writable storage limit is the one most likely to be unavailable**, on either runtime but more
+often on Podman, since whether a size cap can be applied at all depends on the storage driver
+underneath. The application asks, and shows the field disabled with the runtime's own reason rather
+than accepting a number it knows will be ignored — see **Limits** below.
+
+### Adding a runtime
+
+A third runtime is a contained change, and deliberately so. In order:
+
+1. Add a `RuntimeKind` variant and a `crates/micold-core/src/sandbox/dialect/<name>.rs` beside the
+   existing two.
+2. Declare its baseline capabilities, its probe commands, and the wording it uses for "not running"
+   and "not permitted" — those phrase lists are per-runtime data, not a branch in the classifier.
+3. Pass the conformance suite K-1 … K-12 against a fake binary speaking that runtime's output
+   format. The suite is parameterised over every `RuntimeKind`, so a new variant is enrolled in it
+   by existing.
+4. Document its quirks in this file, in the shape of the section above.
+
+Nothing in argv construction's callers, the client, or the service should need to change. If a new
+runtime forces one of them to, the abstraction is wrong, and that is the signal to revisit
+`specs/027-sandboxed-daemon-runtime/contracts/container-runtime.md` rather than to special-case
+around it.
 
 ## What the container can see
 

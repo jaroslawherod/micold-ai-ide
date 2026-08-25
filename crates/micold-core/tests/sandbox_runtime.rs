@@ -50,42 +50,57 @@ fn detect_reports_the_servers_version() {
 /// K-8: each canned failure maps to its own variant, through the *adapter*, not just the
 /// classifier. A classifier that is right and an adapter that swallows its answer is still a
 /// failure the user sees as "something went wrong".
+///
+/// Run against **each runtime's own wording**, which is the only version of this check worth
+/// having. The two runtimes do not phrase the same failure the same way, so a classifier built
+/// from Docker's strings turns podman's daemon being down into `Unknown` — an anonymous failure,
+/// which is the thing FR-034 exists to prevent. See the fixtures' README on where podman's
+/// wording came from and what still has to confirm it.
 #[test]
 fn canned_failures_reach_the_caller_as_distinct_variants() {
     type Matcher<'a> = &'a dyn Fn(&RuntimeError) -> bool;
-    let cases: [(&str, Matcher, &str); 4] = [
+    let cases: [(&str, &str, Matcher, &str); 4] = [
         (
             "err_daemon_down.txt",
+            "podman_err_service_down.txt",
             &|e| matches!(e, RuntimeError::NotRunning { .. }),
             "NotRunning",
         ),
         (
             "err_permission_denied.txt",
+            "podman_err_permission_denied.txt",
             &|e| matches!(e, RuntimeError::PermissionDenied { .. }),
             "PermissionDenied",
         ),
         (
             "err_port_unavailable.txt",
+            "podman_err_port_unavailable.txt",
             &|e| matches!(e, RuntimeError::PortUnavailable { .. }),
             "PortUnavailable",
         ),
         (
             "err_mount_rejected.txt",
+            "podman_err_mount_rejected.txt",
             &|e| matches!(e, RuntimeError::MountRejected { .. }),
             "MountRejected",
         ),
     ];
-    for (f, matches_variant, name) in cases {
-        let rt = primed(
-            RuntimeKind::Docker,
-            vec![CommandOutput::err(125, fixture(f))],
-        );
-        let err = rt
-            .detect()
-            .expect_err("a failed invocation must not succeed");
-        assert!(matches_variant(&err), "{f}: expected {name}, got {err:?}");
-        // FR-034: every one of them is actionable.
-        assert!(!err.remedy().trim().is_empty());
+    for (docker_fixture, podman_fixture, matches_variant, name) in cases {
+        for (kind, f) in [
+            (RuntimeKind::Docker, docker_fixture),
+            (RuntimeKind::Podman, podman_fixture),
+        ] {
+            let rt = primed(kind, vec![CommandOutput::err(125, fixture(f))]);
+            let err = rt
+                .detect()
+                .expect_err("a failed invocation must not succeed");
+            assert!(
+                matches_variant(&err),
+                "{kind} / {f}: expected {name}, got {err:?}"
+            );
+            // FR-034: every one of them is actionable.
+            assert!(!err.remedy().trim().is_empty(), "{kind} / {f}");
+        }
     }
 }
 
@@ -108,13 +123,12 @@ fn a_missing_program_is_reported_as_not_installed() {
 /// told the sandbox is starting; a panic here takes the client down at the worst moment.
 #[test]
 fn truncated_output_is_classified_not_panicked() {
-    let rt = primed(
-        RuntimeKind::Docker,
-        vec![CommandOutput::ok(fixture("err_truncated.json"))],
-    );
-    match rt.detect() {
-        Err(RuntimeError::Unknown { stderr }) => assert!(!stderr.is_empty()),
-        other => panic!("expected a classified error, got {other:?}"),
+    for kind in RuntimeKind::ALL {
+        let rt = primed(kind, vec![CommandOutput::ok(fixture("err_truncated.json"))]);
+        match rt.detect() {
+            Err(RuntimeError::Unknown { stderr }) => assert!(!stderr.is_empty(), "{kind}"),
+            other => panic!("{kind}: expected a classified error, got {other:?}"),
+        }
     }
 }
 
@@ -189,46 +203,50 @@ fn cpu_memory_and_process_limits_are_supported_on_both_runtimes() {
 fn lifecycle_operations_are_idempotent() {
     let id = ContainerId("micold-sandbox".to_string());
 
-    let already_stopped = primed(
-        RuntimeKind::Docker,
-        vec![CommandOutput::err(
-            1,
+    // Each runtime's own phrasing of "it is already in the state you asked for". Short enough to
+    // sit inline rather than in the fixtures directory; podman's are transcribed, not captured,
+    // for the reason the fixtures' README gives.
+    let cases = [
+        (
+            RuntimeKind::Docker,
             "Error response from daemon: container is not running",
-        )],
-    );
-    assert!(already_stopped.stop(&id).is_ok());
-
-    let already_gone = primed(
-        RuntimeKind::Docker,
-        vec![CommandOutput::err(
-            1,
             "Error: No such container: micold-sandbox",
-        )],
-    );
-    assert!(already_gone.remove(&id).is_ok());
-
-    let already_running = primed(
-        RuntimeKind::Docker,
-        vec![CommandOutput::err(
-            1,
             "Error response from daemon: container is already running",
-        )],
-    );
-    assert!(already_running.start(&id).is_ok());
+        ),
+        (
+            RuntimeKind::Podman,
+            "Error: container micold-sandbox is not running",
+            r#"Error: no container with name or ID "micold-sandbox" found: no such container"#,
+            "Error: container micold-sandbox is already running",
+        ),
+    ];
+
+    for (kind, stopped, gone, running) in cases {
+        let already_stopped = primed(kind, vec![CommandOutput::err(1, stopped)]);
+        assert!(already_stopped.stop(&id).is_ok(), "{kind}");
+
+        let already_gone = primed(kind, vec![CommandOutput::err(1, gone)]);
+        assert!(already_gone.remove(&id).is_ok(), "{kind}");
+
+        let already_running = primed(kind, vec![CommandOutput::err(1, running)]);
+        assert!(already_running.start(&id).is_ok(), "{kind}");
+    }
 }
 
 /// K-9's other half: idempotence must not swallow a *real* failure. A `stop` that fails because the
 /// daemon is down has to surface, or the client reports success and then cannot reach anything.
 #[test]
 fn idempotence_does_not_swallow_a_real_failure() {
-    let rt = primed(
-        RuntimeKind::Docker,
-        vec![CommandOutput::err(125, fixture("err_daemon_down.txt"))],
-    );
-    let err = rt
-        .stop(&ContainerId("x".into()))
-        .expect_err("a daemon-down stop is a real failure");
-    assert!(matches!(err, RuntimeError::NotRunning { .. }));
+    for (kind, f) in [
+        (RuntimeKind::Docker, "err_daemon_down.txt"),
+        (RuntimeKind::Podman, "podman_err_service_down.txt"),
+    ] {
+        let rt = primed(kind, vec![CommandOutput::err(125, fixture(f))]);
+        let err = rt
+            .stop(&ContainerId("x".into()))
+            .expect_err("a daemon-down stop is a real failure");
+        assert!(matches!(err, RuntimeError::NotRunning { .. }), "{kind}: {err:?}");
+    }
 }
 
 /// K-10: acquisition reports progress more than once for multi-layer output (obligation C-8).
@@ -236,37 +254,43 @@ fn idempotence_does_not_swallow_a_real_failure() {
 fn acquiring_an_image_emits_progress_while_it_runs() {
     use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
 
-    let runner = RecordingRunner::new();
-    // inspect: absent -> pull (multi-line) -> inspect: present
-    runner.push(Ok(CommandOutput::err(
-        1,
-        "Error: No such image: micold-daemon:0.27.0",
-    )));
-    runner.push_ok(
-        "0e29546d541c: Pulling fs layer\n\
-         0e29546d541c: Downloading  1.2MB/5.8MB\n\
-         0e29546d541c: Extracting  5.8MB/5.8MB\n\
-         Status: Downloaded newer image for micold-daemon:0.27.0",
-    );
-    runner.push_ok(fixture("docker_inspect_image.json"));
+    // Both runtimes report a layered pull line by line, and both print image inspect in the same
+    // shape, so one fixture serves both — the thing under test is that the adapter forwards each
+    // line as it arrives rather than after the pull is over.
+    for kind in RuntimeKind::ALL {
+        let runner = RecordingRunner::new();
+        // inspect: absent -> pull (multi-line) -> inspect: present
+        runner.push(Ok(CommandOutput::err(
+            1,
+            "Error: No such image: micold-daemon:0.27.0",
+        )));
+        runner.push_ok(
+            "0e29546d541c: Pulling fs layer\n\
+             0e29546d541c: Downloading  1.2MB/5.8MB\n\
+             0e29546d541c: Extracting  5.8MB/5.8MB\n\
+             Status: Downloaded newer image for micold-daemon:0.27.0",
+        );
+        runner.push_ok(fixture("docker_inspect_image.json"));
 
-    let rt = CliRuntime::new(RuntimeKind::Docker, runner);
-    let source = ImageSource {
-        kind: ImageSourceKind::Registry,
-        reference: "micold-daemon:0.27.0".to_string(),
-        path: None,
-    };
+        let rt = CliRuntime::new(kind, runner);
+        let source = ImageSource {
+            kind: ImageSourceKind::Registry,
+            reference: "micold-daemon:0.27.0".to_string(),
+            path: None,
+        };
 
-    let mut reports = Vec::new();
-    let facts = rt
-        .acquire_image(&source, &mut |p| reports.push(p))
-        .expect("acquire");
+        let mut reports = Vec::new();
+        let facts = rt
+            .acquire_image(&source, &mut |p| reports.push(p))
+            .expect("acquire");
 
-    assert!(
-        reports.len() >= 2,
-        "SC-004 gives this five minutes; silence for that long reads as a hang. reports: {reports:?}"
-    );
-    assert!(!facts.tags.is_empty());
+        assert!(
+            reports.len() >= 2,
+            "{kind}: SC-004 gives this five minutes; silence for that long reads as a hang. \
+             reports: {reports:?}"
+        );
+        assert!(!facts.tags.is_empty(), "{kind}");
+    }
 }
 
 /// An image already present is not fetched. This is Principle IV's offline claim in miniature: a

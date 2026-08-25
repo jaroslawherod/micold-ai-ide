@@ -9,6 +9,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use super::dialect::Dialect;
 use super::exec::CommandOutput;
 use super::image::ImageSource;
 use super::parse::{ContainerFacts, ImageFacts};
@@ -359,7 +360,7 @@ impl RuntimeError {
     pub fn remedy(&self) -> String {
         match self {
             RuntimeError::NotInstalled { kind } => {
-                format!("Install {kind}, or choose another runtime in Settings → Daemon.")
+                format!("Install {kind}, or choose another runtime in Settings → Session service.")
             }
             RuntimeError::NotRunning { kind } => {
                 format!("Start {kind}, then retry.")
@@ -376,7 +377,8 @@ impl RuntimeError {
                 format!("Upgrade the runtime to {needed} or newer.")
             }
             RuntimeError::ImageNotFound { .. } => {
-                "Check the image reference in Settings → Daemon, or import an image archive."
+                "Check the image reference in Settings → Session service, or import an image \
+                 archive."
                     .to_string()
             }
             RuntimeError::ImagePullFailed { .. } => {
@@ -384,13 +386,14 @@ impl RuntimeError {
                     .to_string()
             }
             RuntimeError::PortUnavailable { .. } => {
-                "Stop whatever holds the port, or choose another in Settings → Daemon.".to_string()
+                "Stop whatever holds the port, or choose another in Settings → Session service."
+                    .to_string()
             }
             RuntimeError::MountRejected { .. } => {
                 "Move the project to a path the runtime can share, or unregister it.".to_string()
             }
             RuntimeError::LimitRejected { field, .. } => {
-                format!("Clear the {field} limit in Settings → Daemon, then retry.")
+                format!("Clear the {field} limit in Settings → Session service, then retry.")
             }
             RuntimeError::Timeout { .. } => {
                 "Retry; if it persists, restart the runtime.".to_string()
@@ -422,10 +425,18 @@ pub fn classify(kind: RuntimeKind, out: &CommandOutput) -> RuntimeError {
     if has("command not found") || has("executable file not found") || has("not recognized") {
         return RuntimeError::NotInstalled { kind };
     }
-    if has("permission denied") {
+    // Both of these come from the dialect rather than from a list here, because the two runtimes
+    // do not phrase the same failure the same way and the difference is the whole point: "install
+    // it", "start it" and "you are not allowed to use it" send the user three different places.
+    //
+    // Permission first: podman reports being unable to reach its socket *because* permission was
+    // denied, and answering "the service is down" would send the user to start something that is
+    // already running.
+    let dialect = Dialect::for_kind(kind);
+    if dialect.not_permitted_phrases.iter().any(|p| has(p)) {
         return RuntimeError::PermissionDenied { kind };
     }
-    if has("cannot connect to the docker daemon") || has("is the docker daemon running") {
+    if dialect.not_running_phrases.iter().any(|p| has(p)) {
         return RuntimeError::NotRunning { kind };
     }
     if has("pull rate limit") || has("toomanyrequests") || has("unauthorized") {

@@ -30,6 +30,21 @@ pub struct Dialect {
     pub no_masquerade_opt: &'static str,
     /// The minimum version this feature has been exercised against.
     pub minimum_version: &'static str,
+    /// What this runtime prints when it is installed but its service cannot be reached.
+    ///
+    /// Lower-case substrings, matched against the runtime's combined output by
+    /// [`classify`](crate::sandbox::runtime::classify). Text-matching is unlovely and is the only
+    /// signal a CLI gives (research R7) — what matters is that the phrases live in the dialect,
+    /// so a new runtime declares its own wording instead of `classify` growing a branch per
+    /// runtime. Docker's phrasing recognised for podman is worse than useless: podman's
+    /// service-down message would fall through to `Unknown`, and the user is told nothing.
+    pub not_running_phrases: &'static [&'static str],
+    /// What it prints when it is reachable but this user may not drive it — group membership on
+    /// Docker, an uninitialised rootless setup on podman.
+    ///
+    /// Matched **before** [`Self::not_running_phrases`]: podman says it cannot connect to its
+    /// socket *because* permission was denied, and the fix is the permission, not the service.
+    pub not_permitted_phrases: &'static [&'static str],
 }
 
 impl Dialect {
@@ -57,6 +72,26 @@ impl Dialect {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_runtime_names_the_failures_it_can_report() {
+        // A dialect with no phrases is a runtime whose "service is down" and "you are not allowed"
+        // both arrive as `Unknown`, which is the anonymous failure FR-034 exists to prevent. That
+        // is easy to leave out when adding a runtime and invisible until someone hits it, so it
+        // is a property of the table rather than a note in the contract.
+        for kind in RuntimeKind::ALL {
+            let d = Dialect::for_kind(kind);
+            assert!(!d.not_running_phrases.is_empty(), "{kind}");
+            assert!(!d.not_permitted_phrases.is_empty(), "{kind}");
+            for p in d.not_running_phrases.iter().chain(d.not_permitted_phrases) {
+                assert_eq!(
+                    *p,
+                    p.to_ascii_lowercase(),
+                    "{kind}: phrases are matched against lower-cased output, so `{p}` never matches"
+                );
+            }
+        }
+    }
 
     #[test]
     fn every_runtime_has_a_dialect() {

@@ -1,0 +1,1 @@
+Error: mkdir /mnt/netshare: read-only file system

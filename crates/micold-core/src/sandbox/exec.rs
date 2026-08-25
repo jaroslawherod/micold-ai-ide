@@ -251,6 +251,27 @@ impl CommandRunner for RecordingRunner {
     }
 }
 
+/// A borrowed runner is a runner.
+///
+/// [`CliRuntime::new`](super::cli::CliRuntime::new) takes its runner by value, which is right for
+/// production — the runtime owns its spawn shim — and leaves a test holding nothing. The argv log
+/// a [`RecordingRunner`] accumulates is the assertion in checks like "the runtime the user did not
+/// select is never invoked", so the test has to keep the recorder and lend it out.
+impl<R: CommandRunner + ?Sized> CommandRunner for &R {
+    fn run(&self, program: &OsStr, args: &[OsString]) -> io::Result<CommandOutput> {
+        (**self).run(program, args)
+    }
+
+    fn run_streaming(
+        &self,
+        program: &OsStr,
+        args: &[OsString],
+        on_line: &mut dyn FnMut(&str),
+    ) -> io::Result<CommandOutput> {
+        (**self).run_streaming(program, args, on_line)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

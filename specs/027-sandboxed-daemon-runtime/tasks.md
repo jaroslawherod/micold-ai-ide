@@ -242,17 +242,17 @@ worktree or settings behaviour.
 
 ### Tests first
 
-- [ ] T090 *(test)* [P] [US5] Parameterise `crates/micold-core/tests/sandbox_argv.rs` and `sandbox_runtime.rs` over both dialects so podman passes K-1 … K-12 (contracts/container-runtime.md §"Conformance suite")
-- [ ] T091 *(test)* [P] [US5] Write `crates/micold-core/tests/sandbox_detect.rs` — a runtime that is not installed, not running, and not usable by this user each produce a **distinct** classified error (US5 scenario 2, C-6)
-- [ ] T092 *(test)* [P] [US5] Assert in `crates/micold-core/tests/sandbox_detect.rs` that the unselected runtime is never invoked — the fake runtime's argv log for the other runtime stays empty (US5 scenario 3)
+- [X] T090 *(test)* [P] [US5] Parameterised the conformance suite over both dialects so podman passes K-1 … K-12 (contracts/container-runtime.md §"Conformance suite"). **`crates/micold-core/tests/sandbox_argv.rs` does not exist**: K-1 … K-7 and K-11 have always lived inline in `crates/micold-core/src/sandbox/argv.rs`'s own test module, and that is where they were parameterised; K-8 … K-10 and K-12 in `tests/sandbox_runtime.rs`. Six `podman_err_*.txt` fixtures were added and their README says plainly that they were **transcribed from podman's message strings rather than captured** — podman is not installed on this machine — with T098 named as the task that confirms or corrects them
+- [X] T091 *(test)* [P] [US5] Write `crates/micold-core/tests/sandbox_detect.rs` — a runtime that is not installed, not running, and not usable by this user each produce a **distinct** classified error (US5 scenario 2, C-6)
+- [X] T092 *(test)* [P] [US5] Assert in `crates/micold-core/tests/sandbox_detect.rs` that the unselected runtime is never invoked — the fake runtime's argv log for the other runtime stays empty (US5 scenario 3)
 
 ### Implementation
 
 - [X] T093 [US5] Implement podman's dialect in `crates/micold-core/src/sandbox/dialect/podman.rs` — rootless defaults and `--userns=keep-id` (R3, C-4)
-- [ ] T094 [US5] Implement `detect` for both dialects in `crates/micold-core/src/sandbox/runtime.rs`, distinguishing not-installed, not-running and not-permitted (US5 scenario 2)
-- [ ] T095 [US5] Add runtime selection to `crates/micold-client/src/ui/settings/daemon.rs` using the existing `Select` component, defaulting to Docker (SP-2, FR-021)
-- [ ] T096 [US5] Ensure a detect failure reports which of the three it is with a next step, and leaves the app with a working service path, in `crates/micold-client/src/features/sandbox.rs` (US5 scenario 2)
-- [ ] T097 [P] [US5] Document the supported runtimes, podman's rootless differences, and the "adding a runtime" procedure in `docs/user-guide/sandboxed-daemon.md` (contracts/container-runtime.md §"Adding a runtime")
+- [X] T094 [US5] Implement `detect` for both dialects in `crates/micold-core/src/sandbox/runtime.rs`, distinguishing not-installed, not-running and not-permitted (US5 scenario 2)
+- [X] T095 [US5] Add runtime selection to `crates/micold-client/src/ui/settings/daemon.rs` using the existing `Select` component, defaulting to Docker (SP-2, FR-021)
+- [X] T096 [US5] Ensure a detect failure reports which of the three it is with a next step, and leaves the app with a working service path, in `crates/micold-client/src/features/sandbox.rs` (US5 scenario 2). Added `Sandbox::fallback_offer`, which is where "leaves a working service path" becomes a property something can assert rather than a hope. Also renamed four remedies from "Settings → Daemon" to "Settings → Session service": the section has never been called Daemon in the UI, so the next step named a place the user could not find
+- [X] T097 [P] [US5] Document the supported runtimes, podman's rootless differences, and the "adding a runtime" procedure in `docs/user-guide/sandboxed-daemon.md` (contracts/container-runtime.md §"Adding a runtime")
 - [ ] T098 [US5] Run quickstart.md §B.2 and §B.4 against podman on Linux, recording the result in `specs/027-sandboxed-daemon-runtime/evidence/us5-podman.md` — the claim that the seam is real, not a shim around one runtime
 
 **Checkpoint**: FR-020's abstraction is demonstrated rather than asserted, and SC-009 is measurable.

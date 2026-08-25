@@ -18,6 +18,25 @@ pub fn dialect() -> Dialect {
         identity: IdentityMapping::KeepId,
         no_masquerade_opt: "com.docker.network.bridge.enable_ip_masquerade=false",
         minimum_version: "4.0",
+        // Rootless podman has no daemon to start, so "not running" means the user-level service or
+        // the `podman machine` VM is not up. Its message says so by telling the user which command
+        // would fix it.
+        not_running_phrases: &[
+            "cannot connect to podman",
+            "unable to connect to podman socket",
+            "podman machine start",
+            "is the podman service running",
+        ],
+        // The subuid range is podman's characteristic first-run failure and does not contain the
+        // words "permission denied" anywhere: it is a permission problem stated in podman's own
+        // terms, and left unlisted it reads as an unknown error to a user one `usermod` away from
+        // a working sandbox.
+        not_permitted_phrases: &[
+            "permission denied",
+            "no subuid ranges found",
+            "no subgid ranges found",
+            "check rootless mode",
+        ],
     }
 }
 

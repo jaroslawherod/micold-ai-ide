@@ -13,6 +13,13 @@ pub fn dialect() -> Dialect {
         // 20.10 is where `--pids-limit` and the network driver options this feature relies on are
         // uniformly available. Measured against 29.5.1 (research R4, R5).
         minimum_version: "20.10",
+        not_running_phrases: &[
+            "cannot connect to the docker daemon",
+            "is the docker daemon running",
+            "the docker daemon is not running",
+            "docker desktop is not running",
+        ],
+        not_permitted_phrases: &["permission denied"],
     }
 }
 

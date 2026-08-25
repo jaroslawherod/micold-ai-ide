@@ -237,8 +237,10 @@ mod tests {
     fn argv_is_a_pure_function_of_the_spec() {
         // Conformance check K-1. If this ever fails, something in here reached for the world, and
         // every other assertion in this file becomes conditional on when it ran.
-        let (spec, caps) = (spec(), caps(RuntimeKind::Docker, LimitSupport::Supported));
-        assert_eq!(create(&spec, &caps), create(&spec, &caps));
+        for kind in RuntimeKind::ALL {
+            let (spec, caps) = (spec(), caps(kind, LimitSupport::Supported));
+            assert_eq!(create(&spec, &caps), create(&spec, &caps), "{kind}");
+        }
     }
 
     #[test]
@@ -252,21 +254,27 @@ mod tests {
             pids: Some(512),
             storage_bytes: Some(Bytes::from_mib(8192)),
         };
-        let args = strings(&create(
-            &s,
-            &caps(RuntimeKind::Docker, LimitSupport::Supported),
-        ));
+        // Both runtimes take the same four flags in the same units today. That is an observation
+        // about their CLIs, not a licence to check only one of them: the day a dialect needs its
+        // own spelling, this is the test that has to be told about it.
+        for kind in RuntimeKind::ALL {
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
 
-        let value_after = |flag: &str| {
-            args.iter()
-                .position(|a| a == flag)
-                .and_then(|i| args.get(i + 1))
-                .cloned()
-        };
-        assert_eq!(value_after("--cpus").as_deref(), Some("2.500"));
-        assert_eq!(value_after("--memory").as_deref(), Some("4096m"));
-        assert_eq!(value_after("--pids-limit").as_deref(), Some("512"));
-        assert_eq!(value_after("--storage-opt").as_deref(), Some("size=8192m"));
+            let value_after = |flag: &str| {
+                args.iter()
+                    .position(|a| a == flag)
+                    .and_then(|i| args.get(i + 1))
+                    .cloned()
+            };
+            assert_eq!(value_after("--cpus").as_deref(), Some("2.500"), "{kind}");
+            assert_eq!(value_after("--memory").as_deref(), Some("4096m"), "{kind}");
+            assert_eq!(value_after("--pids-limit").as_deref(), Some("512"), "{kind}");
+            assert_eq!(
+                value_after("--storage-opt").as_deref(),
+                Some("size=8192m"),
+                "{kind}"
+            );
+        }
     }
 
     #[test]
@@ -275,15 +283,14 @@ mod tests {
         // preserved in the profile and simply not passed — the view is what tells the user why.
         let mut s = spec();
         s.profile.budget.storage_bytes = Some(Bytes::from_mib(8192));
-        let unsupported = caps(
-            RuntimeKind::Docker,
-            LimitSupport::unsupported("overlayfs without pquota"),
-        );
-        let args = strings(&create(&s, &unsupported));
-        assert!(
-            !args.iter().any(|a| a.starts_with("--storage-opt")),
-            "an unenforceable limit must not be passed: {args:?}"
-        );
+        for kind in RuntimeKind::ALL {
+            let unsupported = caps(kind, LimitSupport::unsupported("overlayfs without pquota"));
+            let args = strings(&create(&s, &unsupported));
+            assert!(
+                !args.iter().any(|a| a.starts_with("--storage-opt")),
+                "{kind} passed an unenforceable limit: {args:?}"
+            );
+        }
         // The user's intent survives (rule RC-3) — it is the argv that omits it, not the profile.
         assert_eq!(s.profile.budget.storage_bytes, Some(Bytes::from_mib(8192)));
     }
@@ -297,15 +304,14 @@ mod tests {
             pids: None,
             storage_bytes: None,
         };
-        let args = strings(&create(
-            &s,
-            &caps(RuntimeKind::Docker, LimitSupport::Supported),
-        ));
-        for flag in ["--cpus", "--memory", "--pids-limit", "--storage-opt"] {
-            assert!(
-                !args.iter().any(|a| a == flag),
-                "{flag} was passed for an unset limit"
-            );
+        for kind in RuntimeKind::ALL {
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            for flag in ["--cpus", "--memory", "--pids-limit", "--storage-opt"] {
+                assert!(
+                    !args.iter().any(|a| a == flag),
+                    "{kind} passed {flag} for an unset limit"
+                );
+            }
         }
     }
 
@@ -319,29 +325,28 @@ mod tests {
             host: PathBuf::from("/home/u/.gitconfig"),
             container: PathBuf::from("/home/u/.gitconfig"),
         }];
-        let args = strings(&create(
-            &s,
-            &caps(RuntimeKind::Docker, LimitSupport::Supported),
-        ));
+        for kind in RuntimeKind::ALL {
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
 
-        let mounted: Vec<String> = args
-            .iter()
-            .enumerate()
-            .filter(|(_, a)| a.as_str() == "-v")
-            .filter_map(|(i, _)| args.get(i + 1).cloned())
-            .collect();
-        // projects + state volume + secret + one credential
-        assert_eq!(mounted.len(), 4, "mounted: {mounted:?}");
-        assert!(mounted
-            .iter()
-            .any(|m| m.starts_with("/home/u/p:/home/u/p:rw")));
-        assert!(mounted
-            .iter()
-            .any(|m| m.contains("micold-ai-ide:/var/lib/micold")));
-        assert!(mounted.iter().any(|m| m.ends_with("/run/micold/token:ro")));
-        assert!(mounted
-            .iter()
-            .any(|m| m.contains(".gitconfig") && m.ends_with(":ro")));
+            let mounted: Vec<String> = args
+                .iter()
+                .enumerate()
+                .filter(|(_, a)| a.as_str() == "-v")
+                .filter_map(|(i, _)| args.get(i + 1).cloned())
+                .collect();
+            // projects + state volume + secret + one credential
+            assert_eq!(mounted.len(), 4, "{kind} mounted: {mounted:?}");
+            assert!(mounted
+                .iter()
+                .any(|m| m.starts_with("/home/u/p:/home/u/p:rw")));
+            assert!(mounted
+                .iter()
+                .any(|m| m.contains("micold-ai-ide:/var/lib/micold")));
+            assert!(mounted.iter().any(|m| m.ends_with("/run/micold/token:ro")));
+            assert!(mounted
+                .iter()
+                .any(|m| m.contains(".gitconfig") && m.ends_with(":ro")));
+        }
     }
 
     #[test]
@@ -349,12 +354,11 @@ mod tests {
         // The default posture, checked where it is spent rather than only where it is declared.
         let s = spec();
         assert!(s.profile.credentials.is_empty());
-        let args = strings(&create(
-            &s,
-            &caps(RuntimeKind::Docker, LimitSupport::Supported),
-        ));
-        assert!(!args.iter().any(|a| a.contains(".gitconfig")));
-        assert!(!args.iter().any(|a| a.contains("ssh")));
+        for kind in RuntimeKind::ALL {
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            assert!(!args.iter().any(|a| a.contains(".gitconfig")), "{kind}");
+            assert!(!args.iter().any(|a| a.contains("ssh")), "{kind}");
+        }
     }
 
     #[test]
@@ -364,23 +368,24 @@ mod tests {
         for m in &s.mounts.projects {
             assert_eq!(m.host, m.container);
         }
-        let args = strings(&create(
-            &s,
-            &caps(RuntimeKind::Docker, LimitSupport::Supported),
-        ));
-        assert!(args.iter().any(|a| a == "/home/u/p:/home/u/p:rw"));
+        for kind in RuntimeKind::ALL {
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            assert!(args.iter().any(|a| a == "/home/u/p:/home/u/p:rw"), "{kind}");
+        }
     }
 
     #[test]
     fn the_control_port_is_published_to_loopback_not_to_every_interface() {
         // `-p 7727:7727` would publish to 0.0.0.0 and put the daemon on the network. The loopback
         // bind is not cosmetic: it is half of why the shared secret is the *other* half.
-        let args = strings(&create(
-            &spec(),
-            &caps(RuntimeKind::Docker, LimitSupport::Supported),
-        ));
-        assert!(args.iter().any(|a| a == "127.0.0.1:7727:7727"), "{args:?}");
-        assert!(!args.iter().any(|a| a == "7727:7727"));
+        for kind in RuntimeKind::ALL {
+            let args = strings(&create(&spec(), &caps(kind, LimitSupport::Supported)));
+            assert!(
+                args.iter().any(|a| a == "127.0.0.1:7727:7727"),
+                "{kind}: {args:?}"
+            );
+            assert!(!args.iter().any(|a| a == "7727:7727"), "{kind}");
+        }
     }
 
     #[test]
@@ -388,33 +393,37 @@ mod tests {
         // Conformance check K-7 — the measured answer to research R4, asserted in both directions.
         let mut s = spec();
         s.profile.network = NetworkPosture::NoOutbound;
-        let dialect = Dialect::for_kind(RuntimeKind::Docker);
 
-        let net = strings(&network_create(&s, &dialect));
-        assert!(
-            net.iter().any(|a| a.contains("enable_ip_masquerade=false")),
-            "{net:?}"
-        );
+        for kind in RuntimeKind::ALL {
+            let net = strings(&network_create(&s, &Dialect::for_kind(kind)));
+            assert!(
+                net.iter().any(|a| a.contains("enable_ip_masquerade=false")),
+                "{kind}: {net:?}"
+            );
 
-        // The configuration that was measured to break the control channel must never appear.
-        assert!(
-            !net.iter().any(|a| a == "--internal"),
-            "an --internal network makes the published port inert (research R4): {net:?}"
-        );
+            // The configuration that was measured to break the control channel must never appear.
+            assert!(
+                !net.iter().any(|a| a == "--internal"),
+                "{kind}: an --internal network makes the published port inert (research R4): \
+                 {net:?}"
+            );
 
-        let args = strings(&create(
-            &s,
-            &caps(RuntimeKind::Docker, LimitSupport::Supported),
-        ));
-        assert!(args.iter().any(|a| a == "127.0.0.1:7727:7727"));
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            assert!(args.iter().any(|a| a == "127.0.0.1:7727:7727"), "{kind}");
+        }
     }
 
     #[test]
     fn outbound_leaves_masquerade_alone() {
         let mut s = spec();
         s.profile.network = NetworkPosture::Outbound;
-        let net = strings(&network_create(&s, &Dialect::for_kind(RuntimeKind::Docker)));
-        assert!(!net.iter().any(|a| a.contains("masquerade")), "{net:?}");
+        for kind in RuntimeKind::ALL {
+            let net = strings(&network_create(&s, &Dialect::for_kind(kind)));
+            assert!(
+                !net.iter().any(|a| a.contains("masquerade")),
+                "{kind}: {net:?}"
+            );
+        }
     }
 
     #[test]
@@ -422,33 +431,28 @@ mod tests {
         // Research R6: the setting keeps one name and one meaning; only the mechanism differs by
         // placement. `unless-stopped`, not `always`, so an explicit stop survives a reboot.
         let mut s = spec();
-        s.profile.survive_logout = true;
-        let on = strings(&create(
-            &s,
-            &caps(RuntimeKind::Docker, LimitSupport::Supported),
-        ));
-        let idx = on.iter().position(|a| a == "--restart").unwrap();
-        assert_eq!(on[idx + 1], "unless-stopped");
+        for kind in RuntimeKind::ALL {
+            s.profile.survive_logout = true;
+            let on = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            let idx = on.iter().position(|a| a == "--restart").unwrap();
+            assert_eq!(on[idx + 1], "unless-stopped", "{kind}");
 
-        s.profile.survive_logout = false;
-        let off = strings(&create(
-            &s,
-            &caps(RuntimeKind::Docker, LimitSupport::Supported),
-        ));
-        let idx = off.iter().position(|a| a == "--restart").unwrap();
-        assert_eq!(off[idx + 1], "no");
+            s.profile.survive_logout = false;
+            let off = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            let idx = off.iter().position(|a| a == "--restart").unwrap();
+            assert_eq!(off[idx + 1], "no", "{kind}");
+        }
     }
 
     #[test]
     fn a_user_exposed_port_is_published_alongside_the_control_port() {
         let mut s = spec();
         s.published_ports = vec![3000];
-        let args = strings(&create(
-            &s,
-            &caps(RuntimeKind::Docker, LimitSupport::Supported),
-        ));
-        assert!(args.iter().any(|a| a == "127.0.0.1:3000:3000"));
-        assert!(args.iter().any(|a| a == "127.0.0.1:7727:7727"));
+        for kind in RuntimeKind::ALL {
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            assert!(args.iter().any(|a| a == "127.0.0.1:3000:3000"), "{kind}");
+            assert!(args.iter().any(|a| a == "127.0.0.1:7727:7727"), "{kind}");
+        }
     }
 
     #[test]
@@ -474,6 +478,42 @@ mod tests {
                     !args.iter().any(|a| a.contains("docker.sock")),
                     "{kind} mounted the runtime's own control socket"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn the_generated_argv_carries_its_dialects_identity_and_no_other() {
+        // Conformance check K-6 where it is *spent*. `dialect::tests` checks `identity_args` in
+        // isolation, which proves the table is right and nothing about whether `create` passes it.
+        // The other half matters as much: a podman argv carrying Docker's `--user 1000:1000` runs
+        // under a rootless uid map where 1000 means someone else, and every file the session
+        // writes comes out owned by a uid the user cannot edit as.
+        for kind in RuntimeKind::ALL {
+            let caps = caps(kind, LimitSupport::Supported);
+            let args = strings(&create(&spec(), &caps));
+            match caps.identity_mapping {
+                IdentityMapping::ExplicitUidGid => {
+                    let i = args
+                        .iter()
+                        .position(|a| a == "--user")
+                        .unwrap_or_else(|| panic!("{kind} passed no identity: {args:?}"));
+                    assert_eq!(args[i + 1], "1000:1000", "{kind}");
+                    assert!(
+                        !args.iter().any(|a| a.starts_with("--userns")),
+                        "{kind} passed a namespace mapping it does not use: {args:?}"
+                    );
+                }
+                IdentityMapping::KeepId => {
+                    assert!(
+                        args.iter().any(|a| a == "--userns=keep-id"),
+                        "{kind} passed no identity: {args:?}"
+                    );
+                    assert!(
+                        !args.iter().any(|a| a == "--user"),
+                        "{kind} passed an explicit uid under a keep-id map: {args:?}"
+                    );
+                }
             }
         }
     }
