@@ -23,7 +23,6 @@ use micold_client::features::connection::ConnectionStatus;
 use micold_client::ui;
 use micold_core::env_include::EnvIncludeOutcome;
 
-use micold_core::sandbox::lifecycle::SandboxState;
 use support::layout::{self as lay, Layer};
 
 /// The application's main view for a given state, as the snapshot resolves it.
@@ -36,7 +35,7 @@ fn view(state: &State) -> Element<'_, micold_client::app::Message> {
         None,
         &EnvIncludeOutcome::Disabled,
         &ConnectionStatus::Connected,
-        &SandboxState::Disabled,
+        &micold_client::features::sandbox::Sandbox::default(),
     )
 }
 

@@ -314,6 +314,13 @@ pub enum RuntimeError {
     /// The runtime refused a limit the capability probe said it supported. A probe/reality
     /// disagreement, which is worth reporting distinctly rather than folding into `Unknown`.
     LimitRejected { field: String, detail: String },
+    /// The container this application was using is no longer running — stopped or removed from
+    /// outside (FR-036, US6 scenario 3).
+    ///
+    /// Not a refusal by the runtime, which is why it reads oddly beside the rest: it is here
+    /// because `Failure` is the one thing the application has for "the sandbox is not usable and
+    /// this is why", and a loss with no explanation is exactly the hang FR-036 forbids.
+    SandboxStopped { name: String },
     /// The runtime did not answer in time.
     Timeout { operation: String },
     /// Unclassified. Retains stderr so the log has the whole story.
@@ -341,11 +348,19 @@ impl RuntimeError {
             RuntimeError::PortUnavailable { port } => {
                 format!("Port {port} is already in use, so the sandbox has no control channel.")
             }
+            RuntimeError::MountRejected { path, detail } if path.is_empty() => {
+                // Only reachable when nothing the caller offered matched the runtime's text.
+                // Saying so beats printing an empty pair of backticks and calling it a path.
+                format!("A path the sandbox needs cannot be shared with it: {detail}")
+            }
             RuntimeError::MountRejected { path, detail } => {
                 format!("`{path}` cannot be shared with the sandbox: {detail}")
             }
             RuntimeError::LimitRejected { field, detail } => {
                 format!("The runtime refused the {field} limit: {detail}")
+            }
+            RuntimeError::SandboxStopped { name } => {
+                format!("The sandbox container `{name}` is no longer running.")
             }
             RuntimeError::Timeout { operation } => format!("{operation} did not finish in time."),
             RuntimeError::Unknown { stderr } => {
@@ -394,6 +409,11 @@ impl RuntimeError {
             }
             RuntimeError::LimitRejected { field, .. } => {
                 format!("Clear the {field} limit in Settings → Session service, then retry.")
+            }
+            RuntimeError::SandboxStopped { .. } => {
+                "Restart the sandbox. Sessions resume from where they were — their processes \
+                 stopped with the container, but their history and layout did not."
+                    .to_string()
             }
             RuntimeError::Timeout { .. } => {
                 "Retry; if it persists, restart the runtime.".to_string()
@@ -451,9 +471,14 @@ pub fn classify(kind: RuntimeKind, out: &CommandOutput) -> RuntimeError {
         };
     }
     if has("address already in use") || has("bind for") {
-        return RuntimeError::PortUnavailable { port: 0 };
+        // Named rather than left at zero: "Port 0 is already in use" is not a smaller version of
+        // the truth, it is a different and false statement, and the one number the user needs to
+        // go and look for is right there in the runtime's own message.
+        return RuntimeError::PortUnavailable {
+            port: port_in(&text).unwrap_or(0),
+        };
     }
-    if has("mount source path") || has("invalid mount") || has("read-only file system") {
+    if dialect.mount_rejected_phrases.iter().any(|p| has(p)) {
         return RuntimeError::MountRejected {
             path: String::new(),
             detail: first_line(&out.stderr),
@@ -472,6 +497,58 @@ pub fn classify(kind: RuntimeKind, out: &CommandOutput) -> RuntimeError {
 
 fn first_line(s: &str) -> String {
     s.lines().next().unwrap_or("").trim().to_string()
+}
+
+/// The first `:<port>` in a bind failure, if there is one.
+///
+/// Both runtimes print the endpoint they failed to bind — `0.0.0.0:7727`, `127.0.0.1:7727` — so the
+/// port follows the last colon of a token that also contains a dot. Nothing else in these messages
+/// has that shape, and a wrong number would be worse than none, so anything else yields `None`.
+fn port_in(text: &str) -> Option<u16> {
+    text.split(|c: char| c.is_whitespace() || c == '"' || c == '\'')
+        .filter(|token| token.contains('.'))
+        .filter_map(|token| token.rsplit(':').next())
+        .filter_map(|tail| {
+            let digits: String = tail.chars().take_while(|c| c.is_ascii_digit()).collect();
+            digits.parse::<u16>().ok()
+        })
+        .find(|p| *p != 0)
+}
+
+impl RuntimeError {
+    /// Name the host path a rejected mount was about, given the paths the caller asked for.
+    ///
+    /// [`classify`] sees only the text the runtime printed. Every runtime words a rejected bind
+    /// differently, and none of them says *which of this sandbox's mounts* it was — from the
+    /// runtime's side there is no such question. The caller knows, because it just built the list,
+    /// so attribution happens one step up rather than by teaching the classifier to guess.
+    ///
+    /// It is worth the extra step. "invalid mount config for type bind" sends a user to a search
+    /// engine; "`/mnt/team-share/webapp` cannot be shared with the sandbox" sends them to the one
+    /// project of theirs that lives on a network share, which is the only actionable thing either
+    /// sentence contains.
+    ///
+    /// The longest matching candidate wins, so a project nested inside a rejected parent is named
+    /// as itself rather than as the parent. An unmatched rejection is left alone: naming the wrong
+    /// path is worse than naming none, and [`Self::reason`] has a sentence for that case.
+    pub fn naming_mount(self, candidates: &[&std::path::Path]) -> Self {
+        match self {
+            RuntimeError::MountRejected { path, detail } if path.is_empty() => {
+                let named = candidates
+                    .iter()
+                    .map(|p| p.to_string_lossy())
+                    .filter(|p| !p.is_empty() && detail.contains(p.as_ref()))
+                    .max_by_key(|p| p.len())
+                    .map(|p| p.into_owned())
+                    .unwrap_or_default();
+                RuntimeError::MountRejected {
+                    path: named,
+                    detail,
+                }
+            }
+            other => other,
+        }
+    }
 }
 
 #[cfg(test)]

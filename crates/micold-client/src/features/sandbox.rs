@@ -10,7 +10,7 @@
 //! application being open: whether the user has taken a one-occurrence fallback in this run, and
 //! what the view needs to render about limits the runtime cannot enforce.
 
-use micold_core::sandbox::lifecycle::{Failure, SandboxState, Started};
+use micold_core::sandbox::lifecycle::{Failure, RestartRequested, SandboxState, Started};
 use micold_core::sandbox::placement::{ConsentedFallback, PlacementKind};
 use micold_core::protocol::messages::ExitStatus;
 use micold_core::sandbox::runtime::{RuntimeCapabilities, UnsatisfiableLimit};
@@ -218,6 +218,50 @@ impl Sandbox {
     /// Adopt a failure.
     pub fn failed(&mut self, failure: Failure) {
         self.state = SandboxState::Failed(failure);
+        // A *fresh* attempt just ended, so the consent given for the previous one no longer
+        // describes the situation. Left standing it would keep the banner reporting the old reason
+        // and never offer the way back for this failure (FR-035a).
+        self.fallback = None;
+    }
+
+    /// Adopt a change to the set of projects the sandbox should be sharing (R9, M-4).
+    ///
+    /// Called when a project is registered or unregistered while the sandbox is up. It marks,
+    /// rather than acts: `micold_core::sandbox::lifecycle::mount_set_changed` decides what the
+    /// state becomes, and it never restarts anything — see that function for why ending the user's
+    /// running sessions to service a settings change is the wrong trade.
+    pub fn mounts_changed(&mut self) {
+        self.state = micold_core::sandbox::lifecycle::mount_set_changed(&self.state);
+    }
+
+    /// Restart the sandbox because the user asked for it, reporting whether there was anything to
+    /// restart.
+    ///
+    /// The one edge back into bring-up, and it takes a `RestartRequested` to get there — so the
+    /// "nothing restarts on its own" half of R9 is carried by the signature rather than by every
+    /// caller remembering it.
+    pub fn restart(&mut self, request: RestartRequested) -> bool {
+        match micold_core::sandbox::lifecycle::restart(&self.state, request) {
+            Some(next) => {
+                self.state = next;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Adopt the loss of the container the sandbox was using (FR-036, US6 scenario 3).
+    ///
+    /// Reports whether anything changed, so a liveness check that arrives after the sandbox has
+    /// already failed for its own reason does not overwrite that reason with a vaguer one.
+    pub fn container_lost(&mut self, name: &str) -> bool {
+        match micold_core::sandbox::lifecycle::container_lost(&self.state, name) {
+            Some(next) => {
+                self.state = next;
+                true
+            }
+            None => false,
+        }
     }
 
     /// The one-occurrence fallback the app should be offering right now, if there is one
@@ -492,6 +536,47 @@ mod tests {
     }
 
     /// Nothing else offers it — in particular, a sandbox that is working does not.
+    /// A retry that fails again is a *new* failure, and the banner has to say so.
+    ///
+    /// The sequence is the ordinary one: the sandbox fails, the user runs without it, presses
+    /// "Try the sandbox again", and it fails for a different reason. If the accepted fallback
+    /// survives that, the banner keeps naming the *first* reason and never offers the way back for
+    /// the second — the user would be looking at a stale explanation of a problem that has changed
+    /// underneath them (FR-035a, FR-035b).
+    #[test]
+    fn a_retry_that_fails_again_reports_the_new_reason_and_offers_again() {
+        let mut s = Sandbox::for_placement(PlacementKind::LocalSandbox);
+        s.failed(Failure {
+            stage: Stage::Probing,
+            error: RuntimeError::NotInstalled {
+                kind: RuntimeKind::Docker,
+            },
+        });
+        let offer = s.fallback_offer().expect("a failed sandbox offers the way back");
+        assert!(s.accept_fallback(offer));
+
+        assert!(
+            s.restart(micold_core::sandbox::lifecycle::RestartRequested),
+            "a failed sandbox can be restarted"
+        );
+        s.failed(Failure {
+            stage: Stage::Acquiring,
+            error: RuntimeError::ImageNotFound {
+                reference: "ghcr.io/micold/sandbox:0.8.0".to_string(),
+            },
+        });
+
+        let notice = s.persistent_notice().expect("a failed sandbox is a standing condition");
+        assert!(
+            notice.contains("getting the sandbox image"),
+            "the banner should name the failure that just happened, not the one before it: {notice}"
+        );
+        assert!(
+            s.fallback_offer().is_some(),
+            "the way back has to be offered again for the new failure"
+        );
+    }
+
     #[test]
     fn no_offer_is_made_from_a_state_that_has_not_failed() {
         for state in [

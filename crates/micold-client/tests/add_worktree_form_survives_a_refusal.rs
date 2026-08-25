@@ -32,7 +32,6 @@ use micold_client::features::connection::ConnectionStatus;
 use micold_client::features::worktree_form::BranchSource;
 use micold_client::ui;
 use micold_core::env_include::EnvIncludeOutcome;
-use micold_core::sandbox::lifecycle::SandboxState;
 use micold_core::tokens::density;
 use micold_core::worktree::{BlockReason, BranchCandidate, BranchOrigin};
 
@@ -147,7 +146,7 @@ impl<'a> Screen<'a> {
             None,
             &OUTCOME,
             &CONNECTION,
-            &SandboxState::Disabled,
+            &micold_client::features::sandbox::Sandbox::default(),
         );
         let mut tree = Tree::new(&element);
         let mut node = element

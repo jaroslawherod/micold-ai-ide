@@ -45,7 +45,7 @@ fn the_dialogs_select_settles_across_view_rebuilds() {
             None,
             &micold_core::env_include::EnvIncludeOutcome::Disabled,
             &under.connection,
-            &micold_core::sandbox::lifecycle::SandboxState::Disabled,
+            &micold_client::features::sandbox::Sandbox::default(),
         )
     };
     let limits = layout::Limits::new(Size::ZERO, WINDOW);

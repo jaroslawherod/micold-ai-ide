@@ -337,6 +337,84 @@ fn acquire<R: ContainerRuntime>(
         })
 }
 
+/// What a running sandbox becomes when the set of things it should be sharing changes (R9, M-4).
+///
+/// A container's mounts are fixed when it is created. Register a project after that and the
+/// sandbox cannot see it, however many times it is asked to — so the state has to say so, and
+/// `Stale` is that answer.
+///
+/// # Why this does not restart anything
+///
+/// Restarting would be the obliging thing to do and it is the wrong thing to do: the sessions
+/// inside the container are the user's work, and ending them to service a settings change they
+/// made in another window turns an edit into an outage. `Stale` still accepts sessions for the
+/// same reason — what is out of date is the mount set, not the container.
+///
+/// Every other state is returned unchanged. A sandbox that is still coming up will pick the new
+/// mount set up when it creates its container, and one that has failed or is disabled has no
+/// mounts to be out of date.
+/// What a sandbox becomes when the container it names has gone away (FR-036, US6 scenario 3).
+///
+/// The trigger is a lost connection, not a poll: the application does not watch the container, it
+/// notices that the service it was talking to has stopped answering and then asks *once* whether
+/// the container is still there. That ordering matters — polling a container runtime every few
+/// seconds for the lifetime of the application is a cost paid on every run to detect something
+/// that happens almost never.
+///
+/// `None` when there was nothing to lose. A sandbox that never came up cannot be stopped from
+/// outside, and reporting one as lost would overwrite a real failure with a vaguer one.
+///
+/// The result is `Failed`, which is a *defined* state with a banner and a restart action — the
+/// whole point of FR-036 is that the alternative is a client retrying a connection to a container
+/// that no longer exists, forever, with nothing on screen to say so.
+pub fn container_lost(state: &SandboxState, name: &str) -> Option<SandboxState> {
+    match state {
+        SandboxState::Running(_) | SandboxState::Stale(_) => Some(SandboxState::Failed(Failure {
+            // `Starting` rather than a stage of its own: the sandbox is no longer up, and that is
+            // the stage whose label — "starting the sandbox" — is true of what has to happen next.
+            stage: Stage::Starting,
+            error: RuntimeError::SandboxStopped {
+                name: name.to_string(),
+            },
+        })),
+        SandboxState::Disabled
+        | SandboxState::Probing
+        | SandboxState::Acquiring(_)
+        | SandboxState::Starting
+        | SandboxState::Failed(_) => None,
+    }
+}
+
+pub fn mount_set_changed(state: &SandboxState) -> SandboxState {
+    match state {
+        SandboxState::Running(id) => SandboxState::Stale(id.clone()),
+        other => other.clone(),
+    }
+}
+
+/// The user asked, in so many words, for the sandbox to be restarted.
+///
+/// A marker rather than a bare call, for the same reason [`ConsentedFallback`] is one: it makes
+/// the *only* edge back into bring-up carry evidence that a person asked for it, so "nothing
+/// restarts on its own" is a property of the type rather than a rule a caller is trusted to keep.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RestartRequested;
+
+/// Restart the sandbox, at the user's explicit request.
+///
+/// `None` where there is nothing to restart: a disabled sandbox is not broken, and restarting one
+/// that is already coming up would abandon the attempt in flight and start it again from the top.
+pub fn restart(state: &SandboxState, _: RestartRequested) -> Option<SandboxState> {
+    match state {
+        // The case R9 exists for, plus the two a user would reasonably ask for by hand.
+        SandboxState::Stale(_) | SandboxState::Running(_) | SandboxState::Failed(_) => {
+            Some(SandboxState::Probing)
+        }
+        SandboxState::Disabled | SandboxState::Probing | SandboxState::Acquiring(_)
+        | SandboxState::Starting => None,
+    }
+}
+
 /// The only way out of [`SandboxState::Failed`] that reaches a working daemon.
 ///
 /// Takes the consent as an argument because consent is the whole point: there is no version of this

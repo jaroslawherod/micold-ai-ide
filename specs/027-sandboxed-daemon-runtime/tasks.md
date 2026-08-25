@@ -272,20 +272,25 @@ does a session start unsandboxed without an explicit choice.
 
 - [X] T099 *(test)* [P] [US6] Write `crates/micold-core/tests/sandbox_state.rs` — S-2 as a **graph property**: no edge leaves `Failed` for a working unsandboxed daemon without an explicit action (FR-035)
 - [X] T100 *(test)* [P] [US6] Add S-4 to `crates/micold-core/tests/sandbox_state.rs` — every terminal failure carries a reason **and** a remedy drawn from the closed enumeration (FR-034)
-- [ ] T101 *(test)* [P] [US6] Add M-4 to `crates/micold-core/tests/sandbox_state.rs` — registering a project marks the sandbox `Stale` and nothing restarts on its own (R9)
-- [ ] T102 *(test)* [P] [US6] Extend `crates/micold-client/tests/banner_is_not_a_snackbar.rs` — the failed and unsandboxed states are persistently visible, not a toast that scrolls away (FR-035b, S-3)
-- [ ] T103 *(test)* [P] [US6] Write `crates/micold-core/tests/sandbox_unmountable.rs` — a project on a path the runtime cannot share fails with a message naming the path and the reason, not a generic mount error (Edge Cases)
+- [X] T101 *(test)* [P] [US6] Add M-4 to `crates/micold-core/tests/sandbox_state.rs` — registering a project marks the sandbox `Stale` and nothing restarts on its own (R9)
+- [X] T102 *(test)* [P] [US6] Extend `crates/micold-client/tests/banner_is_not_a_snackbar.rs` — the failed and unsandboxed states are persistently visible, not a toast that scrolls away (FR-035b, S-3)
+- [X] T103 *(test)* [P] [US6] Write `crates/micold-core/tests/sandbox_unmountable.rs` — a project on a path the runtime cannot share fails with a message naming the path and the reason, not a generic mount error (Edge Cases)
+      *Found by the test, as intended:* the mount-refusal phrases were a single hard-coded list written from Docker's wording, and podman does not use it — it names the syscall (`statfs <path>: no such file or directory`) rather than the mount configuration, so a refused bind on podman landed in `Unknown`. The phrases moved into `Dialect::mount_rejected_phrases` beside the two lists that were already there, and the dialect's own test now requires every runtime to declare them.
 
 ### Implementation
 
 - [X] T104 [US6] Implement the `SandboxState` machine in `crates/micold-core/src/sandbox/mod.rs` per data-model.md §7 — pure, with the client holding only the current value
-- [ ] T105 [US6] Implement the stale-on-project-change transition and the explicit restart action in `crates/micold-core/src/sandbox/mod.rs` and `crates/micold-client/src/features/sandbox.rs` (R9, M-4)
-- [ ] T106 [US6] Detect a sandbox stopped or removed outside the app and recover to a defined state rather than hanging, in `crates/micold-client/src/shell/sandbox.rs` (US6 scenario 3)
+- [X] T105 [US6] Implement the stale-on-project-change transition and the explicit restart action in `crates/micold-core/src/sandbox/lifecycle.rs` and `crates/micold-client/src/features/sandbox.rs` (R9, M-4)
+      *Deviation:* the core half lives in `sandbox/lifecycle.rs`, not `sandbox/mod.rs` — that is where the rest of the state machine already was. Reaching the restart from a button also needed the bring-up recipe to outlive boot, so `shell::sandbox::BootPlan` was added and `App` carries one; the M-4 transition is driven from the daemon's catalog in `shell/daemon_sync.rs`, which is the only place that learns a project was registered. Fixed while here: an accepted fallback survived a *second* failure, so the banner kept reporting the first reason.
+- [X] T106 [US6] Detect a sandbox stopped or removed outside the app and recover to a defined state rather than hanging, in `crates/micold-client/src/shell/sandbox.rs` (US6 scenario 3)
+      *Deviation:* needed a twelfth `RuntimeError` — `SandboxStopped { name }` — since `Failure` is the only carrier the application has for "the sandbox is unusable and this is why", and none of the eleven existing variants means "it went away". Contract C-6 updated to list it. The check is asked once on a dropped connection rather than polled: the answer only changes when the connection does.
 - [X] T107 [US6] Implement the per-occurrence consented fallback in `crates/micold-client/src/features/sandbox.rs` — offered on failure, never taken automatically, and reset on next launch (FR-035a, US6 scenario 2)
-- [ ] T108 [US6] Surface the failed and unsandboxed states through `ConnectionBanner` in `crates/micold-client/src/ui/`, persistently for as long as they last (FR-035b)
-- [ ] T109 [US6] Expose the daemon's in-sandbox diagnostics through the app via `logs` in `crates/micold-client/src/ui/` (US6 scenario 6)
-- [ ] T110 [US6] Implement explicit stop that leaves no orphaned container, and leave the sandbox running on app close by design, in `crates/micold-client/src/shell/sandbox.rs` (US6 scenario 4)
-- [ ] T111 [P] [US6] Write the failure catalogue — cause, message, remedy — into `docs/user-guide/sandboxed-daemon.md` (FR-034)
+- [X] T108 [US6] Surface the failed and unsandboxed states through `ConnectionBanner` in `crates/micold-client/src/ui/`, persistently for as long as they last (FR-035b)
+- [X] T109 [US6] Expose the daemon's in-sandbox diagnostics through the app via `logs` in `crates/micold-client/src/shell/` (US6 scenario 6)
+      *Deviation:* not in `ui/` — the existing "show diagnostics" action already had a route, and what was missing was the answer when there is no connection to ask. `shell/daemon_sync.rs`'s `on_diagnostics_requested` now falls back to the runtime's `logs` instead of reporting that there is nothing to show, which is the case the user is almost always in when they ask.
+- [X] T110 [US6] Implement explicit stop that leaves no orphaned container, and leave the sandbox running on app close by design, in `crates/micold-client/src/shell/sandbox.rs` (US6 scenario 4)
+      *Note:* the stop is `stop` **then** `remove`, both idempotent per C-7, and it is routed from the existing "restart service" action — which previously stopped the *process* over its endpoint and would have left the container up with nothing in it. Leaving the sandbox running on app close needed no code: nothing on the close path touches it, which is the design.
+- [X] T111 [P] [US6] Write the failure catalogue — cause, message, remedy — into `docs/user-guide/sandboxed-daemon.md` (FR-034)
 - [ ] T112 [US6] Run quickstart.md §B.3 and §B.5's failure items, recording the result in `specs/027-sandboxed-daemon-runtime/evidence/us6-failures.md`
 
 **Checkpoint**: the new failure surface is bounded, documented and recoverable.

@@ -156,6 +156,51 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
         .into()
 }
 
+/// The sandbox's standing conditions, in the same slot and for the same reason (FR-035b, S-3).
+///
+/// A failed sandbox and a session running outside one are *conditions*: they are true until
+/// somebody makes them false. The notification queue is the wrong home for both — it times out and
+/// it is dismissible, so it tells the user once about something that outlives the telling. The
+/// spec's own edge case is a user who takes the one-occurrence fallback on every launch and never
+/// notices sandboxing has been off for weeks; a toast is how that happens.
+///
+/// Zero-height when there is nothing standing, so a working sandbox costs no space.
+fn sandbox_banner<'a>(
+    sandbox: &crate::features::sandbox::Sandbox,
+    roles: Roles,
+) -> Element<'a, Message> {
+    use micold_core::sandbox::lifecycle::SandboxState;
+
+    let Some(notice) = sandbox.persistent_notice() else {
+        return Space::new()
+            .width(Length::Fixed(0.0))
+            .height(Length::Fixed(0.0))
+            .into();
+    };
+
+    // Each condition gets the action that ends it, because a banner that only states a problem is
+    // a banner the user learns to ignore.
+    let banner = if sandbox.fallback.is_some() {
+        material::ConnectionBanner::new("Running without the sandbox", notice, roles)
+            .action("Try the sandbox again", Message::SandboxRestartRequested)
+    } else {
+        match &sandbox.state {
+            SandboxState::Stale(_) => {
+                material::ConnectionBanner::new("The sandbox is out of date", notice, roles)
+                    .action("Restart the sandbox", Message::SandboxRestartRequested)
+            }
+            _ => material::ConnectionBanner::new("The sandbox did not start", notice, roles)
+                // Offered, never taken on our behalf (FR-035a). The button *is* the consent.
+                .action("Run without it for now", Message::SandboxFallbackAccepted),
+        }
+    };
+
+    container(banner)
+        .padding([spacing::SM, spacing::MD])
+        .width(Length::Fill)
+        .into()
+}
+
 /// Render the main window: the top app bar over the shell body (active project / empty state),
 /// with any floating surface stacked on top. Every surface is styled from the active color
 /// scheme's design tokens.
@@ -174,7 +219,7 @@ pub fn view<'a>(
     dismissing: Option<&'a crate::overlay::registry::Closing>,
     env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
     connection: &ConnectionStatus,
-    sandbox: &micold_core::sandbox::lifecycle::SandboxState,
+    sandbox: &crate::features::sandbox::Sandbox,
 ) -> Element<'a, Message> {
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
@@ -232,10 +277,11 @@ pub fn view<'a>(
         column![
             toolbar::view(state, scheme),
             connection_banner(connection, roles),
-            // Same reasoning as the banner above it, and the same slot: a bring-up in flight is a
+            sandbox_banner(sandbox, roles),
+            // Same reasoning as the banners above it, and the same slot: a bring-up in flight is a
             // condition of the whole window, not of whichever body branch happens to be taken
             // (T043, SC-004).
-            sandbox_status::view(sandbox, roles),
+            sandbox_status::view(&sandbox.state, roles),
             body
         ],
         material::SurfaceKind::Window,

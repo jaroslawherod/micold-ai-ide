@@ -45,6 +45,15 @@ pub struct Dialect {
     /// Matched **before** [`Self::not_running_phrases`]: podman says it cannot connect to its
     /// socket *because* permission was denied, and the fix is the permission, not the service.
     pub not_permitted_phrases: &'static [&'static str],
+    /// What it prints when it will not make one of the binds it was asked for.
+    ///
+    /// Here for the same reason the two above are, and the reason is sharper: the runtimes do not
+    /// merely word this differently, they describe *different things*. Docker names the mount
+    /// configuration (`invalid mount config for type "bind"`); podman names the syscall that failed
+    /// (`statfs <path>: no such file or directory`). A shared list written from Docker's wording
+    /// classifies podman's refusal as `Unknown`, which is precisely the anonymous failure T103
+    /// exists to remove — and it did, until a real podman message was put in front of it.
+    pub mount_rejected_phrases: &'static [&'static str],
 }
 
 impl Dialect {
@@ -83,7 +92,13 @@ mod tests {
             let d = Dialect::for_kind(kind);
             assert!(!d.not_running_phrases.is_empty(), "{kind}");
             assert!(!d.not_permitted_phrases.is_empty(), "{kind}");
-            for p in d.not_running_phrases.iter().chain(d.not_permitted_phrases) {
+            assert!(!d.mount_rejected_phrases.is_empty(), "{kind}");
+            for p in d
+                .not_running_phrases
+                .iter()
+                .chain(d.not_permitted_phrases)
+                .chain(d.mount_rejected_phrases)
+            {
                 assert_eq!(
                     *p,
                     p.to_ascii_lowercase(),

@@ -162,6 +162,15 @@ fn boot() -> (App, Task<Message>) {
         .iter()
         .map(|p| p.path.clone())
         .collect();
+    // Kept for the whole run, not consumed by boot: a restart needs the same three inputs and has
+    // no way to re-derive them (R9). `None` for the host placement, which is what makes "restart
+    // the sandbox" unreachable when there is no sandbox.
+    let boot_plan =
+        (placement == PlacementKind::LocalSandbox).then(|| crate::shell::sandbox::BootPlan {
+            profile: sandbox_profile.clone(),
+            state_dir: state_dir.clone(),
+            projects: projects_for_sandbox,
+        });
 
     let boot_cwd = default_resolution_cwd(&core);
     let boot_snapshot = resolve_env_include(
@@ -217,6 +226,7 @@ fn boot() -> (App, Task<Message>) {
             disconnected: false,
             placement: resolved_placement,
             sandbox: sandbox_state,
+            sandbox_boot: boot_plan.clone(),
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -239,61 +249,12 @@ fn boot() -> (App, Task<Message>) {
                 }),
             // And, when the daemon is sandboxed, start bringing it up. Batched rather than
             // sequenced: the window has no reason to wait on a container image.
-            sandbox_boot(placement, sandbox_profile, state_dir, projects_for_sandbox),
+            match boot_plan {
+                Some(plan) => crate::shell::sandbox::boot(plan),
+                None => Task::none(),
+            },
         ]),
     )
-}
-
-/// Start the sandbox, if that is where the daemon lives (feature 027).
-///
-/// Runs on a blocking thread, because every step of it shells out to a container runtime and the
-/// image acquisition can take minutes — on the render thread that would freeze the window for the
-/// whole of it, which is the opposite of SC-004's "continuous progress".
-///
-/// The projects come from the host's own `projects.json`, read a moment ago at boot. That is why
-/// the daemon's state directory is bind-mounted rather than held in a runtime-managed volume: the
-/// mount set has to be known *before* the sandbox exists, and only the daemon owns the project
-/// list.
-fn sandbox_boot(
-    placement: PlacementKind,
-    profile: micold_core::sandbox::SandboxProfile,
-    state_dir: PathBuf,
-    projects: Vec<PathBuf>,
-) -> Task<Message> {
-    if placement != PlacementKind::LocalSandbox {
-        return Task::none();
-    }
-
-    Task::future(async move {
-        let outcome = tokio::task::spawn_blocking(move || {
-            let facts = crate::shell::sandbox::HostFacts::gather(state_dir);
-            // Progress is dropped here rather than streamed: a `Task::future` yields one message,
-            // and threading a channel through boot for the sake of the first release's progress bar
-            // would buy less than the settings view (US3) will when it renders this properly.
-            crate::shell::sandbox::start(
-                &profile,
-                &projects,
-                &facts,
-                crate::shell::sandbox::control_port(),
-                &mut |_| {},
-            )
-            .map(|ready| ready.started)
-        })
-        .await;
-
-        match outcome {
-            Ok(Ok(started)) => Message::SandboxStarted(Box::new(started)),
-            Ok(Err(failure)) => Message::SandboxFailed(Box::new(failure)),
-            Err(join) => {
-                Message::SandboxFailed(Box::new(micold_core::sandbox::lifecycle::Failure {
-                    stage: micold_core::sandbox::lifecycle::Stage::Starting,
-                    error: micold_core::sandbox::runtime::RuntimeError::Unknown {
-                        stderr: join.to_string(),
-                    },
-                }))
-            }
-        }
-    })
 }
 
 #[cfg(test)]

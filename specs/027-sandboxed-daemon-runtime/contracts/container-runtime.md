@@ -73,10 +73,15 @@ with IP masquerade disabled, and the daemon port is published to loopback. A dia
 and rejected.
 
 **C-6 — Errors are classified, never raw text.** `RuntimeError` is a closed enumeration
-(`NotInstalled`, `VersionTooOld`, `PermissionDenied`, `ImageNotFound`, `ImagePullFailed`,
-`PortUnavailable`, `MountRejected`, `LimitRejected`, `Timeout`, `Unknown { stderr }`), each carrying
-the reason and remedy FR-034 requires. `Unknown` retains stderr for the log and is the only variant
-allowed to surface unclassified text.
+(`NotInstalled`, `NotRunning`, `VersionTooOld`, `PermissionDenied`, `ImageNotFound`,
+`ImagePullFailed`, `PortUnavailable`, `MountRejected`, `LimitRejected`, `SandboxStopped`, `Timeout`,
+`Unknown { stderr }`), each carrying the reason and remedy FR-034 requires. `Unknown` retains stderr
+for the log and is the only variant allowed to surface unclassified text.
+
+`SandboxStopped` is the odd one out: no runtime command produces it. It is what the client's
+liveness check reports when the container it was using has been stopped or removed from outside the
+application, and it lives here rather than in a state of its own because `Failure` is the single
+thing the application has for "the sandbox is not usable, and this is why" (FR-036).
 
 **C-7 — Idempotence.** `stop` on a stopped container, `remove` on an absent one, and `start` on a
 running one all succeed. The client's recovery paths call these without first checking, and a
@@ -135,8 +140,14 @@ spawn itself, covered by one real-spawn test against a command every platform sh
 
 1. Add a `RuntimeKind` variant and a `dialect/<name>.rs`.
 2. Declare its baseline capabilities and its probe commands.
-3. Pass K-1 … K-12 against a fake binary speaking that runtime's output format.
-4. Document its quirks in `docs/user-guide/sandboxed-daemon.md`.
+3. Declare **its own wording** for every failure the dialect names — service down, not permitted,
+   mount refused. These are separate lists per runtime rather than one shared table because the
+   runtimes do not merely phrase the same sentence differently: Docker names the mount
+   configuration for a refused bind, podman names the syscall (`statfs`). A list borrowed from
+   another runtime classifies nothing, and the user gets `Unknown` for a failure the application
+   knows how to explain.
+4. Pass K-1 … K-12 against a fake binary speaking that runtime's output format.
+5. Document its quirks in `docs/user-guide/sandboxed-daemon.md`.
 
 No change to `argv.rs`'s callers, the client, or the daemon. If a new runtime forces one, the
 abstraction is wrong and that is the signal to revisit this contract rather than special-case around

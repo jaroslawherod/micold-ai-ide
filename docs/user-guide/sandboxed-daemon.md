@@ -195,22 +195,41 @@ data directory, mounted in, so it outlives any container.
 
 ## When it does not start
 
-Every failure names a cause and a next step. The common ones:
+Every failure the sandbox can report names a cause **and** a next step. There is no generic "sandbox
+error": the runtime's own output is classified into one of the twelve cases below, and anything that
+matches none of them is reported as the last row rather than dropped.
 
-| What you see | What it means |
-|---|---|
-| "…is not installed" | No container runtime found. Install one, or switch back to running on this computer. |
-| "…is installed but not running" | Start Docker (or Podman) and retry. |
-| "…is not permitted to use it" | Your user is not in the `docker` group, or rootless Podman was never initialised. |
-| "The image … was not found" | Check the image reference, or import an archive. |
-| "…could not be fetched" | Rate limit, sign-in, or a proxy. Import from a file instead. |
-| "Port … is already in use" | Something else holds the service's port. |
-| "… cannot be shared with the sandbox" | The project is on a path the runtime will not mount — a network share, for instance. |
+Each message is prefixed with the stage it happened in — *"The sandbox failed while checking the
+container runtime"*, *"…while getting the sandbox image"*, *"…while creating the sandbox"*,
+*"…while starting the sandbox"* — so you can tell a missing runtime from a missing image without
+reading the detail.
+
+### The catalogue
+
+| Cause | What the application says | What to do |
+|---|---|---|
+| No runtime on `PATH` | *Docker is not installed.* | Install it, or choose another runtime in **Settings → Session service**. |
+| The runtime is installed but its service is down | *Docker is installed but not running.* | Start it, then retry. For rootless Podman this is the user service or `podman machine`. |
+| The runtime refuses this user | *Docker is running, but this user is not permitted to use it.* | Docker: add your user to the `docker` group and log in again. Podman: initialise rootless Podman (`podman system migrate`) — this is also what a missing subuid/subgid range looks like. |
+| The runtime is too old | *This runtime is version 19.03; the sandbox needs 20.10 or newer.* | Upgrade the runtime. Docker needs 20.10, Podman 4.0. |
+| The image is not present and cannot be resolved | *The image `ghcr.io/…` was not found.* | Check the reference in **Settings → Session service**, or import an image archive. |
+| The image is present remotely but the fetch failed | *`ghcr.io/…` could not be fetched: …* | Rate limit, sign-in, or a proxy. Import the image from a file instead — the sandbox does not need a registry. |
+| Something else holds the control port | *Port 7373 is already in use, so the sandbox has no control channel.* | Stop whatever holds it, or choose another port in **Settings → Session service**. |
+| A project is on a path the runtime will not bind | *`/mnt/team-share/webapp` cannot be shared with the sandbox: …* | Move the project to a path the runtime can share, or unregister it. Network shares and FUSE mounts are the usual cause. |
+| The runtime rejected a resource limit | *The runtime refused the storage limit: …* | Clear that limit in **Settings → Session service**, then retry. See [Limits](#limits) — the writable-storage cap is the one most often unavailable. |
+| The container was stopped or removed from outside | *The sandbox container `micold-sandbox` is no longer running.* | Restart the sandbox. Sessions resume from where they were — their processes stopped with the container, but their history and layout did not. |
+| A step did not finish | *Pulling the image did not finish in time.* | Retry; if it persists, restart the runtime. |
+| Anything else | *The runtime reported: <its first line of output>* | Retry. The runtime's full output is in the diagnostics. |
+
+The path in the mount row is the *project's* path, not the directory that happens to contain it —
+if two registered projects nest, the message names the one that was actually rejected.
 
 **The application never quietly runs unsandboxed instead.** If the sandbox will not start, you are
 offered the choice explicitly, for that occurrence only: the next launch tries the sandbox again
 without you having to remember. While you are running without it, the application says so
 persistently — a sandbox that failed once and was forgotten about is a sandbox that is off for weeks.
+That notice carries **Try the sandbox again**, so you do not have to restart the application to get
+back into the sandbox once you have fixed whatever the message named.
 
 If you add or remove a project while the sandbox is running, it is marked as needing a restart rather
 than restarting itself. What the container can see is fixed when it is created, and restarting on its

@@ -587,6 +587,22 @@ pub enum Message {
     /// The sandbox came up (feature 027). Boxed because `Started` carries the capability probe,
     /// and `Message` is cloned on every dispatch.
     SandboxStarted(Box<micold_core::sandbox::lifecycle::Started>),
+    /// The service's own diagnostics, read out of the container (FR-038, US6 scenario 6). The
+    /// answer to "why did it not start?" when the service never came up far enough to be asked
+    /// directly.
+    SandboxDiagnostics(Vec<String>),
+    /// The container the sandbox was using is gone — stopped or removed from outside the
+    /// application (FR-036, US6 scenario 3). Sent by the liveness check, never by a person.
+    SandboxLost,
+    /// The user asked for the sandbox to be restarted (feature 027, R9). The one edge back into
+    /// bring-up: a project registered while the sandbox is up marks it stale and nothing restarts
+    /// on its own, because restarting would end the sessions inside it to service a settings
+    /// change made in another window.
+    SandboxRestartRequested,
+    /// The user accepted running unsandboxed for this occurrence (feature 027, FR-035a). Never
+    /// sent by the application to itself: the button *is* the consent, and there is no other way
+    /// out of a failed sandbox to a working service.
+    SandboxFallbackAccepted,
     /// The sandbox could not be brought up. Carries the stage and the classified cause, so the
     /// banner can name both without the shell formatting a string on the way past (FR-034).
     SandboxFailed(Box<micold_core::sandbox::lifecycle::Failure>),
@@ -1016,6 +1032,10 @@ impl State {
             // same reason: it is runtime, not pure state.
             | Message::SandboxStarted(_)
             | Message::SandboxFailed(_)
+            | Message::SandboxDiagnostics(_)
+            | Message::SandboxLost
+            | Message::SandboxRestartRequested
+            | Message::SandboxFallbackAccepted
             | Message::ConnectionTakeoverRequested
             | Message::DaemonVersionMismatch { .. }
             | Message::DaemonBuildMismatch { .. }

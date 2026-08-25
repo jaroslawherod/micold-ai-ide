@@ -37,6 +37,11 @@ pub fn dialect() -> Dialect {
             "no subgid ranges found",
             "check rootless mode",
         ],
+        // Podman does not talk about mount configuration at all: it reports the syscall it tried.
+        // `statfs <path>: no such file or directory` is what a bind onto a path podman cannot reach
+        // looks like, and nothing in it matches Docker's wording — which is how this failure spent
+        // T103 landing in `Unknown` for one of the two supported runtimes.
+        mount_rejected_phrases: &["statfs ", "invalid mount", "read-only file system"],
     }
 }
 

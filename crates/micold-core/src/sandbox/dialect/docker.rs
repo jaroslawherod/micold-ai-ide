@@ -20,6 +20,11 @@ pub fn dialect() -> Dialect {
             "docker desktop is not running",
         ],
         not_permitted_phrases: &["permission denied"],
+        // Docker describes a refused bind as a problem with the *mount configuration*, and puts the
+        // path inside that sentence. "read-only file system" is here because a bind onto a
+        // read-only mount is the same failure with a different cause, and the user needs the path
+        // either way.
+        mount_rejected_phrases: &["mount source path", "invalid mount", "read-only file system"],
     }
 }
 

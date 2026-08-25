@@ -391,7 +391,15 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
             op.describe()
         ));
     }
-    Task::none()
+    // The connection went away. That is *usually* the daemon restarting and the subscription
+    // reconnecting on its own — but it is also what a container stopped from outside looks like
+    // from here, and the difference is one question to the runtime (FR-036, US6 scenario 3). Asked
+    // once, on the disconnect, rather than polled: the answer only changes when the connection
+    // does.
+    match (app.sandbox.state.accepts_sessions(), &app.sandbox_boot) {
+        (true, Some(plan)) => crate::shell::sandbox::check_alive(plan),
+        _ => Task::none(),
+    }
 }
 
 pub fn on_connect_failed(app: &mut App, reason: String) -> Task<Message> {
@@ -430,11 +438,35 @@ pub fn on_diagnostics_requested(app: &mut App) -> Task<Message> {
             req: req + 1,
             limit: 20,
         });
+    } else if let Some(plan) = &app.sandbox_boot {
+        // No connection — which is the state a user asking for diagnostics is most often in. The
+        // container kept the service's output regardless, so read it from there instead of
+        // reporting that there is nothing to show (FR-038, US6 scenario 6).
+        return crate::shell::sandbox::diagnostics(plan);
     } else {
         app.core
             .notify_error("Not connected to the session service — no diagnostics to show.");
     }
     Task::none()
+}
+
+/// Take the daemon's project list as the set the sandbox should be sharing (R9, M-4).
+///
+/// A project registered after boot is not inside the running container's mount set, and no amount
+/// of restarting *inside* the sandbox will put it there — the bind mounts are fixed when the
+/// container is created. So the sandbox is marked stale and the plan updated, and the user is
+/// offered a restart. Nothing restarts on its own: a restart ends every session in the container,
+/// which is not a price to pay for a side effect of registering a project.
+fn adopt_mount_set(app: &mut App, catalog: &micold_core::protocol::messages::CatalogSnapshot) {
+    let Some(plan) = app.sandbox_boot.as_mut() else {
+        return;
+    };
+    let projects: Vec<std::path::PathBuf> = catalog.projects.iter().map(|p| p.path.clone()).collect();
+    if projects == plan.projects {
+        return;
+    }
+    plan.projects = projects;
+    app.sandbox.mounts_changed();
 }
 
 pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
@@ -445,6 +477,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // so seed here too (T111). Absent-only, so this never disturbs a counter this
             // client is already driving.
             app.stamper.seed_from_catalog(&catalog);
+            adopt_mount_set(app, &catalog);
             app.daemon_catalog = Some(catalog);
         }
         // A settings mutation reached the service — this client's own `SettingsSet` echoed
@@ -766,6 +799,7 @@ pub fn on_connected(
     // (BUG-006). Part of the same resync as the flags and settings above: the daemon's
     // position is authoritative state, so re-read it rather than assume continuity.
     app.stamper.seed_from_catalog(&catalog);
+    adopt_mount_set(app, &catalog);
     app.daemon_catalog = Some(catalog);
     // Attach to the active project and view its active session so the daemon starts
     // streaming grid frames for it (FR-011/FR-016).

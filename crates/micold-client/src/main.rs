@@ -115,6 +115,12 @@ struct App {
     /// Always present, `Disabled` for the host placement — so the persistent-notice check is one
     /// call rather than an `Option` every render site has to remember to unwrap.
     sandbox: micold_client::features::sandbox::Sandbox,
+    /// What a restart of the sandbox would run, when there is a sandbox to restart (R9).
+    ///
+    /// `None` for the host placement. Its project list is refreshed from the daemon's catalog, so
+    /// a restart shares the projects registered *now* rather than the ones registered at boot
+    /// (M-4).
+    sandbox_boot: Option<shell::sandbox::BootPlan>,
     /// A pending contract-version mismatch (US6, FR-021/022): `(client_version, daemon_version,
     /// daemon_build)`. `Some` while the running daemon's contract differs from ours — drives the
     /// version-mismatch banner and its "restart service" action. Cleared on a successful connect.
@@ -478,10 +484,45 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SandboxFailed(failure) => {
-            let notice = format!("{} {}", failure.reason(), failure.remedy());
+            // Recorded and left standing. The banner draws it for as long as it lasts — the queue
+            // would show it once, for four seconds, while the sandbox stayed broken (FR-035b, S-3),
+            // which is exactly the edge case the spec calls out.
             app.sandbox.failed(*failure);
-            // Persistent, not a toast: a sandbox that fails quietly stays broken (FR-035b).
-            app.core.notify_error(notice);
+            Task::none()
+        }
+        Message::SandboxDiagnostics(lines) => {
+            match lines.last() {
+                // Phrased like the connected path's `RecentErrors` answer, because from the user's
+                // side it is the same question — only the route it took to be answered differs.
+                Some(latest) => app.core.notify_error(format!(
+                    "The session service logged {} line(s) inside the sandbox; most recent: {}",
+                    lines.len(),
+                    latest.trim()
+                )),
+                None => app.core.notify_info(
+                    "The sandbox is there, but the session service inside it has logged nothing.",
+                ),
+            }
+            Task::none()
+        }
+        Message::SandboxLost => {
+            app.sandbox
+                .container_lost(shell::sandbox::CONTAINER_NAME);
+            Task::none()
+        }
+        // The one edge back into bring-up, and it is here because a person pressed something
+        // (R9, FR-035a). Both of these are user actions; neither is ever sent by the application
+        // to itself.
+        Message::SandboxRestartRequested => {
+            match app.sandbox_boot.clone() {
+                Some(plan) if app.sandbox.restart(micold_core::sandbox::lifecycle::RestartRequested) => shell::sandbox::boot(plan),
+                _ => Task::none(),
+            }
+        }
+        Message::SandboxFallbackAccepted => {
+            if let Some(offer) = app.sandbox.fallback_offer() {
+                app.sandbox.accept_fallback(offer);
+            }
             Task::none()
         }
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
@@ -732,7 +773,7 @@ fn render(app: &App) -> iced::Element<'_, Message> {
         app.dismissing.as_ref(),
         &app.env_include_last_outcome,
         &connection_status(app),
-        &app.sandbox.state,
+        &app.sandbox,
     )
 }
 
@@ -1001,6 +1042,7 @@ pub(crate) mod tests {
             disconnected: false,
             placement: micold_client::daemon::Placement::default(),
             sandbox: micold_client::features::sandbox::Sandbox::default(),
+            sandbox_boot: None,
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -1048,6 +1090,7 @@ pub(crate) mod tests {
             disconnected: false,
             placement: micold_client::daemon::Placement::default(),
             sandbox: micold_client::features::sandbox::Sandbox::default(),
+            sandbox_boot: None,
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -1184,6 +1227,42 @@ pub(crate) mod tests {
             sent.push(msg);
         }
         sent
+    }
+
+    /// The container's log is an *answer*, and an empty one is an answer too (FR-038).
+    ///
+    /// A user asks for diagnostics because something is wrong. Two outcomes are useful — "here is
+    /// what it said" and "it is running and has said nothing" — and neither is silence, which is
+    /// what the arm did before it existed.
+    #[test]
+    fn the_containers_log_is_reported_whether_or_not_it_has_anything_in_it() {
+        let mut app = base_app();
+        let _ = update_inner(
+            &mut app,
+            Message::SandboxDiagnostics(vec![
+                "starting session service".into(),
+                "bind /work/demo: permission denied".into(),
+            ]),
+        );
+        let said = app.core.notify.visible().expect("a notice was raised");
+        assert!(
+            said.message.contains("permission denied"),
+            "the most recent line is the one worth showing: {}",
+            said.message
+        );
+
+        let mut empty = base_app();
+        let _ = update_inner(&mut empty, Message::SandboxDiagnostics(Vec::new()));
+        let said = empty
+            .core
+            .notify
+            .visible()
+            .expect("an empty log still gets an answer");
+        assert!(
+            said.message.contains("logged nothing"),
+            "an empty log should say so rather than say nothing: {}",
+            said.message
+        );
     }
 
     /// Connecting must **start** the restored session, not only view it (FR-004a, contract §3.3a).
@@ -1348,6 +1427,7 @@ pub(crate) mod tests {
             disconnected: false,
             placement: micold_client::daemon::Placement::default(),
             sandbox: micold_client::features::sandbox::Sandbox::default(),
+            sandbox_boot: None,
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -1678,6 +1758,7 @@ pub(crate) mod tests {
             disconnected: false,
             placement: micold_client::daemon::Placement::default(),
             sandbox: micold_client::features::sandbox::Sandbox::default(),
+            sandbox_boot: None,
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,

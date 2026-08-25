@@ -226,7 +226,11 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
         let caps = self.probe()?;
         let args = argv::create(spec, &caps);
         let borrowed: Vec<&str> = args.iter().filter_map(|a| a.to_str()).collect();
-        let out = self.run(&borrowed)?;
+        // The mount list is known here and nowhere below, so a rejected bind is named here or not
+        // at all — see `RuntimeError::naming_mount`.
+        let out = self
+            .run(&borrowed)
+            .map_err(|e| e.naming_mount(&spec.mounts.host_paths()))?;
         Ok(ContainerId(out.stdout.trim().to_string()))
     }
 
