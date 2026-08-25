@@ -1,4 +1,4 @@
-//! The sandbox handshake: the shared secret and the build fingerprint (feature 027, protocol v6).
+//! The sandbox handshake: the shared secret and the build fingerprint (feature 027, protocol v7).
 //!
 //! `contracts/protocol-delta.md`'s obligations P-1 … P-6. The unit-level rules live beside the code
 //! in `protocol/auth.rs` and `protocol/handshake.rs`; what is here is the *integration* claim —
@@ -6,13 +6,19 @@
 //! and read the way the daemon reads it, ends up authenticating, and that nothing along that path
 //! leaks it.
 
+use micold_core::connect::Credentials;
 use micold_core::protocol::auth::{host_token_path, Token, CONTAINER_TOKEN_PATH, TOKEN_PATH_ENV};
 use micold_core::protocol::handshake::{evaluate_introduction, Expectation, Introduction};
-use micold_core::protocol::messages::RefusalReason;
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, PresentedToken, RefusalReason};
 use micold_core::protocol::version::{
     BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
 };
+use micold_core::sandbox::argv;
+use micold_core::sandbox::dialect::Dialect;
 use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
+use micold_core::sandbox::runtime::{IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind};
+use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
+use std::path::PathBuf;
 
 fn introduction(token: Option<&Token>) -> Introduction {
     Introduction {
@@ -20,7 +26,7 @@ fn introduction(token: Option<&Token>) -> Introduction {
         schema_hash: SCHEMA_HASH,
         package_version: PACKAGE_VERSION.to_string(),
         build: "test-client".to_string(),
-        auth_token: token.map(|t| t.as_str().to_string()),
+        auth_token: token.map(|t| PresentedToken::new(t.as_str())),
         fingerprint: BUILD_FINGERPRINT.to_string(),
         require_fingerprint_match: false,
     }
@@ -167,4 +173,175 @@ fn the_container_token_path_matches_what_the_image_declares() {
         containerfile.contains(&format!("{TOKEN_PATH_ENV}={CONTAINER_TOKEN_PATH}")),
         "the image must set {TOKEN_PATH_ENV} to {CONTAINER_TOKEN_PATH}"
     );
+}
+
+// -------------------------------------------------------------------------------------------
+// T118 — the P-3 audit, as assertions rather than a reading of the code.
+//
+// The audit found one live vector and closed it: `ClientMsg::Hello`, `handshake::Introduction`
+// and `connect::Credentials` all held the token as a bare `String` inside a `derive(Debug)`.
+// `auth::Token` has had an opaque `Debug` since it was introduced precisely so the secret could
+// not reach a log — and every one of those three dropped that protection at the moment the value
+// crossed onto the wire, which is the moment it reaches the most code. Nothing logged them today;
+// the point is that one `tracing::debug!(?msg)` would have been enough, in a crate where 57 log
+// sites already exist.
+//
+// So the tests below are not "we looked and found nothing". They are the three surfaces the token
+// travels through, each asserted to be unable to carry it.
+// -------------------------------------------------------------------------------------------
+
+/// Every `Debug` surface the token passes through, checked against the token itself.
+///
+/// Whole value and eight-character prefix both: a partial leak is still a leak when it shrinks the
+/// search space, and a wrapper that printed `PresentedToken("a1b2c3d4...")` would pass a
+/// whole-string check while giving away 32 bits.
+fn assert_no_trace_of(token: &Token, label: &str, rendered: &str) {
+    assert!(
+        !rendered.contains(token.as_str()),
+        "{label} carries the token verbatim: {rendered}"
+    );
+    assert!(
+        !rendered.contains(&token.as_str()[..8]),
+        "{label} carries a prefix of the token: {rendered}"
+    );
+}
+
+/// P-3: no `Debug` on the handshake path can write the token down.
+#[test]
+fn the_token_survives_no_debug_rendering_on_the_handshake_path() {
+    let token = Token::generate();
+
+    let hello = ClientMsg::Hello {
+        protocol_version: PROTOCOL_VERSION,
+        schema_hash: SCHEMA_HASH,
+        client_build: "test-client".into(),
+        client_package_version: PACKAGE_VERSION.into(),
+        auth_token: Some(PresentedToken::new(token.as_str())),
+        client_fingerprint: BUILD_FINGERPRINT.into(),
+        require_fingerprint_match: false,
+    };
+    assert_no_trace_of(&token, "ClientMsg::Hello's Debug", &format!("{hello:?}"));
+
+    let intro = introduction(Some(&token));
+    assert_no_trace_of(&token, "Introduction's Debug", &format!("{intro:?}"));
+
+    let credentials = Credentials {
+        auth_token: Some(PresentedToken::new(token.as_str())),
+        require_fingerprint_match: false,
+    };
+    assert_no_trace_of(&token, "Credentials' Debug", &format!("{credentials:?}"));
+
+    // The counterweight. A redaction that also removed it from the wire would pass every
+    // assertion above and break authentication, so the encoding is checked to still carry it.
+    let wire = serde_json::to_string(&hello).expect("Hello serialises");
+    assert!(
+        wire.contains(token.as_str()),
+        "the wire form must still carry the token — the redaction is Debug-only"
+    );
+}
+
+/// P-3: the token is not in the container's argument vector, which `docker inspect` shows anyone.
+///
+/// It reaches the container as a **file**: a `0600` host file bind-mounted at
+/// `CONTAINER_TOKEN_PATH`, named to the daemon by `MICOLD_TOKEN_PATH`. So the argv should contain
+/// the mount and the path and never the secret. Asserted by generating a real argv from a spec
+/// whose secret mount is a token file, and grepping every argument.
+#[test]
+fn the_token_is_in_no_generated_argument_vector() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let token = Token::generate();
+    let host_path = host_token_path(dir.path());
+    token.write_to(&host_path).expect("the token is written");
+
+    let profile = SandboxProfile {
+        image: ImageSource {
+            reference: "micold-daemon:dev".into(),
+            kind: ImageSourceKind::LocalBuild,
+            path: None,
+        },
+        ..SandboxProfile::default()
+    };
+    let spec = SandboxSpec {
+        name: "micold-sandbox".into(),
+        profile: profile.clone(),
+        mounts: MountSet::build(
+            &[dir.path().join("project")],
+            &profile,
+            &CredentialLayout::conventional(dir.path(), None),
+            dir.path().join("state"),
+            SecretMount {
+                host: host_path.clone(),
+                container: PathBuf::from(CONTAINER_TOKEN_PATH),
+            },
+        ),
+        uid: 1000,
+        gid: 1000,
+        control_port: 7727,
+        published_ports: Vec::new(),
+        network_name: "micold-net".into(),
+        home: dir.path().to_path_buf(),
+    };
+
+    let caps = RuntimeCapabilities {
+        kind: RuntimeKind::Docker,
+        version: "29.5.1".into(),
+        cpus: LimitSupport::Supported,
+        memory: LimitSupport::Supported,
+        pids: LimitSupport::Supported,
+        storage: LimitSupport::Supported,
+        identity_mapping: IdentityMapping::ExplicitUidGid,
+    };
+
+    let rendered: Vec<String> = argv::create(&spec, &caps)
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    assert_no_trace_of(&token, "the create argv", &rendered.join(" "));
+    let network: Vec<String> = argv::network_create(&spec, &Dialect::for_kind(caps.kind))
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    assert_no_trace_of(&token, "the network argv", &network.join(" "));
+
+    // And the mechanism that replaces it is present: the file is mounted where the image looks.
+    assert!(
+        rendered
+            .iter()
+            .any(|a| a.contains(CONTAINER_TOKEN_PATH) && a.contains(&*host_path.to_string_lossy())),
+        "the token must reach the container as a mount: {rendered:?}"
+    );
+}
+
+/// P-3 and P-5 together: a refusal says the token was wrong without saying anything about it.
+///
+/// The tempting diagnostic — "expected 64 characters, got 12", "wrong token (starts a1b2)" — is
+/// what turns a refusal into an oracle. `AuthRejected` carries no payload at all, and the check
+/// runs over the two renderings that actually reach a person: the client turns the refusal into
+/// `format!("daemon refused the connection: {reason:?}")` (`micold-client/src/daemon.rs`), and the
+/// daemon puts the same value on the wire inside `DaemonMsg::Refused`.
+#[test]
+fn a_refusal_reveals_nothing_about_the_token_that_was_presented() {
+    let right = Token::generate();
+    let wrong = Token::generate();
+
+    let mut intro = introduction(Some(&wrong));
+    intro.auth_token = Some(PresentedToken::new(wrong.as_str()));
+    let refusal = evaluate_introduction(&intro, &expecting(Some(right.clone())))
+        .expect_err("a wrong token is refused");
+
+    assert_eq!(refusal, RefusalReason::AuthRejected);
+    let wire = serde_json::to_string(&DaemonMsg::Refused {
+        reason: refusal.clone(),
+    })
+    .expect("the refusal serialises");
+    for (label, rendered) in [
+        (
+            "the client's message",
+            format!("daemon refused the connection: {refusal:?}"),
+        ),
+        ("the refusal on the wire", wire),
+    ] {
+        assert_no_trace_of(&wrong, label, &rendered);
+        assert_no_trace_of(&right, label, &rendered);
+    }
 }

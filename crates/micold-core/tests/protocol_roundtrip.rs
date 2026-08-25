@@ -51,7 +51,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             client_package_version: "0.4.0".into(),
             // Feature 027. `Some` here on purpose: an `Option` that is only ever encoded as `None`
             // in the round-trip sample would not prove the token survives the wire.
-            auth_token: Some("a".repeat(64)),
+            auth_token: Some(micold_core::protocol::messages::PresentedToken::new("a".repeat(64))),
             client_fingerprint: "b7f3a1c9".into(),
             require_fingerprint_match: true,
         },

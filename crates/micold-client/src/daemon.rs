@@ -57,7 +57,7 @@ fn sandbox_credentials(placement: &Placement) -> Credentials {
     )
     .ok();
     Credentials {
-        auth_token: token.map(|t| t.as_str().to_string()),
+        auth_token: token.map(|t| micold_core::protocol::messages::PresentedToken::new(t.as_str())),
         require_fingerprint_match: placement.strict_fingerprint,
     }
 }

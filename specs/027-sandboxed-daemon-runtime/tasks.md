@@ -353,7 +353,23 @@ does a session start unsandboxed without an explicit choice.
 - [ ] T115 [P] Verify the full quickstart.md §A suite is green on Linux, macOS and Windows with **no** runtime installed, from the CI matrix in `.github/workflows/` (Principle VI, the fake runtime's whole purpose)
 - [ ] T116 [P] Measure SC-003 — sandboxed session start no more than 2s slower than unsandboxed — recording the numbers in `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
 - [ ] T117 [P] Measure SC-004 — first-time enable under 5 minutes with continuous progress, from a cold image state — into `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
-- [ ] T118 Audit that no code path logs, prints, or includes the authentication token in argv or an error message (P-3), adding the grep-the-argv-and-log test to `crates/micold-core/tests/protocol_auth.rs`
+- [x] T118 Audit that no code path logs, prints, or includes the authentication token in argv or an error message (P-3), adding the grep-the-argv-and-log test to `crates/micold-core/tests/protocol_auth.rs`
+      — the audit found a live vector, not a clean bill. `auth::Token` redacts its own `Debug`, but
+      the token stops being a `Token` the moment it goes on the wire: `ClientMsg::Hello`,
+      `handshake::Introduction` and `connect::Credentials` each held it as a bare `String` inside a
+      `derive(Debug)` type, so any `{:?}` of a handshake frame — in a crate with 57 log sites —
+      would have printed the secret in full. Fixed by introducing `PresentedToken`, a
+      `#[serde(transparent)]` newtype with a hand-written redacting `Debug`, and using it at all
+      three sites; `transparent` keeps the encoding byte-identical, so `SCHEMA_HASH` and the wire
+      format are unchanged. It is declared *in* `protocol/messages.rs` because the hash is generated
+      over that file's text alone.
+      Four tests in `tests/protocol_auth.rs` now hold the property: the three Debug renderings on
+      the handshake path, the generated `docker create`/`network create` argv (a real spec with a
+      written token file — `docker inspect` shows argv to anyone), and the refusal a wrong token
+      earns, checked in both renderings that reach a person (the client's
+      `format!("daemon refused the connection: {reason:?}")` and the serialised `DaemonMsg::Refused`).
+      Each carries a counterweight assertion, so a redaction that also broke authentication or
+      dropped the token mount would fail rather than pass.
 - [ ] T119 [P] Update `README.md` and `docs/daemon.md` cross-references for the new placement model and the restructured settings docs
 - [ ] T120 Run the complete quickstart.md §B pass end to end and record the evidence in `specs/027-sandboxed-daemon-runtime/evidence/`
 

@@ -26,7 +26,7 @@ fn hello(token: Option<&Token>) -> ClientMsg {
         schema_hash: SCHEMA_HASH,
         client_build: "test-client".into(),
         client_package_version: PACKAGE_VERSION.into(),
-        auth_token: token.map(|t| t.as_str().to_string()),
+        auth_token: token.map(|t| micold_core::protocol::messages::PresentedToken::new(t.as_str())),
         client_fingerprint: BUILD_FINGERPRINT.into(),
         require_fingerprint_match: false,
     }

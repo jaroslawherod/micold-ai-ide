@@ -11,6 +11,7 @@
 //! that gap as a second, independent check (FR-022a, BUG-002).
 
 use crate::protocol::auth::Token;
+use crate::protocol::messages::PresentedToken;
 use crate::protocol::messages::RefusalReason;
 use crate::protocol::version::{BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 
@@ -30,7 +31,10 @@ pub struct Introduction {
     /// The client's build string.
     pub build: String,
     /// The token the client presented, if any (feature 027, research R1).
-    pub auth_token: Option<String>,
+    ///
+    /// [`PresentedToken`] rather than `String`, so this struct's derived `Debug` — which reaches
+    /// logs and error reports — cannot carry the secret (T118, rule P-3).
+    pub auth_token: Option<PresentedToken>,
     /// The client's build fingerprint (feature 027, research R8).
     pub fingerprint: String,
     /// Whether a fingerprint mismatch refuses.
@@ -74,7 +78,7 @@ pub fn evaluate_introduction(
     )?;
 
     if let Some(token) = &expected.token {
-        let presented = intro.auth_token.as_deref().unwrap_or("");
+        let presented = intro.auth_token.as_ref().map_or("", PresentedToken::as_str);
         if !token.verify(presented) {
             return Err(RefusalReason::AuthRejected);
         }
@@ -165,10 +169,10 @@ mod tests {
         let token = Token::generate();
         let mut i = intro();
 
-        i.auth_token = Some(token.as_str().to_string());
+        i.auth_token = Some(PresentedToken::new(token.as_str()));
         assert!(evaluate_introduction(&i, &expecting(Some(token.clone()))).is_ok());
 
-        i.auth_token = Some("not the token".to_string());
+        i.auth_token = Some(PresentedToken::new("not the token"));
         assert_eq!(
             evaluate_introduction(&i, &expecting(Some(token.clone()))),
             Err(RefusalReason::AuthRejected)
@@ -190,7 +194,7 @@ mod tests {
         // required.
         let mut i = intro();
         i.protocol_version = PROTOCOL_VERSION - 1;
-        i.auth_token = Some("wrong".to_string());
+        i.auth_token = Some(PresentedToken::new("wrong"));
         let refusal = evaluate_introduction(&i, &expecting(Some(Token::generate()))).unwrap_err();
         assert!(matches!(refusal, RefusalReason::VersionMismatch { .. }));
     }
@@ -226,7 +230,7 @@ mod tests {
         // Authentication is checked before the fingerprint, so a wrong token cannot be used to
         // probe what this daemon was built from.
         let mut i = intro();
-        i.auth_token = Some("wrong".to_string());
+        i.auth_token = Some(PresentedToken::new("wrong"));
         i.fingerprint = "0000000000000000".to_string();
         i.require_fingerprint_match = true;
         assert_eq!(

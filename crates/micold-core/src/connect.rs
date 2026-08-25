@@ -90,7 +90,10 @@ pub type DaemonConnection = Framed<Transport, ClientCodec>;
 #[derive(Debug, Clone, Default)]
 pub struct Credentials {
     /// The shared secret, when the daemon requires one.
-    pub auth_token: Option<String>,
+    ///
+    /// [`PresentedToken`] rather than `String` so this struct's derived `Debug` cannot carry it —
+    /// the same reason the wire field is wrapped (T118, rule P-3).
+    pub auth_token: Option<crate::protocol::messages::PresentedToken>,
     /// Whether a build-fingerprint mismatch refuses the connection.
     pub require_fingerprint_match: bool,
 }

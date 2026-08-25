@@ -14,6 +14,7 @@
 //! Both binaries compile against this one definition; the `SCHEMA_HASH` guard (protocol.md §4) makes
 //! any wire-visible edit here refuse a mismatched peer.
 
+use std::fmt;
 use std::ops::Range;
 use std::path::PathBuf;
 
@@ -38,6 +39,44 @@ pub enum SessionProcess {
     Shell(ShellInstanceId),
 }
 
+/// The handshake secret as it travels on the wire, in a wrapper that will not print it.
+///
+/// This field used to be a bare `String`, and [`ClientMsg`] derives `Debug` — so one
+/// `tracing::debug!(?msg)` anywhere on the receive path would have written the token into the
+/// daemon's log verbatim, and a `{err:?}` on a decode failure could have carried it into a bug
+/// report. [`crate::protocol::auth::Token`] has had an opaque `Debug` since it was introduced, for
+/// exactly that reason; the protection was being dropped at the moment the value crossed onto the
+/// wire, which is the moment it reaches the most code (feature 027, T118 / rule P-3).
+///
+/// `#[serde(transparent)]`: the encoding is byte-for-byte what a `String` produced, in JSON and in
+/// postcard alike. This is a `Debug` fix, not a wire change.
+///
+/// Declared here rather than beside `Token` deliberately. `SCHEMA_HASH` is computed over the text
+/// of this file; a wire-visible type defined elsewhere could change its serde representation
+/// without moving the hash, and two builds that disagree would then shake hands.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PresentedToken(String);
+
+impl PresentedToken {
+    /// Wrap a token for presentation.
+    pub fn new(token: impl Into<String>) -> Self {
+        Self(token.into())
+    }
+
+    /// The secret itself. Every caller of this is a place to check when auditing P-3.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for PresentedToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Not even a prefix: a partial leak is still a leak when it shrinks the search space.
+        f.write_str("PresentedToken(<redacted>)")
+    }
+}
+
 /// A message from a client to the daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientMsg {
@@ -59,7 +98,7 @@ pub enum ClientMsg {
         /// `None` for the host-process placement, whose `0700`-guarded socket authenticates by
         /// filesystem permission already. `Some` for the sandbox, whose loopback TCP transport
         /// authenticates nobody — which is why this field and the version bump arrive together.
-        auth_token: Option<String>,
+        auth_token: Option<PresentedToken>,
         /// The client's compiled [`crate::protocol::version::BUILD_FINGERPRINT`] (feature 027, R8).
         client_fingerprint: String,
         /// Whether a fingerprint mismatch is a refusal.
