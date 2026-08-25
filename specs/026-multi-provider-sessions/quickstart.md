@@ -192,13 +192,43 @@ click budget is a claim about an interaction, and no test in this repository cou
 
 | Recorded | |
 |---|---|
-| Date | *(not yet run)* |
-| Platform | |
-| B1 — a Copilot session starts in the right worktree | |
-| B2 — one press starts the default; secondary control overrides; open sessions untouched | |
-| B3 — the choice and the conversation survive a restart | |
-| B4 — row names the CLI in text; terminal bar names it too; title; badge within 1s; both badges identical | **terminal-bar half only, 2026-08-24** — see T067b. The pinned AI tab names both CLIs correctly in both schemes, marked and unmarked, and the sidebar rows carry their labels in the same frames. Run on Xvfb + lavapipe, so the badge's one-second claim and the title are **not** covered here. Evidence: `evidence/FR-016a-ai-tab-names-its-cli.png` |
-| B5 — externally-started session discovered on every open; unknown activity; a still-attached one is attempted and reported, not pre-checked; closing sticks | |
-| B6 — untrusted worktree | |
-| B7 — only one CLI installed; unavailable default offers the available ones and is not rewritten | |
-| B8 — `claude`-only projects unchanged | |
+| Date | **2026-08-25** (B4's terminal-bar half, 2026-08-24) |
+| Platform | Xvfb `:91` at 1600x1400 + Mesa lavapipe (software Vulkan), Linux; Copilot CLI 1.0.80, Claude Code v2.1.245, `COPILOT_HOME=/tmp/micold-copilot-probe`. Driven with the repository's `visual-pass` skill, not by a person at a display — so frame *timing* is this machine's, and B4's one-second badge claim is reported below as a failure on that basis, not as a rendering-speed artefact. |
+| B1 — a Copilot session starts in the right worktree | **Pass.** Started from the worktree row's secondary control → GitHub Copilot. The Copilot TUI came up in the session's terminal with its cwd the worktree (`.../demo-repo/.claude/worktrees/alpha [feat/alpha]`), and `ls $COPILOT_HOME/session-state/` names the same id the sidebar shows (`69ad7d64…`). |
+| B2 — one press starts the default; secondary control overrides; open sessions untouched | **Pass, all three parts.** With the default at Claude Code, one press of `+` started a `claude` session and no menu appeared — SC-001's click budget holds. The secondary control's list reads "Claude Code" / "GitHub Copilot"; picking Copilot started a Copilot session and Settings still read Claude Code (FR-003). Changing the default to Copilot made the *next* unqualified press start Copilot, and both sessions already open kept the CLI they were started on (FR-005). |
+| B3 — the choice and the conversation survive a restart | **Pass.** A short exchange in the Copilot session ("Say only: B3PROBE"), then the application quit entirely and reopened: the same Copilot session resumed with the exchange visible, not a fresh one and not a `claude` session. The row had also picked up Copilot's own generated title by then. |
+| B4 — row names the CLI in text; terminal bar names it too; title; badge within 1s; both badges identical | **Terminal-bar, row-label, register and title halves pass** (bar half 2026-08-24, see T067b — `evidence/FR-016a-ai-tab-names-its-cli.png`). Rows read `claude` / `copilot` as text at full and narrow width; the pinned AI tab names the CLI beside the sparkle; Settings and the override list read "Claude Code" / "GitHub Copilot", so the two registers have not converged; the Copilot row took Copilot's own `name:` from `workspace.yaml`; the two badges are byte-identical crops. **The badge-within-a-second half FAILS, for both CLIs** — see the defect note below. |
+| B5 — externally-started session discovered on every open; unknown activity; a still-attached one is attempted and reported, not pre-checked; closing sticks | **Pass.** Two `copilot` runs started by hand outside the application — one in worktree `beta`, one in the project root — were each discovered on the *next* open, the second on a second open, so discovery runs every time (FR-014). Both listed as Copilot sessions in the right worktree with no activity badge (unknown — the application does not read their logs, FR-018). Leaving the root one attached and selecting it in the application attempted the resume like any other, and **Copilot itself** raised *"Session in use — this session was last active just now and appears to be in use by another CLI or application"* in the session's own terminal; the application made no advance check (FR-008). Closing that session in the application wrote `$COPILOT_HOME/session-state/<id>/micold.archived`, and it did not come back after a quit and reopen (FR-015). One trap worth recording: a hand-started `copilot -p` writes no per-cwd index, so nothing is there for FR-014 to find — B5 needs a real interactive `copilot`. |
+| B6 — untrusted worktree | **Pass, and the contract's guess was right.** In a project root Copilot had never seen, "Confirm folder trust" appeared **in the session's own terminal**; the sidebar showed the session as `copilot`, running, **not failed**, while it waited; answering there added the folder to `$COPILOT_HOME/config.json`'s `trustedFolders` and the session continued. Evidence: `evidence/B6-untrusted-folder-prompt.png`. Newly learned, and not in research R12: **trust is per-root and inherited by subdirectories**, so with this application's `.claude/worktrees/` layout the prompt appears only for a project's *first* session — a new worktree under an already-trusted root never re-prompts. The first attempt at this step produced no prompt for exactly that reason. |
+| B7 — only one CLI installed; unavailable default offers the available ones and is not rewritten | **Both halves pass; one wording gap.** With `copilot` off `PATH`, Copilot is not offered and the **secondary control is gone entirely** — the row is what it was before this feature (FR-006). The existing Copilot session is still listed and still annotated `copilot`. With the stored default at Copilot and Copilot uninstalled, pressing `+` opened the list of *available* CLIs and started nothing, and Settings — and `settings.json` on disk — still read "GitHub Copilot" (FR-002). **Gap:** the application never *says* the default is unavailable. It offers what is available and leaves the reason to be inferred. The quickstart asks for "says the default is unavailable"; what ships is the second half of that sentence only. |
+| B8 — `claude`-only projects unchanged | **Pass.** A project with only `claude` sessions has the same rows, the same `claude` label, the same in-terminal trust prompt, the same title sync, and the same resume behaviour: an exchange sent, the application quit and reopened, and the session came back with its exchange. Nothing about the row or the flow distinguishes it from before this feature. One probe artefact worth naming so it is not mistaken for a defect: run under a Claude Code session, the application inherits `CLAUDE_CODE_CHILD_SESSION`, which turns off claude's transcript saving — the session then looks empty and is pruned on the next open (FR-007a). Unset the `CLAUDE*` markers before driving this step. |
+
+### Defects found by §B
+
+Four, none of them in the paths §A covers. Each has its own task.
+
+1. **The badge does not move within a second (SC-005, FR-018).** Eight frames from 0.24 s to 0.76 s
+   after Return showed a byte-identical badge, and it was still identical long after the reply had
+   finished — it only ever changes when some *other* broadcast happens to run. The same for a
+   `claude` session. The cause is a missing `broadcast_catalog()` after `note_activity` in
+   `micold-daemon/src/state.rs`.
+2. **Restart on a session whose CLI is missing does nothing visible (FR-010).** `spawn_session_start`
+   in `micold-daemon/src/server.rs` passes `reply: None` down the resume path, so the failure is
+   computed and then dropped: no broadcast, no change in the bar.
+3. **The reason for a failed start is never shown (FR-010).** Even where the bar does read "failed",
+   the reason string the daemon computes — *"GitHub Copilot isn't installed. Install it, or start
+   this session on another AI CLI."* — appears nowhere in the UI, including on hover.
+4. **The session-start list opens at the window origin.** Both the `+` (uninstalled-default path) and
+   the secondary control open the CLI list at (0, 0), over the sidebar header, whatever row was
+   pressed — `evidence/session-start-menu-anchors-at-origin.png`. `ContextArea` publishes the anchor
+   on `ButtonPressed` while the iced button publishes its own message on *release*, so
+   `start_menu_toggled` always runs last and overwrites the anchor with `(0, 0)`. The overflow menu
+   and the Settings dropdown anchor correctly; this menu does not. `tests/session_start_press.rs`
+   cannot see it because its assertion is `SessionStartMenuAnchored(_)` — a wildcard.
+
+### What §B could not cover
+
+Run on Xvfb + lavapipe, the pass says nothing about frame pacing on a real GPU, and cannot catch a
+chosen frame mid-animation. Neither claim is one §B makes. The badge timing above is a different
+matter — it is not late, it does not happen at all until something else forces a broadcast, which is
+a defect on any hardware.
