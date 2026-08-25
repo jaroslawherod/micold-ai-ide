@@ -720,7 +720,38 @@ session mid-response reads as working **within one second** (quickstart §B B4, 
   bound, for the reason SC-006 isn't one either. This is the other half of the "long CLI history"
   edge case, whose uncapped half T042 covers, and with per-open discovery (2026-08-18) it is a
   routine size rather than an outlier
-- [ ] T058d [P] [US3] Extend `crates/micold-client/tests/layout_text_overflow.rs` so a narrow sidebar row degrades in the declared order — actions and CLI label hold, the **title** ellipsizes first — and the CLI label is never the thing that disappears, since FR-016 makes it the identification (G4's width budget)
+- [X] T058d [P] [US3] Extend `crates/micold-client/tests/layout_text_overflow.rs` so a narrow sidebar row degrades in the declared order — actions and CLI label hold, the **title** ellipsizes first — and the CLI label is never the thing that disappears, since FR-016 makes it the identification (G4's width budget)
+
+  `layout_text_overflow.rs` reports what *spills*, and a row under width pressure does not spill —
+  it shortens. `Ellipsized` rewrites its own content before shaping, so a title that gave way
+  arrives at the renderer as a different string rather than as an overflow, and the existing gate
+  cannot see it at all. So `support::layout` gained `painted_text`: the same measurement
+  `text_overflows` filters, unfiltered. `text_overflows` is now a call to it, and the
+  `LAYOUT_OVERFLOW_DEBUG=1` escape hatch is that same flag.
+
+  `a_narrow_session_row_shortens_the_title_and_never_the_cli_label` draws one Copilot session row at
+  `SIDEBAR_DEFAULT_WIDTH` and again at `SIDEBAR_MIN_WIDTH` and compares what was painted. Measured:
+  the title falls from `"rewriting the provider s…"` to `"r…"`, `"copilot"` stays whole at both
+  widths (36.5px wanted, 36.5px allowed), the same 33 strings are painted at both, and nothing at
+  the minimum width exceeds its clip. That is the declared order holding — and worth writing down
+  plainly, since at 180px the name is one character and an ellipsis. That is the width budget G4
+  describes, not a defect this task introduced: the annotation is 36.5px of a 172px column, and the
+  alternative — letting the identification ellipsize alongside the name — is what FR-016 rules out.
+
+  Probed from a green tree, each mutation reverted before the next:
+
+  - **P1 — the annotation degrades with the name.** `tree_view.rs` pushes the annotation as an
+    `Ellipsized` instead of a natural-width `Text`. The row then paints `"re…"` and `"co…"`: the
+    identification is exactly what the narrow row drops. Only this test caught it as such.
+    `features_sidebar.rs` and `sidebar_tree.rs` passed — they assert the label is *in* the row, not
+    that it survives width pressure — and `no_text_is_drawn_wider_than_its_clip` passed too, since
+    nothing spilled. `layout_snapshot`'s fixture parity did fail, but it fails for any geometry
+    change and says only "the layout differs"; regenerating it is the normal response, which is
+    precisely how this regression would pass unnoticed.
+  - **P2 — the name stops ellipsizing.** The row label pushed as a plain `Text`. The full title is
+    painted, and this test fails on "the title must ellipsize rather than spill or vanish".
+    `no_text_is_drawn_wider_than_its_clip` passed through it: no covered state carries a session
+    title long enough to spill, so the gate this file was built around cannot see it either.
 - [X] T058e [P] [US3] Assert the two naming registers stay apart, in whichever of
   `crates/micold-client/tests/features_sidebar.rs` / `features_settings.rs` is the cheaper home: rows
   and the terminal bar carry `command()`, the Settings select and the override list carry
