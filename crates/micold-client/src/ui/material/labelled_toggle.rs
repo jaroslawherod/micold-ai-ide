@@ -96,7 +96,10 @@ impl<'a, M: Clone + 'a> From<LabelledToggle<M>> for Element<'a, M> {
         }
         let mut element = button(Element::<M>::from(content))
             .padding(toggle.padding)
-            .style(style::text_button(toggle.roles));
+            // `None`: this toggle stands in the terminal bar, on a neutral surface, so it keeps
+            // the `primary` label §7.3 gives a text button. A `Host` is only for a control drawn on
+            // an accent fill (FR-004a), which this never is.
+            .style(style::text_button(toggle.roles, None));
         if let Some(message) = toggle.on_press {
             element = element.on_press(message);
         }
