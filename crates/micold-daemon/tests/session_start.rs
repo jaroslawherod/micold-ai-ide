@@ -17,7 +17,7 @@ use alacritty_terminal::index::{Column, Line};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
 use micold_core::session::{
-    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode, MAX_RESTART_ATTEMPTS,
 };
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
@@ -1070,4 +1070,201 @@ fn a_cli_that_refuses_the_resume_is_reported_and_leaves_nothing_running() {
         "the refusal was taken as a crash and retried within the budget, which is exactly the \
          missing-detection posture: the daemon has no way to know this exit means `in use`"
     );
+}
+
+// ---------------------------------------------------------------------------------------
+// T072 [US4] — starting a session whose AI CLI is not installed (FR-010)
+// ---------------------------------------------------------------------------------------
+
+/// A `PATH` with no AI CLI on it, whatever the machine running the tests has installed.
+///
+/// The inverse of [`StubOnPath`], and it takes the same lock for the same reason: `PATH` is
+/// process-global, and a stub installed by another test on another thread would make the CLI
+/// available again halfway through this one.
+///
+/// It removes the directories that hold an AI CLI rather than emptying `PATH`, because the
+/// shell-session tests beside these spawn a real interactive shell and inherit whatever `PATH` is
+/// set when they do. Narrowing it is enough to make `is_available` say no, and the constructor
+/// checks that it did — a guard that quietly failed to hide anything would leave the tests below
+/// asserting nothing on a developer machine with `claude` installed.
+struct NoCliOnPath {
+    previous: Option<std::ffi::OsString>,
+    _guard: std::sync::MutexGuard<'static, ()>,
+}
+
+impl NoCliOnPath {
+    fn new() -> Self {
+        let guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let previous = std::env::var_os("PATH");
+        let commands: Vec<&str> = AiCli::ALL
+            .iter()
+            .map(|cli| cli.provider().command())
+            .collect();
+        let kept: Vec<std::path::PathBuf> = previous
+            .iter()
+            .flat_map(std::env::split_paths)
+            .filter(|dir| !commands.iter().any(|command| dir.join(command).is_file()))
+            .collect();
+        std::env::set_var("PATH", std::env::join_paths(kept).unwrap());
+        let hidden = Self {
+            previous,
+            _guard: guard,
+        };
+        for cli in AiCli::ALL {
+            assert!(
+                !cli.provider().is_available(),
+                "the guard has to actually hide {}, or the tests holding it prove nothing",
+                cli.provider().command()
+            );
+        }
+        hidden
+    }
+}
+
+impl Drop for NoCliOnPath {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => std::env::set_var("PATH", value),
+            None => std::env::remove_var("PATH"),
+        }
+    }
+}
+
+/// A catalog holding one AI-CLI session on `provider`, at the root of a real project directory.
+fn catalog_with_ai_cli_session(
+    provider: AiCli,
+    project_dir: &Path,
+    store_dir: &Path,
+    id: SessionId,
+) -> Catalog {
+    let mut sessions = BTreeMap::new();
+    sessions.insert(
+        project_dir.to_path_buf(),
+        vec![Session::restored(
+            id,
+            SessionLocation::Default,
+            SessionLabel::Named("Refactor the parser".into()),
+            TerminalMode::AiCli,
+            provider,
+        )],
+    );
+    let projects_path = store_dir.join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace {
+            projects: vec![Project::new(
+                project_dir.to_path_buf(),
+                true,
+                Availability::Available,
+            )],
+            active: Some(project_dir.to_path_buf()),
+            sessions,
+            worktree_names: BTreeMap::new(),
+            ..Default::default()
+        })
+        .unwrap();
+    Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
+    )
+}
+
+/// Starting a session whose CLI is not installed says so, and starts nothing (FR-010).
+///
+/// Run for every CLI in `AiCli::ALL`, because the message is the provider's own and a check written
+/// against one of them would pass this test on the other by accident.
+///
+/// Two things this holds apart, which are easy to conflate because they end up in the same variant.
+/// The **reason** has a home only on the wire: `session::SessionLifecycle::Failed` is a unit variant
+/// with nothing to carry a sentence in, so it is `WireLifecycle::Failed { reason, attempts }` — the
+/// form a client receives — that this reads, and the domain record is not where to look for the
+/// text. And the **attempts** are zero: a binary that is not on `PATH` is not a crash loop, and
+/// letting it climb toward `MAX_RESTART_ATTEMPTS` would spend three spawns on a problem no retry
+/// can change, with the one sentence that would explain it arriving last instead of first.
+#[test]
+fn starting_a_session_whose_cli_is_absent_reports_it_and_spends_no_restart_budget() {
+    let _path = NoCliOnPath::new();
+
+    for (index, cli) in AiCli::ALL.into_iter().enumerate() {
+        let provider = cli.provider();
+        let store = tempfile::tempdir().unwrap();
+        let project_dir = tempfile::tempdir().unwrap();
+        let id = SessionId::from_uuid(Uuid::from_u128(0x0FF0 + index as u128));
+        let state = DaemonState::new(catalog_with_ai_cli_session(
+            cli,
+            project_dir.path(),
+            store.path(),
+            id,
+        ));
+
+        let result = state.start_session(id, micold_core::terminal::LaunchMode::Fresh);
+
+        assert!(
+            result.is_err(),
+            "{}: a caller that got `Ok` would tell the client the session is coming up, and \
+             nothing is",
+            provider.command()
+        );
+        assert!(
+            state.live_session(id).is_none(),
+            "{}: and nothing was spawned — not the missing binary, and not an empty terminal \
+             standing in for it",
+            provider.command()
+        );
+
+        let WireLifecycle::Failed { reason, attempts } = reported_lifecycle(&state, id) else {
+            panic!(
+                "{}: expected a reported failure, got {:?}",
+                provider.command(),
+                reported_lifecycle(&state, id)
+            );
+        };
+        assert!(
+            reason.contains(provider.display_name()),
+            "the reason names the CLI in the register a sentence wants, got {reason:?}"
+        );
+        assert!(
+            !reason.contains(provider.command()),
+            "and not the executable register: {:?} reads as a shell error rather than as \
+             something the user can go and install",
+            provider.command()
+        );
+        assert_eq!(
+            attempts, 0,
+            "{}: a missing binary is not a crash loop",
+            provider.command()
+        );
+        assert!(
+            attempts < MAX_RESTART_ATTEMPTS,
+            "{}: and it must not be climbing toward the give-up budget either — three retries of \
+             a `PATH` problem is noise, and it makes the reason arrive late",
+            provider.command()
+        );
+    }
+}
+
+/// …and the refusal is scoped to sessions that need an AI CLI at all.
+///
+/// The check sits in `start_session`, in front of every launch; what keeps it off a Regular session
+/// is one `mode == TerminalMode::AiCli` guard. Dropping that guard passes the test above and breaks
+/// every shell session on a machine with no `claude` installed — a terminal that needs nothing but
+/// `/bin/sh`, refused for the absence of something it never runs.
+#[test]
+fn a_shell_session_starts_with_no_ai_cli_installed_at_all() {
+    let _path = NoCliOnPath::new();
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(0x5E55));
+    let state = DaemonState::new(catalog_with_shell_session(project.path(), store.path()));
+
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect("a Regular session runs the platform shell — no AI CLI is involved");
+    let live = state.live_session(id).expect("registered");
+    assert!(
+        wait_until(Duration::from_secs(5), || live.is_alive()),
+        "and it is really running, not merely registered"
+    );
+
+    live.kill().expect("kill");
 }
