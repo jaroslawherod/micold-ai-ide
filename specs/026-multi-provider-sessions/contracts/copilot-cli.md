@@ -27,11 +27,26 @@ session.
 
 ```
 $COPILOT_HOME  if set and non-empty      # verified: relocates the entire store, no leakage
-~/.copilot     otherwise
+~/.copilot     otherwise                 # home-relative on every platform, Windows included
 ```
 
 An empty `COPILOT_HOME` is treated as absent, and an unresolvable home directory yields "uncertain"
 rather than "absent" — both matching `ClaudeProvider`'s existing convention.
+
+**Windows is `%USERPROFILE%\.copilot`**, not `%APPDATA%` or `%LOCALAPPDATA%` (T081, against CLI
+1.0.80). Copilot's own resolver is `resolveCopilotHome(configDir, $COPILOT_HOME, homedir())` — it is
+handed the home directory and neither the platform nor `%LOCALAPPDATA%`, while `copilotCacheHome`
+immediately beside it is handed all three, so the two are deliberately different in this respect.
+Every `.copilot` literal the CLI ships joins it to `homedir()` unconditionally, and one of them is a
+migration that *moves* state out of `$XDG_STATE_HOME`/`$XDG_CONFIG_HOME` into `homedir()/.copilot` —
+the base directory is the destination those variables are being retired in favour of, not one of the
+things they can override.
+
+The one place this can diverge from what the application computes: Node's `os.homedir()` prefers
+`%USERPROFILE%` when it is defined, while `directories::UserDirs` asks Windows for
+`FOLDERID_Profile` and ignores the variable. They name the same directory unless something has
+redefined `%USERPROFILE%` for the process tree — and if that happens, `ClaudeProvider` is wrong in
+exactly the same way, since it resolves its own base the same way. `$COPILOT_HOME` overrides both.
 
 ## Launch — fresh session
 

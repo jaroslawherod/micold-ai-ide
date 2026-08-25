@@ -506,6 +506,11 @@ impl AiCliProvider for CopilotProvider {
     }
 
     fn config_dir(&self) -> Option<PathBuf> {
+        // Home-relative on every platform, including Windows, where it is `%USERPROFILE%\.copilot`
+        // — verified against the shipped CLI rather than assumed (T081). Copilot's own resolver
+        // takes the home directory as an argument and neither the platform nor `%LOCALAPPDATA%`,
+        // while its *cache* home right beside it takes all three; every `.copilot` literal in the
+        // CLI joins it to `homedir()` with no branch. Nothing here needs a `cfg!(windows)` arm.
         if let Ok(dir) = std::env::var(Self::CONFIG_DIR_ENV) {
             if !dir.is_empty() {
                 return Some(PathBuf::from(dir));
