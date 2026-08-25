@@ -1000,7 +1000,7 @@ B7, SC-008).
   own text ("when a start is attempted on an unavailable default, present the available-CLI list
   … instead of starting anything") and is marked done, so this is T075 left half-finished rather
   than a task nobody wrote. Opened as T085.
-- [ ] T072 [P] [US4] Extend `crates/micold-daemon/tests/session_start.rs` so launching a session
+- [X] T072 [P] [US4] Extend `crates/micold-daemon/tests/session_start.rs` so launching a session
   whose CLI is absent reports **`WireLifecycle::Failed { reason, attempts }`** with a reason naming
   the CLI, and the session is **not** presented as started (FR-010). Two things to hold apart, both
   of which an earlier draft of this task blurred by naming the domain enum: the message has a home
@@ -1008,6 +1008,39 @@ B7, SC-008).
   "spawn failed"), and a missing binary must **not** consume the crash-loop budget — assert
   `attempts` does not climb toward `MAX_RESTART_ATTEMPTS` for a CLI that was never there. Retrying a
   `PATH` problem three times is noise, and it makes the reason arrive late
+
+  Two tests, and a guard that is half the work. `NoCliOnPath` is the inverse of the file's existing
+  `StubOnPath` and takes the same `ENV_LOCK`, since `PATH` is process-global and a stub installed by
+  another test on another thread would put the CLI back halfway through this one. It removes the
+  directories that hold an AI CLI rather than emptying `PATH`, because the shell-session tests beside
+  these spawn a real interactive shell and inherit whatever `PATH` is set when they do; narrowing it
+  is enough for `is_available` to say no. Its constructor then asserts that every provider in
+  `AiCli::ALL` reports unavailable — without that, the whole file would keep passing on a developer
+  machine with `claude` installed while asserting nothing at all, which is the failure mode a
+  "the CLI is missing" test is most exposed to.
+
+  The first test runs for every CLI in `AiCli::ALL`, because the message is the provider's own and a
+  check written against one of them would pass on the other by accident. It reads the snapshot a
+  client receives, not the durable record: the reason has a home only on the wire variant, since
+  `session::SessionLifecycle::Failed` is a unit variant with nothing to carry a sentence in. Four
+  assertions, the last two the ones this task exists for — the name appears in the **display**
+  register and the executable register does not (`"claude"` is not a substring of `"Claude Code"`,
+  so the negative is real rather than decorative), and `attempts` is `0` **and** below
+  `MAX_RESTART_ATTEMPTS`. Both, deliberately: `== 0` pins today's value, and `< MAX_RESTART_ATTEMPTS`
+  says why the value matters, so a future change that starts counting something here still trips the
+  rule rather than only the constant.
+
+  The second test is the other direction, and it is not decoration. What keeps the launch-time check
+  off a Regular session is one `plan.mode == TerminalMode::AiCli` guard; dropping it leaves the first
+  test green and refuses every shell session on a machine with no `claude` — a terminal that runs
+  nothing but `/bin/sh`, turned away for the absence of something it never launches.
+
+  Four probes, each from a green tree and each reverted: neutering the launch-time
+  `is_available()` check, swapping `display_name()` for `command()` in the reason, setting `attempts`
+  to `MAX_RESTART_ATTEMPTS` in the overlay, and widening the mode guard to `if true`. The first three
+  fail the missing-CLI test; the fourth fails **only** the shell test and leaves the missing-CLI one
+  passing, which is the asymmetry that says the two tests are covering different things.
+  `cargo test --workspace` is green (218 `test result: ok`).
 - [X] T073 [P] [US4] Extend `crates/micold-client/tests/features_sidebar.rs` so a session on an uninstalled CLI is still listed and still identified as that CLI (US4 scenario 3)
 
 ### Implementation for User Story 4
