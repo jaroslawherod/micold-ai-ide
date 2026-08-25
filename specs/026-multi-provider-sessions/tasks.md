@@ -931,7 +931,75 @@ B7, SC-008).
   - **D2 — the offer comes back in `PATH` order.** The filtered list sorted by which `PATH` entry
     resolved it. The first four states pass unchanged (they install into one directory), and only
     the order assertion fails: `[Copilot, ClaudeCode]` where `[ClaudeCode, Copilot]` was declared.
-- [ ] T071 [P] [US4] Extend `crates/micold-client/tests/features_settings.rs` and `crates/micold-client/tests/features_session.rs` so neither the Settings select nor the per-session override offers an unavailable CLI; and so starting a session when the stored default is unavailable **says so and offers the available CLIs to choose from**, starts nothing until one is chosen, and leaves the stored default unrewritten (FR-002, FR-004 scenario 4, Clarifications 2026-08-16)
+- [X] T071 [P] [US4] Extend `crates/micold-client/tests/features_settings.rs` and `crates/micold-client/tests/features_session.rs` so neither the Settings select nor the per-session override offers an unavailable CLI; and so starting a session when the stored default is unavailable **says so and offers the available CLIs to choose from**, starts nothing until one is chosen, and leaves the stored default unrewritten (FR-002, FR-004 scenario 4, Clarifications 2026-08-16)
+
+  Neither named file was the right home, and the reasons differ. The FR-004 half was *already*
+  there: `features_session.rs` holds `an_unavailable_default_offers_the_choice_rather_than_starting_or_substituting`,
+  which asserts all three of `start_intent(Primary) == OfferChoice`, that nothing starts, and that
+  `default_ai_cli` is unrewritten on the way past — landed with T032a and green. And
+  `features_settings.rs` builds no `State` at all; its own module doc says so.
+
+  What was left uncovered is the other end. FR-006 is a rule about what the user is *shown*, and
+  both surfaces read the availability set correctly today — so a test over `State` restates T075's
+  own function and guards nothing. The risk is `settings_form.rs` reaching for `AiCli::ALL`: one
+  token, every pure test still green, an uninstalled CLI in front of the user. That is only
+  observable in what is drawn, so the tests are in a new render file,
+  `crates/micold-client/tests/provider_choice_surfaces.rs` — open the control the way a person
+  would and assert on the strings the renderer painted.
+
+  Three tests, each claim asserted in **both** directions, because "GitHub Copilot was not painted"
+  is also what a list that never opened looks like: the Settings select with only `claude`
+  installed and then with both; the session start list the same way; and a third that pins the two
+  surfaces against *each other* rather than against `AiCli::ALL`, since "both are filtered" and
+  "both are filtered the same way" are different claims — one reads `state.available_providers`,
+  the other `State::offered_providers()`.
+
+  One deliberate detail in the fixture: the settings draft's default is always set to a CLI that
+  *is* installed. A select paints its current value on the trigger as well as its options in the
+  list, and the trigger is not an offer — it is a report of what the setting says. A draft pointing
+  at an uninstalled CLI puts that name on screen for a reason FR-006 has nothing to say about, and
+  a test reading painted strings cannot tell the two apart. The third test failed exactly that way
+  before the fixture was fixed.
+
+  The harness needed two additions, both in `tests/support/layout.rs`, and the second is the find:
+
+  - `painted_text_pressing` presses a node and then draws the **overlay** as well as the base tree.
+    `resolve_pressing` already grew an overlay pass for the geometry fixture; what is *drawn* needs
+    the same two answers, because `material::Select`'s list is not in the element tree at all.
+  - The overlay needs its **own** settle. The frames pumped before the press go through
+    `Widget::update`, and that never reaches an overlay — the runtime dispatches to those
+    separately. So a list opened by a press arrives with its entrance still at zero and paints its
+    panel's geometry and none of its rows' text. Geometry never showed this because the entrance is
+    layout-neutral by construction, which is why `resolve_pressing` has never needed a settle and
+    this does. `painted_text_settled` is the same fix for a surface the *state* opens rather than a
+    press, which is how the session start list is built.
+
+  `Before` replaces the `Option<&[usize]>` the paint pass took, so the overflow gate's own pass is
+  unchanged: `Before::Mounted` skips the overlay draw entirely rather than adding a measurement
+  whose result is always empty. `cargo test --workspace` is green.
+
+  Probed from a green tree, each mutation reverted before the next:
+
+  - **D1 — the Settings select offers `AiCli::ALL`.** `settings_form::modal` passes `&AiCli::ALL`
+    instead of the availability set. Two of the three fail; `features_settings.rs` stays green
+    6/6, which is the case for the tests being here rather than there.
+  - **D2 — the start list offers `AiCli::ALL`.** `session_start_menu_items` maps over the array
+    instead of `state.offered_providers()`. The other two fail — including the agreement test, from
+    the opposite side — while `features_session.rs` stays green 28/28.
+  - **D3 — the harness stops settling the overlay.** The pump reduced to zero frames. Only
+    `the_settings_select_lists_only_the_installed_clis` fails, and that asymmetry is the point: the
+    start list is in the base tree and settles with it, so the overlay pump is load-bearing for
+    exactly the surface that floats. Without it that test would have passed while asserting
+    nothing.
+
+  **Left undone, and not this task's to do:** nothing dispatches through `start_intent`. It has no
+  caller in `crates/micold-client/src/` — `ui/sidebar.rs`'s primary half emits
+  `SessionStartRequested { provider: state.provider_for_start(None) }` unconditionally, so pressing
+  it with an uninstalled default asks the daemon to spawn a binary the application already knows is
+  missing. The decision is written and tested; the wiring is not. T075 claims that wiring in its
+  own text ("when a start is attempted on an unavailable default, present the available-CLI list
+  … instead of starting anything") and is marked done, so this is T075 left half-finished rather
+  than a task nobody wrote. Opened as T085.
 - [ ] T072 [P] [US4] Extend `crates/micold-daemon/tests/session_start.rs` so launching a session
   whose CLI is absent reports **`WireLifecycle::Failed { reason, attempts }`** with a reason naming
   the CLI, and the session is **not** presented as started (FR-010). Two things to hold apart, both
@@ -982,6 +1050,17 @@ B7, SC-008).
 - [ ] T082 Confirm `mise run test` is green on Linux, macOS and Windows in CI (Principle VI), with every Copilot test passing on a runner that has no `copilot` installed
 - [ ] T083 Run quickstart.md §A and confirm every gate in the table has a corresponding green test
 - [ ] T084 Run quickstart.md §B B1–B8 against a real Copilot CLI with `COPILOT_HOME` pointed at a scratch directory, and fill in the "Recording the pass" table with the date, platform, and any step that did not behave as written — including B6, the untrusted-worktree behaviour no probe could confirm
+- [ ] T085 Dispatch the primary start press through `State::start_intent` (FR-004 scenario 4), which
+  T075 decided and left unwired. `ui/sidebar.rs` currently emits `SessionStartRequested` with
+  `provider_for_start(None)` on every press, so an uninstalled stored default reaches the daemon as
+  a spawn of a missing binary — FR-010's failure, arriving after the fact, where FR-004 wants the
+  list offered instead. Two things the wiring needs that the secondary half already has and the
+  primary does not: the availability set is only refreshed at `SessionStartMenuOpened` and
+  `SettingsOpened` (research R11's two named events), and `SplitAction` reports a press point only
+  for the chevron (`on_secondary_anchor`) — a menu opened from the primary half has nowhere to hang
+  until it reports one too, which `tests/context_menu_anchor_call_sites.rs` governs. The test is a
+  view-level one: pressing the primary half with an unavailable default must publish no
+  `SessionStartRequested`
 
 ---
 
