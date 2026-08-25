@@ -765,3 +765,92 @@ fn resuming_a_conversation_the_cli_no_longer_has_reports_it_and_starts_nothing()
         "resuming a conversation that is gone must not create one"
     );
 }
+
+/// The other half of the same rule: a session that never had a conversation is **not** told one is
+/// gone.
+///
+/// The refusal above is gated on the record having been marked resumable — a conversation was found
+/// for it at startup. Ungated, it would fire for every durable session a resume is asked of,
+/// including one created and never used: no `events.jsonl` exists for that either, and the row
+/// would report "GitHub Copilot no longer has this conversation" about a conversation that never
+/// existed. A message that is false is worse than the CLI's own error, which at least describes
+/// what actually happened.
+///
+/// So the gate is behaviour, not an optimisation, and this test is what says so — dropping
+/// `plan.resumable` from the condition passes every other test in the workspace.
+#[test]
+fn a_session_that_never_recorded_a_conversation_is_not_told_its_conversation_is_gone() {
+    let _stub = StubOnPath::new("copilot");
+
+    // Empty, and it stays empty: this session was created and never used, which is exactly what
+    // "no recorded conversation" looks like for a session that had nothing to lose.
+    let home = tempfile::tempdir().unwrap();
+    std::env::set_var("COPILOT_HOME", home.path());
+
+    let store = tempfile::tempdir().unwrap();
+    // A directory that exists, unlike the test above — this session gets as far as a real spawn.
+    let project_dir = tempfile::tempdir().unwrap();
+    let project = project_dir.path().to_path_buf();
+    let id = SessionId::from_uuid(Uuid::from_u128(0xDECAF));
+    let mut sessions = BTreeMap::new();
+    sessions.insert(
+        project.clone(),
+        vec![Session::restored(
+            id,
+            SessionLocation::Default,
+            SessionLabel::Pending,
+            TerminalMode::AiCli,
+            AiCli::Copilot,
+        )],
+    );
+    let projects_path = store.path().join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace {
+            projects: vec![Project::new(project.clone(), true, Availability::Available)],
+            active: Some(project.clone()),
+            sessions,
+            worktree_names: BTreeMap::new(),
+            ..Default::default()
+        })
+        .unwrap();
+    let state = DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    ));
+
+    // The startup pass finds nothing to offer — the record stays `Idle`, which is the state this
+    // test is about.
+    assert_eq!(
+        state.present_interrupted_resumable_at_startup(),
+        0,
+        "there is no conversation to offer"
+    );
+
+    let result = state.start_session(id, micold_core::terminal::LaunchMode::Resume);
+
+    assert!(
+        result.is_ok(),
+        "the spawn is attempted: whether `copilot` can resume this id is the CLI's answer to give, \
+         not ours to pre-empt — got {result:?}"
+    );
+    let live = state.live_session(id).expect("the process was started");
+    let summary = state
+        .catalog_snapshot()
+        .projects
+        .into_iter()
+        .find(|p| p.path == project)
+        .expect("the project is still there")
+        .sessions
+        .into_iter()
+        .find(|s| s.id == id)
+        .expect("the session is still in the catalog");
+    assert!(
+        !matches!(summary.lifecycle, WireLifecycle::Failed { .. }),
+        "nothing was reported about a conversation this session never had, got {:?}",
+        summary.lifecycle
+    );
+
+    let _ = live.kill();
+}
