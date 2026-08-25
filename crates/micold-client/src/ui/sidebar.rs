@@ -2,6 +2,7 @@
 //! shared [`tree_view`] primitive (FR-002, FR-003, Constitution Principle VIII).
 
 use crate::app::{Message, State};
+use crate::features::session::{PressTarget, StartIntent};
 use crate::features::sidebar::TagFilter;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
@@ -13,7 +14,7 @@ use crate::ui::material::{
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::naming::Tag;
-use micold_core::session::{AiCli, SessionLifecycle, SessionLocation};
+use micold_core::session::{SessionLifecycle, SessionLocation};
 use micold_core::tokens::{self, spacing, Rgb, Roles};
 use micold_core::worktree::WorktreeStatus;
 
@@ -365,25 +366,58 @@ fn action_icon(
     }
 }
 
+/// What the primary half of the start affordance publishes for `location` (feature 026, T085).
+///
+/// The branch is [`State::start_intent`]'s — this only names the message each answer arrives as, so
+/// the view keeps dispatching and decides nothing (Principle I's GUI exception covers drawing and
+/// does not cover branching).
+///
+/// The case this exists for is FR-004's fourth scenario: a stored default that is not installed.
+/// Pressing start then offers the available CLIs and starts nothing, rather than sending the
+/// missing binary to the daemon and letting FR-010's failure arrive on a row that was never going
+/// to run. It publishes the same message the chevron does, which is also how the list it opens is
+/// current: the availability set is refreshed on `SessionStartMenuOpened`, one of the two named
+/// events research R11 allows it to be re-probed at.
+///
+/// The set this decision reads is therefore the one from the *last* of those events, and it can be
+/// out of date by a press. Both ways round are safe and neither is silent: a default that has since
+/// been uninstalled reaches the daemon, whose launch-time check reports which CLI is missing
+/// (FR-010, T076); a default that has since been installed opens a list that — refreshed by this
+/// very press — contains it, one extra press away. What is ruled out is the third answer, which is
+/// starting something other than what the user asked for.
+fn start_press(state: &State, location: SessionLocation) -> Message {
+    match state.start_intent(PressTarget::Primary) {
+        StartIntent::Start(provider) => Message::SessionStartRequested { location, provider },
+        StartIntent::OfferChoice(_) => Message::SessionStartMenuOpened(location),
+        // Nothing at all is installed, so there is no list: FR-006 forbids opening one that is
+        // present-and-empty, and an inert `+` would leave the user with a control that answers
+        // nothing. The stored default goes to the daemon, whose report names the CLI to install
+        // (FR-010) — in this state that report is the only thing that can tell the user anything.
+        StartIntent::NothingAvailable => Message::SessionStartRequested {
+            location,
+            provider: state.provider_for_start(None),
+        },
+    }
+}
+
 /// The start-a-session affordance for one location (feature 026, T033).
 ///
-/// A [`SplitAction`], not two icons in a row: the primary half starts `provider` in one press
+/// A [`SplitAction`], not two icons in a row: the primary half publishes `press` in one press
 /// exactly as the plain button did (SC-001), and the chevron opens the list of installed CLIs. The
 /// chevron is **absent** — not disabled — when `offers_a_choice` is false, which is what keeps the
 /// single-CLI user's sidebar exactly as it was.
 ///
-/// It renders an intent and decides nothing: `provider` and `offers_a_choice` are
-/// `State::provider_for_start` and `State::start_affordance_offers_a_choice`, and pressing either
-/// half emits a message the reducer resolves.
+/// It renders an intent and decides nothing: `press` and `offers_a_choice` are [`start_press`] and
+/// `State::start_affordance_offers_a_choice`, and pressing either half emits a message the reducer
+/// resolves.
 fn start_session_action(
     location: SessionLocation,
     tooltip: &'static str,
     active: bool,
-    provider: AiCli,
+    press: Message,
     offers_a_choice: bool,
     r: Roles,
 ) -> Element<'static, Message> {
-    let choose = location.clone();
     SplitAction::new(Icon::AddSession, r)
         // Inside the sidebar's dense rows — see `IconButton::compact` for the contract conflict
         // this resolves at the call site rather than in the component.
@@ -392,12 +426,14 @@ fn start_session_action(
         .tint(r.primary)
         .primary_tooltip(tooltip)
         .secondary_tooltip("Start a session on a different AI CLI")
-        .on_press_maybe(active.then(|| Message::SessionStartRequested { location, provider }))
+        .on_press_maybe(active.then_some(press))
         .on_secondary_press_maybe(
-            (active && offers_a_choice).then(|| Message::SessionStartMenuOpened(choose)),
+            (active && offers_a_choice).then(|| Message::SessionStartMenuOpened(location)),
         )
-        // Where the list hangs from: the chevron's own press point, since a sidebar row's position
-        // is not something the view holds (018 BUG-008, FR-029d).
+        // Where the list hangs from: the press point of whichever half opened it, since a sidebar
+        // row's position is not something the view holds (018 BUG-008, FR-029d). Both halves can
+        // open it — the chevron always, the primary half when the default is not installed.
+        .on_primary_anchor(Message::SessionStartMenuAnchored)
         .on_secondary_anchor(Message::SessionStartMenuAnchored)
         .into()
 }
@@ -410,7 +446,7 @@ fn row_actions_cluster(
     dir: &str,
     can_start_session: bool,
     active: bool,
-    provider: AiCli,
+    press: Message,
     offers_a_choice: bool,
     r: Roles,
 ) -> Element<'static, Message> {
@@ -420,7 +456,7 @@ fn row_actions_cluster(
             SessionLocation::Worktree(dir.to_string()),
             "Start a new session in this worktree",
             active,
-            provider,
+            press,
             offers_a_choice,
             r,
         ));
@@ -519,8 +555,8 @@ fn build_items(
             active,
             // Threaded in rather than reached for: this function takes narrow arguments and cannot
             // see `State` (feature 026, T014a). Both answers come from the render-free layer —
-            // nothing here decides which CLI runs or whether there is a choice to offer.
-            state.provider_for_start(None),
+            // nothing here decides what a press means or whether there is a choice to offer.
+            start_press(state, SessionLocation::Worktree(dir.clone())),
             state.start_affordance_offers_a_choice(),
             r,
         ));
@@ -611,7 +647,7 @@ fn build_default_item(
         SessionLocation::Default,
         "Start a new session in the project root",
         true,
-        state.provider_for_start(None),
+        start_press(state, SessionLocation::Default),
         state.start_affordance_offers_a_choice(),
         r,
     );
@@ -638,7 +674,7 @@ fn build_default_item(
 mod tests {
     use super::*;
     use micold_core::protocol::messages::ActivitySignal;
-    use micold_core::session::Session;
+    use micold_core::session::{AiCli, Session};
     use micold_core::theme::ColorScheme;
 
     fn session(activity: ActivitySignal, lifecycle: SessionLifecycle) -> Session {
