@@ -1229,7 +1229,8 @@ fn starting_a_session_whose_cli_is_absent_reports_it_and_spends_no_restart_budge
             provider.command()
         );
         assert_eq!(
-            attempts, 0,
+            attempts,
+            0,
             "{}: a missing binary is not a crash loop",
             provider.command()
         );

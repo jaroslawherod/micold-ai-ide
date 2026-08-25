@@ -1099,7 +1099,21 @@ B7, SC-008).
   `boot_judges_each_session_by_its_own_provider`", and that test moved to `shell/persist.rs` with
   the boot prune. A pointer to a test that is no longer where it is named is the same defect this
   task is about, one file further on. Both suites are green (13 and 8).
-- [ ] T080 Satisfy `cargo clippy` and `cargo fmt` across the workspace for the new code, matching what CI enforces
+- [X] T080 Satisfy `cargo clippy` and `cargo fmt` across the workspace for the new code, matching what CI enforces
+
+  The three commands `.github/workflows/ci.yml` runs, in its order: `cargo fmt --all -- --check`,
+  `cargo clippy -p micold-core --all-targets -- -D warnings`, and the same clippy across the
+  workspace. Both clippy passes were already clean — including the render-free one, which is a
+  separate job precisely because `micold-core` must stay buildable without the GUI.
+
+  `fmt` found two diffs, both in code this feature added and both mine: a trailing blank line at the
+  end of `tests/session_start_press.rs`, and an `assert_eq!(attempts, 0, …)` in
+  `tests/session_start.rs` that rustfmt splits one-argument-per-line once the message pushes it over
+  the width. Applied with `cargo fmt --all`; nothing else in the workspace moved, which is the
+  useful part of the result — the formatting drift this task was hedging against did not exist.
+
+  `cargo test --workspace` green afterwards (219 `test result: ok`), since a formatting pass that
+  reflows an assertion is still an edit to a test.
 - [ ] T081 Verify Copilot's base directory on Windows (research R2's one unverified row) and correct `CopilotProvider::config_dir` and `contracts/copilot-cli.md` if it is not `%USERPROFILE%\.copilot`; if it cannot be verified, record that explicitly rather than leaving the table implying it was
 - [ ] T082 Confirm `mise run test` is green on Linux, macOS and Windows in CI (Principle VI), with every Copilot test passing on a runner that has no `copilot` installed
 - [ ] T083 Run quickstart.md §A and confirm every gate in the table has a corresponding green test
