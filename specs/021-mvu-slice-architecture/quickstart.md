@@ -94,13 +94,19 @@ thin glue with no decision logic of its own — and are recorded here as that ex
 
 ### M1 — Persisted state loads identically (SC-008, FR-026)
 
-1. Check out `main` at `44b9fd1` (pre-change) and `mise run run`.
-2. Open a project, create a worktree, start two sessions, set a non-default theme and scrollback,
-   apply a sidebar filter. Quit.
+1. Check out this feature's **merge base**, `e02f971`, and `mise run run`. Not "the commit before
+   021 started" — 021 is long-lived and merges to main incrementally, so `44b9fd1`, which this step
+   named until T083, carries four other features' work (016, 022, 025, 026) and attributes it here.
+   The result below measures both: **0 pixels** from the merge base, **3,755 pixels** from
+   `44b9fd1`, all of the latter a type-scale change this feature did not make.
+2. Open a project, create a worktree, start two sessions, set a non-default theme and scrollback.
+   Quit.
 3. Back up the state directory.
 4. Check out the post-change branch and `mise run run`.
-5. **Expect**: the same project, worktrees, sessions, theme, scrollback and filters, with no
-   migration prompt, no warning, and no rewrite of the state files.
+5. **Expect**: the same project, worktrees, sessions, theme and scrollback, with no migration
+   prompt, no warning, and no rewrite of the state files. **Not filters** — `sidebar_filters` is
+   in-memory view state that no build has ever persisted, so a filter surviving a restart would be
+   a new feature, not this one holding. This step expected them until T083.
 6. Quit, and diff the state directory against the backup. **Expect**: no structural change.
 
 #### Result — 2026-08-20, T072
@@ -143,6 +149,10 @@ pixels** — a global type-scale change — and none of it is attributable to th
 A long-lived feature that merges to main incrementally cannot use "the commit before it started" as
 a control, and M1 should say so rather than let the next reader attribute four features' work to
 this one.
+
+**Done at T083.** Step 1 now names the merge base and step 5 no longer expects filters. The
+procedure above and the result here agree; before T083 they contradicted each other, and a reader
+following the steps would have failed a passing feature twice over.
 
 ### M2 — Overlay behavior is unchanged (FR-011, FR-012, FR-013)
 
