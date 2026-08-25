@@ -604,3 +604,164 @@ fn a_created_session_records_the_cli_the_client_chose() {
         "the Copilot session would be spawned with Copilot's argv, `--no-remote` included"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// T046 [US2] — resuming a conversation the CLI no longer has (Clarifications 2026-08-16)
+// ---------------------------------------------------------------------------------------
+
+/// A scratch `PATH` with the real one still behind it, plus a stub for one command.
+///
+/// The stub exists only so `AiCliProvider::is_available` says yes — `start_session` checks that
+/// first (FR-010), and on a runner with no `copilot` the test would otherwise be asserting the
+/// missing-CLI message instead of this one. It is never executed: the whole point of the assertion
+/// below is that nothing spawns. The real `PATH` stays appended so the shell-session tests running
+/// beside this one still find `sh`.
+struct StubOnPath {
+    _dir: tempfile::TempDir,
+    previous: Option<std::ffi::OsString>,
+}
+
+impl StubOnPath {
+    fn new(command: &str) -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let stub = dir.path().join(command);
+        std::fs::write(&stub, "#!/bin/sh\nexit 0\n").unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let previous = std::env::var_os("PATH");
+        let joined = match &previous {
+            Some(existing) => format!("{}:{}", dir.path().display(), existing.to_string_lossy()),
+            None => dir.path().display().to_string(),
+        };
+        std::env::set_var("PATH", joined);
+        Self {
+            _dir: dir,
+            previous,
+        }
+    }
+}
+
+impl Drop for StubOnPath {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => std::env::set_var("PATH", value),
+            None => std::env::remove_var("PATH"),
+        }
+    }
+}
+
+/// Resuming a Copilot session whose conversation is gone reports it and starts **nothing**.
+///
+/// The clarification chose this over the alternative it was specified against: "a clearly-reported
+/// failure *or* a fresh session". A fresh session is what `--session-id` would give — a brand-new,
+/// empty conversation running under the old session's identity, behind a row whose recorded title
+/// still describes the conversation that is not there. That is worse than an error, because nothing
+/// about the row says what happened.
+///
+/// Reported through the path a missing CLI already takes (FR-010): a reason on the session's
+/// summary, `attempts: 0`, and no spawn. The reason names the CLI in its **display** register —
+/// this is a sentence a user reads, and "copilot no longer has…" reads as a shell error rather than
+/// as something that happened to their conversation.
+#[test]
+fn resuming_a_conversation_the_cli_no_longer_has_reports_it_and_starts_nothing() {
+    let _stub = StubOnPath::new("copilot");
+
+    let home = tempfile::tempdir().unwrap();
+    std::env::set_var("COPILOT_HOME", home.path());
+
+    let store = tempfile::tempdir().unwrap();
+    let project = std::path::PathBuf::from("/repo/alpha");
+    let id = SessionId::from_uuid(Uuid::from_u128(0xC0FFEE));
+    let mut sessions = BTreeMap::new();
+    sessions.insert(
+        project.clone(),
+        vec![Session::restored(
+            id,
+            SessionLocation::Default,
+            SessionLabel::Named("Refactor the parser".into()),
+            TerminalMode::AiCli,
+            AiCli::Copilot,
+        )],
+    );
+    let projects_path = store.path().join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace {
+            projects: vec![Project::new(project.clone(), true, Availability::Available)],
+            active: Some(project.clone()),
+            sessions,
+            worktree_names: BTreeMap::new(),
+            ..Default::default()
+        })
+        .unwrap();
+    let state = DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    ));
+
+    // The conversation exists first, and the application learns of it the way it really does — the
+    // startup pass, asking Copilot. The order is the point: the edge case is a store entry that was
+    // **removed**, and the refusal below applies only to a session the daemon has already judged
+    // resumable. A session the daemon never saw a conversation for keeps FR-008's ordinary
+    // behaviour — attempt the resume, and report whatever the CLI says (T046a).
+    let session_dir = home.path().join("session-state").join(id.0.to_string());
+    std::fs::create_dir_all(&session_dir).unwrap();
+    std::fs::write(session_dir.join("events.jsonl"), "{}\n").unwrap();
+    assert_eq!(
+        state.present_interrupted_resumable_at_startup(),
+        1,
+        "the session is offered for resume — the state a user clicks Start from"
+    );
+
+    // …and then it is gone: `copilot` dropping the conversation, or a user clearing out their
+    // Copilot home. Nothing tells the application; the row still reads "Refactor the parser".
+    std::fs::remove_dir_all(&session_dir).unwrap();
+
+    let result = state.start_session(id, micold_core::terminal::LaunchMode::Resume);
+
+    assert!(
+        result.is_err(),
+        "the start has to fail: a caller that got `Ok` would tell the client the session is coming \
+         up, and nothing is"
+    );
+    assert!(
+        state.live_session(id).is_none(),
+        "and nothing was spawned — not an empty terminal, and not a fresh conversation"
+    );
+
+    // Read from the snapshot a client actually receives, not from `sessions_for` — the reason is
+    // runtime state, overlaid onto the durable record on the way out (FR-010's path).
+    let summary = state
+        .catalog_snapshot()
+        .projects
+        .into_iter()
+        .find(|p| p.path == project)
+        .expect("the project is still there")
+        .sessions
+        .into_iter()
+        .find(|s| s.id == id)
+        .expect("the session is still in the catalog — reporting is not closing it");
+    let WireLifecycle::Failed { reason, attempts } = summary.lifecycle else {
+        panic!("expected a reported failure, got {:?}", summary.lifecycle);
+    };
+    assert!(
+        reason.contains("GitHub Copilot"),
+        "the reason names the CLI in the register a sentence wants, got {reason:?}"
+    );
+    assert!(
+        reason.to_lowercase().contains("conversation"),
+        "and says what is missing, so the row explains itself rather than just going red: {reason:?}"
+    );
+    assert_eq!(
+        attempts, 0,
+        "a conversation that is gone is not a crash loop — retrying it three times would spend the \
+         budget on something that cannot change and make the message arrive late (FR-010's rule)"
+    );
+
+    // The negative that matters most: no conversation was begun under this id.
+    assert!(
+        !session_dir.exists(),
+        "resuming a conversation that is gone must not create one"
+    );
+}

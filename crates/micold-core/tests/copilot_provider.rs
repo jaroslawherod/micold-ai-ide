@@ -628,3 +628,52 @@ fn a_directory_named_like_the_cli_is_not_an_installed_cli() {
     std::fs::create_dir_all(path.bin.join("copilot")).unwrap();
     assert!(!CopilotProvider.is_available());
 }
+
+// ---------------------------------------------------------------------------------------
+// T046 — a store entry that was removed (spec Edge Cases, Clarifications 2026-08-16)
+// ---------------------------------------------------------------------------------------
+
+/// Copilot's per-directory index and its session directories can disagree, and this is the shape
+/// of the disagreement the resume path has to survive: the index still lists a conversation whose
+/// store entry is gone.
+///
+/// The index is Copilot's own file, maintained for its picker. Nothing in this application writes
+/// it, and removing a session directory does not rewrite it — so a row can outlive the conversation
+/// behind it. `has_recorded_conversation` is the only honest answer to "is it still there", which
+/// is what makes it the thing the daemon must ask before resuming rather than after.
+#[test]
+fn a_removed_session_directory_leaves_the_index_still_claiming_it() {
+    let cwd = Path::new("/fixture/worktree");
+    let home = copilot_home().with_corpus(cwd);
+    let id = fixture_id(FIXTURE_SESSION_A);
+
+    assert!(
+        CopilotProvider.has_recorded_conversation(home.path(), cwd, id),
+        "the fixture starts with a conversation recorded"
+    );
+
+    // What "the store entry was removed" is on disk: `copilot` itself deleting the conversation,
+    // or a user clearing it out of `~/.copilot`.
+    std::fs::remove_dir_all(home.session_dir(id)).unwrap();
+
+    assert!(
+        CopilotProvider
+            .recorded_session_ids(home.path(), cwd)
+            .contains(&id),
+        "the index is not rewritten by the removal, so the session is still listed — which is why \
+         a user can still click it and why the resume has to check"
+    );
+    assert!(
+        !CopilotProvider.has_recorded_conversation(home.path(), cwd, id),
+        "and the conversation itself is gone"
+    );
+    assert_eq!(
+        CopilotProvider.read_title(home.path(), cwd, id),
+        None,
+        "with nothing left to read a title from"
+    );
+    assert!(
+        !CopilotProvider.is_archived(home.path(), cwd, id),
+        "and it was never closed — a removal is not an archive, so nothing suppresses the row"
+    );
+}
