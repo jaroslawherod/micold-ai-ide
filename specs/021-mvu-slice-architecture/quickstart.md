@@ -279,6 +279,55 @@ again after T084.
 **Still not covered.** Frame pacing. lavapipe is a software rasteriser, so nothing here says how the
 transition *feels* on the user's GPU; that remains out of reach of this method and is not claimed.
 
+#### Result — step 1 re-run after the fix, 2026-08-25, at T084
+
+**The exit plays.** Same rig, same 20× probe build, same crop and the same Escape: ninety frames, of
+which **fifty-eight carry an intermediate value** where the unfixed build carried none.
+
+| Frame | 1–10 | 11–68 | 69–90 |
+|---|---|---|---|
+| Dialog-region mean | 0.161745 | 0.16174 → 0.151954, ~55 distinct values | 0.079739 |
+| | fully open | fading and shrinking | fully gone |
+
+![the exit animating after the fix](evidence/m2-t084-exit-animates.png)
+
+**The fix is the one T084 called for — the chain, not the snapshot.** `cdk::overlay::backdrop()` now
+wraps its catcher in `mouse_area` unconditionally and attaches `on_press` only when there is a
+dismisser, and the "nothing to catch" early return that produced a bare `Space` is gone with it. Both
+were branches on the dismisser, which is exactly the thing that changes at the instant an exit
+begins. A `mouse_area` with no handler set publishes nothing and captures nothing
+(`iced_widget-0.14.2/src/mouse_area.rs`), so the inert case behaves as the bare `Space` did.
+
+**`positioned()` was not part of the fault, and is unchanged.** T084's text named it as having the
+same conditional shape, and it does — but `iced::widget::opaque` delegates `tag`, `state`,
+`children` and `diff` straight to its content (`iced_widget-0.14.2/src/helpers.rs:600-614`), so
+wrapping in it adds no tree node and discards no state. Only `mouse_area` is a real node. Reading the
+widget rather than reasoning from the symmetry narrowed a two-site change to a one-site change.
+
+**One committed fixture moved, deliberately.** `layout_snapshot.txt` gained forty lines and lost
+none: two closed overlay layers per covered state each gained one child at the same full-window
+rectangle, the inert `mouse_area`'s container. Every recorded rectangle is unchanged — in the failure
+report each observed row carried the preceding recorded row's geometry exactly, which is the
+signature of an insertion rather than a move. Regenerated with `UPDATE_LAYOUT_SNAPSHOT=1`.
+
+**Why the ramp is slower than its 4,000 ms token, and why that is not a finding.** A track "advances
+by a fixed amount per redraw rather than by elapsed wall-clock time, so a transition's real duration
+is only nominal: on a slower display it takes proportionally longer" (`ui/cdk/motion.rs:26`). The
+token buys ~250 redraws at the nominal 60 fps; lavapipe delivers far fewer per second, so the same
+250 redraws take much longer than four seconds of wall clock. Nothing about the timing measured here
+transfers to the user's GPU, in either direction.
+
+**Still not covered — and one new gap.** Frame pacing, as before. And the tail: frame 68 still shows
+a visible faded panel and frame 69 shows none, so the last ~88% of the luminance range collapses
+inside one ~110 ms capture interval. That is what an *emphasized-accelerate* exit curve is supposed
+to do — the travel is concentrated at the end — but this pipeline cannot resolve it, so whether that
+final step reads as a pop on real hardware stays unclaimed rather than passed.
+
+**Step 2 is now answerable and was not asked.** T082 recorded it as vacuous while step 1 failed; step
+1 now passes, so "does reopening mid-exit reverse smoothly?" has a middle to reverse from. It is left
+open rather than quietly claimed — catching a chosen frame of a reversal is the one thing the
+`visual-pass` skill states this method cannot do reliably.
+
 #### Result — step 6 re-run, 2026-08-25, at T080
 
 Step 6 was recorded **Blocked** above, with the block attributed to feature 017's overlay primitive
