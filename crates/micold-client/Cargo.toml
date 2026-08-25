@@ -62,7 +62,7 @@ workspace = true
 [package.metadata.deb]
 maintainer = "Jaroslaw Herod <jaroslaw.herod@cumulocity.com>"
 copyright = "2026, Micold AI IDE contributors"
-extended-description = "A local-first, AI-assisted desktop IDE for managing Claude Code worktrees and sessions with an embedded terminal."
+extended-description = "A local-first, AI-assisted desktop IDE for managing git worktrees and AI coding sessions in an embedded terminal. A session runs Claude Code or GitHub Copilot CLI, whichever you pick when you start it."
 section = "devel"
 priority = "optional"
 depends = "$auto, desktop-file-utils, hicolor-icon-theme"

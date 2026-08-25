@@ -1,7 +1,7 @@
 # Worktrees & Sessions
 
 Micold AI IDE organizes your work into **worktrees** (isolated git branches checked out under
-your project) and **sessions** (interactive `claude` runs inside a worktree). The left sidebar
+your project) and **sessions** (interactive AI CLI runs inside a worktree). The left sidebar
 shows worktrees at the top level and their sessions as sub-items; the right side hosts the
 embedded terminal for the active session. The sidebar also always shows one **Default** entry —
 a session location that isn't a worktree at all, for work you don't want to isolate onto its own
@@ -408,6 +408,10 @@ the session is created.
 - **If only one CLI is installed, the chevron is not there at all.** There is nothing to choose
   between, so the affordance is the plain button it always was.
 - Only CLIs you actually have installed are ever offered.
+- **If your default CLI is not installed, pressing start offers the ones that are** instead of
+  trying to run something that isn't there. Nothing is created until you pick — your default stays
+  as you set it, and the list is checked against your `PATH` at that moment, so a CLI you installed
+  since opening the app is in it.
 
 **The choice is fixed for the session's lifetime.** There is no way to switch a running session to
 the other CLI, and nothing switches it for you — not changing your default, not restarting the app,
@@ -507,21 +511,23 @@ You keep control of the panel:
 
 ## The embedded terminal, resume & restart
 
-- The terminal runs `claude` with its working directory set to the session's worktree, so each
-  session is scoped to its own branch.
-- Type in the input line and press **Enter** to send input to `claude`; its output streams above.
-- If a session's `claude` process exits unexpectedly, it is **automatically restarted** (resuming
-  the prior conversation via `claude --resume`). Repeated rapid failures stop the auto-restart and
-  mark the session **failed** so you can retry manually.
+- The terminal runs the session's AI CLI with its working directory set to the session's worktree,
+  so each session is scoped to its own branch.
+- Type in the input line and press **Enter** to send input to the CLI; its output streams above.
+- If a session's process exits unexpectedly, it is **automatically restarted**, resuming the prior
+  conversation — the app asks the CLI to resume the session id it owns, so you come back to the
+  same conversation rather than a fresh one. Repeated rapid failures stop the auto-restart and mark
+  the session **failed** so you can retry manually.
 - **Closing** the active project (or quitting the app) stops that project's session processes but
-  keeps the sessions; reopening the project restores them and resumes them via `claude --resume`.
+  keeps the sessions; reopening the project restores them and resumes the same conversations.
   **Switching** to another project does not stop them — see below.
 
-> Requires the `claude` CLI on your `PATH`. If it is missing, starting a session reports an error.
+> Requires the session's CLI — `claude` or `copilot` — on your `PATH`. If it is missing, starting
+> the session reports which one could not be found.
 
 ## Switching to a regular terminal
 
-Each session's terminal can also run a plain shell instead of `claude` — useful for running git
+Each session's terminal can also run a plain shell instead of the AI CLI — useful for running git
 commands, scripts, or anything else scoped to that session's worktree without leaving the app.
 
 - The **tab strip** in the terminal's bottom bar is how you move between the AI CLI (`claude` or
@@ -529,14 +535,14 @@ commands, scripts, or anything else scoped to that session's worktree without le
   numbered tab to get a shell. The marked tab is the one the pane is showing, so the strip is the
   single place to check which process your keystrokes are going to — it names where each press
   takes you rather than just saying "the other one".
-- The shell starts with its working directory set to the session's worktree, same as `claude` —
+- The shell starts with its working directory set to the session's worktree, same as the AI CLI —
   so `git status`, build scripts, and so on all run against the right branch.
 - **Both processes keep running** while you switch — leaving the AI tab never stops or restarts
   the CLI, and leaving a shell's tab leaves that shell running in the background. Switching back
   reattaches to whichever process was already there, exactly as you left it.
 - If the shell exits (you typed `exit`, or it crashed), a **restart** control appears in the same
-  bar so you can start a fresh one; unlike `claude`, the shell never restarts on its own.
-- Switching to a shell never stops, restarts, or otherwise touches your `claude` conversation —
+  bar so you can start a fresh one; unlike the AI CLI, the shell never restarts on its own.
+- Switching to a shell never stops, restarts, or otherwise touches your AI conversation —
   even mid-turn. It keeps running in the background exactly as it was, including its own
   crash-auto-restart if it happens to exit while you're looking at the shell, and switching back
   reattaches to that same conversation with nothing lost.
@@ -553,7 +559,7 @@ instances as you need, side by side.
 - The keyboard shortcut only opens a new instance while the session is already showing a Regular
   Terminal — pressing it while the AI tab is marked does nothing and does not change tabs.
 - Each instance is a fully separate shell process: running a long command in one never affects
-  the others, and closing or restarting one instance never touches its siblings or your `claude`
+  the others, and closing or restarting one instance never touches its siblings or your AI
   conversation.
 - Each instance tracks its own running/exited state independently, including ones you're not
   currently looking at — see **the tab strip** below, which is where that state is reported.
@@ -583,11 +589,11 @@ looking at.
 It sits at the right-hand end and stays there as you open and close instances, so it is always one
 press away. Three things make it different from its neighbours, and all three are deliberate:
 
-- **It has no close button.** A session has exactly one `claude` process, and ending it is not
+- **It has no close button.** A session has exactly one AI CLI process, and ending it is not
   something this control offers — by any press. Every instance tab has one; the AI tab keeps the
   space and leaves it empty, so all the tabs stay the same size and the strip still reads as a strip.
 - **Clicking it only switches the view.** It never starts, stops or restarts anything — not
-  `claude`, and not any terminal instance — and clicking it while you are already looking at the AI
+  the AI CLI, and not any terminal instance — and clicking it while you are already looking at the AI
   conversation does nothing at all. Switching away and back returns you to the same terminal
   instance you left.
 - **Its right-click menu is a terminal tab's minus Close** (see below).
@@ -618,7 +624,7 @@ strip tells you what is and isn't running.
 - It appears on a **background** instance without your having to select it. If one exits or crashes
   while you're viewing a different one, its tab gains the ring where you can see it — right-click
   and choose **Restart** to start a fresh shell for just that instance, without switching to it
-  first, and without touching any sibling or your `claude` conversation.
+  first, and without touching any sibling or your AI conversation.
 
 #### When there are more tabs than fit
 
@@ -638,7 +644,7 @@ than being something you have to scroll to.
 
 Switching to a different project **does not stop your sessions**. When you change the active
 project — from the top-bar project switcher, the **Known projects** list, or the folder browser —
-the project you leave keeps all its sessions running in the background: their `claude` processes
+the project you leave keeps all its sessions running in the background: their AI CLI processes
 stay alive and their output keeps accumulating while you are away.
 
 When you switch back, the project's sessions are still running and the session that was in the
@@ -651,11 +657,11 @@ project a short **notice** tells you a background session was restarted — the 
 silently. Dismiss it with its **Dismiss** button.
 
 > Background sessions live for as long as the app is running. Quitting the app stops every session;
-> on the next launch they are restored and resume via `claude --resume` when selected.
+> on the next launch they are restored and resume the same conversations when selected.
 
 ## Colored, real-terminal output
 
-The embedded terminal renders `claude`'s output like a real terminal, not as flat text:
+The embedded terminal renders the AI CLI's output like a real terminal, not as flat text:
 
 - **Colors and styles** — ANSI foreground/background colors (the standard 16, bright, 256-color,
   and 24-bit truecolor) and text styles (bold, dim, italic, underline, strikethrough, and
@@ -663,7 +669,7 @@ The embedded terminal renders `claude`'s output like a real terminal, not as fla
 - **Theme-aware defaults** — when output specifies no explicit color, the terminal's default
   text and background follow the app's light/dark theme and update when you switch themes. The 16
   ANSI colors use a fixed conventional palette so programs look as their authors intended.
-- **Full-screen interfaces** — `claude`'s interactive UI and other full-screen (alternate-screen)
+- **Full-screen interfaces** — the CLI's interactive UI and other full-screen (alternate-screen)
   programs redraw cleanly, with the cursor shown at its current position.
 - **Focus** — the terminal you are looking at is where the keyboard goes, unless you have handed
   it away or something that types has taken it (a colored border marks the focused terminal).
@@ -672,20 +678,20 @@ The embedded terminal renders `claude`'s output like a real terminal, not as fla
 
 Start a session, or select one in the sidebar, and its terminal is focused right away — just type,
 no click needed. (You can also click the terminal to focus it, e.g. after releasing focus.)
-Keystrokes stream straight to `claude` as you press them, exactly like a standalone terminal:
+Keystrokes stream straight to the CLI as you press them, exactly like a standalone terminal:
 
-- **Everything reaches `claude`**: printable characters, Enter, Backspace, Tab, arrow keys,
+- **Everything reaches the CLI**: printable characters, Enter, Backspace, Tab, arrow keys,
   Home/End/PageUp/PageDown, Insert/Delete, function keys, and control chords (Ctrl+C to
   interrupt, Ctrl+D, Ctrl+R, Ctrl+U, …). There is no "type a line and press Enter" box any more.
 - **Paste** with the platform paste shortcut (Ctrl+Shift+V, or Cmd+V on macOS); the text is
-  inserted into `claude` as input.
+  inserted into the CLI as input.
 - **Select** text by dragging with the mouse (double-click selects a word, triple-click a line);
   the selection is copied to the clipboard automatically on release. **Copy** the current
   selection with Ctrl+Shift+C (Cmd+C on macOS); **middle-click** pastes.
 - **Mouse-driven programs**: when the running program turns on mouse reporting, mouse clicks are
   forwarded to it; hold **Shift** while dragging to select text instead.
-- **Keys route to `claude` only while the terminal is focused.** When focused, every key —
-  including Escape and shortcuts the app would otherwise use — goes to `claude`; when not focused,
+- **Keys route to the terminal's process only while the terminal is focused.** When focused, every
+  key — including Escape and shortcuts the app would otherwise use — goes to it; when not focused,
   those keys drive the application instead. Input is only delivered while the session's process
   is running (otherwise keystrokes are ignored and the header shows the session status).
 - **Leaving focus**: press **Ctrl+Shift+E** (Cmd+Shift+E on macOS). Releasing focus never
@@ -758,7 +764,7 @@ program at the cell you pressed. No press is spent purely on focusing.
 
 ## Sizing, resize & scrollback
 
-- The terminal tells `claude` how many rows and columns are actually visible, so its interface
+- The terminal tells the CLI how many rows and columns are actually visible, so its interface
   lays out to fit. **Resizing** the window or dragging the sidebar reflows the terminal and the
   running interface to the new size.
 - **Scroll** with the mouse wheel *or* a touchpad to move back through earlier output (up to the
