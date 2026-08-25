@@ -21,6 +21,7 @@ use std::process::Command;
 use micold_core::connect::{connect_at, Connected, Credentials};
 use micold_core::endpoint::DialAddress;
 use micold_core::protocol::auth::Token;
+use micold_core::protocol::messages::PresentedToken;
 
 const IMAGE: &str = "micold-daemon:dev";
 const CONTAINER: &str = "micold-sandbox-realtest";
@@ -161,7 +162,7 @@ async fn sandbox_real_handshake_succeeds_with_the_mounted_token() {
     let sandbox = Sandbox::start();
     let address = DialAddress::Loopback { port: PORT };
     let credentials = Credentials {
-        auth_token: Some(sandbox.token.as_str().to_string()),
+        auth_token: Some(PresentedToken::new(sandbox.token.as_str())),
         require_fingerprint_match: false,
     };
 
@@ -187,13 +188,13 @@ async fn sandbox_real_handshake_refuses_a_wrong_token() {
     // Wait for it to be up using the right token first, so a refusal below is a refusal and not a
     // "not listening yet".
     let good = Credentials {
-        auth_token: Some(sandbox.token.as_str().to_string()),
+        auth_token: Some(PresentedToken::new(sandbox.token.as_str())),
         require_fingerprint_match: false,
     };
     let _ = wait_for_accept(&address, &good).await;
 
     let bad = Credentials {
-        auth_token: Some(Token::generate().as_str().to_string()),
+        auth_token: Some(PresentedToken::new(Token::generate().as_str())),
         require_fingerprint_match: false,
     };
     match connect_at(&address, "real-test-client", &bad).await {
@@ -219,7 +220,7 @@ async fn sandbox_real_state_is_written_where_the_host_can_read_it() {
     let sandbox = Sandbox::start();
     let address = DialAddress::Loopback { port: PORT };
     let credentials = Credentials {
-        auth_token: Some(sandbox.token.as_str().to_string()),
+        auth_token: Some(PresentedToken::new(sandbox.token.as_str())),
         require_fingerprint_match: false,
     };
     let _ = wait_for_accept(&address, &credentials).await;
