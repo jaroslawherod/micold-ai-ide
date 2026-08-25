@@ -78,11 +78,17 @@ pub fn state_fill(content: Color, opacity: f32) -> Color {
 /// For the one place a state layer cannot be a separate quad: `checkbox::Style` exposes a single
 /// opaque `background`, so its hover layer has to be blended into the fill rather than drawn on
 /// top of it. Everywhere else the layer is its own quad and this is not needed.
+///
+/// The arithmetic is [`tokens::blend_channel`] rather than written out here. `micold-core` needs the
+/// same blend to measure a composited pair (FR-004b), and it has no `Color`, so the choice was one
+/// function used from both crates or two copies of `l*a + b*(1-a)` — and a drifted copy of a blend
+/// does not fail, it measures a colour nothing draws (FR-029a; BUG-010 T160).
 pub fn over(layer: Color, base: Color) -> Color {
+    let ch = |l: f32, b: f32| tokens::blend_channel(l as f64, b as f64, layer.a as f64) as f32;
     Color {
-        r: layer.r * layer.a + base.r * (1.0 - layer.a),
-        g: layer.g * layer.a + base.g * (1.0 - layer.a),
-        b: layer.b * layer.a + base.b * (1.0 - layer.a),
+        r: ch(layer.r, base.r),
+        g: ch(layer.g, base.g),
+        b: ch(layer.b, base.b),
         a: 1.0,
     }
 }
@@ -441,12 +447,22 @@ pub struct Host {
     pub on_fill: Rgb,
     /// Whether `fill` is an **accent** role rather than a neutral surface.
     ///
-    /// Only an accent fill obliges a child to abandon the colours its own variant gives it. §1.3
-    /// enumerates the backgrounds `primary` may be drawn on and they are all neutral surfaces —
-    /// `surface_variant` among them — so a button on the `Info` banner keeps §7.3's table, while
-    /// one on `error` cannot: both roles read their ramps at the tone their scheme assigns, which
-    /// puts `primary` and `error` on the same tone in each scheme, and two roles at the same tone
-    /// have the same luminance by construction (1.00:1 light, 1.01:1 dark — BUG-009).
+    /// Only an accent fill obliges a child to abandon the colours its own variant gives it. A button
+    /// on a fill §1.3 enumerates for `primary` keeps §7.3's table, while one on `error` cannot: both
+    /// roles read their ramps at the tone their scheme assigns, which puts `primary` and `error` on
+    /// the same tone in each scheme, and two roles at the same tone have the same luminance by
+    /// construction (1.00:1 light, 1.01:1 dark — BUG-009).
+    ///
+    /// **Neutral is not the test; enumerated is** (BUG-010). This comment used to say §1.3's
+    /// backgrounds for `primary` "are all neutral surfaces — `surface_variant` among them", and the
+    /// second half was never true: the row lists four `surface`/`surface_container_*` levels and
+    /// `surface_variant` is not one of them. The `Info` banner was built on that sentence, so its
+    /// action drew `primary` on a host the contract does not permit — 4.40:1 pressed in the light
+    /// scheme, with an `outline` border at 2.96:1 in the dark before any state layer at all. A
+    /// neutral fill outside the enumeration is still not a host, and [`imposed`] cannot say so on
+    /// its own: it answers "does this fill oblige a substitution", not "is this fill permitted".
+    ///
+    /// [`imposed`]: Host::imposed
     accent: bool,
 }
 
@@ -492,7 +508,11 @@ impl Host {
 pub fn notification_host(r: Roles, level: NoticeLevel) -> Host {
     match level {
         NoticeLevel::Error => Host::accent(r.error, r.on_error),
-        NoticeLevel::Info => Host::neutral(r.surface_variant, r.on_surface),
+        // `surface_container_high`, not `surface_variant`: §1.3 enumerates `primary` on the
+        // `surface_container_*` levels and never on `surface_variant`, and the banner's action is a
+        // text button in `primary`. The fill moves rather than the action's role, which is FR-004b's
+        // remedy — narrow the host, leave the ramp alone (BUG-010).
+        NoticeLevel::Info => Host::neutral(r.surface_container_high, r.on_surface),
     }
 }
 

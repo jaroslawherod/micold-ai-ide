@@ -74,6 +74,37 @@ pub fn contrast(a: Rgb, b: Rgb) -> f64 {
     (hi + 0.05) / (lo + 0.05)
 }
 
+/// One channel of `layer` composited over `base` at `alpha`, all three in the same units.
+///
+/// The alpha blend, written once. The client draws a state layer as a semi-transparent quad and has
+/// to composite it in two places — `style::over`, for the fill a checkbox has nowhere to put a quad
+/// over — and the gates have to composite it to measure what is behind a label. That is three call
+/// sites for `l*a + b*(1-a)`, and a second transcription of a blend does not fail when it drifts: it
+/// quietly measures a colour the renderer never draws. Same argument as [`contrast`]'s, one layer
+/// down (FR-029a).
+pub fn blend_channel(layer: f64, base: f64, alpha: f64) -> f64 {
+    layer * alpha + base * (1.0 - alpha)
+}
+
+/// `layer` composited over `base` at `alpha` — what is actually behind a label once a state layer
+/// is drawn (FR-004b, contract §5).
+///
+/// A state layer is the *content* colour over the container, so this always moves `base` toward the
+/// foreground and always lowers the ratio [`contrast`] then reports. It is the reason §1.3 and §5
+/// are one measurement rather than two: a pair proved at rest is not proved (BUG-010).
+pub fn over(layer: Rgb, alpha: f64, base: Rgb) -> Rgb {
+    let ch = |l: u8, b: u8| {
+        blend_channel(l as f64, b as f64, alpha)
+            .round()
+            .clamp(0.0, 255.0) as u8
+    };
+    Rgb {
+        r: ch(layer.r, base.r),
+        g: ch(layer.g, base.g),
+        b: ch(layer.b, base.b),
+    }
+}
+
 /// WCAG AA for normal text.
 pub const AA_TEXT: f64 = 4.5;
 /// WCAG AA for non-text — what a divider, a focus ring or an outlined control's border must clear.

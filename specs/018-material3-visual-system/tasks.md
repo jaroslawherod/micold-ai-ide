@@ -1566,28 +1566,58 @@ and `tokens_contrast::text_pairs` asserts exactly those three. So the `Info` ban
 never a permitted composition; it was an unenumerated one that no gate covered and that two prose
 sentences asserted was fine. Both sentences are corrected here.
 
-- [ ] T160 Failing test first: extend `crates/micold-core/tests/tokens_contrast.rs` to assert every §1.3 pair **with the heaviest layer its element can carry composited**, not only at rest. The compositing arithmetic already exists as `style::over` in the client; the core has no `Color`, so this needs the same operation over `Rgb` in `tokens` — one function, used by both, rather than a second copy of alpha blending (FR-004b, SC-008h)
+- [X] T160 Failing test first: extend `crates/micold-core/tests/tokens_contrast.rs` to assert every §1.3 pair **with the heaviest layer its element can carry composited**, not only at rest. The compositing arithmetic already exists as `style::over` in the client; the core has no `Color`, so this needs the same operation over `Rgb` in `tokens` — one function, used by both, rather than a second copy of alpha blending (FR-004b, SC-008h)
 
-- [ ] T161 [P] Add `surface_container_high` to §1.3's permitted hosts for `primary` in `tokens_contrast::text_pairs`, and confirm T160 is green for all four. It is a widening, and it is measured rather than assumed: 5.28/4.75/4.63 light and 8.43/7.04/6.71 dark for the label, 3.68/3.31/3.23 and 4.56/3.81/3.63 for the border (FR-004b, §1.3)
+- [X] T161 [P] Add `surface_container_high` to §1.3's permitted hosts for `primary` in `tokens_contrast::text_pairs`, and confirm T160 is green for all four. It is a widening, and it is measured rather than assumed: 5.28/4.75/4.63 light and 8.43/7.04/6.71 dark for the label, 3.68/3.31/3.23 and 4.56/3.81/3.63 for the border (FR-004b, §1.3)
 
-- [ ] T162 The `Info` banner stops hosting an accent role. `style::notification_host`'s `NoticeLevel::Info` arm takes `surface_container_high` in place of `surface_variant`; its `on_fill` stays `on_surface`, which §1.3 already enumerates on every `surface_container_*` level. One edit, in the one decision both the banner's fill and its action read (FR-004b, FR-027b)
+- [X] T162 The `Info` banner stops hosting an accent role. `style::notification_host`'s `NoticeLevel::Info` arm takes `surface_container_high` in place of `surface_variant`; its `on_fill` stays `on_surface`, which §1.3 already enumerates on every `surface_container_*` level. One edit, in the one decision both the banner's fill and its action read (FR-004b, FR-027b)
 
-- [ ] T163 Remove the accent filter from `crates/micold-client/src/ui/material/composition_contrast.rs` — the single `imposed().is_none()` skip T151 wrote to be removable in one edit — and delete the module doc's "**Scope: hosts that impose**" paragraph with it. Confirm the walk is green over every host and both schemes, and that it was **red before T162**, on the nine violations BUG-010 tabulates (SC-008h)
+- [X] T163 Remove the accent filter from `crates/micold-client/src/ui/material/composition_contrast.rs` — the single `imposed().is_none()` skip T151 wrote to be removable in one edit — and delete the module doc's "**Scope: hosts that impose**" paragraph with it. Confirm the walk is green over every host and both schemes, and that it was **red before T162**, on the nine violations BUG-010 tabulates (SC-008h)
 
-- [ ] T164 [P] Correct the two prose claims that made the exclusion look safe, rather than only the code: `Host::neutral`'s doc comment in `style.rs` ("§1.3 enumerates the backgrounds `primary` may be drawn on … `surface_variant` among them") and BUG-009's "Adjacent risk, not this bug" section, which says the same. Both are the reason nobody re-read the table (FR-041's argument applied to a doc comment)
+- [X] T164 [P] Correct the two prose claims that made the exclusion look safe, rather than only the code: `Host::neutral`'s doc comment in `style.rs` ("§1.3 enumerates the backgrounds `primary` may be drawn on … `surface_variant` among them") and BUG-009's "Adjacent risk, not this bug" section, which says the same. Both are the reason nobody re-read the table (FR-041's argument applied to a doc comment)
 
-- [ ] T165 [P] Sweep the other neutral hosts a component is drawn on for the same unenumerated composition — `style::list_item`'s `surface_variant` fill, `edge_fade`'s `primary`/`surface_variant` pair, and the showcase's own specimens. Measured, not eyeballed: `on_surface` on `surface_variant` is 10.50:1 light and 5.39:1 dark under the heaviest row layer, so `list_item` is inside §1.3 and stays — **record that it was checked**, per the class-not-instance rule T155 and BUG-008 established (FR-004b)
+- [X] T165 [P] Sweep the other neutral hosts a component is drawn on for the same unenumerated composition — `style::list_item`'s `surface_variant` fill, `edge_fade`'s `primary`/`surface_variant` pair, and the showcase's own specimens. Measured, not eyeballed: `on_surface` on `surface_variant` is 10.50:1 light and 5.39:1 dark under the heaviest row layer, so `list_item` is inside §1.3 and stays — **record that it was checked**, per the class-not-instance rule T155 and BUG-008 established (FR-004b)
 
-- [ ] T166 [P] `style_snapshot.rs` re-pins the `Info` banner's fill and its action's resolved style on the new host, and the showcase's banner specimen poses it. The snapshot diff is the proof the fill moved: light `#E7E0EC` → `#ECE7EC`, dark `#49454E` → `#2B292D` (SC-007, feature 019 FR-003)
+- [X] T166 [P] `style_snapshot.rs` re-pins the `Info` banner's fill and its action's resolved style on the new host, and the showcase's banner specimen poses it. The snapshot diff is the proof the fill moved: light `#E7E0EC` → `#ECE7EC`, dark `#49454E` → `#2B292D` (SC-007, feature 019 FR-003)
 
 - [ ] T167 Confirm in the running application by the `visual-pass` route, in **both** schemes: the `Info` banner against its new fill, its action at rest and under hover and press, and the `Error` banner beside it unchanged. Record to `../evidence/` (SC-008h, US4 scenario 16)
 
-- [ ] T168 [P] Read `docs/` against the change (FR-041). The banner's tone is described nowhere in the user guide, which is expected — record that it was checked rather than leaving the question open
+- [X] T168 [P] Read `docs/` against the change (FR-041). The banner's tone is described nowhere in the user guide, which is expected — record that it was checked rather than leaving the question open
 
 **Scope note (T160)**: the composited measurement applies to §1.3's *whole* table, not only to
 `primary`'s row, because a state layer is drawn on every interactive surface (§5) and no row is
 exempt by construction. Nine of the twelve host columns needed nothing; that is the rule being cheap,
 not the rule being narrow.
+
+**Sweep record (T165)** — the class, not the instance. Every neutral host a component is drawn
+on was measured with the heaviest layer that component can carry, in both schemes, not only the three
+BUG-010 tabulated:
+
+- `style::list_item`'s `surface_variant` fill carries `on_surface`, which §1.3 enumerates: **10.50:1**
+  light and **5.39:1** dark under `selected` (0.12), the heaviest layer a row draws. Inside the
+  contract, and it stays.
+- `edge_fade` pairs `primary` with `surface_variant` and draws **no text and no border** — it is a
+  gradient to transparent. §1.3's obligation is about legibility of content against a container; there
+  is no content. Recorded as checked and out of scope, which is a different answer from "it passes".
+- The showcase's own specimens draw on `surface`, `surface_container` and `surface_container_low`,
+  all enumerated, all clearing AA composited (6.14/5.51/5.33 and up — see BUG-010's host table).
+- **Two pairs failed**, both dark-scheme only and neither in BUG-010's tabulated set: the snackbar's
+  action (`inverse_primary` on `inverse_surface`, 4.37:1 pressed) and the sidebar's untyped filter
+  chip (`on_surface_variant` on `surface_variant`, 4.47:1 pressed). They are **not** absorbed here:
+  FR-004b's remedy reaches the chip and cannot reach the snackbar, which has one fill by definition,
+  so the rule needs a clause this phase did not decide. Filed as **BUG-011**, and pinned meanwhile in
+  `tokens_contrast::UNDER_AA_COMPOSITED`, an assertion that fails if the set gains a member *or loses
+  one* — so fixing either breaks the build until its row goes.
+
+**Docs record (T168)** — `docs/` was read against the change. The banner appears once, at
+`docs/user-guide/appearance-theming.md:169`, and describes what it *does*, not what tone it is drawn
+in. **Nothing to change**, recorded rather than left open (FR-041).
+
+**Snapshot record (T166)** — the fixture moved on 17 lines, not 4. Four are the `Info` banner and its
+host, exactly as predicted. The other thirteen are checkbox state layers drifting in the **last f32
+ulp** (0.8858823 → 0.8858824), because T160 made `style::over` delegate to `tokens::blend_channel` and
+the shared function computes in `f64`. No 8-bit channel changes; nothing renders differently. It is
+the cost of having one blend instead of two, and the diff is the evidence there is now one.
 
 **Bugfix**: 2026-08-25 — BUG-010 added Phase 22 (T160–T168). **No task is reopened.** T151 built the
 composition gate scoped to accent hosts and recorded the exclusion in its own module doc, which is
