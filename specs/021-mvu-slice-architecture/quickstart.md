@@ -215,6 +215,70 @@ uses. The behaviours are equivalent *provided the live message is ever sent*, wh
 step 6 could not confirm. Both belong to feature 017's overlay primitive and are out of scope for
 this feature; recorded here rather than fixed.
 
+#### Result — steps 1 and 2 re-run, 2026-08-25, at T082
+
+T040 declined to claim these: a 200 ms exit and a capture loop that caught no intermediate frame
+cannot distinguish "the software rasteriser is not playing the transition" from "it finishes far
+faster than its token". **A 20× probe build separates them**, and the answer is neither.
+
+Method. `ENTER` and `EXIT` in `ui/material/modal.rs` were multiplied by 20 — a 6,000 ms entrance and
+a 4,000 ms exit — in a throwaway build pinned to `~/vp91/bin/micold-ai-ide-slow`; the edit was
+reverted in the same script that made it, so no slowed constant ever reached the tree. Same rig as
+step 6 above: Xvfb `:91`, Mesa lavapipe, `xdotool`, `import`, one 600×320 crop over the dialog, mean
+luminance per frame at ~117 ms per capture.
+
+**The rasteriser plays transitions. The entrance is resolved in detail.** Forty consecutive frames
+climb monotonically, 0.15296 → 0.16039, and the dialog is visibly mid-scale and mid-fade in the
+early ones — smaller, with a pale Close button — against 0.16175 settled and 0.07974 with nothing
+open. So a screenshot pipeline is not the limitation T040 suspected it might be.
+
+**The exit is not played at all — and that is a defect, not a timing artefact.** Sixty consecutive
+frames across an Escape, with the wheel of the same 4,000 ms token running: nine frames at 0.161745,
+then frames 10 through 60 at 0.079739. **Not one intermediate value.** A 4,000 ms exit sampled every
+117 ms would show about thirty-four.
+
+![entrance resolves; exit has no intermediate frame](evidence/m2-step1-enter-vs-exit.png)
+
+| Frame | 1–9 | 10 | 11–60 |
+|---|---|---|---|
+| Dialog-region mean | 0.161745 | 0.079739 | 0.079739 |
+| | fully open | fully gone | fully gone |
+
+**Root cause, traced rather than guessed.** An instrumented build printing the snapshot lifecycle
+shows the application wiring is correct and the transition is abandoned after a single frame:
+
+```
+PROBE snapshot: before=Some(SurfaceId("about")) after=None dismissing_set=true
+PROBE view:     open=None dismissing=true closing=true      <- the snapshot is built, once
+PROBE transition_finished                                    <- and released immediately
+```
+
+`Modal`'s scrim carries `on_hidden`, and `animation.rs` publishes it when a track sits at zero with
+zero as its target. A track is created at zero whenever `animate_in()` is set, so the exit works
+only while the widget *keeps the state it entered with*. It does not: `cdk::overlay::backdrop()`
+builds the scrim as `opaque(mouse_area(container(scrim)).on_press(..))` while the surface has a
+dismisser and as `opaque(container(scrim))` when it has none — and the snapshot deliberately has
+none, because "a snapshot is a dialog on its way out … has nothing left to cancel"
+(`ui/mod.rs`). Dropping `mouse_area` from the chain changes the widget tree, iced rebuilds the
+subtree's state, the fresh track reads as already hidden, and `on_hidden` fires on the first frame.
+`positioned()` has the same conditional shape around the panel, so the dialog body's fade and scale
+tracks are reset by the same flip.
+
+**It predates this feature.** `git show e02f971:crates/micold-client/src/ui/mod.rs` — 021's merge
+base — carries the same `if let Some(cancel) = on_escape(state)` construction, and `overlay.rs` at
+that commit carries the same `match dismisser`; the file was introduced whole by feature 017's
+consolidation (`4b54f41`). So this is 017's overlay primitive, recorded here because FR-011 is 021's
+requirement and this is where the verification gap sat. **T084 fixes it.**
+
+**Step 2 is vacuous while step 1 fails, and stays recorded as unclaimed.** "Does reopening mid-exit
+reverse smoothly?" presupposes an exit with a middle. What T040 established survives unchanged and
+is the part that matters if the transition ever misbehaves: reopening immediately after Escape gives
+a single dialog byte-identical to a clean open — no duplicate, no ghost, no stuck scrim. Ask step 2
+again after T084.
+
+**Still not covered.** Frame pacing. lavapipe is a software rasteriser, so nothing here says how the
+transition *feels* on the user's GPU; that remains out of reach of this method and is not claimed.
+
 #### Result — step 6 re-run, 2026-08-25, at T080
 
 Step 6 was recorded **Blocked** above, with the block attributed to feature 017's overlay primitive
