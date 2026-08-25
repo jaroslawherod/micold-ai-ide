@@ -1405,3 +1405,52 @@ async fn including_and_excluding_are_both_idempotent_and_reversible() {
         "the worktree itself is untouched by either direction — only the app stopped showing it"
     );
 }
+
+/// Feature 027, research R2 part 2: the daemon answers the open-project gate for a client that
+/// cannot see its filesystem at the same paths.
+///
+/// Both directions are asserted in one test on purpose. A handler that answered `true` for
+/// everything would pass a repository-only check, and one that answered `false` for everything
+/// would pass a non-repository-only check; neither could pass this. The echoed path is what lets
+/// a client that has moved on since asking discard the answer.
+#[tokio::test]
+async fn repo_root_query_is_answered_for_both_a_repository_and_a_plain_directory() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+    let plain = tempfile::tempdir().unwrap();
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    for (req, asked, expected) in [
+        (1_u64, project.path().to_path_buf(), true),
+        (2, plain.path().to_path_buf(), false),
+    ] {
+        client
+            .send(Frame::Control(ClientMsg::RepoRootQuery {
+                req,
+                path: asked.clone(),
+            }))
+            .await
+            .unwrap();
+
+        let reply =
+            expect_control(&mut client, |m| matches!(m, DaemonMsg::OperationOk { req: r, .. } if *r == req))
+                .await;
+        match reply {
+            DaemonMsg::OperationOk {
+                result: OperationResult::RepoRoot { path, is_repo_root },
+                ..
+            } => {
+                assert_eq!(path, asked, "the answer must name the folder it is about");
+                assert_eq!(is_repo_root, expected, "for {}", asked.display());
+            }
+            other => panic!("expected a RepoRoot result, got {other:?}"),
+        }
+    }
+}

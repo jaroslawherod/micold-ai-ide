@@ -312,7 +312,24 @@ does a session start unsandboxed without an explicit choice.
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T113 Implement the daemon-backed `micold_core::git::Git` for Windows and wire it into `crates/micold-client/src/shell/capabilities.rs`, replacing path translation as R2's resolution and unblocking the remote placement
+- [x] T113 Implement the daemon-backed `micold_core::git::Git` for Windows and wire it into `crates/micold-client/src/shell/capabilities.rs`, replacing path translation as R2's resolution and unblocking the remote placement
+      — **not as a second `Git` implementation.** R2's wording asks for one, and it cannot be
+      built: `Git` is a synchronous 13-method trait, while the daemon connection is asynchronous
+      and correlated. An impl satisfying that signature would have to block on a round trip into a
+      container from inside iced's `update`, trading a wrong worktree list for a frozen window.
+      So the seam moved one level out. `Capabilities::git` is now `Option<Arc<dyn Git>>`, and
+      `boot()` narrows it away with `without_local_git()` when
+      `Placement::git_routing() == GitRouting::ViaDaemon` — the capability is *absent*, not
+      substituted, and the type system then forces both call sites to say what they do without it.
+      The client uses only two of the thirteen methods, and each gets the answer its nature allows:
+      the open-project gate (`is_repo_root`) becomes protocol v7's `ClientMsg::RepoRootQuery` /
+      `OperationResult::RepoRoot`, answered by the side that will run git; the worktree *seed*
+      (`worktree_list_porcelain`) becomes empty, because a seed built from host paths while the
+      daemon reports container paths is not a faster truth, just a different list shown briefly.
+      The routing predicate reads `pathmap::is_identity()` — the same source of truth the mount set
+      is built from, with a test asserting the two cannot drift. The gate's answer carries the
+      folder back, so a client that has moved on discards it rather than opening what the user
+      cancelled.
 - [ ] T114 *(test)* [P] Add Windows path-mapping cases to `crates/micold-core/tests/sandbox_argv.rs` and a test that the daemon-backed `Git` and `GitCli` agree on worktree listings for the same repository
 - [ ] T115 [P] Verify the full quickstart.md §A suite is green on Linux, macOS and Windows with **no** runtime installed, from the CI matrix in `.github/workflows/` (Principle VI, the fake runtime's whole purpose)
 - [ ] T116 [P] Measure SC-003 — sandboxed session start no more than 2s slower than unsandboxed — recording the numbers in `specs/027-sandboxed-daemon-runtime/evidence/performance.md`

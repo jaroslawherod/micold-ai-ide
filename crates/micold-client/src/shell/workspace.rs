@@ -67,8 +67,17 @@ fn scan(browser: &dyn FolderBrowser, dir: PathBuf) -> Message {
 /// project, and this call is only the local seed that shows *something* while the daemon's own
 /// discovery is still in flight. The catalog push that follows replaces this list entirely, included
 /// worktrees and all.
-pub(crate) fn discover_worktrees(git: &dyn Git, repo: &Path) -> Vec<Worktree> {
-    micold_core::worktree::discover(git, repo, &[])
+///
+/// Empty when this client has no local git (feature 027, research R2 part 2). That is the right
+/// answer rather than a degraded one: the seed exists to avoid a blank list for the few frames
+/// before the daemon's push, and a seed derived from *host* paths while the daemon reports
+/// *container* paths would not be a faster version of the truth — it would be a different list,
+/// briefly shown, and then replaced.
+pub(crate) fn discover_worktrees(git: Option<&dyn Git>, repo: &Path) -> Vec<Worktree> {
+    match git {
+        Some(git) => micold_core::worktree::discover(git, repo, &[]),
+        None => Vec::new(),
+    }
 }
 
 /// Open the folder picker at the user's home directory and start listing it.
@@ -92,18 +101,61 @@ pub(crate) fn on_selector_navigated(app: &mut App, message: Message) -> Task<Mes
     }
 }
 
+/// What the open-project gate says when it refuses (FR-001a). One wording, whichever side of the
+/// connection answered the question.
+pub(crate) const NOT_A_REPOSITORY: &str = "Only git repositories can be opened as projects.";
+
 /// Open the chosen folder as a project — but only if it is a git repository (FR-001a).
+///
+/// Who answers that question depends on where the daemon is (feature 027, research R2 part 2). With
+/// a local git the answer is immediate and the project opens in this same update. Without one the
+/// gate becomes a round trip, and [`on_repo_root_answer`] is the other half.
 pub(crate) fn on_folder_chosen(app: &mut App, path: PathBuf) -> Task<Message> {
     // Close the picker BEFORE the git gate. Notifications render inside `base`, which
     // every modal wraps behind its scrim, so a refusal reported while the selector was
     // still open would be dimmed out of view.
     app.core.selector = None;
-    if !app.caps.git().is_repo_root(&path) {
-        app.core.update(Message::ProjectOpenRefused(
-            "Only git repositories can be opened as projects.".to_string(),
-        ));
+    let Some(git) = app.caps.git() else {
+        // No local git: ask the side that has one. Nothing is opened, refused, or persisted until
+        // the answer lands — the gate has not been passed, only deferred.
+        let asked = path.clone();
+        send_op(app, PendingOp::RepoRootQuery(path), move |req| {
+            ClientMsg::RepoRootQuery { req, path: asked }
+        });
+        return Task::none();
+    };
+    if !git.is_repo_root(&path) {
+        app.core
+            .update(Message::ProjectOpenRefused(NOT_A_REPOSITORY.to_string()));
         return Task::none();
     }
+    open_verified_project(app, path)
+}
+
+/// The daemon's verdict on a folder this client could not judge for itself (feature 027, R2).
+///
+/// `path` is echoed back from the request precisely so this can be checked: the user may have
+/// cancelled, opened something else, or switched project while the question was in flight, and an
+/// answer about a folder nobody is waiting on any more must not open it.
+pub(crate) fn on_repo_root_answer(
+    app: &mut App,
+    asked: PathBuf,
+    answered: PathBuf,
+    is_repo_root: bool,
+) -> Task<Message> {
+    if asked != answered {
+        return Task::none();
+    }
+    if !is_repo_root {
+        app.core
+            .update(Message::ProjectOpenRefused(NOT_A_REPOSITORY.to_string()));
+        return Task::none();
+    }
+    open_verified_project(app, answered)
+}
+
+/// Everything that happens once the folder is known to be a repository, whoever established it.
+fn open_verified_project(app: &mut App, path: PathBuf) -> Task<Message> {
     // Switch without tearing down the outgoing project's sessions (feature 008, BS-1).
     // `open_or_activate` moves `active` to the new project, so capture the outgoing
     // foreground FIRST (I1), then finish the switch bookkeeping for the new project. The
@@ -155,6 +207,145 @@ mod tests {
     use crate::tests::base_app;
     use micold_core::fs_scan::FakeFolderScanner;
     use micold_core::project::FolderEntry;
+    use micold_core::protocol::messages::{DaemonMsg, OperationResult};
+
+    /// A client with no local git and a daemon to ask (feature 027, research R2 part 2) — the
+    /// Windows and remote-placement shape, reproduced on any platform because the capability is
+    /// removed by value rather than by `cfg`.
+    fn client_without_local_git() -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.caps = std::mem::replace(&mut app.caps, crate::shell::capabilities::Capabilities::real())
+            .without_local_git();
+        (app, rx)
+    }
+
+    /// The whole point of R2 part 2, as one assertion: a client that cannot see the daemon's
+    /// filesystem does not guess. It asks.
+    ///
+    /// The failure this prevents is not a wrong error message. On Windows the host sees
+    /// `C:\\Users\\u\\p` and the container sees `/mnt/host/c/Users/u/p`; a client answering the
+    /// open-project gate from its own filesystem would admit or refuse a folder on the strength of
+    /// a path the daemon will never act on.
+    #[test]
+    fn without_local_git_the_gate_is_asked_over_the_wire() {
+        let (mut app, mut rx) = client_without_local_git();
+        let chosen = PathBuf::from("/repo/thing");
+        let _ = on_folder_chosen(&mut app, chosen.clone());
+
+        let sent = rx.try_recv().expect("a question was asked");
+        match sent {
+            ClientMsg::RepoRootQuery { path, .. } => assert_eq!(path, chosen),
+            other => panic!("expected the gate to be asked over the wire, got {other:?}"),
+        }
+        assert!(
+            app.core.workspace.active.is_none(),
+            "nothing may be opened until the answer lands — the gate is deferred, not passed"
+        );
+        assert!(
+            app.core.notify.visible().is_none(),
+            "nor may anything be refused: no verdict has been given yet"
+        );
+    }
+
+    /// And the answer completes the interaction the user started.
+    #[test]
+    fn a_yes_from_the_daemon_opens_the_project() {
+        let (mut app, mut rx) = client_without_local_git();
+        let chosen = PathBuf::from("/repo/thing");
+        let _ = on_folder_chosen(&mut app, chosen.clone());
+        let req = match rx.try_recv().expect("asked") {
+            ClientMsg::RepoRootQuery { req, .. } => req,
+            other => panic!("{other:?}"),
+        };
+
+        let _ = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            DaemonMsg::OperationOk {
+                req,
+                result: OperationResult::RepoRoot {
+                    path: chosen.clone(),
+                    is_repo_root: true,
+                },
+            },
+        );
+        assert_eq!(app.core.workspace.active.as_deref(), Some(chosen.as_path()));
+    }
+
+    /// A no is refused in the same words the local gate uses. One rule, two answerers.
+    #[test]
+    fn a_no_from_the_daemon_is_refused_in_the_same_words() {
+        let (mut app, mut rx) = client_without_local_git();
+        let chosen = PathBuf::from("/repo/not-one");
+        let _ = on_folder_chosen(&mut app, chosen.clone());
+        let req = match rx.try_recv().expect("asked") {
+            ClientMsg::RepoRootQuery { req, .. } => req,
+            other => panic!("{other:?}"),
+        };
+
+        let _ = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            DaemonMsg::OperationOk {
+                req,
+                result: OperationResult::RepoRoot {
+                    path: chosen,
+                    is_repo_root: false,
+                },
+            },
+        );
+        assert!(app.core.workspace.active.is_none());
+        assert_eq!(
+            app.core.notify.visible().map(|n| n.message.as_str()),
+            Some(NOT_A_REPOSITORY),
+            "the wording must not fork by who answered"
+        );
+    }
+
+    /// An answer about a folder nobody is waiting on any more must not open it.
+    ///
+    /// This is what the echoed path is for. A gate answered asynchronously is a gate that can be
+    /// answered after the user has moved on, and "the reply arrived, so act on it" is how a
+    /// cancelled dialog opens a project.
+    #[test]
+    fn an_answer_about_a_different_folder_is_ignored() {
+        let (mut app, mut rx) = client_without_local_git();
+        let chosen = PathBuf::from("/repo/asked-about");
+        let _ = on_folder_chosen(&mut app, chosen);
+        let req = match rx.try_recv().expect("asked") {
+            ClientMsg::RepoRootQuery { req, .. } => req,
+            other => panic!("{other:?}"),
+        };
+
+        let _ = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            DaemonMsg::OperationOk {
+                req,
+                result: OperationResult::RepoRoot {
+                    path: PathBuf::from("/repo/something-else"),
+                    is_repo_root: true,
+                },
+            },
+        );
+        assert!(
+            app.core.workspace.active.is_none(),
+            "an answer about another folder must not open one"
+        );
+    }
+
+    /// The worktree seed is empty rather than wrong when there is no local git.
+    ///
+    /// A seed built from host paths while the daemon reports container paths is not a faster
+    /// version of the truth — it is a different list, shown briefly and then replaced.
+    #[test]
+    fn no_local_git_means_no_local_worktree_seed() {
+        let (app, _rx) = client_without_local_git();
+        assert!(app.caps.git().is_none());
+        assert!(discover_worktrees(app.caps.git(), Path::new("/repo/thing")).is_empty());
+    }
 
     /// `base_app` carries the real git capability, and a temp dir is reliably not a repo root.
     fn choose_a_non_repository() -> App {

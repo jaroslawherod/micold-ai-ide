@@ -106,6 +106,64 @@ impl Placement {
     pub fn is_sandboxed(&self) -> bool {
         matches!(self, Placement::LocalSandbox(_))
     }
+
+    /// Who answers the client's git questions, given whether projects are mounted at their own
+    /// absolute paths (research R2 part 2).
+    ///
+    /// Parameterised on the mapping rather than reading [`crate::sandbox::pathmap::is_identity`]
+    /// directly, for the reason `pathmap` gives for the same choice: a `cfg`-gated branch is
+    /// compiled by one platform in three, which is how parity bugs survive. [`Self::git_routing`]
+    /// supplies this platform's answer.
+    pub fn git_routing_for(&self, identity_paths: bool) -> GitRouting {
+        match self {
+            // Same machine, same filesystem, same paths — and no round trip to pay for a question
+            // asked on every folder the user opens.
+            Placement::HostProcess => GitRouting::Locally,
+            // The whole of R2 in one line. Mount at identical paths and the client's git and the
+            // daemon's git are talking about the same directories; map the paths and they are not,
+            // and git's worktree metadata — which stores absolute paths — is what breaks.
+            Placement::LocalSandbox(_) => {
+                if identity_paths {
+                    GitRouting::Locally
+                } else {
+                    GitRouting::ViaDaemon
+                }
+            }
+            // There is no host filesystem to run git against at any path, so this is not a
+            // platform question. FR-003a is why the variant exists at all.
+            Placement::Remote(_) => GitRouting::ViaDaemon,
+        }
+    }
+
+    /// Who answers the client's git questions on *this* platform.
+    pub fn git_routing(&self) -> GitRouting {
+        self.git_routing_for(crate::sandbox::pathmap::is_identity())
+    }
+}
+
+/// Which side of the connection runs git for the client's read-only questions (research R2 part 2).
+///
+/// # Why this is not a second `Git` implementation
+///
+/// R2 planned for one: "the client gains a second `micold_core::git::Git` implementation that
+/// issues the call over the existing daemon connection". Writing it showed why it cannot be that.
+/// [`crate::git::Git`] is **synchronous** — `is_repo_root(&self, dir: &Path) -> bool` — and the
+/// daemon connection is an asynchronous, correlated request/response stream drained by the client's
+/// update loop. An impl satisfying that signature would have to block the update thread on a round
+/// trip into a container, which is a worse failure than the path translation R2 rejected: a frozen
+/// window rather than a broken worktree.
+///
+/// So the seam moved one level out. The capability becomes *absent* rather than *substituted* —
+/// `Capabilities::git` is an `Option` — and the two call sites that asked git a question ask the
+/// daemon instead, through the same correlated-request machinery every other daemon question uses.
+/// The trait keeps one implementation and one meaning: git, here, now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GitRouting {
+    /// The client runs git itself. Its filesystem and the daemon's agree about absolute paths.
+    Locally,
+    /// The client asks the daemon. Its filesystem view is not the daemon's, so a local answer
+    /// would be about different directories than the ones the daemon will act on.
+    ViaDaemon,
 }
 
 /// A one-occurrence decision to run unsandboxed after the sandbox failed (FR-035a).
@@ -166,6 +224,52 @@ mod tests {
                 .profile()
                 .is_some()
         );
+    }
+
+    #[test]
+    fn the_host_process_always_runs_git_locally() {
+        // Not a platform question: the daemon is a child of this machine's own filesystem, at the
+        // same paths, on all three platforms.
+        for identity in [true, false] {
+            assert_eq!(
+                Placement::HostProcess.git_routing_for(identity),
+                GitRouting::Locally
+            );
+        }
+    }
+
+    #[test]
+    fn a_sandbox_runs_git_locally_only_where_the_paths_are_the_identity() {
+        // This is R2 as an assertion. Linux and macOS mount `/home/u/p` at `/home/u/p`, so both
+        // sides' git agree; Windows cannot, so the client must stop answering for itself.
+        let sandbox = Placement::resolve(PlacementKind::LocalSandbox, &SandboxProfile::default());
+        assert_eq!(sandbox.git_routing_for(true), GitRouting::Locally);
+        assert_eq!(sandbox.git_routing_for(false), GitRouting::ViaDaemon);
+    }
+
+    #[test]
+    fn a_remote_daemon_never_runs_git_on_this_machine() {
+        // The one that is not about path mapping at all: there is no shared filesystem, so no
+        // mapping could rescue a local answer. FR-003a.
+        let remote = Placement::Remote(RemotePlacement {
+            host: "elsewhere".to_string(),
+        });
+        for identity in [true, false] {
+            assert_eq!(remote.git_routing_for(identity), GitRouting::ViaDaemon);
+        }
+    }
+
+    #[test]
+    fn this_platform_s_routing_follows_this_platform_s_path_mapping() {
+        // The one place the `cfg` is allowed to matter, asserted against the same source of truth
+        // the mount set is built from — so the two cannot drift apart silently.
+        let sandbox = Placement::resolve(PlacementKind::LocalSandbox, &SandboxProfile::default());
+        let expected = if crate::sandbox::pathmap::is_identity() {
+            GitRouting::Locally
+        } else {
+            GitRouting::ViaDaemon
+        };
+        assert_eq!(sandbox.git_routing(), expected);
     }
 
     #[test]

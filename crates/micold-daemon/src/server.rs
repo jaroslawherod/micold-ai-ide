@@ -957,6 +957,36 @@ where
                     ),
                 }
             }
+            // Feature 027 (research R2 part 2): the open-project gate, answered here because on
+            // Windows — and for any remote daemon — the client's filesystem is not this one. It is
+            // deliberately the *same* question `GitCli::is_repo_root` answers, on the same binary,
+            // rather than a cheaper `.git` stat: a client that asks this and a client that answers
+            // it locally must not disagree about what counts as a repository.
+            ClientMsg::RepoRootQuery { req, path } => {
+                let probed = path.clone();
+                // `git rev-parse` on a cold or network-mounted directory is not instant, and this
+                // task drives every other client's frames.
+                let is_repo_root =
+                    tokio::task::spawn_blocking(move || GitCli::new().is_repo_root(&probed)).await;
+                match is_repo_root {
+                    Ok(is_repo_root) => state.send(
+                        id,
+                        DaemonMsg::OperationOk {
+                            req,
+                            result: OperationResult::RepoRoot { path, is_repo_root },
+                        },
+                    ),
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::Internal,
+                            message: "could not check whether that folder is a repository".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
+                }
+            }
             ClientMsg::BranchList { req, project } => {
                 let Some((repo, true)) = state.project_repo(&project) else {
                     reject_non_repo(state, id, req, &project);

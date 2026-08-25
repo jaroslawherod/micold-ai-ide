@@ -61,7 +61,7 @@ use micold_core::store::{JsonFileStore, ProjectStore};
 /// now asked once.
 #[derive(Clone)]
 pub struct Capabilities {
-    git: Arc<dyn Git + Send + Sync>,
+    git: Option<Arc<dyn Git + Send + Sync>>,
     projects: Option<Arc<dyn ProjectStore + Send + Sync>>,
     settings: Option<Arc<dyn SettingsStore + Send + Sync>>,
     scanner: Arc<dyn FolderScanner + Send + Sync>,
@@ -77,7 +77,7 @@ impl Capabilities {
         // Once: `StdFolderScanner` satisfies both folder capabilities, and it is `Copy`.
         let folders = StdFolderScanner::new();
         Self {
-            git: Arc::new(GitCli::new()),
+            git: Some(Arc::new(GitCli::new())),
             projects: JsonFileStore::default_location()
                 .map(|store| Arc::new(store) as Arc<dyn ProjectStore + Send + Sync>),
             settings: JsonFileSettingsStore::default_location()
@@ -89,9 +89,28 @@ impl Capabilities {
         }
     }
 
-    /// Git side effects: worktree discovery, branch checks, repository detection.
-    pub fn git(&self) -> &dyn Git {
-        &*self.git
+    /// Git side effects: worktree discovery, branch checks, repository detection — or `None` when
+    /// this client must not run git at all (feature 027, research R2 part 2).
+    ///
+    /// `None` is not a failure to resolve something, the way [`Self::projects`]'s is. It is the
+    /// answer to a question about *where the daemon is*: when the daemon's filesystem is not this
+    /// one at the same absolute paths — a Linux container on a Windows host, or a remote daemon —
+    /// a local answer is about different directories than the ones the daemon will act on, and git
+    /// stores absolute paths in worktree metadata, so the disagreement surfaces as a broken
+    /// worktree rather than as an error. See [`Self::without_local_git`].
+    pub fn git(&self) -> Option<&dyn Git> {
+        self.git.as_ref().map(|g| &**g as &dyn Git)
+    }
+
+    /// The same capabilities, minus git (feature 027, research R2 part 2).
+    ///
+    /// A **narrowing**, not a second assembly point: nothing new is constructed here, so
+    /// [`Self::real`] remains the only place a concrete implementation is named. Boot calls this
+    /// once it knows the placement, which it cannot know when `real()` runs — the placement comes
+    /// out of the settings store, and the settings store is one of the capabilities.
+    pub fn without_local_git(mut self) -> Self {
+        self.git = None;
+        self
     }
 
     /// The project catalog, or `None` when no data directory could be resolved.

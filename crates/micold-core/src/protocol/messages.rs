@@ -228,6 +228,22 @@ pub enum ClientMsg {
         /// Worktree directory name that would be created, for the directory-clash check.
         dir_name: String,
     },
+    /// Ask whether `path` is the ROOT of a git repository — the open-project gate (FR-001a) —
+    /// answered by the daemon's git rather than the client's (feature 027, research R2 part 2).
+    ///
+    /// Read-only: the daemon runs `git rev-parse --show-toplevel` and mutates nothing.
+    ///
+    /// The client asks this only when it has no git view of the daemon's filesystem: a Windows
+    /// host cannot mount `C:\Users\u\p` at that path inside a Linux container, so the two sides
+    /// see different absolute paths and git's worktree metadata — which stores absolute paths —
+    /// would disagree. A remote daemon has no shared filesystem at all. On Linux and macOS the
+    /// mount is the identity and the client answers this itself, without a round trip.
+    RepoRootQuery {
+        /// Correlation id.
+        req: u64,
+        /// The directory the user chose, **as the daemon will see it**.
+        path: PathBuf,
+    },
     /// List every local and remote-tracking branch, annotated with why each is unavailable, for
     /// the existing-branch picker (feature 016, FR-011). Reads local ref storage only — the daemon
     /// never contacts a remote for this (FR-020).
@@ -777,6 +793,16 @@ pub enum OperationResult {
     WorktreeExcluded {
         /// The path that is no longer shown.
         path: PathBuf,
+    },
+    /// The answer to [`ClientMsg::RepoRootQuery`] (feature 027, research R2 part 2).
+    ///
+    /// Carries the path back so a client that has moved on since asking — the user cancelled, or
+    /// chose a different folder — can tell that this answer is about something else.
+    RepoRoot {
+        /// The directory that was asked about.
+        path: PathBuf,
+        /// Whether the daemon's git calls it a repository root.
+        is_repo_root: bool,
     },
 }
 

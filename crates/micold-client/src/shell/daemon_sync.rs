@@ -83,6 +83,11 @@ pub enum PendingOp {
     BranchList {
         project: PathBuf,
     },
+    /// A read-only `RepoRootQuery` — the open-project gate asked over the wire, because this
+    /// client has no git view of the daemon's filesystem (feature 027, research R2 part 2).
+    /// Carries the folder it was asked about, so an answer that outlived the question (the user
+    /// cancelled, or chose another folder) is recognisable rather than acted upon.
+    RepoRootQuery(PathBuf),
     /// A `WorktreeInclude` / `WorktreeExclude` (016 BUG-002). Both carry the path so a failure can
     /// name what it was about, and so the reply is recognisable without re-deriving it.
     WorktreeInclude(PathBuf),
@@ -107,6 +112,9 @@ impl PendingOp {
             PendingOp::WorktreeCreate(d) => format!("create the worktree \"{d}\""),
             PendingOp::BranchPreflight { .. } => "check the branch".into(),
             PendingOp::BranchList { .. } => "list the branches".into(),
+            PendingOp::RepoRootQuery(p) => {
+                format!("check whether {} is a repository", p.display())
+            }
             PendingOp::WorktreeDelete(d) => format!("delete the worktree \"{d}\""),
             PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
             PendingOp::WorktreeInclude(p) => format!("include the worktree at {}", p.display()),
@@ -470,6 +478,10 @@ fn adopt_mount_set(app: &mut App, catalog: &micold_core::protocol::messages::Cat
 }
 
 pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
+    // Almost every arm here resolves entirely into `app`, which is why this function returned
+    // `Task::none()` unconditionally for its whole life. The open-project gate is the first reply
+    // that continues an interaction the user started, so one arm can hand work back.
+    let mut follow_up = Task::none();
     match event {
         DaemonMsg::CatalogChanged { catalog } => {
             reconcile_catalog(&mut app.core, &catalog, true);
@@ -623,6 +635,19 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     }
                 }
             }
+            // Feature 027 (research R2 part 2): the open-project gate, answered by the side
+            // that has a filesystem view of the project. The path is compared, not assumed —
+            // see `workspace::on_repo_root_answer`.
+            Some(PendingOp::RepoRootQuery(asked)) => {
+                if let OperationResult::RepoRoot { path, is_repo_root } = result {
+                    follow_up = crate::shell::workspace::on_repo_root_answer(
+                        app,
+                        asked,
+                        path,
+                        is_repo_root,
+                    );
+                }
+            }
             // Feature 013 (FR-015): the worktree directory and its sessions are already
             // gone by this point (that half always succeeds here) — a failed branch
             // deletion is reported as a distinct, non-blocking notice rather than
@@ -764,7 +789,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }
-    Task::none()
+    follow_up
 }
 
 pub fn on_connected(

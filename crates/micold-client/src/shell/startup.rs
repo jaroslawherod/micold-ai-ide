@@ -115,7 +115,12 @@ pub fn run() -> iced::Result {
 
 fn boot() -> (App, Task<Message>) {
     // The single assembly point (FR-018). Everything below takes what it needs from `caps`.
-    let caps = Capabilities::real();
+    //
+    // `mut` for one reason: whether this client may run git itself is a property of *where the
+    // daemon is*, and the placement comes out of the settings store — which is one of the
+    // capabilities. So the narrowing cannot happen at construction; it happens below, as soon as
+    // the placement is known and before anything asks git a question.
+    let mut caps = Capabilities::real();
     let mut core = State::default();
     if let Some(store) = caps.projects() {
         core.workspace = store.load().workspace;
@@ -147,6 +152,18 @@ fn boot() -> (App, Task<Message>) {
         .settings()
         .map(|store| store.load().settings.daemon.sandbox)
         .unwrap_or_default();
+    // Research R2 part 2: if the daemon will not see this machine's projects at the paths this
+    // machine calls them by — a Linux container on a Windows host, and any remote daemon — then
+    // this client must not answer git questions for itself, because git stores absolute paths in
+    // worktree metadata and the two answers would be about different directories. Taking the
+    // capability away is what makes that a compile-time obligation at every call site rather than
+    // a rule someone has to remember.
+    if micold_core::sandbox::placement::Placement::resolve(placement, &sandbox_profile)
+        .git_routing()
+        == micold_core::sandbox::placement::GitRouting::ViaDaemon
+    {
+        caps = caps.without_local_git();
+    }
     let state_dir = directories::ProjectDirs::from("", "", "micold-ai-ide")
         .map(|d| d.data_dir().to_path_buf())
         .unwrap_or_default();

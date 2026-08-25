@@ -16,7 +16,10 @@
 /// Bumped 5 → 6 for the sandbox handshake: `ClientMsg::Hello` gains the authentication token and
 /// the build fingerprint (feature 027, research R1/R8). Both arrive together because the sandbox
 /// transport is loopback TCP, which — unlike the `0700`-guarded socket — authenticates nobody.
-pub const PROTOCOL_VERSION: u32 = 6;
+/// Bumped 6 → 7 for `ClientMsg::RepoRootQuery` and `OperationResult::RepoRoot`: where the client
+/// cannot see the daemon's filesystem at the same paths — Windows, and the remote placement — the
+/// open-project gate has to be answered by the side that will actually run git (research R2).
+pub const PROTOCOL_VERSION: u32 = 7;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
