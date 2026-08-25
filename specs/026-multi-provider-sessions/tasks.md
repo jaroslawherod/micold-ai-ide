@@ -1076,7 +1076,49 @@ B7, SC-008).
 > Per-story user-guide docs shipped inside their own phases (Principle VII). This phase is only for
 > cross-cutting review and the verification the feature cannot claim without running.
 
-- [ ] T078 [P] Cross-cutting docs review: index/navigation in `docs/user-guide/` and any statement elsewhere in the repo that says or implies the application runs `claude` specifically (including `README.md`)
+- [X] T078 [P] Cross-cutting docs review: index/navigation in `docs/user-guide/` and any statement elsewhere in the repo that says or implies the application runs `claude` specifically (including `README.md`)
+
+  Five files said it and now do not: `README.md` (headline and features bullet), `docs/README.md`,
+  `docs/user-guide/project-selection.md`, `docs/user-guide/worktrees-and-sessions.md` (~18
+  substitutions across the terminal, resume/restart, shell, AI-tab, background-project and
+  keyboard-input sections) and `docs/daemon.md`. The rule applied throughout: say "AI CLI" where the
+  sentence is true of either, and name both where it is about a difference between them — a doc that
+  says "the AI CLI" everywhere is neutral but tells a Copilot user nothing about why their session
+  behaves differently.
+
+  `docs/daemon.md`'s "How the daemon knows" could not be substituted, only rewritten. It described
+  the hook receiver as *the* mechanism, and FR-019 gave the daemon a second one: it is now two
+  bullets — Claude Code posts to the loopback listener, GitHub Copilot writes an event log the
+  daemon tails — with the property that survived both, "nothing is polled on a timer, and no work at
+  all is scheduled for an idle session", stated once for both rather than once inside the hook
+  bullet. Two claims were added that the doc never made and a reader would otherwise get wrong:
+  SC-006/SC-009's rule that a session the app merely *discovered* on disk is watched by neither, and
+  that a discovered session's title comes from `claude`'s transcript or `copilot`'s session state
+  rather than from the OSC-0 title a supervised session sets.
+
+  Outside `docs/`, the grep found two live statements and both were packaging metadata, which is
+  user-facing on a `.deb` install and in a desktop search where nobody will read a correction:
+  `cargo deb`'s `extended-description` said "managing Claude Code worktrees and sessions", and the
+  `.desktop` keywords listed `claude` with no `copilot`. Everything else that matched is either
+  history that should stay history (`CHANGELOG.md`, `specs/**`), a type name (`ClaudeProvider` in
+  `docs/development/architecture.md`), a path (`.claude/worktrees/`), or a fixture label in tests
+  and the design showcase.
+
+  `docs/user-guide/settings.md` needed no change at all — it was written two-CLI in T072 and already
+  states what T085 later made true, that "when you start a session the app tells you what is missing
+  and offers the CLIs that are available instead of substituting one". The session guide is where
+  that had gone missing, so it gains a bullet for it: the offer is made from the set checked against
+  `PATH` at press time, nothing is created until you pick, and your stored default is left alone
+  (FR-002).
+
+  `scripts/tests/documentation-set.test.sh` and `classify-change.test.sh` both green, which is the
+  only thing here a test can speak to — that the files changed are still classified as documentation
+  and that `packaging/` and `Cargo.toml` are not, so CI runs the full build for this commit.
+
+  Out of scope but found and left: `README.md`'s build instructions still say `cargo run --features
+  gui` and `cargo test --no-default-features`, which are neither the workspace's feature layout nor
+  the `mise run` tasks CLAUDE.md names as canonical. That is stale against feature 010's split, not
+  against this feature, and correcting it here would hide it in a docs commit about providers.
 - [X] T079 Remove the now-false module docs in `crates/micold-core/tests/ai_cli_provider_seam.rs` and `crates/micold-client/tests/no_concrete_implementations.rs` that state the seam is not substitutable and that `Capabilities` is where to fix it — the files now prove the opposite
 
   Both docs were rewritten in `6993fbb`, in the same commit that made them false — the seam file now
