@@ -884,7 +884,7 @@ B7, SC-008).
   view cannot run a `PATH` probe per frame and SC-006 forbids scheduling one. "Never persisted" is
   R11's rule; "never held in memory anywhere" is not, and asserting the latter here would contradict
   T014a
-- [ ] T070 [P] [US4] **Not writable as specified — the requirement is covered elsewhere; decide
+- [X] T070 [P] [US4] **Not writable as specified — the requirement is covered elsewhere; decide
   whether to close it.** `available_providers()` cannot be driven by a fake any more: it filters
   `AiCli::ALL` through `AiCli::provider(which).is_available()`, and that registry is a static
   exhaustive match with no injection point. That is T011a's whole property — the lookup is total by
@@ -895,6 +895,42 @@ B7, SC-008).
   `micold-client/tests/features_session.rs` asserts that an unavailable CLI is never offered, from
   the availability set on `State`. What is *not* covered is the wiring between them —
   `Capabilities::available_providers()` itself — which is four lines with no branching
+
+  Written rather than closed, and that last sentence is why: the two suites above hold the ends,
+  and `available_providers()` returning `AiCli::ALL` unconditionally leaves both of them green.
+  Confirmed, not assumed — under that mutation `copilot_provider.rs` passed 22/22 and
+  `features_session.rs` 28/28. The requirement was covered; the wiring was not.
+
+  The seam is gone, but the test does not need one. Availability *is* a `PATH` probe, so the honest
+  way to drive these four lines is to give the process a scratch `PATH` and read back what the real
+  `Capabilities::real()` offers. That also keeps the assertion pointed at the real thing: a
+  substituted registry would have shown the filter forwards *a* predicate, not that the client's
+  offer follows what is installed — the same argument `capabilities.rs`'s own module doc makes
+  about the `from_parts` constructor it deleted.
+
+  `the_offer_is_exactly_what_is_installed_now` walks four states over one scratch `PATH`: nothing
+  installed → an empty offer (not a default guess); `copilot` alone → `[Copilot]`, the *second*
+  variant, so a stub returning a prefix of `ALL` does not pass; every command in `AiCli::ALL`
+  installed → all of `AiCli::ALL`, written over the array rather than over today's two names so a
+  third CLI is covered the day it joins the registry; then `claude` removed → the offer shrinks,
+  which is R11's "computed, never stored" holding at this level and not only at the provider's.
+  A fifth step installs the variants backwards across two `PATH` directories and asserts the offer
+  still comes back in the declared order — the settings select renders the list as it arrives, so
+  its order is user-visible and must not depend on the shape of the user's machine.
+
+  It is a unit test in the bin crate because `shell/` is declared in `main.rs`, not in the library,
+  so `tests/` cannot reach `Capabilities` at all — the first attempt was an integration test and
+  did not compile. One test function, because `PATH` is process-global and Rust runs tests on
+  threads: the same arrangement, for the same reason, as `shell/persist.rs`'s boot-prune test.
+
+  Probed from a green tree, each mutation reverted before the next:
+
+  - **D1 — the offer ignores `PATH`.** `available_providers` returns `AiCli::ALL.to_vec()`. Fails
+    at the first assertion ("an empty PATH must offer no CLI at all"), while both suites named
+    above stay green — which is the whole case for this task not being closed.
+  - **D2 — the offer comes back in `PATH` order.** The filtered list sorted by which `PATH` entry
+    resolved it. The first four states pass unchanged (they install into one directory), and only
+    the order assertion fails: `[Copilot, ClaudeCode]` where `[ClaudeCode, Copilot]` was declared.
 - [ ] T071 [P] [US4] Extend `crates/micold-client/tests/features_settings.rs` and `crates/micold-client/tests/features_session.rs` so neither the Settings select nor the per-session override offers an unavailable CLI; and so starting a session when the stored default is unavailable **says so and offers the available CLIs to choose from**, starts nothing until one is chosen, and leaves the stored default unrewritten (FR-002, FR-004 scenario 4, Clarifications 2026-08-16)
 - [ ] T072 [P] [US4] Extend `crates/micold-daemon/tests/session_start.rs` so launching a session
   whose CLI is absent reports **`WireLifecycle::Failed { reason, attempts }`** with a reason naming
