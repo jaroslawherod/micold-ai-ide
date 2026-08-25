@@ -31,6 +31,7 @@ use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
 use micold_client::features::worktree_form::WorktreeFormStatus;
 use micold_client::ui;
+use micold_core::sandbox::lifecycle::SandboxState;
 
 /// The window the view is laid out in. Large enough that nothing is clipped away unrendered.
 const VIEWPORT: Size = Size {
@@ -58,10 +59,28 @@ fn frames_until_rest(state: &State, budget: usize) -> Option<usize> {
     let limits = layout::Limits::new(Size::ZERO, VIEWPORT);
     let start = Instant::now();
 
-    let mut tree = Tree::new(ui::view(state, None, None, 0, None, &outcome, &connection));
+    let mut tree = Tree::new(ui::view(
+        state,
+        None,
+        None,
+        0,
+        None,
+        &outcome,
+        &connection,
+        &SandboxState::Disabled,
+    ));
 
     for frame in 0..budget {
-        let mut element = ui::view(state, None, None, 0, None, &outcome, &connection);
+        let mut element = ui::view(
+            state,
+            None,
+            None,
+            0,
+            None,
+            &outcome,
+            &connection,
+            &SandboxState::Disabled,
+        );
         tree.diff(&element);
         let node = element
             .as_widget_mut()

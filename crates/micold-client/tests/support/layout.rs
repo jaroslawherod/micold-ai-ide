@@ -502,6 +502,10 @@ pub fn records_for(
         None,
         &micold_core::env_include::EnvIncludeOutcome::Disabled,
         &under.connection,
+        // Every covered state renders with the sandbox off, so the bring-up indicator is absent and
+        // no fixture's geometry moves. A state that showed it would be recording an animation, which
+        // this fixture deliberately does not do (T030).
+        &micold_core::sandbox::lifecycle::SandboxState::Disabled,
     );
 
     resolve_pressing(element, renderer, under.press_at)
@@ -653,6 +657,10 @@ fn view_of(under: &StateUnderTest) -> Element<'_, micold_client::app::Message> {
         None,
         &micold_core::env_include::EnvIncludeOutcome::Disabled,
         &under.connection,
+        // Every covered state renders with the sandbox off, so the bring-up indicator is absent and
+        // no fixture's geometry moves. A state that showed it would be recording an animation, which
+        // this fixture deliberately does not do (T030).
+        &micold_core::sandbox::lifecycle::SandboxState::Disabled,
     )
 }
 

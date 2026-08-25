@@ -21,8 +21,13 @@ pub(crate) mod material;
 pub use focus::{into_view as focus_into_view, scroll_focused_into_view};
 pub use material::ripple_pulse;
 pub use material::target_offset_delta;
+/// The bring-up indicator, and the wording it shows. Named individually — like the ripple
+/// below — because `tests/sandbox_progress.rs` checks both halves and the module itself has
+/// no reason to be public.
+pub use sandbox_status::{stage_line, view as sandbox_indicator, StageLine};
 pub(crate) mod project_selector;
 pub(crate) mod rename;
+mod sandbox_status;
 /// The Settings sections — one module per page of the full-surface view (feature 027, FR-026).
 pub(crate) mod settings;
 pub(crate) mod settings_view;
@@ -163,6 +168,7 @@ pub fn view<'a>(
     dismissing: Option<&'a crate::overlay::registry::Closing>,
     env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
     connection: &ConnectionStatus,
+    sandbox: &micold_core::sandbox::lifecycle::SandboxState,
 ) -> Element<'a, Message> {
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
@@ -220,6 +226,10 @@ pub fn view<'a>(
         column![
             toolbar::view(state, scheme),
             connection_banner(connection, roles),
+            // Same reasoning as the banner above it, and the same slot: a bring-up in flight is a
+            // condition of the whole window, not of whichever body branch happens to be taken
+            // (T043, SC-004).
+            sandbox_status::view(sandbox, roles),
             body
         ],
         material::SurfaceKind::Window,

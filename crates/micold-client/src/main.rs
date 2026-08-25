@@ -732,6 +732,7 @@ fn render(app: &App) -> iced::Element<'_, Message> {
         app.dismissing.as_ref(),
         &app.env_include_last_outcome,
         &connection_status(app),
+        &app.sandbox.state,
     )
 }
 

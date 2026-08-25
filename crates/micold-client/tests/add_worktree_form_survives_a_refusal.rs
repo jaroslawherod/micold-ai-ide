@@ -32,6 +32,7 @@ use micold_client::features::connection::ConnectionStatus;
 use micold_client::features::worktree_form::BranchSource;
 use micold_client::ui;
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::sandbox::lifecycle::SandboxState;
 use micold_core::tokens::density;
 use micold_core::worktree::{BlockReason, BranchCandidate, BranchOrigin};
 
@@ -138,7 +139,16 @@ impl<'a> Screen<'a> {
 
         // The view is built once and kept, exactly as the runtime keeps it between frames: a fresh
         // element each frame would restart every entrance and nothing would ever settle.
-        let mut element = ui::view(state, None, None, 0, None, &OUTCOME, &CONNECTION);
+        let mut element = ui::view(
+            state,
+            None,
+            None,
+            0,
+            None,
+            &OUTCOME,
+            &CONNECTION,
+            &SandboxState::Disabled,
+        );
         let mut tree = Tree::new(&element);
         let mut node = element
             .as_widget_mut()

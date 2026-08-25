@@ -25,6 +25,7 @@ use iced::{Element, Rectangle, Size};
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::sandbox::lifecycle::SandboxState;
 
 use support::layout::{self as lay, WINDOW};
 
@@ -37,6 +38,7 @@ fn view(state: &State) -> Element<'_, Message> {
         None,
         &EnvIncludeOutcome::Disabled,
         &ConnectionStatus::Connected,
+        &SandboxState::Disabled,
     )
 }
 
