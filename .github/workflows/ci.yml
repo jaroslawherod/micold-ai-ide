@@ -145,12 +145,19 @@ jobs:
       # Ensure the full workspace (client GUI binary + daemon) compiles on every platform.
       - name: Build (workspace)
         run: cargo build --workspace
-      # Feature 020's gates, the 017 gates it widened, and BUG-001's. These read source text, one
-      # `const` slice and a reducer — they open no window — so they run wherever the crate compiles,
-      # and this step is the authoritative list of them. Path handling (`\` vs `/` in the scanners'
-      # display keys) is exactly the kind of difference a Linux-only run would miss: several of these
-      # walk the source tree from `CARGO_MANIFEST_DIR` and report findings by path.
-      - name: Test (component library + showcase gates, all platforms)
+      # Feature 020's gates, the 017 gates it widened, BUG-001's, and feature 021's architecture
+      # guards. These read source text, one `const` slice and a reducer — they open no window — so
+      # they run wherever the crate compiles, and this step is the authoritative list of them. Path
+      # handling (`\` vs `/` in the scanners' display keys) is exactly the kind of difference a
+      # Linux-only run would miss: several of these walk the source tree from `CARGO_MANIFEST_DIR`
+      # and report findings by path.
+      #
+      # The feature-021 block was added at T079, and the reason it is here rather than in the
+      # Linux-only step below is SC-006: "the complete pre-existing test suite passes on all three
+      # supported platforms" is not met by a matrix that builds everywhere and runs a feature's own
+      # guards in one place. Verified display-free before being widened — all 20 targets pass with
+      # `DISPLAY` and `WAYLAND_DISPLAY` unset — and none constructs an iced runtime or a window.
+      - name: Test (component library, showcase, and architecture gates, all platforms)
         # Windows defaults to `pwsh`, which does not treat `\` as a line continuation; pin bash so the
         # one readable multi-line invocation below parses identically on all three runners.
         shell: bash
@@ -166,7 +173,27 @@ jobs:
             --test material_boundary \
             --test material_builder_api \
             --test idle_requests_no_frames \
-            --test animated_layout_relayouts
+            --test animated_layout_relayouts \
+            --test feature_write_isolation \
+            --test root_is_routing_only \
+            --test features_are_render_free \
+            --test no_concrete_implementations \
+            --test overlay_registration \
+            --test feature_registration_cost \
+            --test surface_registration_cost \
+            --test service_capability_fakes \
+            --test outcome_termination \
+            --test popover_displacement \
+            --test features_connection \
+            --test features_help \
+            --test features_notifications \
+            --test features_project \
+            --test features_session \
+            --test features_settings \
+            --test features_sidebar \
+            --test features_window \
+            --test features_worktree \
+            --test features_worktree_form
       # Run the client + daemon test suites where the iced system deps are present.
       - name: Test (full workspace)
         if: runner.os == 'Linux'
