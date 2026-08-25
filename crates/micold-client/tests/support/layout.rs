@@ -819,6 +819,35 @@ pub fn text_overflows<'a, M: 'a>(
     element: Element<'a, M>,
     renderer: &mut iced::Renderer,
 ) -> Vec<Overflow> {
+    // Set `LAYOUT_OVERFLOW_DEBUG=1` to report every piece of drawn text with its attribution,
+    // not only the ones that overflow. The question "why did this *not* fire?" is otherwise
+    // unanswerable from the outside, which is how a false positive survived once already.
+    painted(
+        element,
+        renderer,
+        std::env::var("LAYOUT_OVERFLOW_DEBUG").is_ok(),
+    )
+}
+
+/// Every piece of text the renderer painted, with the width it wanted and the width it was allowed
+/// — the same measurement [`text_overflows`] filters, unfiltered.
+///
+/// For asserting what a layout *keeps* rather than what it spills: a row under width pressure
+/// degrades in a declared order, and the only way to see which piece shortened is to read what was
+/// actually drawn. An `Ellipsized` label rewrites its own content before shaping, so a shortened
+/// title arrives here as the shortened string rather than as an overflow (feature 026, T058d).
+pub fn painted_text<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &mut iced::Renderer,
+) -> Vec<Overflow> {
+    painted(element, renderer, true)
+}
+
+fn painted<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &mut iced::Renderer,
+    report_everything: bool,
+) -> Vec<Overflow> {
     use iced::advanced::Renderer as _;
 
     let mut element = element;
@@ -899,11 +928,6 @@ pub fn text_overflows<'a, M: 'a>(
                     .max_by_key(|b| b.path.len())
             })
     };
-
-    // Set `LAYOUT_OVERFLOW_DEBUG=1` to report every piece of drawn text with its attribution,
-    // not only the ones that overflow. The question "why did this *not* fire?" is otherwise
-    // unanswerable from the outside, which is how a false positive survived once already.
-    let report_everything = std::env::var("LAYOUT_OVERFLOW_DEBUG").is_ok();
 
     let mut found = Vec::new();
     for layer in inner.layers() {
