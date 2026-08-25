@@ -179,11 +179,6 @@ pub enum Message {
     /// Toggle whether agent-owned worktrees are included in the sidebar list (feature 014,
     /// FR-010). Sole mutation: `show_agent_worktrees`. Never touches the tag filters (FR-010d).
     ShowAgentWorktreesToggled,
-    /// Content scrolled underneath an open floating surface (feature 017, FR-009). The third of
-    /// the three dismissal triggers, and the one no widget used to report — see
-    /// [`micold_core::overlay::Trigger::ScrollBeneath`]. Emitted unconditionally by the scrollable
-    /// that moved; deciding whether anything closes is the reducer's job, via the shared rule.
-    ScrolledBeneathOverlay,
     /// Escape was pressed with the terminal unfocused (feature 021, T034). The first of the three
     /// dismissal triggers to be reported the same way the third already was: as *what happened*,
     /// not as what should close.
@@ -1004,7 +999,6 @@ impl State {
                 crate::features::session::tab_strip_viewport_resized(self, width)
             }
             Message::SidebarScrolled(offset) => crate::features::sidebar::scrolled(self, offset),
-            Message::ScrolledBeneathOverlay => self.dismiss_on_scroll_beneath(),
             Message::EscapePressed => self.dismiss_topmost(),
             Message::SidebarFilterMenuToggled => {
                 let outcomes = crate::features::sidebar::filter_menu_toggled(self);

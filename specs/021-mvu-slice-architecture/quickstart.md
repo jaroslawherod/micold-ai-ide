@@ -266,7 +266,9 @@ that is steps 1 and 2's unanswered question, still unanswered, and T082's subjec
 establishes only that the surface is gone and the content moved.
 
 The related observation above — `Message::ScrolledBeneathOverlay` having no producer in `src/` — is
-unaffected by this result and is T081's subject.
+unaffected by this result, and T081 resolved it the way this result points: the variant is deleted
+and `tests/overlay_dismissal_delta.rs` now asks through `SidebarScrolled`, the message the worktree
+list it describes actually sends.
 
 ## Documentation deliverable (Principle VII)
 
