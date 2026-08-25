@@ -481,13 +481,45 @@ the Copilot conversation is there (quickstart §B B3, B5).
   not a forked binary (`daemon_singleton.rs` and `version_recovery.rs` own that, and neither needs a
   CLI installed); and the resume is asserted as argv rather than as a spawn, because this suite
   never spawns either CLI — `session_start.rs` states why.
-- [ ] T046 [P] [US2] Add a test to `crates/micold-core/tests/copilot_provider.rs` and
+- [X] T046 [P] [US2] Add a test to `crates/micold-core/tests/copilot_provider.rs` and
   `crates/micold-daemon/tests/session_start.rs` for the spec's removed-store-entry edge case:
   resuming an id Copilot no longer has reports **`WireLifecycle::Failed { reason, attempts }`** with
   a reason naming the CLI and the lost conversation, **starts nothing**, and does not begin a fresh
   conversation under the old session's identity (Clarifications 2026-08-16). Assert against the wire
   type, not `session::SessionLifecycle` — the domain enum's `Failed` is a **unit variant** meaning
   "auto-restart gave up after repeated quick failures" and has nowhere to put a message
+
+  **Done 2026-08-25.** Two tests, one per layer. The core one characterises what the edge case
+  leaves on disk — a per-cwd index still listing an id whose `session-state/<uuid>` directory is
+  gone, so `has_recorded_conversation`, `read_title` and `is_archived` all answer "no" while
+  discovery still names it. The daemon one stages the removal in the order it happens: record a
+  conversation, let `present_interrupted_resumable_at_startup()` offer the session (the state a user
+  clicks Start from), *then* delete it. Staging matters — the case is an entry that was **removed**,
+  and the refusal is gated on the session having been offered.
+
+  Read from `catalog_snapshot()`, not `sessions_for()`: the reason is runtime state that
+  `overlay_live_summaries` projects onto the durable record on the way out, and `sessions_for` is
+  documented as the one snapshot path that does not run it, so it reported `InterruptedResumable`
+  and the first version of the test failed against a working implementation.
+
+  Probes, all against the committed code:
+  - the refusal deleted → the test fails on `result.is_err()`, so it does drive the new code;
+  - the `Err` kept but `start_failures.insert` dropped → still fails: erroring silently is not
+    reporting, and the row would go red with nothing to read;
+  - `display_name()` → `command()` in the reason → fails on the register assertion, which is the
+    difference between "GitHub Copilot no longer has this conversation" and something that reads
+    like a shell error.
+  - **and one that did not fail.** Dropping `plan.resumable` from the condition — pre-checking every
+    `LaunchMode::Resume` — passed the entire workspace. The prediction that `catalog_join.rs` would
+    catch it was wrong: the session it resumes is a **shell**, so the AI-CLI branch never runs. That
+    gate was carrying real behaviour on nothing but an argument, so T046 also adds
+    `a_session_that_never_recorded_a_conversation_is_not_told_its_conversation_is_gone`, and the
+    re-probe fails there with the message that made the case: a session created and never used being
+    told a conversation it never had is gone.
+
+  What it does not model: the client's rendering of the reason (T032a's), and any *fresh* start
+  under the same id — `LaunchMode::Fresh` is untouched, so closing the session and starting a new
+  one remains the way out.
 - [ ] T046a [P] [US2] Extend `crates/micold-daemon/tests/session_start.rs` for the already-attached
   case: resuming a conversation another process holds attempts the resume like any other, and if the
   CLI refuses or exits immediately the session reports `WireLifecycle::Failed { reason, .. }` and
@@ -521,6 +553,22 @@ the Copilot conversation is there (quickstart §B B3, B5).
   `SessionId`, so a reopen is a no-op rather than a duplicate. Resolve each provider's `config_dir()`
   independently — one returning `None` must not suppress the other's contribution. It ends in a
   `Catalog` write, since the daemon is `projects.json`'s single writer. T042a is the gate
+- [X] T050a [US2] Implement the removed-store-entry refusal T046 drives, in
+  `crates/micold-daemon/src/state.rs::start_session`: after the FR-010 availability check and before
+  the spawn, ask the session's own provider whether the conversation is still recorded, and on "no"
+  record a reason and return `Err` instead of spawning. Gated on the record's lifecycle being
+  `SessionLifecycle::InterruptedResumable` — carried on `SpawnPlan` as `resumable`, read under the
+  same lock as the rest of the plan — so it fires only where absence is news, and reported through
+  the path FR-010 already uses (`start_failures` → `overlay_live_summaries` → `WireLifecycle::Failed
+  { reason, attempts: 0 }`). An unresolvable `config_dir()` is ignorance, not evidence: attempt the
+  resume and let the CLI answer
+
+  **Done 2026-08-25.** Missing from this section until now — US2's implementation list went from the
+  discovery pass (T050) straight to documentation, so the behaviour T046 tests had no task. Nothing
+  else on the resume path changed: `respawn_primary` spawns directly and never enters
+  `start_session`, so crash-restart is untouched, and `server.rs` maps `SessionCreate` to `Fresh`,
+  so only an explicit resume is pre-checked
+
 - [X] T051 [P] [US2] Document in `docs/user-guide/worktrees-and-sessions.md` that a session's CLI is fixed for its lifetime, survives restart with its conversation, that sessions started outside the application are discovered per CLI, and that closing one is durable
 
 **Checkpoint**: US1 + US2 both work. A Copilot session is a first-class, persistent, rediscoverable
