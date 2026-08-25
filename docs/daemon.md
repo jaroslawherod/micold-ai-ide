@@ -314,6 +314,12 @@ differently based on how it started.
 The daemon has a **placement**: where it runs. Until this feature there was only one, and it was
 assumed rather than described.
 
+This section is the *model*. For turning the container placement on, what it can and cannot see,
+which runtimes work, and what to do when it will not start, see
+[Running the session service in a container](user-guide/sandboxed-daemon.md); the switch itself
+lives in Settings → Session service, described in
+[Settings](user-guide/settings.md#session-service).
+
 | Placement | What it is | Reached over |
 |---|---|---|
 | **On this computer** (default) | A detached host process, spawned by the app on a cold start | A Unix socket or named pipe in a `0700` directory |
@@ -334,7 +340,8 @@ That transport carries none of the protection a `0700` directory gives: any loca
 to a loopback port. What replaces it is a shared secret, generated per sandbox start, written `0600`
 and bind-mounted read-only into the container. The guarantee moves from "you cannot reach it" to "you
 cannot answer for it", and the filesystem permission is still what enforces it. This is why the wire
-protocol moved to version 6.
+protocol grew an authenticated handshake — version 6 when the sandbox landed, and version 7 today,
+after the repository-root query the container placement also needed (below).
 
 ### The lifecycle
 
@@ -354,6 +361,15 @@ It never falls back. A sandbox that will not start is an error with a cause and 
 without it is a choice the user makes for that occurrence — never a substitution the app performs
 because the alternative was easier. If the app ever silently connected to a host process after a
 sandbox failed, the feature would be gone and nothing would report it.
+
+### Who answers "is this a git repository?"
+
+With the service in a container, the app can no longer answer that question for itself: the folder
+you picked is a host path, and the app's own `git` sees a machine the sessions do not run on. So the
+question goes to whoever can see the folder the way the sessions will — the service — over the wire
+(`RepoRootQuery`/`RepoRoot`, the addition that moved the protocol to version 7). On the default
+placement nothing changes: the app still answers locally, because there it *is* the machine that
+runs the sessions.
 
 ### State
 

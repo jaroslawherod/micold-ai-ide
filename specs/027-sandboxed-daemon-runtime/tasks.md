@@ -370,7 +370,21 @@ does a session start unsandboxed without an explicit choice.
       `format!("daemon refused the connection: {reason:?}")` and the serialised `DaemonMsg::Refused`).
       Each carries a counterweight assertion, so a redaction that also broke authentication or
       dropped the token mount would fail rather than pass.
-- [ ] T119 [P] Update `README.md` and `docs/daemon.md` cross-references for the new placement model and the restructured settings docs
+- [x] T119 [P] Update `README.md` and `docs/daemon.md` cross-references for the new placement model and the restructured settings docs
+      — `docs/daemon.md`'s placement section had **no outbound links at all**: it described the model
+      and then left the reader with no route to the page that tells them how to switch it on. It now
+      points at `user-guide/sandboxed-daemon.md` and at Settings → Session service, and two claims in
+      it were stale — "the wire protocol moved to version 6" (it is 7) and nothing at all about who
+      answers "is this a git repository?" once the service cannot see the folder the way the app
+      does. Both corrected in place.
+      `docs/README.md` never listed `sandboxed-daemon.md`, so the whole page was reachable only from
+      inside `settings.md`; added, and the settings and daemon entries rewritten to name what they
+      actually cover now. `README.md` gained the session service and the container placement in its
+      feature list, and its **Build & run** block was wrong — `cargo run --features gui` names a
+      feature this workspace does not have, from before the core/client/daemon split. Replaced with
+      the `mise` tasks CLAUDE.md declares canonical. The same stale wording survives in several early
+      features' spec artifacts; the constitution's 1.4.1 report explicitly leaves those to their own
+      passes, so they were not touched here.
 - [ ] T120 Run the complete quickstart.md §B pass end to end and record the evidence in `specs/027-sandboxed-daemon-runtime/evidence/`
 
 ---

@@ -16,20 +16,33 @@ fully functional offline (Constitution Principle IV).
 - A real terminal emulator: full ANSI color + text styling, live keyboard and mouse input,
   focus-gated key routing, resize, scrollback, and copy/paste.
 - Light/dark theming that follows your OS preference; configurable terminal scrollback.
+- Sessions run in a background **session service**, so they survive closing — or crashing — the
+  window, and reattach instantly when it comes back.
+- That service can run **in a container** instead of directly on your computer: it then sees only
+  the projects you registered and the credentials you allowed, under limits you set. See
+  [Running the session service in a container](docs/user-guide/sandboxed-daemon.md).
 
 ## Build & run
 
 ```sh
-cargo run --features gui        # run the GUI app
-cargo test --no-default-features # render-free logic core (no GUI needed)
+mise run run        # run the GUI client (it spawns or attaches the session daemon itself)
+mise run test       # test the whole workspace, as CI does
+mise run test-core  # test only the render-free core — no GUI, much faster
 ```
+
+The workspace is three crates: `micold-core` (render-free logic and the wire protocol),
+`micold-client` (the iced GUI) and `micold-daemon` (the session service). `mise.toml` holds the
+canonical commands; a first run in a fresh clone needs `mise trust` once.
 
 Linux build/runtime needs the usual GUI dev libraries (X11/Wayland/xkbcommon); see
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the exact package list.
 
 ## Documentation
 
-User guide: [`docs/README.md`](docs/README.md). Changes: [`CHANGELOG.md`](CHANGELOG.md)
+User guide: [`docs/README.md`](docs/README.md) — including
+[the session service](docs/daemon.md) and
+[running it in a container](docs/user-guide/sandboxed-daemon.md).
+Changes: [`CHANGELOG.md`](CHANGELOG.md)
 (maintained by release-please and embedded in the app).
 
 ## Releases
