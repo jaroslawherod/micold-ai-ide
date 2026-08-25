@@ -9,6 +9,7 @@
 
 use std::collections::BTreeMap;
 use std::io::Write;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use alacritty_terminal::grid::Dimensions;
@@ -609,23 +610,50 @@ fn a_created_session_records_the_cli_the_client_chose() {
 // T046 [US2] — resuming a conversation the CLI no longer has (Clarifications 2026-08-16)
 // ---------------------------------------------------------------------------------------
 
+/// Serialises the tests that reach for `PATH` and `COPILOT_HOME`.
+///
+/// Both are process-global and this binary runs its tests on threads, so two of them installing
+/// stubs at once would restore each other's `PATH` on drop and leave the survivor looking at a
+/// directory that no longer exists. Held for the lifetime of a [`StubOnPath`], which is also the
+/// lifetime of the `COPILOT_HOME` each of these tests sets.
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// A scratch `PATH` with the real one still behind it, plus a stub for one command.
 ///
-/// The stub exists only so `AiCliProvider::is_available` says yes — `start_session` checks that
-/// first (FR-010), and on a runner with no `copilot` the test would otherwise be asserting the
-/// missing-CLI message instead of this one. It is never executed: the whole point of the assertion
-/// below is that nothing spawns. The real `PATH` stays appended so the shell-session tests running
-/// beside this one still find `sh`.
+/// The stub is there first of all so `AiCliProvider::is_available` says yes — `start_session`
+/// checks that before anything else (FR-010), and on a runner with no `copilot` these tests would
+/// be asserting the missing-CLI message instead of their own. It also **records the argv it was
+/// given**, so a test can say what the daemon ran, how it ran it, and how many times. The real
+/// `PATH` stays appended so the shell-session tests running beside these still find `sh`.
 struct StubOnPath {
     _dir: tempfile::TempDir,
     previous: Option<std::ffi::OsString>,
+    log: std::path::PathBuf,
+    /// Dropped last (declaration order), after `Drop for StubOnPath` has put `PATH` back.
+    _guard: std::sync::MutexGuard<'static, ()>,
 }
 
 impl StubOnPath {
+    /// A stub that succeeds — for tests where what matters is that it was (or was not) run.
     fn new(command: &str) -> Self {
+        Self::with_body(command, "exit 0")
+    }
+
+    /// A stub whose body is `body`, so a test can make the CLI refuse the way a real one would.
+    fn with_body(command: &str, body: &str) -> Self {
+        let guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("argv.log");
         let stub = dir.path().join(command);
-        std::fs::write(&stub, "#!/bin/sh\nexit 0\n").unwrap();
+        // One line per invocation, so "was it run twice?" is a question the test can ask.
+        std::fs::write(
+            &stub,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\n{body}\n",
+                log.display()
+            ),
+        )
+        .unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
         let previous = std::env::var_os("PATH");
@@ -637,6 +665,16 @@ impl StubOnPath {
         Self {
             _dir: dir,
             previous,
+            log,
+            _guard: guard,
+        }
+    }
+
+    /// One line per invocation, in order. Empty if the stub was never run.
+    fn invocations(&self) -> Vec<String> {
+        match std::fs::read_to_string(&self.log) {
+            Ok(text) => text.lines().map(str::to_string).collect(),
+            Err(_) => Vec::new(),
         }
     }
 }
@@ -853,4 +891,183 @@ fn a_session_that_never_recorded_a_conversation_is_not_told_its_conversation_is_
     );
 
     let _ = live.kill();
+}
+
+// ---------------------------------------------------------------------------------------
+// T046a [US2] — a conversation another process may already hold (FR-008, amended 2026-08-18)
+// ---------------------------------------------------------------------------------------
+
+/// A Copilot session with a recorded conversation, in a real directory, already offered for resume.
+///
+/// The same shape as a session discovered under FR-014: the conversation is on disk, the record is
+/// `InterruptedResumable`, and **nothing distinguishes it from one a `copilot` is attached to in
+/// another terminal** — which is the whole difficulty the tests below are about.
+fn offered_copilot_session(
+    home: &Path,
+    project: &Path,
+    store: &Path,
+    id: SessionId,
+) -> DaemonState {
+    let session_dir = home.join("session-state").join(id.0.to_string());
+    std::fs::create_dir_all(&session_dir).unwrap();
+    std::fs::write(session_dir.join("events.jsonl"), "{}\n").unwrap();
+
+    let mut sessions = BTreeMap::new();
+    sessions.insert(
+        project.to_path_buf(),
+        vec![Session::restored(
+            id,
+            SessionLocation::Default,
+            SessionLabel::Named("Refactor the parser".into()),
+            TerminalMode::AiCli,
+            AiCli::Copilot,
+        )],
+    );
+    let projects_path = store.join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace {
+            projects: vec![Project::new(
+                project.to_path_buf(),
+                true,
+                Availability::Available,
+            )],
+            active: Some(project.to_path_buf()),
+            sessions,
+            worktree_names: BTreeMap::new(),
+            ..Default::default()
+        })
+        .unwrap();
+    let state = DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(store.join("settings.json"))),
+    ));
+    assert_eq!(
+        state.present_interrupted_resumable_at_startup(),
+        1,
+        "the conversation is there, so the session is offered"
+    );
+    state
+}
+
+/// Every path under `root`, so a test can say "nothing was written here" rather than "the one path
+/// I thought to check is absent".
+fn tree(root: &Path) -> std::collections::BTreeSet<std::path::PathBuf> {
+    let mut out = std::collections::BTreeSet::new();
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            out.extend(tree(&path));
+        }
+        out.insert(path);
+    }
+    out
+}
+
+/// Resuming a conversation another terminal may already hold is attempted like any other resume.
+///
+/// The clarification (2026-08-18) settled this against the tempting alternative: check first, and
+/// refuse if the conversation looks busy. Research found neither CLI writes a lock or a liveness
+/// marker, so such a check could only be a guess — and a guess that says "in use" when it is not
+/// blocks a resume the user is entitled to, with no way for them to override it.
+///
+/// So the assertions here are mostly negative, and they are the point of the test: the daemon runs
+/// the CLI **once**, with the ordinary resume argv, and writes nothing of its own into the
+/// provider's store on the way. No lock file, no sentinel, no second invocation to ask whether the
+/// conversation is free.
+#[test]
+fn resuming_a_conversation_another_terminal_may_hold_is_attempted_like_any_other() {
+    let stub = StubOnPath::new("copilot");
+
+    let home = tempfile::tempdir().unwrap();
+    std::env::set_var("COPILOT_HOME", home.path());
+    let store = tempfile::tempdir().unwrap();
+    let project_dir = tempfile::tempdir().unwrap();
+    let project = project_dir.path().to_path_buf();
+    let id = SessionId::from_uuid(Uuid::from_u128(0xB0A7));
+    let state = offered_copilot_session(home.path(), &project, store.path(), id);
+
+    let before = tree(home.path());
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect("the resume is attempted — whether the conversation is free is the CLI's answer");
+    assert!(
+        state.live_session(id).is_some(),
+        "the process was started; nothing pre-empted it"
+    );
+
+    assert!(
+        wait_until(Duration::from_secs(5), || !stub.invocations().is_empty()),
+        "the CLI must actually run for the rest of this test to be testing anything"
+    );
+    assert_eq!(
+        stub.invocations(),
+        vec![format!("--resume={} --no-remote", id.0)],
+        "run once, with the resume every Copilot session gets — not a probe run first, and not a \
+         different command because the conversation might be busy"
+    );
+    assert_eq!(
+        tree(home.path()),
+        before,
+        "and the daemon wrote nothing of its own into Copilot's store: no lock, no in-use marker, \
+         nothing a second application would have to learn to respect"
+    );
+}
+
+/// …and when the CLI refuses, that is reported and nothing is left running.
+///
+/// The other half of the same clarification. `copilot` here exits immediately with a message, which
+/// is what a CLI that will not attach twice to one conversation does — the daemon cannot tell that
+/// apart from any other immediate exit, and does not try to. It supervises the process it started
+/// like any other, and the crash-loop policy settles `Failed` with the session's process dropped.
+///
+/// `Failed`'s `reason` is empty on this route, deliberately unasserted: the domain lifecycle is a
+/// unit variant, and the message a user reads for an exiting process is the terminal's own output,
+/// not a string the daemon invents. T046's route — a refusal the daemon itself decides — is the one
+/// that carries a reason.
+#[test]
+fn a_cli_that_refuses_the_resume_is_reported_and_leaves_nothing_running() {
+    let stub = StubOnPath::with_body("copilot", "echo 'session is in use' >&2\nexit 1");
+
+    let home = tempfile::tempdir().unwrap();
+    std::env::set_var("COPILOT_HOME", home.path());
+    let store = tempfile::tempdir().unwrap();
+    let project_dir = tempfile::tempdir().unwrap();
+    let project = project_dir.path().to_path_buf();
+    let id = SessionId::from_uuid(Uuid::from_u128(0xB0A8));
+    let state = offered_copilot_session(home.path(), &project, store.path(), id);
+
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect(
+            "the attempt is made: the refusal is the CLI's to give, and it gives it by exiting",
+        );
+
+    let lifecycle = || {
+        state
+            .sessions_for(&project)
+            .into_iter()
+            .find(|s| s.id == id)
+            .map(|s| s.lifecycle)
+    };
+    let settled = wait_until(Duration::from_secs(20), || {
+        state.supervise_exited_sessions();
+        matches!(lifecycle(), Some(WireLifecycle::Failed { .. }))
+    });
+    assert!(
+        settled,
+        "a CLI that exits every time must end reported, not retried forever: {:?}",
+        lifecycle()
+    );
+    assert!(
+        state.live_session(id).is_none(),
+        "and nothing is left running — a dead process kept in the registry would read as alive"
+    );
+    assert!(
+        stub.invocations().len() > 1,
+        "the refusal was taken as a crash and retried within the budget, which is exactly the \
+         missing-detection posture: the daemon has no way to know this exit means `in use`"
+    );
 }
