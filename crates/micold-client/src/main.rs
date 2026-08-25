@@ -484,6 +484,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.notify_error(notice);
             Task::none()
         }
+        // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
+        // tree, so moving it is an operation issued from here. Every input in the application
+        // already implements iced's `Focusable` — what was missing was anyone asking.
+        Message::FocusMoved { forward } => {
+            if forward {
+                iced::widget::operation::focus_next()
+            } else {
+                iced::widget::operation::focus_previous()
+            }
+        }
         Message::ConnectionTakeoverRequested => shell::daemon_sync::on_takeover_requested(app),
         // The daemon refused us on a contract mismatch (US6, FR-021): record it so the banner can
         // name both versions and offer the restart action. The connection subscription keeps

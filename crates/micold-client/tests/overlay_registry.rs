@@ -489,31 +489,37 @@ fn the_keyboard_subscription_names_no_surface() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/mod.rs");
     let src =
         std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    // Everything from the subscription to the end of the module: feature 027 split the mapping
+    // out of the closure (`escape_message`), so reading only the `subscription` body would find
+    // no message at all and quietly stop guarding anything.
     let at = src
         .find("pub fn subscription(")
         .expect("`ui::subscription` has moved; point this guard at it");
-    let rest = &src[at..];
-    let end = rest.find("\n}").expect("unterminated function");
-    let body = &rest[..end];
+    let body = &src[at..];
 
     assert!(
         body.contains("Message::EscapePressed"),
-        "the guard is looking at the wrong text: the subscription's body should emit \
+        "the guard is looking at the wrong text: the keyboard subscription should emit \
          `Message::EscapePressed`"
     );
     assert!(
         !body.contains("Overlay::"),
         "`ui::subscription` matches on an overlay variant again:\n{body}"
     );
+    // `Message::FocusMoved` is exempt on the same grounds Escape is, and for the same reason: it
+    // names *what the key was*, not what surface it reaches. Focus traversal has no table to
+    // drift from — the rendering stack owns the order.
     let named: Vec<&str> = body
         .match_indices("Message::")
         .map(|(at, _)| body[at..].split_whitespace().next().unwrap_or_default())
-        .filter(|m| !m.starts_with("Message::EscapePressed"))
+        .filter(|m| {
+            !m.starts_with("Message::EscapePressed") && !m.starts_with("Message::FocusMoved")
+        })
         .collect();
     assert!(
         named.is_empty(),
         "`ui::subscription` names per-surface messages again: {named:?} — it is supposed to \
-         report that Escape happened and let the registry decide what that closes"
+         report that a key happened and let the registry decide what that reaches"
     );
 }
 

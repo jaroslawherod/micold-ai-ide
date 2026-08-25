@@ -210,3 +210,84 @@ fn a_semicolon_inside_a_string_does_not_end_the_expression() {
         "the span ran past its own statement and into the next field: {span:?}",
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// And something has to *move* it (feature 027, FR-030, T075)
+// ---------------------------------------------------------------------------------------------
+
+/// A keyboard event for `key`, with `modifiers`.
+fn pressed(key: iced::keyboard::key::Named, modifiers: iced::keyboard::Modifiers) -> KeyEvent {
+    KeyEvent::KeyPressed {
+        key: iced::keyboard::Key::Named(key),
+        modified_key: iced::keyboard::Key::Named(key),
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+        location: iced::keyboard::Location::Standard,
+        modifiers,
+        text: None,
+        repeat: false,
+    }
+}
+
+use iced::keyboard::Event as KeyEvent;
+use micold_client::app::Message;
+
+/// Tab forwards, Shift+Tab back, and nothing for any other key.
+///
+/// The rule the tests above enforce — every input joined to `focused_field` — describes a focus
+/// that is *reported and drawn*. It says nothing about the focus ever moving, and for two features
+/// it did not: the application never issued iced's traversal operation, so the keyboard reached
+/// exactly the one control a pointer had last clicked and Tab did nothing at all. Found by pressing
+/// Tab (T075); no assertion about focus *order* could have caught it, because the order was right.
+#[test]
+fn tab_asks_the_keyboards_focus_to_move() {
+    use iced::keyboard::key::Named;
+    use iced::keyboard::Modifiers;
+
+    assert_eq!(
+        micold_client::ui::focus_move_message(pressed(Named::Tab, Modifiers::empty())),
+        Some(Message::FocusMoved { forward: true })
+    );
+    assert_eq!(
+        micold_client::ui::focus_move_message(pressed(Named::Tab, Modifiers::SHIFT)),
+        Some(Message::FocusMoved { forward: false })
+    );
+    for other in [Named::Escape, Named::Enter, Named::ArrowDown] {
+        assert_eq!(
+            micold_client::ui::focus_move_message(pressed(other, Modifiers::empty())),
+            None,
+            "{other:?} was read as a request to move the focus"
+        );
+    }
+}
+
+/// The message reaches the operation that moves the focus.
+///
+/// A source scan because this is the half that cannot be reached from a test: `update` is a pure
+/// reducer and focus lives in the widget tree, so the traversal is issued by the binary's
+/// `update_inner` and needs a running renderer to observe. What went wrong here was never subtle
+/// behaviour — it was that no line of the application mentioned traversal at all.
+#[test]
+fn the_focus_message_reaches_the_traversal_operation() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/main.rs");
+    let src =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let at = src
+        .find("Message::FocusMoved")
+        .expect("nothing in `main.rs` handles `Message::FocusMoved`, so Tab moves nothing");
+    // The arm itself, not `expression`'s semicolon rule: this arm's body is a bare `if`, so the
+    // first semicolon after it is somewhere in a later arm and the scan would read half the
+    // reducer as evidence.
+    let rest = &src[at..];
+    let arm = rest
+        .find("\n        Message::")
+        .map_or(rest, |end| &rest[..end]);
+    for op in ["focus_next()", "focus_previous()"] {
+        assert!(
+            arm.contains(op),
+            "the `Message::FocusMoved` arm does not call `{op}`; Tab (or Shift+Tab) is heard and \
+             then dropped:\n{arm}"
+        );
+    }
+}

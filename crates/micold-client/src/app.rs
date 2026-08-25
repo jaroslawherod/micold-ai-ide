@@ -249,6 +249,21 @@ pub enum Message {
     /// made against the state Escape actually lands in rather than the state that was last
     /// rendered.
     EscapePressed,
+    /// Tab (or Shift+Tab) asked for the keyboard's focus to move (feature 027, FR-030).
+    ///
+    /// Runtime, not state: the focused widget is the rendering stack's, and moving it is a widget
+    /// *operation* the binary issues — this reducer has nowhere to put it. What lives here is the
+    /// message, so the subscription that hears the key and the shell that acts on it agree about
+    /// what was asked for.
+    ///
+    /// The application had no traversal at all until T075's visual pass pressed Tab: every input
+    /// implemented iced's `Focusable`, focus order was whatever the view's order was, and nothing
+    /// ever issued the operation. The keyboard reached exactly the one control a pointer had last
+    /// clicked.
+    FocusMoved {
+        /// Forwards for Tab, backwards for Shift+Tab.
+        forward: bool,
+    },
     /// The worktree sidebar scrolled to this vertical offset.
     ///
     /// Carries the offset rather than being a bare notification, because the app bar's elevation
@@ -983,6 +998,9 @@ impl State {
             | Message::DaemonBuildMismatch { .. }
             | Message::ConnectionRestartServiceRequested
             | Message::NoOp
+            // Focus is the rendering stack's, and moving it is a widget operation — see
+            // [`Message::FocusMoved`].
+            | Message::FocusMoved { .. }
             | Message::DiagnosticsRequested
             | Message::LogoutSurvivalRequested
             | Message::LogoutSurvivalOutcome(_) => {}

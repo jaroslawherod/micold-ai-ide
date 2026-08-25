@@ -547,19 +547,71 @@ fn surface_key(id: crate::overlay::SurfaceId) -> u64 {
 /// What is left here is the one thing that genuinely belongs to the view layer: whether to hold a
 /// keyboard listener open at all. It is held only while Escape has something to close, so pressing
 /// it with nothing open stays as inert as it was.
+///
+/// # Tab belongs here for the same reason (feature 027, FR-030)
+///
+/// Moving the keyboard's focus is the other thing that is about *whether a listener is open at
+/// all* rather than about any one surface, and it is subject to the same terminal rule: inside a
+/// session Tab is a tab character the shell wants, not a request to leave the field.
+///
+/// It is a second subscription rather than a second arm of the same closure because of the
+/// `TypeId` rule above — one closure, one identity, and this one has to stay open in states where
+/// Escape's does not (nothing floating, but there is still a form to tab through).
 pub fn subscription(state: &State) -> Subscription<Message> {
-    if state.terminal_focused() || crate::app::on_escape(state).is_none() {
+    // Feature 006 (FR-009): the focused terminal owns every key, Tab and Escape included.
+    if state.terminal_focused() {
         return Subscription::none();
     }
-    iced::keyboard::listen().filter_map(|event| {
-        use iced::keyboard::{key::Named, Event, Key};
-        matches!(
-            event,
-            Event::KeyPressed {
-                key: Key::Named(Named::Escape),
-                ..
-            }
-        )
-        .then_some(Message::EscapePressed)
-    })
+    let mut subs = vec![focus_traversal()];
+    // Held only while Escape has something to close, so pressing it with nothing open stays as
+    // inert as it was.
+    if crate::app::on_escape(state).is_some() {
+        subs.push(escape_dismissal());
+    }
+    Subscription::batch(subs)
+}
+
+/// Escape, reported as having happened; the reducer asks the registry what it reaches.
+fn escape_dismissal() -> Subscription<Message> {
+    iced::keyboard::listen().filter_map(escape_message)
+}
+
+/// Tab and Shift+Tab, as a request to move the keyboard's focus.
+fn focus_traversal() -> Subscription<Message> {
+    iced::keyboard::listen().filter_map(focus_move_message)
+}
+
+/// [`Message::EscapePressed`] for a press of Escape, and nothing for anything else.
+///
+/// A free function, not a closure written inline: `Subscription::filter_map` takes its identity
+/// from the mapper's `TypeId`, so each of the two listeners needs a distinct named one.
+fn escape_message(event: iced::keyboard::Event) -> Option<Message> {
+    use iced::keyboard::{key::Named, Event, Key};
+    matches!(
+        event,
+        Event::KeyPressed {
+            key: Key::Named(Named::Escape),
+            ..
+        }
+    )
+    .then_some(Message::EscapePressed)
+}
+
+/// Which way Tab moves the focus, if this event is a Tab at all.
+///
+/// Public to the crate so `tests/` can state the mapping without a runtime: the defect this
+/// answers (T075) was that *nothing* was listening, which no assertion about focus order could
+/// have caught — the order was fine, the key never arrived.
+pub fn focus_move_message(event: iced::keyboard::Event) -> Option<Message> {
+    use iced::keyboard::{key::Named, Event, Key};
+    match event {
+        Event::KeyPressed {
+            key: Key::Named(Named::Tab),
+            modifiers,
+            ..
+        } => Some(Message::FocusMoved {
+            forward: !modifiers.shift(),
+        }),
+        _ => None,
+    }
 }
