@@ -520,13 +520,42 @@ the Copilot conversation is there (quickstart §B B3, B5).
   What it does not model: the client's rendering of the reason (T032a's), and any *fresh* start
   under the same id — `LaunchMode::Fresh` is untouched, so closing the session and starting a new
   one remains the way out.
-- [ ] T046a [P] [US2] Extend `crates/micold-daemon/tests/session_start.rs` for the already-attached
+- [X] T046a [P] [US2] Extend `crates/micold-daemon/tests/session_start.rs` for the already-attached
   case: resuming a conversation another process holds attempts the resume like any other, and if the
   CLI refuses or exits immediately the session reports `WireLifecycle::Failed { reason, .. }` and
   starts nothing (FR-008 as amended 2026-08-18). Assert the **negative** just as hard: no liveness
   probe, no process scan, no lock file — nothing that tries to work out beforehand whether a
   conversation is in use. Neither CLI exposes a marker to test against, so such a check would be a
   guess, and a wrong "in use" blocks a resume the user is entitled to
+
+  **Done 2026-08-25.** No implementation followed, and that is the finding: the daemon already has
+  no liveness detection to remove, so the tests exist to keep it that way. "Another terminal holds
+  it" is not a state that can be set up, because nothing on disk records it — a held conversation
+  and a free one are the same bytes — so the setup is an ordinary offered Copilot session and the
+  assertions are the negatives.
+
+  The stub `copilot` now records the argv it is handed, which turns the negatives into things a test
+  can actually say: run **once** (not a probe run first), with `--resume=<uuid> --no-remote` (not a
+  different command because the conversation might be busy), and Copilot's whole store byte-for-byte
+  unchanged across the start (not a lock, not an in-use sentinel). The refusal half makes the stub
+  exit immediately with a message, which is what a CLI that will not attach twice does, and asserts
+  it is treated as any other immediate exit: supervised, retried inside the budget, then `Failed`
+  with the process dropped.
+
+  Probes: a pre-flight "looks busy" refusal → the attempt assertion fails; a lock file written into
+  the store before the spawn → the whole-store comparison fails (the reason it is a comparison and
+  not a path check); the AI-CLI respawn removed → the refusal test fails to settle.
+
+  That last probe turned up something outside this task and worth writing down: when a **respawn**
+  fails to spawn at all, `respawn_primary` counts one crash and then drops the session from the live
+  registry, so the next supervision cycle has nothing to observe and the record stays `Restarting`
+  forever — no process, no report, and a client that renders "restarting" indefinitely. Not
+  reachable through this feature's paths (the CLI is checked at `start_session`, and a respawn that
+  fails needs the binary to vanish mid-loop), so it is recorded rather than fixed here.
+
+  `PATH` and `COPILOT_HOME` are process-global and this binary threads its tests, so the stub now
+  holds a mutex for its lifetime — two of these tests running at once would restore each other's
+  `PATH` and leave the survivor pointing at a deleted directory.
 
 ### Implementation for User Story 2
 
