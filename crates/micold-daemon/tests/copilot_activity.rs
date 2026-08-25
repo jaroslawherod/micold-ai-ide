@@ -5,6 +5,12 @@
 //! one line of a Copilot `events.jsonl` to an `ActivityEvent`, and everything downstream is feature
 //! 010's, unchanged.
 //!
+//! Second, not only: a Copilot session's event log joins the braille-spinner scan, which is shared
+//! and not provider-conditional (`micold-daemon/src/terminal.rs` reads every PTY session's OSC-0
+//! title, whichever CLI wrote it). The two cannot contradict each other — `SpinnerObserved` only
+//! moves `Unknown -> Working` — and `micold-daemon/tests/activity_pipeline.rs` proves that end to
+//! end with both sources live on one session (T057). What is mapped here is one of the two.
+//!
 //! Every line read here comes from the T001 corpus — captured from GitHub Copilot CLI 1.0.80, with
 //! the two authored lines recorded in that corpus's own README. Nothing here needs `copilot`
 //! installed.
