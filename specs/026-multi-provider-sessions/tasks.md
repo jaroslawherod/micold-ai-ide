@@ -1083,7 +1083,7 @@ B7, SC-008).
 - [ ] T082 Confirm `mise run test` is green on Linux, macOS and Windows in CI (Principle VI), with every Copilot test passing on a runner that has no `copilot` installed
 - [ ] T083 Run quickstart.md §A and confirm every gate in the table has a corresponding green test
 - [ ] T084 Run quickstart.md §B B1–B8 against a real Copilot CLI with `COPILOT_HOME` pointed at a scratch directory, and fill in the "Recording the pass" table with the date, platform, and any step that did not behave as written — including B6, the untrusted-worktree behaviour no probe could confirm
-- [ ] T085 Dispatch the primary start press through `State::start_intent` (FR-004 scenario 4), which
+- [X] T085 Dispatch the primary start press through `State::start_intent` (FR-004 scenario 4), which
   T075 decided and left unwired. `ui/sidebar.rs` currently emits `SessionStartRequested` with
   `provider_for_start(None)` on every press, so an uninstalled stored default reaches the daemon as
   a spawn of a missing binary — FR-010's failure, arriving after the fact, where FR-004 wants the
@@ -1094,6 +1094,55 @@ B7, SC-008).
   until it reports one too, which `tests/context_menu_anchor_call_sites.rs` governs. The test is a
   view-level one: pressing the primary half with an unavailable default must publish no
   `SessionStartRequested`
+
+  `start_press` in `ui/sidebar.rs` names the message each `StartIntent` answer arrives as, and
+  decides nothing itself — the branch is `State::start_intent`'s, which `features_session.rs` has
+  covered since T032a. What was missing was only the dispatch, which is why every pure test stayed
+  green while a press on an uninstalled default went to the daemon as a spawn of a binary that is
+  not there.
+
+  The `OfferChoice` arm publishes `SessionStartMenuOpened` — the chevron's own message, not one of
+  its own. That is what makes the offered list current rather than merely correct-at-launch: the
+  availability set is re-probed on that message and on `SettingsOpened`, research R11's two named
+  events, so the very press that opens the list refreshes what it contains. A message of its own
+  would have opened the list on the set as it stood at the last of those events, which for a user
+  who has installed nothing since launch is the set from launch. The third test pins exactly this,
+  since it is a property of *which* message is published and nothing about the list's contents would
+  show it.
+
+  The set that decision reads can still be a press out of date, and both directions are safe and
+  neither is silent: a default uninstalled since the last probe reaches the daemon, whose
+  launch-time check names the missing CLI (FR-010, T076); one installed since then opens a list
+  that — refreshed by this press — now contains it, one press away. `NothingAvailable` keeps
+  today's behaviour and sends the stored default, because FR-006 forbids opening a
+  present-and-empty list and an inert `+` answers nothing; the daemon's report is the only thing
+  that can tell that user anything. No test covers that arm — the probe that would have caught it
+  is P5 below, and it is recorded as uncovered rather than implied.
+
+  `SplitAction::on_primary_anchor` is the other half of the wiring: the primary half can open a
+  list now, and a list hangs from the press point because a sidebar row's position is not something
+  the view holds (018 BUG-008). It reports the point on **every** primary press, including the ones
+  that start a session — what a press means is the state's to decide and the control does not know
+  which answer it just published; an anchor with no list open is a no-op at the reducer, the same
+  contract the chevron already relies on for the press that closes the list.
+
+  The test presses the real `+`, found by the glyph it paints rather than by a node path, so a
+  rearranged sidebar says so instead of quietly pressing something else. Finding it needed one
+  harness addition: `Overflow` now reports the paragraph's draw `origin`. `node_path` answers a
+  different question — attribution is by clip, so that it can report the width the text was allowed
+  — and a glyph inside the sidebar's scrollable attributes to the scrollable. Pressing that node's
+  centre presses empty list, which publishes nothing, which is indistinguishable from the very
+  thing the negative assertion looks for. That is P4, and it fails all three tests including the
+  negative one, because the negative test also asserts the press *did* something.
+
+  Five probes, each from a green tree and each reverted. P1, the `OfferChoice` arm restored to an
+  unconditional `SessionStartRequested`: the two uninstalled-default tests fail and the installed
+  one passes. P2, `on_primary_anchor` removed: **only** the anchor assertion fails, the rest of the
+  first test passing on the same press. P3, the `Start` arm made to open the list too: only
+  SC-001's test fails — one press, the stored default, started. P4 above. P5, the
+  `NothingAvailable` arm switched to `SessionStartMenuOpened`: **nothing fails**, which is the gap
+  named two paragraphs up; covering it needs a state with an empty availability set and is not in
+  this task's scope. `cargo test --workspace` is green (219 `test result: ok`).
 
 ---
 
