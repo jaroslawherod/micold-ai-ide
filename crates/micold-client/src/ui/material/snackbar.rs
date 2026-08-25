@@ -78,12 +78,19 @@ impl<'a, M: Clone + 'a> From<Snackbar<'a, M>> for Element<'a, M> {
         if let Some(message) = s.on_dismiss {
             // A text button in `inverse_primary`: the only accent that stays legible on the
             // inverted container, and the reason that role exists at all.
+            //
+            // Said once, to the button, instead of tinted onto the label. Tinting reached the
+            // glyphs and nothing else — the hover and press layers and the ripple stayed `primary`
+            // over the inverted fill, because the component decides those and the call site cannot
+            // reach them. `.on_host` hands the whole variant the role, so all four move together
+            // (FR-004a, FR-027b, BUG-009 T155).
             line = line.push(
                 Button::with_content(
-                    Text::new("Dismiss", TypeRole::Action, r).tint(r.inverse_primary),
+                    Text::new("Dismiss", TypeRole::Action, r),
                     ButtonVariant::Text,
                     r,
                 )
+                .on_host(style::snackbar_host(r))
                 .on_press(message),
             );
         }

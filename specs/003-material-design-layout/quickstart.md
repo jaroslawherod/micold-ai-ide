@@ -66,10 +66,16 @@ Confirm:
 
 ## 5. Manual walkthrough — user override (User Story 3, FR-007…FR-009, SC-004)
 
-1. With the OS in **light**, open the theme menu in the app bar and choose **Dark**. The app turns
-   dark immediately and ignores the OS.
-2. Quit and relaunch: the app is still **dark** (preference persisted to `settings.json`).
-3. Open the theme menu and choose **Follow system**: the app returns to matching the OS and, on a
+> **The control is not a menu.** What ships is a single **cycling** item in the `⋮` overflow,
+> labelled with the current setting and its icon: `Theme: Auto` → `Theme: Light` → `Theme: Dark` →
+> `Theme: Auto`. The menu stays open across the cycle. Read "choose X" below as "press it until it
+> reads X".
+
+1. With the OS in one scheme, cycle the theme to **the other one**. The app changes immediately and
+   ignores the OS.
+2. Quit and relaunch: the app still shows the override (persisted to `settings.json` as
+   `"theme": "light"` / `"dark"` — the schema's values, not the menu's labels).
+3. Cycle on to **Auto**: the app returns to matching the OS (`"theme": "follow_system"`) and, on a
    subsequent OS theme change, updates live again.
 
 ## 6. Docs check (Principle VII)
@@ -80,3 +86,17 @@ test -f docs/user-guide/appearance-theming.md
 
 The user-guide page documents the new look and how to choose/persist a theme, and is linked from
 `docs/README.md`. CI asserts the file exists.
+
+## Recorded runs
+
+**Linux, 2026-08-21** — §1–§6 run headlessly (Xvfb + lavapipe), recorded in
+`evidence/T015-T033-manual-walkthrough.md`. §1, §5 and §6 pass; §3 passes but for FR-016, which
+fails (`bugs/BUG-002.md`); §2 covers Linux only; §4's live OS theme change was not run — the
+portal-absent FR-018 fallback was tested in its place and holds.
+
+**macOS and Windows**: never run. §1 and §2 are covered on all three by CI; the manual walkthroughs
+are not.
+
+> §1's `cargo test --no-default-features --all-targets` and §2's `cargo build --features gui`
+> predate the workspace split and the `mise` tasks. Their current equivalents are
+> `mise run test-core` and `mise run build`.

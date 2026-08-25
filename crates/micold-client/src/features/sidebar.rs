@@ -393,8 +393,22 @@ impl State {
     pub fn reveal_scroll_offset(&self) -> Option<u32> {
         let entries = self.sidebar_entries();
         let index = current_session_row(&entries, self.active_session)?;
+        let heights = row_heights(&entries);
+        if crate::reveal_trace::enabled() {
+            let top: f32 = heights[..index].iter().sum::<f32>() + ROW_GAP * index as f32;
+            let content =
+                heights.iter().sum::<f32>() + ROW_GAP * heights.len().saturating_sub(1) as f32;
+            crate::reveal_trace::line(format_args!(
+                "geometry: row {index} of {} spans {top}..{}, content {content}, viewport {}, \
+                 offset {}",
+                heights.len(),
+                top + heights[index],
+                self.sidebar_viewport_height,
+                self.sidebar_scroll_offset,
+            ));
+        }
         scroll_target(
-            &row_heights(&entries),
+            &heights,
             index,
             self.sidebar_viewport_height as f32,
             self.sidebar_scroll_offset as f32,
@@ -658,6 +672,7 @@ pub fn viewport_resized(state: &mut State, height: u32) {
 /// message per event — so this does both rather than the view emitting two. Same rule, one call,
 /// no second copy of it.
 pub fn scrolled(state: &mut State, offset: u32) {
+    crate::reveal_trace::line(format_args!("the scrollable reports offset {offset}"));
     state.sidebar_scroll_offset = offset;
     state.dismiss_on_scroll_beneath();
 }

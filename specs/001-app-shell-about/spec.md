@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-13
 
-**Status**: Draft
+**Status**: Closed (implemented and shipped; every task including T033 is done). The manual quickstart pass ran 2026-08-20 on Linux — [evidence](./evidence/B-about-flow-pass.md). Steps 3/5/7/8/9 pass; **step 4 fails** and is an open bug rather than an open task — [BUG-001](./bugs/BUG-001.md), the About dialog shows `micold-core`'s package description, not the application's. Steps 1–2 describe a toolbar that 003/017/018 replaced and are recorded stale. One claim remains out of reach: **macOS/Windows parity** for the walkthrough is unrun — there is no host here, and no CI job drives a GUI on any platform (T032's build/test claim *is* carried by the three-OS matrix; this one is not).
 
 **Input**: User description: "Basic application window with a Help / About toolbar. When the user launches Micold AI IDE, the app opens a main window with a toolbar across the top. The toolbar contains a \"Help\" entry. Selecting \"Help\" reveals an \"About\" action. Activating \"About\" opens an About dialog showing the application name (Micold AI IDE), the current version, the open-source license, and a one-line description of the app. The user can dismiss the About dialog (via a Close button or the Esc key) to return to the main window."
 

@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-23
 
-**Status**: Draft
+**Status**: Closed (implemented and shipped; the manual quickstart pass ran 2026-08-21 — [evidence](./evidence/T034-manual-procedure.md). SC-001/002/003/005 confirmed; SC-004 is a before/after comparison and stays unmeasured, since no pre-feature build exists to compare against.)
 
 **Input**: User description: "Hide Claude Code's internal subagent worktrees from the app's worktree UI. These are worktrees Claude Code creates for isolated subagents: directory `.claude/worktrees/agent-<hex-id>` with branch `worktree-agent-<hex-id>`. They are not user worktrees and should not appear in the worktree list / project switcher. Filter them out by matching the `worktree-agent-` branch prefix (and/or the `agent-<hex>` directory name under `.claude/worktrees/`), while making sure a user-created branch merely named e.g. `agent-foo` is not accidentally hidden."
 

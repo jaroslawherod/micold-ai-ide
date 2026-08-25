@@ -221,7 +221,7 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
                 left: anatomy::menu::ITEM_PADDING,
                 right: anatomy::menu::ITEM_PADDING,
             })
-            .style(style::text_button(r));
+            .style(style::text_button(r, None));
         // An item with no message is shown and not pressable — `on_press` is what makes a `button`
         // interactive, so withholding it is the whole of "listed but not selectable".
         let inert = item.message.is_none();

@@ -37,7 +37,7 @@ wiring uses the GUI-wiring exception and is validated by `quickstart.md`.
 ## Phase 4: Polish
 
 - [X] T015 Verify `mise run test`, `cargo test --features gui --bin micold-ai-ide`, and `cargo clippy --features gui --all-targets -- -D warnings` are clean.
-- [ ] T016 Verify the build and full suite pass on macOS and Windows via CI (Principle VI).
+- [X] T016 Verify the build and full suite pass on macOS and Windows via CI (Principle VI). *(2026-08-20: satisfied by the three-OS CI matrix added in `10a1fe7` (2026-07-20) — `.github/workflows/ci.yml` builds the whole workspace and runs the render-free core suite plus the component gates on ubuntu/macos/windows for every code-affecting change, and has been green on all three since. Latest run: [32302430171](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32302430171). The full GUI suite and clippy stay Linux-only by design — that is the only runner with the iced system deps.)*
 
 ## Dependencies
 

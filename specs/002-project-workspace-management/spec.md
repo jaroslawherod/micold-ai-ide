@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-13
 
-**Status**: Draft
+**Status**: Closed (implemented and shipped; every task in [tasks.md](./tasks.md) is done. The manual quickstart walkthrough ran 2026-08-21 on Linux — [evidence](./evidence/T047-manual-walkthrough.md): steps 1–4 and 6–11 pass, plus the persistence and corruption spot checks, and the run closes the silent-refusal defect the 2026-07-20 alignment note left open. Step 5 is stale text superseded by FR-003's amendment, not a failure; step 12 is partial. macOS/Windows parity (FR-024, SC-010) is unrun. Three open defects, none blocking: [BUG-002](./bugs/BUG-002.md) (a symlinked project path misclassifies every worktree), [BUG-003](./bugs/BUG-003.md) (reopening a known project never updates the persisted last-active — FR-010/FR-011), [BUG-004](./bugs/BUG-004.md) (boot activates a last-active project whose folder is gone — FR-023).)
 
 **Input**: User description: "Project selection and workspace management. Micold AI IDE lets a user choose a project to work on and set that project as the current working space. Opening a project, known projects (local-first), active working space, renaming a project, notable situations to handle, scope boundaries, and cross-platform parity."
 
@@ -181,7 +181,7 @@ The following are explicitly **not** part of this feature:
 - Renaming, moving, or deleting anything on the filesystem (all rename behavior affects only the application-stored display name).
 - Removing entries from the known-projects list (managing/pruning the list is not addressed here).
 
-**Alignment**: 2026-07-20 — Spec/code alignment audit. FR-003 amended: "any folder, git or not" was directly reversed by feature 005 FR-001a (git repositories only), because every session maps to a git worktree. The code has enforced the git-only gate since feature 005; this spec had not been updated. No behaviour change. Separately, a real defect was found on this path and is tracked for fix, not spec'd away: the refusal message is written to a state field whose only render site is the add-worktree modal, so a non-git folder is refused silently (see feature 005 FR-001a, which requires informing the user).
+**Alignment**: 2026-07-20 — Spec/code alignment audit. FR-003 amended: "any folder, git or not" was directly reversed by feature 005 FR-001a (git repositories only), because every session maps to a git worktree. The code has enforced the git-only gate since feature 005; this spec had not been updated. No behaviour change. Separately, a real defect was found on this path and was tracked for fix, not spec'd away: the refusal message is written to a state field whose only render site is the add-worktree modal, so a non-git folder is refused silently (see feature 005 FR-001a, which requires informing the user). **Fixed and confirmed 2026-08-21** — `on_folder_chosen` now closes the selector before the git gate so the refusal reaches the notification surface, and the T047 manual pass photographed it ([evidence](./evidence/T047-manual-walkthrough.md)).
 
 **Bugfix**: 2026-07-21 — BUG-001 All projects' persisted state (sessions, worktree names, terminal
 mode) was lost with no recovery path whenever the single shared `projects.json` store hit any

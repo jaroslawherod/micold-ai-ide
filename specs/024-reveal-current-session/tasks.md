@@ -8,6 +8,9 @@
 **Bugfix**: 2026-08-19 — [BUG-001](./bugs/BUG-001.md) Updated from bugfix patch: T021 reopened,
 Phase 8 added (T061–T065).
 
+**Bugfix**: 2026-08-20 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch: Phase 9 added
+(T066–T069). T033's drain was right about *when* to scroll and wrong about *where the list is*.
+
 **Tests**: Per Constitution Principle I (Test-First, NON-NEGOTIABLE), test tasks are MANDATORY and
 are written to fail first. The three things no test in this repository can see — a single frame, a
 perceptual weight, a row's position against a real viewport — are quickstart §B's job, not an excuse
@@ -284,6 +287,45 @@ margin a 400 → 500 step produces, not by the 0.3% measured on 2026-08-18.
     FR-003a ask for. **R4's fallback is not needed** — the weight carries on its own in both
     schemes, so T058 stands as closed rather than reopened
 
+## Phase 9: Bugfix BUG-002 — the reveal declines to scroll, against an offset the panel left behind
+
+**Goal**: the arrival scrolls, in the case §B4 describes and every earlier attempt failed to build:
+a panel with a non-zero scroll position, a short project passed through, and a return.
+
+**What was wrong**: `sidebar_scroll_offset` is a mirror of the scrollable's position whose only
+writer is `Message::SidebarScrolled` — which the rendering stack does not publish when the content
+fits its viewport. A reveal in a short project moves the list and is never told, so the mirror keeps
+the *previous* project's offset, and the next arrival measures its row against a position the panel
+is nowhere near, calls it visible, and consumes the arm under FR-009.
+
+- [X] T066 [BUG-002] Reproduce it, with a trace rather than a hypothesis. Add
+  `crates/micold-client/src/reveal_trace.rs` — arming, the drain's four inputs, its decision, the
+  row geometry, and what the scrollable reports back — behind `MICOLD_REVEAL_TRACE`, silent
+  otherwise. The report asked for exactly this after the first diagnosis was refuted on the strength
+  of two `eprintln!`s that were then deleted
+  - **Done 2026-08-20**: reproduced on Xvfb :91 + lavapipe, 1600×1400, `~/.aa-big` (30 worktrees) +
+    `~/.aa-small` (1). `drained: scroll_offset=734 -> no scroll, the row is already visible (FR-009)`
+    immediately followed by `the scrollable reports offset 0`. Panel pinned at the top, first and
+    settled frames pixel-identical, the marked row 1,968px below the fold
+
+- [X] T067 [BUG-002] Add a failing test in `crates/micold-client/src/main.rs` that a drained reveal
+  records the offset it asked for, built on the state a short project leaves behind: one location, a
+  tall viewport, and an offset inherited from a longer list
+  - **Done 2026-08-20**: `a_drained_reveal_records_where_it_sent_the_list`, failing on the unfixed
+    code with `left: 734, right: 0`
+
+- [X] T068 [BUG-002] Record the target in `reveal_scroll` before returning the operation
+  (`app.core.sidebar_scroll_offset = offset`). `scroll_target` has already clamped it into this
+  list's own range, so it is where the panel will be whether or not a notification follows
+  - **Done 2026-08-20**: one line; T067 passes, and the whole workspace suite is green
+
+- [X] T069 [BUG-002] Re-run the reproduction against the fixed build — same fixture, same sequence —
+  and record it in [quickstart.md](./quickstart.md) beside §B4's 2026-08-18 row
+  - **Done 2026-08-20**: `drained: viewport_h=1277 scroll_offset=0 -> scrolling to 735`, the
+    scrollable confirms 734, and the panel arrives at the bottom of the list with the deepest row
+    expanded, marked and fully visible
+    ([evidence](./evidence/B4-fixed-arrival-scrolls-to-the-row.png))
+
 ---
 
 ## Dependencies & Execution Order
@@ -297,6 +339,10 @@ margin a 400 → 500 step produces, not by the 0.3% measured on 2026-08-18.
 - **US3 (Phase 5)**: depends on Phase 2 and on T018 (`set_current_session`, introduced in US1)
 - **US4 (Phase 6)**: depends on Phase 2; the exemption is meaningless without US1's reveal
 - **Polish (Phase 7)**: depends on the stories being delivered
+- **Bugfix BUG-001 (Phase 8)**: depends on Phase 3 — it reopens T021, whose role selection is where
+  the defect starts; independent of Phase 9
+- **Bugfix BUG-002 (Phase 9)**: depends on Phase 4 — it repairs the drain T033 introduced;
+  independent of Phase 8
 
 ### Within Each User Story
 

@@ -389,4 +389,128 @@ mod tests {
             p.value()
         );
     }
+
+    /// Drive `p` for `frames` redraw ticks toward `target` at `speed`, starting the frame clock at
+    /// `from`. Returns the frame count consumed, so a caller can keep the clock monotonic across
+    /// several legs — `on_event` ignores a repeated timestamp, so two legs sharing one would lose a
+    /// frame silently.
+    fn tick<M>(
+        p: &mut Progress,
+        target: f32,
+        speed: f32,
+        frames: usize,
+        from: usize,
+        messages: &mut Vec<M>,
+    ) {
+        use iced::window;
+        for i in 0..frames {
+            p.on_event(
+                &Event::Window(window::Event::RedrawRequested(
+                    Instant::now() + Duration::from_millis(16 * (from + i + 1) as u64),
+                )),
+                target,
+                speed,
+                &mut Shell::new(messages),
+            );
+        }
+    }
+
+    /// An interrupted transition **resumes from where it is**; it does not snap to either end.
+    ///
+    /// This is the clause several manual passes could not answer — a screenshot pipeline cannot
+    /// reliably catch a chosen frame of a 200 ms fade, so "does a reversal resume or snap?" stayed
+    /// open on 007 (§5 reopen-during-exit / rapid-toggle) and on 022 (§B2's interrupted
+    /// transition). It does not need a display: reversal is decided here, by `retarget`, and the
+    /// answer is renderer-independent.
+    ///
+    /// `retarget` sets `from = self.value` — the live mid-flight value — and rewinds `t` to 0. So
+    /// the reversal starts at exactly the value on screen and takes its own full duration from
+    /// there. The two things it must not do are jump on the interrupting event itself, and arrive
+    /// on the first frame after it.
+    #[test]
+    fn an_interrupted_transition_resumes_from_where_it_is() {
+        let mut p = Progress::new(0.0);
+        let mut messages: Vec<()> = Vec::new();
+
+        // Enter, then stop partway — an overlay caught mid-fade-in.
+        p.on_event(
+            &Event::Mouse(iced::mouse::Event::CursorEntered),
+            1.0,
+            0.1,
+            &mut Shell::new(&mut messages),
+        );
+        tick(&mut p, 1.0, 0.1, 4, 0, &mut messages);
+        let caught = p.value();
+        assert!(
+            caught > 0.0 && caught < 1.0,
+            "the track was meant to be mid-flight, and is at {caught}"
+        );
+
+        // The interruption arrives as an ordinary event, the way Cancel or Esc does.
+        p.on_event(
+            &Event::Mouse(iced::mouse::Event::CursorLeft),
+            0.0,
+            0.1,
+            &mut Shell::new(&mut messages),
+        );
+        assert_eq!(
+            p.value(),
+            caught,
+            "the reversal moved the track on the event itself — it must resume from where it is"
+        );
+
+        // The first frame of the reversal steps back from `caught`, and only by a step: not to 0,
+        // and not to 1 either (the `min(1 + speed, 1)` arrival this module's other test describes).
+        tick(&mut p, 0.0, 0.1, 1, 5, &mut messages);
+        assert!(
+            p.value() < caught && p.value() > 0.0,
+            "one frame of the reversal put the track at {} (from {caught}) — it snapped",
+            p.value()
+        );
+        assert!(p.animating(), "the reversal is still under way");
+
+        // And it takes the reversal's own full duration from there rather than a residue of the
+        // entrance: ten frames at a tenth per frame is exactly one traversal.
+        tick(&mut p, 0.0, 0.1, 9, 6, &mut messages);
+        assert_eq!(
+            p.value(),
+            0.0,
+            "the reversal did not complete in its own time"
+        );
+        assert!(!p.animating(), "and it comes to rest");
+    }
+
+    /// Rapid toggling leaves nothing stuck part-way (007 §5).
+    ///
+    /// Reverse on every other frame for a while, then stop asking and let it settle. The value
+    /// stays inside its range throughout — no overshoot from a rewound clock — and the track
+    /// converges on whichever destination it was last given.
+    #[test]
+    fn rapid_toggling_never_sticks_part_way() {
+        let mut p = Progress::new(0.0);
+        let mut messages: Vec<()> = Vec::new();
+
+        let mut frame = 0usize;
+        for i in 0..12 {
+            let target = if i % 2 == 0 { 1.0 } else { 0.0 };
+            p.on_event(
+                &Event::Mouse(iced::mouse::Event::CursorEntered),
+                target,
+                0.1,
+                &mut Shell::new(&mut messages),
+            );
+            tick(&mut p, target, 0.1, 2, frame, &mut messages);
+            frame += 2;
+            assert!(
+                (0.0..=1.0).contains(&p.value()),
+                "toggle {i} put the track outside its range, at {}",
+                p.value()
+            );
+        }
+
+        // Stop toggling: it must land, and land closed (the last target above is 0.0, at i == 11).
+        tick(&mut p, 0.0, 0.1, 20, frame, &mut messages);
+        assert_eq!(p.value(), 0.0, "a rapidly toggled track stuck part-way");
+        assert!(!p.animating());
+    }
 }

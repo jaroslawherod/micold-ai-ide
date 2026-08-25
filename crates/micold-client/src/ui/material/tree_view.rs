@@ -305,7 +305,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                     };
                     let mut twisty = button(icon(glyph, twisty_size, item.tint))
                         .padding(spacing::XS)
-                        .style(style::text_button(r));
+                        .style(style::text_button(r, None));
                     if let Some(msg) = item.on_toggle.clone() {
                         twisty = twisty.on_press(msg);
                     }
@@ -375,7 +375,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             } else if let Some((glyph, msg)) = item.trailing {
                 let btn = button(icon(glyph, twisty_size, item.tint))
                     .padding(spacing::XS)
-                    .style(style::text_button(r))
+                    .style(style::text_button(r, None))
                     .on_press(msg);
                 let trailing: Element<'a, M> = match item.trailing_tooltip {
                     Some(tip) => super::Tooltip::new(btn, tip, r).into(),
@@ -489,7 +489,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                         })
                         .width(Length::Fill)
                         .height(Length::Shrink)
-                        .style(style::text_button(r))
+                        .style(style::text_button(r, None))
                         .on_press(msg),
                     r.on_surface,
                     shape::FULL,

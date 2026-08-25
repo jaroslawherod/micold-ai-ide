@@ -6,6 +6,11 @@
 
 **Status**: Closed
 
+**Bugfix**: 2026-08-20 — [BUG-002](./bugs/BUG-002.md) changed **no requirement**. FR-008 and FR-009
+were right as written, and are what the implementation was measured against; what was wrong was the
+input it measured with — a scroll position the panel had left. Recorded here so a reader who finds
+the bug does not go looking for the requirement that must have been missing.
+
 **Bugfix**: 2026-08-19 — [BUG-001](./bugs/BUG-001.md) clarified **FR-003a** (the non-colour cue has
 to reach the pixels, not merely the chosen type role) and added **SC-005a**, which measures the cue
 where §A cannot: on the drawn label rather than on the role it was asked for.

@@ -78,11 +78,17 @@ pub fn state_fill(content: Color, opacity: f32) -> Color {
 /// For the one place a state layer cannot be a separate quad: `checkbox::Style` exposes a single
 /// opaque `background`, so its hover layer has to be blended into the fill rather than drawn on
 /// top of it. Everywhere else the layer is its own quad and this is not needed.
+///
+/// The arithmetic is [`tokens::blend_channel`] rather than written out here. `micold-core` needs the
+/// same blend to measure a composited pair (FR-004b), and it has no `Color`, so the choice was one
+/// function used from both crates or two copies of `l*a + b*(1-a)` — and a drifted copy of a blend
+/// does not fail, it measures a colour nothing draws (FR-029a; BUG-010 T160).
 pub fn over(layer: Color, base: Color) -> Color {
+    let ch = |l: f32, b: f32| tokens::blend_channel(l as f64, b as f64, layer.a as f64) as f32;
     Color {
-        r: layer.r * layer.a + base.r * (1.0 - layer.a),
-        g: layer.g * layer.a + base.g * (1.0 - layer.a),
-        b: layer.b * layer.a + base.b * (1.0 - layer.a),
+        r: ch(layer.r, base.r),
+        g: ch(layer.g, base.g),
+        b: ch(layer.b, base.b),
         a: 1.0,
     }
 }
@@ -419,28 +425,141 @@ pub fn list_item(r: Roles) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-/// A global notification banner. `Error` uses the error role so a failed action reads as one
-/// at a glance; `Info` reuses the neutral list-row surface.
+/// A container's fill and the foreground role §1.3 pairs with it — what a component drawn *inside*
+/// it has to know (contract §1.3, §7.3 "Host surface", FR-004a).
+///
+/// The rendering stack's inherited `text_color` carries a container's foreground to the children
+/// that have no opinion, and only to those: a `Button` writes its own into `button::Style`, from
+/// the role §7.3 assigns its variant. So the banner's statement "on this surface, foregrounds are
+/// `on_error`" reached its title and its detail and stopped at the one child that also had a
+/// statement to make. This type is that statement made explicit, for the children that need it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Host {
+    /// The container's own fill.
+    pub fill: Rgb,
+    /// The foreground role paired with that fill **for a component drawn on it**.
+    ///
+    /// Usually this is also the container's prose colour — `error`/`on_error` is one role pair
+    /// serving both. It is not always: `inverse_surface` sets prose in `inverse_on_surface` but
+    /// pairs an *action* with `inverse_primary`, which is the role's whole purpose. So this field
+    /// is the component's foreground, and a container that differs sets its own `text_color`
+    /// directly rather than reading it back from here (contract §7.3 "Host surface").
+    pub on_fill: Rgb,
+    /// Whether `fill` is an **accent** role rather than a neutral surface.
+    ///
+    /// Only an accent fill obliges a child to abandon the colours its own variant gives it. A button
+    /// on a fill §1.3 enumerates for `primary` keeps §7.3's table, while one on `error` cannot: both
+    /// roles read their ramps at the tone their scheme assigns, which puts `primary` and `error` on
+    /// the same tone in each scheme, and two roles at the same tone have the same luminance by
+    /// construction (1.00:1 light, 1.01:1 dark — BUG-009).
+    ///
+    /// **Neutral is not the test; enumerated is** (BUG-010). This comment used to say §1.3's
+    /// backgrounds for `primary` "are all neutral surfaces — `surface_variant` among them", and the
+    /// second half was never true: the row lists four `surface`/`surface_container_*` levels and
+    /// `surface_variant` is not one of them. The `Info` banner was built on that sentence, so its
+    /// action drew `primary` on a host the contract does not permit — 4.40:1 pressed in the light
+    /// scheme, with an `outline` border at 2.96:1 in the dark before any state layer at all. A
+    /// neutral fill outside the enumeration is still not a host, and [`imposed`] cannot say so on
+    /// its own: it answers "does this fill oblige a substitution", not "is this fill permitted".
+    ///
+    /// [`imposed`]: Host::imposed
+    accent: bool,
+}
+
+impl Host {
+    /// A container filled with an **accent** role, which imposes `on_fill` on its children.
+    pub fn accent(fill: Rgb, on_fill: Rgb) -> Self {
+        Self {
+            fill,
+            on_fill,
+            accent: true,
+        }
+    }
+
+    /// A container filled with a **neutral surface** — one §1.3 already enumerates for `primary`,
+    /// so it imposes nothing and a child keeps its variant's own colours.
+    pub fn neutral(fill: Rgb, on_fill: Rgb) -> Self {
+        Self {
+            fill,
+            on_fill,
+            accent: false,
+        }
+    }
+
+    /// What this host **imposes** on a component drawn in it — `(fill, on_fill)` — or `None` where
+    /// it imposes nothing.
+    ///
+    /// Returned as a pair because the substitution is a pair: a component that draws a container of
+    /// its own fills it with `on_fill` and labels it `fill`, which is the inverse arrangement
+    /// Material uses for an action on a filled surface. One value would serve the outlined and text
+    /// variants and leave the filled one with nothing to label against.
+    pub fn imposed(self) -> Option<(Rgb, Rgb)> {
+        self.accent.then_some((self.fill, self.on_fill))
+    }
+}
+
+/// What a global notification banner stands on, by severity. `Error` uses the error role so a
+/// failed action reads as one at a glance; `Info` reuses the neutral list-row surface.
+///
+/// **The one decision**, so a level added later cannot give the banner a colour and its action a
+/// different one: [`notification`] draws from this, and so does the banner's own action
+/// (FR-004a, FR-027b — a foreground is *derived* from the decision that produced the fill, never
+/// restated beside it).
+pub fn notification_host(r: Roles, level: NoticeLevel) -> Host {
+    match level {
+        NoticeLevel::Error => Host::accent(r.error, r.on_error),
+        // `surface_container_high`, not `surface_variant`: §1.3 enumerates `primary` on the
+        // `surface_container_*` levels and never on `surface_variant`, and the banner's action is a
+        // text button in `primary`. The fill moves rather than the action's role, which is FR-004b's
+        // remedy — narrow the host, leave the ramp alone (BUG-010).
+        NoticeLevel::Info => Host::neutral(r.surface_container_high, r.on_surface),
+    }
+}
+
+/// What the snackbar's action stands on: the inverted container, paired with `inverse_primary`.
+///
+/// `inverse_primary` rather than `inverse_on_surface` because the contract's **Host surface** table
+/// says so, and because the role exists for no other reason — it is the accent that survives on an
+/// inverted surface. The snackbar's *message* keeps `inverse_on_surface`; that is prose, and
+/// [`snackbar`] sets it on the container.
+///
+/// The action's label was already `inverse_primary`, tinted at the call site. What was not was
+/// everything the label does not cover: the press and hover layers, and the ripple, all still
+/// `primary` over the inverted fill. That is BUG-009's shape at a smaller amplitude — a foreground
+/// corrected in the one place someone looked, in a component whose other colours are decided
+/// elsewhere — and it is why FR-027b puts the role in the component rather than on the label.
+pub fn snackbar_host(r: Roles) -> Host {
+    Host::accent(r.inverse_surface, r.inverse_primary)
+}
+
+/// A global notification banner.
 pub fn notification(r: Roles, level: NoticeLevel) -> impl Fn(&Theme) -> container::Style {
     move |_theme| {
-        let (bg, fg) = match level {
-            NoticeLevel::Error => (r.error, r.on_error),
-            NoticeLevel::Info => (r.surface_variant, r.on_surface),
-        };
+        let host = notification_host(r, level);
         container::Style {
-            background: Some(Background::Color(color(bg))),
-            text_color: Some(color(fg)),
+            background: Some(Background::Color(color(host.fill))),
+            text_color: Some(color(host.on_fill)),
             border: radius(shape::MEDIUM),
             ..container::Style::default()
         }
     }
 }
 
-/// Filled button: primary fill, `on_primary` label (the single primary action, FR-015).
-pub fn filled(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
+/// Filled button: primary fill, `on_primary` label (the single primary action, FR-015) — unless it
+/// stands on an accent fill, where the pair inverts.
+///
+/// On such a host the button's own container takes the host's `on_*` role and its label takes the
+/// host's fill, so the action reads as an action *on* that colour instead of a second, unrelated
+/// accent laid beside it (FR-004a, FR-027b, contract §7.3 'Host surface'). Both halves of the pair
+/// move together, which is why [`Host::imposed`] hands back a pair rather than one colour.
+pub fn filled(r: Roles, host: Option<Host>) -> impl Fn(&Theme, button::Status) -> button::Style {
+    let (fill, label) = match host.and_then(Host::imposed) {
+        Some((host_fill, on_host_fill)) => (on_host_fill, host_fill),
+        None => (r.primary, r.on_primary),
+    };
     move |_theme, status| {
-        let base = color(r.primary);
-        let on = color(r.on_primary);
+        let base = color(fill);
+        let on = color(label);
         let bg = match status {
             button::Status::Active => base,
             button::Status::Hovered => state_layer(base, on, state::HOVER),
@@ -461,19 +580,27 @@ pub fn filled(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
     }
 }
 
-/// Outlined button: transparent fill, `outline` border, `primary` label (secondary actions).
-pub fn outlined(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
+/// Outlined button: transparent fill, `outline` border, `primary` label (secondary actions) — or,
+/// on an accent fill, the host's `on_*` role for both.
+///
+/// The border moves with the label rather than staying on `outline`: FR-004a reaches the non-text
+/// parts too, and `outline` is a neutral-variant tone, which on `error` reads 1.42:1 — under the
+/// 3:1 a 1dp edge needs (BUG-009).
+pub fn outlined(r: Roles, host: Option<Host>) -> impl Fn(&Theme, button::Status) -> button::Style {
+    let imposed = host.and_then(Host::imposed);
+    let front = imposed.map_or(r.primary, |(_, on_fill)| on_fill);
+    let edge = imposed.map_or(r.outline, |(_, on_fill)| on_fill);
     move |_theme, status| {
-        let prim = color(r.primary);
+        let prim = color(front);
         let fill = match status {
             button::Status::Hovered => Some(Background::Color(state_fill(prim, state::HOVER))),
             button::Status::Pressed => Some(Background::Color(state_fill(prim, state::PRESSED))),
             _ => None,
         };
         let (text, border_color) = if matches!(status, button::Status::Disabled) {
-            (alpha(prim, 0.38), alpha(color(r.outline), 0.38))
+            (alpha(prim, 0.38), alpha(color(edge), 0.38))
         } else {
-            (prim, color(r.outline))
+            (prim, color(edge))
         };
         button::Style {
             background: fill,
@@ -490,10 +617,17 @@ pub fn outlined(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
     }
 }
 
-/// Text button: transparent, no border, `primary` label (low-emphasis actions).
-pub fn text_button(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
+/// Text button: transparent, no border, `primary` label (low-emphasis actions) — or the host's
+/// `on_*` role where it stands on an accent fill (FR-004a).
+pub fn text_button(
+    r: Roles,
+    host: Option<Host>,
+) -> impl Fn(&Theme, button::Status) -> button::Style {
+    let front = host
+        .and_then(Host::imposed)
+        .map_or(r.primary, |(_, on_fill)| on_fill);
     move |_theme, status| {
-        let prim = color(r.primary);
+        let prim = color(front);
         let fill = match status {
             button::Status::Hovered => Some(Background::Color(state_fill(prim, state::HOVER))),
             button::Status::Pressed => Some(Background::Color(state_fill(prim, state::PRESSED))),
@@ -727,7 +861,7 @@ mod tests {
     #[test]
     fn disabled_color_matches_the_button_styles_disabled_label() {
         let r = tokens::roles(ColorScheme::Dark);
-        let style = text_button(r)(&iced::Theme::Dark, Status::Disabled);
+        let style = text_button(r, None)(&iced::Theme::Dark, Status::Disabled);
         assert_eq!(disabled_color(r.primary), style.text_color);
     }
 

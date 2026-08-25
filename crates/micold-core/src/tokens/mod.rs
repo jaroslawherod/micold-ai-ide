@@ -45,6 +45,71 @@ impl Rgb {
     }
 }
 
+/// One channel of an sRGB colour, linearised — WCAG 2.1 §"relative luminance".
+fn linearize(channel: u8) -> f64 {
+    let c = channel as f64 / 255.0;
+    if c <= 0.039_28 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// WCAG relative luminance.
+pub fn luminance(color: Rgb) -> f64 {
+    0.2126 * linearize(color.r) + 0.7152 * linearize(color.g) + 0.0722 * linearize(color.b)
+}
+
+/// The WCAG contrast ratio between two colours, from 1.0 (identical luminance) to 21.0.
+///
+/// Here rather than copied into each gate that needs it. Four test files had written out the same
+/// twelve lines, which is the shape FR-029a forbids for a *number* and this feature's BUG-009 found
+/// again in colour: a restated definition is correct only until the original moves. It is `pub`
+/// from the token module because contrast is a property **of** the token set — §1.3's obligation
+/// table is a claim about these ratios, and the thresholds it imposes (4.5:1 for text, 3:1 for
+/// non-text) are read by gates in both crates.
+pub fn contrast(a: Rgb, b: Rgb) -> f64 {
+    let (la, lb) = (luminance(a), luminance(b));
+    let (hi, lo) = if la >= lb { (la, lb) } else { (lb, la) };
+    (hi + 0.05) / (lo + 0.05)
+}
+
+/// One channel of `layer` composited over `base` at `alpha`, all three in the same units.
+///
+/// The alpha blend, written once. The client draws a state layer as a semi-transparent quad and has
+/// to composite it in two places — `style::over`, for the fill a checkbox has nowhere to put a quad
+/// over — and the gates have to composite it to measure what is behind a label. That is three call
+/// sites for `l*a + b*(1-a)`, and a second transcription of a blend does not fail when it drifts: it
+/// quietly measures a colour the renderer never draws. Same argument as [`contrast`]'s, one layer
+/// down (FR-029a).
+pub fn blend_channel(layer: f64, base: f64, alpha: f64) -> f64 {
+    layer * alpha + base * (1.0 - alpha)
+}
+
+/// `layer` composited over `base` at `alpha` — what is actually behind a label once a state layer
+/// is drawn (FR-004b, contract §5).
+///
+/// A state layer is the *content* colour over the container, so this always moves `base` toward the
+/// foreground and always lowers the ratio [`contrast`] then reports. It is the reason §1.3 and §5
+/// are one measurement rather than two: a pair proved at rest is not proved (BUG-010).
+pub fn over(layer: Rgb, alpha: f64, base: Rgb) -> Rgb {
+    let ch = |l: u8, b: u8| {
+        blend_channel(l as f64, b as f64, alpha)
+            .round()
+            .clamp(0.0, 255.0) as u8
+    };
+    Rgb {
+        r: ch(layer.r, base.r),
+        g: ch(layer.g, base.g),
+        b: ch(layer.b, base.b),
+    }
+}
+
+/// WCAG AA for normal text.
+pub const AA_TEXT: f64 = 4.5;
+/// WCAG AA for non-text — what a divider, a focus ring or an outlined control's border must clear.
+pub const AA_NON_TEXT: f64 = 3.0;
+
 /// The Material 3 semantic color roles for one scheme (contract §1.2).
 ///
 /// Every field is produced by reading a [`palette`] ramp at a stated tone — see [`LIGHT`] and

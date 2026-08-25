@@ -369,7 +369,17 @@ docs state per-platform support (quickstart S14).
   result. Those need the implementation first and then their own tests; splitting the CI-gate clause
   (met) from the Windows-behaviour clause (not started) is what this checkbox now records.
 - [ ] T084 Run all quickstart.md scenarios S1–S15 and record outcomes. **Partially blocked**: the scenarios are GUI/interactive (`mise run run`, multi-window, logout). Their underlying behaviour is covered by automated tests — S5/S7 (`version_recovery`), S6 (`exclusivity`/`liveness`), S8 (`mutation_semantics`/`mutation_atomicity`), supervision (`supervision_restart`/`supervision_giveup`) — but the manual walkthrough + outcome log still needs a human at the GUI.
-- [ ] T085 [P] Measure retargeted `TerminalPane` repaint cost at 60 Hz on the client (Risk 2 — all streaming measurements were daemon-side); record whether the tick rate is the right knob. **Blocked in this environment**: needs a running GUI + a frame profiler; can't be measured headlessly here.
+- [x] T085 [P] Measure retargeted `TerminalPane` repaint cost at 60 Hz on the client (Risk 2 — all
+  streaming measurements were daemon-side); record whether the tick rate is the right knob.
+  **Measured 2026-08-25** — the "blocked" note above was wrong on both halves: the frame profiler
+  already ships in the client (`MICOLD_FRAME_PROBE`, feature 018 FR-039b), and a headless Xvfb +
+  lavapipe run is a running GUI. `render(app)` over 400 counted frames costs **0.31 ms mean /
+  0.40 ms p95** at an idle terminal and **0.42 ms / 0.58 ms** under a saturating flood — 2.5 % of a
+  16.7 ms budget. Answer to the question asked: **the tick rate is not the knob**, because the client
+  has no terminal tick left to turn (`shell/subscriptions.rs`: "the idle window schedules nothing at
+  all"); the one control is the daemon's `FRAME_INTERVAL = 16 ms`
+  (`crates/micold-daemon/src/server.rs:1543`). Evidence, CPU split and the lavapipe caveat:
+  `evidence/T085-terminalpane-repaint-cost.md`.
 
 ---
 

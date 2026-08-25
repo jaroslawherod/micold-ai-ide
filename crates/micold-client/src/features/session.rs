@@ -144,8 +144,17 @@ impl State {
         next: Option<SessionId>,
     ) -> Vec<crate::features::Outcome> {
         if self.active_session == next {
+            crate::reveal_trace::line(format_args!(
+                "current session unchanged at {:?}: neither expanded nor armed",
+                self.active_session
+            ));
             return Vec::new();
         }
+        crate::reveal_trace::line(format_args!(
+            "current session {:?} -> {next:?}, arming={}",
+            self.active_session,
+            next.is_some()
+        ));
         let mut outcomes = Vec::new();
         // Resolved BEFORE the assignment, so this is the *outgoing* session's location — see
         // `closed` below, which orders itself around exactly that.
