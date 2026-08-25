@@ -6,15 +6,16 @@
 //! own `SessionCloseRequested`/`SessionRemoveConfirmed` comments claimed it happened, but the
 //! daemon-side code never actually called `AiCliProvider::mark_archived`.
 //!
-//! `CLAUDE_CONFIG_DIR` is a process-global env var read by `ClaudeProvider::config_dir()`. All
-//! three scenarios below share one `#[test]` function (rather than one each) so they run
-//! sequentially within this binary and never race each other over that global.
+//! `CLAUDE_CONFIG_DIR` and `COPILOT_HOME` are process-global env vars, read by
+//! `ClaudeProvider::config_dir()` and `CopilotProvider::config_dir()` respectively. All four
+//! scenarios below share one `#[test]` function (rather than one each) so they run sequentially
+//! within this binary and never race each other over those globals.
 
-use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use micold_core::project::{Availability, Project};
-use micold_core::provider::{AiCliProvider, ClaudeProvider};
+use micold_core::provider::{AiCliProvider, ClaudeProvider, CopilotProvider};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -25,10 +26,11 @@ use micold_daemon::catalog::Catalog;
 use uuid::Uuid;
 
 fn catalog_with_session(
-    data_dir: &std::path::Path,
-    project_path: &std::path::Path,
+    data_dir: &Path,
+    project_path: &Path,
     session_id: SessionId,
     location: SessionLocation,
+    provider: AiCli,
 ) -> Catalog {
     let mut sessions = BTreeMap::new();
     sessions.insert(
@@ -38,7 +40,7 @@ fn catalog_with_session(
             location,
             SessionLabel::Named("Test session".into()),
             TerminalMode::AiCli,
-            AiCli::ClaudeCode,
+            provider,
         )],
     );
     let workspace = Workspace {
@@ -64,12 +66,34 @@ fn catalog_with_session(
     )
 }
 
+/// Every path under `root`, recursively. Scenario 4 asserts the `claude` store is *untouched* by
+/// a Copilot close, which is a stronger claim than "no marker at the one path `ClaudeProvider`
+/// would look at".
+fn tree(root: &Path) -> BTreeSet<PathBuf> {
+    let mut out = BTreeSet::new();
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            out.extend(tree(&path));
+        }
+        out.insert(path);
+    }
+    out
+}
+
 #[test]
 fn archiving_a_session_always_writes_the_durable_provider_marker() {
     let config = tempfile::tempdir().unwrap();
-    // SAFETY: this is the only test in the workspace that reads/writes CLAUDE_CONFIG_DIR, and
-    // all three scenarios run sequentially in this one function, so there is no cross-test race.
+    let copilot_home = tempfile::tempdir().unwrap();
+    // SAFETY: this is the only test in the workspace that reads/writes CLAUDE_CONFIG_DIR, and all
+    // four scenarios run sequentially in this one function, so there is no cross-test race. The
+    // same holds for COPILOT_HOME, which scenario 4 needs for the same reason: a real
+    // `CopilotProvider::config_dir()` would otherwise resolve to the developer's own `~/.copilot`.
     std::env::set_var("CLAUDE_CONFIG_DIR", config.path());
+    std::env::set_var("COPILOT_HOME", copilot_home.path());
 
     // --- Scenario 1: Catalog::archive_session (the Close/Remove RPC path, FR-015a/FR-015c) ---
     {
@@ -81,6 +105,7 @@ fn archiving_a_session_always_writes_the_durable_provider_marker() {
             &project_path,
             session_id,
             SessionLocation::Default,
+            AiCli::ClaudeCode,
         );
         let cwd = SessionLocation::Default.cwd(&project_path);
         assert!(
@@ -104,8 +129,13 @@ fn archiving_a_session_always_writes_the_durable_provider_marker() {
         let project_path = PathBuf::from("/repo/beta");
         let session_id = SessionId::from_uuid(Uuid::from_u128(0x2));
         let location = SessionLocation::Worktree("feat-x".into());
-        let mut catalog =
-            catalog_with_session(data_dir.path(), &project_path, session_id, location.clone());
+        let mut catalog = catalog_with_session(
+            data_dir.path(),
+            &project_path,
+            session_id,
+            location.clone(),
+            AiCli::ClaudeCode,
+        );
 
         catalog
             .archive_worktree_sessions(&project_path, "feat-x")
@@ -130,6 +160,7 @@ fn archiving_a_session_always_writes_the_durable_provider_marker() {
             &project_path,
             session_id,
             SessionLocation::Default,
+            AiCli::ClaudeCode,
         );
 
         catalog.archive_session_ids(&[session_id]).unwrap();
@@ -138,6 +169,49 @@ fn archiving_a_session_always_writes_the_durable_provider_marker() {
         assert!(
             ClaudeProvider.is_archived(config.path(), &cwd, session_id.0),
             "archive_session_ids (empty-session pruning path) must record the durable marker too"
+        );
+    }
+
+    // --- Scenario 4: a **Copilot** session's marker lands in Copilot's store (FR-013, T044) ---
+    //
+    // All three paths above funnel into the one free function `catalog.rs::mark_archived_durable`,
+    // so the provider substitution only needs proving once; what genuinely differs between them is
+    // the *cwd*, which scenario 2 already covers. What is new here is the provider. Closing a
+    // Copilot session has to write the marker where Copilot itself will look — a marker in the
+    // wrong store suppresses nothing, and reconciliation (FR-020b) would hand the session back on
+    // the next open, which is exactly the resurrection BUG-003 was about.
+    {
+        let data_dir = tempfile::tempdir().unwrap();
+        let project_path = PathBuf::from("/repo/delta");
+        let session_id = SessionId::from_uuid(Uuid::from_u128(0x4));
+        let mut catalog = catalog_with_session(
+            data_dir.path(),
+            &project_path,
+            session_id,
+            SessionLocation::Default,
+            AiCli::Copilot,
+        );
+        let cwd = SessionLocation::Default.cwd(&project_path);
+        let claude_store_before = tree(config.path());
+
+        catalog.archive_session(session_id).unwrap();
+
+        assert!(
+            CopilotProvider.is_archived(copilot_home.path(), &cwd, session_id.0),
+            "closing a Copilot session must write its durable marker through the seam, into \
+             Copilot's own store"
+        );
+        assert!(
+            !ClaudeProvider.is_archived(config.path(), &cwd, session_id.0),
+            "and not through `ClaudeProvider` — the marker must not be reachable in the `claude` \
+             store under the layout `claude` reads"
+        );
+        assert_eq!(
+            tree(config.path()),
+            claude_store_before,
+            "closing a Copilot session must leave the `claude` store untouched, not merely miss \
+             the path `ClaudeProvider::is_archived` probes: the assertion above would pass for \
+             free if a stray marker landed there under a different name"
         );
     }
 }
