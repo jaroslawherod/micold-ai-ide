@@ -156,6 +156,42 @@ impl<'a> Mounted<'a> {
         )
     }
 
+    /// The frame tick every widget sees. iced delivers `RedrawRequested` through `update` like any
+    /// other event, which is what gives a widget somewhere to publish from after an *operation* has
+    /// changed something — an operation carries no shell and can say nothing itself.
+    fn redraw(&mut self) -> Vec<String> {
+        self.send(
+            Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            )),
+            mouse::Cursor::Unavailable,
+        )
+    }
+
+    /// Move the keyboard forward through this element, the way `Message::FocusMoved` does.
+    ///
+    /// The loop is not ceremony. `focus_next` is two passes chained — count the focusables, then
+    /// move to the one after the focused — and a single `operate` call runs only the first, so a
+    /// test that made one call would prove nothing and pass either way. The runtime drives the
+    /// chain; here that is this loop.
+    fn focus_next(&mut self) {
+        use iced::advanced::widget::operation::{focusable, Operation, Outcome};
+
+        let mut current: Box<dyn Operation<()>> = Box::new(focusable::focus_next::<()>());
+        loop {
+            self.element.as_widget_mut().operate(
+                &mut self.tree,
+                Layout::new(&self.node),
+                &self.renderer,
+                current.as_mut(),
+            );
+            match current.finish() {
+                Outcome::Chain(next) => current = next,
+                Outcome::None | Outcome::Some(_) => break,
+            }
+        }
+    }
+
     /// Press a named key, with the pointer nowhere near — a keyboard interaction has to work
     /// without the mouse resting helpfully on the control, or it is not a keyboard interaction.
     fn press_key(&mut self, key: iced::keyboard::key::Named) -> Vec<String> {
@@ -489,4 +525,43 @@ fn the_focused_checkbox_is_shaded_and_focus_outranks_hover() {
             );
         }
     }
+}
+
+/// A focus traversal is not an event, so a control it lands on has no `update` to notice it in.
+/// The checkbox took the keyboard from the traversal, answered Space, and told the application
+/// nothing — so `focused_field` stayed empty and the box drew itself at rest. Found by the T075
+/// visual pass: tabbing onto a credential opt-in changed not one pixel, and Space then toggled it.
+///
+/// FR-030 asks for the focused element to be *visible*, and a control that holds the keyboard in
+/// secret is the half of that requirement nothing else here was checking.
+#[test]
+fn a_checkbox_reached_by_the_traversal_says_so() {
+    let r = roles();
+    let mut mounted =
+        Mounted::new(checkbox(false, r).on_focus_change(|focused| format!("focus={focused}")));
+
+    mounted.focus_next();
+    assert_eq!(
+        mounted.redraw(),
+        vec!["focus=true".to_string()],
+        "the traversal gave the checkbox the keyboard and nothing was published, so nothing in the \
+         application knows to draw it focused"
+    );
+}
+
+/// And only once. A report on every frame would be a message per repaint for as long as the box
+/// holds the keyboard — the defect `focus_is_reported_when_it_changes_and_not_on_every_event`
+/// guards against for the field beside it.
+#[test]
+fn the_checkbox_reports_the_traversal_once_and_not_every_frame() {
+    let r = roles();
+    let mut mounted =
+        Mounted::new(checkbox(false, r).on_focus_change(|focused| format!("focus={focused}")));
+
+    mounted.focus_next();
+    assert_eq!(mounted.redraw(), vec!["focus=true".to_string()]);
+    assert!(
+        mounted.redraw().is_empty(),
+        "the checkbox re-announced focus it had already reported"
+    );
 }

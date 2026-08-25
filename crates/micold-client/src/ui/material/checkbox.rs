@@ -153,6 +153,15 @@ struct Focus {
     /// focus without publishing anything — and undoing that would make this control unreachable by
     /// the very traversal it was joined to.
     supplied: bool,
+    /// What was last *published* to the application, so a change can be told from a repetition.
+    ///
+    /// Not the same question as `supplied`, and that is why it is a third bool rather than a reuse
+    /// of the second. `supplied` watches the application; this watches the box. A focus traversal
+    /// moves through [`TakesTheKeyboard::operate`], which is not an event and carries no shell —
+    /// so the change it makes has no `update` around it to be noticed in, and the before/after
+    /// bracket that catches a press cannot see it at all. Comparing against what was last said
+    /// catches it on the frame that follows, which is when there is finally a shell to say it to.
+    reported: bool,
 }
 
 impl operation::Focusable for Focus {
@@ -185,6 +194,9 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
             if state.supplied != self.focused {
                 state.supplied = self.focused;
                 state.focused = self.focused;
+                // The application is the one that just said this, so saying it back would be an
+                // echo — and one that arrives a frame late, after the next `update` compares.
+                state.reported = self.focused;
             }
         }
         tree.diff_children(std::slice::from_ref(&self.content));
@@ -295,10 +307,16 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
             state.focused = now;
         }
 
-        let after = tree.state.downcast_ref::<Focus>().focused;
-        if after != before {
+        // Against what was last reported, not against `before`: focus can also have been taken by
+        // a traversal since the previous frame, and that happened outside any event this bracket
+        // spans (BUG-004's neighbour, found by the T075 visual pass — tabbing onto a credential
+        // opt-in changed not one pixel, and Space then toggled it).
+        let state = tree.state.downcast_mut::<Focus>();
+        if state.reported != state.focused {
+            state.reported = state.focused;
+            let now = state.focused;
             if let Some(on_focus_change) = &self.on_focus_change {
-                shell.publish(on_focus_change(after));
+                shell.publish(on_focus_change(now));
             }
         }
     }

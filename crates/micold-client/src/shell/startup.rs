@@ -50,14 +50,31 @@ use crate::{observe_system_scheme, probe_config, theme, update, view, App};
 /// `assets/icon/generate.py`). Embedded directly so no runtime image decoder is needed.
 const ICON_RGBA: &[u8] = include_bytes!("../../../../assets/icon/icon-64.rgba");
 
-/// Window settings carrying the app icon (taskbar / titlebar). On Linux the window app-id /
-/// WM_CLASS is set to match `StartupWMClass` in the `.desktop` entry so the running window groups
-/// under the launcher icon.
+/// The narrowest window the interface is supported at.
+///
+/// It exists so that "the narrowest supported window width" is a fact rather than a question. The
+/// settings surface puts a fixed 288dp rail beside a content column, and the rail never gives any
+/// of its width back — so below roughly 520dp the actions row runs off the right edge and the Save
+/// button loses first its edge and then its label, which is the primary action of the surface
+/// becoming an unlabelled circle. Every control renders at this size; see
+/// `the_window_declares_the_narrowest_size_it_supports`.
+const MIN_WINDOW_SIZE: iced::Size = iced::Size::new(640.0, 480.0);
+
+/// The floor stays above the width the layout was seen to break at, not at it: 520dp was the last
+/// width whose actions row still fitted, and 640x480 was checked by hand and renders every control.
+/// A compile-time check rather than a test, because both sides are constants and a test of two
+/// constants is a test of nothing.
+const _: () = assert!(MIN_WINDOW_SIZE.width >= 640.0 && MIN_WINDOW_SIZE.height >= 480.0);
+
+/// Window settings carrying the app icon (taskbar / titlebar) and the narrowest size the interface
+/// is supported at. On Linux the window app-id / WM_CLASS is set to match `StartupWMClass` in the
+/// `.desktop` entry so the running window groups under the launcher icon.
 fn window_settings() -> iced::window::Settings {
     let icon = iced::window::icon::from_rgba(ICON_RGBA.to_vec(), 64, 64).ok();
     #[allow(unused_mut)]
     let mut settings = iced::window::Settings {
         icon,
+        min_size: Some(MIN_WINDOW_SIZE),
         ..Default::default()
     };
     #[cfg(target_os = "linux")]
@@ -277,4 +294,26 @@ fn sandbox_boot(
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{window_settings, MIN_WINDOW_SIZE};
+
+    /// The window has a narrowest supported size, and it is the one the documentation names.
+    ///
+    /// Without one the settings surface can be dragged past the point where it works: the rail is
+    /// a fixed 288dp and never gives any of it back, so the content column beside it shrinks until
+    /// the actions row overflows. At 500dp wide the Save button is clipped by the window edge and
+    /// at 480 its label is gone entirely — the primary action of the surface becomes an unlabelled
+    /// circle (found by the T075 visual pass; quickstart §B.6 asks for "no truncated labels at the
+    /// narrowest supported window width" and there was no such width to test against).
+    #[test]
+    fn the_window_declares_the_narrowest_size_it_supports() {
+        assert_eq!(
+            window_settings().min_size,
+            Some(MIN_WINDOW_SIZE),
+            "no minimum window size, so there is no narrowest supported width to hold the layout to"
+        );
+    }
 }
