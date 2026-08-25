@@ -202,6 +202,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Runtime version
         run: docker version --format '{{.Server.Version}}' && docker info --format '{{.Driver}}'
+      # `sandbox_real_` is a *test-name* filter, not a file filter: cargo matches it against the
+      # test function's path, and an integration target's name is not part of that path. So a test
+      # in `tests/sandbox_real_*.rs` whose function is not also named `sandbox_real_*` runs locally
+      # and is silently skipped here — no failure, just a smaller number in the summary. Every
+      # real-runtime test therefore carries the prefix in its own name.
       - name: Test (real runtime)
         run: cargo test -p micold-core --features sandbox-real-runtime sandbox_real_ -- --test-threads=1
 

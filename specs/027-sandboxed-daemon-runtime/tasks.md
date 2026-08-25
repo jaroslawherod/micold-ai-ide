@@ -291,7 +291,20 @@ does a session start unsandboxed without an explicit choice.
 - [X] T110 [US6] Implement explicit stop that leaves no orphaned container, and leave the sandbox running on app close by design, in `crates/micold-client/src/shell/sandbox.rs` (US6 scenario 4)
       *Note:* the stop is `stop` **then** `remove`, both idempotent per C-7, and it is routed from the existing "restart service" action — which previously stopped the *process* over its endpoint and would have left the container up with nothing in it. Leaving the sandbox running on app close needed no code: nothing on the close path touches it, which is the design.
 - [X] T111 [P] [US6] Write the failure catalogue — cause, message, remedy — into `docs/user-guide/sandboxed-daemon.md` (FR-034)
-- [ ] T112 [US6] Run quickstart.md §B.3 and §B.5's failure items, recording the result in `specs/027-sandboxed-daemon-runtime/evidence/us6-failures.md`
+- [x] T112 [US6] Run quickstart.md §B.3 and §B.5's failure items, recording the result in `specs/027-sandboxed-daemon-runtime/evidence/us6-failures.md`
+
+      Run as `crates/micold-core/tests/sandbox_real_lifecycle.rs` behind the `sandbox-real-runtime`
+      feature rather than as a hand-typed `docker` transcript: the checks drive `CliRuntime` against
+      a real Docker daemon, so what they exercise is the argv and the state machine the application
+      actually uses, and the same tests are what CI's Linux `sandbox-runtime` job runs. All seven
+      pass against Docker 29.5.1, under CI's own command. *Found by writing it this way:* the CI
+      step filters on `sandbox_real_`, which cargo matches against **test names**, not file names —
+      so these seven, first written with plain descriptive names, would have been silently skipped
+      there while passing locally. They now carry the prefix, and the contract is recorded beside
+      the filter in `.github/workflows/ci.yml`. Four §B.5 items are **not** ticked and say why in
+      the evidence: the stale-on-registration item is pure state-machine behaviour already covered by
+      `sandbox_state.rs`, and accepting the fallback, surviving a client restart, and surviving a
+      reboot need a GUI or a reboot of this machine.
 
 **Checkpoint**: the new failure surface is bounded, documented and recoverable.
 

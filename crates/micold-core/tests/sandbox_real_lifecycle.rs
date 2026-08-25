@@ -195,7 +195,7 @@ const EGRESS_PROBE: &str = "timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' && 
 /// severing the published port is the whole of research R4, and a change that reached for
 /// `--internal` would pass a test that only checked the first half.
 #[test]
-fn no_outbound_blocks_egress_while_the_control_port_still_answers() {
+fn sandbox_real_no_outbound_blocks_egress_while_the_control_port_still_answers() {
     let fx = Fixture::up("noout", 17801, NetworkPosture::NoOutbound);
 
     let (ok, out) = fx.probe(EGRESS_PROBE);
@@ -226,7 +226,7 @@ fn no_outbound_blocks_egress_while_the_control_port_still_answers() {
 /// passing would mean either the documentation is now wrong or the posture quietly became something
 /// stronger than it claims — both worth knowing.
 #[test]
-fn no_outbound_still_resolves_names() {
+fn sandbox_real_no_outbound_still_resolves_names() {
     let fx = Fixture::up("nooutdns", 17802, NetworkPosture::NoOutbound);
 
     let (ok, out) = fx.probe("getent hosts example.com && echo RESOLVED");
@@ -242,7 +242,7 @@ fn no_outbound_still_resolves_names() {
 /// Skipped — loudly — when the host itself has no egress, because on a disconnected machine a
 /// failure here says nothing about the posture.
 #[test]
-fn outbound_permits_egress() {
+fn sandbox_real_outbound_permits_egress() {
     if !host_has_egress() {
         eprintln!(
             "SKIPPED outbound_permits_egress: this host cannot reach the network, so the sandbox \
@@ -272,7 +272,7 @@ fn outbound_permits_egress() {
 /// exact question the client asks, and then runs the answer through the same transition the client
 /// runs it through (FR-036, US6 scenario 3).
 #[test]
-fn a_container_stopped_from_outside_is_reported_lost_with_a_reason_and_a_remedy() {
+fn sandbox_real_a_container_stopped_from_outside_is_reported_lost() {
     let fx = Fixture::up("stopped", 17804, NetworkPosture::NoOutbound);
 
     let running = fx
@@ -325,7 +325,7 @@ fn a_container_stopped_from_outside_is_reported_lost_with_a_reason_and_a_remedy(
 /// "Nothing behind" is the requirement, not "it stopped". A stopped-but-present container is the
 /// orphan the next start then finds, has to recognise, and has to replace.
 #[test]
-fn an_explicit_stop_leaves_no_container_behind() {
+fn sandbox_real_an_explicit_stop_leaves_no_container_behind() {
     let fx = Fixture::up("orphan", 17805, NetworkPosture::NoOutbound);
 
     fx.runtime.stop(&fx.id).expect("stop");
@@ -351,7 +351,7 @@ fn an_explicit_stop_leaves_no_container_behind() {
 /// again from a second container — so a pass means the round trip works, not merely that a
 /// directory exists.
 #[test]
-fn the_daemons_state_survives_container_recreation() {
+fn sandbox_real_the_daemons_state_survives_container_recreation() {
     let fx = Fixture::up("state", 17806, NetworkPosture::NoOutbound);
 
     let (ok, out) = fx.probe("echo survived > /var/lib/micold-ai-ide/probe.txt && echo WROTE");
@@ -389,7 +389,7 @@ fn the_daemons_state_survives_container_recreation() {
 /// the sandbox worse than no sandbox: root-owned files in the user's own repository, uneditable
 /// without elevation.
 #[test]
-fn a_file_written_inside_belongs_to_the_host_user() {
+fn sandbox_real_a_file_written_inside_belongs_to_the_host_user() {
     let fx = Fixture::up("owner", 17808, NetworkPosture::NoOutbound);
     let host_path = fx.project.join("written-inside.txt");
 

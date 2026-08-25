@@ -83,11 +83,11 @@ This is the feature. In a sandboxed session's terminal:
 
 ### B.3 — Network posture
 
-- [ ] With `NoOutbound`: `curl https://example.com` fails; the session stays connected throughout —
+- [x] With `NoOutbound`: `curl https://example.com` fails; the session stays connected throughout —
       the control channel is unaffected (R4, C-5)
-- [ ] With `NoOutbound`: `nslookup example.com` **resolves**. Confirm the documented caveat is
+- [x] With `NoOutbound`: `nslookup example.com` **resolves**. Confirm the documented caveat is
       accurate and that `docs/user-guide/sandboxed-daemon.md` states it (R4)
-- [ ] Switching to `Outbound` and restarting the sandbox: `curl` succeeds
+- [x] Switching to `Outbound` and restarting the sandbox: `curl` succeeds
 
 ### B.4 — Limits
 
@@ -101,13 +101,13 @@ This is the feature. In a sandboxed session's terminal:
 
 - [ ] Register a new project while the sandbox runs: it is marked **stale** with an explicit restart
       action; running sessions keep working; nothing restarts on its own (R9, M-4)
-- [ ] `docker stop` the container from outside: the client shows a persistent failure with a reason
+- [x] `docker stop` the container from outside: the client shows a persistent failure with a reason
       and a remedy, and does **not** fall back to an unsandboxed daemon (FR-035, FR-035b, S-2)
 - [ ] Accept the offered fallback explicitly: it works, and the unsandboxed state stays visible for
       as long as it lasts (FR-035a/b)
 - [ ] Sessions survive a client restart while sandboxed (FR-014)
 - [ ] With survive-logout enabled, the sandbox comes back after a reboot (FR-014a/b, R6)
-- [ ] Daemon state survives container recreation: stop, remove, restart — projects are still there
+- [x] Daemon state survives container recreation: stop, remove, restart — projects are still there
       (FR-011, M-3)
 
 ### B.6 — The Settings view
