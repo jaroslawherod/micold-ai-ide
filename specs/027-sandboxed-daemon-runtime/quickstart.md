@@ -112,14 +112,16 @@ This is the feature. In a sandboxed session's terminal:
 
 ### B.6 — The Settings view
 
-- [ ] Settings opens as a full-surface view with a navigation rail, not a 420-point modal (FR-026)
-- [ ] Every daemon setting is in the Daemon section, and no daemon setting is left elsewhere (FR-027)
-- [ ] Every pre-existing setting still exists and still works (FR-028) — the migration's real risk
-- [ ] Active credential opt-ins are each individually visible while active (FR-004c, N-2)
-- [ ] Keyboard navigation reaches every section and every control; focus order is sane
-- [ ] Both themes; no truncated labels at the narrowest supported window width
+- [x] Settings opens as a full-surface view with a navigation rail, not a 420-point modal (FR-026)
+- [x] Every daemon setting is in the Daemon section, and no daemon setting is left elsewhere (FR-027)
+- [x] Every pre-existing setting still exists and still works (FR-028) — the migration's real risk
+- [x] Active credential opt-ins are each individually visible while active (FR-004c, N-2)
+- [x] Keyboard navigation reaches every section and every control; focus order is sane
+- [x] Both themes; clean to 640pt wide, degrading below it — no minimum is declared anywhere
+      (evidence/us3-settings-view.md)
 - [ ] Idle with the view open: no repainting (the automated counterpart is
-      `idle_requests_no_frames.rs`)
+      `idle_requests_no_frames.rs`) — **inconclusive under lavapipe**; the view costs no more idle
+      than the main surface, but the absolute claim rests on the automated test
 
 ### B.7 — The development loop (FR-024c)
 
