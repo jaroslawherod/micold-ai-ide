@@ -220,10 +220,13 @@ a dozen files across the three crates, two user-guide pages, and one guard test 
   `PathBuf::join` on components — no separator assumptions, no `cfg(target_os)` in the providers.
   The environment override (`COPILOT_HOME`) and home-directory fallback follow the convention
   `ClaudeProvider` already uses for `CLAUDE_CONFIG_DIR`, so both providers behave the same way on
-  all three platforms. **The risk**: Copilot's base directory on Windows was not verified (research
-  R2) — it may not be `%USERPROFILE%\.copilot`. Mitigation: it is one function, `config_dir()`,
-  behind the seam; CI stays green regardless because no test requires the CLI, and any test that
-  would must skip when it is absent (FR-006's availability check is the same predicate). The watch
+  all three platforms. **The risk, since retired**: Copilot's base directory on Windows was not
+  verified (research R2). T081 closed it against CLI 1.0.80 — it *is* `%USERPROFILE%\.copilot`,
+  because Copilot's own home resolver is handed the home directory and neither the platform nor
+  `%LOCALAPPDATA%`. The mitigation the risk was written against still holds and is worth keeping:
+  it is one function, `config_dir()`, behind the seam; CI stays green regardless because no test
+  requires the CLI, and any test that would must skip when it is absent (FR-006's availability
+  check is the same predicate). The watch
   crate is what keeps FR-019 from becoming three platform code paths, which is this principle's
   "isolated behind clear abstractions" clause applied to the one new mechanism.
 - [x] **VII. Documentation First-Class**: PASS. Two pages, in the same change:

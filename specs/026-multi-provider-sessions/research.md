@@ -494,10 +494,16 @@ fixture store rather than mirroring it.
 | | Linux | macOS | Windows |
 |---|---|---|---|
 | `copilot` on `PATH` | verified here | same mechanism | same mechanism, `.exe`/`.cmd` resolution |
-| `COPILOT_HOME` / `~/.copilot` | verified | expected identical (home-relative) | **unverified** |
+| `COPILOT_HOME` / `~/.copilot` | verified | expected identical (home-relative) | verified (T081) — `%USERPROFILE%\.copilot` |
 
 The path derivations are all `PathBuf::join` on a base directory, so they are platform-neutral by
-construction; what is unverified is where Copilot puts its base directory on Windows. CI covers all
-three and the provider's path arithmetic is pure and unit-testable without the CLI installed —
-which is how `ClaudeProvider` is already tested. Tests that require the CLI itself must skip when it
-is absent rather than fail, as the existing suite does.
+construction. CI covers all three and the provider's path arithmetic is pure and unit-testable
+without the CLI installed — which is how `ClaudeProvider` is already tested. Tests that require the
+CLI itself must skip when it is absent rather than fail, as the existing suite does.
+
+**The Windows row was closed in T081** without a Windows machine, by reading the CLI's own shipped
+code: `resolveCopilotHome` is handed the home directory and neither the platform nor
+`%LOCALAPPDATA%`, where `copilotCacheHome` beside it is handed all three; every `.copilot` literal
+joins it to `homedir()` with no branch; and Node's `os.homedir()` is `%USERPROFILE%` on Windows.
+`contracts/copilot-cli.md` carries the detail, including the one way the application's own
+`directories`-based home can disagree with the CLI's.
