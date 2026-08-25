@@ -487,12 +487,17 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
         // tree, so moving it is an operation issued from here. Every input in the application
         // already implements iced's `Focusable` — what was missing was anyone asking.
+        // The move itself, then the second clause of FR-030: a control the traversal reached
+        // below the fold is focused-but-invisible until something scrolls to it, and iced's focus
+        // operations never look at a scrollable. Chained rather than batched, because the scroll
+        // has to read the focus the move just set.
         Message::FocusMoved { forward } => {
-            if forward {
+            let moved = if forward {
                 iced::widget::operation::focus_next()
             } else {
                 iced::widget::operation::focus_previous()
-            }
+            };
+            moved.chain(micold_client::ui::scroll_focused_into_view())
         }
         Message::ConnectionTakeoverRequested => shell::daemon_sync::on_takeover_requested(app),
         // The daemon refused us on a contract mismatch (US6, FR-021): record it so the banner can

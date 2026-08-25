@@ -166,7 +166,16 @@ const WRAPPED_WIDGETS: &[&str] = &[
 /// Matched at a word boundary, so a *method* whose name ends in a widget's — `row_tooltip(`,
 /// `menu_panel(` — is not mistaken for constructing one. Without that the count can never reach
 /// zero, because the offending name belongs to a builder step the library itself provides.
+///
+/// A **declaration** is not a call either. `fn scrollable(...)` in an `impl Operation` is iced's
+/// own callback name — the module is being *told* about a scrollable someone else built, which is
+/// the opposite of building one. Nothing here can rename it.
 fn widget_calls(code: &str) -> usize {
+    fn declares(line: &str) -> bool {
+        let line = line.trim_start();
+        line.starts_with("fn ") || line.starts_with("pub fn ") || line.starts_with("pub(crate) fn ")
+    }
+
     fn names_widget(line: &str, widget: &str) -> bool {
         let needle = format!("{widget}(");
         let mut from = 0;
@@ -185,7 +194,7 @@ fn widget_calls(code: &str) -> usize {
         false
     }
     code.lines()
-        .filter(|line| WRAPPED_WIDGETS.iter().any(|w| names_widget(line, w)))
+        .filter(|line| !declares(line) && WRAPPED_WIDGETS.iter().any(|w| names_widget(line, w)))
         .count()
 }
 

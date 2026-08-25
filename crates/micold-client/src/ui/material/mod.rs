@@ -50,6 +50,7 @@ mod form_field_anatomy;
 pub mod glyph;
 mod icon_button;
 mod icon_label;
+mod keyboard_focus;
 mod menu;
 /// §7.5's *spatial* figures — the item's inset, the panel's padding, the leading glyph, and what
 /// sits between two items. `anatomy_size` reads sizes; these are positions, and nothing read them

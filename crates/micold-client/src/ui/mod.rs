@@ -18,6 +18,7 @@ pub(crate) mod material;
 /// Named individually rather than by opening the module, which stays `pub(crate)`. The binary
 /// composes the `full` measurement scene and a ripple only starts from a press, so it needs the one
 /// traversal that can reach a ripple's per-instance state — and nothing else from the library.
+pub use focus::{into_view as focus_into_view, scroll_focused_into_view};
 pub use material::ripple_pulse;
 pub use material::target_offset_delta;
 pub(crate) mod project_selector;
