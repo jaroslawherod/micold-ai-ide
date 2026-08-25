@@ -62,8 +62,10 @@ chosen.
 worktree context menu, session context menu.
 
 **How it is wired**: the sidebar's scrollable reports every scroll unconditionally
-(`Message::ScrolledBeneathOverlay`); the reducer asks `micold_core::overlay::dismisses` whether
-anything closes. With nothing open the message is inert.
+(`Message::SidebarScrolled(offset)` — this named `Message::ScrolledBeneathOverlay` until feature
+021's T081, which found that variant had no producer and deleted it; the reducer arm and the rule
+below are the same ones); the reducer asks `micold_core::overlay::dismisses` whether anything
+closes. With nothing open the message is inert.
 
 ### 3. The folder browser's scrollbar is now the design system's
 
