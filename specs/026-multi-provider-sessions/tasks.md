@@ -1156,7 +1156,55 @@ B7, SC-008).
 
   `cargo test --workspace` green afterwards (219 `test result: ok`), since a formatting pass that
   reflows an assertion is still an edit to a test.
-- [ ] T081 Verify Copilot's base directory on Windows (research R2's one unverified row) and correct `CopilotProvider::config_dir` and `contracts/copilot-cli.md` if it is not `%USERPROFILE%\.copilot`; if it cannot be verified, record that explicitly rather than leaving the table implying it was
+- [X] T081 Verify Copilot's base directory on Windows (research R2's one unverified row) and correct `CopilotProvider::config_dir` and `contracts/copilot-cli.md` if it is not `%USERPROFILE%\.copilot`; if it cannot be verified, record that explicitly rather than leaving the table implying it was
+
+  Verified, and `config_dir` needed no correction. There is no Windows machine here and the task's
+  escape hatch was to say so — but "unverifiable" was the wrong answer, because the thing to verify
+  is on this disk. The `copilot` binary is a Node launcher that unpacks the real CLI into
+  `~/.cache/copilot/pkg/<platform>/<version>/app.js`, and that bundle is the CLI's own answer to
+  the question, not a document about it.
+
+  Three findings from 1.0.80, each independent of the others:
+
+  - The canonical resolver is called as `resolveCopilotHome(configDir, $COPILOT_HOME, homedir())`.
+    It is handed the home directory and **neither the platform nor `%LOCALAPPDATA%`** — so it
+    cannot branch on Windows even if it wanted to. The contrast is the decisive part rather than
+    the absence: `copilotCacheHome(process.platform, homedir(), $COPILOT_CACHE_HOME,
+    $LOCALAPPDATA, $XDG_CACHE_HOME)` sits immediately beside it with all three. The cache home is
+    deliberately platform-aware and the config home deliberately is not; that is a design decision
+    visible in two adjacent signatures, not an oversight one release could quietly correct.
+  - All five `.copilot` literals in `app.js` are `join(homedir(), ".copilot")`, none behind a
+    `win32` branch, and the launcher's own SEA bundle does the same for its package cache while
+    its cache-home helper branches on `win32`/`darwin` — the same split, one layer up.
+  - One of those five is a migration that **moves** `session-state`, `session-store.db`,
+    command history and the config files *out of* `$XDG_STATE_HOME/.copilot` and
+    `$XDG_CONFIG_HOME/.copilot` into `homedir()/.copilot`. R2 recorded XDG as "not honoured"; it
+    is more than that — the home-relative path is the destination those variables are being retired
+    in favour of. A base directory a vendor is actively migrating *towards* is not one that varies
+    by platform.
+
+  Joined to Node's documented `os.homedir()` — `%USERPROFILE%` when defined on Windows — the row is
+  `%USERPROFILE%\.copilot`, which is what `CopilotProvider::config_dir` already computes.
+
+  The one real divergence this turned up, recorded in `contracts/copilot-cli.md` because it is the
+  kind of thing that becomes a bug report years later: the application does **not** resolve home the
+  way Node does. `directories::UserDirs` calls `SHGetKnownFolderPath(FOLDERID_Profile)` and ignores
+  `%USERPROFILE%`; Node prefers the variable. They name the same directory unless something has
+  redefined it for the process tree, and if that ever happens `ClaudeProvider` is wrong in exactly
+  the same way — it resolves its own base identically, and has since feature 021. So this is a
+  property of the seam, not of Copilot, and `$COPILOT_HOME` overrides both. Not fixed here: making
+  the two agree is a change to `ClaudeProvider`'s behaviour on a platform nobody has run this on,
+  which is a worse trade than recording it.
+
+  Caveat kept honestly: the package inspected is `linux-x64`, so this is the JS the Linux build
+  ships. The argument does not rest on the platform of the bundle — a resolver with no platform
+  parameter has none on any build — but a Windows package that shipped *different* JS would defeat
+  it, and nothing here can rule that out. `research.md`'s table says "verified (T081)" and names the
+  method, so a future reader can weigh it rather than inherit it.
+
+  `plan.md`'s Principle VI risk is marked retired rather than deleted, keeping the mitigation it
+  named. `mise run test-core` green (64 `test result: ok`), `cargo fmt --all -- --check` clean —
+  which is all a comment-and-docs change can be asked to prove.
 - [ ] T082 Confirm `mise run test` is green on Linux, macOS and Windows in CI (Principle VI), with every Copilot test passing on a runner that has no `copilot` installed
 - [ ] T083 Run quickstart.md §A and confirm every gate in the table has a corresponding green test
 - [ ] T084 Run quickstart.md §B B1–B8 against a real Copilot CLI with `COPILOT_HOME` pointed at a scratch directory, and fill in the "Recording the pass" table with the date, platform, and any step that did not behave as written — including B6, the untrusted-worktree behaviour no probe could confirm
