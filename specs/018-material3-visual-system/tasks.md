@@ -1548,6 +1548,9 @@ here, because widening this gate to cover them would make it fail for a reason B
 cause, and because choosing between "retune the tone" and "declare state layers exempt on neutral
 hosts" is a contract decision rather than an implementation one. The filter is a single
 `imposed().is_none()` skip, so removing it is one edit when that decision is made.
+**Removed 2026-08-25 (T163)** — the decision is FR-004b, the edit was the one line this note
+promised, and the walk now covers every container rather than the accent ones. The nine near-misses
+above are closed by T162 moving the `Info` banner's fill, not by the gate being told to ignore them.
 
 **Bugfix**: 2026-08-21 — BUG-009 added Phase 21 (T151–T159). **No task is reopened.** T080 rebuilt the banner's action on the shared `Button` and is complete as written — the hand-rolled control it replaced called `style::outlined` and was purple-on-red too, so the task did not introduce the defect; what it did was make the colour arrive from the shared library, which is where the missing rule has to live. T000a/T000b built the contrast gate faithfully over §1.3's table, and the table is the gap rather than the gate. T036 applied the state layers as specified; they are `primary` at low alpha and follow the label's role once FR-027b puts that role in the component. The work missing here was never a task, and could not have been while no artifact said a component's foreground depends on what it is standing on.
 
@@ -1580,7 +1583,23 @@ sentences asserted was fine. Both sentences are corrected here.
 
 - [X] T166 [P] `style_snapshot.rs` re-pins the `Info` banner's fill and its action's resolved style on the new host, and the showcase's banner specimen poses it. The snapshot diff is the proof the fill moved: light `#E7E0EC` → `#ECE7EC`, dark `#49454E` → `#2B292D` (SC-007, feature 019 FR-003)
 
-- [ ] T167 Confirm in the running application by the `visual-pass` route, in **both** schemes: the `Info` banner against its new fill, its action at rest and under hover and press, and the `Error` banner beside it unchanged. Record to `../evidence/` (SC-008h, US4 scenario 16)
+- [X] T167 Confirm in the running application by the `visual-pass` route, in **both** schemes: the
+  `Info` banner against its new fill, its action at rest and under hover and press, and the `Error`
+  banner beside it unchanged. Record to `../evidence/` (SC-008h, US4 scenario 16). **Run
+  2026-08-25** on Xvfb `:71` + lavapipe (software Vulkan), showcase binary built and copied to a
+  private pin dir inside the build lock so it cannot be another branch's. The fill was **sampled,
+  not eyeballed**: both `Info` specimens read `srgb(236,231,236)` = `#ECE7EC` in the light scheme and
+  `srgb(43,41,45)` = `#2B292D` in the dark, which are exactly the two values T166 predicted from the
+  snapshot — the screen and the fixture agree. `Retry now` on that fill is legible at rest, under
+  hover and under press in both schemes, the pressed state layer visibly filling the pill without
+  taking the label with it; the dark border, which was the 2.96:1 miss at rest on the old host, now
+  reads clearly against `#2B292D`. The two `Error` specimens beside it are **unchanged** — white
+  label and white pill border on the red fill in the light scheme, `on_error` maroon on salmon in
+  the dark — so narrowing the `Info` host did not disturb BUG-009's fix. Recorded to
+  `../evidence/BUG-010-info-banner-on-its-new-fill.png`: both schemes, all four specimens, and the
+  action's three states cropped at identical geometry beneath each. What this route cannot answer,
+  unchanged from every prior pass: mid-flight animation frames and perceived smoothness — neither is
+  claimed here, and neither is at issue in a colour fix
 
 - [X] T168 [P] Read `docs/` against the change (FR-041). The banner's tone is described nowhere in the user guide, which is expected — record that it was checked rather than leaving the question open
 
