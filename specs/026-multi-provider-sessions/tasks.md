@@ -1206,7 +1206,63 @@ B7, SC-008).
   named. `mise run test-core` green (64 `test result: ok`), `cargo fmt --all -- --check` clean —
   which is all a comment-and-docs change can be asked to prove.
 - [ ] T082 Confirm `mise run test` is green on Linux, macOS and Windows in CI (Principle VI), with every Copilot test passing on a runner that has no `copilot` installed
-- [ ] T083 Run quickstart.md §A and confirm every gate in the table has a corresponding green test
+- [X] T083 Run quickstart.md §A and confirm every gate in the table has a corresponding green test
+
+  Every gate is present and green, and seven of the table's pointers were wrong about where. The
+  suite itself was never in doubt — `mise run test` is green, which is what the task's second half
+  asks. What the walk was for is the first half: that each row's *left column* names something.
+
+  The drift is three different failures, which is why walking the column matters more than counting
+  the rows:
+
+  - `micold-daemon/tests/copilot_activity_is_event_driven.rs` was never created. FR-019's two
+    assertions live in `copilot_activity.rs` as `this_applications_watch_path_schedules_no_timer_of_its_own`
+    and `a_quiet_session_costs_nothing_between_appends`.
+  - Three rows named files that exist and hold something else — `sidebar_tree.rs` for SC-009
+    (it is `features_sidebar.rs`, T058c), `service_capability_fakes.rs` for FR-006's "an
+    unavailable CLI is not offered" (`provider_choice_surfaces.rs`, T071, with the `PATH` probe
+    itself in `shell/capabilities.rs`'s own tests, T070), and `main.rs` for the catalog fold.
+  - Three were never updated from planning at all, still reading "the test T023a adds": they are
+    `settings_default_ai_cli.rs`, `session_discovery.rs` and `shell/persist.rs`'s own tests. This
+    is the same class T079 fixed in `plan.md`, one document over.
+
+  The `main.rs` row is the finding worth keeping. Walking it, a search of `crates/*/tests/` for a
+  test that builds a `SessionSummary` carrying `Copilot` returned nothing, and the row's own text —
+  *"miss it and the provider defaults silently while every other test stays green"* — read like a
+  description of a hole rather than of a gate. So a test was written into `catalog_sync.rs` beside
+  the fold, and then probed the way anything here is probed: replace `summary.provider` with a
+  constant `AiCli::ClaudeCode` and run the workspace.
+
+  Three tests failed, not one. `shell/daemon_sync.rs::a_daemon_reported_session_keeps_the_cli_the_daemon_named`
+  and `an_existing_sessions_cli_is_not_rewritten_by_a_later_snapshot` — T060a's, covering the adopt
+  branch *and* the deliberate non-adoption on update, which the new test did not. The gate existed;
+  it sits in a `#[cfg(test)]` module in the **binary** crate, which is precisely where a search of
+  `crates/*/tests/` cannot see it. The row was right in substance and stale only in filename. The
+  duplicate was deleted and the row now points at `shell/daemon_sync.rs`.
+
+  So the probe's real yield here was not that an assertion is load-bearing but that a *conclusion*
+  was wrong, and it is worth naming why the mistake was available: "no test names this type" is
+  evidence about a search, not about the suite, and this repo keeps a third of its client tests
+  inside `src/`. The corrected table now says which rows are `#[cfg(test)]` modules for that reason.
+
+  Everything the mutated run does say, it says cleanly: 1792 tests pass with the fold defaulted, and
+  the only three that fail are the ones written to watch it. Nothing else in the workspace notices —
+  which is the row's claim, now demonstrated rather than asserted.
+
+  Two merge fallouts fixed on the way, both from `origin/main` landing while this branch was open
+  and neither visible locally until CI built the merge commit: `labelled_toggle.rs` had not been
+  given `text_button`'s new `host` argument (`None` — it draws on a neutral surface, and a `Host` is
+  only for a control on an accent fill, FR-004a), and a test main brought in called `start_new` with
+  one argument.
+
+  `cargo test --workspace` green: 2167 tests over 220 targets, nothing failing. One caveat worth
+  recording rather than smoothing over: an earlier run of the same tree failed
+  `frame_coalescing::a_flood_is_coalesced_to_at_most_one_frame_per_frame_interval` with *"only 1
+  frame(s) — nothing was streamed"*, and passed on re-run. That test is feature 010's and this
+  branch does not touch its path; the assertion needs the flood to arrive in more than one frame,
+  which a machine running four `rustc` jobs and another worktree's build alongside it cannot
+  guarantee. It is a load flake, not a regression — but it is one this repository's own build
+  discipline makes likely, so it is named here rather than left for the next person to rediscover.
 - [ ] T084 Run quickstart.md §B B1–B8 against a real Copilot CLI with `COPILOT_HOME` pointed at a scratch directory, and fill in the "Recording the pass" table with the date, platform, and any step that did not behave as written — including B6, the untrusted-worktree behaviour no probe could confirm
 - [X] T085 Dispatch the primary start press through `State::start_intent` (FR-004 scenario 4), which
   T075 decided and left unwired. `ui/sidebar.rs` currently emits `SessionStartRequested` with
