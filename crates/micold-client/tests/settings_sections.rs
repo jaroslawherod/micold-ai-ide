@@ -37,17 +37,13 @@ use std::path::{Path, PathBuf};
 
 /// Settings this feature renders in a later phase, and the task that does it. Keyed by the same
 /// dotted path the persisted shape produces.
-const DEFERRED: &[(&str, &str)] = &[
-    (
-        "daemon.sandbox.budget",
-        "T086 renders the limits, each editable or disabled with the runtime's reason",
-    ),
-    (
-        "daemon.sandbox.network",
-        "T087 renders the network posture with the warning that turning it off cuts the agent \
-         off from its provider",
-    ),
-];
+///
+/// **Empty, and kept.** Both entries — the resource limits and the network posture — landed with
+/// T086 and T087, and [`a_deferred_setting_that_arrived_is_stale`] is what made deleting them a
+/// step rather than an oversight. The list stays because the next field added to `SandboxProfile`
+/// needs somewhere to be recorded on the day it has no control yet, and rebuilding this machinery
+/// then is how it does not get built.
+const DEFERRED: &[(&str, &str)] = &[];
 
 fn client_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

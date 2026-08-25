@@ -30,6 +30,12 @@ pub(crate) mod rename;
 mod sandbox_status;
 /// The Settings sections — one module per page of the full-surface view (feature 027, FR-026).
 pub(crate) mod settings;
+// The limits' *decision* — which appear, which are editable, what a disabled one says — re-exported
+// like `stage_line` above, because `tests/sandbox_limits.rs` checks it and a view function is the
+// one thing in this crate a test cannot look inside.
+pub use settings::daemon::{
+    limits as sandbox_limits, network_warning, LimitControl, NO_OUTBOUND_WARNING,
+};
 pub(crate) mod settings_view;
 mod shell;
 mod sidebar;

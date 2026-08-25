@@ -50,17 +50,42 @@ look like a fully isolated one.
 
 ## Limits
 
-You can cap what the service may consume: processor share, memory, number of processes, and writable
-disk. A session that tries to use every core does not make your machine unusable, and one that forks
-without bound does not take your desktop with it.
+Settings → **Session service** → **Limits** caps what the sandbox may consume. A session that tries
+to use every core does not make your machine unusable, and one that forks without bound does not take
+your desktop with it.
 
-**Not every limit works with every setup.** The writable-disk limit in particular depends on how your
-container runtime stores images: some configurations enforce it and some cannot. Where it cannot, the
-setting is shown disabled **with the reason**, rather than accepting a number that would be silently
-ignored.
+| Setting | Unit | Default | Lowest you can set |
+|---|---|---|---|
+| Processor limit | cores, fractions allowed | 2 | 0.25 |
+| Memory limit | MiB | 4096 | 512 |
+| Process limit | count | 512 | 64 |
+| Writable storage limit | MiB | *unset* | 1024 |
+
+**Leave a field empty to unset it.** Empty is not zero: it hands the decision to the container
+runtime, which applies whatever it does by default — usually no limit at all. That is why the
+writable-storage limit ships unset while the other three ship with a number.
+
+**The minimums are not arbitrary and the form enforces them.** Below them the service does not work
+rather than working slowly: a quarter of a core is roughly what it takes to keep the control channel
+answering, 512 MiB is under what the daemon plus one session needs before the kernel starts killing
+things, and 64 processes is about what a shell running a build already has open. Type something
+smaller and the field itself refuses it, naming the minimum — the settings are not saved with a
+number that would produce a sandbox that cannot start.
+
+**Not every limit works with every setup, and the writable-storage one often does not.** Whether it
+can be enforced depends on how your container runtime stores images — Docker's `overlayfs` driver
+accepts a size cap, the older `overlay2` driver rejects it unless it sits on xfs with project quotas
+enabled, and podman differs again. The application asks your runtime once, when the sandbox starts,
+and remembers the answer against that runtime's version.
+
+Where a limit cannot be enforced, its field is shown **disabled with the runtime's own reason**
+underneath it. It is not hidden — a value you set earlier stays visible — and it is never quietly
+accepted, because a number that is ignored is worse than no number at all: you would believe a bound
+exists.
 
 If a session is stopped because it hit a limit, the application names which limit and which setting
-governs it.
+governs it, so you know which one to raise. The processor limit is the exception: a container over
+its processor share is slowed down, never stopped, so it is never named as a cause.
 
 ## Network
 
@@ -70,10 +95,16 @@ connection to its provider. If you need either, turn network access on for the s
 application warns you at the point you turn it off, for the same reason.
 
 One thing to know precisely: with outbound connections blocked, **DNS lookups still resolve**. Names
-resolve, connections to them do not. The runtime's own resolver answers from your side of the
-boundary. That is a small channel — a program inside could signal something by choosing what to look
-up — and it is stated here rather than left for you to discover. The guarantee is "no outbound
-connections", not "no outbound traffic of any kind".
+resolve, connections to them do not. The block works by leaving the container's bridge without a
+route out to the internet, and the runtime answers DNS from your side of that boundary — so a lookup
+succeeds and the connection that follows it fails. Expect errors that say "connection refused",
+"network unreachable" or a timeout, rather than "host not found"; a program reporting that it
+resolved an address has not reached it.
+
+That is a small channel — something inside could signal outward by choosing what to look up — and it
+is stated here rather than left for you to discover. The guarantee is "no outbound connections", not
+"no outbound traffic of any kind". The control channel between this application and the service is
+unaffected either way; it does not travel over the container's network.
 
 ## Working offline
 

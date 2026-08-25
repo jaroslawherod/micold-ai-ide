@@ -80,6 +80,14 @@ pub enum FieldId {
     SettingsCredential(micold_core::sandbox::CredentialShare),
     /// Settings: the "keep sessions running after I sign out" checkbox (feature 027).
     SettingsSurviveLogout,
+    /// Settings: the sandbox's processor limit, in cores (feature 027, FR-012).
+    SettingsCpuLimit,
+    /// Settings: the sandbox's memory limit, in MiB (feature 027, FR-013).
+    SettingsMemoryLimit,
+    /// Settings: the sandbox's process-count limit (feature 027, FR-014).
+    SettingsPidLimit,
+    /// Settings: the sandbox's writable-storage limit, in MiB (feature 027, FR-015).
+    SettingsStorageLimit,
     /// Settings: the environment-include script path.
     SettingsEnvIncludePath,
     /// Settings: the environment-include timeout.
@@ -511,6 +519,21 @@ pub enum Message {
     SettingsCredentialToggled(micold_core::sandbox::CredentialShare, bool),
     /// Whether sessions outlive the user's sign-out (feature 027, FR-014a).
     SettingsSurviveLogoutToggled(bool),
+    /// Whether the sandbox may open outbound connections (feature 027, FR-017, FR-018).
+    SettingsNetworkChanged(micold_core::sandbox::NetworkPosture),
+    /// The sandbox's processor limit changed, in cores as typed (feature 027, FR-012).
+    ///
+    /// Four variants rather than one carrying which limit it is, unlike
+    /// [`Message::SettingsCredentialToggled`]: the four credentials are one control repeated over
+    /// a set, while these four are four different quantities in three different units, and a
+    /// single variant would only move the `match` from here into the reducer.
+    SettingsCpuLimitChanged(String),
+    /// The sandbox's memory limit changed, in MiB as typed (feature 027, FR-013).
+    SettingsMemoryLimitChanged(String),
+    /// The sandbox's process-count limit changed, as typed (feature 027, FR-014).
+    SettingsPidLimitChanged(String),
+    /// The sandbox's writable-storage limit changed, in MiB as typed (feature 027, FR-015).
+    SettingsStorageLimitChanged(String),
     SettingsEnvIncludeEnabledToggled(bool),
     /// The Settings environment-include script path field changed (FR-002).
     SettingsEnvIncludePathChanged(String),
@@ -1837,6 +1860,36 @@ impl State {
             Message::SettingsSurviveLogoutToggled(survive) => {
                 if let Some(draft) = &mut self.settings_draft {
                     draft.daemon.profile.survive_logout = survive;
+                    draft.edited();
+                }
+            }
+            Message::SettingsNetworkChanged(posture) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.daemon.profile.network = posture;
+                    draft.edited();
+                }
+            }
+            Message::SettingsCpuLimitChanged(text) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.daemon.cpus = text;
+                    draft.edited();
+                }
+            }
+            Message::SettingsMemoryLimitChanged(text) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.daemon.memory_mib = text;
+                    draft.edited();
+                }
+            }
+            Message::SettingsPidLimitChanged(text) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.daemon.pids = text;
+                    draft.edited();
+                }
+            }
+            Message::SettingsStorageLimitChanged(text) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.daemon.storage_mib = text;
                     draft.edited();
                 }
             }

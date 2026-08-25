@@ -223,10 +223,10 @@ happened rather than showing an unexplained dead session.
 - [X] T083 [US4] Implement `reconcile(profile, caps) -> Vec<UnsatisfiableLimit>` in `crates/micold-core/src/sandbox/runtime.rs` — one fact consumed by both the view and the argv builder, so they cannot drift (RC-2)
 - [X] T084 [US4] Emit the budget flags in `crates/micold-core/src/sandbox/argv.rs`, omitting any limit reconciliation reports as unsupported (C-2)
 - [X] T085 [US4] Implement `NetworkPosture` and the masquerade-disabled user-defined network in `crates/micold-core/src/sandbox/mod.rs` and `dialect/docker.rs` (R4, C-5)
-- [ ] T086 [US4] Render limits in `crates/micold-client/src/ui/settings/daemon.rs` — supported ones editable, unsupported ones **disabled with the reason**, never hidden and never silently accepted (FR-015, SC-009)
-- [ ] T087 [US4] Warn at the point of setting change that turning the network off stops the AI agent reaching its provider, in `crates/micold-client/src/ui/settings/daemon.rs` (US4 scenario 4)
-- [ ] T088 [US4] Report which limit was reached and which setting governs it when a session is stopped by one, in `crates/micold-client/src/features/sandbox.rs` (US4 scenario 3 — not an anonymous failure)
-- [ ] T089 [US4] Document the limits, their workable minimums, the storage-limit portability caveat and the DNS-still-resolves caveat in `docs/user-guide/sandboxed-daemon.md` (R4, R5)
+- [X] T086 [US4] Render limits in `crates/micold-client/src/ui/settings/daemon.rs` — supported ones editable, unsupported ones **disabled with the reason**, never hidden and never silently accepted (FR-015, SC-009)
+- [X] T087 [US4] Warn at the point of setting change that turning the network off stops the AI agent reaching its provider, in `crates/micold-client/src/ui/settings/daemon.rs` (US4 scenario 4)
+- [X] T088 [US4] Report which limit was reached and which setting governs it when a session is stopped by one, in `crates/micold-client/src/features/sandbox.rs` (US4 scenario 3 — not an anonymous failure)
+- [X] T089 [US4] Document the limits, their workable minimums, the storage-limit portability caveat and the DNS-still-resolves caveat in `docs/user-guide/sandboxed-daemon.md` (R4, R5)
 
 **Checkpoint**: the second half of "sandbox" — containment as well as isolation.
 

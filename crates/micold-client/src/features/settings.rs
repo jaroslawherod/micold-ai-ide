@@ -23,7 +23,10 @@ use std::path::PathBuf;
 
 use crate::app::FieldId;
 use micold_core::sandbox::placement::PlacementKind;
-use micold_core::sandbox::SandboxProfile;
+use micold_core::sandbox::runtime::RuntimeCapabilities;
+use micold_core::sandbox::{
+    Bytes, MilliCpus, SandboxProfile, MIN_MEMORY, MIN_MILLI_CPUS, MIN_PIDS, MIN_STORAGE,
+};
 use micold_core::settings::{DaemonConfig, Settings};
 use micold_core::theme::ThemePreference;
 
@@ -102,8 +105,8 @@ pub struct EnvironmentDraft {
 /// The Session service section's fields (feature 027, FR-028).
 ///
 /// The sandbox profile is held whole rather than field by field, so that a setting this section
-/// does not render yet — the limits and the network posture, which arrive with US4 — survives a
-/// save instead of being reset to its default by a draft that had never heard of it.
+/// does not render yet — the network posture, which arrives with T087 — survives a save instead of
+/// being reset to its default by a draft that had never heard of it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DaemonDraft {
     /// Where the service runs (FR-001).
@@ -113,6 +116,28 @@ pub struct DaemonDraft {
     /// The archive to import, as typed. Text rather than the profile's `Option<PathBuf>` for the
     /// same reason the numbers are text: an empty field is a state the user passes through.
     pub image_path: String,
+    /// The processor limit, in cores as typed. Empty means *unset* — the runtime's own default —
+    /// which is a different intent from any number, and is why the profile holds an `Option`
+    /// (rule RB-2).
+    pub cpus: String,
+    /// The memory limit, in MiB as typed. Empty means unset.
+    pub memory_mib: String,
+    /// The process-count limit, as typed. Empty means unset.
+    pub pids: String,
+    /// The writable-storage limit, in MiB as typed. Empty means unset.
+    pub storage_mib: String,
+    /// What the selected runtime turned out to be able to enforce, when a bring-up has told us.
+    ///
+    /// `None` is *not yet known*, not *nothing works*: before the first bring-up the application
+    /// has never run the probe, and a form that disabled every limit on that basis would be
+    /// inventing a restriction. So unknown renders every limit editable, and a limit the runtime
+    /// then turns out not to enforce is reported by [`reconcile`] once it runs (FR-015).
+    ///
+    /// Not persisted and not a setting — a fact about this machine, which is why it is seeded from
+    /// the sandbox's state rather than from `Settings`.
+    ///
+    /// [`reconcile`]: micold_core::sandbox::runtime::reconcile
+    pub capabilities: Option<RuntimeCapabilities>,
 }
 
 /// A rejected save: what was wrong, where the control is, and what to say.
@@ -185,6 +210,29 @@ pub struct SettingsDraft {
     pub error: Option<FieldError>,
 }
 
+/// A processor share as the field shows it: cores, with no trailing zeros.
+///
+/// `MilliCpus(2000)` is "2" and not "2.000". The field is round-trippable — what it shows is what
+/// the user would type to reproduce the stored value — and a number padded with zeros the user
+/// never typed reads as the form having edited their input.
+pub fn cores_text(cpus: MilliCpus) -> String {
+    let mut text = format!("{:.3}", f64::from(cpus.0) / 1000.0);
+    while text.ends_with('0') {
+        text.pop();
+    }
+    if text.ends_with('.') {
+        text.pop();
+    }
+    text
+}
+
+/// One core per hardware thread on a machine far larger than any this will run on.
+const MAX_CORES: f64 = 1024.0;
+/// 1 TiB, in MiB — past any desktop, and comfortably inside `u64` once multiplied out.
+const MAX_MIB: u64 = 1024 * 1024;
+/// The kernel's own `pid_max` ceiling on 64-bit Linux.
+const MAX_PIDS: u32 = 4_194_304;
+
 impl SettingsDraft {
     /// Show `section`. Nothing else changes — in particular nothing is reseeded, which is the
     /// whole of US3 scenario 2.
@@ -228,6 +276,7 @@ impl SettingsDraft {
             let trimmed = self.daemon.image_path.trim();
             (!trimmed.is_empty()).then(|| PathBuf::from(trimmed))
         };
+        profile.budget = self.budget()?;
 
         Ok(ValidSettings {
             theme: self.appearance.theme,
@@ -254,6 +303,123 @@ impl SettingsDraft {
             Ok(n) if (min..=max).contains(&n) => Ok(n),
             Ok(_) => Err(reject(format!("Enter a number between {min} and {max}."))),
             Err(_) => Err(reject("Enter a whole number of lines.".to_string())),
+        }
+    }
+
+    /// The four sandbox limits, parsed from what was typed.
+    ///
+    /// # Why an empty field is not a zero
+    ///
+    /// Every limit is an `Option` because *unset* and *set to some number* are different intents
+    /// that have to round-trip differently (rule RB-2): unset leaves the runtime's own default,
+    /// and there is no number that means that. So an empty field parses to `None` rather than
+    /// being rejected — it is the way to say "do not bound this" — while a number below the
+    /// documented workable minimum is refused with the range that would be accepted (FR-016).
+    ///
+    /// The maxima are not policy the way the minima are. `MIN_MEMORY` and its siblings are what
+    /// the daemon needs to run at all, stated in `micold-core` beside the settings they bound;
+    /// these ceilings only keep a typo like `1e12` from overflowing the unit conversion, so they
+    /// live here with the form that parses the text.
+    fn budget(&self) -> Result<micold_core::sandbox::ResourceBudget, FieldError> {
+        Ok(micold_core::sandbox::ResourceBudget {
+            cpus_milli: self.cores()?,
+            memory_bytes: self.mib(
+                &self.daemon.memory_mib,
+                FieldId::SettingsMemoryLimit,
+                MIN_MEMORY,
+                MAX_MIB,
+            )?,
+            pids: self.count(&self.daemon.pids, FieldId::SettingsPidLimit, MIN_PIDS, MAX_PIDS)?,
+            storage_bytes: self.mib(
+                &self.daemon.storage_mib,
+                FieldId::SettingsStorageLimit,
+                MIN_STORAGE,
+                MAX_MIB,
+            )?,
+        })
+    }
+
+    fn reject(&self, field: FieldId, message: String) -> FieldError {
+        FieldError {
+            field,
+            section: SettingsSection::Daemon,
+            message,
+        }
+    }
+
+    fn cores(&self) -> Result<Option<MilliCpus>, FieldError> {
+        let text = self.daemon.cpus.trim();
+        if text.is_empty() {
+            return Ok(None);
+        }
+        let min = cores_text(MIN_MILLI_CPUS);
+        match text.parse::<f64>() {
+            Ok(c) if c.is_finite() && c >= f64::from(MIN_MILLI_CPUS.0) / 1000.0 && c <= MAX_CORES => {
+                Ok(Some(MilliCpus((c * 1000.0).round() as u32)))
+            }
+            Ok(_) => Err(self.reject(
+                FieldId::SettingsCpuLimit,
+                format!("Enter between {min} and {MAX_CORES:.0} cores, or leave it empty to use the runtime's default."),
+            )),
+            Err(_) => Err(self.reject(
+                FieldId::SettingsCpuLimit,
+                "Enter a number of cores, like 2 or 1.5.".to_string(),
+            )),
+        }
+    }
+
+    fn mib(
+        &self,
+        text: &str,
+        field: FieldId,
+        min: Bytes,
+        max_mib: u64,
+    ) -> Result<Option<Bytes>, FieldError> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Ok(None);
+        }
+        let min_mib = min.as_mib();
+        match text.parse::<u64>() {
+            Ok(m) if (min_mib..=max_mib).contains(&m) => Ok(Some(Bytes::from_mib(m))),
+            Ok(_) => Err(self.reject(
+                field,
+                format!(
+                    "Enter between {min_mib} and {max_mib} MiB, or leave it empty to use the \
+                     runtime's default."
+                ),
+            )),
+            Err(_) => Err(self.reject(
+                field,
+                "Enter a whole number of mebibytes.".to_string(),
+            )),
+        }
+    }
+
+    fn count(
+        &self,
+        text: &str,
+        field: FieldId,
+        min: u32,
+        max: u32,
+    ) -> Result<Option<u32>, FieldError> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Ok(None);
+        }
+        match text.parse::<u32>() {
+            Ok(n) if (min..=max).contains(&n) => Ok(Some(n)),
+            Ok(_) => Err(self.reject(
+                field,
+                format!(
+                    "Enter between {min} and {max} processes, or leave it empty to use the \
+                     runtime's default."
+                ),
+            )),
+            Err(_) => Err(self.reject(
+                field,
+                "Enter a whole number of processes.".to_string(),
+            )),
         }
     }
 
@@ -300,6 +466,40 @@ impl SettingsDraft {
                     .as_ref()
                     .map(|p| p.display().to_string())
                     .unwrap_or_default(),
+                // An unset limit seeds an *empty* field rather than a zero or the word
+                // "unlimited": empty is what the user types to unset it, so what they are shown is
+                // what they would have to type to reproduce it (rule RB-2).
+                cpus: settings
+                    .daemon
+                    .sandbox
+                    .budget
+                    .cpus_milli
+                    .map(cores_text)
+                    .unwrap_or_default(),
+                memory_mib: settings
+                    .daemon
+                    .sandbox
+                    .budget
+                    .memory_bytes
+                    .map(|b| b.as_mib().to_string())
+                    .unwrap_or_default(),
+                pids: settings
+                    .daemon
+                    .sandbox
+                    .budget
+                    .pids
+                    .map(|p| p.to_string())
+                    .unwrap_or_default(),
+                storage_mib: settings
+                    .daemon
+                    .sandbox
+                    .budget
+                    .storage_bytes
+                    .map(|b| b.as_mib().to_string())
+                    .unwrap_or_default(),
+                // Seeded by the shell from the sandbox's state, which is where the probe's answer
+                // lands — `Settings` has never heard of it and must not learn.
+                capabilities: None,
             },
             error: None,
         }

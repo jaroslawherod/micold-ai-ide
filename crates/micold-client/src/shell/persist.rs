@@ -145,7 +145,13 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
         env_include_timeout_secs: app.env_include_timeout_secs,
         daemon,
     };
-    app.core.settings_draft = Some(SettingsDraft::from_settings(&current));
+    let mut draft = SettingsDraft::from_settings(&current);
+    // What this machine's runtime can enforce is not a setting and is not in the file — it is the
+    // probe's answer, which lands on the sandbox state when a bring-up succeeds. The form needs it
+    // to decide which limits are editable (FR-015), so it is carried across here rather than
+    // guessed at inside the view.
+    draft.daemon.capabilities = app.sandbox.capabilities.clone();
+    app.core.settings_draft = Some(draft);
     Task::none()
 }
 
