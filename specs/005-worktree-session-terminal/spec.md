@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-15
 
-**Status**: Draft
+**Status**: Closed (implemented and shipped. The manual quickstart pass — V1–V10 plus the SC-001/SC-002/SC-004 timings — ran 2026-08-21 on Linux, headlessly; evidence: `evidence/T061-manual-validation.md`. Eight scenarios pass outright, V3 passes but for a rollback clause only reachable through `FakeGit`, and V7's crash-loop guard fails → one open defect, `bugs/BUG-004.md`. T058's performance pass ran 2026-08-25 and **passes** — coalescing and the per-session scrollback cap are now measured by `crates/micold-daemon/tests/frame_coalescing.rs` against real flooded PTYs (20,000 lines in 48–62 frames against ceilings of 66–81; 5,000 lines into a 100-line cap retained exactly cap+screen), evidence: `evidence/T058-performance-pass.md`. Every task is now done. macOS/Windows parity is unrun.)
 
 **Input**: User description: "Add the ability to open an existing project and manage its Claude Code worktrees and sessions through a Material Design navigation sidebar. Top-level navbar items are worktrees for the selected project; sub-items are sessions. Users can add a new worktree by name, which creates a workspace at .claude/worktrees/<name> relative to the project dir. Selecting a worktree lets the user start a session; an active session shows an embedded terminal on the right running claude in that worktree."
 

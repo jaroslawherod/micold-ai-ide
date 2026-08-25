@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-17
 
-**Status**: Draft
+**Status**: Reopened 2026-08-25 — implemented and shipped, and the manual quickstart pass (unrun until now) found the headline claim half-broken. Overlays **enter** with a visible transition; every overlay **exit** renders in a single frame, on all three dismissal paths and for the overflow menu and main-view switch too, so FR-002 and FR-003 are not met. Measured at 60 fps — `evidence/T024-quickstart-pass.md`, filed as `bugs/BUG-001.md`. All tasks are ticked as *run*; the feature closes again when that bug is fixed and the two clauses it makes unanswerable (reveal-beneath, reopen-during-exit) can be checked.
 
 **Input**: User description: "Generic, reusable UI animation library plus fade in/out for modal overlays. Overlays currently appear/disappear instantly; existing animations are bespoke and duplicated. Want one reusable animation mechanism any widget can use (not a static per-animation list), overlay fade in AND out (revealing the app beneath), and clearly perceptible timing (~300ms in / ~240ms out) — the current ~90ms is too fast to notice."
 

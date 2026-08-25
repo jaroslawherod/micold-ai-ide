@@ -87,3 +87,21 @@ Expected: all pass. Key assertions to look for (see `data-model.md` Validation r
 - `docs/user-guide/worktrees-and-sessions.md` describes the Default entry alongside
   worktrees (what it is, how to start a session from it, how it differs from a worktree).
 - Docs build passes in CI.
+
+## Recorded runs
+
+- **2026-08-21, Linux, headless** (Xvfb + lavapipe, per the repo's `visual-pass` skill) — the
+  first time these eleven steps and both checks were run. Steps 1–10, the visual/asset check and
+  the documentation check pass; **step 11 fails** (`bugs/BUG-001.md`). Evidence and images:
+  `evidence/T029-manual-validation.md`.
+- **macOS and Windows**: never run.
+
+Two prerequisites the steps above do not state, both learned the hard way:
+
+- **Step 9 needs a session that has actually said something.** A Default session with no recorded
+  `claude` conversation is archived on load by FR-020's empty-session pruning, so an otherwise
+  correct restart looks like broken persistence. Send one real message before quitting — and note
+  that a `claude` launched from inside another Claude Code session writes no transcript at all
+  unless `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` is in the app's environment.
+- **Step 11 is known to fail** as of the run above. Expect `starting…` forever rather than the
+  failure state the step asks for; do not spend time looking for the error message.

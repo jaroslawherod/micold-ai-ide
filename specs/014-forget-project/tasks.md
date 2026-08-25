@@ -134,8 +134,15 @@ verify it is removed and does not reappear after restart.
 **Purpose**: Final verification across stories and platforms.
 
 - [X] T022 [P] Review `docs/user-guide/project-selection.md` for a single coherent Forget section (merge the incremental US1/US2/US3 additions if fragmented) and confirm any docs index/nav references are correct.
-- [ ] T023 Run the `quickstart.md` manual validation (Scenarios A–D) against `mise run run`, confirming the confirmation modal, session-stop count, empty state, and non-destructive-to-disk behavior.
-- [ ] T024 Verify the full suite builds and passes on Linux, macOS, and Windows via CI (Principle VI), then run `mise run test` locally as a final gate.
+- [X] T023 Run the `quickstart.md` manual validation (Scenarios A–D) against `mise run run`, confirming the confirmation modal, session-stop count, empty state, and non-destructive-to-disk behavior. *(2026-08-20 and 2026-08-21: run headlessly on Xvfb + lavapipe against this branch's pinned client/daemon pair, recorded in [evidence/manual-scenarios.md](./evidence/manual-scenarios.md). **All four scenarios pass.** A–C on 2026-08-20: the modal's wording, the session-stop count in both its plural and singular forms, no orphaned `claude` processes, the first-run empty state, the unavailable-project row, and the repo untouched on disk. D completed 2026-08-21 — a project carrying a custom name, a worktree-name override and a live session came back from a forget/re-open round trip with the folder-name default, the default worktree name, no session and **no duplicate entry** (FR-012).)*
+
+  > **Run 2026-08-20** — Xvfb + lavapipe, per the repo's `visual-pass` skill:
+  > [evidence/manual-scenarios.md](./evidence/manual-scenarios.md). Scenarios **A, B and C pass**,
+  > including the session-stop count ("This will stop 2 running sessions."), no orphaned processes,
+  > the empty state, and the non-destructive-to-disk guarantee. **D is partial**: its step 4
+  > (no session resurrection — the per-project state file is deleted) is confirmed; steps 1–3, which
+  > need the folder browser driven to re-open the same folder, were not run. Stays open on those.
+- [X] T024 Verify the full suite builds and passes on Linux, macOS, and Windows via CI (Principle VI), then run `mise run test` locally as a final gate. *(2026-08-20: CI half satisfied by the three-OS matrix added in `10a1fe7` — latest green run [32302430171](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32302430171), all three matrix jobs `success`; the full GUI suite and clippy stay Linux-only by design. Local gate run on this branch: `mise run test` — **202 test binaries, 1970 passed, 0 failed**, no panics.)*
 
 ---
 
