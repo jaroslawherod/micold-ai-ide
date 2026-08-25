@@ -129,7 +129,9 @@ fn saved_settings_file_records_the_current_version() {
 // -------------------------------------------------------------------------------------------
 
 use micold_core::sandbox::placement::PlacementKind;
-use micold_core::sandbox::{Bytes, MilliCpus, ResourceBudget, MIN_MEMORY, MIN_PIDS};
+use micold_core::sandbox::{
+    Bytes, MilliCpus, ResourceBudget, MIN_MEMORY, MIN_MILLI_CPUS, MIN_PIDS, MIN_STORAGE,
+};
 
 /// A verbatim v3 document, as written by the build before this feature.
 const V3_DOCUMENT: &str = r#"{
@@ -230,6 +232,104 @@ fn an_out_of_range_budget_is_clamped_on_read_and_reported() {
     assert_eq!(budget.pids, Some(MIN_PIDS));
     // A value already in range is left exactly as it was.
     assert_eq!(budget.cpus_milli, Some(MilliCpus(2000)));
+}
+
+/// T080, US4 scenario 5. The other half of the range: a hand-edited file is corrected on read,
+/// but a value the user typed is **refused**, and the refusal names the range.
+///
+/// The two are deliberately different. Correcting a file the user did not write is helpful;
+/// correcting a number they just typed is the application deciding it knows better and saying
+/// nothing about it — and the number they typed is usually one they had a reason for.
+#[test]
+fn a_below_minimum_limit_is_refused_on_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    let store = JsonFileSettingsStore::at(path.clone());
+
+    let mut settings = Settings::default();
+    settings.daemon.placement = PlacementKind::LocalSandbox;
+    settings.daemon.sandbox.budget = ResourceBudget {
+        cpus_milli: Some(MilliCpus(1)),
+        memory_bytes: Some(Bytes::from_mib(1)),
+        pids: Some(1),
+        storage_bytes: Some(Bytes::from_mib(1)),
+    };
+
+    let refused = store
+        .save(&settings)
+        .expect_err("a budget this small must be refused");
+    let message = refused.to_string();
+
+    for (field, minimum, unit) in [
+        ("processor", u64::from(MIN_MILLI_CPUS.0), "millicpus"),
+        ("memory", MIN_MEMORY.as_mib(), "MiB"),
+        ("processes", u64::from(MIN_PIDS), "processes"),
+        ("storage", MIN_STORAGE.as_mib(), "MiB"),
+    ] {
+        assert!(
+            message.contains(field),
+            "the refusal does not say which limit: {message}"
+        );
+        assert!(
+            message.contains(&minimum.to_string()) && message.contains(unit),
+            "the refusal does not name {field}'s accepted range: {message}"
+        );
+    }
+
+    assert!(
+        !path.exists(),
+        "the refusal still wrote the file, so the limit was accepted after all"
+    );
+}
+
+/// And a refusal leaves what was already saved untouched.
+///
+/// A save that half-applies is worse than one that fails: the user fixes the number the message
+/// named and saves again, and the settings they never touched have moved underneath them.
+#[test]
+fn a_refused_save_does_not_disturb_the_stored_document() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    let store = JsonFileSettingsStore::at(path.clone());
+
+    let mut good = Settings::default();
+    good.daemon.placement = PlacementKind::LocalSandbox;
+    good.scrollback_lines = 4242;
+    store.save(&good).expect("a default budget is in range");
+    let written = std::fs::read_to_string(&path).unwrap();
+
+    let mut bad = good.clone();
+    bad.scrollback_lines = 9999;
+    bad.daemon.sandbox.budget.pids = Some(1);
+    assert!(store.save(&bad).is_err());
+
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        written,
+        "the refused save still rewrote the document"
+    );
+    assert_eq!(store.load().settings.scrollback_lines, 4242);
+}
+
+/// A limit left unset is not a violation, however small the minimums are.
+///
+/// `None` means "leave the runtime's default" (rule RB-2), which cannot be below anything.
+#[test]
+fn an_unset_limit_saves_without_complaint() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+
+    let mut settings = Settings::default();
+    settings.daemon.placement = PlacementKind::LocalSandbox;
+    settings.daemon.sandbox.budget = ResourceBudget {
+        cpus_milli: None,
+        memory_bytes: None,
+        pids: None,
+        storage_bytes: None,
+    };
+    store
+        .save(&settings)
+        .expect("nothing is set, so nothing is out of range");
 }
 
 #[test]

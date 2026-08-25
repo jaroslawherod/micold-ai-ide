@@ -213,15 +213,15 @@ happened rather than showing an unexplained dead session.
 - [X] T076 *(test)* [P] [US4] Add K-2 to `crates/micold-core/tests/sandbox_argv.rs` — each supported limit produces exactly its flag with the expected unit conversion
 - [X] T077 *(test)* [P] [US4] Add K-3 to `crates/micold-core/tests/sandbox_argv.rs` — an unsupported limit produces **no** flag and reconciliation reports it with a reason (C-2, R5 — checked as behaviour, not documented as a caveat)
 - [X] T078 *(test)* [P] [US4] Add K-7 to `crates/micold-core/tests/sandbox_argv.rs` — `NoOutbound` emits the masquerade-disabled network **and** the published port, and asserts the measured failure mode (an `--internal` network making the port inert) is never generated (C-5, R4)
-- [ ] T079 *(test)* [P] [US4] Write `crates/micold-core/tests/sandbox_capabilities.rs` — the probe is cached against the runtime version and re-runs when it changes, and `reconcile` is pure, total, and never mutates the profile (RC-1, RC-2, RC-3)
-- [ ] T080 *(test)* [P] [US4] Add range cases to `crates/micold-core/tests/settings_roundtrip.rs` — a value below a documented workable minimum is refused on save with a message naming the accepted range (US4 scenario 5, FR-016)
+- [X] T079 *(test)* [P] [US4] Write `crates/micold-core/tests/sandbox_capabilities.rs` — the probe is cached against the runtime version and re-runs when it changes, and `reconcile` is pure, total, and never mutates the profile (RC-1, RC-2, RC-3)
+- [X] T080 *(test)* [P] [US4] Add range cases to `crates/micold-core/tests/settings_roundtrip.rs` — a value below a documented workable minimum is refused on save with a message naming the accepted range (US4 scenario 5, FR-016)
 
 ### Implementation
 
 - [X] T081 [US4] Implement `ResourceBudget`, `MilliCpus` and `Bytes` as newtypes with `Option` semantics distinguishing unset from maximum, in `crates/micold-core/src/sandbox/mod.rs` (RB-1, RB-2)
-- [ ] T082 [US4] Implement `probe` and `RuntimeCapabilities` with per-limit `LimitSupport` carrying its reason, in `crates/micold-core/src/sandbox/runtime.rs` and `dialect/docker.rs` (R10, RC-1)
+- [X] T082 [US4] Implement `probe` and `RuntimeCapabilities` with per-limit `LimitSupport` carrying its reason, in `crates/micold-core/src/sandbox/runtime.rs` and `dialect/docker.rs` (R10, RC-1)
 - [X] T083 [US4] Implement `reconcile(profile, caps) -> Vec<UnsatisfiableLimit>` in `crates/micold-core/src/sandbox/runtime.rs` — one fact consumed by both the view and the argv builder, so they cannot drift (RC-2)
-- [ ] T084 [US4] Emit the budget flags in `crates/micold-core/src/sandbox/argv.rs`, omitting any limit reconciliation reports as unsupported (C-2)
+- [X] T084 [US4] Emit the budget flags in `crates/micold-core/src/sandbox/argv.rs`, omitting any limit reconciliation reports as unsupported (C-2)
 - [X] T085 [US4] Implement `NetworkPosture` and the masquerade-disabled user-defined network in `crates/micold-core/src/sandbox/mod.rs` and `dialect/docker.rs` (R4, C-5)
 - [ ] T086 [US4] Render limits in `crates/micold-client/src/ui/settings/daemon.rs` — supported ones editable, unsupported ones **disabled with the reason**, never hidden and never silently accepted (FR-015, SC-009)
 - [ ] T087 [US4] Warn at the point of setting change that turning the network off stops the AI agent reaching its provider, in `crates/micold-client/src/ui/settings/daemon.rs` (US4 scenario 4)

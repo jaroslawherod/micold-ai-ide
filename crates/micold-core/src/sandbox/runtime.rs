@@ -127,6 +127,61 @@ pub struct UnsatisfiableLimit {
     pub reason: String,
 }
 
+/// The probe's answer, kept for exactly as long as it is still true (rule RC-1).
+///
+/// # Why this is not just a `once_cell`
+///
+/// [`ContainerRuntime::probe`] costs a `docker info`, and it is consulted by the settings view, the
+/// argv builder and the reconciliation report — one of which is a view function that runs on every
+/// frame. So it has to be cached. But a capability set cached forever is worse than none: the user
+/// upgrades Docker, the limit that was unavailable becomes available, and the application goes on
+/// refusing to let them set it until they restart it. The runtime's *version* is what can
+/// invalidate the answer, so it is what the answer is kept against.
+///
+/// [`ContainerRuntime::detect`] runs on every call and [`ContainerRuntime::probe`] only when the
+/// version it reports has moved. That is the trade this type exists to make: the cheap command
+/// every time, so the expensive one almost never.
+#[derive(Debug, Default, Clone)]
+pub struct CapabilityCache {
+    cached: Option<RuntimeCapabilities>,
+}
+
+impl CapabilityCache {
+    /// An empty cache. The first call probes.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// What `runtime` can enforce, probing only if the cache does not already describe the version
+    /// it currently reports.
+    ///
+    /// A failure is reported rather than papered over with the stale answer: a runtime that has
+    /// stopped responding is a fact the caller needs (US6). The previous answer is kept, so the
+    /// next successful call does not have to pay for the probe again unless the version moved.
+    pub fn capabilities(
+        &mut self,
+        runtime: &dyn ContainerRuntime,
+    ) -> Result<RuntimeCapabilities, RuntimeError> {
+        let now = runtime.detect()?;
+        if let Some(cached) = &self.cached {
+            if cached.kind == now.kind && cached.version == now.version {
+                return Ok(cached.clone());
+            }
+        }
+        let probed = runtime.probe()?;
+        self.cached = Some(probed.clone());
+        Ok(probed)
+    }
+
+    /// What was last probed, without consulting the runtime at all.
+    ///
+    /// For a caller that already holds the answer and only needs to draw with it — a view redrawing
+    /// mid-frame must not spawn a process, however cheap.
+    pub fn cached(&self) -> Option<&RuntimeCapabilities> {
+        self.cached.as_ref()
+    }
+}
+
 /// Every limit the profile sets that `caps` cannot enforce.
 ///
 /// Pure and total, and it never mutates the profile: the user's stored intent survives a move to a

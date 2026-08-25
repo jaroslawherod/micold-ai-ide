@@ -8,7 +8,7 @@
 //! `specs/003-material-design-layout/contracts/settings-schema.md`.
 
 use crate::sandbox::placement::PlacementKind;
-use crate::sandbox::SandboxProfile;
+use crate::sandbox::{BudgetViolation, SandboxProfile};
 use crate::store::LoadStatus;
 use crate::theme::ThemePreference;
 use serde::{Deserialize, Serialize};
@@ -313,6 +313,25 @@ impl SettingsStore for JsonFileSettingsStore {
     }
 
     fn save(&self, settings: &Settings) -> io::Result<()> {
+        // A limit below what the daemon needs to run is refused here rather than corrected, and
+        // the refusal names the accepted range (FR-016, US4 scenario 5). This is deliberately the
+        // opposite of what `load` does with the same value: a file the user did not write is
+        // clamped and reported (rule S-7), because opening the app must not fail. A number the
+        // user just typed is theirs, and silently replacing it is the application deciding it
+        // knows better and saying nothing.
+        //
+        // Refused *before* the directory is created and before anything is written, so a rejected
+        // save leaves the stored document exactly as it was.
+        let violations = settings.daemon.sandbox.budget.violations();
+        if !violations.is_empty() {
+            let message = violations
+                .iter()
+                .map(BudgetViolation::message)
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, message));
+        }
+
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }
