@@ -50,6 +50,7 @@ pub struct SplitAction<'a, M> {
     icon: Icon,
     roles: Roles,
     primary: Option<M>,
+    primary_anchor: Option<OnAnchor<'a, M>>,
     secondary: Option<M>,
     secondary_anchor: Option<OnAnchor<'a, M>>,
     tooltip: Option<&'static str>,
@@ -67,6 +68,7 @@ impl<'a, M> SplitAction<'a, M> {
             icon,
             roles,
             primary: None,
+            primary_anchor: None,
             secondary: None,
             secondary_anchor: None,
             tooltip: None,
@@ -96,6 +98,22 @@ impl<'a, M> SplitAction<'a, M> {
     /// user has one CLI installed and there is nothing to choose (FR-006).
     pub fn on_secondary_press_maybe(mut self, message: Option<M>) -> Self {
         self.secondary = message;
+        self
+    }
+
+    /// Also report *where* a **primary** press landed, as `f(point)` in window pixels.
+    ///
+    /// The primary half does not always start something. When the stored default is not installed
+    /// it offers the list instead (feature 026, FR-004 scenario 4), and a list has to hang from the
+    /// control that opened it wherever it was opened from — so the half that can open one has to be
+    /// able to say where it is, exactly as [`Self::on_secondary_anchor`] does for the chevron.
+    ///
+    /// Reported on every primary press, not only the ones that open something: what a press means
+    /// is the state's to decide, and this control does not know which answer it just published. A
+    /// point that arrives with no list open is a no-op at the reducer, which is the same contract
+    /// the chevron's anchor already relies on for the press that *closes* the list.
+    pub fn on_primary_anchor(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
+        self.primary_anchor = Some(Box::new(f));
         self
     }
 
@@ -180,6 +198,10 @@ impl<'a, M: Clone + 'a> From<SplitAction<'a, M>> for Element<'a, M> {
         };
 
         let primary = half(split.icon, split.primary.clone(), split.tooltip);
+        let primary = match split.primary_anchor {
+            Some(anchor) => ContextArea::new(primary).on_primary_press(anchor).into(),
+            None => primary,
+        };
         match split.secondary.clone() {
             None => primary,
             Some(message) => {

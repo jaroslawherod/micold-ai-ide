@@ -824,7 +824,20 @@ pub struct Overflow {
     pub allowed_width: f32,
     /// The layout node the text was attributed to — the deepest one containing its origin.
     /// Written as a fixture path (`0/2/1`), so it can be looked up in `layout_snapshot.txt`.
+    ///
+    /// Attribution is by *clip*, not by depth alone: a node whose box equals the clip rectangle
+    /// wins over a deeper one, because the question this field was grown for is "what width was
+    /// this text allowed", and that is the clip's answer. Text inside a scrollable therefore
+    /// attributes to the scrollable's content node rather than to the widget that drew it. For
+    /// "where on screen is this glyph" — locating a control to press by what it paints — read
+    /// [`Overflow::origin`] instead.
     pub node_path: String,
+    /// Where the renderer put the paragraph, in window pixels.
+    ///
+    /// The point the draw call was given, so it lies inside the widget that drew the text however
+    /// the text is aligned within it. A test that presses a control it found by its glyph presses
+    /// here (feature 026, T085).
+    pub origin: iced::Point,
 }
 
 impl Overflow {
@@ -1121,6 +1134,7 @@ fn painted<'a, M: 'a>(
 
                         found.push(Overflow {
                             content,
+                            origin: *position,
                             natural_width: paragraph.min_bounds.width,
                             allowed_width: allowed,
                             node_path,
