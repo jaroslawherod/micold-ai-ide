@@ -86,10 +86,20 @@ The single normative table. Light and dark columns are tone values on the named 
 `scrim` and `shadow` are pure black in both schemes; their visible strength comes from the alpha at
 which they are drawn (§4, §7), not from a tone difference.
 
-### 1.3 Contrast obligations (FR-004, FR-005)
+### 1.3 Contrast obligations (FR-004, FR-005, FR-004b)
 
 The following (foreground, background) pairs carry text or icons and MUST meet **WCAG AA ≥ 4.5:1**
 in both schemes. The automated test asserts every row and fails the build on any violation.
+
+**Measured with the heaviest state layer composited, not at rest (FR-004b).** A state layer is the
+*content* colour drawn over the container at §5's opacity, so on an interactive element it moves the
+background toward the foreground and the pair reads lower under the pointer than it does at rest. The
+ratio a user sees is therefore a function of this table **and** §5, and a pair proved only at rest is
+not proved. Every row below clears 4.5:1 at rest and with the heaviest layer its element can carry
+composited — 10% for a button (`pressed`, and `focus` at the same figure), 12% for a row or a tag
+(`selected`). Layers never sum: §5 makes the states mutually exclusive, so an element shows one.
+*(Added by BUG-010, which found four labels at 4.40–4.49:1 under hover and press — each of them a
+pair that passes comfortably at rest.)*
 
 | Foreground                | Backgrounds it must clear                                                                                              |
 |---------------------------|------------------------------------------------------------------------------------------------------------------------|
@@ -106,7 +116,7 @@ in both schemes. The automated test asserts every row and fails the build on any
 | `on_error_container`      | `error_container`                                                                                                       |
 | `inverse_on_surface`      | `inverse_surface`                                                                                                       |
 | `inverse_primary`         | `inverse_surface`                                                                                                       |
-| `primary`                 | `surface`, `surface_container_low`, `surface_container` — **neutral surfaces only** (text/outlined buttons and links draw `primary` on a surface). `primary` MUST NOT be drawn on an **accent fill**: not on `primary`, `secondary`, `tertiary`, `error` or any `*_container`. A component on an accent fill draws that fill's paired `on_*` role (FR-004a) |
+| `primary`                 | `surface`, `surface_container_low`, `surface_container`, `surface_container_high` — **neutral surfaces only, and only these four** (text/outlined buttons and links draw `primary` on a surface). `primary` MUST NOT be drawn on an **accent fill**: not on `primary`, `secondary`, `tertiary`, `error` or any `*_container`. A component on an accent fill draws that fill's paired `on_*` role (FR-004a). It MUST NOT be drawn on `surface_variant` or on `surface_container_highest` either — both are neutral, and both fail FR-004b's composited measurement; see the note below (FR-004b) |
 | `error`                   | `surface`, `surface_container` (error helper text)                                                                       |
 | each tag's text tone      | that same tag's fill tone, for all 11 tags (§1.4)                                                                        |
 
@@ -116,6 +126,29 @@ divides — and it is a neutral-variant tone, chosen against those surfaces, so 
 threshold against **neutral** surfaces only. An outlined component standing on an **accent fill**
 draws its border from that fill's paired `on_*` role at the border's own opacity, not from `outline`
 (FR-004a; `outline` on `error` is **1.42:1**, below the 3:1 this paragraph already imposes).
+
+"Neutral surfaces" here means the four the `primary` row names, for the same reason and by the same
+measurement: `outline` on `surface_variant` is **2.96:1 in the dark scheme at rest** — a plain miss
+of the 3:1 threshold with no state layer involved — falling to 2.42:1 under a press. On the four
+permitted hosts it clears 3:1 in both schemes with the heaviest layer composited (FR-004b, BUG-010).
+
+**Which hosts, and why those.** Measured rather than asserted, at rest / hover / press, `primary`
+label then `outline` border:
+
+| Host                        | light label      | light border     | dark label       | dark border      |
+|-----------------------------|------------------|------------------|------------------|------------------|
+| `surface`                   | 6.14 5.51 5.33   | 4.28 3.84 3.71   | 10.83 9.30 8.93  | 5.86 5.03 4.83   |
+| `surface_container_low`     | 5.84 5.22 5.10   | 4.07 3.64 3.55   | 10.03 8.51 8.13  | 5.43 4.60 4.40   |
+| `surface_container`         | 5.53 4.99 4.82   | 3.86 3.48 3.36   | 9.60 8.05 7.68   | 5.19 4.36 4.16   |
+| `surface_container_high`    | 5.28 4.75 4.63   | 3.68 3.31 3.23   | 8.43 7.04 6.71   | 4.56 3.81 3.63   |
+| ~~`surface_container_highest`~~ | 4.99 4.49 **4.37** | 3.48 3.13 3.04 | 7.21 6.04 5.75 | 3.90 3.26 3.11   |
+| ~~`surface_variant`~~       | 4.99 4.49 **4.40** | 3.48 3.13 3.06 | 5.48 4.64 **4.48** | **2.96** 2.51 2.42 |
+
+The rule is not expensive: **ten of the twelve** columns above already satisfied it, and the two that
+do not are the pair of hosts with the least tonal headroom — light `surface_container_highest` misses
+by 0.13 and `surface_variant` misses in both schemes. Retuning `primary`'s tone would have satisfied
+them (light needs tone 30, dark tone 87), and is rejected: the ramps are checked-in Material data
+(§1.1) and moving the seed to fix two containers changes the accent everywhere.
 
 ### 1.4 Worktree tag and issue tag colors (FR-006, FR-006a)
 
@@ -336,6 +369,17 @@ buttons of every variant, text fields and the select control — not buttons alo
 | `selected`         | 0.12    | persistent; distinct from hover, and composable with it            |
 | `disabled_content` | 0.38    | applied to text and icons                                         |
 | `disabled_container`| 0.12   | applied to the container fill                                     |
+
+**A state layer is part of the contrast measurement, not separate from it (FR-004b).** Because the
+layer is the *content* colour, drawing it moves the background toward the foreground and lowers the
+pair's ratio — always, by construction, on every interactive element. §1.3's pairs are therefore
+measured with the heaviest layer here composited, and this table and that one are read together
+rather than one at a time. Which layer is heaviest depends on the element — a button reaches
+`pressed`/`focus` at 0.10, a row or tag reaches `selected` at 0.12 — and the states above are
+mutually exclusive, so the heaviest **single** layer is the measurement and layers never sum. The
+`disabled_*` opacities are excluded: disabled content is exempt from the contrast obligation by
+Material's own convention and by WCAG's. *(Added by BUG-010: §1.3 proved its pairs and §5 proved
+its opacities, and nothing multiplied them together.)*
 
 **Focus indicator (FR-022, FR-043)**: every element that *can* hold keyboard focus draws a **3dp
 `secondary` outline** at its own shape radius when focused, in addition to the focus state layer.
@@ -578,7 +622,8 @@ its state layers (§5) and its ripple from that container's paired foreground ro
 | `primary` / `secondary` / `tertiary` | `on_primary` / `on_secondary` / `on_tertiary` |
 | any `*_container`      | that container's `on_*_container`             |
 | `inverse_surface`      | `inverse_primary`     |
-| a neutral surface      | the table's own value (`primary`, `on_primary`, `on_surface_variant`) |
+| a neutral surface **that §1.3 permits** | the table's own value (`primary`, `on_primary`, `on_surface_variant`) |
+| a neutral surface §1.3 does **not** permit — `surface_variant`, `surface_container_highest` | not a host: the container takes a permitted fill instead (FR-004b) |
 
 The outlined variant's border takes the same role at the border's opacity — `outline` is 1.42:1 on
 `error`, below §1.3's 3:1 non-text threshold — and the state layer takes it too, since `primary` at

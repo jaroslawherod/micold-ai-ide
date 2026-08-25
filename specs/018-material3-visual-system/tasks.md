@@ -1550,3 +1550,50 @@ hosts" is a contract decision rather than an implementation one. The filter is a
 `imposed().is_none()` skip, so removing it is one edit when that decision is made.
 
 **Bugfix**: 2026-08-21 — BUG-009 added Phase 21 (T151–T159). **No task is reopened.** T080 rebuilt the banner's action on the shared `Button` and is complete as written — the hand-rolled control it replaced called `style::outlined` and was purple-on-red too, so the task did not introduce the defect; what it did was make the colour arrive from the shared library, which is where the missing rule has to live. T000a/T000b built the contrast gate faithfully over §1.3's table, and the table is the gap rather than the gate. T036 applied the state layers as specified; they are `primary` at low alpha and follow the label's role once FR-027b puts that role in the component. The work missing here was never a task, and could not have been while no artifact said a component's foreground depends on what it is standing on.
+
+---
+
+## Phase 22: BUG-010 — the composition gate's excluded class, and the host that was never enumerated
+
+**Goal**: remove the accent-host filter from the composition gate and make the contract true where it
+then fails. The rule is decided (FR-004b): a pair is measured **with the heaviest state layer its
+element can carry composited**, and where a pair fails, the *host* narrows rather than the palette.
+
+**The report's premise was wrong, and the correction is the work.** BUG-010 was filed as "an
+enumerated pair erodes under a state layer". §1.3's `primary` row enumerates `surface`,
+`surface_container_low` and `surface_container` — three hosts, `surface_variant` not among them —
+and `tokens_contrast::text_pairs` asserts exactly those three. So the `Info` banner's action was
+never a permitted composition; it was an unenumerated one that no gate covered and that two prose
+sentences asserted was fine. Both sentences are corrected here.
+
+- [ ] T160 Failing test first: extend `crates/micold-core/tests/tokens_contrast.rs` to assert every §1.3 pair **with the heaviest layer its element can carry composited**, not only at rest. The compositing arithmetic already exists as `style::over` in the client; the core has no `Color`, so this needs the same operation over `Rgb` in `tokens` — one function, used by both, rather than a second copy of alpha blending (FR-004b, SC-008h)
+
+- [ ] T161 [P] Add `surface_container_high` to §1.3's permitted hosts for `primary` in `tokens_contrast::text_pairs`, and confirm T160 is green for all four. It is a widening, and it is measured rather than assumed: 5.28/4.75/4.63 light and 8.43/7.04/6.71 dark for the label, 3.68/3.31/3.23 and 4.56/3.81/3.63 for the border (FR-004b, §1.3)
+
+- [ ] T162 The `Info` banner stops hosting an accent role. `style::notification_host`'s `NoticeLevel::Info` arm takes `surface_container_high` in place of `surface_variant`; its `on_fill` stays `on_surface`, which §1.3 already enumerates on every `surface_container_*` level. One edit, in the one decision both the banner's fill and its action read (FR-004b, FR-027b)
+
+- [ ] T163 Remove the accent filter from `crates/micold-client/src/ui/material/composition_contrast.rs` — the single `imposed().is_none()` skip T151 wrote to be removable in one edit — and delete the module doc's "**Scope: hosts that impose**" paragraph with it. Confirm the walk is green over every host and both schemes, and that it was **red before T162**, on the nine violations BUG-010 tabulates (SC-008h)
+
+- [ ] T164 [P] Correct the two prose claims that made the exclusion look safe, rather than only the code: `Host::neutral`'s doc comment in `style.rs` ("§1.3 enumerates the backgrounds `primary` may be drawn on … `surface_variant` among them") and BUG-009's "Adjacent risk, not this bug" section, which says the same. Both are the reason nobody re-read the table (FR-041's argument applied to a doc comment)
+
+- [ ] T165 [P] Sweep the other neutral hosts a component is drawn on for the same unenumerated composition — `style::list_item`'s `surface_variant` fill, `edge_fade`'s `primary`/`surface_variant` pair, and the showcase's own specimens. Measured, not eyeballed: `on_surface` on `surface_variant` is 10.50:1 light and 5.39:1 dark under the heaviest row layer, so `list_item` is inside §1.3 and stays — **record that it was checked**, per the class-not-instance rule T155 and BUG-008 established (FR-004b)
+
+- [ ] T166 [P] `style_snapshot.rs` re-pins the `Info` banner's fill and its action's resolved style on the new host, and the showcase's banner specimen poses it. The snapshot diff is the proof the fill moved: light `#E7E0EC` → `#ECE7EC`, dark `#49454E` → `#2B292D` (SC-007, feature 019 FR-003)
+
+- [ ] T167 Confirm in the running application by the `visual-pass` route, in **both** schemes: the `Info` banner against its new fill, its action at rest and under hover and press, and the `Error` banner beside it unchanged. Record to `../evidence/` (SC-008h, US4 scenario 16)
+
+- [ ] T168 [P] Read `docs/` against the change (FR-041). The banner's tone is described nowhere in the user guide, which is expected — record that it was checked rather than leaving the question open
+
+**Scope note (T160)**: the composited measurement applies to §1.3's *whole* table, not only to
+`primary`'s row, because a state layer is drawn on every interactive surface (§5) and no row is
+exempt by construction. Nine of the twelve host columns needed nothing; that is the rule being cheap,
+not the rule being narrow.
+
+**Bugfix**: 2026-08-25 — BUG-010 added Phase 22 (T160–T168). **No task is reopened.** T151 built the
+composition gate scoped to accent hosts and recorded the exclusion in its own module doc, which is
+faithful to FR-004a as it stood and is why the nine findings were filed rather than lost. T000a/T000b
+built the contrast gate exhaustively over §1.3's table, and the table — not the gate — is what did
+not account for §5. The work missing here was never a task: no artifact said a pair must survive its
+own state layer, and the one sentence that would have caught the `Info` banner anyway ("`primary` may
+be drawn on `surface_variant`") was prose that contradicted the table beside it, which no check reads.
+
