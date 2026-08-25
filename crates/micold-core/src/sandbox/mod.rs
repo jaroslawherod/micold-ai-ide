@@ -319,8 +319,19 @@ pub struct ProjectMount {
 impl ProjectMount {
     /// A writable mount for a registered project, at this platform's container path.
     pub fn project(host: impl Into<PathBuf>) -> Self {
+        Self::project_for(host, cfg!(windows))
+    }
+
+    /// A writable mount for a registered project, under a *named* platform's mapping.
+    ///
+    /// Parameterised for the reason [`pathmap::map_for`] is (T114): the Windows branch of the
+    /// mapping is the one that makes host and container paths differ, and that difference is what
+    /// the whole daemon-side-git argument rests on — yet on a `cfg!(windows)` gate it is compiled
+    /// by no CI job this project runs. Threading the platform through as a value means the Linux
+    /// suite builds the Windows mount set, and `argv` renders it.
+    pub fn project_for(host: impl Into<PathBuf>, windows_host: bool) -> Self {
         let host = host.into();
-        let container = pathmap::map(&host);
+        let container = pathmap::map_for(&host, windows_host);
         Self {
             host,
             container,
@@ -487,6 +498,22 @@ impl MountSet {
         state_dir: impl Into<PathBuf>,
         secret: SecretMount,
     ) -> Self {
+        Self::build_for(projects, profile, layout, state_dir, secret, cfg!(windows))
+    }
+
+    /// [`MountSet::build`], under a *named* platform's path mapping rather than this one's.
+    ///
+    /// Same reason as [`ProjectMount::project_for`]: the assembly that produces a Windows mount set
+    /// should be exercised by every CI job, not only by the one platform this project has no
+    /// runner for. Rule M-1 is enforced here once, for both mappings.
+    pub fn build_for(
+        projects: &[PathBuf],
+        profile: &SandboxProfile,
+        layout: &CredentialLayout,
+        state_dir: impl Into<PathBuf>,
+        secret: SecretMount,
+        windows_host: bool,
+    ) -> Self {
         let credentials = profile
             .credentials
             .iter()
@@ -496,7 +523,7 @@ impl MountSet {
                     share: *share,
                     // Credentials are mounted at their own absolute paths for the same reason
                     // projects are: the tools inside look for them where they always are.
-                    container: pathmap::map(host),
+                    container: pathmap::map_for(host, windows_host),
                     host: host.to_path_buf(),
                 })
             })
@@ -506,7 +533,7 @@ impl MountSet {
             projects: projects
                 .iter()
                 .cloned()
-                .map(ProjectMount::project)
+                .map(|p| ProjectMount::project_for(p, windows_host))
                 .collect(),
             state: StateMount {
                 host: state_dir.into(),

@@ -330,7 +330,26 @@ does a session start unsandboxed without an explicit choice.
       is built from, with a test asserting the two cannot drift. The gate's answer carries the
       folder back, so a client that has moved on discards it rather than opening what the user
       cancelled.
-- [ ] T114 *(test)* [P] Add Windows path-mapping cases to `crates/micold-core/tests/sandbox_argv.rs` and a test that the daemon-backed `Git` and `GitCli` agree on worktree listings for the same repository
+- [x] T114 *(test)* [P] Add Windows path-mapping cases to `crates/micold-core/tests/sandbox_argv.rs` and a test that the daemon-backed `Git` and `GitCli` agree on worktree listings for the same repository
+      — the mapping had unit tests; everything *downstream* of it did not. `ProjectMount::project`
+      and `MountSet::build` called `pathmap::map`, which is `cfg!(windows)`-gated, so the assembly
+      that produces a Windows mount set — and the `-v` flags `argv` renders from it — was compiled
+      by no CI runner this project has. Both now take the platform as a value (`project_for`,
+      `build_for`), and the new `sandbox_argv.rs` drives them **both ways** on whatever platform
+      runs: every Windows container path is a Linux absolute path under `/mnt/host`, the host half
+      keeps its backslashes and drive letter, rule M-1 holds under both mappings, and `argv` and
+      `git_routing_for` are asserted to agree about whether the two halves differ — the drift check
+      between the mount set and T113's routing decision. The volume parser splits from the *right*
+      because a Windows host path contains a colon; splitting left yields `C` as the host, which is
+      the exact bug the file exists to catch. The state and token mounts are excluded from the
+      identity claim: their container paths are fixed by the image, so they are never identity
+      mounts, not even on Linux.
+      The second half could not be written as stated — T113 removed the daemon-backed `Git` rather
+      than adding one — so the surviving claim is the one that matters:
+      `mutation_semantics.rs::the_streamed_worktree_list_matches_local_git_discovery` asserts the
+      daemon's streamed worktree list equals `worktree::discover(&GitCli::new(), …)` for the same
+      repository. Where the client has no local git that stream is not a faster copy of something
+      it could compute; it is the only list it will ever have.
 - [ ] T115 [P] Verify the full quickstart.md §A suite is green on Linux, macOS and Windows with **no** runtime installed, from the CI matrix in `.github/workflows/` (Principle VI, the fake runtime's whole purpose)
 - [ ] T116 [P] Measure SC-003 — sandboxed session start no more than 2s slower than unsandboxed — recording the numbers in `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
 - [ ] T117 [P] Measure SC-004 — first-time enable under 5 minutes with continuous progress, from a cold image state — into `specs/027-sandboxed-daemon-runtime/evidence/performance.md`

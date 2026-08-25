@@ -1454,3 +1454,89 @@ async fn repo_root_query_is_answered_for_both_a_repository_and_a_plain_directory
         }
     }
 }
+
+/// T114 — the worktree list the daemon streams is the one local git discovery would produce.
+///
+/// This is what replaces R2's "the daemon-backed `Git` and `GitCli` agree" check, which cannot be
+/// written as stated because T113 removed the daemon-backed `Git` rather than adding one. The
+/// claim survives the change of mechanism, and it is the claim that matters: on Windows and for a
+/// remote daemon the client has no local git at all, so the streamed list is not a faster copy of
+/// something it could compute — it is the only list it will ever have. If it disagreed with what
+/// git says about the repository, nothing on the client side would notice.
+///
+/// Compared as *sets* of `(dir_name, branch)` and by count. Order is not asserted: `git worktree
+/// list --porcelain` emits in its own order, and pinning that here would fail on a git upgrade
+/// without anything being wrong.
+#[tokio::test]
+async fn the_streamed_worktree_list_matches_local_git_discovery() {
+    use micold_core::git::GitCli;
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    // Two, so the comparison is not satisfied by an empty list on both sides.
+    for (req, branch, dir) in [(1_u64, "feature/one", "one"), (2, "feature/two", "two")] {
+        client
+            .send(Frame::Control(ClientMsg::WorktreeCreate {
+                req,
+                project: project.path().to_path_buf(),
+                branch: branch.into(),
+                dir_name: dir.into(),
+                mode: CreateMode::NewBranch,
+            }))
+            .await
+            .unwrap();
+    }
+
+    // Read until the catalog reports both, rather than awaiting the two `WorktreeCreated` replies
+    // and then a push. The daemon pushes a snapshot per change, and `expect_control` *discards*
+    // every frame it does not match — so waiting for the replies first throws away the very pushes
+    // this test is about, and then blocks forever on one that will not come.
+    let snapshot = loop {
+        match client.next().await.expect("stream open").unwrap() {
+            Frame::Control(DaemonMsg::CatalogChanged { catalog }) => {
+                if worktrees_for(&catalog, project.path()).len() == 2 {
+                    break catalog;
+                }
+            }
+            Frame::Control(DaemonMsg::OperationError {
+                message, detail, ..
+            }) => panic!("a worktree create failed: {message} ({detail:?})"),
+            Frame::Control(_) | Frame::Grid(_) => continue,
+        }
+    };
+
+    let streamed: std::collections::BTreeSet<(String, Option<String>)> = snapshot
+        .projects
+        .iter()
+        .find(|p| p.path == project.path())
+        .expect("the project is in the snapshot")
+        .worktrees
+        .iter()
+        .map(|w| (w.dir_name.clone(), w.branch.clone()))
+        .collect();
+
+    let locally: std::collections::BTreeSet<(String, Option<String>)> =
+        micold_core::worktree::discover(&GitCli::new(), project.path(), &[])
+            .into_iter()
+            .map(|w| (w.dir_name, w.branch))
+            .collect();
+
+    assert_eq!(
+        streamed.len(),
+        2,
+        "both worktrees reached the snapshot: {streamed:?}"
+    );
+    assert_eq!(
+        streamed, locally,
+        "the daemon's list and local git discovery disagree about the same repository"
+    );
+}
