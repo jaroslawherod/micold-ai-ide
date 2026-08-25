@@ -443,7 +443,24 @@ the Copilot conversation is there (quickstart §B B3, B5).
   adds nothing, because a discovered session's `SessionId` is the CLI's own uuid. This MUST fail on
   the current tree because the function does not exist yet. It is the gate on T050
 - [X] T043 [P] [US2] Add a test to `crates/micold-core/tests/session_reconciliation.rs` for the spec's colliding-id edge case: the same uuid present in both providers' stores must resolve by the session's **persisted** provider, and must never re-derive a known session's provider from disk (data-model invariant 3)
-- [ ] T044 [P] [US2] Extend `crates/micold-daemon/tests/session_archive_durable_marker.rs` so closing a Copilot session writes its marker through the seam rather than through `ClaudeProvider`
+- [X] T044 [P] [US2] Extend `crates/micold-daemon/tests/session_archive_durable_marker.rs` so closing a Copilot session writes its marker through the seam rather than through `ClaudeProvider`
+
+  **Done 2026-08-25.** A fourth scenario inside the file's single `#[test]`; `COPILOT_HOME` joins
+  `CLAUDE_CONFIG_DIR` as a process-global this file owns, which is why the scenarios keep sharing
+  one function. Only one of the three archive paths needed the new provider — all three funnel into
+  `catalog.rs::mark_archived_durable`, and what genuinely differs between them is the *cwd*, which
+  scenario 2 already covers. The negative is asserted twice: `!ClaudeProvider.is_archived` for the
+  one path `claude` probes, and a recursive listing of the whole `claude` store before and after
+  for everything else.
+
+  `mark_archived_durable` already took the provider from the session record (T047's work), so this
+  **passes on arrival**. Two probes say it is load-bearing rather than decorative:
+
+  - provider reverted to a hardcoded `ClaudeProvider` → fails at the first assertion, the marker
+    missing from Copilot's own store.
+  - seam left correct, but a stray file written into the `claude` store under a name
+    `ClaudeProvider::is_archived` does not probe → the first two assertions pass and the
+    before/after listing fails, which is exactly the case it exists for.
 - [X] T045 [P] [US2] Extend `crates/micold-daemon/tests/catalog_adoption.rs` so a restored Copilot session resumes with `--resume=<uuid>` and not a fresh `--session-id` when a conversation is recorded (FR-008)
 - [ ] T045a [P] [US2] Extend `crates/micold-daemon/tests/session_survival.rs` so a Copilot session survives a **daemon** restart on the right provider and resumes its own conversation — the leg of FR-012 that neither the store round-trip (T036) nor the application-restart pass (quickstart B3) reaches
 - [ ] T046 [P] [US2] Add a test to `crates/micold-core/tests/copilot_provider.rs` and
