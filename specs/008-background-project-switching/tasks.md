@@ -144,7 +144,18 @@ gui-gated layer in `src/main.rs` and `src/ui/**`.
 - [x] T031 [P] Cross-cutting docs review: cross-reference the switcher (project-selection.md) and background-session behavior (worktrees-and-sessions.md), update any index/nav in `docs/user-guide/`.
 - [x] T032 Reconcile stale comments/naming referring to stopping sessions on switch (e.g. FR-023-era "stop the outgoing project's sessions" notes) in `src/main.rs`, now that switching is non-destructive.
 - [x] T033 Verify build + full test suite (`cargo test` and `cargo test --no-default-features`) pass on Linux, macOS, and Windows (Principle VI).
-- [ ] T034 Run `quickstart.md` validation: headless test commands + the 7-step manual walkthrough (SC-001…SC-007).
+- [X] T034 Run `quickstart.md` validation: headless test commands + the 7-step manual walkthrough (SC-001…SC-007).
+
+  > **Run 2026-08-21** — [evidence/T034-quickstart.md](./evidence/T034-quickstart.md). The automated
+  > half is green (201 test binaries, 0 failures) and every assertion the quickstart names by
+  > behaviour is present. Manual steps 1–5 and 7 pass; **step 6 half-fails** and produced
+  > [BUG-003](./bugs/BUG-003.md) — a missing folder is never *indicated*, because availability is
+  > only scanned at startup and on a project reopen. Nothing is silently activated, which is FR-008's
+  > other clause. SC-005's ~1 s is left unmeasured: `import` alone costs ~300 ms and lavapipe is a
+  > software rasteriser.
+  >
+  > A second defect turned up outside the numbered steps: selecting a project leaves the switcher
+  > panel open, against the contract's "Panel closes." — [BUG-002](./bugs/BUG-002.md).
 
 ## Phase 7: Convergence
 

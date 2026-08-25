@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-23
 
-**Status**: Draft
+**Status**: Closed (implemented and shipped; the manual quickstart pass ran 2026-08-20/21 — [evidence](./evidence/manual-scenarios.md). All four scenarios pass: the confirmation wording and session-stop count (FR-002/FR-002a), no orphaned processes (FR-010), nothing deleted on disk (FR-006), the empty state (FR-009), the unavailable-project row (FR-011), and a re-opened folder returning as a fresh default-named entry with no resurrected state (FR-005/FR-012).)
 
 **Input**: User description: "the user should be able to \"forget\" the project and remove it from project list"
 

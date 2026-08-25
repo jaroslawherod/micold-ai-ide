@@ -187,10 +187,10 @@ the platform, and any step that did not behave as written. A step that fails is 
 
 | Recorded | |
 |---|---|
-| Date | 2026-08-07 · Linux |
+| Date | 2026-08-07 · Linux; steps 1–4 run 2026-08-21 · Linux |
 | The rule itself — closed at rest, opens on reach, opens on typing, closes on a pick, closes on a dismissal | **yes** — five tests in `crates/micold-client/tests/showcase_state.rs`, each observed failing before the reducer existed |
 | The showcase binary launches and renders with the entry rewired | **yes** |
-| §B8 steps 1–4 confirmed **on screen** | **not yet recorded** — the four steps are a visual check and need a human at the display |
+| §B8 steps 1–4 confirmed **on screen** | **yes, 2026-08-21** — all four pass, in both schemes, including FR-001b (the frames before and after the press are pixel-identical outside the list). Run headlessly on Xvfb + lavapipe rather than at a display; recorded in [evidence/B8-open-close-rule.md](./evidence/B8-open-close-rule.md) |
 
 The split is deliberate rather than a shortcut. The rule is a decision about state, so it lives in the
 reducer where a test can drive it (Principle I); what `controls.rs` does with the answer is the thin

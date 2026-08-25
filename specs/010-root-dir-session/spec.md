@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-18
 
-**Status**: Draft
+**Status**: Closed (implemented and shipped. The manual quickstart pass — all 11 GUI steps, plus the visual/asset and documentation checks — ran 2026-08-21 on Linux, headlessly; evidence: evidence/T029-manual-validation.md. Steps 1–10 and both checks pass. Step 11 fails: a session whose working directory has been renamed away sits at `starting…` forever with no error — one open defect, bugs/BUG-001.md, in the shared session-start path rather than in anything this feature added. macOS/Windows parity is unrun.)
 
 **Input**: User description: "Add the ability to start a session directly in the project's root directory, without it being bound to a git worktree.
 

@@ -256,7 +256,7 @@ came from:
 | `feat/login` | A local branch, ready to use. |
 | `feat/reporting · origin` | Exists on `origin`, not yet on this machine. |
 | `feat/login · in use by feat-login` | Already checked out in that worktree — not available. |
-| `feat/login · in use by a hidden agent worktree` | Held by an assistant's worktree, which the sidebar hides by default. |
+| `feat/login · in use by a hidden agent worktree` | Held by an agent worktree, which the sidebar hides by default. |
 | `fix/olx · in use outside this app` | Held by a worktree the app doesn't manage — see below. |
 | `main · in use by the project checkout` | The project's own current branch — not available. |
 
@@ -305,7 +305,7 @@ Where it is can be one of four places, and the message tells you which:
 
 - **Another of your worktrees** — named by its folder, which is its row in the sidebar.
 - **The project's own checkout** — the branch the project directory itself is on.
-- **A hidden assistant worktree** — one of the app's own, but not currently listed. Turn on
+- **A hidden agent worktree** — one of the app's own, but not currently listed. Turn on
   **Show agent worktrees** in the sidebar to see it.
 - **A worktree outside this app** — one git knows about that this app doesn't manage: another
   tool's worktree directory (`.git-paw/worktrees/…` and the like), or a checkout in some unrelated

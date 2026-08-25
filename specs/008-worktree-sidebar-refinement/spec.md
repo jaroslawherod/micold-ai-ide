@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-17
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "Refinement of worktree sidebar — minimal left/right padding, remove the git icon next to worktrees, show a worktree name with type/Jira tags below it (color-coded, later filterable), right-click actions to delete (worktree + all sessions + branch) and rename (displayed name only), and a smaller sidebar font at 80% of current size."
 

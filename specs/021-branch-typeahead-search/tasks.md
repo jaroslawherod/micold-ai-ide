@@ -420,13 +420,16 @@ nothing.
 - [X] T073 [US3] Add `typeahead_open: bool` (false at rest), a `typeahead_open()` accessor, and the `TypeaheadFocused` / `TypeaheadDismissed` message variants in `crates/micold-client/src/showcase/state.rs`, making T072 pass. The rule MUST mirror `app.rs`'s branch-picker arms rather than invent a second one — `AddWorktreeBranchFocused` → open, `AddWorktreeBranchQueryChanged` → open, `AddWorktreeBranchSelected` → close, `AddWorktreeBranchDismissed` → close — because a gallery whose open rule differed from the application's would be the same class of defect this bug is (FR-020a)
 - [X] T074 [US3] Retire T029's pose in `crates/micold-client/src/showcase/sections/controls.rs`: `.open(…)` from the reducer, `.on_focus(Message::TypeaheadFocused)`, `.on_dismiss(Message::TypeaheadDismissed)`, and pick closing through the existing `TypeaheadPicked`. Replace the "Always open, because the list is the half worth looking at" comment with what the entry now shows and why — the comment is the record of the decision being reversed. Closes the reopened T053 (FR-020a)
 - [X] T075 [P] [US3] Add the open/close line to the entry's `live` captions in `crates/micold-client/src/showcase/catalogue.rs`, so the page describes the behaviour it now has rather than leaving its most conspicuous one unnamed — the gap that let `tests/showcase_captions.rs` stay green through this defect (FR-020a)
-- [ ] T076 [US3] Update [quickstart.md](./quickstart.md) §B8 to have the reviewer confirm the list is **closed** on launch, opens on a press in the field, closes on a pick and closes on a press outside — then run it and record the pass (FR-020a, SC-007a)
+- [X] T076 [US3] Update [quickstart.md](./quickstart.md) §B8 to have the reviewer confirm the list is **closed** on launch, opens on a press in the field, closes on a pick and closes on a press outside — then run it and record the pass (FR-020a, SC-007a)
 
-  > **§B8 written; the visual pass is not recorded.** The four steps are in the quickstart and the
-  > binary was launched and renders with the entry rewired, but confirming what is on screen needs a
-  > human at the display, so the record says so rather than claiming a pass nobody watched. The rule
-  > itself is not waiting on this: it is driven by five tests in `tests/showcase_state.rs`, and only
-  > the glue that applies the answer is what §B8 checks.
+  > **§B8 written 2026-08-07; run 2026-08-21.** All four steps pass, in both schemes —
+  > [evidence/B8-open-close-rule.md](./evidence/B8-open-close-rule.md). It did not need a human at a
+  > display after all: the repo's `visual-pass` skill runs the binary headlessly on Xvfb + lavapipe,
+  > and FR-001b's "without moving the entries around it" came out stronger that way than by eye,
+  > since the frames before and after the press are pixel-identical outside the list.
+  >
+  > The split the original note describes still holds: the rule is driven by five tests in
+  > `tests/showcase_state.rs`, and what §B8's four steps confirm is the glue that applies it.
 
 **Bugfix**: 2026-08-07 — BUG-001 Updated from bugfix patch: reopened T053, added T072–T076. T053's
 reopen is kept visible rather than erased; its matching half stays done and only its pose is retired.

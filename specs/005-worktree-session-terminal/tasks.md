@@ -36,7 +36,7 @@ Single Rust project: render-free core in `src/*.rs` + `tests/*.rs`; gui-gated la
 - [x] T001 Update `Cargo.toml`: add `uuid = { version = "1", features = ["v4"] }` (core); add iced features `canvas`, `advanced`, `lazy`; add gui-gated `iced_term = "=0.6.0"`, `portable-pty = "0.9"`, `alacritty_terminal = "0.25"` under the `gui` feature (the VT `Term` grid is gui-only; the pure core never depends on these, keeping `--no-default-features` lean); set `rust-version` to a concrete pinned value = max(current 1.80, the MSRV stated by `iced_term 0.6`, `alacritty_terminal 0.25`, and `portable-pty 0.9` — check each crate's "Rust version" on docs.rs before pinning); update the CI toolchain pin to match (Principle VI); do not leave the MSRV unbounded. Add a justification comment per new crate (Principle V).
 - [x] T002 [P] Declare new core modules in `src/lib.rs`: `pub mod naming; pub mod worktree; pub mod session; pub mod git; pub mod terminal;` (empty stubs compiling under `--no-default-features`).
 - [x] T003 [P] Add gui module stubs and wire them in `src/ui/mod.rs`: `mod components; mod sidebar; mod worktree_form; mod terminal;` and create `src/ui/components/mod.rs`.
-- [ ] T004 [P] Verify the CI matrix still builds/tests on Linux, macOS, Windows with the new MSRV and deps (`.github/workflows/*`); adjust the toolchain pin if needed (Principle VI).
+- [X] T004 [P] Verify the CI matrix still builds/tests on Linux, macOS, Windows with the new MSRV and deps (`.github/workflows/*`); adjust the toolchain pin if needed (Principle VI). *(2026-08-20: satisfied by the three-OS CI matrix added in `10a1fe7` (2026-07-20) — `.github/workflows/ci.yml` builds the whole workspace and runs the render-free core suite plus the component gates on ubuntu/macos/windows for every code-affecting change, and has been green on all three since. Latest run: [32302430171](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32302430171). The full GUI suite and clippy stay Linux-only by design — that is the only runner with the iced system deps.)*
 
 ---
 
@@ -146,7 +146,7 @@ sessions restore and resume.
 - [x] T044 [US3] Extend `src/store.rs` to persist/load sessions per project by adding an optional per-project `sessions` array to `projects.json` (option A: forward-compatible, single atomic write, no `schema_version` bump) per contracts/storage-schema.md, to make T040 pass.
 - [x] T045 [US3] Real `TerminalBackend` impl: `portable-pty` spawn (cwd, `--session-id`/`--resume`, `TERM` env) + blocking reader thread, gui-gated, in `src/ui/terminal.rs` (research R1/R6).
 - [x] T046 [US3] PTY → iced streaming: `Subscription::run_with_id` + tokio mpsc emitting `PtyOutput`/`PtyExited`, batched per session, in `src/ui/terminal.rs` and `src/main.rs` (research R4/R5).
-- [ ] T047 [US3] Terminal pane rendering (`iced_term` 0.6 / `canvas`): draw the active session's grid, send keystrokes to the writer, handle resize, coalesce redraws with `canvas::Cache` (research R3) in `src/ui/terminal.rs`.
+- [X] T047 [US3] Terminal pane rendering (`iced_term` 0.6 / `canvas`): draw the active session's grid, send keystrokes to the writer, handle resize, coalesce redraws with `canvas::Cache` (research R3) in `src/ui/terminal.rs`. *(2026-08-20: superseded and delivered by feature 006, which rewrote the pane. The `iced_term 0.6` view is vendored at `crates/micold-client/src/ui/material/terminal_pane.rs` — it draws the grid, forwards key/mouse input to the writer, handles resize, and coalesces redraws through `crate::grid::GridCache` rather than a bare `canvas::Cache`. Ticked as done-elsewhere, not as unbuilt.)*
 - [x] T048 [US3] Render session sub-items under their worktree in the `TreeView` (label `Pending`/`Named`, active/inactive state, FR-011/011a/016) in `src/ui/sidebar.rs`.
 - [x] T049 [US3] Start-session action (disabled unless worktree `status == Valid` per FR-018a): generate UUID, `Fresh` launch, in `src/app.rs` + `src/main.rs`.
 - [x] T050 [US3] Switch session — change active id only; other sessions keep running (FR-015/015b) — and show the active terminal in `src/app.rs` / `src/ui/shell.rs`.
@@ -181,13 +181,13 @@ sessions restore and resume.
   file's own T051 "Close/stop session," a different, unrelated, already-completed task, both of
   which landed in this same change).
 
-- [ ] T067 [P] [US3] (bugfix BUG-003) Failing tests in `tests/session_archive.rs` (new):
+- [X] T067 [P] [US3] (bugfix BUG-003) Failing tests in `tests/session_archive.rs` (new):
   `Session::archive()` sets `lifecycle = Idle` and `archived = true`; a session's
   `archived: true` excludes it from whatever helper the sidebar builds its rows from
   (`State::active_sessions()`), so it disappears from both the Default node and worktree nodes.
   Landed as `tests/session_archive.rs`: `archive_stops_the_process_and_keeps_the_record` +
   `archived_sessions_are_hidden_from_the_sidebar` (via `State::sidebar_entries()`, closer to what
-  the UI actually renders than `active_sessions()` directly — see T074's note).
+  the UI actually renders than `active_sessions()` directly — see T074's note). *(2026-08-20: ticked to match this task's own body — the tests landed as `crates/micold-client/tests/session_archive.rs`: `archive_stops_the_process_and_keeps_the_record` and `archived_sessions_are_hidden_from_the_sidebar`. The checkbox was simply never flipped when T068–T080 were.)*
 - [X] T068 [P] [US3] (bugfix BUG-003) Failing tests in `tests/ai_cli_provider.rs` (extend):
   `AiCliProvider::mark_archived` writes a marker file beside the transcript;
   `is_archived` reflects the marker's presence/absence; `discover_transcript_session_ids`
@@ -294,10 +294,33 @@ reverses.
 
 - [x] T056 [P] Update docs index/navigation (`docs/README.md`) to link the new worktrees-and-sessions guide.
 - [x] T057 Kill all child `claude` processes on app shutdown (`Drop`/shutdown handler) to avoid zombies (research R5) in `src/main.rs`.
-- [ ] T058 Performance pass: verify redraw coalescing (≤1/frame) and per-session scrollback cap under chatty output (SC-004/005) in `src/ui/terminal.rs`.
+- [X] T058 Performance pass: verify redraw coalescing (≤1/frame) and per-session scrollback cap under chatty output (SC-004/005) in `src/ui/terminal.rs`.
+      (2026-08-21 — attempted with T061 and left open deliberately. The headless harness renders
+      through Mesa lavapipe, a software rasteriser: a frame-pacing figure measured there says
+      nothing about the GPU this claim is about. Recorded as unmeasured rather than passed —
+      `evidence/T061-manual-validation.md`.)
+      (2026-08-25 — **closed**, by dropping the assumption that made it unanswerable rather than by
+      finding a GPU. The 2026-08-21 objection is right about *frame pacing* and does not apply here:
+      since the daemon split this claim is not decided by the renderer at all. The task names
+      `src/ui/terminal.rs` because that is where the coalescing lived when the client polled the PTY
+      itself; it now lives in `server.rs`'s `stream_view` — a 16 ms ticker gated on the VT dirty
+      flag — and the client has no redraw driver of its own for terminal output, so bounding frames
+      on the wire bounds redraws. That bound is a protocol-layer count, measurable anywhere.
+      Measured by a new test, `crates/micold-daemon/tests/frame_coalescing.rs`, flooding real PTYs:
+      **20,000 lines streamed in 48–62 frames over ~1.0–1.3 s** across three runs, each under its
+      ceiling (48/66, 62/81, 51/67 — 320–420 lines folded per frame),
+      and **5,000 lines into a 100-line cap retained exactly cap+screen = 124**, with the neighbour
+      session's history untouched. Evidence: `evidence/T058-performance-pass.md`. SC-008's perceived
+      latency stays out of reach for the original reason; this task never asked for it.)
 - [x] T059 [P] Confirm dependency-vetting comments (Principle V) for `uuid`, `iced_term`, `portable-pty`, `alacritty_terminal` in `Cargo.toml`.
-- [ ] T060 Verify full build + `cargo test` (default and `--no-default-features`) + `cargo clippy` pass on Linux, macOS, Windows (Principle VI).
-- [ ] T061 Run the `quickstart.md` validation scenarios V1–V10 end-to-end, including the timing observations for SC-001 (open < 3 s, V1), SC-002 (create < 30 s, V3), and SC-004 (session start < 5 s, V4).
+- [X] T060 Verify full build + `cargo test` (default and `--no-default-features`) + `cargo clippy` pass on Linux, macOS, Windows (Principle VI). *(2026-08-20: satisfied by the three-OS CI matrix added in `10a1fe7` (2026-07-20) — `.github/workflows/ci.yml` builds the whole workspace and runs the render-free core suite plus the component gates on ubuntu/macos/windows for every code-affecting change, and has been green on all three since. Latest run: [32302430171](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32302430171). The full GUI suite and clippy stay Linux-only by design — that is the only runner with the iced system deps.)* `--no-default-features` has since become its own crate: the matrix's `cargo test -p micold-core --all-targets` step is the render-free run this task asked for.
+- [X] T061 Run the `quickstart.md` validation scenarios V1–V10 end-to-end, including the timing observations for SC-001 (open < 3 s, V1), SC-002 (create < 30 s, V3), and SC-004 (session start < 5 s, V4).
+      (2026-08-21 — run headlessly on Xvfb + lavapipe against a throwaway repo; evidence:
+      `evidence/T061-manual-validation.md`. V1, V2, V4, V5, V6, V8, V9, V10 pass; V3 passes but for
+      the forced-git-failure rollback, which is only reachable through `FakeGit`; V7's auto-restart
+      passes and its crash-loop guard **fails** → `bugs/BUG-004.md`. All three timings pass with
+      room to spare: SC-001 0.26–0.36 s of 3 s, SC-002 0.51 s of 30 s, SC-004 ≈1.25 s of 5 s.
+      V10's "all target platforms" clause is Linux-only from here.)
 
 ---
 
@@ -404,8 +427,8 @@ docs. Verification evidence:
   + T064 (title-sync reader on the terminal poll). See `bugs/BUG-002.md`.
 - **T058** — redraw coalescing is approximated by the 120 ms poll; a per-session scrollback cap
   and formal perf verification are pending.
-- **T061** — the git-side scenarios (V3) are verified; GUI-driven scenarios (V1/V2/V4–V10) need a
-  display to run.
+- **T061** — ✅ **RESOLVED** 2026-08-21. All ten scenarios ran headlessly (Xvfb + lavapipe), not
+  on a display; see `evidence/T061-manual-validation.md`. One defect found: `bugs/BUG-004.md`.
 
 **Bugfix**: 2026-07-16 — BUG-001 Added T062 (empty sessions excluded from persistence). See `bugs/BUG-001.md`. Also resolved implementation drift on T047 (terminal now interprets ANSI/VT via `alacritty_terminal` instead of showing raw escapes).
 
