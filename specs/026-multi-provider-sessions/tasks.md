@@ -636,7 +636,7 @@ session mid-response reads as working **within one second** (quickstart §B B4, 
   second half is the one that matters: a project with hundreds of discovered sessions must schedule
   no observation work at all, so assert the absence of a watcher per discovered session, not just the
   signal value
-- [ ] T057 [P] [US3] Extend `crates/micold-daemon/tests/activity_pipeline.rs` to prove the `Activity`
+- [X] T057 [P] [US3] Extend `crates/micold-daemon/tests/activity_pipeline.rs` to prove the `Activity`
   state machine's transitions are unchanged. Correct the framing while you are here: it is not that
   "only the event source differs" — a Copilot session has **two** sources, because the braille-spinner
   path is shared and not provider-conditional. `micold-daemon/src/terminal.rs:141` scans every PTY
@@ -645,6 +645,48 @@ session mid-response reads as working **within one second** (quickstart §B B4, 
   only ever moves `Unknown → Working` and is a no-op from every other state (H1a/A1a) — so the two
   sources cannot contradict each other. Assert that, rather than asserting a single-source claim that
   is not true
+
+  The FSM's own transitions needed nothing here: `micold-daemon/src/activity.rs::mod tests` already
+  walks the whole table event-by-event from every state, including `h1a_spinner_from_unknown_only`
+  from Unknown, Working, AwaitingInput and Ended. Re-asserting that in an integration test would
+  have duplicated it in a slower place. What was untested is the *pipeline* around it for a Copilot
+  session, and that is where the wrong framing lived, so that is what the two new tests in
+  `activity_pipeline.rs` pin.
+
+  `a_copilot_session_is_watched_by_its_event_log_and_scanned_for_spinners_like_any_other` asks the
+  provider for the session's activity source (an `EventLog`, source one), then drives a braille OSC-0
+  title through a real PTY on that same Copilot session and asserts the badge reaches `Working` —
+  source two, reached without anything asking which CLI is running.
+  `a_copilot_event_log_and_the_shared_spinner_scan_cannot_contradict_each_other` puts both live on
+  one session in the order that could produce a contradiction: `DaemonState::open_event_log_tail`
+  watches a real `events.jsonl`, an appended `assistant.turn_end` moves the badge to `AwaitingInput`
+  through the tail, and only *then* is the spinner drained. It stays `AwaitingInput`. The test
+  asserts the title actually landed as well, because without that the activity assertion would pass
+  for free on a spinner that never arrived.
+
+  `catalog_with_session` now takes the CLI as a parameter — it hardcoded `AiCli::ClaudeCode`, which
+  is exactly the single-source assumption this task is correcting. `COPILOT_HOME` is process-global,
+  so the two new tests take a `CopilotHome` guard that serialises them and clears the variable on
+  drop.
+
+  Probed, both from a green tree, each mutation reverted before the next:
+
+  - **P1 — the spinner scan becomes provider-conditional.** `drain_signals` gated on the session's
+    provider being `ClaudeCode`. Only
+    `a_copilot_session_is_watched_by_its_event_log_and_scanned_for_spinners_like_any_other` failed
+    (5 passed, 1 failed) — the existing claude spinner tests cannot see this, which is the whole
+    point of adding a Copilot one.
+  - **P2 — the event-log source is severed.** An early `return` at the top of
+    `open_event_log_tail`. Only
+    `a_copilot_event_log_and_the_shared_spinner_scan_cannot_contradict_each_other` failed, on "the
+    event log's turn_end must reach the activity machine". `copilot_activity.rs` stayed green
+    through it (11 passed): its tests drive `EventLogTail::open` directly and its watch-site test
+    greps the source text, so *nothing else in the suite notices the daemon no longer opening a
+    watch*. That test is the only end-to-end coverage of that wiring.
+
+  The framing was corrected in both places that carried it: this file's module doc now states the
+  two sources and why they cannot disagree, and `copilot_activity.rs`'s "a second source" paragraph
+  now says second, not only, and points here for the proof.
 - [X] T058 [P] [US3] Extend `crates/micold-client/tests/features_sidebar.rs` and `crates/micold-client/tests/sidebar_tree.rs` so each session row carries a **short text label**
   naming its CLI by its **command name** — `claude`, `copilot`, not "Claude Code"/"GitHub Copilot",
   and not a colour, a glyph alone or a tooltip (FR-016 as amended 2026-08-16 and 2026-08-18) — and so the activity badge is rendered identically for both providers, with no per-provider styling and no "less certain" variant (FR-018). **Also assert the row is still one line.**
