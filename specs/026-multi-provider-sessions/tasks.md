@@ -1077,7 +1077,28 @@ B7, SC-008).
 > cross-cutting review and the verification the feature cannot claim without running.
 
 - [ ] T078 [P] Cross-cutting docs review: index/navigation in `docs/user-guide/` and any statement elsewhere in the repo that says or implies the application runs `claude` specifically (including `README.md`)
-- [ ] T079 Remove the now-false module docs in `crates/micold-core/tests/ai_cli_provider_seam.rs` and `crates/micold-client/tests/no_concrete_implementations.rs` that state the seam is not substitutable and that `Capabilities` is where to fix it — the files now prove the opposite
+- [X] T079 Remove the now-false module docs in `crates/micold-core/tests/ai_cli_provider_seam.rs` and `crates/micold-client/tests/no_concrete_implementations.rs` that state the seam is not substitutable and that `Capabilities` is where to fix it — the files now prove the opposite
+
+  Both docs were rewritten in `6993fbb`, in the same commit that made them false — the seam file now
+  opens with what it *used* to say and why it no longer says it, and the guard file's provider
+  section states that the "one place" is `micold-core/src/provider.rs` and explicitly not the shell.
+  So this task closed itself, and what was left was to check that rather than to assume it. Every
+  surviving mention of the old position is in the past tense and framed as history, which is worth
+  keeping: a doc that says only what is true now leaves the next reader to rediscover why the
+  arrangement is what it is.
+
+  Verified rather than read: `ClaudeProvider` appears in both files only in that historical framing
+  and in the guard's own expectation list, which now names `CopilotProvider` beside it; the seam
+  doc's claim that `discover_transcript_session_ids` and `archived_marker_path` are off the trait
+  holds — the two survivors are inherent methods on `ClaudeProvider`, with a comment saying they are
+  `claude`'s layout and nothing else's; and the four consumers the doc names as taking the provider
+  from the session record (`catalog.rs`, `state.rs`, `supervisor.rs`, `terminal.rs`) all call
+  `.provider()`.
+
+  One line was actually wrong and is fixed: the guard file pointed at "`main.rs`'s own
+  `boot_judges_each_session_by_its_own_provider`", and that test moved to `shell/persist.rs` with
+  the boot prune. A pointer to a test that is no longer where it is named is the same defect this
+  task is about, one file further on. Both suites are green (13 and 8).
 - [ ] T080 Satisfy `cargo clippy` and `cargo fmt` across the workspace for the new code, matching what CI enforces
 - [ ] T081 Verify Copilot's base directory on Windows (research R2's one unverified row) and correct `CopilotProvider::config_dir` and `contracts/copilot-cli.md` if it is not `%USERPROFILE%\.copilot`; if it cannot be verified, record that explicitly rather than leaving the table implying it was
 - [ ] T082 Confirm `mise run test` is green on Linux, macOS and Windows in CI (Principle VI), with every Copilot test passing on a runner that has no `copilot` installed

@@ -69,7 +69,7 @@
 //! `&dyn AiCliProvider` from `Capabilities` and applied it to every session in every project — so
 //! it passed this check while being the same defect, and would have dropped every Copilot session
 //! at startup. Only a test that mixes providers can see that, which is why
-//! `main.rs`'s own `boot_judges_each_session_by_its_own_provider` and the daemon's
+//! `shell/persist.rs`'s own `boot_judges_each_session_by_its_own_provider` and the daemon's
 //! `set_wide_provider_decisions.rs` exist. Recorded here so a reader does not mistake a green run
 //! of this file for the whole of FR-022.
 
