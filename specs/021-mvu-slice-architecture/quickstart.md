@@ -215,6 +215,59 @@ uses. The behaviours are equivalent *provided the live message is ever sent*, wh
 step 6 could not confirm. Both belong to feature 017's overlay primitive and are out of scope for
 this feature; recorded here rather than fixed.
 
+#### Result — step 6 re-run, 2026-08-25, at T080
+
+Step 6 was recorded **Blocked** above, with the block attributed to feature 017's overlay primitive
+capturing wheel events. **That attribution was wrong.** Re-run against `HEAD` of `work-021`, again
+**not on a real display**: Xvfb `:91` at 1600×1400 with Mesa lavapipe (software Vulkan),
+`WGPU_BACKEND=vulkan`, driven by `xdotool`, captured with `import`, compared with
+`compare -metric AE`. Client and daemon were built in one invocation and pinned to `~/vp91/bin/`;
+the pair was confirmed to handshake (`client attached to daemon`) before anything was measured.
+State was isolated to a scratch `XDG_DATA_HOME` with `XDG_RUNTIME_DIR=/tmp/vp91`, against a
+throwaway one-project fixture with 20 worktrees. The developer's own app and daemon were untouched.
+
+**Step 6 passes. FR-012's scroll dismissal survives in the built application.** Two different
+lightweight surfaces were exercised — the header's ⋮ overflow menu (`Layer::Popover`,
+`Anchor::TopEnd`, which does not overlap the sidebar) and a worktree row's right-click context menu
+(`Layer::ContextMenu`, `Anchor::Point`, which does) — and both dismissed when the sidebar was
+scrolled beneath them.
+
+| Gesture | Sidebar region | Surface region |
+|---|---|---|
+| Three wheel notches over the sidebar, **no** surface open | 46,257 px changed | — |
+| Same gesture, ⋮ overflow menu open | **46,257 px** — identical | 65,277 px (96.6%), menu gone |
+| Same gesture, context menu open | scrolled | 41,623 px (80.0%), menu gone |
+| Three wheel notches **over the open panel itself** | **0 px** | 10,961 px — hover highlight only, menu stays |
+
+The last row is what T040 measured. Pointing the wheel at the panel scrolls nothing beneath it and
+dismisses nothing, which is the correct behaviour for a surface that is itself the pointer's target;
+pointing it at the content *beneath* the surface produces a scroll byte-identical to the
+no-surface baseline **and** takes the surface with it. That last row is also the only way this build produces
+"0 pixels", and it is reachable by aiming a wheel at a coordinate an open surface now covers —
+exactly the hazard the `visual-pass` skill warns about under "An open overlay changes what a
+coordinate means". T040 did not record where it pointed, so this is the likeliest reading of its
+number rather than a certainty; what *is* certain is that the behaviour it inferred from that number
+does not exist in this build.
+
+![step 6: dismissal on scroll beneath vs. scroll on the panel](evidence/m2-step6-scroll-dismissal.png)
+
+Two history checks rule out "it was broken then and was fixed since", since that would leave the
+defect real and merely relocated. Neither half of the wiring has changed since `cacd9ab`, the commit
+T040 ran against: `git log cacd9ab..HEAD -- crates/micold-client/src/ui/cdk/overlay.rs` yields one
+commit, `bd67826`, whose diff to that file adds nothing but the `Anchor::BottomStart` variant; and
+`.on_scroll_offset(Message::SidebarScrolled)` was already present in `src/ui/sidebar.rs` at
+`cacd9ab` (line 154 there, line 173 now). The static reading agrees: `mouse_area` captures
+`WheelScrolled` only when `on_scroll` is set, which the overlay primitive never sets; `opaque`
+captures presses only; and `modal.rs:143` is the sole `.scrim(...)` call site, so no non-modal
+surface gets an opaque backdrop at all. There was never a wheel-capturing path to fix.
+
+**Not covered.** Whether the *dismissal* animates out over its 200 ms, as opposed to disappearing —
+that is steps 1 and 2's unanswered question, still unanswered, and T082's subject. This step
+establishes only that the surface is gone and the content moved.
+
+The related observation above — `Message::ScrolledBeneathOverlay` having no producer in `src/` — is
+unaffected by this result and is T081's subject.
+
 ## Documentation deliverable (Principle VII)
 
 This change is not user-facing, so the user-guide obligation is met by architectural documentation:
