@@ -1381,7 +1381,7 @@ pub(crate) mod tests {
     #[test]
     fn a_drained_reveal_records_where_it_sent_the_list() {
         use micold_core::project::{Availability, Project};
-        use micold_core::session::Session;
+        use micold_core::session::{AiCli, Session};
         use micold_core::worktree::{Worktree, WorktreeStatus};
 
         let mut app = base_app();
@@ -1400,7 +1400,10 @@ pub(crate) mod tests {
             status: WorktreeStatus::Valid,
             included: false,
         }];
-        let session = Session::start_new(SessionLocation::Worktree("only".to_string()));
+        let session = Session::start_new(
+            SessionLocation::Worktree("only".to_string()),
+            AiCli::ClaudeCode,
+        );
         let id = session.id;
         app.core.workspace.sessions.insert(path, vec![session]);
         app.core.active_session = Some(id);
