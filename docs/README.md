@@ -20,7 +20,7 @@ verified in CI.
   worktree sidebar (including how agent-created worktrees are hidden and how to reveal them),
   creating worktrees (on a new branch, or by searching for one that already exists locally or on
   a remote),
-  and running `claude` sessions in the embedded terminal
+  and running AI CLI sessions (`claude` or `copilot`) in the embedded terminal
   (colored real-terminal rendering, interactive keyboard/mouse input, focus, resize, scrollback,
   and toggling a session's terminal to one or more independent plain-shell instances scoped to
   its worktree, switchable and individually closeable/restartable).
