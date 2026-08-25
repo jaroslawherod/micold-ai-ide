@@ -21,12 +21,14 @@ Green is the gate. What each gate is watching:
 
 | Gate | Watching |
 |---|---|
-| `micold-core/tests/sandbox_argv.rs` | argv is a pure function of the spec — identical across repeated builds (K-1), correct flag and unit per supported limit (K-2) |
-| `micold-core/tests/sandbox_argv.rs` | **no flag for an unsupported limit** (K-3), and reconciliation reports it with a reason — the R5 answer, checked as behaviour rather than documented as a caveat |
-| `micold-core/tests/sandbox_argv.rs` | argv mounts equal the `MountSet` as sets (K-4) — nothing implicit, no home, no runtime socket |
-| `micold-core/tests/sandbox_argv.rs` | on Linux/macOS specs every `ProjectMount` has `container == host` (K-5) — the R2 claim git's worktree metadata depends on |
-| `micold-core/tests/sandbox_argv.rs` | `NoOutbound` emits the masquerade-disabled network **and** the published port (K-7). The measured failure mode — an `--internal` network that makes the port inert — is asserted *not* to be generated |
-| `micold-core/tests/sandbox_argv.rs` | the escalation denylist: no `--privileged`, `--cap-add`, `--pid=host`, `--network=host`, `seccomp=unconfined`, no host path outside the `MountSet` (K-11) |
+| `micold-core/src/sandbox/argv.rs` (unit) | argv is a pure function of the spec — identical across repeated builds (K-1), correct flag and unit per supported limit (K-2) |
+| `micold-core/src/sandbox/argv.rs` (unit) | **no flag for an unsupported limit** (K-3), and reconciliation reports it with a reason — the R5 answer, checked as behaviour rather than documented as a caveat |
+| `micold-core/src/sandbox/argv.rs` (unit) | argv mounts equal the `MountSet` as sets (K-4) — nothing implicit, no home, no runtime socket |
+| `micold-core/src/sandbox/argv.rs` (unit) | on Linux/macOS specs every `ProjectMount` has `container == host` (K-5) — the R2 claim git's worktree metadata depends on |
+| `micold-core/src/sandbox/argv.rs` (unit) | `NoOutbound` emits the masquerade-disabled network **and** the published port (K-7). The measured failure mode — an `--internal` network that makes the port inert — is asserted *not* to be generated |
+| `micold-core/src/sandbox/argv.rs` (unit) | the escalation denylist: no `--privileged`, `--cap-add`, `--pid=host`, `--network=host`, `seccomp=unconfined`, no host path outside the `MountSet` (K-11) |
+| `micold-core/tests/sandbox_argv.rs` | the **Windows** mapping, on whatever platform runs: mapped container paths under `/mnt/host`, host paths unrewritten, rule M-1 under both mappings, and `argv` agreeing with `Placement::git_routing_for` about whether the two halves differ (T114) |
+| `micold-core/tests/sandbox_needs_no_runtime.rs` | nothing outside a feature-gated `sandbox_real_*` target reaches `docker`/`podman`, and the process boundary stays in `exec.rs` — the property the three-platform matrix depends on (T115) |
 | `micold-core/tests/sandbox_runtime.rs` | each canned runtime failure maps to its `RuntimeError` variant (K-8); malformed JSON classifies rather than panics (K-12) |
 | `micold-core/tests/sandbox_runtime.rs` | stop/remove/start are idempotent (K-9); `acquire_image` emits progress more than once (K-10) |
 | `micold-core/tests/sandbox_runtime.rs` | podman's dialect passes K-1…K-12 too — an abstraction with one implementation is a guess |
@@ -43,10 +45,13 @@ Green is the gate. What each gate is watching:
 | `micold-client/tests/features_settings.rs` | each section's draft validates independently; leaving a section with an invalid field does not silently discard the edit |
 | `micold-client/tests/anatomy_call_sites.rs` | `section_list` is built in `ui/material/` with the chainable-builder-into-`Element` API, not privately in the feature (Principle VIII) |
 
-**The fake runtime** backs every `sandbox_*` test: a binary placed first on `PATH` that records its
-argv and replays canned output. That is why §A runs on Linux, macOS and Windows with nothing
-installed — and it is the only reason Principle VI's coverage of the adapter layer is honest rather
-than aspirational.
+**The fake runtime** backs every `sandbox_*` test — as an injected `exec::CommandRunner`, not a
+binary on `PATH`. `CliRuntime` is generic over the runner; the tests hand it `RecordingRunner`,
+which records each argv and replays canned output in process, so nothing is spawned and `PATH` is
+never consulted. That is why §A runs on Linux, macOS and Windows with nothing installed, and it is
+the only reason Principle VI's coverage of the adapter layer is honest rather than aspirational.
+`sandbox_needs_no_runtime.rs` is what keeps it true: only a `sandbox_real_*` target, gated on the
+`sandbox-real-runtime` feature, may construct `SystemRunner` or spawn a runtime by name.
 
 **What §A cannot tell you**: whether the container it describes is actually confined. Every test
 above asserts on strings.
