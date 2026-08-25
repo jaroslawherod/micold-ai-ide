@@ -1205,7 +1205,21 @@ B7, SC-008).
   `plan.md`'s Principle VI risk is marked retired rather than deleted, keeping the mitigation it
   named. `mise run test-core` green (64 `test result: ok`), `cargo fmt --all -- --check` clean —
   which is all a comment-and-docs change can be asked to prove.
-- [ ] T082 Confirm `mise run test` is green on Linux, macOS and Windows in CI (Principle VI), with every Copilot test passing on a runner that has no `copilot` installed
+- [X] T082 Confirm `mise run test` is green on Linux, macOS and Windows in CI (Principle VI), with every Copilot test passing on a runner that has no `copilot` installed
+
+  Green on all three, for commit `6564e1c`: `build + test (ubuntu-latest)` 4m40s, `(macos-latest)`
+  1m20s, `(windows-latest)` 4m56s, alongside `classify change`, `docs check`, `assertion freeze`,
+  `fmt + clippy` and `ci complete` — eight checks, no failures.
+
+  The second half of the task is the one worth writing down, because a green matrix does not by
+  itself prove it: **no runner has `copilot`.** Nothing in `.github/workflows/` installs it or
+  mentions it, so every Copilot test in the suite passed on three machines where the binary is
+  absent. That is the shape the feature was built to: availability is probed, never assumed, and a
+  test that needed the real CLI would have had to be `#[ignore]`d to get here. There is no live
+  `#[ignore]` anywhere in `crates/` — the four matches are all prose in doc comments recording that
+  two tests *used* to be ignored (`service_capability_fakes.rs`, `no_concrete_implementations.rs`)
+  and are not any more. So the Windows job in particular exercises Copilot's base-directory
+  resolution (T081) against fixtures on the platform that resolution is about.
 - [X] T083 Run quickstart.md §A and confirm every gate in the table has a corresponding green test
 
   Every gate is present and green, and seven of the table's pointers were wrong about where. The
@@ -1263,7 +1277,65 @@ B7, SC-008).
   which a machine running four `rustc` jobs and another worktree's build alongside it cannot
   guarantee. It is a load flake, not a regression — but it is one this repository's own build
   discipline makes likely, so it is named here rather than left for the next person to rediscover.
-- [ ] T084 Run quickstart.md §B B1–B8 against a real Copilot CLI with `COPILOT_HOME` pointed at a scratch directory, and fill in the "Recording the pass" table with the date, platform, and any step that did not behave as written — including B6, the untrusted-worktree behaviour no probe could confirm
+- [X] T084 Run quickstart.md §B B1–B8 against a real Copilot CLI with `COPILOT_HOME` pointed at a scratch directory, and fill in the "Recording the pass" table with the date, platform, and any step that did not behave as written — including B6, the untrusted-worktree behaviour no probe could confirm
+
+  Run on 2026-08-25 with the repository's `visual-pass` skill rather than by a person at a display:
+  Xvfb `:91` at 1600x1400 with Mesa lavapipe, a pinned matched client/daemon pair, a private
+  `XDG_RUNTIME_DIR`/`XDG_DATA_HOME`, three scratch git repos, and Copilot CLI 1.0.80 against
+  `COPILOT_HOME=/tmp/micold-copilot-probe`. The table in `quickstart.md` holds the per-step results;
+  what follows is what the pass *found*, since that is the part a green table hides.
+
+  **Seven of the eight steps pass, including the three §A cannot substitute for** — B2's click
+  budget (one press, no menu, on the default), B3's restart with the conversation intact, and B5's
+  externally-started sessions. B4 passes except for its badge-timing clause. **§B found four
+  defects, none of them in a path §A covers**, which is the answer to whether a manual pass was
+  worth running against a suite of 2167 tests:
+
+  1. **The badge never moves on its own (SC-005, FR-018)** — eight frames from 0.24 s to 0.76 s
+     after Return are byte-identical, and so is a frame taken long after the reply finished. It
+     changes only when some *other* broadcast happens to run. `micold-daemon/src/state.rs` calls
+     `note_activity` without the `broadcast_catalog()` beside it. True for `claude` as well as
+     `copilot`, so it is not a Copilot defect — it is one this feature's own success criterion is
+     the first thing to measure. Opened as T086.
+  2. **Restart on a session whose CLI is missing does nothing visible (FR-010)** —
+     `spawn_session_start` in `micold-daemon/src/server.rs` passes `reply: None` on the resume path,
+     so the failure is computed and dropped. Opened as T087.
+  3. **A failed start never says why (FR-010)** — the reason string the daemon builds ("GitHub
+     Copilot isn't installed. Install it, or start this session on another AI CLI.") reaches no
+     surface in the UI, not even a tooltip. Opened as T088.
+  4. **The session-start list opens at the window origin**, over the sidebar header, from both the
+     `+` and the secondary control — `evidence/session-start-menu-anchors-at-origin.png`.
+     `ContextArea` publishes the anchor on `ButtonPressed`; the iced button publishes its own
+     message on *release*; `start_menu_toggled` therefore always runs last and writes `(0, 0)`.
+     `features/session.rs`'s doc comment asserts the opposite ("the same press publishes both
+     messages … so the panel is never rendered at the origin") and is simply wrong about the event
+     phases. T085's `tests/session_start_press.rs` cannot see it: its assertion is
+     `SessionStartMenuAnchored(_)`. Opened as T089.
+
+  Two findings that are not defects but would have cost the next person the same time they cost
+  this pass, so they are written into the quickstart's steps rather than left in a log:
+
+  - **Copilot's folder trust is per-root and inherited by subdirectories.** B6's first attempt
+    produced no prompt at all, which read like the contract being wrong; it was the repo root
+    already sitting in `trustedFolders`. With this application's `.claude/worktrees/` layout that
+    means the trust question appears only for a project's *first* session, never for a new worktree
+    — which is a better outcome than research R12 dared assume, and the reason B6 needed a
+    brand-new project to be observable. When it does appear it appears in the session's own
+    terminal, and the sidebar shows the session running, not failed, while it waits.
+  - **A hand-started `copilot -p` writes no per-cwd index**, so B5's discovery has nothing to find
+    and the step fails for a reason that has nothing to do with the application. B5 needs a real
+    interactive `copilot`, driven through a pty.
+
+  And one artefact of running this *inside* Claude Code, recorded so it is not mistaken for
+  FR-007a misbehaving: the application inherits `CLAUDE_CODE_CHILD_SESSION` from the session driving
+  it, which turns off claude's transcript saving, so a `claude` session started under it looks empty
+  and is pruned on the next open. B8's resume half only became observable once every `CLAUDE*`
+  marker was unset from the launch environment.
+
+  What the pass cannot answer is unchanged from the skill's own limits: lavapipe says nothing about
+  frame pacing on the user's GPU, and no screenshot pipeline catches a chosen frame mid-animation.
+  Neither is a claim §B makes. The badge defect is not one of those limits — it is not late, it does
+  not happen at all.
 - [X] T085 Dispatch the primary start press through `State::start_intent` (FR-004 scenario 4), which
   T075 decided and left unwired. `ui/sidebar.rs` currently emits `SessionStartRequested` with
   `provider_for_start(None)` on every press, so an uninstalled stored default reaches the daemon as
@@ -1324,6 +1396,59 @@ B7, SC-008).
   `NothingAvailable` arm switched to `SessionStartMenuOpened`: **nothing fails**, which is the gap
   named two paragraphs up; covering it needs a state with an empty availability set and is not in
   this task's scope. `cargo test --workspace` is green (219 `test result: ok`).
+
+### Defects found by the §B manual pass (T084)
+
+Four, opened as tasks rather than written up as notes, because each is a behaviour the feature
+claims and does not have. None is reachable from §A: every one of them is either a timing property,
+a path only a second press exercises, or a pixel position.
+
+- [ ] T086 Broadcast after `note_activity`, so the badge moves when the event lands (SC-005, FR-018).
+  `state.rs`'s `open_event_log_tail` callback calls `state.note_activity(id, event)` and **discards
+  its return value** — the `bool` that says the projected signal changed. `drain_signals`, the other
+  producer of the same kind of change, returns the same `bool` to the supervisor tick, which pushes
+  a `CatalogChanged`; the event-log path has no tick behind it, so nothing pushes. The badge
+  therefore only ever changes when some unrelated broadcast happens to run — which §B measured: eight
+  frames from 0.24 s to 0.76 s after Return are byte-identical, and so is one taken long after the
+  reply finished. True for `claude` as well as `copilot`, so the defect is in the fold, not in
+  Copilot's reporting. The gate has to be about the *push*, not about the state: a test that asserts
+  `note_activity` changed the signal passes today. Assert a subscriber receives a catalog after a
+  synthesised event-log append, and probe it by deleting the new broadcast — nothing else in the
+  suite should fail, which is the measure of how alone that assertion is.
+
+- [ ] T087 Report a failed **resume** to the client (FR-010). `ClientMsg::SessionStart` — the restart
+  a user presses on an existing session — calls `spawn_session_start(…, LaunchMode::Resume, None, …)`
+  in `micold-daemon/src/server.rs`. That `None` is the reply channel, and the whole of the outcome
+  handling sits behind `if let Some((client, req)) = reply`: the start failure is logged at `warn`
+  and then dropped, with no `OperationError` and no `broadcast_catalog()`. So pressing restart on a
+  session whose CLI is no longer installed does *nothing visible at all* — the check
+  `state.rs` performs is correct and lands nowhere. The fresh path passes `Some((id, req))` and is
+  fine, which is why every test of the failure message passes. Note the asymmetry is deliberate for
+  the *success* case (a resume has no `SessionCreated` to send); the fix is to broadcast and report
+  the error regardless, not to invent a reply for the success.
+
+- [ ] T088 Surface the reason a start failed, somewhere a user can read it (FR-010). The daemon
+  already computes the sentence — "GitHub Copilot isn't installed. Install it, or start this session
+  on another AI CLI." — and it reaches `WireLifecycle::Failed { reason, attempts: 0 }`. §B found it
+  displayed nowhere: the bar reads "failed", and the reason is not in the row, not in the terminal,
+  not on hover. FR-010 asks for the CLI to be *named*, which "failed" does not do. Decide one
+  surface and gate it there; a tooltip is enough if that is what the sidebar can carry, but the
+  choice belongs in the task rather than in whatever is convenient at the call site.
+
+- [ ] T089 Anchor the session-start list to the press that opened it. Both halves of `SplitAction`
+  open the CLI list at the window origin, over the sidebar header, whatever row was pressed —
+  `evidence/session-start-menu-anchors-at-origin.png`. The cause is an event-phase mismatch:
+  `ContextArea::on_primary_press`/`on_secondary_anchor` publish the anchor from `reported_press`,
+  which fires on `ButtonPressed`, while the iced button inside publishes its own message on
+  **release**. `start_menu_toggled` therefore always runs *after* `start_menu_anchored` and
+  overwrites the anchor with `(0, 0)`. The doc comment on `features/session.rs`'s
+  `start_menu_anchored` asserts the opposite in so many words — "the same press publishes both
+  messages, and iced applies every queued message before it draws, so the panel is never rendered at
+  the origin" — and is wrong about which phase each message comes from; fix the comment with the
+  code. The overflow menu and the Settings dropdown anchor correctly, so this is not a
+  `clamp_menu_anchor` problem. T085's `tests/session_start_press.rs` cannot see it because its
+  assertion is `SessionStartMenuAnchored(_)`: the gate must assert the *point*, and the probe is to
+  restore the `(0, 0)` write and watch that one assertion fail.
 
 ---
 
