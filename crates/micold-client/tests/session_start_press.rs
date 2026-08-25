@@ -226,4 +226,3 @@ fn the_choice_is_offered_from_the_availability_set_the_press_can_still_refresh()
          on it happens for this press too. Published: {published:?}"
     );
 }
-
