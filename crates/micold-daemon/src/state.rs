@@ -21,7 +21,8 @@ use micold_core::protocol::messages::{
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{
-    AiCli, Session, SessionId, SessionLabel, SessionLocation, ShellInstanceId, TerminalMode,
+    AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
+    TerminalMode,
 };
 use micold_core::terminal::{LaunchMode, LaunchSpec};
 use micold_core::worktree::{self, Worktree};
@@ -187,6 +188,10 @@ struct SpawnPlan {
     /// Which AI CLI this session runs (feature 026, FR-007) — read from the record, never chosen
     /// here.
     provider: AiCli,
+    /// Whether the record is one the daemon has already judged resumable — a conversation was
+    /// found for it at startup (FR-008). Gates the "the CLI no longer has this conversation" check
+    /// in [`DaemonState::start_session`], which must not fire for a session that never had one.
+    resumable: bool,
     scrollback: usize,
 }
 
@@ -1059,6 +1064,10 @@ impl DaemonState {
                             cwd: s.location.cwd(project),
                             mode: s.mode,
                             provider: s.provider,
+                            resumable: matches!(
+                                s.lifecycle,
+                                SessionLifecycle::InterruptedResumable
+                            ),
                             scrollback,
                         })
                 })
@@ -1088,6 +1097,41 @@ impl DaemonState {
                 tracing::warn!(session = %id.0, cli = provider.command(), "AI CLI not on PATH; not starting");
                 self.lock().start_failures.insert(id, reason.clone());
                 return Err(io::Error::new(io::ErrorKind::NotFound, reason));
+            }
+
+            // FR-008 / T046: the CLI is installed, but is the conversation still there? A row the
+            // user is clicking Start on was offered because a conversation existed at startup; it
+            // can be deleted afterwards, by the CLI or by hand, and nothing tells us.
+            //
+            // Gated on `resumable` — the record having been marked at startup — for two reasons.
+            // It is the only state in which absence is *news*: a session created but never used
+            // has no recorded conversation either, and refusing that would break `Fresh`-adjacent
+            // resumes of sessions the daemon never saw a transcript for. And it keeps the check to
+            // one stat() on the path a user actually clicks.
+            //
+            // Reported, not silently started fresh: reusing the id for a new conversation would
+            // put the user in an empty session wearing the old one's title (spec clarification
+            // 2026-08-16).
+            if launch == LaunchMode::Resume && plan.resumable {
+                let gone = match provider.config_dir() {
+                    Some(config) => !provider.has_recorded_conversation(&config, &plan.cwd, id.0),
+                    // An unresolvable config directory is ignorance, not evidence of absence —
+                    // attempt the resume and let the CLI answer.
+                    None => false,
+                };
+                if gone {
+                    let reason = format!(
+                        "{} no longer has this conversation. Close this session, or start a new one.",
+                        provider.display_name()
+                    );
+                    tracing::warn!(
+                        session = %id.0,
+                        cli = provider.command(),
+                        "no recorded conversation to resume; not starting"
+                    );
+                    self.lock().start_failures.insert(id, reason.clone());
+                    return Err(io::Error::new(io::ErrorKind::NotFound, reason));
+                }
             }
         }
 
