@@ -174,11 +174,6 @@ fn escape_still_reaches_exactly_what_it_used_to() {
             Message::AddWorktreeCancelled,
         ),
         (
-            "settings",
-            |s| s.settings_draft = Some(Default::default()),
-            Message::SettingsCancelled,
-        ),
-        (
             "confirm_worktree_delete",
             |s| s.worktree_delete_target = Some("wt".to_string()),
             Message::WorktreeDeleteCancelled,

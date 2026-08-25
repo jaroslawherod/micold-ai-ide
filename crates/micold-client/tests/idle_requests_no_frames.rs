@@ -448,3 +448,39 @@ fn the_scan_actually_finds_the_rendering_layer() {
         redraw_call_sites()
     );
 }
+
+/// Feature 027, T064: the settings surface is inside the scan.
+///
+/// It is the largest thing this feature adds to the rendering layer, and a view rewrite is the
+/// change most likely to leave a component asking for frames at rest — a rail that animates its
+/// selection, a section that fades as it swaps. `ui_sources()` walks `src/ui` recursively, so
+/// these files are covered the moment they exist; what is *not* automatic is that they stay
+/// there. Naming them makes moving the settings surface out from under the walk a failure here
+/// rather than a silent loss of coverage, which is the same reason the showcase is named above.
+#[test]
+fn the_scan_reaches_the_settings_surface() {
+    let sources = ui_sources();
+    let found: Vec<&String> = sources
+        .iter()
+        .map(|(p, _)| p)
+        .filter(|p| p.as_str() == "ui/settings_view.rs" || p.starts_with("ui/settings/"))
+        .collect();
+
+    assert!(
+        found.iter().any(|p| p.as_str() == "ui/settings_view.rs"),
+        "`settings_view.rs` is not being scanned for frame requests. Found under {}: {:?}",
+        ui_dir().display(),
+        sources.iter().map(|(p, _)| p).collect::<Vec<_>>()
+    );
+    assert!(
+        found.len() >= 5,
+        "expected the settings view and a module per section inside the scan, found {found:?}"
+    );
+    assert!(
+        sources
+            .iter()
+            .any(|(p, _)| p == "ui/material/section_list.rs"),
+        "the section rail is not being scanned — it is the one new component here that renders a \
+         selection, which is exactly the shape that grows an animation later"
+    );
+}

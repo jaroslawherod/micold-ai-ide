@@ -299,3 +299,33 @@ pub fn navigation_drawer<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Eleme
         Layout::FullWidth,
     )
 }
+
+/// `SectionList` — the navigation rail a full-surface view is divided by (feature 027, FR-026a).
+///
+/// One live instance rather than three posed ones. The component's whole subject is *which row is
+/// current*, and three static rails each claiming a different row would show the same thing three
+/// times without ever showing the transition between them. The badge rides on the last row, which
+/// is where the settings surface puts it.
+pub fn section_list<'a>(showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let mut sections = vec![
+        material::Section::new("Appearance", Message::SectionShown(0)),
+        material::Section::new("Terminal", Message::SectionShown(1)),
+        material::Section::new("Environment", Message::SectionShown(2)),
+        material::Section::new("Session service", Message::SectionShown(3)),
+    ];
+    sections[3].badge = Some("Sharing".to_string());
+
+    arrange(
+        vec![posed(
+            "press a row to make it current",
+            iced::widget::container(
+                material::SectionList::new(sections, roles)
+                    .selected(showcase.section_shown())
+                    .badge_accent(roles.error),
+            )
+            .height(Length::Fixed(200.0)),
+            roles,
+        )],
+        Layout::Inline,
+    )
+}

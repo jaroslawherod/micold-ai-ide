@@ -119,10 +119,13 @@ fn the_registration_list_is_actually_being_read() {
         registry::probes().len(),
         surfaces
     );
+    // Sixteen when Tier 2 registered them. Fifteen since feature 027: Settings stopped being a
+    // floating surface and became a view (FR-026), so it has nothing to register — lowered
+    // deliberately, which is what the message below asks for.
     assert!(
-        surfaces.len() >= 16,
-        "fewer surfaces than the sixteen Tier 2 registered. If one was genuinely removed, lower \
-         this number deliberately; it is here so an empty or half-read parse cannot look healthy"
+        surfaces.len() >= 15,
+        "fewer surfaces than the fifteen registered. If one was genuinely removed, lower this \
+         number deliberately; it is here so an empty or half-read parse cannot look healthy"
     );
 
     let unique: BTreeSet<&Surface> = surfaces.iter().collect();
@@ -325,7 +328,6 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             error: None,
         }),
         worktree_form: Some(Default::default()),
-        settings_draft: Some(Default::default()),
         worktree_delete_target: Some("wt".to_string()),
         worktree_rename_draft: Some(WorktreeRenameDraft {
             dir_name: "wt".to_string(),

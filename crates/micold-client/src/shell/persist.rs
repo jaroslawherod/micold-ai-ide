@@ -40,8 +40,9 @@ use iced::Task;
 use micold_client::app::Message;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::provider::AiCliProvider;
-use micold_core::sandbox::placement::PlacementKind;
 use micold_core::settings::{Settings, SettingsStore};
+
+use micold_client::features::settings::SettingsDraft;
 
 use crate::shell::daemon_sync::PendingOp;
 use crate::shell::env_include::{default_resolution_cwd, refresh_env_include};
@@ -123,96 +124,62 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
 /// scrollback value (FR-019/FR-020).
 pub fn on_settings_opened(app: &mut App) -> Task<Message> {
     app.core.update(Message::SettingsOpened);
-    if let Some(draft) = app.core.settings_draft.as_mut() {
-        draft.scrollback_lines = app.scrollback_lines.to_string();
-        draft.env_include_enabled = app.env_include_enabled;
-        draft.env_include_script_path = app.env_include_script_path.clone();
-        draft.env_include_timeout = app.env_include_timeout_secs.to_string();
-        // Feature 027: seeded from the store rather than from `App`, because the placement is not
-        // otherwise held in memory — the connection subscription read it once at boot and the
-        // sandbox's *state* is what `App` carries from then on.
-        draft.sandboxed = app
-            .caps
-            .settings()
-            .map(|store| store.load().settings.daemon.placement)
-            .unwrap_or_default()
-            == PlacementKind::LocalSandbox;
-    }
+    // Seeded from one `Settings` value rather than field by field, so that a setting added to the
+    // persisted shape is carried into the draft by `from_settings` instead of needing a line here
+    // that somebody has to remember to write.
+    //
+    // The daemon half comes from the store and the rest from `App`, because that is where each of
+    // them actually lives: the scrollback limit and the environment include are applied to running
+    // sessions and so are held in memory, while the placement was read once at boot by the
+    // connection subscription and never kept.
+    let daemon = app
+        .caps
+        .settings()
+        .map(|store| store.load().settings.daemon)
+        .unwrap_or_default();
+    let current = Settings {
+        theme: app.core.theme_pref,
+        scrollback_lines: app.scrollback_lines,
+        env_include_enabled: app.env_include_enabled,
+        env_include_script_path: app.env_include_script_path.clone(),
+        env_include_timeout_secs: app.env_include_timeout_secs,
+        daemon,
+    };
+    app.core.settings_draft = Some(SettingsDraft::from_settings(&current));
     Task::none()
 }
 
-/// Save Settings: validate the scrollback and environment-include timeout fields; on
-/// success persist + apply + refresh + close, on failure keep the form open with an error
-/// (FR-020/FR-021; environment-include: FR-014, contracts/settings-ui.md).
+/// Save Settings: validate every section together; on success persist + apply + refresh + close,
+/// on failure keep the view open showing the offending field's section (FR-020/FR-021, feature 027
+/// FR-029; environment-include: FR-014, contracts/settings-ui.md).
+///
+/// The validation itself is no longer here. It moved beside the draft with feature 027, because a
+/// rejection now has to name the *section* holding the field it is about, and this function has no
+/// business knowing which section a field is in — see [`SettingsDraft::validate`].
 pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     let Some(draft) = app.core.settings_draft.clone() else {
         return Task::none();
     };
 
-    let scrollback_min = micold_core::settings::MIN_SCROLLBACK_LINES;
-    let scrollback_max = micold_core::settings::MAX_SCROLLBACK_LINES;
-    let scrollback_lines = match draft.scrollback_lines.trim().parse::<usize>() {
-        Ok(n) if (scrollback_min..=scrollback_max).contains(&n) => n,
-        Ok(_) => {
+    let valid = match draft.validate() {
+        Ok(valid) => valid,
+        Err(error) => {
             if let Some(d) = app.core.settings_draft.as_mut() {
-                d.error = Some(format!(
-                    "Enter a number between {scrollback_min} and {scrollback_max}."
-                ));
-            }
-            return Task::none();
-        }
-        Err(_) => {
-            if let Some(d) = app.core.settings_draft.as_mut() {
-                d.error = Some("Enter a whole number of lines.".to_string());
+                d.report(error);
             }
             return Task::none();
         }
     };
 
-    let timeout_min = micold_core::settings::MIN_ENV_INCLUDE_TIMEOUT_SECS;
-    let timeout_max = micold_core::settings::MAX_ENV_INCLUDE_TIMEOUT_SECS;
-    let env_include_timeout_secs = match draft.env_include_timeout.trim().parse::<u64>() {
-        Ok(t) if (timeout_min..=timeout_max).contains(&t) => t,
-        Ok(_) => {
-            if let Some(d) = app.core.settings_draft.as_mut() {
-                d.error = Some(format!(
-                    "Enter a timeout between {timeout_min} and {timeout_max} seconds."
-                ));
-            }
-            return Task::none();
-        }
-        Err(_) => {
-            if let Some(d) = app.core.settings_draft.as_mut() {
-                d.error = Some("Enter a whole number of seconds.".to_string());
-            }
-            return Task::none();
-        }
-    };
+    app.core.theme_pref = valid.theme;
+    app.scrollback_lines = valid.scrollback_lines;
+    app.env_include_enabled = valid.env_include_enabled;
+    app.env_include_script_path = valid.env_include_script_path.clone();
+    app.env_include_timeout_secs = valid.env_include_timeout_secs;
 
-    app.scrollback_lines = scrollback_lines;
-    app.env_include_enabled = draft.env_include_enabled;
-    app.env_include_script_path = draft.env_include_script_path;
-    app.env_include_timeout_secs = env_include_timeout_secs;
+    let settings = valid.into_settings();
     if let Some(store) = app.caps.settings() {
-        if let Err(err) = store.save(&Settings {
-            theme: app.core.theme_pref,
-            scrollback_lines,
-            env_include_enabled: app.env_include_enabled,
-            env_include_script_path: app.env_include_script_path.clone(),
-            env_include_timeout_secs,
-            // Everything else about the daemon is edited by its own section (feature 027, US3).
-            // The placement is here because this dialog is the only way to reach it until that
-            // section exists.
-            daemon: {
-                let mut daemon = store.load().settings.daemon;
-                daemon.placement = if draft.sandboxed {
-                    PlacementKind::LocalSandbox
-                } else {
-                    PlacementKind::HostProcess
-                };
-                daemon
-            },
-        }) {
+        if let Err(err) = store.save(&settings) {
             app.core
                 .notify_error(format!("Couldn't save your settings: {err}"));
         }
@@ -229,10 +196,10 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
         app.next_req += 1;
         daemon.send(ClientMsg::SettingsSet {
             req,
-            scrollback_lines: Some(scrollback_lines),
-            env_include_enabled: Some(app.env_include_enabled),
-            env_include_script_path: Some(app.env_include_script_path.clone()),
-            env_include_timeout_secs: Some(env_include_timeout_secs),
+            scrollback_lines: Some(settings.scrollback_lines),
+            env_include_enabled: Some(settings.env_include_enabled),
+            env_include_script_path: Some(settings.env_include_script_path.clone()),
+            env_include_timeout_secs: Some(settings.env_include_timeout_secs),
         });
         app.pending_ops.insert(req, PendingOp::SettingsSet);
     }
@@ -243,7 +210,7 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
-    app.core.update(Message::SettingsSaved); // closes the overlay
+    app.core.update(Message::SettingsSaved); // closes the view
     Task::none()
 }
 

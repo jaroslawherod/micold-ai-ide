@@ -173,23 +173,23 @@ check both themes at the supported window sizes.
 
 ### Tests first
 
-- [ ] T061 *(test)* [P] [US3] Write `crates/micold-client/tests/settings_sections.rs` — every setting that existed before this feature is present in exactly **one** section (US3 scenario 5, FR-028 — the migration's real risk)
-- [ ] T062 *(test)* [P] [US3] Add cross-section draft cases to `crates/micold-client/tests/features_settings.rs` — unsaved edits survive a section change, a save applies every visited section together, and a validation failure reports against its field with that section shown (US3 scenarios 2 and 3)
-- [ ] T063 *(test)* [P] [US3] Extend `crates/micold-client/tests/anatomy_call_sites.rs` — `section_list` is built in `ui/material/` with the chainable-builder-into-`Element` API, not privately in the feature (Principle VIII)
-- [ ] T064 *(test)* [P] [US3] Confirm `crates/micold-client/tests/idle_requests_no_frames.rs` covers the new view — no repainting at rest with Settings open (the regression a view rewrite is most likely to cause)
+- [X] T061 *(test)* [P] [US3] Write `crates/micold-client/tests/settings_sections.rs` — every setting that existed before this feature is present in exactly **one** section (US3 scenario 5, FR-028 — the migration's real risk)
+- [X] T062 *(test)* [P] [US3] Add cross-section draft cases to `crates/micold-client/tests/features_settings.rs` — unsaved edits survive a section change, a save applies every visited section together, and a validation failure reports against its field with that section shown (US3 scenarios 2 and 3)
+- [X] T063 *(test)* [P] [US3] Extend `crates/micold-client/tests/anatomy_call_sites.rs` — `section_list` is built in `ui/material/` with the chainable-builder-into-`Element` API, not privately in the feature (Principle VIII). **Restated**: the assertions landed in `tests/settings_sections.rs` instead. `anatomy_call_sites.rs` guards *token* bindings at call sites — that a spacing or colour is named rather than spelled — and knows nothing about composition; the rail's home and its builder shape are a claim about the settings view, which is what `settings_sections.rs` is about. The property the task was protecting is unchanged and asserted
+- [X] T064 *(test)* [P] [US3] Confirm `crates/micold-client/tests/idle_requests_no_frames.rs` covers the new view — no repainting at rest with Settings open (the regression a view rewrite is most likely to cause)
 
 ### Implementation
 
-- [ ] T065 [US3] Build the `section_list` primitive in `crates/micold-client/src/ui/material/section_list.rs` with the mandated builder API and its own unit tests (Principle VIII, FR-026a)
-- [ ] T066 [US3] Create the full-surface view in `crates/micold-client/src/ui/settings_view.rs`, composing `NavigationDrawer` for the rail and `section_list` for the sections (FR-026)
-- [ ] T067 [P] [US3] Move the appearance settings into `crates/micold-client/src/ui/settings/appearance.rs`
-- [ ] T068 [P] [US3] Move the terminal settings into `crates/micold-client/src/ui/settings/terminal.rs`
-- [ ] T069 [P] [US3] Move the environment-include settings into `crates/micold-client/src/ui/settings/environment.rs`
-- [ ] T070 [US3] Build the daemon section in `crates/micold-client/src/ui/settings/daemon.rs` — placement, runtime, image, and the sandbox controls promoted out of T042's temporary home (FR-027)
-- [ ] T071 [US3] Grow `SettingsDraft` to hold per-section drafts with validation beside the type in `crates/micold-client/src/features/settings.rs` (US3 scenarios 2 and 3)
-- [ ] T072 [US3] Render each active credential opt-in individually while it is active, in `crates/micold-client/src/ui/settings/daemon.rs` (FR-004c, N-2)
-- [ ] T073 [US3] Route the view into the shell and remove `crates/micold-client/src/ui/settings_form.rs`'s modal, updating `crates/micold-client/src/ui/mod.rs`'s `view` signature
-- [ ] T074 [P] [US3] Restructure `docs/user-guide/settings.md` for the sectioned view
+- [X] T065 [US3] Build the `section_list` primitive in `crates/micold-client/src/ui/material/section_list.rs` with the mandated builder API and its own unit tests (Principle VIII, FR-026a)
+- [X] T066 [US3] Create the full-surface view in `crates/micold-client/src/ui/settings_view.rs`, composing `NavigationDrawer` for the rail and `section_list` for the sections (FR-026)
+- [X] T067 [P] [US3] Move the appearance settings into `crates/micold-client/src/ui/settings/appearance.rs`
+- [X] T068 [P] [US3] Move the terminal settings into `crates/micold-client/src/ui/settings/terminal.rs`
+- [X] T069 [P] [US3] Move the environment-include settings into `crates/micold-client/src/ui/settings/environment.rs`
+- [X] T070 [US3] Build the daemon section in `crates/micold-client/src/ui/settings/daemon.rs` — placement, runtime, image, and the sandbox controls promoted out of T042's temporary home (FR-027)
+- [X] T071 [US3] Grow `SettingsDraft` to hold per-section drafts with validation beside the type in `crates/micold-client/src/features/settings.rs` (US3 scenarios 2 and 3)
+- [X] T072 [US3] Render each active credential opt-in individually while it is active, in `crates/micold-client/src/ui/settings/daemon.rs` (FR-004c, N-2)
+- [X] T073 [US3] Route the view into the shell and remove `crates/micold-client/src/ui/settings_form.rs`'s modal, updating `crates/micold-client/src/ui/mod.rs`'s `view` signature
+- [X] T074 [P] [US3] Restructure `docs/user-guide/settings.md` for the sectioned view
 - [ ] T075 [US3] Run quickstart.md §B.6 with the repo's `visual-pass` skill — both themes, keyboard-only navigation, narrowest supported width — and record the result
 
 **Checkpoint**: Settings is a view, and it is where the rest of this feature is configured from.

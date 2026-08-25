@@ -891,7 +891,7 @@ pub(crate) mod tests {
     // mostly what they were for; the stamper-seeding tests below still build a snapshot, so they
     // import them back rather than keep a second copy.
     use crate::shell::daemon_sync::tests::{snapshot_with, summary, summary_at};
-    use micold_client::features::settings::SettingsDraft;
+    use micold_client::features::settings::{EnvironmentDraft, SettingsDraft, TerminalDraft};
     // These tests drive whole messages through `update_inner`, which is this file's dispatcher, so
     // they stay here even though what they assert about is the daemon's: they are tests of the
     // routing reaching the right arm as much as of the arm itself.
@@ -1509,12 +1509,15 @@ pub(crate) mod tests {
         let mut app = base_app();
         app.daemon = Some(micold_client::daemon::Outbox::new(tx));
         app.core.settings_draft = Some(SettingsDraft {
-            scrollback_lines: "20000".into(),
-            env_include_enabled: false,
-            env_include_script_path: "/tmp/does-not-exist.sh".into(),
-            env_include_timeout: "15".into(),
-            sandboxed: false,
-            error: None,
+            terminal: TerminalDraft {
+                scrollback_lines: "20000".into(),
+            },
+            environment: EnvironmentDraft {
+                enabled: false,
+                script_path: "/tmp/does-not-exist.sh".into(),
+                timeout_secs: "15".into(),
+            },
+            ..SettingsDraft::default()
         });
 
         let _ = update_inner(&mut app, Message::SettingsSaved);
@@ -1550,12 +1553,15 @@ pub(crate) mod tests {
         let mut app = base_app();
         assert!(app.daemon.is_none());
         app.core.settings_draft = Some(SettingsDraft {
-            scrollback_lines: "20000".into(),
-            env_include_enabled: true,
-            env_include_script_path: String::new(),
-            env_include_timeout: "15".into(),
-            sandboxed: false,
-            error: None,
+            terminal: TerminalDraft {
+                scrollback_lines: "20000".into(),
+            },
+            environment: EnvironmentDraft {
+                enabled: true,
+                script_path: String::new(),
+                timeout_secs: "15".into(),
+            },
+            ..SettingsDraft::default()
         });
 
         let _ = update_inner(&mut app, Message::SettingsSaved);

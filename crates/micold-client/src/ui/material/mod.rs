@@ -77,6 +77,7 @@ mod progress;
 mod resize_handle;
 mod ripple;
 mod scrollable;
+mod section_list;
 mod select;
 /// The select's own anatomy, and the two behaviours nothing outside it can observe — its indicator
 /// answering for itself, and its highlight seeded from the current choice. In-crate for the same
@@ -150,6 +151,7 @@ pub use progress::StageProgress;
 pub use resize_handle::ResizeHandle;
 pub use ripple::{pulse as ripple_pulse, Ripple};
 pub use scrollable::Scrollable;
+pub use section_list::{Section, SectionList};
 pub use select::Select;
 pub use snackbar::Snackbar;
 pub use surface::{Kind as SurfaceKind, Surface};

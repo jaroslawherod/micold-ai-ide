@@ -417,6 +417,21 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::surfaces::scrollable,
     },
     Entry {
+        module: "material/section_list.rs",
+        component: "SectionList",
+        variants: &[],
+        density: &[],
+        // `Section` is deliberately absent, for the reason `MenuItem` and `TreeItem` are: it is a
+        // record the caller fills in, not a component. It is on the page all the same — a rail is
+        // nothing but the sections it was given.
+        posed: &["with a badge on the last row"],
+        live: &["press a row to make it current"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::surfaces::section_list,
+    },
+    Entry {
         module: "material/accordion.rs",
         component: "Accordion",
         variants: &[],

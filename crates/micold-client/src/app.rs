@@ -68,8 +68,18 @@ pub enum FieldId {
     /// Settings: the environment-include on/off checkbox. Not a text field — the checkbox now
     /// takes the keyboard too, and this is the same fact about the same dialog (BUG-003).
     SettingsEnvIncludeEnabled,
-    /// The "run the service in a container" checkbox (feature 027).
-    SettingsSandboxed,
+    /// Settings: the sandbox image's reference (feature 027).
+    SettingsImageReference,
+    /// Settings: the archive an imported image is loaded from (feature 027).
+    SettingsImagePath,
+    /// Settings: one host credential's share opt-in (feature 027, FR-004c).
+    ///
+    /// Parameterised rather than four variants, because the four are the *same* control repeated
+    /// over `CredentialShare::ALL` — spelling them out would mean a fifth share silently losing
+    /// its keyboard focus rather than failing to compile.
+    SettingsCredential(micold_core::sandbox::CredentialShare),
+    /// Settings: the "keep sessions running after I sign out" checkbox (feature 027).
+    SettingsSurviveLogout,
     /// Settings: the environment-include script path.
     SettingsEnvIncludePath,
     /// Settings: the environment-include timeout.
@@ -464,7 +474,28 @@ pub enum Message {
     SettingsScrollbackChanged(String),
     /// The Settings environment-include enabled checkbox was toggled (feature 011, FR-001).
     /// The "run the daemon in a container" checkbox was toggled (feature 027, FR-001).
-    SettingsSandboxedToggled(bool),
+    /// The Settings view moved to another section (feature 027, FR-026).
+    SettingsSectionShown(crate::features::settings::SettingsSection),
+    /// The Settings theme picker changed (feature 027, FR-027).
+    ///
+    /// Distinct from [`Message::ThemePreferenceChanged`], which the app bar's cycle button emits
+    /// and which applies immediately. This one edits the draft and takes effect on save, like
+    /// every other control on the form.
+    SettingsThemeChanged(micold_core::theme::ThemePreference),
+    /// Where the session service runs (feature 027, FR-001).
+    SettingsPlacementChanged(micold_core::sandbox::placement::PlacementKind),
+    /// Which container runtime drives the sandbox (feature 027, FR-021).
+    SettingsRuntimeChanged(micold_core::sandbox::runtime::RuntimeKind),
+    /// How the sandbox image is obtained (feature 027, FR-024).
+    SettingsImageKindChanged(micold_core::sandbox::image::ImageSourceKind),
+    /// The sandbox image's reference changed (feature 027, FR-024).
+    SettingsImageReferenceChanged(String),
+    /// The archive an imported image is loaded from changed (feature 027, FR-024a).
+    SettingsImagePathChanged(String),
+    /// One host credential's share was opted into or out of (feature 027, FR-004c).
+    SettingsCredentialToggled(micold_core::sandbox::CredentialShare, bool),
+    /// Whether sessions outlive the user's sign-out (feature 027, FR-014a).
+    SettingsSurviveLogoutToggled(bool),
     SettingsEnvIncludeEnabledToggled(bool),
     /// The Settings environment-include script path field changed (FR-002).
     SettingsEnvIncludePathChanged(String),
@@ -888,6 +919,10 @@ impl State {
             && !self.terminal_released
             && self.focused_field.is_none()
             && !self.any_surface_takes_keyboard()
+            // Settings is not a floating surface any more, so the registry cannot answer for it
+            // (feature 027, FR-026). Without this the terminal it replaced on screen would still
+            // be taking every key the user typed into a form.
+            && self.settings_draft.is_none()
     }
 
     /// Any floating surface that takes the keyboard while it is open (FR-004, FR-017).
@@ -1704,34 +1739,87 @@ impl State {
                     self.settings_draft = Some(SettingsDraft::default());
                 }
             }
-            Message::SettingsScrollbackChanged(text) => {
+            Message::SettingsSectionShown(section) => {
                 if let Some(draft) = &mut self.settings_draft {
-                    draft.scrollback_lines = text;
-                    draft.error = None;
+                    draft.show(section);
                 }
             }
-            Message::SettingsSandboxedToggled(sandboxed) => {
+            Message::SettingsThemeChanged(theme) => {
                 if let Some(draft) = &mut self.settings_draft {
-                    draft.sandboxed = sandboxed;
-                    draft.error = None;
+                    draft.appearance.theme = theme;
+                    draft.edited();
+                }
+            }
+            Message::SettingsScrollbackChanged(text) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.terminal.scrollback_lines = text;
+                    draft.edited();
                 }
             }
             Message::SettingsEnvIncludeEnabledToggled(enabled) => {
                 if let Some(draft) = &mut self.settings_draft {
-                    draft.env_include_enabled = enabled;
-                    draft.error = None;
+                    draft.environment.enabled = enabled;
+                    draft.edited();
                 }
             }
             Message::SettingsEnvIncludePathChanged(text) => {
                 if let Some(draft) = &mut self.settings_draft {
-                    draft.env_include_script_path = text;
-                    draft.error = None;
+                    draft.environment.script_path = text;
+                    draft.edited();
                 }
             }
             Message::SettingsEnvIncludeTimeoutChanged(text) => {
                 if let Some(draft) = &mut self.settings_draft {
-                    draft.env_include_timeout = text;
-                    draft.error = None;
+                    draft.environment.timeout_secs = text;
+                    draft.edited();
+                }
+            }
+            Message::SettingsPlacementChanged(placement) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.daemon.placement = placement;
+                    draft.edited();
+                }
+            }
+            Message::SettingsRuntimeChanged(runtime) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.daemon.profile.runtime = runtime;
+                    draft.edited();
+                }
+            }
+            Message::SettingsImageKindChanged(kind) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.daemon.profile.image.kind = kind;
+                    draft.edited();
+                }
+            }
+            Message::SettingsImageReferenceChanged(text) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.daemon.profile.image.reference = text;
+                    draft.edited();
+                }
+            }
+            Message::SettingsImagePathChanged(text) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.daemon.image_path = text;
+                    draft.edited();
+                }
+            }
+            Message::SettingsCredentialToggled(share, shared) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    // A set, so opting in twice is opting in once (rule N-2) and the order the
+                    // section lists them in is the order it always lists them in.
+                    if shared {
+                        draft.daemon.profile.credentials.insert(share);
+                    } else {
+                        draft.daemon.profile.credentials.remove(&share);
+                    }
+                    draft.edited();
+                }
+            }
+            Message::SettingsSurviveLogoutToggled(survive) => {
+                if let Some(draft) = &mut self.settings_draft {
+                    draft.daemon.profile.survive_logout = survive;
+                    draft.edited();
                 }
             }
             Message::SettingsSaved => {
@@ -1862,7 +1950,14 @@ impl State {
 /// The function itself survives only as the name the scrim and the tests already call; T034
 /// collapses the keyboard subscription onto the same call and this goes with it.
 pub fn on_escape(state: &State) -> Option<Message> {
-    crate::overlay::registry::escape(state)
+    // The registry first: a dialog opened *over* the Settings view is the thing Escape is about,
+    // and Settings is no longer in that list to answer for itself (feature 027, FR-026).
+    crate::overlay::registry::escape(state).or_else(|| {
+        state
+            .settings_draft
+            .is_some()
+            .then_some(Message::SettingsCancelled)
+    })
 }
 
 /// Where a decoded key press should go (feature 006, FR-009/FR-011). Pure; see

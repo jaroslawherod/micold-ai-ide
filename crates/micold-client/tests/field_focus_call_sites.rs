@@ -81,9 +81,25 @@ fn rendering_files() -> Vec<(String, String)> {
 /// application, and a check that reads the source has to stop somewhere; stopping at the statement
 /// is both the smallest span that contains the whole chain and the largest that cannot reach the
 /// next field.
+///
+/// Crude, but not *blind*: a `;` inside a string literal does not end a statement, and supporting
+/// text is prose, where a semicolon is ordinary punctuation. Reading one as the end of the chain
+/// truncated the span before `.track_focus(` and reported two correctly wired fields as unwired —
+/// a gate failing on the English in a caption is worse than one that skips string literals.
 fn expression(source: &str, from: usize) -> &str {
     let rest = &source[from..];
-    &rest[..rest.find(';').unwrap_or(rest.len())]
+    let mut in_string = false;
+    let mut escaped = false;
+    for (offset, ch) in rest.char_indices() {
+        match ch {
+            _ if escaped => escaped = false,
+            '\\' if in_string => escaped = true,
+            '"' => in_string = !in_string,
+            ';' if !in_string => return &rest[..offset],
+            _ => {}
+        }
+    }
+    rest
 }
 
 /// The constructors an input is built through. One list, so adding a control that can hold the
@@ -142,7 +158,11 @@ fn the_helper_the_rule_names_still_joins_both_halves() {
 
 /// A `TextField` call site outside the rendering layer would slip past [`rendering_files`] and its
 /// directory walk without anyone noticing. This is the fixture's own smoke test: the sweep must
-/// actually be reaching the four dialogs it is supposed to police.
+/// actually be reaching the surfaces it is supposed to police.
+///
+/// `ui/settings_form.rs` was on this list until feature 027 turned Settings into a sectioned view;
+/// its fields live in `ui/settings/` now, and the three sections that own one are named here so the
+/// migration cannot quietly cost the sweep its reach.
 #[test]
 fn the_sweep_reaches_the_application_dialogs() {
     let found: Vec<PathBuf> = rendering_files()
@@ -155,7 +175,9 @@ fn the_sweep_reaches_the_application_dialogs() {
         "ui/rename.rs",
         "ui/worktree_rename.rs",
         "ui/worktree_form.rs",
-        "ui/settings_form.rs",
+        "ui/settings/terminal.rs",
+        "ui/settings/environment.rs",
+        "ui/settings/daemon.rs",
         "ui/confirm_delete.rs",
     ] {
         assert!(
@@ -163,4 +185,28 @@ fn the_sweep_reaches_the_application_dialogs() {
             "{expected} builds an input and the sweep did not see it — found {found:?}",
         );
     }
+}
+
+/// The scanner's own case. A semicolon inside a caption is punctuation, and reading it as the end
+/// of the builder chain is how this gate once failed on two fields that were wired correctly.
+#[test]
+fn a_semicolon_inside_a_string_does_not_end_the_expression() {
+    let source = r#"    let f = TextField::new("", v, r)
+        .supporting("Run in a shell; its variables reach every session")
+        .track_focus(FieldId::X, focused);
+    let g = TextField::new("", w, r);
+"#;
+    let offset = source
+        .find("TextField::new(")
+        .expect("the fixture builds a field");
+
+    let span = expression(source, offset);
+    assert!(
+        span.contains(".track_focus("),
+        "the span stopped inside the caption: {span:?}",
+    );
+    assert!(
+        !span.contains("let g"),
+        "the span ran past its own statement and into the next field: {span:?}",
+    );
 }

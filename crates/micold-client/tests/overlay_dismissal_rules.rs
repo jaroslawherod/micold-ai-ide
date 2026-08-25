@@ -112,7 +112,7 @@ fn a_surface_identity_is_its_own_name_and_nothing_else() {
     assert_eq!(id.to_string(), "about");
     assert_ne!(
         id,
-        SurfaceId::new("settings"),
+        SurfaceId::new("add_worktree"),
         "identities must distinguish surfaces — the registry keys on them"
     );
 }

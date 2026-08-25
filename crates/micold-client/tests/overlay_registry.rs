@@ -21,6 +21,14 @@
 //! reached before T031. T031 registered the other six, and that *did* change what Escape does —
 //! recorded below in `escape_now_reaches_every_popover`, not hidden inside the table.
 //!
+//! ## Nine dialogs, then eight (feature 027)
+//!
+//! The counts above are the ones this file was written with. Settings left the list in feature
+//! 027 — it is a view now, not a floating surface (FR-026), so it has no cancellation to declare
+//! and no place in a registry of things Escape closes. `every_dialog_is_in_the_list` carries the
+//! current arithmetic; the narrative above is kept as written because it is about why the file
+//! has the shape it has, not about how many rows are in it today.
+//!
 //! ## The keyboard path (T034)
 //!
 //! Up to T034 all of that was about what dispatch *would* answer; the live Escape key still went
@@ -85,11 +93,6 @@ fn dialogs() -> Vec<Dialog> {
             id: "add_worktree",
             cancel: Message::AddWorktreeCancelled,
             open: |state| state.worktree_form = Some(Default::default()),
-        },
-        Dialog {
-            id: "settings",
-            cancel: Message::SettingsCancelled,
-            open: |state| state.settings_draft = Some(Default::default()),
         },
         Dialog {
             id: "confirm_worktree_delete",
@@ -206,18 +209,22 @@ fn every_dialog_is_in_the_list() {
     // The compile-time half of this went with the enum: an exhaustive `match` used to make a
     // dialog added without an expectation a build error. Nothing about a registration line is
     // exhaustive, so the hold is now arithmetic — this list against the registry's own count of
-    // dialogs. A tenth dialog registered without a row here fails on the second assertion, and
-    // the twenty states this file covers stay twenty.
+    // dialogs. A ninth dialog registered without a row here fails on the second assertion, and
+    // the eighteen states this file covers stay eighteen.
+    //
+    // Nine until feature 027. Settings was the largest of them and is no longer a dialog at all —
+    // it is a view (FR-026), so it neither floats nor takes Escape, and the count going *down* is
+    // this file noticing that rather than a row being lost.
     assert_eq!(
         dialogs().len(),
-        9,
-        "the dialog list has drifted. Add the new dialog here, or the twenty states this file is \
-         meant to cover are no longer twenty"
+        8,
+        "the dialog list has drifted. Add the new dialog here, or the eighteen states this file is \
+         meant to cover are no longer eighteen"
     );
     assert_eq!(
         every_state().len(),
-        20,
-        "nine dialogs plus nothing open, each with the filter panel open and closed"
+        18,
+        "eight dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -277,7 +284,6 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
     let openers: &[(&str, Message)] = &[
         ("about", Message::AboutOpened),
         ("add_worktree", Message::AddWorktreeOpened),
-        ("settings", Message::SettingsOpened),
     ];
 
     for (name, opening) in openers {
@@ -602,7 +608,6 @@ fn a_dialog_draws_from_its_own_state() {
             s.update(Message::RenameStarted(std::path::PathBuf::from("/p")))
         }),
         ("add_worktree", |s| s.update(Message::AddWorktreeOpened)),
-        ("settings", |s| s.update(Message::SettingsOpened)),
         ("confirm_worktree_delete", |s| {
             s.update(Message::WorktreeDeleteRequested("feat-x".to_string()))
         }),

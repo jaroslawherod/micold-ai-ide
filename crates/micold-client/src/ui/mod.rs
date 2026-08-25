@@ -22,7 +22,9 @@ pub use material::ripple_pulse;
 pub use material::target_offset_delta;
 pub(crate) mod project_selector;
 pub(crate) mod rename;
-pub(crate) mod settings_form;
+/// The Settings sections — one module per page of the full-surface view (feature 027, FR-026).
+pub(crate) mod settings;
+pub(crate) mod settings_view;
 mod shell;
 mod sidebar;
 // The sidebar list's scroll viewport, by name — the binary addresses `scroll_to` to it when a
@@ -168,7 +170,18 @@ pub fn view<'a>(
     // With a project open, show the worktree sidebar beside the main area; the main area is
     // the embedded terminal when a session is active (FR-012), else the project surface. The
     // sidebar slides in/out and is resizable; the main content fades when it changes.
-    let body: Element<'a, Message> = if state.workspace.active_project().is_some() {
+    // Settings takes the whole content area rather than floating over it (feature 027, FR-026).
+    // Checked before the project branch, and returning early from the same `body` binding, so that
+    // the app bar and the connection banner below still frame it — a full-surface view is not a
+    // separate window, and the way out of it has to stay visible.
+    let body: Element<'a, Message> = if let Some(draft) = state.settings_draft.as_ref() {
+        material::ViewFade::new(
+            settings_view::view(draft, env_include_outcome, state.focused_field, scheme),
+            bg,
+        )
+        .showing(main_content_key(state))
+        .into()
+    } else if state.workspace.active_project().is_some() {
         let main_inner: Element<'a, Message> = if state.active_session.is_some() {
             terminal::pane(state, grid, selection, display_offset, scheme)
         } else {
@@ -476,6 +489,13 @@ fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
 /// on every re-render — the same question the old `MotionKey::Main` reset answered, now asked of
 /// the component that owns the track.
 fn main_content_key(state: &State) -> u64 {
+    // Settings is a content state like any other, so switching into and out of it crossfades the
+    // way opening a project does. A sentinel rather than the next small integer: the session arm
+    // below mixes a real id into the low bits, and a key that a session could collide with would
+    // suppress the fade on exactly the transition it is for.
+    if state.settings_draft.is_some() {
+        return u64::MAX;
+    }
     match (state.workspace.active_project(), state.active_session) {
         (None, _) => 0,
         (Some(_), None) => 1,
