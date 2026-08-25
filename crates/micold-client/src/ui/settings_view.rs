@@ -62,7 +62,7 @@ pub fn view<'a>(
     let rail: Element<'a, Message> = material::NavigationDrawer::new(
         SectionList::new(sections, r)
             .selected(draft.section.index())
-            .badge_accent(r.error),
+            .badge_accent(r.error, r.on_error),
         Space::new().width(Length::Fixed(0.0)).height(Length::Fill),
     )
     .open(true)

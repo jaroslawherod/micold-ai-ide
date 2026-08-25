@@ -53,7 +53,8 @@ fn mark_archived_durable(project: &Path, session: &Session) {
     }
 }
 
-/// The durable aggregate the daemon owns. The single writer of `projects.json` + `settings.json`.
+/// The durable aggregate the daemon owns. The single writer of `projects.json`, and one of two
+/// writers of `settings.json` — see [`Catalog::persist_service_settings`] for what that costs.
 pub struct Catalog {
     workspace: Workspace,
     settings: Settings,
@@ -205,10 +206,41 @@ impl Catalog {
     pub fn set_scrollback(&mut self, lines: usize) -> io::Result<usize> {
         let clamped = clamp_scrollback(lines);
         self.settings.scrollback_lines = clamped;
-        if let Some(store) = &self.settings_store {
-            store.save(&self.settings)?;
-        }
+        self.persist_service_settings()?;
         Ok(clamped)
+    }
+
+    /// Write the four service-owned fields into `settings.json`, leaving every other field as the
+    /// file has it.
+    ///
+    /// # Why this cannot write `self.settings` whole
+    ///
+    /// The client writes that file too, and it owns strictly more of it than this process does:
+    /// the theme, where the service is placed, and the whole sandbox profile — runtime, image,
+    /// resource budget, network posture, and the credential opt-ins. `self.settings` is whatever
+    /// *this daemon* read at its own boot, which for every field outside `settings_wire` is a
+    /// snapshot that only gets staler.
+    ///
+    /// The two calls that reach here both arrive from `SettingsSet`, which the client sends
+    /// **immediately after** writing the file — so saving the whole struct reverts the save that
+    /// just happened, every time, and reliably enough that a save changing nothing at all still
+    /// wiped the theme and every credential the user had shared. That was invisible until feature
+    /// 027: before it, the Settings form held only the four fields this daemon carries, so writing
+    /// the struct whole wrote back the values it had just been sent.
+    ///
+    /// Re-reading is the fix rather than widening `SettingsSet`, because the extra fields are not
+    /// the service's to know. A theme is not a session-service setting, and a protocol that
+    /// carried one would make this daemon the authority on a question it has no opinion about.
+    fn persist_service_settings(&self) -> io::Result<()> {
+        if let Some(store) = &self.settings_store {
+            let mut on_disk = store.load().settings;
+            on_disk.scrollback_lines = self.settings.scrollback_lines;
+            on_disk.env_include_enabled = self.settings.env_include_enabled;
+            on_disk.env_include_script_path = self.settings.env_include_script_path.clone();
+            on_disk.env_include_timeout_secs = self.settings.env_include_timeout_secs;
+            store.save(&on_disk)?;
+        }
+        Ok(())
     }
 
     /// Set any of the three service-owned environment-include settings (leaving a field unchanged
@@ -229,9 +261,7 @@ impl Catalog {
         if let Some(timeout_secs) = timeout_secs {
             self.settings.env_include_timeout_secs = clamp_env_include_timeout(timeout_secs);
         }
-        if let Some(store) = &self.settings_store {
-            store.save(&self.settings)?;
-        }
+        self.persist_service_settings()?;
         Ok(())
     }
 

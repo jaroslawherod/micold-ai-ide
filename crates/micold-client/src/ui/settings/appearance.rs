@@ -11,7 +11,7 @@
 use crate::app::Message;
 use crate::features::settings::SettingsDraft;
 use crate::ui::material::Select;
-use crate::ui::settings::{note, page, Named};
+use crate::ui::settings::{name_of, note, page, Named};
 use iced::Element;
 use micold_core::theme::ThemePreference;
 use micold_core::tokens::Roles;
@@ -34,7 +34,10 @@ const THEMES: &[Named<ThemePreference>] = &[
 pub fn view<'a>(draft: &'a SettingsDraft, roles: Roles) -> Element<'a, Message> {
     let theme = Select::new(
         THEMES,
-        Some(Named(draft.appearance.theme, "")),
+        Some(Named(
+            draft.appearance.theme,
+            name_of(THEMES, draft.appearance.theme),
+        )),
         |chosen: Named<ThemePreference>| Message::SettingsThemeChanged(chosen.0),
         roles,
     )

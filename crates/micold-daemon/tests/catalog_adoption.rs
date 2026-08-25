@@ -334,3 +334,73 @@ fn nothing_in_the_catalog_erases_a_projects_memory() {
          a stale memory costs nothing, where an erased one costs the user their place (FR-005a)"
     );
 }
+
+/// The regression that a visual pass found and every automated test missed (feature 027, T075).
+///
+/// `settings.json` has two writers, not one: the client owns the theme, the placement and the whole
+/// sandbox profile, and this daemon owns the four fields `settings_wire` projects. A `SettingsSet`
+/// arrives right after the client has written the file, so a daemon that saves its whole in-memory
+/// `Settings` reverts everything it does not own to whatever it read at its own boot.
+///
+/// It was silent for as long as the Settings form held only the fields the daemon carries. Feature
+/// 027 put the theme and the credential opt-ins in the same save, and a save that changed nothing
+/// at all then cleared both — measured, on a running client, before this test existed.
+#[test]
+fn a_service_settings_write_leaves_the_clients_own_fields_alone() {
+    use micold_core::sandbox::placement::PlacementKind;
+    use micold_core::sandbox::CredentialShare;
+    use micold_core::settings::Settings;
+    use micold_core::theme::ThemePreference;
+
+    let dir = tempfile::tempdir().unwrap();
+    let settings_path = dir.path().join("settings.json");
+
+    // The daemon boots and reads the file as it stands: defaults for everything.
+    let mut catalog = Catalog::load(
+        Box::new(JsonFileStore::at(dir.path().join("projects.json"))),
+        Box::new(JsonFileSettingsStore::at(settings_path.clone())),
+    );
+
+    // Then the user saves Settings. The client writes the whole document first — a theme and a
+    // shared credential the daemon has never heard of — and only then sends `SettingsSet`.
+    let store = JsonFileSettingsStore::at(settings_path.clone());
+    let mut written = store.load().settings;
+    written.theme = ThemePreference::Dark;
+    written.daemon.placement = PlacementKind::LocalSandbox;
+    written
+        .daemon
+        .sandbox
+        .credentials
+        .insert(CredentialShare::SshAgent);
+    store.save(&written).unwrap();
+
+    catalog.set_scrollback(20_000).unwrap();
+    catalog
+        .set_env_include(Some(false), None, Some(30))
+        .unwrap();
+
+    let after: Settings = store.load().settings;
+    assert_eq!(
+        after.theme,
+        ThemePreference::Dark,
+        "the daemon reverted the theme the client had just saved"
+    );
+    assert_eq!(
+        after.daemon.placement,
+        PlacementKind::LocalSandbox,
+        "the daemon reverted where the client had asked the service to run"
+    );
+    assert!(
+        after
+            .daemon
+            .sandbox
+            .credentials
+            .contains(&CredentialShare::SshAgent),
+        "the daemon cleared a credential the user had explicitly shared"
+    );
+
+    // And it did write its own fields, or the merge above would be preserving by doing nothing.
+    assert_eq!(after.scrollback_lines, 20_000);
+    assert!(!after.env_include_enabled);
+    assert_eq!(after.env_include_timeout_secs, 30);
+}

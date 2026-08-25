@@ -321,7 +321,7 @@ pub fn section_list<'a>(showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
             iced::widget::container(
                 material::SectionList::new(sections, roles)
                     .selected(showcase.section_shown())
-                    .badge_accent(roles.error),
+                    .badge_accent(roles.error, roles.on_error),
             )
             .height(Length::Fixed(200.0)),
             roles,

@@ -33,10 +33,18 @@ use iced::{Alignment, Element, Length};
 use super::{Button, ButtonVariant, Tag, Text, TypeRole};
 use micold_core::tokens::{spacing, Rgb, Roles};
 
-/// The rail's width. Wide enough for the longest section name this application has at the label
-/// role, and fixed rather than shrink-to-fit so that switching sections never moves the content
-/// beside it — a rail that resized with its own selection would shift the whole form sideways.
-const RAIL_WIDTH: f32 = 208.0;
+/// The rail's width. Fixed rather than shrink-to-fit so that switching sections never moves the
+/// content beside it — a rail that resized with its own selection would shift the whole form
+/// sideways.
+///
+/// Wide enough for the widest row the application can produce, which is not the widest *label*: the
+/// current row is drawn `Filled` and so is inset by `PADDING_FILLED` where every other row is inset
+/// by `PADDING_TEXT`, and it may carry a badge as well. At 208 the longest name fit everywhere
+/// except where it mattered — "Session service" wrapped onto two lines exactly when it was the
+/// section you were on (found by the T075 visual pass; every layout gate was green, because a
+/// wrapped label occupies the box it was given). The test
+/// `the_current_row_fits_the_widest_label_and_a_badge` keeps that arithmetic honest.
+const RAIL_WIDTH: f32 = 288.0;
 
 /// One destination in a [`SectionList`].
 ///
@@ -73,7 +81,7 @@ impl<M> Section<M> {
 pub struct SectionList<'a, M> {
     sections: Vec<Section<M>>,
     selected: usize,
-    badge_accent: Option<Rgb>,
+    badge_accent: Option<(Rgb, Rgb)>,
     roles: Roles,
     _marker: PhantomData<&'a M>,
 }
@@ -101,10 +109,15 @@ impl<'a, M: Clone + 'a> SectionList<'a, M> {
         self
     }
 
-    /// The colour a badge is drawn in. Defaults to the roles' primary accent; state it when the
-    /// badge is a *warning* rather than a marker.
-    pub fn badge_accent(mut self, accent: Rgb) -> Self {
-        self.badge_accent = Some(accent);
+    /// The colour pair a badge is drawn in — its fill, and the colour of the text on it. Defaults
+    /// to the roles' primary accent; state it when the badge is a *warning* rather than a marker.
+    ///
+    /// A pair rather than one accent because the badge is drawn opaque, and it is drawn opaque
+    /// because it sits on two different backgrounds: the surface behind an ordinary row, and the
+    /// `primary` fill of the current one. A single accent at the chip's usual 20% tint disappeared
+    /// into the second (T075).
+    pub fn badge_accent(mut self, fill: Rgb, on_fill: Rgb) -> Self {
+        self.badge_accent = Some((fill, on_fill));
         self
     }
 }
@@ -124,7 +137,9 @@ fn variant_at(index: usize, selected: usize) -> ButtonVariant {
 impl<'a, M: Clone + 'a> From<SectionList<'a, M>> for Element<'a, M> {
     fn from(list: SectionList<'a, M>) -> Self {
         let roles = list.roles;
-        let accent = list.badge_accent.unwrap_or(roles.primary);
+        let (badge_fill, badge_on_fill) = list
+            .badge_accent
+            .unwrap_or((roles.primary, roles.on_primary));
         let selected = list.selected;
 
         let rows = list.sections.into_iter().enumerate().map(|(i, section)| {
@@ -139,7 +154,11 @@ impl<'a, M: Clone + 'a> From<SectionList<'a, M>> for Element<'a, M> {
             .spacing(spacing::SM)
             .align_y(Alignment::Center);
             if let Some(badge) = section.badge {
-                content = content.push(Tag::<M>::new(badge, accent).role(TypeRole::Caption));
+                content = content.push(
+                    Tag::<M>::new(badge, badge_fill)
+                        .solid(badge_on_fill)
+                        .role(TypeRole::Caption),
+                );
             }
 
             Button::with_content(content, variant, roles)
@@ -165,6 +184,17 @@ mod tests {
     use super::*;
     use micold_core::theme::ColorScheme;
     use micold_core::tokens::roles;
+
+    /// How wide "Session service" is at `TypeRole::Action`, and "Sharing" is inside its chip at
+    /// `TypeRole::Caption` — both approximate, read off the rendered rail during the T075 visual
+    /// pass rather than measured by a shaper.
+    ///
+    /// Approximate is enough for what they are used for: a *floor* under the rail's content width,
+    /// with the slack that follows from rounding both up. They are here so that a longer section
+    /// name added later fails a test instead of quietly wrapping.
+    const WIDEST_LABEL: f32 = 160.0;
+    /// See [`WIDEST_LABEL`].
+    const WIDEST_BADGE: f32 = 56.0;
 
     fn sections() -> Vec<Section<()>> {
         vec![
@@ -225,6 +255,24 @@ mod tests {
         badged[2].badge = Some("Sharing".into());
         let element: Element<'_, ()> = SectionList::new(badged, r).into();
         assert_eq!(element.as_widget().size().width, Length::Fixed(RAIL_WIDTH));
+    }
+
+    /// The row that has the least room for its label is the one the user is on, and it is also the
+    /// only one that can be both filled *and* badged. Sizing the rail by the longest name alone put
+    /// "Session service" on two lines whenever it was current.
+    ///
+    /// Arithmetic rather than a rendered measurement, because what broke was arithmetic: the rail
+    /// was sized against `PADDING_TEXT` and the row that mattered was drawn with `PADDING_FILLED`.
+    #[test]
+    fn the_current_row_fits_the_widest_label_and_a_badge() {
+        let padding = micold_core::tokens::anatomy::button::PADDING_FILLED;
+        let content = RAIL_WIDTH - 2.0 * spacing::SM - 2.0 * padding;
+        let needed = WIDEST_LABEL + spacing::SM + WIDEST_BADGE;
+        assert!(
+            content >= needed,
+            "the current row has {content}dp for its content and needs {needed}dp; the widest \
+             section name wraps when it is the one selected"
+        );
     }
 
     /// An empty rail is representable. It is not a state this application reaches, but a component

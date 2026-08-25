@@ -347,6 +347,22 @@ pub fn chip(accent: Rgb) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A chip on an opaque fill — the accent as the *background*, with its own on-colour for the label.
+///
+/// [`chip`] above draws the accent at 20% over whatever is behind it, which reads as an accent only
+/// while "whatever is behind it" is a plain surface. Over a filled container — a current navigation
+/// row, drawn in `primary` — a 20% tint of `error` is neither the accent nor the surface, and the
+/// label sitting on it is close to unreadable. A chip that has to survive an unknown background
+/// brings its own (feature 027, T075).
+pub fn chip_solid(fill: Rgb, on_fill: Rgb) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(fill))),
+        text_color: Some(color(on_fill)),
+        border: radius(shape::FULL),
+        ..container::Style::default()
+    }
+}
+
 /// A result row inside a type-ahead menu (feature 021, contracts/typeahead-component.md §4.7).
 ///
 /// Three things can be true of one row at the same time, so each gets its own channel and none can

@@ -87,7 +87,10 @@ pub fn view<'a>(
 ) -> Element<'a, Message> {
     let placement = Select::new(
         PLACEMENTS,
-        Some(Named(draft.daemon.placement, "")),
+        Some(Named(
+            draft.daemon.placement,
+            name_of(PLACEMENTS, draft.daemon.placement),
+        )),
         |chosen: Named<PlacementKind>| Message::SettingsPlacementChanged(chosen.0),
         roles,
     )
@@ -96,7 +99,10 @@ pub fn view<'a>(
 
     let runtime = Select::new(
         RUNTIMES,
-        Some(Named(draft.daemon.profile.runtime, "")),
+        Some(Named(
+            draft.daemon.profile.runtime,
+            name_of(RUNTIMES, draft.daemon.profile.runtime),
+        )),
         |chosen: Named<RuntimeKind>| Message::SettingsRuntimeChanged(chosen.0),
         roles,
     )
@@ -104,7 +110,10 @@ pub fn view<'a>(
 
     let image_kind = Select::new(
         IMAGE_SOURCES,
-        Some(Named(draft.daemon.profile.image.kind, "")),
+        Some(Named(
+            draft.daemon.profile.image.kind,
+            name_of(IMAGE_SOURCES, draft.daemon.profile.image.kind),
+        )),
         |chosen: Named<ImageSourceKind>| Message::SettingsImageKindChanged(chosen.0),
         roles,
     )

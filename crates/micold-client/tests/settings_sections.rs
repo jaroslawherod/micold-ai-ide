@@ -388,3 +388,66 @@ fn no_section_module_declares_its_own_rail() {
          `ui/material/section_list.rs`"
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// What a picker shows for its current value (feature 027, T075)
+// ---------------------------------------------------------------------------------------------
+
+/// A `Select`'s trigger draws its selected value with `Display`, and [`Named`]'s `Display` is its
+/// *name* — so a selected value built with an empty name renders a picker with a label, a chevron,
+/// and nothing between them.
+///
+/// Every one of the four pickers in this view shipped that way, because [`Named`]'s `PartialEq`
+/// compares the value and ignores the name: the open option list found and ticked the right row,
+/// the unit tests passed, the layout gates measured a box of exactly the right size, and the
+/// collapsed field was blank. A visual pass found it (T075); nothing automated could.
+///
+/// [`Named`]: micold_client::ui — `crate::ui::settings::Named`
+#[test]
+fn no_picker_is_given_a_selected_value_with_no_name() {
+    for (module, src) in section_sources() {
+        for (offset, _) in src.match_indices("Named(") {
+            // The whole call, to its closing paren — nested parens included, since the value is
+            // itself often a call.
+            let rest = &src[offset..];
+            let mut depth = 0usize;
+            let mut end = rest.len();
+            for (i, ch) in rest.char_indices() {
+                match ch {
+                    '(' => depth += 1,
+                    ')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            end = i + 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let call = &rest[..end];
+            assert!(
+                !call.contains(", \"\")") && !call.contains(",\n            \"\",\n"),
+                "in `ui/settings/{module}`, `{call}` names its value with the empty string. A \
+                 picker draws its selected value by name, so this one renders blank — pass \
+                 `name_of(OPTIONS, value)` instead"
+            );
+        }
+    }
+}
+
+/// The gate above is worth nothing if it cannot see the call it is about, and the shape it matches
+/// is fragile under rustfmt: the four call sites it guards are split across lines precisely
+/// because they got longer when they were fixed.
+#[test]
+fn the_scan_reaches_every_pickers_selected_value() {
+    let found: usize = section_sources()
+        .values()
+        .map(|src| src.matches("Some(Named(").count())
+        .sum();
+    assert!(
+        found >= 4,
+        "found {found} selected values written as `Some(Named(`; there are four pickers in this \
+         view, so a lower count means the scan stopped seeing them"
+    );
+}
