@@ -462,7 +462,25 @@ the Copilot conversation is there (quickstart §B B3, B5).
     `ClaudeProvider::is_archived` does not probe → the first two assertions pass and the
     before/after listing fails, which is exactly the case it exists for.
 - [X] T045 [P] [US2] Extend `crates/micold-daemon/tests/catalog_adoption.rs` so a restored Copilot session resumes with `--resume=<uuid>` and not a fresh `--session-id` when a conversation is recorded (FR-008)
-- [ ] T045a [P] [US2] Extend `crates/micold-daemon/tests/session_survival.rs` so a Copilot session survives a **daemon** restart on the right provider and resumes its own conversation — the leg of FR-012 that neither the store round-trip (T036) nor the application-restart pass (quickstart B3) reaches
+- [X] T045a [P] [US2] Extend `crates/micold-daemon/tests/session_survival.rs` so a Copilot session survives a **daemon** restart on the right provider and resumes its own conversation — the leg of FR-012 that neither the store round-trip (T036) nor the application-restart pass (quickstart B3) reaches
+
+  **Done 2026-08-25.** The gap turned out to be narrower and sharper than "a restart": T036,
+  `catalog_adoption.rs` and `set_wide_provider_decisions.rs` all start from a `projects.json` a
+  *test* hand-wrote, so none of them says the **daemon's own write** carries the provider — and
+  `create_session` is what runs when the user clicks "+". So the test creates both sessions through
+  the daemon, drops it, and loads a second one from the same store paths: providers preserved, both
+  presented `InterruptedResumable` because each was asked of its own CLI, and the argv each reloaded
+  record implies is its own (`--resume=<uuid>` beside `--resume <uuid>`).
+
+  Probe: `Catalog::create_session` reverted to naming no provider (`AiCli::ClaudeCode` regardless of
+  the caller) → `present_interrupted_resumable_at_startup()` returns 1 instead of 2, which is the
+  failure described — the Copilot session comes back as a Claude one, `claude` has never seen its
+  id, and it stays `Idle`, indistinguishable from created-and-never-used.
+
+  Two limits, both deliberate: the restart is a dropped `DaemonState` reloaded from the same files,
+  not a forked binary (`daemon_singleton.rs` and `version_recovery.rs` own that, and neither needs a
+  CLI installed); and the resume is asserted as argv rather than as a spawn, because this suite
+  never spawns either CLI — `session_start.rs` states why.
 - [ ] T046 [P] [US2] Add a test to `crates/micold-core/tests/copilot_provider.rs` and
   `crates/micold-daemon/tests/session_start.rs` for the spec's removed-store-entry edge case:
   resuming an id Copilot no longer has reports **`WireLifecycle::Failed { reason, attempts }`** with
