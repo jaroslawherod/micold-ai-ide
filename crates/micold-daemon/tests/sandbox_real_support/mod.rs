@@ -25,7 +25,11 @@ use micold_core::protocol::auth::Token;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::grid::GridFrame;
 use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, PresentedToken};
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::sandbox::dialect::Dialect;
+use micold_core::sandbox::runtime::RuntimeKind;
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::store::ProjectStore;
 use micold_core::workspace::Workspace;
 
@@ -203,7 +207,7 @@ impl<'a> Terminal<'a> {
                      --- screen ---\n{}\n--- container processes ---\n{}\n--- daemon log ---\n{}",
                     self.screen.all(),
                     String::from_utf8_lossy(
-                        &Command::new("docker")
+                        &Command::new(dialect().program)
                             .args(["exec", &self.container, "ps", "-ef"])
                             .output()
                             .map(|o| o.stdout)
@@ -221,33 +225,58 @@ impl<'a> Terminal<'a> {
 // The sandbox
 // ---------------------------------------------------------------------------------------------
 
-pub fn docker(args: &[&str]) {
-    let out = Command::new("docker")
+/// Which runtime these tests drive, from `MICOLD_TEST_RUNTIME`; Docker unless it says otherwise.
+///
+/// FR-020 claims the runtime is replaceable, and a harness that spells `docker` in its own body
+/// cannot demonstrate that: it would go on passing for a dialect layer that was a shim around one
+/// runtime, because the harness would be that shim. So the *kind* is chosen here and every
+/// runtime-specific spelling below — the program, the identity flag — is read from
+/// [`Dialect::for_kind`], which is the application's own table. That is what makes T098's podman
+/// pass evidence about the seam rather than evidence about podman.
+pub fn runtime_kind() -> RuntimeKind {
+    match std::env::var("MICOLD_TEST_RUNTIME").as_deref() {
+        Err(_) | Ok("") | Ok("docker") => RuntimeKind::Docker,
+        Ok("podman") => RuntimeKind::Podman,
+        // Loudly, rather than falling back to Docker: a typo that silently ran the Docker suite
+        // again would report a podman pass that never happened.
+        Ok(other) => panic!("MICOLD_TEST_RUNTIME={other:?}: expected `docker` or `podman`"),
+    }
+}
+
+/// The selected runtime's dialect.
+pub fn dialect() -> Dialect {
+    Dialect::for_kind(runtime_kind())
+}
+
+pub fn cli(args: &[&str]) {
+    let program = dialect().program;
+    let out = Command::new(program)
         .args(args)
         .output()
-        .unwrap_or_else(|e| panic!("docker {args:?}: {e}"));
+        .unwrap_or_else(|e| panic!("{program} {args:?}: {e}"));
     assert!(
         out.status.success(),
-        "docker {args:?} failed: {}",
+        "{program} {args:?} failed: {}",
         String::from_utf8_lossy(&out.stderr)
     );
 }
 
-/// `docker` for a value you want back — `inspect -f`, mostly.
-pub fn docker_out(args: &[&str]) -> String {
-    let out = Command::new("docker")
+/// The runtime CLI for a value you want back — `inspect -f`, mostly.
+pub fn cli_out(args: &[&str]) -> String {
+    let program = dialect().program;
+    let out = Command::new(program)
         .args(args)
         .output()
-        .unwrap_or_else(|e| panic!("docker {args:?}: {e}"));
+        .unwrap_or_else(|e| panic!("{program} {args:?}: {e}"));
     assert!(
         out.status.success(),
-        "docker {args:?} failed: {}",
+        "{program} {args:?} failed: {}",
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
-/// What the application would pass to `docker create`, minus the parts each test varies.
+/// What the application would pass to the runtime's `create`, minus the parts each test varies.
 pub struct SandboxSpec<'a> {
     pub container: &'a str,
     pub network: &'a str,
@@ -259,7 +288,7 @@ pub struct SandboxSpec<'a> {
     /// The daemon's `HOME`, and so the session's. Passing the **host** home is what `argv::create`
     /// does, and it is what makes "`ls ~` shows nothing" worth asserting at all.
     pub home: &'a str,
-    /// Extra `docker create` arguments — the limit flags, a different network posture.
+    /// Extra `create` arguments — the limit flags, a different network posture.
     pub extra: &'a [String],
 }
 
@@ -276,10 +305,9 @@ impl Drop for Sandbox {
 }
 
 pub fn purge(container: &str, network: &str) {
-    let _ = Command::new("docker")
-        .args(["rm", "-f", container])
-        .output();
-    let _ = Command::new("docker")
+    let program = dialect().program;
+    let _ = Command::new(program).args(["rm", "-f", container]).output();
+    let _ = Command::new(program)
         .args(["network", "rm", network])
         .output();
 }
@@ -290,10 +318,9 @@ pub fn purge(container: &str, network: &str) {
 /// fails with `no such session in the catalog` while the container looks perfectly healthy.
 pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
     purge(spec.container, spec.network);
-    docker(&["network", "create", "--driver", "bridge", spec.network]);
+    cli(&["network", "create", "--driver", "bridge", spec.network]);
 
     let (uid, gid) = micold_core::sandbox::host_identity();
-    let user = format!("{uid}:{gid}");
     let publish = format!("127.0.0.1:{}:7727", spec.port);
     let home_env = format!("HOME={}", spec.home);
     let image_env = format!("MICOLD_IMAGE_REFERENCE={IMAGE}");
@@ -308,8 +335,6 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
         "create",
         "--name",
         spec.container,
-        "--user",
-        &user,
         "--restart",
         "no",
         "--network",
@@ -337,11 +362,17 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
     .iter()
     .map(|s| s.to_string())
     .collect();
+    // From the dialect, not spelled here: Docker's `--user uid:gid` and podman's `--userns=keep-id`
+    // are the one place the two runtimes genuinely differ (R3), and it is the difference the last
+    // box of quickstart §B.2 — a file written into the project is owned by the host user, not root
+    // — actually tests. A harness that hardcoded `--user` would pass that box on podman by not
+    // using podman's answer to it.
+    args.extend(dialect().identity_args(uid, gid));
     args.extend(spec.extra.iter().cloned());
     args.push(IMAGE.to_string());
 
-    docker(&args.iter().map(String::as_str).collect::<Vec<_>>());
-    docker(&["start", spec.container]);
+    cli(&args.iter().map(String::as_str).collect::<Vec<_>>());
+    cli(&["start", spec.container]);
 
     Sandbox {
         container: spec.container.to_string(),
@@ -363,6 +394,9 @@ pub fn seed(data_home: &Path, project: &Path, label: &str) -> SessionId {
             SessionLocation::Default,
             SessionLabel::Named(label.into()),
             TerminalMode::Regular,
+            // Feature 026: a session records which AI CLI it runs. The default one, because these
+            // probes are about the container boundary and never start an AI CLI at all.
+            AiCli::default(),
         )],
     );
     let workspace = Workspace {

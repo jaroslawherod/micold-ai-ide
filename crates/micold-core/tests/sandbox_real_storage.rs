@@ -23,8 +23,22 @@
 use std::process::Command;
 
 use micold_core::sandbox::cli::CliRuntime;
+use micold_core::sandbox::dialect::Dialect;
 use micold_core::sandbox::exec::SystemRunner;
 use micold_core::sandbox::runtime::{ContainerRuntime, LimitSupport, RuntimeKind};
+
+/// Which runtime to ask, from `MICOLD_TEST_RUNTIME`; Docker unless it says otherwise.
+///
+/// The question this file asks — does the runtime enforce what it claims to? — has a different
+/// answer per runtime, and only one of them was ever measured. Selecting the kind here, and taking
+/// the program name from the dialect rather than spelling it, is what let T098 ask it of podman.
+fn kind() -> RuntimeKind {
+    match std::env::var("MICOLD_TEST_RUNTIME").as_deref() {
+        Err(_) | Ok("") | Ok("docker") => RuntimeKind::Docker,
+        Ok("podman") => RuntimeKind::Podman,
+        Ok(other) => panic!("MICOLD_TEST_RUNTIME={other:?}: expected `docker` or `podman`"),
+    }
+}
 
 const IMAGE: &str = "micold-daemon:dev";
 /// Comfortably above the image's own size — a cap below it makes the container unstartable, which
@@ -45,7 +59,8 @@ enum Outcome {
 }
 
 fn exceed_the_cap() -> Outcome {
-    let out = Command::new("docker")
+    let program = Dialect::for_kind(kind()).program;
+    let out = Command::new(program)
         .args([
             "run",
             "--rm",
@@ -58,7 +73,7 @@ fn exceed_the_cap() -> Outcome {
             &format!("dd if=/dev/zero of=/big bs=1M count={WRITE_MIB} 2>&1; echo rc=$?"),
         ])
         .output()
-        .expect("docker run");
+        .unwrap_or_else(|e| panic!("{program} run: {e}"));
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
@@ -76,7 +91,7 @@ fn exceed_the_cap() -> Outcome {
 
 #[tokio::test]
 async fn sandbox_real_storage_capability_matches_what_the_runtime_enforces() {
-    let claimed = CliRuntime::new(RuntimeKind::Docker, SystemRunner)
+    let claimed = CliRuntime::new(kind(), SystemRunner)
         .probe()
         .expect("probe the real runtime")
         .storage;
